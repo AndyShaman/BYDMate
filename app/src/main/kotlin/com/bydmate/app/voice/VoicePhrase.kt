@@ -18,13 +18,23 @@ object VoicePhrase {
     fun normalize(phrase: String): String = tokens(phrase).joinToString(" ")
 
     /** The normalized tokens of [phrase], in spoken order. */
-    fun tokens(phrase: String): List<String> =
+    fun tokens(phrase: String): List<String> = words(phrase).map { VoiceStemmer.stem(it) }
+
+    /** The words of [phrase] as spoken, without stemming: lowercase, ё→е, no punctuation, no
+     *  fillers. Exactness is judged on these, so «открой окна» is not «открой окно»; stemming
+     *  is only for finding a phrase inside a longer utterance. */
+    fun words(phrase: String): List<String> =
         phrase.lowercase()
             .replace('ё', 'е')
             .replace(NON_WORD, " ")
             .split(WHITESPACE)
             .filter { it.isNotBlank() && it !in FILLERS }
-            .map { VoiceStemmer.stem(it) }
+
+    /** [phrase] is the whole of [heard], word for word after normalization. */
+    fun isExact(heard: String, phrase: String): Boolean {
+        val words = words(phrase)
+        return words.isNotEmpty() && words == words(heard)
+    }
 
     /** True when [phrase] (normalized tokens) occurs in [heard] as a whole-word sequence,
      *  equality included. Token-wise, so «окно» never matches inside «окновать». */

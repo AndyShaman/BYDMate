@@ -2,7 +2,6 @@ package com.bydmate.app.voice
 
 import com.bydmate.app.voice.VoiceNormalizer.Extreme
 import com.bydmate.app.voice.VoiceNormalizer.Measure
-import kotlin.math.abs
 
 sealed interface ParseResult {
     /** One utterance can resolve to several dispatchable commands (plural seats fan
@@ -15,12 +14,17 @@ sealed interface ParseResult {
     data class RelativeTemp(val sign: Int) : ParseResult
     data class Volume(val payload: String) : ParseResult
     data object Unrecognized : ParseResult
+    /** Understood enough to know it must NOT act: a negation, a command for later, a measure
+     *  it cannot read, a "кроме" it cannot express, several commands it cannot split.
+     *  [reason] is a [VoiceRefusal] code. Unlike [Unrecognized], no phrase contained in the
+     *  utterance may act on it either. */
+    data class Refused(val reason: String) : ParseResult
 }
 
 /**
  * Offline slot parser for Russian voice commands. Deterministic and pure. Every word it
  * cannot place is ignored EXCEPT measure words: a share or a number it cannot read on a
- * window or the sunroof makes the whole utterance [ParseResult.Unrecognized], never a
+ * window or the sunroof makes the whole utterance [ParseResult.Refused], never a
  * full open.
  */
 object NluParser {
@@ -31,15 +35,27 @@ object NluParser {
 
         // Negation ("не открывай", "нет, не надо") is beyond slot NLU: guessing an
         // affirmative command would do the OPPOSITE of what was said. Agent decides.
-        val stems = tokens.map { VoiceStemmer.stem(it) }
-        if (VoiceStemmer.stem("не") in stems || VoiceStemmer.stem("нет") in stems) {
-            return ParseResult.Unrecognized
-        }
+        if (negated(tokens)) return ParseResult.Refused(VoiceRefusal.NEGATION)
+        // "открой окно потом": a command for later is not a command for now.
+        if (tokens.any { it in DEFERRED_WORDS }) return ParseResult.Refused(VoiceRefusal.DEFERRED)
+        // "кроме" lists its exclusions with «и»: they are never commands of their own.
+        if (EXCEPT in tokens) return parseClause(tokens).refusedAs(VoiceRefusal.EXCEPT_UNSUPPORTED)
 
         val clauses = splitClauses(tokens)
-        if (clauses.size > 1) parseCompound(clauses)?.let { return it }
-        return parseClause(tokens)
+        return if (clauses.size > 1) parseClauses(tokens, clauses) else parseClause(tokens)
     }
+
+    /** True when [text] holds a negation word: it is never an affirmative command, neither
+     *  the parser's nor a phrase contained in it. */
+    fun negated(text: String): Boolean = negated(VoiceNormalizer.tokens(text))
+
+    private val NEGATION_WORDS = setOf("не", "нет", "нельзя", "отмена", "отмени", "отменить", "отмените")
+    private val DEFERRED_WORDS = setOf("завтра", "потом", "позже", "вчера", "раньше")
+
+    private fun negated(tokens: List<String>) = tokens.any { it in NEGATION_WORDS }
+
+    private fun ParseResult.refusedAs(reason: String): ParseResult =
+        if (this == ParseResult.Unrecognized) ParseResult.Refused(reason) else this
 
     /** How the cabin feels, as a temperature step: cold asks for warmer air, heat for cooler.
      *  Only these exact words: "прохладнее"/"холоднее" are the COOLER request itself. */
@@ -85,22 +101,34 @@ object NluParser {
 
     /**
      * Every clause must parse on its own; a clause without a verb borrows the previous
-     * one ("закрой окна и люк"). Otherwise null and the utterance is parsed whole
-     * ("открой окна водителя и пассажира" is one target, not two clauses). A share named
-     * in one clause next to a full open in another ("открой окна и люк наполовину") is
-     * ambiguous and never dispatched.
+     * one ("закрой окна и люк"). Otherwise the utterance is parsed whole ("открой окна
+     * водителя и пассажира" is one target, not two clauses). When neither reading works but
+     * some clause alone meant something, the phrase held commands the parser cannot split:
+     * refused, so no phrase contained in it acts on one part.
      */
-    private fun parseCompound(clauses: List<List<String>>): ParseResult? {
+    private fun parseClauses(tokens: List<String>, clauses: List<List<String>>): ParseResult {
         var verbs = emptyList<String>()
         val filled = clauses.map { clause ->
             val own = clause.filter { VoiceStemmer.stem(it) in actionStems }
             if (own.isNotEmpty()) verbs = own
             if (own.isEmpty()) verbs + clause else clause
         }
-        val parsed = filled.map { (parseClause(it) as? ParseResult.Command)?.commands ?: return null }
+        val parsed = filled.map { parseClause(it) }
+        compound(filled, parsed)?.let { return it }
+        val whole = parseClause(tokens)
+        if (whole != ParseResult.Unrecognized) return whole
+        parsed.firstOrNull { it is ParseResult.Refused }?.let { return it }
+        return if (parsed.all { it == ParseResult.Unrecognized }) whole
+        else ParseResult.Refused(VoiceRefusal.MULTIPLE_COMMANDS)
+    }
+
+    /** Every clause as its commands, or null. A share named in one clause next to a full
+     *  open in another ("открой окна и люк наполовину") is ambiguous and never dispatched. */
+    private fun compound(filled: List<List<String>>, parsed: List<ParseResult>): ParseResult.Command? {
+        val commands = parsed.map { (it as? ParseResult.Command)?.commands ?: return null }.flatten()
         val namesShare = filled.any { VoiceNormalizer.measure(it).let { m -> m.hasShare || m.numberIsShare } }
-        if (namesShare && parsed.flatten().any { it in fullOpenCommands }) return null
-        return ParseResult.Command(parsed.flatten())
+        if (namesShare && commands.any { it in fullOpenCommands }) return null
+        return ParseResult.Command(commands)
     }
 
     private fun parseClause(input: List<String>): ParseResult {
@@ -128,8 +156,8 @@ object NluParser {
         if (EXCEPT in tokens) return ParseResult.Unrecognized
         if (isFan(devices, stems, measure)) return resolveFan(actions, measure)
         // A share ("наполовину", "чуть", "приоткрой") only fits an opening; on anything
-        // else the phrase was not understood.
-        if (measure.hasShare && measure.extreme == null) return ParseResult.Unrecognized
+        // else it cannot be read, and doing the rest in full would do more than was asked.
+        if (measure.hasShare && measure.extreme == null) return ParseResult.Refused(VoiceRefusal.UNKNOWN_MEASURE)
         return resolveComfort(stems, actions, devices, qualifiers, measure)
     }
 
@@ -204,15 +232,24 @@ object NluParser {
     private fun pluralWindows(tokens: List<String>) =
         tokens.indices.any { i -> tokens[i] in PLURAL_WINDOWS && tokens.getOrNull(i - 1) != "пол" }
 
-    /** Detents each opening supports, as (share, slot), ascending so a tie picks the
-     *  smaller opening. Sunroof vent (tilt) reads 7 % on the percent fid. */
+    /** Detents each opening supports, as (share, slot), ascending. Sunroof vent (tilt) reads
+     *  7 % on the percent fid. */
     private val WINDOW_STOPS = listOf(10 to ActionSlot.VENT, 50 to ActionSlot.HALF, 100 to ActionSlot.OPEN)
     private val SUNROOF_STOPS = listOf(7 to ActionSlot.VENT, 50 to ActionSlot.HALF, 100 to ActionSlot.OPEN)
 
     private val APERTURE_ACTIONS = setOf(ActionSlot.OPEN, ActionSlot.CLOSE, ActionSlot.SET, ActionSlot.ON, ActionSlot.VENT)
     private val OPENING_ACTIONS = setOf(ActionSlot.OPEN, ActionSlot.SET, ActionSlot.ON)
-    private const val BAD_SHARE = -1
+    private const val UNKNOWN_SHARE = -1
+    private const val CONFLICT_SHARE = -2
     private const val HALF_SHARE = 50
+
+    /** The detent an aperture phrase asks for: a slot, a refusal with its reason, or nothing
+     *  an opening can do (no verb, a verb that is not about openings). */
+    private sealed interface Detent {
+        data class Slot(val slot: ActionSlot) : Detent
+        data class Refuse(val reason: String) : Detent
+        data object None : Detent
+    }
 
     private fun resolveAperture(
         tokens: List<String>,
@@ -225,8 +262,11 @@ object NluParser {
         // ("окно в салоне") is not a phrase the parser can place.
         val others = devices.filterNot { isAperture(it) || it == DeviceSlot.CAR }
         if (others.isNotEmpty() || sunroof && devices.any { isWindow(it) }) return ParseResult.Unrecognized
-        val slot = apertureSlot(actions, measure, if (sunroof) SUNROOF_STOPS else WINDOW_STOPS)
-            ?: return ParseResult.Unrecognized
+        val slot = when (val d = apertureDetent(actions, measure, if (sunroof) SUNROOF_STOPS else WINDOW_STOPS)) {
+            is Detent.Slot -> d.slot
+            is Detent.Refuse -> return ParseResult.Refused(d.reason)
+            Detent.None -> return ParseResult.Unrecognized
+        }
         val targets = when {
             !sunroof -> windowTargets(tokens)
             EXCEPT in tokens -> null
@@ -236,22 +276,30 @@ object NluParser {
         return ParseResult.Command(commands)
     }
 
-    /** The detent slot the phrase asks for, or null when the measure or the verbs
-     *  cannot be read (never a full open by default). */
-    private fun apertureSlot(actions: Set<ActionSlot>, m: Measure, stops: List<Pair<Int, ActionSlot>>): ActionSlot? {
-        if (actions.any { it !in APERTURE_ACTIONS }) return null
+    /** The detent the phrase asks for; a measure or verbs it cannot read are refused, never
+     *  a full open by default. A spoken share maps to the widest detent that does not exceed
+     *  it; anything above zero but below the smallest detent is that detent. */
+    private fun apertureDetent(actions: Set<ActionSlot>, m: Measure, stops: List<Pair<Int, ActionSlot>>): Detent {
+        if (actions.any { it !in APERTURE_ACTIONS }) return Detent.None
         val closes = ActionSlot.CLOSE in actions
-        if (closes && actions.any { it in OPENING_ACTIONS }) return null
+        if (closes && actions.any { it in OPENING_ACTIONS }) return Detent.Refuse(VoiceRefusal.MULTIPLE_COMMANDS)
         val share = namedShare(actions, m)
+        shareRefusal(share)?.let { return Detent.Refuse(it) }
         val target = when {
-            share == BAD_SHARE -> return null
-            closes -> closingTarget(share) ?: return null
-            share == null -> if (ActionSlot.OPEN in actions) VoiceNormalizer.FULL_SHARE else return null
-            share == 0 -> return null
+            closes -> closingTarget(share) ?: return Detent.Refuse(VoiceRefusal.UNKNOWN_MEASURE)
+            share == null -> if (ActionSlot.OPEN in actions) VoiceNormalizer.FULL_SHARE else return Detent.None
+            share == 0 && ActionSlot.OPEN in actions -> return Detent.Refuse(VoiceRefusal.CONFLICTING_MEASURE)
             else -> share
         }
-        if (target == 0) return ActionSlot.CLOSE
-        return stops.minBy { abs(it.first - target) }.second
+        if (target == 0) return Detent.Slot(ActionSlot.CLOSE)
+        return Detent.Slot((stops.lastOrNull { it.first <= target } ?: stops.first()).second)
+    }
+
+    /** The refusal an unreadable or contradictory share stands for, or null. */
+    private fun shareRefusal(share: Int?): String? = when (share) {
+        UNKNOWN_SHARE -> VoiceRefusal.UNKNOWN_MEASURE
+        CONFLICT_SHARE -> VoiceRefusal.CONFLICTING_MEASURE
+        else -> null
     }
 
     /** "закрой" / "закрой до конца" close; "закрой наполовину" leaves half open; any
@@ -262,25 +310,39 @@ object NluParser {
         else -> null
     }
 
-    /** Share of the opening the words name: null = none, [BAD_SHARE] = unreadable or contradictory. */
+    /** Share of the opening the words name: null = none, [UNKNOWN_SHARE] = unreadable,
+     *  [CONFLICT_SHARE] = two different shares or numbers. */
     private fun namedShare(actions: Set<ActionSlot>, m: Measure): Int? {
-        if (unreadableShare(m)) return BAD_SHARE
+        if (m.shareConflict || m.numbers.size > 1) return CONFLICT_SHARE
+        if (unreadableShare(m)) return UNKNOWN_SHARE
         val named = LinkedHashSet<Int>()
         m.share?.let { named.add(it) }
-        m.numbers.firstOrNull()?.let { if (it in 0..VoiceNormalizer.FULL_SHARE) named.add(it) else return BAD_SHARE }
+        m.numbers.firstOrNull()?.let { if (it in 0..VoiceNormalizer.FULL_SHARE) named.add(it) else return UNKNOWN_SHARE }
         if (m.extreme == Extreme.MAX) named.add(VoiceNormalizer.FULL_SHARE)
         if (ActionSlot.VENT in actions) named.add(VoiceNormalizer.VENT_SHARE)
-        if (named.size > 1) return BAD_SHARE
+        if (named.size > 1) return CONFLICT_SHARE
         return named.firstOrNull() ?: VoiceNormalizer.VENT_SHARE.takeIf { m.softVent }
     }
 
-    /** A measure that cannot be a share of an opening: an unexplained word, two shares,
-     *  a level (ordinal, "минимум"), several numbers or a number that is not a share. */
+    /** A measure that cannot be a share of an opening: an unexplained word, a level
+     *  (ordinal, "минимум"), a number that is not a share, or «на»/«по» followed by a word
+     *  that is neither a measure nor a target ("на палец", "на ладонь"). */
     private fun unreadableShare(m: Measure): Boolean {
-        if (m.unexplained || m.shareConflict || m.ordinal != null) return true
-        if (m.extreme == Extreme.MIN || m.numbers.size > 1) return true
+        if (m.unexplained || m.ordinal != null || m.extreme == Extreme.MIN) return true
+        if (m.looseTargets.any { !isApertureTarget(it) }) return true
         return m.numbers.isNotEmpty() && !m.numberIsShare
     }
+
+    /** Words that may follow «на»/«по» on a window or the sunroof without being a measure:
+     *  a side or position, the opening itself, the airing mode. */
+    private val APERTURE_TARGET_STEMS: Set<String> by lazy {
+        val devices = VoiceLexicon.deviceWords().filterKeys { isAperture(it) || it == DeviceSlot.SUNSHADE }.values.flatten()
+        val airing = VoiceLexicon.actionWords().getValue(ActionSlot.VENT)
+        (QUAL_WORDS.values.flatten() + MY_WORDS + devices + airing).mapTo(HashSet()) { VoiceStemmer.stem(it) }
+    }
+
+    private fun isApertureTarget(word: String): Boolean =
+        word.startsWith("сторон") || VoiceStemmer.stem(word) in APERTURE_TARGET_STEMS
 
     private const val EXCEPT = "кроме"
 
@@ -288,16 +350,22 @@ object NluParser {
         DeviceSlot.WINDOW_DRIVER, DeviceSlot.WINDOW_PASSENGER, DeviceSlot.WINDOW_REAR_LEFT, DeviceSlot.WINDOW_REAR_RIGHT,
     )
 
-    /** One window slot, or per-door slots for "кроме X" (never touching X); null when the
-     *  exclusion names nothing or leaves nothing. */
+    /** One window slot, or per-door slots for "кроме X и Y" (never touching X or Y); null
+     *  when an exclusion names no window or nothing is left. */
     private fun windowTargets(tokens: List<String>): List<DeviceSlot>? {
         val cut = tokens.indexOf(EXCEPT)
         if (cut < 0) return listOf(windowFor(detectQualifiers(tokens), pluralWindows(tokens)))
-        val excludedQuals = detectQualifiers(tokens.subList(cut + 1, tokens.size))
-        if (excludedQuals.isEmpty()) return null
+        // Each excluded window on its own: "заднего левого и заднего правого" is two corners,
+        // not one set of qualifiers.
+        val excluded = splitClauses(tokens.subList(cut + 1, tokens.size)).flatMap { part ->
+            val quals = detectQualifiers(part)
+            if (quals.isEmpty()) return null
+            doorsOf(windowFor(quals, plural = false))
+        }
+        if (excluded.isEmpty()) return null
         val baseQuals = detectQualifiers(tokens.subList(0, cut)) - Qual.ALL
         val base = if (baseQuals.isEmpty()) DeviceSlot.WINDOW_ALL else windowFor(baseQuals, plural = true)
-        val kept = doorsOf(base) - doorsOf(windowFor(excludedQuals, plural = false)).toSet()
+        val kept = doorsOf(base) - excluded.toSet()
         return kept.takeIf { it.isNotEmpty() }
     }
 

@@ -32,7 +32,9 @@ object RuGoldenCorpus {
         is ParseResult.Command -> result.commands.joinToString("+")
         is ParseResult.RelativeTemp -> "TEMP:" + if (result.sign > 0) "+1" else "-1"
         is ParseResult.Volume -> "VOL:" + result.payload
-        ParseResult.Unrecognized -> UNRECOGNIZED
+        // A refusal and a phrase not understood both go to the agent; the reason codes are
+        // pinned by the parser's unit tests.
+        ParseResult.Unrecognized, is ParseResult.Refused -> UNRECOGNIZED
     }
 
     fun actual(row: Row): String = render(NluParser.parse(row.utterance))
@@ -72,6 +74,25 @@ object RuGoldenCorpus {
     fun doesMoreThanExpected(expected: String, actual: String): Boolean {
         val want = apertures(expected)
         return apertures(actual).any { (target, pct) -> pct > (want[target] ?: 0) }
+    }
+
+    /** Smallest detent per opening (window vent 10 %, sunroof tilt 7 %): a spoken share above
+     *  zero but below it may open that far and no further. */
+    private fun smallestDetent(target: String): Int = if (target == "sunroof") 7 else 10
+
+    /** The share the utterance itself names ("на сорок процентов", "на треть", "чуть"), or null. */
+    fun spokenShare(utterance: String): Int? {
+        val m = VoiceNormalizer.measure(VoiceNormalizer.tokens(utterance))
+        return m.numbers.singleOrNull()?.takeIf { m.numberIsShare } ?: m.share
+    }
+
+    /** True when [actual] opens some aperture wider than the share the utterance names,
+     *  whatever the expected string was rounded to. */
+    fun opensWiderThanSpoken(utterance: String, actual: String): Boolean {
+        val limit = spokenShare(utterance) ?: return false
+        return apertures(actual).any { (target, pct) ->
+            pct > if (limit > 0) maxOf(limit, smallestDetent(target)) else 0
+        }
     }
 
     data class Score(val category: String, val correct: Int, val total: Int) {

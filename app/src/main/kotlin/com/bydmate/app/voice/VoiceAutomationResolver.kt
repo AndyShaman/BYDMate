@@ -19,18 +19,20 @@ class VoiceAutomationResolver @Inject constructor(
     private val ruleDao: RuleDao,
 ) {
     /** The longest matching phrase wins, so «открой окна дома» picks the rule for «окна дома»
-     *  over the one for «окна»; on a tie the first enabled rule wins. */
+     *  over the one for «окна»; on a tie an exact phrase wins, then the first enabled rule.
+     *  Exact means word for word without stemming (see [VoicePhrase.isExact]). */
     suspend fun match(transcript: String): VoiceAutomationMatch? {
         val heard = VoicePhrase.tokens(transcript)
         if (heard.isEmpty()) return null
         var best: VoiceAutomationMatch? = null
         var bestLen = 0
         for (rule in ruleDao.getEnabled()) {
-            for (t in TriggerDef.listFromJson(rule.triggers)) {
-                if (t.kind != "voice") continue
+            for (t in TriggerDef.listFromJson(rule.triggers).filter { it.kind == "voice" }) {
                 val phrase = VoicePhrase.tokens(t.value)
-                if (phrase.size > bestLen && VoicePhrase.containsSequence(heard, phrase)) {
-                    best = VoiceAutomationMatch(rule.id, rule.name, exact = phrase.size == heard.size)
+                if (phrase.size < bestLen || !VoicePhrase.containsSequence(heard, phrase)) continue
+                val exact = VoicePhrase.isExact(transcript, t.value)
+                if (phrase.size > bestLen || exact && best?.exact == false) {
+                    best = VoiceAutomationMatch(rule.id, rule.name, exact)
                     bestLen = phrase.size
                 }
             }

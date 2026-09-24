@@ -19,6 +19,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.voice.VoiceGate
+import com.bydmate.app.voice.VoiceUserPhrases
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -480,6 +481,22 @@ class AgentToolsAutomationTest {
         val out = JSONObject(tools().execute(call("create_automation",
             createArgs(trigger = """{"kind":"voice","phrase":"Тёплый приём!"}"""))))
         assertTrue(out.getString("error").contains("уже использ"))
+    }
+
+    @Test fun `voice trigger taken by a user phrase of a built-in command is rejected`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        coEvery { ruleDao.insert(any()) } returns 1L
+        val phrases = VoiceUserPhrases().apply { add("windows_close_all", "задраить трюм") }
+        val command = VoiceUserPhrases.COMMANDS.first { it.id == "windows_close_all" }.name
+        val tools = tools().apply { injectUserPhrases(phrases) }
+
+        val out = JSONObject(tools.execute(call("create_automation",
+            createArgs(trigger = """{"kind":"voice","phrase":"Задраить трюм!"}"""))))
+
+        assertFalse(out.toString(), out.optBoolean("ok"))
+        assertTrue(out.toString(), out.getString("error").contains("уже используется"))
+        assertTrue(out.toString(), out.getString("error").contains(command))
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 
     @Test fun `create with button press trigger saves button number`() = runTest {

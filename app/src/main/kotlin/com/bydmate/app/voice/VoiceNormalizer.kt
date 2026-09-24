@@ -25,6 +25,9 @@ object VoiceNormalizer {
      * @param ordinal "первый".."пятый" as a level
      * @param extreme "максимум"/"минимум"
      * @param unexplained a measure word nobody can read (centimetres, a dangling "до"/"пол")
+     * @param looseTargets words after «на»/«по» that no measure reader explains ("" for a
+     *   trailing preposition): "на палец", "по кругу". The parser decides whether each one
+     *   names a target ("на водительской стороне") or an unreadable measure.
      */
     data class Measure(
         val numbers: List<Int> = emptyList(),
@@ -35,6 +38,7 @@ object VoiceNormalizer {
         val ordinal: Int? = null,
         val extreme: Extreme? = null,
         val unexplained: Boolean = false,
+        val looseTargets: List<String> = emptyList(),
     ) {
         /** Some word asks for a share of an opening (numbers alone do not: they are levels elsewhere). */
         val hasShare: Boolean get() = share != null || softVent || shareConflict
@@ -81,6 +85,7 @@ object VoiceNormalizer {
     private val UNIT_PREFIXES = listOf("сантиметр", "миллиметр")
     private val UNIT_ABBREVIATIONS = setOf("см", "мм")
     private val HALF_NOUNS = listOf("окн", "окош", "стекл", "форточ", "люк")
+    private val TARGET_PREPOSITIONS = setOf("на", "по")
 
     /** Lowercase, ё -> е, "%" -> "процентов", hyphens and punctuation split tokens,
      *  "полокна" -> "пол окна". */
@@ -124,6 +129,12 @@ object VoiceNormalizer {
 
     fun measure(tokens: List<String>): Measure {
         val spans = numberSpans(tokens).filterNot { threeQuarters(tokens, it.first) }
+        // The word at j is read by one of the measure readers: a number, a share word, a level.
+        val measureAt = { j: Int ->
+            val t = tokens.getOrNull(j)
+            t != null && (spans.any { it.first == j } || wordShare(tokens, j) != null ||
+                t in MAX_WORDS || t in MIN_WORDS || t in ORDINALS)
+        }
         val shares = LinkedHashSet<Int>()
         var unexplained = false
         tokens.forEachIndexed { i, t ->
@@ -142,6 +153,9 @@ object VoiceNormalizer {
             ordinal = tokens.firstNotNullOfOrNull { ORDINALS[it] },
             extreme = extremeOf(tokens),
             unexplained = unexplained,
+            looseTargets = tokens.indices
+                .filter { tokens[it] in TARGET_PREPOSITIONS && !measureAt(it + 1) }
+                .map { tokens.getOrNull(it + 1).orEmpty() },
         )
     }
 
