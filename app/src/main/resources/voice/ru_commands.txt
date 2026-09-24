@@ -110,6 +110,8 @@ solo {win} <little> => {win}通风
 <set> {wins} на проветривание => {wins}通风
 solo {wins} <little> => {wins}通风
 <air> салон => 车窗通风
+solo [<on>] режим проветривания => 车窗通风 + 天窗通风
+solo <off> режим проветривания => 车窗关闭 + 天窗打开0
 
 # A share by number or fraction.
 <open> {win} [<prep>] {pct1} [<pct_word>] => {win}{pct1}

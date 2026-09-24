@@ -64,7 +64,9 @@ utterance	expected	category	danger
 проветри окна	车窗通风	windows	danger
 проветри окно пассажира	副驾通风	windows	danger
 проветри передние окна	前排车窗通风	windows	danger
-режим проветривания	UNRECOGNIZED	windows	
+режим проветривания	车窗通风+天窗通风	windows	danger
+включи режим проветривания	车窗通风+天窗通风	windows	danger
+выключи режим проветривания	车窗关闭+天窗打开0	windows	danger
 открой окно на пять сантиметров	UNRECOGNIZED	windows	danger
 открой окно на сантиметр	UNRECOGNIZED	windows	danger
 открой окно полностью наполовину	UNRECOGNIZED	windows	danger
