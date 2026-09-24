@@ -31,7 +31,7 @@ android {
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
         versionCode = 489
-        versionName = "3.18.0"
+        versionName = "3.18.0-test"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
