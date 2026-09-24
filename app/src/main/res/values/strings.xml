@@ -1772,6 +1772,8 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Импорт</string>
     <string name="automation_share_button">Поделиться</string>
+    <string name="automation_view_list">Списком</string>
+    <string name="automation_view_grid">Карточками</string>
     <string name="automation_share_note">Из файла удалены номера телефонов, имена контактов и привязки к вашим местам. Из ссылок удаляются логин с паролем и параметры, похожие на ключи; сам адрес проверьте перед отправкой. Тексты уведомлений и фраз, запросы агенту и точки маршрутов остаются, их тоже стоит проверить.</string>
     <string name="automation_share_error">Не удалось сохранить файл: %1$s</string>
     <string name="automation_test_run_button">Тестовый запуск</string>

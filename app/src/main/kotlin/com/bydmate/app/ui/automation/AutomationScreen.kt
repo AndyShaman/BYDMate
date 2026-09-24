@@ -9,6 +9,33 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -146,23 +173,21 @@ fun AutomationScreen(
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         // Header: title and filters on the left; «Места» / «Журнал», a divider, then «Импорт» /
-        // «+ Создать» on the right. Both halves wrap at the largest text size.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        // «+ Создать» and the list/grid toggle on the right. When both groups do not fit one
+        // line, the action group moves whole under the filters (and wraps only if still too wide).
+        HeaderLayout {
             FlowRow(
-                modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(stringResource(R.string.automation_tab_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
                     modifier = Modifier.align(Alignment.CenterVertically).padding(end = 12.dp))
-                AutoChip(stringResource(R.string.automation_filter_all), state.filter == RuleFilter.ALL) { viewModel.setFilter(RuleFilter.ALL) }
-                AutoChip(stringResource(R.string.automation_filter_active), state.filter == RuleFilter.ENABLED) { viewModel.setFilter(RuleFilter.ENABLED) }
-                AutoChip(stringResource(R.string.automation_filter_disabled), state.filter == RuleFilter.DISABLED) { viewModel.setFilter(RuleFilter.DISABLED) }
+                // 40dp visible, the chip's own minimum interactive size makes the touch area 48dp.
+                val chipModifier = Modifier.heightIn(min = 40.dp)
+                AutoChip(stringResource(R.string.automation_filter_all), state.filter == RuleFilter.ALL, chipModifier) { viewModel.setFilter(RuleFilter.ALL) }
+                AutoChip(stringResource(R.string.automation_filter_active), state.filter == RuleFilter.ENABLED, chipModifier) { viewModel.setFilter(RuleFilter.ENABLED) }
+                AutoChip(stringResource(R.string.automation_filter_disabled), state.filter == RuleFilter.DISABLED, chipModifier) { viewModel.setFilter(RuleFilter.DISABLED) }
             }
-            Spacer(Modifier.width(12.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -181,29 +206,72 @@ fun AutomationScreen(
                 Button(
                     onClick = { viewModel.openNewRule() },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
                 ) { Text(stringResource(R.string.automation_create_button), fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+                ViewModeToggle(state.viewMode, viewModel::setViewMode)
             }
         }
 
         Spacer(Modifier.height(12.dp))
 
-        // Rule list
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(filtered, key = { it.id }) { rule ->
-                RuleCard(
-                    rule = rule,
-                    onToggle = { viewModel.toggleEnabled(rule) },
-                    onClick = { viewModel.openEditRule(rule) },
-                    onEdit = { viewModel.openEditRule(rule) },
-                    onDuplicate = { viewModel.duplicateRule(rule) },
-                    onShare = { viewModel.shareRule(rule) },
-                    shareEnabled = !state.shareInProgress,
-                    onDelete = { viewModel.requestDelete(rule.id) }
+        // Rule list: compact rows or a 3-column grid of cards, chosen in the header.
+        val actionsFor: @Composable (RuleEntity) -> List<RuleAction> = { rule ->
+            ruleActions(
+                onEdit = { viewModel.openEditRule(rule) },
+                onDuplicate = { viewModel.duplicateRule(rule) },
+                onShare = { viewModel.shareRule(rule) },
+                shareEnabled = !state.shareInProgress,
+                onDelete = { viewModel.requestDelete(rule.id) },
+            )
+        }
+        when (state.viewMode) {
+            RuleViewMode.LIST -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                // Narrow windows (DiLink 3/4, split screen): the buttons give way before the text.
+                val labels = ruleActions({}, {}, {}, true, {}).map { it.label }
+                val labelWidth = maxLabelWidth(labels, ROW_LABEL_STYLE)
+                val mode = listActionMode(
+                    rowWidth = maxWidth,
+                    labeledActionsWidth = (ROW_BUTTON_CHROME + labelWidth) * 4 + ROW_ACTION_SPACING * 3,
+                    minTextWidth = with(LocalDensity.current) { MIN_ROW_TEXT.toDp() },
                 )
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(filtered, key = { it.id }) { rule ->
+                        RuleListRow(
+                            rule = rule,
+                            actions = actionsFor(rule),
+                            mode = mode,
+                            onToggle = { viewModel.toggleEnabled(rule) },
+                            onClick = { viewModel.openEditRule(rule) },
+                        )
+                    }
+                }
+            }
+            RuleViewMode.GRID -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                // Columns keep every card button at least 48dp wide; labels go icon-only in every
+                // card when the widest one does not fit its cell.
+                val columns = gridColumns(maxWidth)
+                val labelWidth = maxLabelWidth(ruleActions({}, {}, {}, true, {}).map { it.label }, FOOT_LABEL_STYLE)
+                val showLabels = labelWidth <= footCellWidth(maxWidth, columns) - FOOT_CELL_PADDING * 2
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    horizontalArrangement = Arrangement.spacedBy(GRID_SPACING),
+                    verticalArrangement = Arrangement.spacedBy(GRID_SPACING),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(filtered, key = { it.id }) { rule ->
+                        RuleGridCard(
+                            rule = rule,
+                            actions = actionsFor(rule),
+                            showLabels = showLabels,
+                            onToggle = { viewModel.toggleEnabled(rule) },
+                            onClick = { viewModel.openEditRule(rule) },
+                        )
+                    }
+                }
             }
         }
     }
@@ -302,23 +370,115 @@ fun AutomationScreen(
     }
 }
 
-// --- Rule Card ---
+// --- Rule list: rows and cards ---
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+private val FOOT_CELL_PADDING = 4.dp
+private val FOOT_LABEL_STYLE = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
+private val ROW_LABEL_STYLE = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+/** Labeled list button without its label: 12 + 14 padding, 24 icon, 8 gap. */
+private val ROW_BUTTON_CHROME = 58.dp
+/** Least width the list row text keeps beside the buttons; in sp so it grows with the text size. */
+private val MIN_ROW_TEXT = 240.sp
+
+/** One of the four buttons of a rule: Изменить / Дублировать / Поделиться / Удалить. */
+private class RuleAction(
+    val label: String,
+    val icon: ImageVector,
+    val destructive: Boolean,
+    val enabled: Boolean,
+    val onClick: () -> Unit,
+)
+
 @Composable
-private fun RuleCard(
-    rule: RuleEntity,
-    onToggle: () -> Unit,
-    onClick: () -> Unit,
+private fun ruleActions(
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onShare: () -> Unit,
     shareEnabled: Boolean,
-    onDelete: () -> Unit
-) {
+    onDelete: () -> Unit,
+): List<RuleAction> = listOf(
+    RuleAction(stringResource(R.string.automation_menu_edit), Icons.Outlined.Edit, false, true, onEdit),
+    RuleAction(stringResource(R.string.automation_menu_duplicate), Icons.Outlined.ContentCopy, false, true, onDuplicate),
+    RuleAction(stringResource(R.string.automation_share_button), Icons.Outlined.Share, false, shareEnabled, onShare),
+    RuleAction(stringResource(R.string.automation_menu_delete), Icons.Outlined.Delete, true, true, onDelete),
+)
+
+private fun RuleAction.contentColor(): Color = when {
+    !enabled -> TextMuted
+    destructive -> AccentOrange
+    else -> AccentGreen
+}
+
+/** Width of the widest of [labels] on one line at the current text size. */
+@Composable
+private fun maxLabelWidth(labels: List<String>, style: TextStyle): Dp {
+    val measurer = rememberTextMeasurer()
+    val widest = labels.maxOf { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width }
+    return with(LocalDensity.current) { widest.toDp() }
+}
+
+/** Trigger → action line; a disabled rule shows it all muted. */
+@Composable
+private fun ruleLogic(rule: RuleEntity): AnnotatedString {
     val triggers = remember(rule.triggers) { TriggerDef.listFromJson(rule.triggers) }
     val actions = remember(rule.actions) { ActionDef.listFromJson(rule.actions) }
+    val logicAndLabel = stringResource(R.string.automation_rule_logic_and)
+    val logicOrLabel = stringResource(R.string.automation_rule_logic_or)
+    val summaryCtx = LocalContext.current
+    val logic = buildAnnotatedString {
+        triggers.forEachIndexed { i, t ->
+            if (i > 0) {
+                withStyle(SpanStyle(color = TextMuted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)) {
+                    append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
+                }
+            }
+            appendTriggerSummary(t, summaryCtx)
+        }
+        withStyle(SpanStyle(color = TextMuted)) { append(" → ") }
+        withStyle(SpanStyle(color = AccentTeal)) {
+            append(actions.joinToString(", ") { it.displayName })
+        }
+    }
+    return if (rule.enabled) logic else AnnotatedString(logic.text)
+}
 
+/** «Сработало: N · Последний: … · Пауза: N сек». */
+@Composable
+private fun ruleStats(rule: RuleEntity): String {
+    val triggeredLabel = stringResource(R.string.automation_rule_triggered_count, rule.triggerCount)
+    val localContext = LocalContext.current
+    val lastLabel = rule.lastTriggeredAt?.let { ts ->
+        " · " + stringResource(R.string.automation_rule_last_trigger, formatRelativeTime(ts, localContext))
+    } ?: ""
+    val cooldownLabel = " · " + stringResource(R.string.automation_rule_cooldown, rule.cooldownSeconds)
+    return triggeredLabel + lastLabel + cooldownLabel
+}
+
+@Composable
+private fun RuleDot(enabled: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(8.dp)
+            .clip(CircleShape)
+            .background(if (enabled) AccentGreen else Color.Transparent)
+            .border(1.5.dp, if (enabled) AccentGreen else TextSecondary, CircleShape)
+    )
+}
+
+/** The rule's switch centred in a 64x48dp slot; the M3 switch itself is 52x48dp to touch. */
+@Composable
+private fun RuleSwitch(enabled: Boolean, onToggle: () -> Unit) {
+    Box(Modifier.size(64.dp, 48.dp), contentAlignment = Alignment.Center) {
+        Switch(checked = enabled, onCheckedChange = { onToggle() }, colors = bydSwitchColors())
+    }
+}
+
+@Composable
+private fun RuleContainer(
+    rule: RuleEntity,
+    onClick: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -330,82 +490,279 @@ private fun RuleCard(
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
             if (rule.enabled) AccentGreen.copy(alpha = 0.25f) else CardBorder
-        )
-    ) {
-        Column(modifier = Modifier.padding(12.dp, 10.dp)) {
-            // Header: dot + name + toggle
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (rule.enabled) AccentGreen else Color.Transparent)
-                        .border(1.5.dp, if (rule.enabled) AccentGreen else TextSecondary, CircleShape)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(rule.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
-                    modifier = Modifier.weight(1f))
-                Switch(
-                    checked = rule.enabled,
-                    onCheckedChange = { onToggle() },
-                    colors = bydSwitchColors(),
-                    modifier = Modifier.height(24.dp)
-                )
-            }
+        ),
+        content = content,
+    )
+}
 
-            Spacer(Modifier.height(4.dp))
-
-            // Trigger → Action summary
-            val logicAndLabel = stringResource(R.string.automation_rule_logic_and)
-            val logicOrLabel = stringResource(R.string.automation_rule_logic_or)
-            val summaryCtx = LocalContext.current
-            Text(
-                buildAnnotatedString {
-                    triggers.forEachIndexed { i, t ->
-                        if (i > 0) {
-                            withStyle(SpanStyle(color = TextMuted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)) {
-                                append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
-                            }
-                        }
-                        appendTriggerSummary(t, summaryCtx)
-                    }
-                    withStyle(SpanStyle(color = TextMuted)) { append(" → ") }
-                    withStyle(SpanStyle(color = AccentTeal)) {
-                        append(actions.joinToString(", ") { it.displayName })
-                    }
-                },
-                fontSize = 13.sp, lineHeight = 20.sp
-            )
-
-            // Stats
-            Spacer(Modifier.height(4.dp))
-            val triggeredLabel = stringResource(R.string.automation_rule_triggered_count, rule.triggerCount)
-            val localContext = LocalContext.current
-            val lastLabel = rule.lastTriggeredAt?.let { ts ->
-                " · " + stringResource(R.string.automation_rule_last_trigger, formatRelativeTime(ts, localContext))
-            } ?: ""
-            val cooldownLabel = " · " + stringResource(R.string.automation_rule_cooldown, rule.cooldownSeconds)
-            Text(triggeredLabel + lastLabel + cooldownLabel, fontSize = 11.sp, color = TextMuted)
-
-            // One row of text buttons instead of the overflow menu.
-            HorizontalDivider(color = CardBorder, modifier = Modifier.padding(top = 8.dp))
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+/**
+ * List view: text on the left, four 48dp buttons, the switch at the far right. In a narrow
+ * window ([mode]) the buttons drop their labels, then move under the text across the row.
+ */
+@Composable
+private fun RuleListRow(
+    rule: RuleEntity,
+    actions: List<RuleAction>,
+    mode: ListActionMode,
+    onToggle: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val padding = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)
+    RuleContainer(rule, onClick) {
+        when (mode) {
+            ListActionMode.LABELED, ListActionMode.ICONS -> Row(
+                modifier = padding,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                CardTextButton(stringResource(R.string.automation_menu_edit), AccentGreen, onEdit)
-                CardTextButton(stringResource(R.string.automation_menu_duplicate), AccentGreen, onDuplicate)
-                CardTextButton(stringResource(R.string.automation_share_button), AccentGreen, onShare, enabled = shareEnabled)
-                CardTextButton(stringResource(R.string.automation_menu_delete), AccentOrange, onDelete)
+                RuleRowText(rule, ruleLogic(rule), ruleStats(rule), Modifier.weight(1f))
+                if (mode == ListActionMode.LABELED) {
+                    // Equal widths: every button is as wide as the widest label needs.
+                    Row(Modifier.width(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(ROW_ACTION_SPACING)) {
+                        actions.forEach { RowActionButton(it, showLabel = true, Modifier.weight(1f)) }
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(ROW_ACTION_SPACING)) {
+                        actions.forEach { RowActionButton(it, showLabel = false, Modifier.width(MIN_TOUCH)) }
+                    }
+                }
+                RuleSwitch(rule.enabled, onToggle)
+            }
+            ListActionMode.BELOW_LABELED, ListActionMode.BELOW_ICONS -> Column(
+                modifier = padding,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    RuleRowText(rule, ruleLogic(rule), ruleStats(rule), Modifier.weight(1f))
+                    RuleSwitch(rule.enabled, onToggle)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ROW_ACTION_SPACING)) {
+                    val showLabel = mode == ListActionMode.BELOW_LABELED
+                    actions.forEach { RowActionButton(it, showLabel, Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Dot + name with the stats beside the name when they fit, otherwise on their own line under
+ * the logic. Name and stats wrap rather than get cut; only the logic line ellipsizes.
+ */
+@Composable
+private fun RuleRowText(rule: RuleEntity, logic: AnnotatedString, stats: String, modifier: Modifier) {
+    Layout(
+        content = {
+            RuleDot(rule.enabled)
+            Text(
+                rule.name, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold,
+                color = if (rule.enabled) TextPrimary else TextSecondary,
+            )
+            Text(stats, fontSize = 11.sp, lineHeight = 14.sp, color = TextMuted)
+            Text(
+                logic, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = if (rule.enabled) TextPrimary else TextMuted,
+            )
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val dotM = measurables[0]
+        val nameM = measurables[1]
+        val statsM = measurables[2]
+        val logicM = measurables[3]
+        val indent = 16.dp.roundToPx()
+        val gap = 12.dp.roundToPx()
+        val rowGap = 2.dp.roundToPx()
+        val width = constraints.maxWidth
+        val textMax = (width - indent).coerceAtLeast(0)
+        val dot = dotM.measure(Constraints())
+        val name = nameM.measure(Constraints(maxWidth = textMax))
+        val statsBeside = name.width + gap + statsM.maxIntrinsicWidth(Constraints.Infinity) <= textMax
+        val stats = statsM.measure(
+            Constraints(maxWidth = if (statsBeside) textMax - name.width - gap else textMax)
+        )
+        val logic = logicM.measure(Constraints(maxWidth = textMax))
+
+        val statsX: Int
+        val statsY: Int
+        val logicY: Int
+        val height: Int
+        if (statsBeside) {
+            // Stats share the name's baseline.
+            statsX = indent + name.width + gap
+            statsY = (name[FirstBaseline] - stats[FirstBaseline]).coerceAtLeast(0)
+            logicY = maxOf(name.height, statsY + stats.height) + rowGap
+            height = logicY + logic.height
+        } else {
+            statsX = indent
+            logicY = name.height + rowGap
+            statsY = logicY + logic.height + rowGap
+            height = statsY + stats.height
+        }
+        val nameLine = minOf(name.height, 20.sp.roundToPx())
+        layout(width, height) {
+            dot.place(0, (nameLine - dot.height) / 2)
+            name.place(indent, 0)
+            stats.place(statsX, statsY)
+            logic.place(indent, logicY)
+        }
+    }
+}
+
+@Composable
+private fun RowActionButton(action: RuleAction, showLabel: Boolean, modifier: Modifier) {
+    val shape = RoundedCornerShape(10.dp)
+    val color = action.contentColor()
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .clip(shape)
+            .background(if (action.destructive) AccentOrange.copy(alpha = 0.10f) else CardSurfaceElevated)
+            .border(1.dp, if (action.destructive) AccentOrange.copy(alpha = 0.40f) else CardBorder, shape)
+            .clickable(enabled = action.enabled, onClick = action.onClick)
+            .padding(start = if (showLabel) 12.dp else 0.dp, end = if (showLabel) 14.dp else 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+    ) {
+        Icon(action.icon, if (showLabel) null else action.label, tint = color, modifier = Modifier.size(24.dp))
+        if (showLabel) {
+            Text(action.label, color = color, style = ROW_LABEL_STYLE, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
+/** Title with filters and the action group: one line when both fit whole, else stacked. */
+@Composable
+private fun HeaderLayout(content: @Composable () -> Unit) {
+    Layout(content = content, modifier = Modifier.fillMaxWidth()) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val gap = 12.dp.roundToPx()
+        val lineGap = 4.dp.roundToPx()
+        val left = measurables[0].measure(Constraints(maxWidth = width))
+        val right = measurables[1].measure(Constraints(maxWidth = width))
+        if (headerOnOneLine(left.width, right.width, gap, width)) {
+            val height = maxOf(left.height, right.height)
+            layout(width, height) {
+                left.place(0, (height - left.height) / 2)
+                right.place(width - right.width, (height - right.height) / 2)
+            }
+        } else {
+            layout(width, left.height + lineGap + right.height) {
+                left.place(0, 0)
+                right.place(width - right.width, left.height + lineGap)
+            }
+        }
+    }
+}
+
+/**
+ * Grid view: name + switch, one logic line, the stats line, then four equal buttons across the
+ * card. Every text line is single, so all cards of a row come out the same height.
+ */
+@Composable
+private fun RuleGridCard(
+    rule: RuleEntity,
+    actions: List<RuleAction>,
+    showLabels: Boolean,
+    onToggle: () -> Unit,
+    onClick: () -> Unit,
+) {
+    RuleContainer(rule, onClick) {
+        Column(
+            modifier = Modifier.padding(start = 14.dp, end = 4.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RuleDot(rule.enabled)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    rule.name, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (rule.enabled) TextPrimary else TextSecondary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                RuleSwitch(rule.enabled, onToggle)
+            }
+            Text(
+                ruleLogic(rule), fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = if (rule.enabled) TextPrimary else TextMuted, modifier = Modifier.padding(end = 10.dp),
+            )
+            Text(
+                ruleStats(rule), fontSize = 11.sp, lineHeight = 14.sp, color = TextMuted,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 10.dp),
+            )
+        }
+        HorizontalDivider(color = CardBorder)
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            actions.forEachIndexed { i, action ->
+                if (i > 0) VerticalDivider(color = CardBorder)
+                FootActionButton(action, showLabels, Modifier.weight(1f).fillMaxHeight())
             }
         }
     }
 }
 
 @Composable
-private fun CardTextButton(label: String, color: Color, onClick: () -> Unit, enabled: Boolean = true) {
-    TextButton(onClick = onClick, enabled = enabled) {
-        Text(label, color = if (enabled) color else TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+private fun FootActionButton(action: RuleAction, showLabel: Boolean, modifier: Modifier) {
+    val color = action.contentColor()
+    Column(
+        modifier = modifier
+            .background(if (action.destructive) AccentOrange.copy(alpha = 0.10f) else Color.Transparent)
+            .clickable(enabled = action.enabled, onClick = action.onClick)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = FOOT_CELL_PADDING, vertical = if (showLabel) 6.dp else 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+    ) {
+        Icon(action.icon, if (showLabel) null else action.label, tint = color, modifier = Modifier.size(24.dp))
+        if (showLabel) {
+            Text(action.label, color = color, style = FOOT_LABEL_STYLE, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
+/** Two-button list/grid switch at the right end of the header: 48x40dp each, 48dp to touch. */
+@Composable
+private fun ViewModeToggle(mode: RuleViewMode, onChange: (RuleViewMode) -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(Modifier.height(48.dp)) {
+        Row {
+            ViewModeCell(
+                Icons.AutoMirrored.Outlined.ViewList, stringResource(R.string.automation_view_list),
+                mode == RuleViewMode.LIST, RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp),
+            ) { onChange(RuleViewMode.LIST) }
+            ViewModeCell(
+                Icons.Outlined.GridView, stringResource(R.string.automation_view_grid),
+                mode == RuleViewMode.GRID, RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp),
+            ) { onChange(RuleViewMode.GRID) }
+        }
+        // The outline and the middle line are drawn over the 40dp visible part only.
+        Box(
+            Modifier
+                .matchParentSize()
+                .padding(vertical = 4.dp)
+                .border(1.5.dp, CardBorder, shape)
+        )
+        Box(
+            Modifier
+                .align(Alignment.Center)
+                .width(1.5.dp)
+                .height(40.dp)
+                .background(CardBorder)
+        )
+    }
+}
+
+@Composable
+private fun ViewModeCell(icon: ImageVector, label: String, selected: Boolean, shape: Shape, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(vertical = 4.dp)
+            .background(if (selected) AccentGreen.copy(alpha = 0.18f) else Color.Transparent, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, label, tint = if (selected) AccentGreen else TextSecondary, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -415,12 +772,14 @@ private fun HeaderOutlinedButton(label: String, icon: androidx.compose.ui.graphi
         onClick = onClick,
         colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
+        contentPadding = PaddingValues(horizontal = 14.dp),
+        // On the 40dp button itself, not around its 48dp touch area.
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, CardBorder),
     ) {
         Text(label, fontSize = 13.sp)
         if (icon != null) {
             Spacer(Modifier.width(6.dp))
-            Icon(icon, null, modifier = Modifier.size(16.dp))
+            Icon(icon, null, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -2205,10 +2564,11 @@ private fun LogItem(log: RuleLogEntity) {
 // --- Shared Composables ---
 
 @Composable
-private fun AutoChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun AutoChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     FilterChip(
         selected = selected,
         onClick = onClick,
+        modifier = modifier,
         label = { Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = AccentGreen,

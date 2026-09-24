@@ -1601,6 +1601,8 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Importar</string>
     <string name="automation_share_button">Compartilhar</string>
+    <string name="automation_view_list">Lista</string>
+    <string name="automation_view_grid">Grade</string>
     <string name="automation_share_note">Números de telefone, nomes de contatos e vínculos com seus locais são removidos do arquivo. Dos links são removidos login e senha e os parâmetros que parecem chaves; confira o próprio endereço antes de enviar. Textos de notificações e frases, pedidos ao agente e pontos de rota permanecem, confira-os também.</string>
     <string name="automation_share_error">Não foi possível salvar o arquivo: %1$s</string>
     <string name="automation_test_run_button">Execução de teste</string>
