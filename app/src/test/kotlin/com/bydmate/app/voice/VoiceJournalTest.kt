@@ -143,10 +143,31 @@ class VoiceJournalTest {
                 command = long, reason = long))
         }
         assertTrue(file.length() <= VoiceJournal.MAX_FILE_BYTES)
+        val onDisk = org.json.JSONArray(file.readText())
+        for (i in 0 until onDisk.length()) {
+            val o = onDisk.getJSONObject(i)
+            assertEquals(VoiceJournal.MAX_TEXT_CHARS, o.getString("detail").length)
+            assertEquals(VoiceJournal.MAX_TEXT_CHARS, o.getString("answer").length)
+        }
 
         val back = journal(file).entries.value
         assertEquals(VoiceJournal.MAX, back.size)
         assertTrue(back.all { it.detail.length == VoiceJournal.MAX_TEXT_CHARS && it.answer?.length == VoiceJournal.MAX_TEXT_CHARS })
+    }
+
+    @Test fun `serialised size over the file bound drops the oldest entries, never writing a file the loader rejects`() {
+        val file = File(tmp.root, VoiceJournal.FILE_NAME)
+        // U+0001 escapes to \u0001 in JSON (6 bytes per character), so the per-field character
+        // bound alone is not enough to keep the serialised file under MAX_FILE_BYTES.
+        val control = "\u0001".repeat(VoiceJournal.MAX_TEXT_CHARS)
+        val writer = journal(file)
+        repeat(VoiceJournal.MAX) {
+            writer.add(entry("cmd$it").copy(route = VoiceJournalEntry.Route.AGENT, detail = control, answer = control))
+        }
+
+        assertTrue(file.length() <= VoiceJournal.MAX_FILE_BYTES)
+        val reloaded = journal(file).entries.value
+        assertTrue(reloaded.isNotEmpty())
     }
 
     @Test fun `stored fields over the bound are cut on load`() {

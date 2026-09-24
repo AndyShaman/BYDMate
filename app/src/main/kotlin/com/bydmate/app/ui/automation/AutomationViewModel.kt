@@ -554,6 +554,7 @@ class AutomationViewModel @Inject constructor(
      * (a snapshot taken before the edit is what gets inserted) nor kept (the editor closes on
      * success and drops it).
      */
+    @Suppress("TooGenericExceptionCaught")
     fun saveDeletedRuleAsNew() {
         val e = _uiState.value.editing
         if (!_uiState.value.editorRuleDeleted || e.saving) return
@@ -564,21 +565,16 @@ class AutomationViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)))
-                if (session == editorSession) {
-                    _uiState.update { it.copy(editing = it.editing.copy(saving = false)) }
-                    closeEditor()
-                }
-            } catch (ex: SQLiteException) {
-                Log.w("AutomationViewModel", "saveDeletedRuleAsNew: insert failed", ex)
-                if (session == editorSession) {
-                    _uiState.update {
-                        it.copy(
-                            editing = it.editing.copy(saving = false),
-                            editorError = context.appLocalizedContext()
-                                .getString(R.string.automation_import_save_failed, ex.message ?: "?"),
-                        )
-                    }
-                }
+                if (session == editorSession) closeEditor()
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (e: Exception) {
+                Log.w("AutomationViewModel", "saveDeletedRuleAsNew: insert failed", e)
+                val msg = context.appLocalizedContext().getString(R.string.automation_import_save_failed, e.message ?: "?")
+                if (session == editorSession) _uiState.update { it.copy(editorError = msg) }
+            } finally {
+                // Unfreezes the draft on any failure; a successful close already dropped this session.
+                if (session == editorSession) _uiState.update { it.copy(editing = it.editing.copy(saving = false)) }
             }
         }
     }
