@@ -920,10 +920,13 @@ private fun WidgetSection() {
                     ),
                     selectedIndex = if (leftTapApp.mode == LeftTapMode.APP) 0 else 1,
                     onSelect = { idx ->
-                        prefs.setLeftTapMode(if (idx == 0) LeftTapMode.APP else LeftTapMode.SPLIT)
+                        if (leftTapModeSelectable(idx, splitFeatureEnabled)) {
+                            prefs.setLeftTapMode(if (idx == 0) LeftTapMode.APP else LeftTapMode.SPLIT)
+                        }
                     },
-                    // Disabled when split feature is off: prevents selecting split mode (Fix 1).
-                    enabled = enabled && splitFeatureEnabled,
+                    // Stays enabled with split off if SPLIT is still the saved mode, so the
+                    // user has a way to switch out of it (#188).
+                    enabled = leftTapModeChipEnabled(enabled, splitFeatureEnabled, leftTapApp.mode),
                 )
             }
             SettingToggleRow(
@@ -967,6 +970,24 @@ private fun WidgetSection() {
         )
     }
 }
+
+/**
+ * Whether the "left tap mode" chip row should be interactive. With the split feature off the
+ * row still stays enabled if SPLIT is the saved mode, so the user has a way to switch out of
+ * it instead of being stuck (#188).
+ */
+internal fun leftTapModeChipEnabled(
+    widgetEnabled: Boolean,
+    splitFeatureEnabled: Boolean,
+    mode: LeftTapMode,
+): Boolean = widgetEnabled && (splitFeatureEnabled || mode == LeftTapMode.SPLIT)
+
+/**
+ * Whether a chip tap (idx 0 = APP, idx 1 = SPLIT) should be applied. APP is always accepted;
+ * SPLIT is ignored while the split feature is disabled.
+ */
+internal fun leftTapModeSelectable(idx: Int, splitFeatureEnabled: Boolean): Boolean =
+    idx == 0 || splitFeatureEnabled
 
 @Composable
 private fun DisplaySection() {
