@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.dashboard
 
+import kotlin.math.ceil
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -583,7 +584,7 @@ private fun GaugeYieldingColumn(
         val cards = measurables[2].measure(free)
         val target = constraints.minHeight
         val gaugeSize = (target - rows.height - cards.height)
-            .coerceIn(gaugeMinSize.roundToPx(), maxOf(gaugeMinSize, GaugeMaxSize).roundToPx())
+            .coerceIn(ceil(gaugeMinSize.toPx()).toInt(), maxOf(gaugeMinSize, GaugeMaxSize).roundToPx())
             .coerceAtMost(width)
         val gauge = measurables[0].measure(Constraints.fixed(gaugeSize, gaugeSize))
         val needed = gaugeSize + rows.height + cards.height

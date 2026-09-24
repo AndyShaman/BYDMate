@@ -286,7 +286,8 @@ fun rememberSocGaugeMinSize(isCharging: Boolean): Dp {
                     android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, FontWeight.Medium.weight, false),
                     SocGaugeLabelSize.toPx()))
             }
-            socGaugeMinSizePx(rows, SocGaugeStroke.toPx()).toDp()
+            // A lower bound: round up, or the arc could still touch the ink by a fraction of a px.
+            kotlin.math.ceil(socGaugeMinSizePx(rows, SocGaugeStroke.toPx())).toDp()
         }
     }
 }
