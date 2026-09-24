@@ -368,17 +368,16 @@ class VoiceControllerAgentFallbackTest {
         verify { ttsEngine.stop() }
     }
 
-    // --- Task 5: pending agent question outranks NLU ---
+    // --- Task 5 / dictionary-outranks-follow-up: a recognized command still dispatches ---
 
-    @Test fun `follow-up answer bypasses NLU and reaches the agent verbatim`() {
+    @Test fun `NLU-resolvable phrase dispatches locally even with a pending agent question`() {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val fakeAsr = FakeContinuousAsr()
-        // "закрой все окна" is NLU-resolvable — with a pending agent question it must
-        // NOT dispatch; it is the answer to the question.
+        // "закрой все окна" is NLU-resolvable — a recognized dictionary command outranks the
+        // follow-up window, so it dispatches locally and never reaches the agent.
         val controller = makeController(agentOrchestrator = agentOrchestrator, dispatcher = dispatcher, continuousAsr = fakeAsr)
         coEvery { agentOrchestrator.expectsFollowUp() } returns true
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Готово")
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -386,7 +385,27 @@ class VoiceControllerAgentFallbackTest {
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой все окна"))
         Thread.sleep(500)
 
-        coVerify(exactly = 1) { agentOrchestrator.ask("закрой все окна", any()) }
+        coVerify(exactly = 1) { dispatcher.dispatch(any(), any()) }
+        coVerify(exactly = 0) { agentOrchestrator.ask(any(), any()) }
+    }
+
+    @Test fun `unrecognized phrase with a pending agent question still reaches the agent verbatim`() {
+        val agentOrchestrator = mockk<AgentOrchestrator>()
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val fakeAsr = FakeContinuousAsr()
+        // "водителя" is not NLU-resolvable, so it falls through to the follow-up window and
+        // reaches ask() verbatim, as the answer to the agent's pending question.
+        val controller = makeController(agentOrchestrator = agentOrchestrator, dispatcher = dispatcher, continuousAsr = fakeAsr)
+        coEvery { agentOrchestrator.expectsFollowUp() } returns true
+        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Готово")
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("водителя"))
+        Thread.sleep(500)
+
+        coVerify(exactly = 1) { agentOrchestrator.ask("водителя", any()) }
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 

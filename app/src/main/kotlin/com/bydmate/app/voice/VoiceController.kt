@@ -426,10 +426,16 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             return
         }
 
-        // An unanswered clarifying question from the agent outranks every local resolver: the
-        // phrase is the ANSWER ("водителя", "назови её Дом") and must reach ask() verbatim.
-        val followUp = runCatching { agentOrchestrator.expectsFollowUp() }.getOrDefault(false)
-        val res = if (followUp) Resolution.None(VoiceRefusal.AGENT_FOLLOWUP_WINDOW) else resolve(command)
+        // A recognized dictionary command (automation phrase, user phrase, built-in NLU) outranks
+        // an unanswered clarifying question from the agent: "закрой все окна" must still dispatch
+        // even right after the agent asked something with a rhetorical "?". Only a phrase none of
+        // the local resolvers claim falls through to the follow-up window, where it is treated as
+        // the ANSWER ("водителя", "назови её Дом") and reaches ask() verbatim.
+        val local = resolve(command)
+        val res = if (local is Resolution.None) {
+            val followUp = runCatching { agentOrchestrator.expectsFollowUp() }.getOrDefault(false)
+            if (followUp) Resolution.None(VoiceRefusal.AGENT_FOLLOWUP_WINDOW) else local
+        } else local
         _state.value = VoiceUiState.Thinking
         if (res is Resolution.None) {
             turn = turn.copy(agentReason = res.reason)
@@ -445,12 +451,13 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     private fun withDecodeMs(text: String, decodeMs: Long?): String =
         if (decodeMs != null) "$text decodeMs=$decodeMs" else text
 
-    /** Side-effect-free resolution of a transcript to an actionable command. Precedence (the
-     *  agent follow-up window, checked by the caller, outranks all of them):
+    /** Side-effect-free resolution of a transcript to an actionable command. Precedence:
      *  1. an automation phrase equal to the whole utterance, word for word after normalization;
      *  2. the user's own phrase for a built-in command, equal to the whole utterance;
      *  3. the built-in NluParser on the full utterance;
-     *  4. the agent (Resolution.None, with the parser's reason).
+     *  4. the agent follow-up window (checked by the caller only when none of the above claim
+     *     the phrase);
+     *  5. the agent (Resolution.None, with the parser's reason).
      *  A user-made phrase goes first so the user can take over a phrase the parser gets wrong;
      *  it never fires from inside a longer utterance, so «открой окно» never swallows
      *  «открой окно наполовину», «не открывай окно» or «открой окно на палец». */
