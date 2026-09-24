@@ -5,7 +5,7 @@ import org.junit.Test
 
 class NluParserTest {
     private fun cmd(text: String): String? =
-        (NluParser.parse(text, VoiceLang.RU) as? ParseResult.Command)?.command
+        (NluParser.parse(text) as? ParseResult.Command)?.command
 
     @Test fun word_order_does_not_matter() {
         assertEquals("车窗关闭", cmd("закрой окна"))
@@ -41,16 +41,16 @@ class NluParserTest {
     }
 
     @Test fun temperature_out_of_range_is_unrecognized() {
-        assertEquals(ParseResult.Unrecognized, NluParser.parse("поставь температуру 40", VoiceLang.RU))
+        assertEquals(ParseResult.Unrecognized, NluParser.parse("поставь температуру 40"))
     }
 
     @Test fun garbage_is_unrecognized() {
-        assertEquals(ParseResult.Unrecognized, NluParser.parse("сколько времени", VoiceLang.RU))
+        assertEquals(ParseResult.Unrecognized, NluParser.parse("сколько времени"))
     }
 
     @Test fun missing_action_is_unrecognized() {
         // device but no action → never guess
-        assertEquals(ParseResult.Unrecognized, NluParser.parse("окна", VoiceLang.RU))
+        assertEquals(ParseResult.Unrecognized, NluParser.parse("окна"))
     }
 
     @Test fun ac_off_recognized() {
@@ -78,19 +78,19 @@ class NluParserTest {
     }
 
     @Test fun bare_temperature_out_of_range_is_unrecognized() {
-        assertEquals(ParseResult.Unrecognized, NluParser.parse("температура 14", VoiceLang.RU))
+        assertEquals(ParseResult.Unrecognized, NluParser.parse("температура 14"))
     }
 
     @Test fun bare_temperature_without_number_stays_unrecognized() {
         // "температура" alone is ambiguous (no value) -> never guess
-        assertEquals(ParseResult.Unrecognized, NluParser.parse("температура", VoiceLang.RU))
+        assertEquals(ParseResult.Unrecognized, NluParser.parse("температура"))
     }
 
     @Test fun relative_temperature_warmer_cooler() {
-        assertEquals(ParseResult.RelativeTemp(1), NluParser.parse("теплее", VoiceLang.RU))
-        assertEquals(ParseResult.RelativeTemp(1), NluParser.parse("сделай потеплее", VoiceLang.RU))
-        assertEquals(ParseResult.RelativeTemp(-1), NluParser.parse("холоднее", VoiceLang.RU))
-        assertEquals(ParseResult.RelativeTemp(-1), NluParser.parse("сделай прохладнее", VoiceLang.RU))
+        assertEquals(ParseResult.RelativeTemp(1), NluParser.parse("теплее"))
+        assertEquals(ParseResult.RelativeTemp(1), NluParser.parse("сделай потеплее"))
+        assertEquals(ParseResult.RelativeTemp(-1), NluParser.parse("холоднее"))
+        assertEquals(ParseResult.RelativeTemp(-1), NluParser.parse("сделай прохладнее"))
     }
 
     @Test fun windows_half_open() {
@@ -119,7 +119,7 @@ class NluParserTest {
     }
 
     private fun vol(text: String): String? =
-        (NluParser.parse(text, VoiceLang.RU) as? ParseResult.Volume)?.payload
+        (NluParser.parse(text) as? ParseResult.Volume)?.payload
 
     @Test fun volume_absolute() {
         assertEquals("10", vol("громкость на 10"))
@@ -156,7 +156,7 @@ class NluParserTest {
     // The heater needs a heat word or an on/off verb: the wheel alone is not the heater.
     @Test fun steering_wheel_without_heat_or_switch_is_not_the_heater() {
         for (phrase in listOf("поверни руль", "руль налево", "подогрев руля", "открой руль")) {
-            assertEquals(phrase, ParseResult.Unrecognized, NluParser.parse(phrase, VoiceLang.RU))
+            assertEquals(phrase, ParseResult.Unrecognized, NluParser.parse(phrase))
         }
     }
 

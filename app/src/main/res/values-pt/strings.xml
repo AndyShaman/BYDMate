@@ -1344,7 +1344,7 @@
     <string name="settings_voice_user_phrases_title">Frases próprias para comandos</string>
     <string name="settings_voice_user_phrases_description">Suas palavras para comandos offline integrados</string>
     <string name="settings_voice_user_phrases_button">Abrir</string>
-    <string name="voice_user_phrases_hint">O comando funciona quando a frase é dita sozinha ou dentro de uma frase mais longa. Suas frases são verificadas antes das integradas.</string>
+    <string name="voice_user_phrases_hint">Dita sozinha, sua frase tem prioridade sobre o comando integrado. Dentro de uma frase mais longa, ela só funciona se nenhum comando integrado for reconhecido.</string>
     <string name="voice_user_phrases_add">Adicionar</string>
     <string name="voice_user_phrases_field">Frase</string>
     <string name="voice_user_phrases_too_long">No máximo %1$d caracteres</string>

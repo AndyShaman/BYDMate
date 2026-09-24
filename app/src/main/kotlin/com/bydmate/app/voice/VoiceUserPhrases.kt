@@ -17,6 +17,10 @@ import javax.inject.Singleton
  *  (voice is Russian-only) and the dispatch string. */
 data class VoiceUserCommand(val id: String, val name: String, val command: String)
 
+/** A command picked by the user's phrase; [exact] when the phrase is the whole utterance after
+ *  normalization, not just a part of it. */
+data class VoiceUserMatch(val command: VoiceUserCommand, val exact: Boolean)
+
 /**
  * The user's own phrases for built-in offline commands (like the competitor's
  * `voice_cmd_overrides`): commandId → phrases, JSON in SharedPreferences("voice"). A phrase
@@ -41,17 +45,17 @@ class VoiceUserPhrases(private val prefs: SharedPreferences? = null) {
     }
 
     /** The command whose user phrase occurs in [transcript]; the longest phrase wins. */
-    fun match(transcript: String): VoiceUserCommand? {
+    fun match(transcript: String): VoiceUserMatch? {
         val heard = VoicePhrase.tokens(transcript)
         if (heard.isEmpty()) return null
-        var best: VoiceUserCommand? = null
+        var best: VoiceUserMatch? = null
         var bestLen = 0
         for ((id, list) in _phrases.value) {
             val cmd = byId[id] ?: continue
             for (phrase in list) {
                 val tokens = VoicePhrase.tokens(phrase)
                 if (tokens.size > bestLen && VoicePhrase.containsSequence(heard, tokens)) {
-                    best = cmd
+                    best = VoiceUserMatch(cmd, exact = tokens.size == heard.size)
                     bestLen = tokens.size
                 }
             }

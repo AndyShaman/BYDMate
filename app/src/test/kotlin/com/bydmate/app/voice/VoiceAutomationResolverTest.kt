@@ -31,7 +31,8 @@ class VoiceAutomationResolverTest {
 
     @Test fun `phrase contained in the utterance matches, fillers and yo ignored`() = runBlocking {
         val r = resolver(listOf(voiceRule(1, "режим ёлка")))
-        assertEquals(1L, r.match("Эй, включи мне режим елка, пожалуйста!")?.ruleId)
+        assertEquals(VoiceAutomationMatch(1L, "r1", exact = false), r.match("Эй, включи мне режим елка, пожалуйста!"))
+        assertEquals(VoiceAutomationMatch(1L, "r1", exact = true), r.match("Эй, режим елка, пожалуйста!"))
     }
 
     @Test fun `no partial-word match`() = runBlocking {

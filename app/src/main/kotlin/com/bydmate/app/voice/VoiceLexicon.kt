@@ -1,8 +1,5 @@
 package com.bydmate.app.voice
 
-/** Offline commands are Russian only; the value is kept for callers that still pass it. */
-enum class VoiceLang { RU }
-
 /** Surface words per slot. This is the single place where phrasing flexibility
  *  lives: add a synonym here and the parser picks it up. Words are lowercase with
  *  "е" for "ё" (VoiceNormalizer folds it); matching is stem-based (see NluParser), so

@@ -6,10 +6,10 @@ import org.junit.Test
 class NluQualifierTest {
 
     private fun cmd(text: String): String? =
-        (NluParser.parse(text, VoiceLang.RU) as? ParseResult.Command)?.command
+        (NluParser.parse(text) as? ParseResult.Command)?.command
 
     private fun unrecognized(text: String) =
-        assertEquals(ParseResult.Unrecognized, NluParser.parse(text, VoiceLang.RU))
+        assertEquals(ParseResult.Unrecognized, NluParser.parse(text))
 
     // Corner windows: a compound qualifier must select exactly ONE window.
     @Test fun rear_right_window_targets_one_window() = assertEquals("后右打开100", cmd("открой заднее правое окно"))

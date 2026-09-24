@@ -25,9 +25,7 @@ sealed interface ParseResult {
  */
 object NluParser {
 
-    /** Offline commands are Russian only; [lang] has the single value RU and is not consulted. */
-    @Suppress("UnusedParameter", "UNUSED_PARAMETER")
-    fun parse(text: String, lang: VoiceLang): ParseResult {
+    fun parse(text: String): ParseResult {
         val tokens = VoiceNormalizer.tokens(text)
         if (tokens.isEmpty()) return ParseResult.Unrecognized
 

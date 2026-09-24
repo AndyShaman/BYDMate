@@ -33,17 +33,20 @@ class VoiceUserPhrasesTest {
 
     @Test fun `equal phrase matches`() {
         val p = VoiceUserPhrases().apply { add(close, "задраить люки") }
-        assertEquals(close, p.match("задраить люки")?.id)
+        val cmd = VoiceUserPhrases.COMMANDS.first { it.id == close }
+        assertEquals(VoiceUserMatch(cmd, exact = true), p.match("задраить люки"))
     }
 
     @Test fun `phrase contained in the utterance matches`() {
         val p = VoiceUserPhrases().apply { add(close, "задраить люки") }
-        assertEquals(close, p.match("ну давай задраить люки быстро")?.id)
+        assertEquals(close, p.match("ну давай задраить люки быстро")?.command?.id)
+        assertEquals(false, p.match("ну давай задраить люки быстро")?.exact)
     }
 
     @Test fun `fillers punctuation case and yo are ignored`() {
         val p = VoiceUserPhrases().apply { add(open, "Ёлки открыть") }
-        assertEquals(open, p.match("Эй, слушай, елки открыть мне, пожалуйста!")?.id)
+        assertEquals(open, p.match("Эй, слушай, елки открыть мне, пожалуйста!")?.command?.id)
+        assertEquals(true, p.match("Эй, слушай, елки открыть мне, пожалуйста!")?.exact)
     }
 
     @Test fun `no partial-word match`() {
@@ -56,8 +59,8 @@ class VoiceUserPhrasesTest {
             add(open, "проветрить")
             add(close, "хватит проветрить")
         }
-        assertEquals(close, p.match("хватит проветрить")?.id)
-        assertEquals(open, p.match("проветрить")?.id)
+        assertEquals(close, p.match("хватит проветрить")?.command?.id)
+        assertEquals(open, p.match("проветрить")?.command?.id)
     }
 
     @Test fun `remove drops the phrase`() {
@@ -72,7 +75,7 @@ class VoiceUserPhrasesTest {
 
         val reloaded = VoiceUserPhrases(prefs)
         assertEquals(mapOf(close to listOf("задраить люки"), open to listOf("проветрить")), reloaded.phrases.value)
-        assertEquals(close, reloaded.match("задраить люки")?.id)
+        assertEquals(close, reloaded.match("задраить люки")?.command?.id)
     }
 
     @Test fun `check refuses empty, too long and too many`() {

@@ -1317,7 +1317,7 @@
     <string name="settings_voice_user_phrases_title">自定义命令短语</string>
     <string name="settings_voice_user_phrases_description">为内置离线命令添加自己的说法</string>
     <string name="settings_voice_user_phrases_button">打开</string>
-    <string name="voice_user_phrases_hint">单独说出短语或在更长的句子中说出时，命令都会执行。自定义短语优先于内置短语。</string>
+    <string name="voice_user_phrases_hint">单独说出时，自定义短语优先于内置命令。在更长的句子中，只有未识别出内置命令时才会执行。</string>
     <string name="voice_user_phrases_add">添加</string>
     <string name="voice_user_phrases_field">短语</string>
     <string name="voice_user_phrases_too_long">最多 %1$d 个字符</string>

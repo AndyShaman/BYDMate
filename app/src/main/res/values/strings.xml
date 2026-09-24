@@ -1358,7 +1358,7 @@
     <string name="settings_voice_user_phrases_title">Свои фразы для команд</string>
     <string name="settings_voice_user_phrases_description">Свои слова для встроенных офлайн-команд</string>
     <string name="settings_voice_user_phrases_button">Открыть</string>
-    <string name="voice_user_phrases_hint">Команда сработает, если фраза сказана целиком или внутри длинной фразы. Свои фразы проверяются раньше встроенных.</string>
+    <string name="voice_user_phrases_hint">Своя фраза, сказанная отдельно, важнее встроенной команды. Внутри длинной фразы она сработает, только если встроенная команда не распознана.</string>
     <string name="voice_user_phrases_add">Добавить</string>
     <string name="voice_user_phrases_field">Фраза</string>
     <string name="voice_user_phrases_too_long">Не длиннее %1$d символов</string>
