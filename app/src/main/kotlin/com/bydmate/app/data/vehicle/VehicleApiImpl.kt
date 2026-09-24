@@ -313,15 +313,29 @@ class VehicleApiImpl @Inject constructor(
         return Result.success(Unit)
     }
 
-    /** Steering wheel heat through its verification channel, as the Result dispatch returns. */
-    private suspend fun steeringHeat(action: String): Result<Unit> =
-        when (steeringHeatChannel.actuate(on = action == "steering_heat_on")) {
+    /**
+     * Steering wheel heat through its verification channel, as the Result dispatch returns.
+     * The per-write audit rows only say the daemon accepted a write; one more row records the
+     * channel's verdict: dev = the device of the last write (0 = none), readback = the last
+     * state read, error = "verdict=<label>" (also on success).
+     */
+    private suspend fun steeringHeat(action: String): Result<Unit> {
+        val outcome = steeringHeatChannel.actuate(on = action == "steering_heat_on")
+        val entry = allowlist.find(action)
+        logWrite(
+            action, outcome.dev, entry?.writeFid ?: -1, entry?.valueMin ?: -1, outcome.state,
+            outcome.result == SteeringHeatChannel.Result.OK, "verdict=${outcome.verdict}", validated = false,
+        )
+        return when (outcome.result) {
             SteeringHeatChannel.Result.OK -> Result.success(Unit)
             SteeringHeatChannel.Result.NOT_EQUIPPED -> Result.failure(VehicleWriteError.NotEquipped(action))
             SteeringHeatChannel.Result.NO_EFFECT -> Result.failure(VehicleWriteError.Unsupported(action))
             SteeringHeatChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "helper write not accepted"))
+            SteeringHeatChannel.Result.UNCONFIRMED ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
         }
+    }
 
     /** Logcat line plus audit row for a write that went through. */
     private suspend fun logSuccess(actionName: String, entry: WriteEntry, value: Int, readback: Long?) {
