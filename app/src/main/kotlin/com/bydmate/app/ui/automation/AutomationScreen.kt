@@ -255,14 +255,18 @@ fun AutomationScreen(
         }
     }
 
-    // After «Поделиться» (card or editor): drawn last so it sits above the editor. The share sheet
-    // opens over it right away; the dialog stays so the file name is there on the way back.
-    state.sharedRuleFile?.let { file ->
-        RuleSavedDialog(
-            fileName = file.name,
-            onShare = { viewModel.openShareSheet() },
-            onDismiss = { viewModel.dismissSharedRule() },
+    // After «Поделиться» (card or editor), before the file is written: drawn last so it sits
+    // above the editor. «Продолжить» writes the file and opens the share sheet.
+    if (state.pendingShare != null) {
+        ShareNoteDialog(
+            onContinue = { viewModel.confirmShare() },
+            onDismiss = { viewModel.cancelShare() },
         )
+    }
+
+    // «Сохранить» on a rule deleted meanwhile: above the editor, closes it.
+    if (state.showEditor && state.editorRuleDeleted) {
+        RuleDeletedDialog(onClose = { viewModel.closeEditor() })
     }
 
     // Journal dialog

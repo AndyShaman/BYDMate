@@ -29,13 +29,17 @@ data class SharedRule(
     fun unresolvedPlaceIndexes(): List<Int> =
         triggers.indices.filter { triggers[it].kind in RuleShare.PLACE_KINDS && triggers[it].placeId == null }
 
+    /** `url` actions whose address could not be cleaned on export: the user enters it again in the editor. */
+    fun unresolvedUrlIndexes(): List<Int> = actions.indices.filter { needsUrl(actions[it]) }
+
     /**
      * Actions waiting for a phone number: calls without one (the file never carries one) and
      * `tel:` / `sms:` links whose number was removed on export.
      */
     fun unresolvedCallIndexes(): List<Int> = actions.indices.filter { needsContact(actions[it]) }
 
-    fun hasUnresolved(): Boolean = unresolvedPlaceIndexes().isNotEmpty() || unresolvedCallIndexes().isNotEmpty()
+    fun hasUnresolved(): Boolean =
+        unresolvedPlaceIndexes().isNotEmpty() || unresolvedCallIndexes().isNotEmpty() || unresolvedUrlIndexes().isNotEmpty()
 
     companion object {
         fun fromEntity(rule: RuleEntity) = SharedRule(
@@ -86,6 +90,9 @@ object RuleShare {
 
     /** Marker left in a stripped call or tel/sms url payload: the importer has to ask for a number. */
     internal const val CONTACT_REQUIRED = "contactRequired"
+
+    /** Marker left in a url payload whose address was emptied on export: it has to be entered again. */
+    internal const val URL_REQUIRED = "urlRequired"
 
     // --- Export ---
 
@@ -142,7 +149,10 @@ object RuleShare {
             val json = payloadOf(action.payload)
             val stripped = RuleShareUrl.strip(json.optString("url"))
             json.put("url", stripped.url)
-            if (stripped.contactRequired) json.put(CONTACT_REQUIRED, true) else json.remove(CONTACT_REQUIRED)
+            json.remove(CONTACT_REQUIRED)
+            json.remove(URL_REQUIRED)
+            if (stripped.contactRequired) json.put(CONTACT_REQUIRED, true)
+            if (stripped.urlRequired) json.put(URL_REQUIRED, true)
             action.copy(displayName = stripped.url, payload = json.toString())
         }
         else -> action
@@ -150,8 +160,12 @@ object RuleShare {
 
     // --- Import ---
 
-    /** Parses a share file. [callLabel] names call actions, whose display name was stripped. */
+    /**
+     * Parses a share file. [callLabel] names call actions, whose display name was stripped.
+     * A file past [RuleShareJsonLimits] is invalid before org.json ever sees it.
+     */
     fun parse(text: String, callLabel: String): RuleParseResult {
+        if (!RuleShareJsonLimits.accepts(text)) return RuleParseResult.Invalid
         val root = runCatching { JSONObject(text) }.getOrNull() ?: return RuleParseResult.Invalid
         if (root.optString("format") != FORMAT) return RuleParseResult.Invalid
         val version = root.optInt("version", -1)
@@ -244,36 +258,52 @@ object RuleShare {
     )
 }
 
-/** A share-safe address, and whether the importer has to enter a phone number into it. */
-data class StrippedUrl(val url: String, val contactRequired: Boolean)
+/**
+ * A share-safe address; whether the importer has to enter a phone number into it; whether the
+ * address could not be cleaned and was emptied, so the importer has to enter it again.
+ */
+data class StrippedUrl(val url: String, val contactRequired: Boolean, val urlRequired: Boolean = false)
 
 /**
  * Credential stripping for a shared `url` action. The address is parsed as a [URI]:
  * - user:password in the authority is dropped;
- * - query parameters whose URL-decoded name looks like a credential are dropped;
+ * - query parameters whose URL-decoded name contains one of [CREDENTIAL_PARTS] are dropped;
  * - the fragment is dropped (OAuth-style links carry tokens there), except in an Android
  *   `intent:` link, where the fragment IS the intent: there only credential-named extras go;
- * - `tel:`, `sms:` and `smsto:` lose the number and are marked contact-required, like `call`.
- * A secret in the path (a webhook id, a file name) cannot be recognised structurally and is
- * out of scope: the share note asks the user to check links before sending.
- * An address [URI] cannot parse keeps only what comes before its query and fragment.
+ * - `tel:` loses the number, `sms:` and `smsto:` lose the number and keep the query (the
+ *   message body); all three are marked contact-required, like `call`.
+ * An address [URI] cannot parse, and `javascript:` / `data:` content, is not guessed at: it is
+ * emptied and marked url-required. A secret in the path or in a link nested inside another
+ * (a webhook id, an intent fallback URL) cannot be recognised structurally: the share note
+ * says what is removed and asks the user to check the address itself.
  */
 internal object RuleShareUrl {
     private val CONTACT_SCHEMES = setOf("tel", "sms", "smsto")
+    private val CONTENT_SCHEMES = setOf("javascript", "data")
 
-    // Query parameter names that carry a secret.
-    private val CREDENTIAL_PARAM = Regex(
-        "(?i)^(.*token.*|.*secret.*|.*passw(or)?d.*|pwd|pass|key|apikey|api_key|api-key|auth|authorization|sig|signature)$"
-    )
-    private val SCHEME_AND_USER_INFO = Regex("^([a-zA-Z][a-zA-Z0-9+.\\-]*://)[^/]*@")
+    // Lower-cased substrings of a query parameter name that carries a secret.
+    private val CREDENTIAL_PARTS = listOf("token", "secret", "key", "pass", "pwd", "auth", "sig", "api")
+
+    private val EMPTIED = StrippedUrl("", contactRequired = false, urlRequired = true)
 
     fun strip(url: String): StrippedUrl {
         val trimmed = url.trim()
-        val uri = runCatching { URI(trimmed) }.getOrNull()
-        val scheme = (uri?.scheme ?: trimmed.substringBefore(':', "")).lowercase()
-        if (scheme in CONTACT_SCHEMES) return StrippedUrl("$scheme:", contactRequired = true)
-        val stripped = if (uri == null) unparsed(trimmed) else rebuild(uri)
-        return StrippedUrl(stripped, contactRequired = false)
+        val scheme = trimmed.substringBefore(':', "").lowercase()
+        if (scheme in CONTACT_SCHEMES) return withoutNumber(scheme, trimmed)
+        if (scheme in CONTENT_SCHEMES) return EMPTIED
+        val uri = runCatching { URI(trimmed) }.getOrNull() ?: return EMPTIED
+        return StrippedUrl(rebuild(uri), contactRequired = false)
+    }
+
+    /** A contact-required `tel:` / `sms:` link from [strip] with [phone] put back before its query. */
+    fun withNumber(url: String, phone: String): String {
+        val query = url.substringAfter('?', "")
+        return url.substringBefore(':') + ":" + phone.trim() + (if (query.isEmpty()) "" else "?$query")
+    }
+
+    private fun withoutNumber(scheme: String, url: String): StrippedUrl {
+        val query = if (scheme == "tel") null else filterQuery(url.substringBefore('#').substringAfter('?', "").ifEmpty { null })
+        return StrippedUrl("$scheme:" + (query?.let { "?$it" } ?: ""), contactRequired = true)
     }
 
     private fun rebuild(uri: URI): String {
@@ -310,12 +340,114 @@ internal object RuleShareUrl {
 
     // A name that does not even decode is treated as a credential: dropping it is the safe side.
     private fun isCredential(rawName: String): Boolean {
-        val name = runCatching { URLDecoder.decode(rawName, "UTF-8") }.getOrNull() ?: return true
-        return CREDENTIAL_PARAM.matches(name.trim())
+        val name = runCatching { URLDecoder.decode(rawName, "UTF-8") }.getOrNull()?.trim()?.lowercase() ?: return true
+        return CREDENTIAL_PARTS.any { it in name }
+    }
+}
+
+/**
+ * Keeps org.json away from input it cannot survive. Android's parser recurses once per nesting
+ * level, and a string field can hold JSON of its own that is parsed later (action payloads,
+ * the schedule of a `time_range` trigger). So the file, and every string in it that org.json
+ * could take for JSON, nests `{` / `[` at most [MAX_DEPTH] deep, and no string is longer than
+ * [MAX_STRING_CHARS]. The scan tokenises like the lenient Android parser: double- and
+ * single-quoted strings, unquoted literals, `/* */`, `//` and `#` comments. Where that parser would give up
+ * (an unmatched close, an unterminated string) the scan stops too: nothing after it is parsed.
+ */
+internal object RuleShareJsonLimits {
+    const val MAX_DEPTH = 32
+    const val MAX_STRING_CHARS = 8 * 1024
+
+    private val ESCAPES = mapOf('t' to '\t', 'b' to '\b', 'n' to '\n', 'r' to '\r', 'f' to '\u000C')
+
+    // What ends an unquoted literal (`true`, `12`, `abc`) for the Android parser. A quote inside
+    // a literal is part of it, not the start of a string.
+    private const val LITERAL_END = "{}[]/\\:,=;# \t\u000C\r\n"
+
+    fun accepts(text: String): Boolean {
+        var depth = 0
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            when {
+                c in "{[" -> if (++depth > MAX_DEPTH) return false
+                c in "}]" -> if (--depth < 0) return true
+                c in "\"'" -> i = acceptString(text, i) ?: return false
+                c in "/#" -> i = skipComment(text, i)
+                c !in LITERAL_END -> i = literalEnd(text, i)
+            }
+            i++
+        }
+        return true
     }
 
-    private fun unparsed(url: String): String =
-        url.substringBefore('#').substringBefore('?').replace(SCHEME_AND_USER_INFO, "$1")
+    /** The last index of the unquoted literal starting at [start]. */
+    private fun literalEnd(text: String, start: Int): Int {
+        var i = start
+        while (i + 1 < text.length && text[i + 1] !in LITERAL_END) i++
+        return i
+    }
+
+    /**
+     * Checks the string opening at [open]: the index of its closing quote, null when it breaks a
+     * limit. An unterminated string ends the text: org.json fails there.
+     */
+    private fun acceptString(text: String, open: Int): Int? {
+        val value = StringBuilder()
+        val close = readString(text, open, value) ?: return text.length
+        if (value.length > MAX_STRING_CHARS) return null
+        return if (looksLikeJson(value) && !accepts(value.toString())) null else close
+    }
+
+    /** Decodes the string opening at [open] into [out]: the index of the closing quote, null when there is none. */
+    private fun readString(text: String, open: Int, out: StringBuilder): Int? {
+        val quote = text[open]
+        var i = open + 1
+        while (i < text.length) {
+            val c = text[i]
+            if (c == quote) return i
+            if (c != '\\') {
+                out.append(c)
+            } else if (text.getOrNull(i + 1) == 'u') {
+                out.append(text.substring(i + 2, minOf(i + 6, text.length)).toIntOrNull(16)?.toChar() ?: return null)
+                i += 5
+            } else {
+                val e = text.getOrNull(i + 1) ?: return null
+                out.append(ESCAPES[e] ?: e)
+                i++
+            }
+            i++
+        }
+        return null
+    }
+
+    /** The last index of a comment starting at [start], or [start] when none starts there. */
+    private fun skipComment(text: CharSequence, start: Int): Int {
+        val c = text[start]
+        val next = text.getOrNull(start + 1)
+        return when {
+            c == '/' && next == '*' -> text.indexOf("*/", start + 2).let { if (it < 0) text.length else it + 1 }
+            c == '#' || (c == '/' && next == '/') ->
+                text.indexOfAny(charArrayOf('\n', '\r'), start).let { if (it < 0) text.length else it }
+            else -> start
+        }
+    }
+
+    /** True when org.json would read [s] as an object or array: its first token is `{` or `[`. */
+    private fun looksLikeJson(s: CharSequence): Boolean {
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '{' || c == '[') return true
+            if (!c.isWhitespace()) {
+                val end = skipComment(s, i)
+                if (end == i) return false
+                i = end
+            }
+            i++
+        }
+        return false
+    }
 }
 
 /** Where share files live: `bydmate_rule_<slug>.json` in the public Download folder. */
@@ -403,6 +535,9 @@ object RuleShareFiles {
 
 private fun payloadOf(payload: String?): JSONObject =
     runCatching { JSONObject(payload ?: "{}") }.getOrDefault(JSONObject())
+
+private fun needsUrl(action: ActionDef): Boolean =
+    action.kind == "url" && payloadOf(action.payload).optBoolean(RuleShare.URL_REQUIRED, false)
 
 private fun needsContact(action: ActionDef): Boolean = when (action.kind) {
     "call" -> payloadOf(action.payload).optString("phone").isBlank()

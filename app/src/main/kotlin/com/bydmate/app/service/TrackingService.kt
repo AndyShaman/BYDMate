@@ -380,6 +380,13 @@ class TrackingService : Service(), LocationListener {
         @Volatile var lastDataAtMs: Long = 0L
             private set
 
+        /**
+         * The last polled snapshot with its measurement time, as one object: what a speed gate
+         * that needs to know the age of its data reads. Push patches do not touch it.
+         */
+        @Volatile var lastSample: com.bydmate.app.data.loop.TimedSnapshot? = null
+            private set
+
         private val _lastRangeKm = MutableStateFlow<Double?>(null)
         val lastRangeKm: StateFlow<Double?> = _lastRangeKm
 
@@ -1431,10 +1438,12 @@ class TrackingService : Service(), LocationListener {
                 }
             }
 
-            sharedAdaptiveLoop.flow.collect { data ->
+            sharedAdaptiveLoop.samples.collect { sample ->
+                val data = sample.data
                 try {
                     _lastData.value = data
                     lastDataAtMs = System.currentTimeMillis()
+                    lastSample = sample
                     blindSpotController.onPollSnapshot(data)
                     alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.

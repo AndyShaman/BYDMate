@@ -1761,7 +1761,7 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Импорт</string>
     <string name="automation_share_button">Поделиться</string>
-    <string name="automation_share_note">Из файла удалены номера телефонов, имена контактов, привязки к вашим местам и ключи в ссылках. Тексты уведомлений и фраз, запросы агенту и точки маршрутов остаются, проверьте их перед отправкой.</string>
+    <string name="automation_share_note">Из файла удалены номера телефонов, имена контактов и привязки к вашим местам. Из ссылок удаляются логин с паролем и параметры, похожие на ключи; сам адрес проверьте перед отправкой. Тексты уведомлений и фраз, запросы агенту и точки маршрутов остаются, их тоже стоит проверить.</string>
     <string name="automation_share_error">Не удалось сохранить файл: %1$s</string>
     <string name="automation_test_run_button">Тестовый запуск</string>
     <string name="automation_test_run_hint">Выполнит все действия сразу, как будто сработало условие</string>
@@ -1787,4 +1787,18 @@
     <string name="automation_import_enable_now_hint">Иначе добавится выключенной</string>
     <string name="automation_import_add">Добавить</string>
     <string name="automation_import_name_suffix">импорт</string>
+    <string name="automation_share_continue">Продолжить</string>
+    <string name="automation_share_saved_toast">Файл сохранён: %1$s</string>
+    <string name="automation_rule_deleted">Правило уже удалено</string>
+    <string name="automation_test_run_unrecognized">команда не распознана, действие пропущено</string>
+    <string name="automation_import_url_required">Адрес ссылки нужно ввести заново</string>
+    <string name="automation_import_logic_all">Все условия</string>
+    <string name="automation_import_logic_any">Любое условие</string>
+    <string name="automation_import_nav_home">домой (адрес из навигатора)</string>
+    <string name="automation_import_nav_work">на работу (адрес из навигатора)</string>
+    <string name="automation_import_nav_search">поиск «%1$s»</string>
+    <string name="automation_import_nav_show">только показать точку</string>
+    <string name="automation_import_nav_go">сразу «Поехали»</string>
+    <string name="automation_import_nav_maps">в Яндекс Картах</string>
+    <string name="automation_import_minimize">затем свернуть</string>
 </resources>

@@ -1746,7 +1746,7 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Importuj</string>
     <string name="automation_share_button">Udostępnij</string>
-    <string name="automation_share_note">Z pliku usunięto numery telefonów, nazwy kontaktów, powiązania z Twoimi miejscami i klucze w linkach. Teksty powiadomień i fraz, zapytania do agenta i punkty tras zostają, sprawdź je przed wysłaniem.</string>
+    <string name="automation_share_note">Z pliku usunięto numery telefonów, nazwy kontaktów i powiązania z Twoimi miejscami. Z linków usuwane są login z hasłem i parametry wyglądające na klucze; sam adres sprawdź przed wysłaniem. Teksty powiadomień i fraz, zapytania do agenta i punkty tras zostają, je też warto sprawdzić.</string>
     <string name="automation_share_error">Nie udało się zapisać pliku: %1$s</string>
     <string name="automation_test_run_button">Uruchomienie testowe</string>
     <string name="automation_test_run_hint">Wykona wszystkie akcje od razu, jakby warunek został spełniony</string>
@@ -1772,4 +1772,18 @@
     <string name="automation_import_enable_now_hint">W przeciwnym razie zostanie dodana wyłączona</string>
     <string name="automation_import_add">Dodaj</string>
     <string name="automation_import_name_suffix">import</string>
+    <string name="automation_share_continue">Kontynuuj</string>
+    <string name="automation_share_saved_toast">Plik zapisany: %1$s</string>
+    <string name="automation_rule_deleted">Ta reguła została już usunięta</string>
+    <string name="automation_test_run_unrecognized">nie rozpoznano polecenia, akcja pominięta</string>
+    <string name="automation_import_url_required">Adres linku trzeba wpisać ponownie</string>
+    <string name="automation_import_logic_all">Wszystkie warunki</string>
+    <string name="automation_import_logic_any">Dowolny warunek</string>
+    <string name="automation_import_nav_home">do domu (adres z nawigacji)</string>
+    <string name="automation_import_nav_work">do pracy (adres z nawigacji)</string>
+    <string name="automation_import_nav_search">wyszukiwanie „%1$s”</string>
+    <string name="automation_import_nav_show">tylko pokaż punkt</string>
+    <string name="automation_import_nav_go">od razu „Jedziemy”</string>
+    <string name="automation_import_nav_maps">w Yandex Maps</string>
+    <string name="automation_import_minimize">potem zminimalizuj</string>
 </resources>

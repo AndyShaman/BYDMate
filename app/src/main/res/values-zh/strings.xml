@@ -1708,7 +1708,7 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">导入</string>
     <string name="automation_share_button">分享</string>
-    <string name="automation_share_note">文件中已删除电话号码、联系人姓名、与你的地点的关联以及链接中的密钥。通知和语音文本、语音助手请求以及路线点会保留，发送前请检查。</string>
+    <string name="automation_share_note">文件中已删除电话号码、联系人姓名以及与你的地点的关联。链接中的登录名和密码以及看起来像密钥的参数会被删除；地址本身请在发送前检查。通知和语音文本、语音助手请求以及路线点会保留，也请检查。</string>
     <string name="automation_share_error">无法保存文件：%1$s</string>
     <string name="automation_test_run_button">试运行</string>
     <string name="automation_test_run_hint">立即执行所有动作，就像条件已满足一样</string>
@@ -1734,4 +1734,18 @@
     <string name="automation_import_enable_now_hint">否则将以停用状态添加</string>
     <string name="automation_import_add">添加</string>
     <string name="automation_import_name_suffix">导入</string>
+    <string name="automation_share_continue">继续</string>
+    <string name="automation_share_saved_toast">文件已保存：%1$s</string>
+    <string name="automation_rule_deleted">该规则已被删除</string>
+    <string name="automation_test_run_unrecognized">无法识别该指令，已跳过该操作</string>
+    <string name="automation_import_url_required">需要重新输入链接地址</string>
+    <string name="automation_import_logic_all">满足所有条件</string>
+    <string name="automation_import_logic_any">满足任一条件</string>
+    <string name="automation_import_nav_home">回家（导航中保存的地址）</string>
+    <string name="automation_import_nav_work">去公司（导航中保存的地址）</string>
+    <string name="automation_import_nav_search">搜索“%1$s”</string>
+    <string name="automation_import_nav_show">仅显示位置</string>
+    <string name="automation_import_nav_go">立即开始导航</string>
+    <string name="automation_import_nav_maps">在 Yandex 地图中</string>
+    <string name="automation_import_minimize">然后最小化</string>
 </resources>

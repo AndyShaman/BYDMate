@@ -1590,7 +1590,7 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Importar</string>
     <string name="automation_share_button">Compartilhar</string>
-    <string name="automation_share_note">Números de telefone, nomes de contatos, vínculos com seus locais e chaves em links são removidos do arquivo. Textos de notificações e frases, pedidos ao agente e pontos de rota permanecem, confira-os antes de enviar.</string>
+    <string name="automation_share_note">Números de telefone, nomes de contatos e vínculos com seus locais são removidos do arquivo. Dos links são removidos login e senha e os parâmetros que parecem chaves; confira o próprio endereço antes de enviar. Textos de notificações e frases, pedidos ao agente e pontos de rota permanecem, confira-os também.</string>
     <string name="automation_share_error">Não foi possível salvar o arquivo: %1$s</string>
     <string name="automation_test_run_button">Execução de teste</string>
     <string name="automation_test_run_hint">Executa todas as ações agora, como se a condição tivesse sido atendida</string>
@@ -1616,4 +1616,18 @@
     <string name="automation_import_enable_now_hint">Caso contrário, será adicionada desativada</string>
     <string name="automation_import_add">Adicionar</string>
     <string name="automation_import_name_suffix">importada</string>
+    <string name="automation_share_continue">Continuar</string>
+    <string name="automation_share_saved_toast">Arquivo salvo: %1$s</string>
+    <string name="automation_rule_deleted">Esta regra já foi excluída</string>
+    <string name="automation_test_run_unrecognized">comando não reconhecido, ação ignorada</string>
+    <string name="automation_import_url_required">O endereço do link precisa ser digitado novamente</string>
+    <string name="automation_import_logic_all">Todas as condições</string>
+    <string name="automation_import_logic_any">Qualquer condição</string>
+    <string name="automation_import_nav_home">para casa (endereço salvo no navegador)</string>
+    <string name="automation_import_nav_work">para o trabalho (endereço salvo no navegador)</string>
+    <string name="automation_import_nav_search">busca “%1$s”</string>
+    <string name="automation_import_nav_show">apenas mostrar o ponto</string>
+    <string name="automation_import_nav_go">inicia a rota na hora</string>
+    <string name="automation_import_nav_maps">no Yandex Maps</string>
+    <string name="automation_import_minimize">depois minimizar</string>
 </resources>

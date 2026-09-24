@@ -1746,7 +1746,7 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Імпарт</string>
     <string name="automation_share_button">Падзяліцца</string>
-    <string name="automation_share_note">З файла выдалены нумары тэлефонаў, імёны кантактаў, прывязкі да вашых месцаў і ключы ў спасылках. Тэксты апавяшчэнняў і фраз, запыты агенту і пункты маршрутаў застаюцца, праверце іх перад адпраўкай.</string>
+    <string name="automation_share_note">З файла выдалены нумары тэлефонаў, імёны кантактаў і прывязкі да вашых месцаў. Са спасылак выдаляюцца лагін з паролем і параметры, падобныя на ключы; сам адрас праверце перад адпраўкай. Тэксты апавяшчэнняў і фраз, запыты агенту і пункты маршрутаў застаюцца, іх таксама варта праверыць.</string>
     <string name="automation_share_error">Не ўдалося захаваць файл: %1$s</string>
     <string name="automation_test_run_button">Тэставы запуск</string>
     <string name="automation_test_run_hint">Выканае ўсе дзеянні адразу, як быццам спрацавала ўмова</string>
@@ -1772,4 +1772,18 @@
     <string name="automation_import_enable_now_hint">Інакш дадасца выключанай</string>
     <string name="automation_import_add">Дадаць</string>
     <string name="automation_import_name_suffix">імпарт</string>
+    <string name="automation_share_continue">Працягнуць</string>
+    <string name="automation_share_saved_toast">Файл захаваны: %1$s</string>
+    <string name="automation_rule_deleted">Правіла ўжо выдалена</string>
+    <string name="automation_test_run_unrecognized">каманда не распазнана, дзеянне прапушчана</string>
+    <string name="automation_import_url_required">Адрас спасылкі трэба ўвесці нанова</string>
+    <string name="automation_import_logic_all">Усе ўмовы</string>
+    <string name="automation_import_logic_any">Любая ўмова</string>
+    <string name="automation_import_nav_home">дадому (адрас з навігатара)</string>
+    <string name="automation_import_nav_work">на працу (адрас з навігатара)</string>
+    <string name="automation_import_nav_search">пошук «%1$s»</string>
+    <string name="automation_import_nav_show">толькі паказаць пункт</string>
+    <string name="automation_import_nav_go">адразу «Паехалі»</string>
+    <string name="automation_import_nav_maps">у Яндекс Картах</string>
+    <string name="automation_import_minimize">потым згарнуць</string>
 </resources>
