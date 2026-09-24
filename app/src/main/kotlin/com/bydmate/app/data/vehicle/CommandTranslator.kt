@@ -118,7 +118,7 @@ object CommandTranslator {
 
         // ── Sunroof ── LIVE_VALIDATED ─────────────────────────────────────────
         "天窗打开100" to Resolved("sunroof_open",  1),  // full open
-        "天窗打开50"  to Resolved("sunroof_tilt",  3),  // tilt/half — LIVE val=3
+        "天窗打开50"  to Resolved("sunroof_tilt",  3),  // half-open slide — LIVE val=3 (not a tilt, 2026-07-30; tilt is 天窗通风 = 5)
         "天窗打开0"   to Resolved("sunroof_close", 2),
 
         // ── Sunroof extra positions ── allowlist sunroof_stop/updip/comfort vals 4/5/6

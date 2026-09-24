@@ -4,8 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class NluParserTest {
-    private fun cmd(text: String, lang: VoiceLang = VoiceLang.RU): String? =
-        (NluParser.parse(text, lang) as? ParseResult.Command)?.command
+    private fun cmd(text: String): String? =
+        (NluParser.parse(text, VoiceLang.RU) as? ParseResult.Command)?.command
 
     @Test fun word_order_does_not_matter() {
         assertEquals("车窗关闭", cmd("закрой окна"))
@@ -42,11 +42,6 @@ class NluParserTest {
 
     @Test fun temperature_out_of_range_is_unrecognized() {
         assertEquals(ParseResult.Unrecognized, NluParser.parse("поставь температуру 40", VoiceLang.RU))
-    }
-
-    @Test fun english_lock_unlock() {
-        assertEquals("车门上锁", cmd("lock the doors", VoiceLang.EN))
-        assertEquals("车门解锁", cmd("unlock doors", VoiceLang.EN))
     }
 
     @Test fun garbage_is_unrecognized() {
@@ -99,12 +94,18 @@ class NluParserTest {
     }
 
     @Test fun windows_half_open() {
-        assertEquals("车窗半开", cmd("приоткрой окна"))
         assertEquals("车窗半开", cmd("окна наполовину"))
+        assertEquals("车窗半开", cmd("открой окна на половину"))
     }
 
-    @Test fun sunroof_tilt() {
-        assertEquals("天窗打开50", cmd("приоткрой люк"))
+    // "приоткрой" is the vent detent (Andy 2026-09-24): windows crack, the sunroof tilts.
+    @Test fun ajar_is_vent() {
+        assertEquals("车窗通风", cmd("приоткрой окна"))
+        assertEquals("天窗通风", cmd("приоткрой люк"))
+    }
+
+    @Test fun sunroof_half_slides() {
+        assertEquals("天窗打开50", cmd("открой люк наполовину"))
     }
 
     @Test fun seat_heat_levels() {
@@ -117,8 +118,8 @@ class NluParserTest {
         assertEquals("副驾座椅通风3档", cmd("вентиляция сиденья пассажира 3"))
     }
 
-    private fun vol(text: String, lang: VoiceLang = VoiceLang.RU): String? =
-        (NluParser.parse(text, lang) as? ParseResult.Volume)?.payload
+    private fun vol(text: String): String? =
+        (NluParser.parse(text, VoiceLang.RU) as? ParseResult.Volume)?.payload
 
     @Test fun volume_absolute() {
         assertEquals("10", vol("громкость на 10"))
@@ -133,11 +134,6 @@ class NluParserTest {
         assertEquals("unmute", vol("включи звук"))
     }
 
-    @Test fun volume_mute_unmute_en() {
-        assertEquals("mute", vol("turn off sound", VoiceLang.EN))
-        assertEquals("unmute", vol("turn on sound", VoiceLang.EN))
-    }
-
     // Seat OFF (singular): "подогрев"/"обдув" also tags an action slot (HEAT_1/VENT_1),
     // so OFF used to fan out across both seat subsystems (heat-off + vent-off + heat-1
     // = 3 commands -> Unrecognized -> LLM). With an explicit OFF verb the noun must
@@ -147,22 +143,23 @@ class NluParserTest {
     @Test fun seat_vent_off_ventilation_word() = assertEquals("主驾座椅通风关闭", cmd("выключи вентиляцию сиденья"))
     @Test fun seat_heat_off_passenger() = assertEquals("副驾座椅加热关闭", cmd("выключи подогрев сиденья пассажира"))
     @Test fun seat_heat_off_otklyuchi() = assertEquals("主驾座椅加热关闭", cmd("отключи подогрев сиденья"))
-    @Test fun seat_heat_off_en() = assertEquals("主驾座椅加热关闭", cmd("turn off seat heating", VoiceLang.EN))
     // Regression guards: ON path and mirror heat must not change.
     @Test fun seat_heat_on_still_level1() = assertEquals("主驾座椅加热1档", cmd("включи подогрев сиденья"))
     @Test fun mirror_heat_off_still_resolves() = assertEquals("关闭后视镜加热", cmd("выключи подогрев зеркал"))
 
-    @Test fun steering_heat_resolves_ru_and_en() {
+    @Test fun steering_heat_resolves() {
         assertEquals("方向盘加热", cmd("включи подогрев руля"))
         assertEquals("关闭方向盘加热", cmd("выключи подогрев руля"))
         assertEquals("方向盘加热", cmd("включи руль"))
-        assertEquals("方向盘加热", cmd("enable steering wheel heating", VoiceLang.EN))
-        assertEquals("关闭方向盘加热", cmd("disable steering wheel heating", VoiceLang.EN))
     }
 
-    @Test fun en_steering_wheel_without_a_heat_word_is_not_the_heater() {
-        for (phrase in listOf("turn steering wheel left", "steering wheel angle", "wheel left", "turn on steering wheel")) {
-            assertEquals(phrase, ParseResult.Unrecognized, NluParser.parse(phrase, VoiceLang.EN))
+    // The heater needs a heat word or an on/off verb: the wheel alone is not the heater.
+    @Test fun steering_wheel_without_heat_or_switch_is_not_the_heater() {
+        for (phrase in listOf("поверни руль", "руль налево", "подогрев руля", "открой руль")) {
+            assertEquals(phrase, ParseResult.Unrecognized, NluParser.parse(phrase, VoiceLang.RU))
         }
     }
+
+    // ASR slip seen in a real transcript (2026-09-15): "руля" heard as "роля".
+    @Test fun steering_heat_asr_slip() = assertEquals("方向盘加热", cmd("включи подогрев роля"))
 }

@@ -17,24 +17,29 @@ class NluQualifierTest {
     @Test fun front_left_is_driver() = assertEquals("主驾打开100", cmd("открой переднее левое окно"))
     @Test fun front_right_is_passenger() = assertEquals("副驾打开0", cmd("закрой переднее правое окно"))
     @Test fun bare_left_is_rear_left() = assertEquals("后左打开100", cmd("открой левое окно"))
-    @Test fun bare_window_still_all() = assertEquals("车窗全开", cmd("открой окно"))
+    // Singular "окно" / "моё окно" is the driver's (Andy 2026-09-24); plural "окна" is every window.
+    @Test fun bare_window_is_driver() = assertEquals("主驾打开100", cmd("открой окно"))
+    @Test fun my_window_is_driver() = assertEquals("主驾打开100", cmd("открой моё окно"))
+    @Test fun plural_windows_are_all() = assertEquals("车窗全开", cmd("открой окна"))
     @Test fun front_windows_still_pair() = assertEquals("前排车窗全开", cmd("открой передние окна"))
 
     // Half and vent exist for every single window and for the front/rear pairs,
     // not only for "all windows".
-    @Test fun half_driver_window() = assertEquals("主驾半开", cmd("приоткрой окно водителя"))
+    @Test fun vent_driver_window_ajar() = assertEquals("主驾通风", cmd("приоткрой окно водителя"))
     @Test fun half_driver_window_with_open_verb() = assertEquals("主驾半开", cmd("открой наполовину водительское окно"))
-    @Test fun half_rear_left_window() = assertEquals("后左半开", cmd("приоткрой заднее левое окно"))
+    @Test fun vent_rear_left_window_ajar() = assertEquals("后左通风", cmd("приоткрой заднее левое окно"))
     @Test fun half_passenger_window() = assertEquals("副驾半开", cmd("окно пассажира наполовину"))
     @Test fun half_rear_pair() = assertEquals("后排车窗半开", cmd("задние окна наполовину"))
-    @Test fun half_front_pair() = assertEquals("前排车窗半开", cmd("приоткрой передние окна"))
+    @Test fun vent_front_pair_ajar() = assertEquals("前排车窗通风", cmd("приоткрой передние окна"))
     @Test fun vent_front_pair() = assertEquals("前排车窗通风", cmd("проветри передние окна"))
     @Test fun vent_rear_pair() = assertEquals("后排车窗通风", cmd("проветри задние окна"))
     @Test fun half_sunroof_with_open_verb() = assertEquals("天窗打开50", cmd("открой люк наполовину"))
 
-    // An explicit percentage is not one of the three apertures: the agent names them.
-    @Test fun window_percentage_goes_to_agent() = unrecognized("открой водительское окно на двадцать процентов")
-    @Test fun sunroof_percentage_goes_to_agent() = unrecognized("открой люк на тридцать процентов")
+    // An explicit percentage picks the nearest detent (ties to the smaller opening);
+    // a measure the parser cannot read goes to the agent, never to a full open.
+    @Test fun window_percentage_picks_nearest_detent() = assertEquals("主驾通风", cmd("открой водительское окно на двадцать процентов"))
+    @Test fun sunroof_percentage_picks_nearest_detent() = assertEquals("天窗打开50", cmd("открой люк на тридцать процентов"))
+    @Test fun unreadable_measure_goes_to_agent() = unrecognized("открой окно на пять сантиметров")
 
     // Front trunk is NOT the rear tailgate — must go to the agent.
     @Test fun front_trunk_goes_to_agent() = unrecognized("открой передний багажник")

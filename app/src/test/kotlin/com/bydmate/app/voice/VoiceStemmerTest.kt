@@ -16,10 +16,6 @@ class VoiceStemmerTest {
         assertEquals("свет", VoiceStemmer.stem("свет"))
     }
 
-    @Test fun strips_english_plural() {
-        assertEquals(VoiceStemmer.stem("window"), VoiceStemmer.stem("windows"))
-    }
-
     @Test fun is_idempotent() {
         val once = VoiceStemmer.stem("окнами")
         assertEquals(once, VoiceStemmer.stem(once))

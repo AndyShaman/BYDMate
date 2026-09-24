@@ -51,6 +51,7 @@ object VoiceCatalog {
         VoiceCommandSpec(ON, AC_AUTO) { "自动空调" },
         VoiceCommandSpec(OFF, AC_AUTO) { "关闭空调" },
         VoiceCommandSpec(ON, AC_FLOW) { "打开空调通风" },
+        VoiceCommandSpec(SET, AC_FAN, ValueSpec(1, 7)) { n -> "风量${n}" },
         VoiceCommandSpec(SET, AC_TEMP, ValueSpec(16, 30)) { n -> "设置温度${n}" },
         VoiceCommandSpec(ON, AC_RECIRC_INNER) { "内循环" },
         VoiceCommandSpec(ON, AC_RECIRC_OUTER) { "外循环" },
@@ -99,7 +100,8 @@ object VoiceCatalog {
         VoiceCommandSpec(OPEN, CAR) { "车门解锁" },
         // Sunroof / sunshade
         VoiceCommandSpec(OPEN, SUNROOF) { "天窗打开100" },
-        VoiceCommandSpec(HALF, SUNROOF) { "天窗打开50" },
+        VoiceCommandSpec(HALF, SUNROOF) { "天窗打开50" },  // enum 3 = half-open slide
+        VoiceCommandSpec(VENT, SUNROOF) { "天窗通风" },     // enum 5 = tilt (vent)
         VoiceCommandSpec(CLOSE, SUNROOF) { "天窗打开0" },
         VoiceCommandSpec(OPEN, SUNSHADE) { "遮阳帘打开" },
         VoiceCommandSpec(CLOSE, SUNSHADE) { "遮阳帘关闭" },

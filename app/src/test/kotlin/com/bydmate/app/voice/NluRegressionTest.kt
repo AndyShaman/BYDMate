@@ -15,7 +15,8 @@ class NluRegressionTest {
 
     private val fixtures: List<Pair<String, String?>> = listOf(
         // windows
-        "открой окно" to "车窗全开",
+        "открой окно" to "主驾打开100",
+        "открой окна" to "车窗全开",
         "закрой все окна" to "车窗关闭",
         "открой окно водителя" to "主驾打开100",
         "открой заднее правое окно" to "后右打开100",
@@ -58,7 +59,8 @@ class NluRegressionTest {
         "закрой передний багажник" to null,     // agent: front_trunk_close
         // sunroof / shade
         "открой люк" to "天窗打开100",
-        "приоткрой люк" to "天窗打开50",
+        "приоткрой люк" to "天窗通风",
+        "открой люк наполовину" to "天窗打开50",
         "закрой шторку" to "遮阳帘关闭",
         // lights / mirrors
         "включи свет" to "打开车内灯",
