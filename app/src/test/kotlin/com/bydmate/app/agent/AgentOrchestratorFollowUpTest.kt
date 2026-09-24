@@ -36,6 +36,18 @@ class AgentOrchestratorFollowUpTest {
     }
 
     private fun answer(text: String) = Result.success(AgentReply(text, emptyList()))
+    private fun toolCall(name: String) = Result.success(
+        AgentReply(null, listOf(AgentToolCall("c1", name, "{}"))))
+
+    @Test fun no_follow_up_when_question_follows_a_tool_call() = runTest {
+        // A question asked AFTER the agent already acted is rhetorical, not a clarification.
+        coEvery { tools.execute(any()) } returns """{"result":"ok"}"""
+        val o = orchestrator(FakeBackend(replies = ArrayDeque(listOf(
+            toolCall("vehicle_control"), answer("Приоткрыл окно. Опять в форточку дышать собрался?"),
+        ))))
+        o.ask("открой окно")
+        assertFalse(o.expectsFollowUp())
+    }
 
     @Test fun follow_up_expected_after_clarifying_question() = runTest {
         val o = orchestrator(FakeBackend(replies = ArrayDeque(listOf(answer("Какое окно, водителя или все?")))))

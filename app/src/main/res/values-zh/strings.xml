@@ -1761,4 +1761,5 @@
     <string name="automation_import_nav_go">立即开始导航</string>
     <string name="automation_import_nav_maps">在 Yandex 地图中</string>
     <string name="automation_import_minimize">然后最小化</string>
+    <string name="help_badge_content_description">提示</string>
 </resources>
