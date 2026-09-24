@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -40,6 +42,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -102,6 +106,12 @@ fun formatDuration(context: android.content.Context, startTs: Long, endTs: Long)
     val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMs) % 60
     return if (hours > 0) context.getString(R.string.common_duration_hours_minutes, hours.toInt(), minutes.toInt())
     else context.getString(R.string.common_duration_minutes, minutes.toInt())
+}
+
+// Language-neutral h:mm form (1:32, 0:05) for cells too narrow for formatDuration's words.
+fun formatDurationCompact(startTs: Long, endTs: Long): String {
+    val totalMin = ((endTs - startTs) / 60_000L).coerceAtLeast(0L)
+    return "%d:%02d".format(totalMin / 60, totalMin % 60)
 }
 
 // Единый стиль Switch по всему приложению:
@@ -251,13 +261,23 @@ fun TripCard(
         Text(text = timeRange, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium,
             fontFamily = FontFamily.Monospace, modifier = Modifier.weight(2.5f))
 
-        // Duration (2nd column)
-        Text(
-            text = if (trip.endTs != null) formatDuration(ctx, trip.startTs, trip.endTs) else "…",
-            color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f)
-        )
+        // Duration (2nd column): always one line. The worded form while the cell fits it,
+        // h:mm once a large text size leaves the cell too narrow.
+        val durationStyle = LocalTextStyle.current.merge(TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace))
+        val measurer = rememberTextMeasurer()
+        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            val durationText = if (trip.endTs != null) {
+                val full = formatDuration(ctx, trip.startTs, trip.endTs)
+                val fullWidth = measurer.measure(full, durationStyle, softWrap = false, maxLines = 1).size.width
+                if (fullWidth <= constraints.maxWidth) full else formatDurationCompact(trip.startTs, trip.endTs)
+            } else "…"
+            Text(
+                text = durationText,
+                color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End, maxLines = 1, softWrap = false,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
         // Distance
         Text(
