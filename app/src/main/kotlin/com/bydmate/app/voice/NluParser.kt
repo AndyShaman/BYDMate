@@ -27,24 +27,46 @@ object NluParser {
     // A corrupt resource must never surface as internal_error: a failed load is logged once
     // here (by "by lazy") and every phrase after it goes to the agent instead, same as one the
     // dictionary itself does not recognize.
-    private val dictionary: Result<VoiceDictionary> by lazy {
-        runCatching { VoiceDictionary.load() }.onFailure { Log.e(TAG, "dictionary failed to load", it) }
+    private val dictionary: VoiceDictionary? by lazy {
+        val start = System.currentTimeMillis()
+        runCatching { VoiceDictionary.load() }
+            .onSuccess {
+                val ms = System.currentTimeMillis() - start
+                Log.i(TAG, "dictionary loaded: templates=${it.templateCount} keys=${it.keyCount} in $ms ms")
+            }
+            .onFailure { Log.e(TAG, "dictionary failed to load", it) }
+            .getOrNull()
     }
 
-    /** Load the dictionary ahead of the first command so it never waits on the parse. */
+    /** Load the dictionary ahead of the first command so it never waits on the parse, and log a
+     *  self-test so a car log settles whether it loaded without waiting for a real command. */
     fun warmUp() {
-        dictionary
+        val dict = dictionary
+        if (dict == null) {
+            Log.w(TAG, "self-test: dictionary unavailable")
+            return
+        }
+        val result = parse("закрой люк", dict)
+        val summary = (result as? ParseResult.Command)?.commands?.joinToString(",") ?: result::class.simpleName
+        Log.i(TAG, "self-test: закрой люк -> $summary")
     }
 
     fun parse(text: String): ParseResult = parse(text, dictionary)
 
-    /** [dict] is the loaded (or failed) dictionary, exposed here so a failed load can be
-     *  exercised without pointing [NluParser] at a broken resource. */
-    internal fun parse(text: String, dict: Result<VoiceDictionary>): ParseResult {
-        val dictionary = dict.getOrNull() ?: return ParseResult.Unrecognized
+    /** [dict] is the loaded dictionary or null, exposed here so a failed load can be exercised
+     *  without pointing [NluParser] at a broken resource. */
+    internal fun parse(text: String, dict: VoiceDictionary?): ParseResult {
+        if (dict == null) {
+            // Logged per call on purpose: the load itself may have happened before a log
+            // recording started, and this line is what tells a load failure from a miss.
+            Log.w(TAG, "dictionary unavailable, phrase goes to the agent")
+            return ParseResult.Unrecognized
+        }
         val words = VoiceDictionary.words(text)
         if (words.isEmpty()) return ParseResult.Unrecognized
-        return dictionary.match(words) ?: compound(words, dictionary) ?: ParseResult.Unrecognized
+        val result = dict.match(words) ?: compound(words, dict) ?: ParseResult.Unrecognized
+        if (result is ParseResult.Unrecognized) Log.i(TAG, "no match: words=${words.joinToString(" ").take(80)}")
+        return result
     }
 
     /** Every part between «и» / «а также» as its commands, or null when some part is not a

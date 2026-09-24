@@ -62,7 +62,6 @@ class NluParserTest {
     }
 
     @Test fun a_failed_dictionary_load_is_unrecognized_not_a_crash() {
-        val broken = Result.failure<VoiceDictionary>(IllegalArgumentException("corrupt resource"))
-        assertEquals(ParseResult.Unrecognized, NluParser.parse("открой окно", broken))
+        assertEquals(ParseResult.Unrecognized, NluParser.parse("открой окно", null))
     }
 }
