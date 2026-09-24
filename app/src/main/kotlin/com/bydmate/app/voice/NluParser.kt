@@ -43,6 +43,26 @@ object NluParser {
         return parseClause(tokens)
     }
 
+    /** How the cabin feels, as a temperature step: cold asks for warmer air, heat for cooler.
+     *  Only these exact words: "прохладнее"/"холоднее" are the COOLER request itself. */
+    private val FEELINGS: Map<String, Int> = mapOf(
+        "холодно" to 1, "прохладно" to 1, "замерз" to 1, "замерзла" to 1, "замерзли" to 1,
+        "жарко" to -1, "душно" to -1,
+    )
+
+    /** Places a feeling may name ("в салоне", "в машине", "в климате") without being about another device. */
+    private val FEELING_PLACES = setOf(DeviceSlot.CAR, DeviceSlot.LIGHT_INTERIOR, DeviceSlot.AC_AUTO, DeviceSlot.AC_TEMP)
+
+    /** A feeling steps the temperature only when nothing else is asked: an explicit verb
+     *  wins ("душно, открой окно"), and a feeling about another device ("в окно дует,
+     *  холодно") or two opposite feelings go to the agent. */
+    private fun feelingResult(feeling: List<Int>, actions: Set<ActionSlot>, devices: Set<DeviceSlot>): ParseResult? {
+        if (feeling.isEmpty() || actions.isNotEmpty()) return null
+        val sign = feeling.singleOrNull()
+        return if (sign != null && FEELING_PLACES.containsAll(devices)) ParseResult.RelativeTemp(sign)
+        else ParseResult.Unrecognized
+    }
+
     /** "закрой окна и люк", "открой люк а также окна": clauses joined by «и» / «а также». */
     private fun splitClauses(tokens: List<String>): List<List<String>> {
         val parts = mutableListOf(mutableListOf<String>())
@@ -86,7 +106,8 @@ object NluParser {
     }
 
     private fun parseClause(input: List<String>): ParseResult {
-        val tokens = VoiceSpelling.correct(input)
+        val feeling = input.mapNotNull { FEELINGS[it] }.distinct()
+        val tokens = VoiceSpelling.correct(input.filterNot { it in FEELINGS })
         val stems = tokens.map { VoiceStemmer.stem(it) }
         val measure = VoiceNormalizer.measure(tokens)
         val actions = matchSlots(stems, VoiceLexicon.actionWords())
@@ -99,6 +120,7 @@ object NluParser {
 
         // Relative temperature implies the AC; resolved against the live snapshot
         // by VoiceController (the parser stays pure).
+        feelingResult(feeling, actions, devices)?.let { return it }
         if (ActionSlot.WARMER in actions) return ParseResult.RelativeTemp(1)
         if (ActionSlot.COOLER in actions) return ParseResult.RelativeTemp(-1)
 
