@@ -31,8 +31,10 @@ sealed class ActionValidationError {
 /** Reason a trigger draft failed validation (currently: voice-phrase collisions only). */
 sealed class TriggerValidationError {
     object VoicePhraseEmpty : TriggerValidationError()
-    object VoicePhraseBuiltin : TriggerValidationError()
-    object VoicePhraseTaken : TriggerValidationError()
+    /** The phrase is the user's own phrase for the built-in command [command]. */
+    data class VoicePhraseBuiltin(val command: String) : TriggerValidationError()
+    /** The phrase already triggers the automation [rule]. */
+    data class VoicePhraseTaken(val rule: String) : TriggerValidationError()
 }
 
 /**
@@ -126,20 +128,29 @@ object RuleDraftValidator {
         return null
     }
 
-    fun validateTriggers(triggers: List<TriggerDef>, editingId: Long, existingRules: List<RuleEntity>): TriggerValidationError? {
+    /** [userCommandPhrases]: normalized user phrases of built-in commands → command name. */
+    fun validateTriggers(
+        triggers: List<TriggerDef>,
+        editingId: Long,
+        existingRules: List<RuleEntity>,
+        userCommandPhrases: Map<String, String> = emptyMap(),
+    ): TriggerValidationError? {
         val voiceTriggers = triggers.filter { it.kind == "voice" }
         if (voiceTriggers.isEmpty()) return null
-        val otherPhrases = existingRules
-            .filter { it.id != editingId }
-            .flatMap { TriggerDef.listFromJson(it.triggers) }
-            .filter { it.kind == "voice" && it.value.isNotBlank() }
-            .map { VoicePhrase.normalize(it.value) }
-            .toSet()
+        val otherPhrases = buildMap {
+            for (rule in existingRules) {
+                if (rule.id == editingId) continue
+                TriggerDef.listFromJson(rule.triggers)
+                    .filter { it.kind == "voice" && it.value.isNotBlank() }
+                    .forEach { putIfAbsent(VoicePhrase.normalize(it.value), rule.name) }
+            }
+        }
         for (t in voiceTriggers) {
-            when (VoiceTriggerValidation.check(t.value, otherPhrases)) {
+            when (val c = VoiceTriggerValidation.check(t.value, otherPhrases, userCommandPhrases)) {
                 VoiceTriggerValidation.Collision.Empty -> return TriggerValidationError.VoicePhraseEmpty
-                VoiceTriggerValidation.Collision.BuiltIn -> return TriggerValidationError.VoicePhraseBuiltin
-                VoiceTriggerValidation.Collision.OtherRule -> return TriggerValidationError.VoicePhraseTaken
+                is VoiceTriggerValidation.Collision.UserCommandPhrase ->
+                    return TriggerValidationError.VoicePhraseBuiltin(c.command)
+                is VoiceTriggerValidation.Collision.OtherRule -> return TriggerValidationError.VoicePhraseTaken(c.rule)
                 VoiceTriggerValidation.Collision.None -> {}
             }
         }

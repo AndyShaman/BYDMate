@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.R
 import com.bydmate.app.voice.VoiceJournal
 import com.bydmate.app.voice.VoiceJournalEntry
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,6 +42,7 @@ import javax.inject.Inject
 
 private val JournalOkGreen = Color(0xFF2E7D32)
 private val JournalBrokenRed = Color(0xFFC62828)
+private val JournalMutedGray = Color(0xFF9E9E9E)
 
 @HiltViewModel
 class VoiceJournalViewModel @Inject constructor(
@@ -49,8 +52,9 @@ class VoiceJournalViewModel @Inject constructor(
     fun clear() = journal.clear()
 }
 
-/** Debug-only screen (RU hardcoded, like AgentChatScreen): the last
- *  MAX voice sessions from VoiceJournal — what ASR heard, how it routed, and the outcome. */
+/** Debug-only screen (RU hardcoded, like AgentChatScreen): the last MAX voice sessions from
+ *  VoiceJournal (kept across restarts) — what ASR heard, how it routed, the command or the
+ *  refusal code, and the outcome. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceJournalScreen(
@@ -58,7 +62,8 @@ fun VoiceJournalScreen(
     viewModel: VoiceJournalViewModel = hiltViewModel(),
 ) {
     val entries by viewModel.entries.collectAsStateWithLifecycle()
-    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    // The journal now spans restarts, so the date matters too.
+    val timeFormat = remember { SimpleDateFormat("dd.MM HH:mm:ss", Locale.getDefault()) }
 
     Scaffold(
         topBar = {
@@ -92,18 +97,30 @@ private fun VoiceJournalRow(entry: VoiceJournalEntry, timeFormat: SimpleDateForm
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(timeFormat.format(Date(entry.timestampMs)), fontSize = 12.sp, color = Color(0xFF9E9E9E))
+        Text(timeFormat.format(Date(entry.timestampMs)), fontSize = 12.sp, color = JournalMutedGray)
         Text(
-            text = when (entry.route) {
-                VoiceJournalEntry.Route.NLU -> "Команда"
-                VoiceJournalEntry.Route.AGENT -> "Агент"
-                VoiceJournalEntry.Route.NONE -> "—"
-            },
+            text = stringResource(
+                when (entry.route) {
+                    VoiceJournalEntry.Route.NLU -> R.string.voice_journal_route_nlu
+                    VoiceJournalEntry.Route.AUTOMATION -> R.string.voice_journal_route_automation
+                    VoiceJournalEntry.Route.AGENT -> R.string.voice_journal_route_agent
+                    VoiceJournalEntry.Route.REFUSED -> R.string.voice_journal_route_refused
+                }
+            ),
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.transcript, fontSize = 14.sp)
+            // Raw codes on purpose: the same strings the dump carries, so a screenshot and a
+            // dump read alike.
+            val codes = listOfNotNull(entry.command, entry.refusal).joinToString(" · ")
+            if (codes.isNotEmpty()) Text(codes, fontSize = 12.sp, color = JournalMutedGray)
             entry.reason?.let { Text(it, fontSize = 12.sp, color = JournalBrokenRed) }
+            val asr = entry.asrMs
+            val dispatch = entry.dispatchMs
+            if (asr != null && dispatch != null) {
+                Text(stringResource(R.string.voice_journal_timing, asr, dispatch), fontSize = 12.sp, color = JournalMutedGray)
+            }
         }
         Text(
             text = if (entry.outcome == VoiceJournalEntry.Outcome.OK) "✓" else "✗",

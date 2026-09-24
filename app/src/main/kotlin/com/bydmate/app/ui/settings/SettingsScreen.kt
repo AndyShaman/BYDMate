@@ -180,6 +180,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onNavigateToAgentChat: () -> Unit = {},
     onNavigateToVoiceJournal: () -> Unit = {},
+    onNavigateToVoiceUserPhrases: () -> Unit = {},
     onNavigateToTariffPeriods: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -277,7 +278,9 @@ fun SettingsScreen(
                     when (safeSelected) {
                         SettingsSection.BATTERY -> BatterySection(state, viewModel, onNavigateToTariffPeriods)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
-                        SettingsSection.VOICE -> VoiceSettingsContent(state, viewModel, onNavigateToVoiceJournal, onNavigateToAgentChat)
+                        SettingsSection.VOICE -> VoiceSettingsContent(
+                            state, viewModel, onNavigateToVoiceJournal, onNavigateToAgentChat, onNavigateToVoiceUserPhrases,
+                        )
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
                         SettingsSection.SPLIT -> SplitSection()
@@ -2852,6 +2855,7 @@ private fun VoiceSettingsContent(
     viewModel: SettingsViewModel,
     onNavigateToVoiceJournal: () -> Unit,
     onNavigateToAgentChat: () -> Unit,
+    onNavigateToVoiceUserPhrases: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -3309,6 +3313,13 @@ private fun VoiceSettingsContent(
                 description = stringResource(R.string.settings_voice_journal_entry_description),
                 buttonLabel = stringResource(R.string.settings_voice_journal_entry_title),
                 onClick = onNavigateToVoiceJournal,
+                style = SettingButtonStyle.Secondary,
+            )
+            SettingActionRow(
+                title = stringResource(R.string.settings_voice_user_phrases_title),
+                description = stringResource(R.string.settings_voice_user_phrases_description),
+                buttonLabel = stringResource(R.string.settings_voice_user_phrases_button),
+                onClick = onNavigateToVoiceUserPhrases,
                 style = SettingButtonStyle.Secondary,
             )
         }

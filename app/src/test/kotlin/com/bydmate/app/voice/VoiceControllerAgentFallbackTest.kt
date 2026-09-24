@@ -6,7 +6,6 @@ import com.bydmate.app.agent.AgentResult
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
-import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.util.appStringsOver
 import io.mockk.coEvery
@@ -80,14 +79,10 @@ class VoiceControllerAgentFallbackTest {
         val gate = mockk<VoiceGate>()
         every { gate.isEnabled() } returns true
         every { gate.vehicleSnapshot() } returns null
-        every { gate.preferredLang() } returns null
         every { gate.ttsEnabled() } returns ttsEnabled
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { /* empty — completes immediately */ }
-
-        val localePrefs = mockk<LocalePreferences>(relaxed = true)
-        every { localePrefs.getLanguage() } returns "ru"
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
@@ -98,7 +93,7 @@ class VoiceControllerAgentFallbackTest {
         // Default: no pending agent question (individual tests override AFTER construction).
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
-        return VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
+        return VoiceController(audioCapture, dispatcher, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true), ttsEngine, journal, continuousAsr,
             agentIdentity = agentIdentity,
             ttsModelManager = mockk(relaxed = true),
