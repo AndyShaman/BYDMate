@@ -137,7 +137,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             if (!command.contains("遮阳帘")) return false
             if (command.contains("关")) return false
             val opensViaPosition = POSITION_OPEN.find(command)
-                ?.let { it.groupValues[1].toInt() > 0 }
+                ?.let { (positionPercent(it.groupValues[1]) ?: 0) > 0 }
                 ?: command.contains("打开")        // bare "打开" (no %) -- treat as open
             val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
             return opensViaPosition || opensViaWord
