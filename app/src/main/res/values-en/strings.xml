@@ -434,8 +434,7 @@
     <string name="automation_trigger_type_voice">Voice</string>
     <string name="automation_trigger_voice_phrase_label">Trigger phrase</string>
     <string name="automation_voice_phrase_empty">Voice phrase is empty</string>
-    <string name="automation_voice_phrase_builtin">Phrase is already a built-in command</string>
-    <string name="automation_voice_phrase_taken">Phrase is already used by another automation</string>
+    <string name="automation_voice_phrase_taken">This phrase is already used: %1$s</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Exact</string>
@@ -1177,7 +1176,6 @@
     <string name="voice_listening">Listening</string>
     <string name="voice_thinking">Thinking</string>
     <string name="voice_error_model_missing">Voice model is not downloaded. Get it in Settings, Voice agent section.</string>
-    <string name="voice_error_lang_not_ru">Voice commands understand Russian speech only. In Settings → Application pick Language: Русский.</string>
     <string name="voice_block_park_required">Park required</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
@@ -1201,6 +1199,19 @@
     <!-- Voice journal: debug screen with the last voice sessions -->
     <string name="settings_voice_journal_entry_title">Voice journal</string>
     <string name="settings_voice_journal_entry_description">Last 50 voice sessions</string>
+    <string name="settings_voice_user_phrases_title">Own phrases for commands</string>
+    <string name="settings_voice_user_phrases_description">Your words for built-in offline commands</string>
+    <string name="settings_voice_user_phrases_button">Open</string>
+    <string name="voice_user_phrases_hint">A command runs when its phrase is said on its own or inside a longer one. Your phrases are checked before the built-in ones.</string>
+    <string name="voice_user_phrases_add">Add</string>
+    <string name="voice_user_phrases_field">Phrase</string>
+    <string name="voice_user_phrases_too_long">At most %1$d characters</string>
+    <string name="voice_user_phrases_too_many">At most %1$d phrases per command</string>
+    <string name="voice_journal_route_nlu">Command</string>
+    <string name="voice_journal_route_automation">Automation</string>
+    <string name="voice_journal_route_agent">Agent</string>
+    <string name="voice_journal_route_refused">Refused</string>
+    <string name="voice_journal_timing">Recognized in %1$d ms, done in %2$d ms</string>
 
     <!-- TTS: offline synthesis of agent replies (Phase 2) -->
     <string name="settings_tts_header">Agent replies</string>
@@ -1623,8 +1634,10 @@
     <string name="automation_share_continue">Continue</string>
     <string name="automation_share_saved_toast">File saved: %1$s</string>
     <string name="automation_rule_deleted">This rule has already been deleted</string>
+    <string name="automation_rule_deleted_save_new">Save as new</string>
     <string name="automation_test_run_unrecognized">command not recognized, action skipped</string>
     <string name="automation_import_url_required">The link address needs to be entered again</string>
+    <string name="automation_import_url_params_stripped">Key-like parameters were removed from the link, check the address</string>
     <string name="automation_import_logic_all">All conditions</string>
     <string name="automation_import_logic_any">Any condition</string>
     <string name="automation_import_nav_home">home (address saved in the navigator)</string>

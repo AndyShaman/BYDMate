@@ -1315,8 +1315,7 @@
     <string name="automation_trigger_type_voice">Voz</string>
     <string name="automation_trigger_voice_phrase_label">Frase de ativação</string>
     <string name="automation_voice_phrase_empty">A frase de voz está vazia</string>
-    <string name="automation_voice_phrase_builtin">A frase já é um comando integrado</string>
-    <string name="automation_voice_phrase_taken">A frase já é usada por outra automação</string>
+    <string name="automation_voice_phrase_taken">Esta frase já está em uso: %1$s</string>
 
     <!-- Voice agent settings -->
     <string name="settings_voice_enable_label">Comandos de voz</string>
@@ -1326,7 +1325,6 @@
     <string name="voice_listening">Ouvindo</string>
     <string name="voice_thinking">Pensando</string>
     <string name="voice_error_model_missing">O modelo de voz não está baixado. Baixe-o em Configurações, seção Agente de voz.</string>
-    <string name="voice_error_lang_not_ru">Os comandos de voz entendem apenas fala em russo. Em Configurações → Aplicativo escolha Idioma: Русский.</string>
     <string name="voice_block_park_required">É necessário estar em P</string>
     <string name="settings_asr_gigaam_title">Reconhecimento de fala</string>
     <string name="settings_asr_gigaam_ready">Modelo pronto</string>
@@ -1343,6 +1341,19 @@
     <string name="settings_voice_contacts_grant">Conceder</string>
     <string name="settings_voice_journal_entry_title">Registro de voz</string>
     <string name="settings_voice_journal_entry_description">Últimas 50 sessões de voz</string>
+    <string name="settings_voice_user_phrases_title">Frases próprias para comandos</string>
+    <string name="settings_voice_user_phrases_description">Suas palavras para comandos offline integrados</string>
+    <string name="settings_voice_user_phrases_button">Abrir</string>
+    <string name="voice_user_phrases_hint">O comando funciona quando a frase é dita sozinha ou dentro de uma frase mais longa. Suas frases são verificadas antes das integradas.</string>
+    <string name="voice_user_phrases_add">Adicionar</string>
+    <string name="voice_user_phrases_field">Frase</string>
+    <string name="voice_user_phrases_too_long">No máximo %1$d caracteres</string>
+    <string name="voice_user_phrases_too_many">No máximo %1$d frases por comando</string>
+    <string name="voice_journal_route_nlu">Comando</string>
+    <string name="voice_journal_route_automation">Automação</string>
+    <string name="voice_journal_route_agent">Agente</string>
+    <string name="voice_journal_route_refused">Recusa</string>
+    <string name="voice_journal_timing">Reconhecido em %1$d ms, executado em %2$d ms</string>
     <string name="settings_tts_header">Respostas do agente</string>
     <string name="settings_tts_toggle">Falar as respostas do agente em voz alta</string>
     <string name="settings_tts_subtitle">O agente responde em voz alta, funciona sem internet.</string>
@@ -1619,8 +1630,10 @@
     <string name="automation_share_continue">Continuar</string>
     <string name="automation_share_saved_toast">Arquivo salvo: %1$s</string>
     <string name="automation_rule_deleted">Esta regra já foi excluída</string>
+    <string name="automation_rule_deleted_save_new">Salvar como nova</string>
     <string name="automation_test_run_unrecognized">comando não reconhecido, ação ignorada</string>
     <string name="automation_import_url_required">O endereço do link precisa ser digitado novamente</string>
+    <string name="automation_import_url_params_stripped">Parâmetros parecidos com chaves foram removidos do link, verifique o endereço</string>
     <string name="automation_import_logic_all">Todas as condições</string>
     <string name="automation_import_logic_any">Qualquer condição</string>
     <string name="automation_import_nav_home">para casa (endereço salvo no navegador)</string>

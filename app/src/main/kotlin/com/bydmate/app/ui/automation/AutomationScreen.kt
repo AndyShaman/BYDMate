@@ -264,9 +264,13 @@ fun AutomationScreen(
         )
     }
 
-    // «Сохранить» on a rule deleted meanwhile: above the editor, closes it.
+    // «Сохранить» on a rule deleted meanwhile: above the editor, save as new or close it.
     if (state.showEditor && state.editorRuleDeleted) {
-        RuleDeletedDialog(onClose = { viewModel.closeEditor() })
+        RuleDeletedDialog(
+            onSaveAsNew = { viewModel.saveDeletedRuleAsNew() },
+            onClose = { viewModel.closeEditor() },
+            onDismiss = { viewModel.dismissRuleDeleted() },
+        )
     }
 
     // Journal dialog

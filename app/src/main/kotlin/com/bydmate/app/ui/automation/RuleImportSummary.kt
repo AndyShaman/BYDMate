@@ -2,7 +2,6 @@ package com.bydmate.app.ui.automation
 
 import android.content.Context
 import com.bydmate.app.R
-import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.SharedRule
@@ -80,30 +79,33 @@ internal object RuleImportSummary {
         "DUSK" to R.string.automation_trigger_dusk,
     )
 
-    /** Every line of [rule] in one pass. */
-    fun preview(rule: SharedRule, context: Context): RuleImportPreview {
+    /**
+     * Every line of [rule] in one pass. [autoGo] is the dispatcher's own answer to «will this
+     * navigate press «Поехали» itself here» (ActionDispatcher.autoGoWillRun).
+     */
+    fun preview(rule: SharedRule, context: Context, autoGo: (JSONObject) -> Boolean): RuleImportPreview {
         val lc = context.appLocalizedContext()
         return RuleImportPreview(
             logic = lc.getString(if (rule.triggerLogic == "OR") R.string.automation_import_logic_any else R.string.automation_import_logic_all),
             triggers = rule.triggers.map { trigger(it, context) },
-            actions = rule.actions.map { action(it, context) },
+            actions = rule.actions.map { action(it, context, autoGo) },
             flags = flags(rule, context),
         )
     }
 
     /** «Звонок: +375291234567, Звонить автоматически», «Команда автомобилю: Закрыть все окна (车窗关闭)». */
-    fun action(action: ActionDef, context: Context): String {
+    fun action(action: ActionDef, context: Context, autoGo: (JSONObject) -> Boolean = { false }): String {
         val lc = context.appLocalizedContext()
         if (action.kind == "toggle") return toggleDisplayName(context, action.payload.orEmpty())
         val label = ACTION_KIND_LABELS[action.kind]?.let { lc.getString(it) } ?: action.kind
         // Same default as the dispatcher: no flag, no minimize.
         val minimize = lc.getString(R.string.automation_import_minimize)
             .takeIf { action.kind in MINIMIZE_KINDS && payloadJson(action.payload).optBoolean("minimize", false) }
-        val detail = listOfNotNull(actionDetail(action, lc), minimize).filter { it.isNotBlank() }.joinToString(", ")
+        val detail = listOfNotNull(actionDetail(action, lc, autoGo), minimize).filter { it.isNotBlank() }.joinToString(", ")
         return if (detail.isBlank()) label else "$label: $detail"
     }
 
-    private fun actionDetail(action: ActionDef, lc: Context): String? {
+    private fun actionDetail(action: ActionDef, lc: Context, autoGo: (JSONObject) -> Boolean): String? {
         val json = payloadJson(action.payload)
         return when (action.kind) {
             "param" -> ACTION_COMMANDS.find { it.command == action.command }
@@ -115,7 +117,7 @@ internal object RuleImportSummary {
             "delay", "media_volume" -> action.payload
             "sentry", "hotspot", "cluster_projection" ->
                 lc.getString(if (action.payload == "1") R.string.auto_enum_on else R.string.auto_enum_off)
-            else -> launchDetail(action.kind, json, lc) ?: ACTION_TEXT_FIELDS[action.kind]?.let { json.optString(it) }
+            else -> launchDetail(action.kind, json, lc, autoGo) ?: ACTION_TEXT_FIELDS[action.kind]?.let { json.optString(it) }
         }
     }
 
@@ -179,8 +181,8 @@ internal object RuleImportSummary {
 private val MUSIC_QUERY_MODES = setOf("play", "search")
 
 /** What navigate, Yandex Music and the split really run; null for the other kinds. */
-private fun launchDetail(kind: String, json: JSONObject, lc: Context): String? = when (kind) {
-    "navigate" -> navigateDetail(json, lc)
+private fun launchDetail(kind: String, json: JSONObject, lc: Context, autoGo: (JSONObject) -> Boolean): String? = when (kind) {
+    "navigate" -> navigateDetail(json, lc, autoGo)
     "yandex_music" -> musicDetail(json)
     "split_screen" -> "${json.optString("narrow")} / ${json.optString("wide")}, ${splitSide(json, lc)}"
     else -> null
@@ -190,7 +192,7 @@ private fun launchDetail(kind: String, json: JSONObject, lc: Context): String? =
  * Where the route goes, in the dispatcher's own order: the navigator's saved Home/Work
  * shortcut, else a search query, else the coordinates; then the flags that change what runs.
  */
-private fun navigateDetail(json: JSONObject, lc: Context): String {
+private fun navigateDetail(json: JSONObject, lc: Context, autoGo: (JSONObject) -> Boolean): String {
     val shortcut = json.optString("shortcut").takeIf(String::isNotBlank)
     val query = json.optString("query").takeIf(String::isNotBlank)
     val target = when {
@@ -203,8 +205,9 @@ private fun navigateDetail(json: JSONObject, lc: Context): String {
     val flags = listOfNotNull(
         lc.getString(R.string.automation_import_nav_show)
             .takeIf { shortcut == null && query == null && json.optBoolean("show", false) },
+        // A route the dispatcher cannot press «Поехали» on (Maps, 2GIS) is still a route: no flag.
         lc.getString(R.string.automation_import_nav_go)
-            .takeIf { query == null && ActionDispatcher.autoGoRequested(json) },
+            .takeIf { autoGo(json) },
         lc.getString(R.string.automation_import_nav_maps)
             .takeIf { json.optString("app").trim().equals(RouteNavigatorUris.MAPS, ignoreCase = true) },
     )

@@ -38,6 +38,11 @@ data class SharedRule(
      */
     fun unresolvedCallIndexes(): List<Int> = actions.indices.filter { needsContact(actions[it]) }
 
+    /** `url` actions that lost credential-like parameters on export: the preview asks to check the address. */
+    fun strippedUrlIndexes(): List<Int> = actions.indices.filter {
+        actions[it].kind == "url" && payloadOf(actions[it].payload).optBoolean(RuleShare.PARAMS_STRIPPED)
+    }
+
     fun hasUnresolved(): Boolean =
         unresolvedPlaceIndexes().isNotEmpty() || unresolvedCallIndexes().isNotEmpty() || unresolvedUrlIndexes().isNotEmpty()
 
@@ -93,6 +98,9 @@ object RuleShare {
 
     /** Marker left in a url payload whose address was emptied on export: it has to be entered again. */
     internal const val URL_REQUIRED = "urlRequired"
+
+    /** Marker left in a url payload that lost credential-like parameters on export: worth a look, not a blocker. */
+    internal const val PARAMS_STRIPPED = "paramsStripped"
 
     // --- Export ---
 
@@ -151,8 +159,10 @@ object RuleShare {
             json.put("url", stripped.url)
             json.remove(CONTACT_REQUIRED)
             json.remove(URL_REQUIRED)
+            json.remove(PARAMS_STRIPPED)
             if (stripped.contactRequired) json.put(CONTACT_REQUIRED, true)
             if (stripped.urlRequired) json.put(URL_REQUIRED, true)
+            if (stripped.paramsStripped) json.put(PARAMS_STRIPPED, true)
             action.copy(displayName = stripped.url, payload = json.toString())
         }
         else -> action
@@ -260,20 +270,26 @@ object RuleShare {
 
 /**
  * A share-safe address; whether the importer has to enter a phone number into it; whether the
- * address could not be cleaned and was emptied, so the importer has to enter it again.
+ * address could not be cleaned and was emptied, so the importer has to enter it again; whether
+ * credential-like parameters were removed from it, so the address may need a look.
  */
-data class StrippedUrl(val url: String, val contactRequired: Boolean, val urlRequired: Boolean = false)
+data class StrippedUrl(
+    val url: String,
+    val contactRequired: Boolean,
+    val urlRequired: Boolean = false,
+    val paramsStripped: Boolean = false,
+)
 
 /**
  * Credential stripping for a shared `url` action. The address is parsed as a [URI]:
  * - user:password in the authority is dropped;
- * - query parameters whose URL-decoded name contains one of [CREDENTIAL_PARTS] are dropped;
+ * - query parameters whose URL-decoded name reads as a credential ([isCredential]) are dropped;
  * - the fragment is dropped (OAuth-style links carry tokens there), except in an Android
  *   `intent:` link, where the fragment IS the intent: there only credential-named extras go;
  * - `tel:` loses the number, `sms:` and `smsto:` lose the number and keep the query (the
  *   message body); all three are marked contact-required, like `call`.
- * An address [URI] cannot parse, and `javascript:` / `data:` content, is not guessed at: it is
- * emptied and marked url-required. A secret in the path or in a link nested inside another
+ * An address [URI] cannot parse, `javascript:` / `data:` content, and an empty address (one
+ * emptied by an earlier export) are not guessed at: they are emptied and marked url-required. A secret in the path or in a link nested inside another
  * (a webhook id, an intent fallback URL) cannot be recognised structurally: the share note
  * says what is removed and asks the user to check the address itself.
  */
@@ -281,8 +297,21 @@ internal object RuleShareUrl {
     private val CONTACT_SCHEMES = setOf("tel", "sms", "smsto")
     private val CONTENT_SCHEMES = setOf("javascript", "data")
 
-    // Lower-cased substrings of a query parameter name that carries a secret.
-    private val CREDENTIAL_PARTS = listOf("token", "secret", "key", "pass", "pwd", "auth", "sig", "api")
+    // Words of a parameter name that make it a credential: `X-Api-Key`, `access_token`, `sig`.
+    private val CREDENTIAL_WORDS = setOf(
+        "token", "secret", "key", "pass", "passwd", "password", "pwd", "auth", "authorization", "sig",
+        "signature", "api", "apikey", "credential", "credentials", "session", "sid",
+    )
+
+    // Endings of a parameter name written without separators: `accesstoken`, `myapikey`.
+    private val CREDENTIAL_ENDINGS = listOf(
+        "apikey", "accesstoken", "authtoken", "refreshtoken", "clientsecret", "password", "passwd",
+        "signature", "secret", "token",
+    )
+
+    // Where a camelCase name starts a new word: `accessToken`, `APIKey`.
+    private val CAMEL_BOUNDARY = Regex("(?<=[\\p{Ll}\\p{N}])(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})")
+    private val NON_ALNUM = Regex("[^\\p{L}\\p{N}]+")
 
     private val EMPTIED = StrippedUrl("", contactRequired = false, urlRequired = true)
 
@@ -290,9 +319,9 @@ internal object RuleShareUrl {
         val trimmed = url.trim()
         val scheme = trimmed.substringBefore(':', "").lowercase()
         if (scheme in CONTACT_SCHEMES) return withoutNumber(scheme, trimmed)
-        if (scheme in CONTENT_SCHEMES) return EMPTIED
+        if (scheme in CONTENT_SCHEMES || trimmed.isEmpty()) return EMPTIED
         val uri = runCatching { URI(trimmed) }.getOrNull() ?: return EMPTIED
-        return StrippedUrl(rebuild(uri), contactRequired = false)
+        return rebuild(uri)
     }
 
     /** A contact-required `tel:` / `sms:` link from [strip] with [phone] put back before its query. */
@@ -302,46 +331,67 @@ internal object RuleShareUrl {
     }
 
     private fun withoutNumber(scheme: String, url: String): StrippedUrl {
-        val query = if (scheme == "tel") null else filterQuery(url.substringBefore('#').substringAfter('?', "").ifEmpty { null })
-        return StrippedUrl("$scheme:" + (query?.let { "?$it" } ?: ""), contactRequired = true)
+        val rawQuery = if (scheme == "tel") null else url.substringBefore('#').substringAfter('?', "").ifEmpty { null }
+        val query = filterQuery(rawQuery)
+        return StrippedUrl(
+            "$scheme:" + (query?.let { "?$it" } ?: ""), contactRequired = true,
+            paramsStripped = dropsParams(rawQuery, null),
+        )
     }
 
-    private fun rebuild(uri: URI): String {
+    private fun rebuild(uri: URI): StrippedUrl {
         if (uri.isOpaque) {
             // mailto:, geo:... have no authority, but may still carry a query.
             val ssp = uri.rawSchemeSpecificPart
-            val query = if ('?' in ssp) filterQuery(ssp.substringAfter('?')) else null
-            return "${uri.scheme}:${ssp.substringBefore('?')}" + (query?.let { "?$it" } ?: "")
+            val rawQuery = if ('?' in ssp) ssp.substringAfter('?') else null
+            val query = filterQuery(rawQuery)
+            val url = "${uri.scheme}:${ssp.substringBefore('?')}" + (query?.let { "?$it" } ?: "")
+            return StrippedUrl(url, contactRequired = false, paramsStripped = dropsParams(rawQuery, null))
         }
-        return buildString {
+        val intentExtras = uri.rawFragment?.takeIf { uri.scheme.equals("intent", ignoreCase = true) }
+        val url = buildString {
             uri.scheme?.let { append(it).append(':') }
             // Userinfo cannot hold an unescaped '@', so the host starts after the last one.
             if (uri.rawSchemeSpecificPart.startsWith("//")) append("//").append(uri.rawAuthority?.substringAfterLast('@').orEmpty())
             append(uri.rawPath.orEmpty())
             filterQuery(uri.rawQuery)?.let { append('?').append(it) }
-            if (uri.scheme.equals("intent", ignoreCase = true) && uri.rawFragment != null) {
-                append('#').append(filterIntentExtras(uri.rawFragment))
-            }
+            intentExtras?.let { append('#').append(filterIntentExtras(it)) }
         }
+        return StrippedUrl(url, contactRequired = false, paramsStripped = dropsParams(uri.rawQuery, intentExtras))
     }
 
     /** The query without credential parameters, or null when nothing is left. */
     private fun filterQuery(rawQuery: String?): String? =
         rawQuery?.split('&')
-            ?.filter { it.isNotEmpty() && !isCredential(it.substringBefore('=')) }
+            ?.filter { it.isNotEmpty() && !isCredentialParam(it) }
             ?.takeIf { it.isNotEmpty() }
             ?.joinToString("&")
 
     /** `#Intent;scheme=https;S.token=abc;end` without the credential-named extras (`S.token`). */
     private fun filterIntentExtras(fragment: String): String =
-        fragment.split(';').filterNot { part ->
-            '=' in part && isCredential(part.substringBefore('=').substringAfter('.'))
-        }.joinToString(";")
+        fragment.split(';').filterNot(::isCredentialExtra).joinToString(";")
 
-    // A name that does not even decode is treated as a credential: dropping it is the safe side.
+    /** Whether [filterQuery] / [filterIntentExtras] drop anything from these parts. */
+    private fun dropsParams(rawQuery: String?, intentExtras: String?): Boolean =
+        rawQuery.orEmpty().split('&').any { it.isNotEmpty() && isCredentialParam(it) } ||
+            intentExtras.orEmpty().split(';').any(::isCredentialExtra)
+
+    private fun isCredentialParam(part: String): Boolean = isCredential(part.substringBefore('='))
+
+    private fun isCredentialExtra(part: String): Boolean =
+        '=' in part && isCredential(part.substringBefore('=').substringAfter('.'))
+
+    /**
+     * A name is a credential when one of its words is in [CREDENTIAL_WORDS] (words split at
+     * non-alphanumerics and camelCase), or when written without separators it ends like one of
+     * [CREDENTIAL_ENDINGS]. Whole words only: `mapid` and `design` are not `api` and `sig`.
+     * A name that does not even decode is treated as a credential: dropping it is the safe side.
+     */
     private fun isCredential(rawName: String): Boolean {
-        val name = runCatching { URLDecoder.decode(rawName, "UTF-8") }.getOrNull()?.trim()?.lowercase() ?: return true
-        return CREDENTIAL_PARTS.any { it in name }
+        val name = runCatching { URLDecoder.decode(rawName, "UTF-8") }.getOrNull() ?: return true
+        val words = name.replace(CAMEL_BOUNDARY, " ").lowercase().split(NON_ALNUM).filter { it.isNotEmpty() }
+        val compact = words.joinToString("")
+        return words.any { it in CREDENTIAL_WORDS } || CREDENTIAL_ENDINGS.any { compact.endsWith(it) }
     }
 }
 
@@ -358,6 +408,8 @@ internal object RuleShareJsonLimits {
     const val MAX_DEPTH = 32
     const val MAX_STRING_CHARS = 8 * 1024
 
+    private const val BOM = '\uFEFF'
+
     private val ESCAPES = mapOf('t' to '\t', 'b' to '\b', 'n' to '\n', 'r' to '\r', 'f' to '\u000C')
 
     // What ends an unquoted literal (`true`, `12`, `abc`) for the Android parser. A quote inside
@@ -366,7 +418,8 @@ internal object RuleShareJsonLimits {
 
     fun accepts(text: String): Boolean {
         var depth = 0
-        var i = 0
+        // The Android tokenizer drops one leading byte order mark before it parses.
+        var i = if (text.startsWith(BOM)) 1 else 0
         while (i < text.length) {
             val c = text[i]
             when {
@@ -374,18 +427,21 @@ internal object RuleShareJsonLimits {
                 c in "}]" -> if (--depth < 0) return true
                 c in "\"'" -> i = acceptString(text, i) ?: return false
                 c in "/#" -> i = skipComment(text, i)
-                c !in LITERAL_END -> i = literalEnd(text, i)
+                c !in LITERAL_END -> i = literalEnd(text, i) ?: return false
             }
             i++
         }
         return true
     }
 
-    /** The last index of the unquoted literal starting at [start]. */
-    private fun literalEnd(text: String, start: Int): Int {
+    /**
+     * The last index of the unquoted literal starting at [start], null when it is longer than
+     * [MAX_STRING_CHARS]: the parser reads an unquoted `name:aaaa` as a string too.
+     */
+    private fun literalEnd(text: String, start: Int): Int? {
         var i = start
         while (i + 1 < text.length && text[i + 1] !in LITERAL_END) i++
-        return i
+        return i.takeIf { it - start < MAX_STRING_CHARS }
     }
 
     /**
@@ -433,9 +489,12 @@ internal object RuleShareJsonLimits {
         }
     }
 
-    /** True when org.json would read [s] as an object or array: its first token is `{` or `[`. */
+    /**
+     * True when org.json would read [s] as an object or array: its first token, after one
+     * leading byte order mark (the tokenizer drops it), is `{` or `[`.
+     */
     private fun looksLikeJson(s: CharSequence): Boolean {
-        var i = 0
+        var i = if (s.startsWith(BOM)) 1 else 0
         while (i < s.length) {
             val c = s[i]
             if (c == '{' || c == '[') return true
