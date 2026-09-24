@@ -56,7 +56,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -67,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,6 +87,7 @@ import com.bydmate.app.ui.components.TripCard
 import com.bydmate.app.ui.components.adbVerdictColor
 import com.bydmate.app.ui.components.adbVerdictText
 import com.bydmate.app.ui.components.consumptionColor
+import com.bydmate.app.ui.components.rememberSocGaugeMinSize
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.widget.TRIP_DISTANCE_TREND_THRESHOLD_KM
 import com.bydmate.app.ui.widget.formatDurationShort
@@ -144,10 +148,12 @@ fun DashboardScreen(
         ) {
             // LEFT COLUMN: blocks keep their own height, only the gauge yields when space runs out
             BoxWithConstraints(modifier = Modifier.weight(0.4f)) {
-                val columnHeight = maxHeight
-                // Scroll is attached only on overflow: its clip would cut the glow above the gauge.
-                var overflows by remember { mutableStateOf(false) }
                 val scrollState = rememberScrollState()
+                // The scroll container reaches GaugeGlowRoom above the column so its clip leaves the
+                // glow over the gauge alone; the content starts that much lower to stay in place.
+                val density = LocalDensity.current
+                val glowRoomPx = with(density) { GaugeGlowRoom.roundToPx() }
+                val contentMinHeight = with(density) { (constraints.maxHeight + glowRoomPx).toDp() }
                 // Ghost car background
                 Image(
                     painter = painterResource(R.drawable.leopard3),
@@ -159,12 +165,16 @@ fun DashboardScreen(
                     alignment = Alignment.Center
                 )
                 GaugeYieldingColumn(
-                    onOverflowChange = { overflows = it },
+                    gaugeMinSize = rememberSocGaugeMinSize(state.isCharging),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (overflows) Modifier.verticalScroll(scrollState) else Modifier)
-                        .heightIn(min = columnHeight)
-                        .padding(vertical = 4.dp),
+                        .layout { measurable, c ->
+                            val p = measurable.measure(c.copy(maxHeight = c.maxHeight + glowRoomPx))
+                            layout(p.width, c.constrainHeight(p.height - glowRoomPx)) { p.place(0, -glowRoomPx) }
+                        }
+                        .verticalScroll(scrollState)
+                        .heightIn(min = contentMinHeight)
+                        .padding(top = GaugeGlowRoom + 4.dp, bottom = 4.dp),
                 ) {
                     // TOP: SOC gauge + 4 widget-style stats around it (mirrors FloatingWidgetView).
                     // Two symmetric rows wrap the gauge:
@@ -549,17 +559,20 @@ fun DashboardScreen(
 }
 
 private val GaugeMaxSize = 150.dp
-private val GaugeMinSize = 100.dp
+
+// The gauge glow reaches 10.5 dp above its square; the column's 4 dp top padding covers the rest.
+private val GaugeGlowRoom = 8.dp
 
 /**
  * Left column of Главная. [content] emits the gauge, the rows under it and the card stack, in
  * that order. Rows and cards keep their own height and the cards sit at the bottom; the gauge
- * takes what is left, between [GaugeMinSize] and [GaugeMaxSize]. When even the smallest gauge
- * does not fit the minimum height, the column grows taller and reports it via [onOverflowChange].
+ * takes what is left, between [gaugeMinSize] (its text still clear of the arc) and [GaugeMaxSize].
+ * When even the smallest gauge does not fit the minimum height, the column grows taller than
+ * it and the caller's scroll takes over.
  */
 @Composable
 private fun GaugeYieldingColumn(
-    onOverflowChange: (Boolean) -> Unit,
+    gaugeMinSize: Dp,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -570,16 +583,15 @@ private fun GaugeYieldingColumn(
         val cards = measurables[2].measure(free)
         val target = constraints.minHeight
         val gaugeSize = (target - rows.height - cards.height)
-            .coerceIn(GaugeMinSize.roundToPx(), GaugeMaxSize.roundToPx())
+            .coerceIn(gaugeMinSize.roundToPx(), maxOf(gaugeMinSize, GaugeMaxSize).roundToPx())
             .coerceAtMost(width)
         val gauge = measurables[0].measure(Constraints.fixed(gaugeSize, gaugeSize))
         val needed = gaugeSize + rows.height + cards.height
-        onOverflowChange(needed > target)
         val height = constraints.constrainHeight(maxOf(target, needed))
         layout(width, height) {
             gauge.place((width - gaugeSize) / 2, 0)
             rows.place((width - rows.width) / 2, gaugeSize)
-            cards.place((width - cards.width) / 2, maxOf(gaugeSize + rows.height, height - cards.height))
+            cards.place((width - cards.width) / 2, height - cards.height)
         }
     }
 }
