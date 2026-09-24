@@ -846,6 +846,16 @@
     <string name="backup_error_no_selected_parts">The archive has none of the selected parts</string>
     <string name="backup_error_fk_violation">The backup file is damaged: links between tables are broken</string>
     <string name="backup_error_version_mismatch">The backup file is damaged: the database version does not match its description</string>
+    <string name="backup_error_db_not_sqlite">The database file in the backup is damaged or is not a SQLite database</string>
+    <string name="backup_error_db_integrity">The database file in the backup failed the integrity check</string>
+    <string name="backup_error_too_many_entries">The backup file is damaged: too many entries in the archive</string>
+    <string name="backup_error_duplicate_entry">The backup file is damaged: duplicate entry %1$s</string>
+    <string name="backup_error_too_large">The backup file is too large</string>
+    <string name="backup_error_incomplete">The backup file is damaged or incomplete. Expected entries: %1$s</string>
+    <string name="backup_error_entry_too_large">The backup file is damaged: an entry exceeds the allowed size</string>
+    <string name="backup_error_export_busy">The database is busy, export aborted. Try again later.</string>
+    <string name="backup_error_open_failed">Could not open the backup file</string>
+    <string name="backup_error_swap_failed">Could not replace the database file during restore</string>
     <string name="settings_backup_chip_tables">Tables</string>
     <string name="settings_backup_chip_settings">Settings</string>
     <string name="settings_backup_chip_keys">Keys</string>

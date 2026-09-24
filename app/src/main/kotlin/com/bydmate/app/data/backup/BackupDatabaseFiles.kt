@@ -133,7 +133,7 @@ internal object BackupDatabaseFiles {
             SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
         } catch (e: SQLiteException) {
             file.delete()
-            throw IllegalStateException("Файл базы данных в бэкапе повреждён или не является базой SQLite", e)
+            throw IllegalStateException(strings.get(R.string.backup_error_db_not_sqlite), e)
         }
         val version = db.version
         val problem = try {
@@ -141,14 +141,14 @@ internal object BackupDatabaseFiles {
             val coreTables = db.rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ($tables)", null)
                 .use { it.moveToFirst(); it.getInt(0) }
             when {
-                !quickCheck(db) -> "Файл базы данных в бэкапе не прошёл проверку целостности"
+                !quickCheck(db) -> strings.get(R.string.backup_error_db_integrity)
                 // A full archive is swapped in as is: Room would fail on the next start.
                 version < 1 || coreTables < CORE_TABLES.size -> strings.get(R.string.backup_error_not_bydmate_db)
                 db.rawQuery("PRAGMA foreign_key_check", null).use { it.count } > 0 -> strings.get(R.string.backup_error_fk_violation)
                 else -> null
             }
         } catch (_: SQLiteException) {
-            "Файл базы данных в бэкапе не прошёл проверку целостности"
+            strings.get(R.string.backup_error_db_integrity)
         } finally {
             db.close()
         }

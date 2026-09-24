@@ -284,6 +284,7 @@ class BackupManager(
          */
         internal fun readBackupEntries(
             stream: InputStream,
+            strings: AppStrings,
             maxEntryBytes: Long = MAX_ENTRY_BYTES,
             maxTotalBytes: Long = MAX_TOTAL_BYTES,
             dbEntryNames: Set<String> = setOf(ENTRY_DB, ENTRY_PART_DB),
@@ -294,24 +295,24 @@ class BackupManager(
             var total = 0L
             ZipInputStream(stream).use { zip ->
                 generateSequence { zip.nextEntry }.forEachIndexed { index, entry ->
-                    check(index < MAX_ENTRIES) { "Файл бэкапа повреждён: слишком много записей в архиве" }
+                    check(index < MAX_ENTRIES) { strings.get(R.string.backup_error_too_many_entries) }
                     val slot = when (entry.name) {
                         in dbEntryNames -> ENTRY_DB
                         ENTRY_PREFS, ENTRY_MANIFEST -> entry.name
                         else -> null
                     }
                     if (slot != null) {
-                        check(slot !in found) { "Файл бэкапа повреждён: дублирующаяся запись ${entry.name}" }
-                        val bytes = readEntryBounded(zip, maxEntryBytes)
+                        check(slot !in found) { strings.get(R.string.backup_error_duplicate_entry, entry.name) }
+                        val bytes = readEntryBounded(zip, maxEntryBytes, strings)
                         total += bytes.size
-                        check(total <= maxTotalBytes) { "Файл бэкапа слишком большой" }
+                        check(total <= maxTotalBytes) { strings.get(R.string.backup_error_too_large) }
                         found[slot] = bytes
                         if (slot == ENTRY_DB) dbEntryName = entry.name
                     }
                     zip.closeEntry()
                 }
             }
-            fun take(slot: String) = found[slot] ?: throw incompleteBackup()
+            fun take(slot: String) = found[slot] ?: throw incompleteBackup(strings)
             return BackupEntries(
                 dbBytes = take(ENTRY_DB),
                 prefsJson = take(ENTRY_PREFS).toString(Charsets.UTF_8),
@@ -329,12 +330,12 @@ class BackupManager(
         /** Largest manifest.json [archiveParts] reads; a real one is under 200 bytes. */
         private const val MAX_MANIFEST_BYTES = 64L * 1024
 
-        private fun incompleteBackup() = IllegalStateException(
-            "Файл бэкапа повреждён или неполный. Ожидались записи: $ENTRY_DB, $ENTRY_PREFS, $ENTRY_MANIFEST"
+        private fun incompleteBackup(strings: AppStrings) = IllegalStateException(
+            strings.get(R.string.backup_error_incomplete, "$ENTRY_DB, $ENTRY_PREFS, $ENTRY_MANIFEST")
         )
 
         /** Read the current zip entry, failing fast once [limit] bytes are exceeded. */
-        private fun readEntryBounded(zip: ZipInputStream, limit: Long): ByteArray {
+        private fun readEntryBounded(zip: ZipInputStream, limit: Long, strings: AppStrings): ByteArray {
             val out = java.io.ByteArrayOutputStream()
             val buf = ByteArray(64 * 1024)
             var total = 0L
@@ -343,7 +344,7 @@ class BackupManager(
                 if (n < 0) break
                 total += n
                 if (total > limit) {
-                    throw IllegalStateException("Файл бэкапа повреждён: запись превышает допустимый размер")
+                    throw IllegalStateException(strings.get(R.string.backup_error_entry_too_large))
                 }
                 out.write(buf, 0, n)
             }
@@ -485,9 +486,7 @@ class BackupManager(
                 supportDb.endTransaction()
             }
         }
-        throw IllegalStateException(
-            "База данных занята, экспорт прерван. Повторите попытку позже."
-        )
+        throw IllegalStateException(strings.get(R.string.backup_error_export_busy))
     }
 
     /** Runs PRAGMA wal_checkpoint(TRUNCATE); true only when fully checkpointed (busy=0). */
@@ -516,11 +515,11 @@ class BackupManager(
                 generateSequence { zip.nextEntry }
                     .take(MAX_ENTRIES)
                     .firstOrNull { it.name == ENTRY_MANIFEST }
-                    ?.let { readEntryBounded(zip, MAX_MANIFEST_BYTES).toString(Charsets.UTF_8) }
+                    ?.let { readEntryBounded(zip, MAX_MANIFEST_BYTES, strings).toString(Charsets.UTF_8) }
             }
         } catch (e: IOException) {
-            throw IllegalStateException("Не удалось открыть файл бэкапа", e)
-        } ?: throw incompleteBackup()
+            throw IllegalStateException(strings.get(R.string.backup_error_open_failed), e)
+        } ?: throw incompleteBackup(strings)
         return manifestParts(JSONObject(manifestJson))
     }
 
@@ -547,10 +546,10 @@ class BackupManager(
             val inputStream: InputStream = try {
                 file.inputStream()
             } catch (e: IOException) {
-                throw IllegalStateException("Не удалось открыть файл бэкапа", e)
+                throw IllegalStateException(strings.get(R.string.backup_error_open_failed), e)
             }
             // 1-2. Read + validate the zip entries under hard size limits (AC-13).
-            val entries = inputStream.use { readBackupEntries(it) }
+            val entries = inputStream.use { readBackupEntries(it, strings) }
 
             // ---------------------------------------------------------------------
             // PRE-VALIDATION — everything that can fail MUST be checked here, before
@@ -665,7 +664,7 @@ class BackupManager(
         //    deletes below do not throw, and the prefs loop is best-effort (see below).
         if (!dbFile.renameTo(targetDbFile)) {
             dbFile.delete()
-            throw IllegalStateException("Не удалось заменить файл базы данных при восстановлении")
+            throw IllegalStateException(strings.get(R.string.backup_error_swap_failed))
         }
         // Drop stale WAL/SHM left from the old DB AFTER the swap. The restored file is
         // self-contained (WAL was folded in at export time).

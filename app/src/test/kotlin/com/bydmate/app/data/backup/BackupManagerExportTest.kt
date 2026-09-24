@@ -167,9 +167,9 @@ class BackupManagerExportTest {
         val zip = manager().export(setOf(BackupPart.TABLES, BackupPart.SETTINGS))
 
         assertThrows(IllegalStateException::class.java) {
-            zip.inputStream().use { BackupManager.readBackupEntries(it, dbEntryNames = setOf("bydmate.db")) }
+            zip.inputStream().use { BackupManager.readBackupEntries(it, AppStrings(context), dbEntryNames = setOf("bydmate.db")) }
         }
-        val entries = zip.inputStream().use { BackupManager.readBackupEntries(it) }
+        val entries = zip.inputStream().use { BackupManager.readBackupEntries(it, AppStrings(context)) }
         assertTrue(entries.partial)
     }
 
