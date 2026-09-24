@@ -563,5 +563,7 @@ utterance	expected	category	danger
 включай подогрев руля	方向盘加热	steering heat	
 сохрани заряд	UNRECOGNIZED	misc	
 сколько заряда	UNRECOGNIZED	misc	
-включи навигатор	UNRECOGNIZED	misc	
-выключи фары	UNRECOGNIZED	misc	
+включи навигатор	UNRECOGNIZED	misc
+выключи фары	UNRECOGNIZED	misc
+выключи подогрев руля и подогрев сидений	UNRECOGNIZED	seats
+выключи подогрев сиденья водителя и подогрев сиденья пассажира	UNRECOGNIZED	seats

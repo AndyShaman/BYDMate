@@ -35,6 +35,9 @@ internal class VoiceDictionaryLoader(text: String) {
     private val rules = HashMap<String, List<List<Node>>>()
     private val slots = HashMap<String, List<SlotGroup>>()
     private val templates = ArrayList<TemplateLine>()
+    // Cache keys are namespaced ("rule:" / "slot:") so a <name> reference never serves a {name}
+    // reference from the same cache entry or the reverse: a name defined as one but referenced
+    // as the other must still fail with "unknown rule"/"unknown slot", whichever expands first.
     private val expanded = HashMap<String, List<Part>>()
     private val expanding = HashSet<String>()
 
@@ -55,7 +58,7 @@ internal class VoiceDictionaryLoader(text: String) {
                 byKey.getOrPut(part.words.joinToString(" ")) { ArrayList() }.add(phrase)
             }
         }
-        val unused = (rules.keys + slots.keys) - expanded.keys
+        val unused = rules.keys.filterNot { "rule:$it" in expanded } + slots.keys.filterNot { "slot:$it" in expanded }
         require(unused.isEmpty()) { "defined but never used: $unused" }
         return VoiceDictionary(byKey, templates.size)
     }
@@ -99,10 +102,10 @@ internal class VoiceDictionaryLoader(text: String) {
 
     private fun expandNode(node: Node): List<Part> = when (node) {
         is Node.Word -> listOf(word(node.text))
-        is Node.Rule -> named(node.name) {
+        is Node.Rule -> named("rule", node.name) {
             requireNotNull(rules[node.name]) { "unknown rule <${node.name}>" }.flatMap { expand(it) }
         }
-        is Node.Slot -> named(node.name) { slotParts(node.name) }
+        is Node.Slot -> named("slot", node.name) { slotParts(node.name) }
         is Node.Choice -> node.options.flatMap { expand(it) } + if (node.optional) listOf(Part.EMPTY) else emptyList()
     }
 
@@ -111,11 +114,14 @@ internal class VoiceDictionaryLoader(text: String) {
         return Part(listOf(VoiceDictionary.NUM), listOf(Num(n..n, null)), emptyMap())
     }
 
-    /** The expansion of a rule or slot, computed once; a definition using itself is an error. */
-    private fun named(name: String, compute: () -> List<Part>): List<Part> {
-        expanded[name]?.let { return it }
-        require(expanding.add(name)) { "\"$name\" refers to itself" }
-        return compute().also { expanded[name] = it; expanding.remove(name) }
+    /** The expansion of a rule or slot, computed once; a definition using itself is an error.
+     *  [kind] ("rule" or "slot") namespaces the cache so <name> and {name} never share a cache
+     *  entry when the file uses [name] as only one of the two. */
+    private fun named(kind: String, name: String, compute: () -> List<Part>): List<Part> {
+        val key = "$kind:$name"
+        expanded[key]?.let { return it }
+        require(expanding.add(key)) { "\"$name\" refers to itself" }
+        return compute().also { expanded[key] = it; expanding.remove(key) }
     }
 
     private fun slotParts(name: String): List<Part> =
@@ -131,7 +137,10 @@ internal class VoiceDictionaryLoader(text: String) {
 
         fun range(text: String, where: String): IntRange {
             val m = requireNotNull(RANGE.matchEntire(text.trim())) { "$where: bad range \"$text\"" }
-            return m.groupValues[1].toInt()..m.groupValues[2].toInt()
+            val lo = m.groupValues[1].toInt()
+            val hi = m.groupValues[2].toInt()
+            require(lo <= hi) { "$where: reversed range \"$text\"" }
+            return lo..hi
         }
 
         /** [text] split at [sep] outside (), [] and {}; "=>" and <rule> never hold a separator. */
@@ -179,7 +188,10 @@ private class SyntaxReader(private val text: String, private val where: String) 
         val words = StringBuilder()
         while (true) {
             val c = text.getOrNull(i)
-            if (c == null || c in "|)]") {
+            // A bare "}" or ">" here (one <rule>/{slot} already consumes its own closer via
+            // name()) is as unbalanced as a stray ")" or "]": every one of the four must fail
+            // to load, never get silently stripped by punctuation normalization later.
+            if (c == null || c in "|)]}>") {
                 seq.addAll(literal(words))
                 words.clear()
                 require(seq.isNotEmpty()) { "$where: empty choice in \"$text\"" }
