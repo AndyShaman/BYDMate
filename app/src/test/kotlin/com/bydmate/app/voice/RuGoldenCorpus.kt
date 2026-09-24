@@ -32,9 +32,7 @@ object RuGoldenCorpus {
         is ParseResult.Command -> result.commands.joinToString("+")
         is ParseResult.RelativeTemp -> "TEMP:" + if (result.sign > 0) "+1" else "-1"
         is ParseResult.Volume -> "VOL:" + result.payload
-        // A refusal and a phrase not understood both go to the agent; the reason codes are
-        // pinned by the parser's unit tests.
-        ParseResult.Unrecognized, is ParseResult.Refused -> UNRECOGNIZED
+        ParseResult.Unrecognized -> UNRECOGNIZED
     }
 
     fun actual(row: Row): String = render(NluParser.parse(row.utterance))
@@ -76,10 +74,39 @@ object RuGoldenCorpus {
         return apertures(actual).any { (target, pct) -> pct > (want[target] ?: 0) }
     }
 
-    /** The share the utterance itself names ("на сорок процентов", "на треть", "чуть"), or null. */
+    /** The share the utterance itself names ("на сорок процентов", "на треть", "чуть"), the
+     *  smallest when it names several, or null. Read here on its own, independent of the
+     *  dictionary, so a template that widens a spoken share fails the corpus. */
     fun spokenShare(utterance: String): Int? {
-        val m = VoiceNormalizer.measure(VoiceNormalizer.tokens(utterance))
-        return m.numbers.singleOrNull()?.takeIf { m.numberIsShare } ?: m.share
+        val w = VoiceNormalizer.digits(VoiceNormalizer.tokens(utterance))
+        return w.indices.mapNotNull { shareAt(w, it) }.minOrNull()
+    }
+
+    private val VENT_WORDS = setOf("чуть", "немного", "немножко", "слегка", "щелочку", "щелку")
+
+    private val QUARTER = setOf("четверть", "четверти")
+
+    /** "3 четверти" is 75; any other number is a share only after на/до or before процент*. */
+    private fun numberShare(number: Int, prev: String?, next: String?): Int? = when {
+        next in QUARTER -> number * 25
+        prev == "на" || prev == "до" || next?.startsWith("процент") == true -> number
+        else -> null
+    }
+
+    private fun shareAt(w: List<String>, i: Int): Int? {
+        val t = w[i]
+        val prev = w.getOrNull(i - 1)
+        val next = w.getOrNull(i + 1)
+        VoiceNormalizer.number(t)?.let { return numberShare(it, prev, next) }
+        return when {
+            t in QUARTER -> 25.takeIf { prev == null || VoiceNormalizer.number(prev) == null }
+            t in setOf("треть", "трети") -> 33
+            t == "наполовину" || t.startsWith("половин") -> 50
+            t == "пол" -> 50.takeIf { prev == "на" || next?.startsWith("окн") == true }
+            t in VENT_WORDS -> 10
+            t == "полностью" || t == "конца" && prev == "до" -> 100
+            else -> null
+        }
     }
 
     /** True when [actual] opens some aperture wider than the share the utterance names,

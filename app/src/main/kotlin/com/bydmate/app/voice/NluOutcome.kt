@@ -15,17 +15,11 @@ object VoiceRefusal {
     const val RULE_NOT_FOUND = "rule_not_found"
     const val INTERNAL_ERROR = "internal_error"
 
-    // The parser understood enough to know it must not act (see ParseResult.Refused).
-    const val NEGATION = "negation"
-    const val UNKNOWN_MEASURE = "unknown_measure"
-    const val CONFLICTING_MEASURE = "conflicting_measure"
-    const val MULTIPLE_COMMANDS = "multiple_commands"
-
     /** A safety gate held the command back, e.g. `gate:speed_unknown`. */
     fun gate(name: String): String = "gate:$name"
 }
 
-/** What the built-in parser made of a phrase: a command to run, or a refusal with its code. */
+/** What the built-in dictionary made of a phrase: a command to run, or a refusal with its code. */
 sealed interface NluOutcome {
     data class Understood(val result: ParseResult) : NluOutcome
     data class Refused(val reason: String) : NluOutcome
@@ -33,7 +27,6 @@ sealed interface NluOutcome {
     companion object {
         fun of(result: ParseResult): NluOutcome = when (result) {
             ParseResult.Unrecognized -> Refused(VoiceRefusal.UNRECOGNIZED)
-            is ParseResult.Refused -> Refused(result.reason)
             else -> Understood(result)
         }
     }

@@ -379,3 +379,167 @@ utterance	expected	category	danger
 открой окно на пятьдесят пожалуйста процентов	主驾半开	windows	danger
 открой окно до пожалуйста конца	主驾打开100	windows	
 открой окно на пожалуйста пятьдесят	主驾半开	windows	danger
+окна закрой	车窗关闭	windows	
+открой стекло пассажира	副驾打开100	windows	
+проветри левое окно	后左通风	windows	danger
+закрой переднее правое окно	副驾打开0	windows	
+открой левое и правое окно	UNRECOGNIZED	windows	danger
+открой правое окно водителя	UNRECOGNIZED	windows	danger
+открой все левые окна	UNRECOGNIZED	windows	danger
+закрой левую форточку сзади	后左打开0	windows	
+приоткрой окно водителя	主驾通风	windows	danger
+открой наполовину водительское окно	主驾半开	windows	danger
+приоткрой заднее левое окно	后左通风	windows	danger
+окно пассажира наполовину	副驾半开	windows	danger
+задние окна наполовину	后排车窗半开	windows	danger
+приоткрой передние окна	前排车窗通风	windows	danger
+проветри задние окна	后排车窗通风	windows	danger
+открой водительское окно на двадцать процентов	主驾通风	windows	danger
+открой правое окно	后右打开100	windows	
+открыть окно	主驾打开100	windows	
+не открой окно	UNRECOGNIZED	windows	danger
+отмена закрой окна	UNRECOGNIZED	windows	
+не надо открой окно	UNRECOGNIZED	windows	danger
+открывал окно	UNRECOGNIZED	windows	danger
+открой окно на	UNRECOGNIZED	windows	danger
+открой окно до	UNRECOGNIZED	windows	danger
+открой окно в салоне	UNRECOGNIZED	windows	danger
+открой окно на щелочку	主驾通风	windows	danger
+открой окно на максимум минимум	UNRECOGNIZED	windows	danger
+открой окно на двадцать на тридцать	UNRECOGNIZED	windows	danger
+открой окно на сто процентов	主驾打开100	windows	
+открой окно на восемьдесят процентов	主驾半开	windows	danger
+открой окно на семьдесят пять процентов	主驾半开	windows	danger
+открой окно на тридцать три процента	主驾通风	windows	danger
+открой окно на двадцать пять процентов	主驾通风	windows	danger
+открой окно на двадцать два процента	主驾通风	windows	danger
+открой окно на девять процентов	UNRECOGNIZED	windows	danger
+открой окна кроме окна	UNRECOGNIZED	windows	danger
+закрой окна кроме заднего левого и правого	UNRECOGNIZED	windows	
+открой окна кроме переднего правого	主驾打开100+后左打开100+后右打开100	windows	danger
+открой закрой окно	UNRECOGNIZED	windows	danger
+поставь окно на пятьдесят процентов	主驾半开	windows	danger
+установи окна на двадцать процентов	车窗通风	windows	danger
+проветри салон	车窗通风	windows	danger
+открой люк на тридцать процентов	天窗通风	sunroof	danger
+нет закрой люк	UNRECOGNIZED	sunroof	
+нет открой люк	UNRECOGNIZED	sunroof	danger
+открывал люк	UNRECOGNIZED	sunroof	danger
+я открываю люк	UNRECOGNIZED	sunroof	danger
+открой люк на сто процентов	天窗打开100	sunroof	
+открой люк на семь процентов	天窗通风	sunroof	danger
+открой люк до пяти процентов	UNRECOGNIZED	sunroof	danger
+открой окно и люк на палец	UNRECOGNIZED	sunroof	danger
+открой окна и люк	车窗全开+天窗打开100	sunroof	
+подогрев сиденья водителя 3	主驾座椅加热3档	seats	
+выключи вентиляцию сиденья	主驾座椅通风关闭	seats	
+выключи подогрев сиденья пассажира	副驾座椅加热关闭	seats	
+отключи подогрев сиденья	主驾座椅加热关闭	seats	
+отключить подогрев сиденья	主驾座椅加热关闭	seats	
+выключи обогрев сиденья	主驾座椅加热关闭	seats	
+обдув сиденья водителя	主驾座椅通风1档	seats	
+включи подогрев сиденья пассажира	副驾座椅加热1档	seats	
+включи вентиляцию сиденья	主驾座椅通风1档	seats	
+включи подогрев левого кресла	主驾座椅加热1档	seats	
+включи подогрев сидений слева и справа	主驾座椅加热1档+副驾座椅加热1档	seats	
+включи подогрев правого сиденья водителя	UNRECOGNIZED	seats	
+включи подогрев левого сиденья пассажира	UNRECOGNIZED	seats	
+подогрев сиденья пассажира на 3	副驾座椅加热3档	seats	
+подогрев сиденья на пять	UNRECOGNIZED	seats	
+включи подогрев сидения пассажира	副驾座椅加热1档	seats	
+включи подогрев всех сидений	主驾座椅加热1档+副驾座椅加热1档	seats	
+включи подогрев обоих сидений	主驾座椅加热1档+副驾座椅加热1档	seats	
+включи вентиляцию сидений	主驾座椅通风1档+副驾座椅通风1档	seats	
+выключи обогрев всех сидений	主驾座椅加热关闭+副驾座椅加热关闭	seats	
+выключи обдув сидений	主驾座椅通风关闭+副驾座椅通风关闭	seats	
+поставь подогрев сиденья на два	主驾座椅加热2档	seats	
+включи подогрев сидений на три процента	UNRECOGNIZED	seats	
+включи подогрев сиденья на полную	主驾座椅加热3档	seats	
+включи подогрев сиденья на третий уровень	主驾座椅加热3档	seats	
+включи вентиляцию сиденья пассажира на минимум	副驾座椅通风1档	seats	
+включи обдув сидений	主驾座椅通风1档+副驾座椅通风1档	seats	
+сильный обдув сидений	主驾座椅通风3档+副驾座椅通风3档	seats	
+правое сиденье водителя	UNRECOGNIZED	seats	
+сделай двадцать четыре градуса	设置温度24	climate	
+поставь температуру 40	UNRECOGNIZED	climate	
+24 градуса	设置温度24	climate	
+температура двадцать шесть	设置温度26	climate	
+температура 14	UNRECOGNIZED	climate	
+температура	UNRECOGNIZED	climate	
+сделай теплее	TEMP:+1	climate	
+сделай потеплее	TEMP:+1	climate	
+холоднее	TEMP:-1	climate	
+похолоднее	TEMP:-1	climate	
+включи внутреннюю рециркуляцию	内循环	climate	
+выключи рециркуляцию	外循环	climate	
+выключи кондиционер	关闭空调	climate	
+включи климат	自动空调	climate	
+включи авто режим кондиционера	自动空调	climate	
+климат авто	自动空调	climate	
+включи вентиляцию салона	打开空调通风	climate	
+включи вентиляцию	打开空调通风	climate	
+поставь двадцать два градуса	设置温度22	climate	
+установи температуру на двадцать два	设置温度22	climate	
+сделай теплее на два градуса	UNRECOGNIZED	climate	
+сделай теплее водителю	UNRECOGNIZED	climate	
+включи климат на двадцать два	UNRECOGNIZED	climate	
+поставь температуру 22 на максимум	UNRECOGNIZED	climate	
+включи обдув переднего	UNRECOGNIZED	climate	
+включи подогрев климата	UNRECOGNIZED	climate	
+выключи обдув	UNRECOGNIZED	climate	
+на ноги	UNRECOGNIZED	climate	
+вентилятор на три чуть	UNRECOGNIZED	fan	
+проветри вентилятор на три	UNRECOGNIZED	fan	
+обдув сильнее	UNRECOGNIZED	fan	
+включи вентиляцию зеркал	UNRECOGNIZED	mirrors	
+складывай зеркала	UNRECOGNIZED	mirrors	
+подогрев руля	UNRECOGNIZED	steering heat	
+открой руль	UNRECOGNIZED	steering heat	
+включи подогрев руля на максимум	UNRECOGNIZED	steering heat	
+включи подогрев всех руля	UNRECOGNIZED	steering heat	
+закрой двери	UNRECOGNIZED	locks	
+запри машину	车门上锁	locks	
+заблокируй двери машины	车门上锁	locks	
+открой задний багажник	开后备箱	locks	
+закрой передний багажник	UNRECOGNIZED	locks	
+мы откроем багажник	UNRECOGNIZED	locks	danger
+багажник открывается	UNRECOGNIZED	locks	
+открой багажник климат	UNRECOGNIZED	locks	
+частично открой багажник	UNRECOGNIZED	locks	danger
+громкость 20	VOL:20	media	
+сделай громче	VOL:+1	media	
+сделай тише	VOL:-1	media	
+громче на пять	UNRECOGNIZED	media	
+громче кроме задних	UNRECOGNIZED	media	
+установи громкость на пятьдесят	VOL:50	media	
+увеличь громкость	VOL:+1	media	
+уменьши громкость	VOL:-1	media	
+прибавь звук	VOL:+1	media	
+убавь звук	VOL:-1	media	
+поставь музыку	UNRECOGNIZED	media	
+включи амбиент	氛围灯打开	misc	
+включи свет	打开车内灯	misc	
+выключи подсветку	氛围灯关闭	misc	
+выключи свет в салоне	关闭车内灯	misc	
+выключи дхо	关闭日行灯	misc	
+включи аварийку	UNRECOGNIZED	misc	
+отмена	UNRECOGNIZED	misc	
+температура 24	设置温度24	climate	
+вентиляция сиденья пассажира 3	副驾座椅通风3档	seats	
+громкость на 10	VOL:10	media	
+открой полностью все окна	车窗全开	windows	
+задние окна открой	后排车窗全开	windows	
+окно пассажира закрой	副驾打开0	windows	
+открой наполовину окна	车窗半开	windows	danger
+поставь окно на проветривание	主驾通风	windows	danger
+окна приоткрой	车窗通风	windows	danger
+окно пассажира тридцать процентов	副驾通风	windows	danger
+окна на двадцать процентов	车窗通风	windows	danger
+окна пятьдесят процентов	车窗半开	windows	danger
+окна на треть	车窗通风	windows	danger
+люк открой	天窗打开100	sunroof	
+люк закрой	天窗打开0	sunroof	
+люк приоткрой	天窗通风	sunroof	danger
+открой люк и окна	天窗打开100+车窗全开	sunroof	
+второй уровень вентиляции сиденья пассажира	副驾座椅通风2档	seats	
+выключи руль	关闭方向盘加热	steering heat	

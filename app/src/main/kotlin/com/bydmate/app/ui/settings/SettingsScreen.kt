@@ -175,6 +175,9 @@ internal enum class SettingsSection(@StringRes val labelRes: Int, val icon: Imag
 
 private val PrimaryColor = AccentGreen
 
+/** Own phrases for built-in commands are hidden while the built-in phrase list settles. */
+private const val SHOW_VOICE_USER_PHRASES = false
+
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
@@ -3315,13 +3318,15 @@ private fun VoiceSettingsContent(
                 onClick = onNavigateToVoiceJournal,
                 style = SettingButtonStyle.Secondary,
             )
-            SettingActionRow(
-                title = stringResource(R.string.settings_voice_user_phrases_title),
-                description = stringResource(R.string.settings_voice_user_phrases_description),
-                buttonLabel = stringResource(R.string.settings_voice_user_phrases_button),
-                onClick = onNavigateToVoiceUserPhrases,
-                style = SettingButtonStyle.Secondary,
-            )
+            if (SHOW_VOICE_USER_PHRASES) {
+                SettingActionRow(
+                    title = stringResource(R.string.settings_voice_user_phrases_title),
+                    description = stringResource(R.string.settings_voice_user_phrases_description),
+                    buttonLabel = stringResource(R.string.settings_voice_user_phrases_button),
+                    onClick = onNavigateToVoiceUserPhrases,
+                    style = SettingButtonStyle.Secondary,
+                )
+            }
         }
     }
 

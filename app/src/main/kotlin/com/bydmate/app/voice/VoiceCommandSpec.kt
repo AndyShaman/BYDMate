@@ -5,7 +5,8 @@ import com.bydmate.app.voice.DeviceSlot.*
 
 /** One supported voice command: a (action, device, value?) key and the
  *  dispatchable Chinese command string it produces. The string MUST exist in
- *  CommandTranslator (validated by VoiceCommandSpecTest.every_catalog_command_is_dispatchable). */
+ *  CommandTranslator (validated by VoiceCommandSpecTest.every_catalog_command_is_dispatchable).
+ *  The command dictionary (voice/ru_commands.txt) may emit only these strings. */
 data class VoiceCommandSpec(
     val action: ActionSlot,
     val device: DeviceSlot,
@@ -110,19 +111,4 @@ object VoiceCatalog {
         VoiceCommandSpec(CLOSE, TRUNK) { "关后备箱" },
     )
 
-    private val byKey: Map<Pair<ActionSlot, DeviceSlot>, VoiceCommandSpec> =
-        ALL.associateBy { it.action to it.device }
-
-    /** Resolve a filled slot set to a dispatchable command string, or null if
-     *  the combination is unsupported / the value is out of range. */
-    fun resolve(action: ActionSlot, device: DeviceSlot, value: Int?): String? {
-        val spec = byKey[action to device] ?: return null
-        val vs = spec.value
-        if (vs != null) {
-            val v = value ?: return null
-            if (v < vs.min || v > vs.max) return null
-            return spec.command(v)
-        }
-        return spec.command(null)
-    }
 }
