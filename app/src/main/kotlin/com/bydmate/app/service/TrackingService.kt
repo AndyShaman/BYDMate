@@ -731,7 +731,10 @@ class TrackingService : Service(), LocationListener {
                     asrLoadGuard.reset()
                     return@runCatching
                 }
-                if (voiceGate.isEnabled()) continuousAsr.warmUp()
+                if (voiceGate.isEnabled()) {
+                    continuousAsr.warmUp()
+                    com.bydmate.app.voice.NluParser.warmUp()
+                }
             }
             // TTS guard: symmetric check in its own runCatching so ASR path is unaffected.
             runCatching {
