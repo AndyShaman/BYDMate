@@ -113,8 +113,51 @@ class RuleShareTest {
         )
     }
 
-    @Test fun `unparsable url keeps only what comes before the query`() {
-        assertEquals("https://a.b/my file", RuleShareUrl.strip("https://user:pw@a.b/my file?token=s6#x").url)
+    @Test fun `unparsable url is emptied and has to be entered again`() {
+        listOf("https://user:pw@a.b/my file?token=s6#x", "javascript:fetch('/x?key=s7')", "data:text/plain,key=s8").forEach {
+            val stripped = RuleShareUrl.strip(it)
+            assertEquals(it, "", stripped.url)
+            assertTrue(it, stripped.urlRequired)
+            assertFalse(it, stripped.contactRequired)
+        }
+        val rule = SharedRule.fromEntity(sourceEntity()).copy(
+            actions = listOf(ActionDef("", "https://a.b/my file?token=s6", "url", """{"url":"https://a.b/my file?token=s6","minimize":true}""")),
+        )
+        val text = RuleShare.exportJson(rule, "x")
+        assertFalse(text.contains("s6"))
+        assertFalse(text.contains("my file"))
+        val parsed = (RuleShare.parse(text, "Звонок") as RuleParseResult.Ok).rule
+        val payload = JSONObject(parsed.actions[0].payload!!)
+        assertEquals("", payload.getString("url"))
+        assertTrue(payload.getBoolean("urlRequired"))
+        assertTrue(payload.getBoolean("minimize"))
+        assertEquals(listOf(0), parsed.unresolvedUrlIndexes())
+        assertTrue(parsed.hasUnresolved())
+        assertFalse(RuleShare.toEntity(parsed, "x", enableNow = true).enabled)
+    }
+
+    @Test fun `query names are matched by credential substrings`() {
+        assertEquals("https://h/p?q=1", RuleShareUrl.strip("https://h/p?access_key=S&q=1").url)
+        listOf("apikey", "x-auth", "passwd", "Signature", "client_secret", "API").forEach {
+            assertEquals(it, "https://h/p?q=1", RuleShareUrl.strip("https://h/p?$it=S&q=1").url)
+        }
+        val rule = SharedRule.fromEntity(sourceEntity()).copy(
+            actions = listOf(ActionDef("", "https://h/p?access_key=S3CR3T", "url", """{"url":"https://h/p?access_key=S3CR3T&q=1","minimize":false}""")),
+        )
+        val text = RuleShare.exportJson(rule, "x")
+        assertFalse(text.contains("S3CR3T"))
+        assertFalse(text.contains("access_key"))
+        assertTrue(text.contains("https://h/p?q=1"))
+    }
+
+    @Test fun `sms keeps its body and loses only the number`() {
+        val stripped = RuleShareUrl.strip("sms:+375291234567?body=hello%20there&token=s9")
+        assertEquals("sms:?body=hello%20there", stripped.url)
+        assertTrue(stripped.contactRequired)
+        assertEquals("smsto:?body=hi", RuleShareUrl.strip("smsto:375291234567?body=hi").url)
+        assertEquals("tel:", RuleShareUrl.strip("tel:+375291234567?x=1").url)
+        assertEquals("sms:+375290000000?body=hello%20there", RuleShareUrl.withNumber(stripped.url, " +375290000000 "))
+        assertEquals("tel:+375290000000", RuleShareUrl.withNumber("tel:", "+375290000000"))
     }
 
     @Test fun `tel and sms links lose the number and need a contact`() {
@@ -308,6 +351,37 @@ class RuleShareTest {
             """{"command":"","displayName":"x","kind":"toggle","payload":"warp_drive"}""",
         )
         assertEquals(RuleParseResult.NewerVersion, RuleShare.parse(json, "Звонок"))
+    }
+
+    @Test fun `json nested past the limit inside a string is invalid`() {
+        val deep = fixture("bydmate_rule_deep.json")
+        assertEquals(RuleParseResult.Invalid, RuleShare.parse(deep, "Звонок"))
+        // The same file five levels deep is a normal rule.
+        val shallow = deep.replace("[".repeat(40), "[".repeat(5)).replace("]".repeat(40), "]".repeat(5))
+        assertTrue(RuleShare.parse(shallow, "Звонок") is RuleParseResult.Ok)
+    }
+
+    @Test fun `json nested past the limit in the file itself is invalid`() {
+        val body = fixture("bydmate_rule_speed.json")
+        val deep = body.replace("\"play_sound\": false", "\"play_sound\": false, \"x\": " + "[".repeat(40) + "]".repeat(40))
+        assertEquals(RuleParseResult.Invalid, RuleShare.parse(deep, "Звонок"))
+        // A quote inside an unquoted literal does not open a string for the parser, nor for the limit.
+        val hidden = body.replace("\"play_sound\": false", "\"play_sound\": false, \"x\": [x',"  + "[".repeat(40) + "]".repeat(40) + "]")
+        assertEquals(RuleParseResult.Invalid, RuleShare.parse(hidden, "Звонок"))
+        // The file root and "rule" are two levels: the array may take the remaining ones, not one more.
+        val room = RuleShareJsonLimits.MAX_DEPTH - 2
+        val ok = body.replace("\"play_sound\": false", "\"play_sound\": false, \"x\": " + "[".repeat(room) + "]".repeat(room))
+        assertTrue(RuleShare.parse(ok, "Звонок") is RuleParseResult.Ok)
+        val over = body.replace("\"play_sound\": false", "\"play_sound\": false, \"x\": " + "[".repeat(room + 1) + "]".repeat(room + 1))
+        assertEquals(RuleParseResult.Invalid, RuleShare.parse(over, "Звонок"))
+    }
+
+    @Test fun `a string longer than 8 KiB is invalid`() {
+        val body = fixture("bydmate_rule_speed.json")
+        val long = body.replace("\"Navi\"", "\"" + "x".repeat(RuleShareJsonLimits.MAX_STRING_CHARS + 1) + "\"")
+        assertEquals(RuleParseResult.Invalid, RuleShare.parse(long, "Звонок"))
+        val fits = body.replace("\"Navi\"", "\"" + "x".repeat(RuleShareJsonLimits.MAX_STRING_CHARS) + "\"")
+        assertTrue(RuleShare.parse(fits, "Звонок") is RuleParseResult.Ok)
     }
 
     @Test fun `garbage and foreign json are invalid`() {

@@ -32,7 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -81,29 +80,41 @@ internal fun PlacesDialog(onDismiss: () -> Unit) {
 }
 
 /**
- * «Сохранено» after «Поделиться»: the file name, what the file keeps, «Поделиться» again and
- * «Закрыть». The system share sheet opens over it right after the save.
+ * After «Поделиться», before anything is written: what the file keeps and what to check.
+ * «Продолжить» writes the file and opens the system share sheet.
  */
 @Composable
-internal fun RuleSavedDialog(fileName: String, onShare: () -> Unit, onDismiss: () -> Unit) {
+internal fun ShareNoteDialog(onContinue: () -> Unit, onDismiss: () -> Unit) {
     AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurfaceElevated,
-        title = { Text(stringResource(R.string.settings_config_saved_title), color = TextPrimary) },
+        title = { Text(stringResource(R.string.automation_share_button), color = TextPrimary) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(fileName, color = TextPrimary, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                Text(stringResource(R.string.automation_share_note), color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp)
-            }
+            Text(stringResource(R.string.automation_share_note), color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.settings_backup_close), color = AccentGreen)
+            TextButton(onClick = onContinue) {
+                Text(stringResource(R.string.automation_share_continue), color = AccentGreen)
             }
         },
         dismissButton = {
-            TextButton(onClick = onShare) {
-                Text(stringResource(R.string.automation_share_button), color = TextSecondary)
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
+            }
+        },
+    )
+}
+
+/** «Сохранить» on a rule deleted while it was open in the editor: nothing is saved. */
+@Composable
+internal fun RuleDeletedDialog(onClose: () -> Unit) {
+    AppAlertDialog(
+        onDismissRequest = onClose,
+        containerColor = CardSurfaceElevated,
+        text = { Text(stringResource(R.string.automation_rule_deleted), color = TextPrimary, fontSize = 14.sp) },
+        confirmButton = {
+            TextButton(onClick = onClose) {
+                Text(stringResource(R.string.settings_backup_close), color = AccentGreen)
             }
         },
     )
@@ -155,10 +166,11 @@ internal fun ImportPickDialog(
 
 /**
  * Import step 2: the rule as it will be added. Every row is built from what will run
- * ([RuleImportSummary]), not from the labels in the file, and the settings come in one line.
- * Places not found by name (or found twice) and numbers of calls and tel/sms links (never in
- * the file) are asked for under «Нужно уточнить»; while any stays open the rule can only be
- * added switched off.
+ * ([RuleImportSummary], via [RuleImportDraft.preview]), not from the labels in the file, and
+ * the settings come in one line. Places not found by name (or found twice) and numbers of
+ * calls and tel/sms links (never in the file) are asked for under «Нужно уточнить», links
+ * emptied on export are listed there too (fixed later in the editor); while any stays open the
+ * rule can only be added switched off. While the insert runs every control waits.
  */
 @Composable
 internal fun ImportPreviewDialog(
@@ -171,10 +183,12 @@ internal fun ImportPreviewDialog(
     onDismiss: () -> Unit,
 ) {
     val rule = draft.rule
-    val context = LocalContext.current
+    val preview = draft.preview
     val unresolvedPlaces = rule.unresolvedPlaceIndexes()
     val unresolvedCalls = rule.unresolvedCallIndexes()
-    val canEnable = unresolvedPlaces.isEmpty() && unresolvedCalls.isEmpty()
+    val unresolvedUrls = rule.unresolvedUrlIndexes()
+    val canEnable = !rule.hasUnresolved()
+    val idle = !draft.saving
     var contactFor by remember { mutableStateOf<Int?>(null) }
 
     AppAlertDialog(
@@ -196,9 +210,10 @@ internal fun ImportPreviewDialog(
                 )
                 Text(stringResource(R.string.automation_import_conditions), color = TextPrimary, fontSize = 13.sp,
                     fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
-                rule.triggers.forEach { t ->
+                Text(preview.logic, color = TextSecondary, fontSize = 12.sp)
+                preview.triggers.forEach { line ->
                     Text(
-                        RuleImportSummary.trigger(t, context),
+                        line,
                         color = AccentBlue,
                         fontSize = 13.sp,
                         modifier = Modifier
@@ -208,10 +223,10 @@ internal fun ImportPreviewDialog(
                 }
                 Text(stringResource(R.string.automation_import_actions), color = TextPrimary, fontSize = 13.sp,
                     fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
-                rule.actions.forEach { a ->
-                    Text(RuleImportSummary.action(a, context), color = AccentTeal, fontSize = 13.sp)
+                preview.actions.forEach { line ->
+                    Text(line, color = AccentTeal, fontSize = 13.sp)
                 }
-                Text(RuleImportSummary.flags(rule, context), color = TextSecondary, fontSize = 12.sp,
+                Text(preview.flags, color = TextSecondary, fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp))
 
                 if (!canEnable) {
@@ -231,15 +246,18 @@ internal fun ImportPreviewDialog(
                             UnresolvedRow(
                                 text = stringResource(R.string.automation_import_place_missing, rule.triggers[index].placeName.orEmpty()),
                             ) {
-                                PlacePickButton(places = places, onPick = { onPickPlace(index, it) })
+                                PlacePickButton(places = places, enabled = idle, onPick = { onPickPlace(index, it) })
                             }
                         }
                         unresolvedCalls.forEach { index ->
                             UnresolvedRow(text = stringResource(R.string.automation_import_contact_missing)) {
-                                OutlinedButton(onClick = { contactFor = index }, shape = RoundedCornerShape(8.dp)) {
+                                OutlinedButton(onClick = { contactFor = index }, enabled = idle, shape = RoundedCornerShape(8.dp)) {
                                     Text(stringResource(R.string.automation_import_pick_contact) + " ▾", color = TextPrimary, fontSize = 13.sp)
                                 }
                             }
+                        }
+                        if (unresolvedUrls.isNotEmpty()) {
+                            Text(stringResource(R.string.automation_import_url_required), color = TextPrimary, fontSize = 13.sp)
                         }
                     }
                 }
@@ -248,13 +266,13 @@ internal fun ImportPreviewDialog(
                     verticalAlignment = Alignment.Top,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(enabled = canEnable) { onEnableNowChange(!draft.enableNow) }
+                        .clickable(enabled = canEnable && idle) { onEnableNowChange(!draft.enableNow) }
                         .padding(top = 4.dp)
                 ) {
                     Checkbox(
                         checked = draft.enableNow,
                         onCheckedChange = { onEnableNowChange(it) },
-                        enabled = canEnable,
+                        enabled = canEnable && idle,
                         colors = CheckboxDefaults.colors(
                             checkedColor = AccentGreen,
                             uncheckedColor = TextMuted,
@@ -277,6 +295,7 @@ internal fun ImportPreviewDialog(
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
+                enabled = idle,
                 colors = ButtonDefaults.textButtonColors(containerColor = AccentGreen, contentColor = NavyDark),
                 shape = RoundedCornerShape(8.dp),
             ) {
@@ -284,7 +303,7 @@ internal fun ImportPreviewDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = idle) {
                 Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
             }
         },
@@ -315,10 +334,10 @@ private fun UnresolvedRow(text: String, button: @Composable () -> Unit) {
 }
 
 @Composable
-private fun PlacePickButton(places: List<PlaceEntity>, onPick: (PlaceEntity) -> Unit) {
+private fun PlacePickButton(places: List<PlaceEntity>, enabled: Boolean, onPick: (PlaceEntity) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }, shape = RoundedCornerShape(8.dp)) {
+        OutlinedButton(onClick = { expanded = true }, enabled = enabled, shape = RoundedCornerShape(8.dp)) {
             Text(stringResource(R.string.automation_import_pick_place) + " ▾", color = TextPrimary, fontSize = 13.sp)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

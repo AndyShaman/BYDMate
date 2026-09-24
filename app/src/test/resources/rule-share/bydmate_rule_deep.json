@@ -1,0 +1,31 @@
+{
+  "format": "bydmate_rule",
+  "version": 1,
+  "app_version": "3.18.0",
+  "rule": {
+    "name": "Deep",
+    "trigger_logic": "AND",
+    "triggers": [
+      {
+        "param": "TimeRange",
+        "chineseName": "",
+        "operator": "==",
+        "value": "{\"from\":\"08:00\",\"to\":\"10:00\",\"days\":[1,2,3,4,5],\"extra\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+        "displayName": "08:00-10:00",
+        "kind": "time_range"
+      }
+    ],
+    "actions": [
+      {
+        "command": "车窗关闭",
+        "displayName": "Закрыть все окна",
+        "kind": "param"
+      }
+    ],
+    "cooldown_seconds": 60,
+    "require_park": false,
+    "confirm_before_execute": false,
+    "fire_once_per_trip": false,
+    "play_sound": false
+  }
+}

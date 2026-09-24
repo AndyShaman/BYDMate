@@ -1594,7 +1594,7 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Import</string>
     <string name="automation_share_button">Share</string>
-    <string name="automation_share_note">Phone numbers, contact names, links to your places and keys in web links are removed from the file. Notification and phrase texts, agent requests and route points stay, so check them before sending.</string>
+    <string name="automation_share_note">Phone numbers, contact names and links to your places are removed from the file. Links lose their login and password and any parameters that look like keys; check the address itself before sending. Notification and phrase texts, agent requests and route points stay, so check them too.</string>
     <string name="automation_share_error">Could not save the file: %1$s</string>
     <string name="automation_test_run_button">Test run</string>
     <string name="automation_test_run_hint">Runs every action now, as if the condition had been met</string>
@@ -1620,4 +1620,18 @@
     <string name="automation_import_enable_now_hint">Otherwise it is added turned off</string>
     <string name="automation_import_add">Add</string>
     <string name="automation_import_name_suffix">imported</string>
+    <string name="automation_share_continue">Continue</string>
+    <string name="automation_share_saved_toast">File saved: %1$s</string>
+    <string name="automation_rule_deleted">This rule has already been deleted</string>
+    <string name="automation_test_run_unrecognized">command not recognized, action skipped</string>
+    <string name="automation_import_url_required">The link address needs to be entered again</string>
+    <string name="automation_import_logic_all">All conditions</string>
+    <string name="automation_import_logic_any">Any condition</string>
+    <string name="automation_import_nav_home">home (address saved in the navigator)</string>
+    <string name="automation_import_nav_work">to work (address saved in the navigator)</string>
+    <string name="automation_import_nav_search">search “%1$s”</string>
+    <string name="automation_import_nav_show">show the point only</string>
+    <string name="automation_import_nav_go">starts the route right away</string>
+    <string name="automation_import_nav_maps">in Yandex Maps</string>
+    <string name="automation_import_minimize">then minimize</string>
 </resources>
