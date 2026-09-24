@@ -44,6 +44,12 @@ import kotlinx.coroutines.launch
  * ticks: a tick loop stalled for over a minute with the screen on (a long action holding the
  * mutex, a slow read) must not look like a wake gap. The timer only carries a heartbeat the ticks
  * have already decided on; a gap it did not see closing (screen dark, suspend) is left to a tick.
+ * A beat that sees the screen dark confirms the dark screen for the car-off marker, as a dark
+ * tick does. A tick and a beat run under [heartbeatLock] (lock order: evaluateMutex, then
+ * [heartbeatLock], then [carOffLock]). Beat and tick times are kept apart: the tick's elapsed is
+ * read before the lock, so a beat may be a few ms ahead of it; the gap counts from the later of
+ * the two, elapsed going backwards is judged tick to tick only, and the stored heartbeat never
+ * moves back.
  */
 @Suppress("TooManyFunctions") // one state machine: the heartbeat timer shares its private state
 internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
@@ -61,6 +67,8 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
     @Volatile private var sessionBootId: String? = null
     @Volatile private var savedBootId: String? = null
     @Volatile private var lastTickElapsed: Long? = null
+    // Elapsed of the last heartbeat timer beat with the screen on.
+    @Volatile private var lastBeatElapsed: Long? = null
     @Volatile private var lastHeartbeatWriteElapsed: Long? = null
     // Elapsed of the ACC_OFF this process marked while it has not seen the screen off since:
     // the car is going off, so nothing may fire or open a session until a dark tick. Null with
@@ -78,11 +86,15 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
     private var carOffGeneration = 0L
     private var carOffPersisted = true
     @Volatile private var heartbeatJob: Job? = null
+    // Serialises a tick with a timer beat. The generation changes on every start and stop, so a
+    // beat already running when its timer was stopped writes nothing.
+    private val heartbeatLock = Any()
+    private var heartbeatGeneration = 0L
 
     /** The car-off state a tick judges, read at once under [carOffLock]. */
     private data class CarOff(val generation: Long, val marked: Boolean, val litSince: Long?)
 
-    fun tick(elapsed: Long, interactive: Boolean, bootId: () -> String) {
+    fun tick(elapsed: Long, interactive: Boolean, bootId: () -> String) = synchronized(heartbeatLock) {
         val prefs = prefs()
         val firstTick = !seeded
         if (firstTick) {
@@ -122,14 +134,15 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
         // A marker still lit here has just expired and been cleared.
         val eligible = carOff.marked && carOff.litSince == null
         val prevElapsed = lastTickElapsed
-        val gap = prevElapsed?.let { "${(elapsed - it) / 1000}s" } ?: "-"
+        val lastSeen = prevElapsed?.let { maxOf(it, lastBeatElapsed ?: it) }
+        val gap = lastSeen?.let { "${(elapsed - it).coerceAtLeast(0L) / 1000}s" } ?: "-"
         val sinceOpened = lastSessionOpenedElapsed?.let { elapsed - it } ?: Long.MAX_VALUE
         val carOffInSession = eligible && sinceOpened <= SERVICE_START_WAKE_GAP_MS
         if (carOffInSession) {
             Log.i(TAG, "service_start: car off marker within session, ignored gap=${sinceOpened / 1000}s")
             commitClearingCarOff(prefs.edit(), carOff.generation, "service_start: car off marker commit failed")
         }
-        val reason = newSessionReason(elapsed, prevElapsed, eligible && !carOffInSession)
+        val reason = newSessionReason(elapsed, prevElapsed, lastSeen, eligible && !carOffInSession)
         if (reason != null) {
             openSession(prefs, elapsed, carOff.generation, "service_start: new session reason=$reason gap=$gap")
         } else if (!sessionDecided) {
@@ -177,15 +190,15 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
             current
         }
 
-    private fun newSessionReason(elapsed: Long, prevElapsed: Long?, carOff: Boolean): String? {
+    private fun newSessionReason(elapsed: Long, prevElapsed: Long?, lastSeen: Long?, carOff: Boolean): String? {
         val bootId = sessionBootId.orEmpty()
         val saved = savedBootId.orEmpty()
         return when {
             carOff -> "car_off"
             bootId.isNotEmpty() && saved.isNotEmpty() && bootId != saved -> "boot"
-            prevElapsed == null -> "first"
+            prevElapsed == null || lastSeen == null -> "first"
             elapsed < prevElapsed -> "elapsed_back"
-            elapsed - prevElapsed > SERVICE_START_WAKE_GAP_MS -> "wake"
+            elapsed - lastSeen > SERVICE_START_WAKE_GAP_MS -> "wake"
             else -> null
         }
     }
@@ -193,17 +206,19 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
     private fun openSession(prefs: SharedPreferences, elapsed: Long, generation: Long, line: String) {
         Log.i(TAG, line)
         val bootId = sessionBootId.orEmpty()
+        // A beat may have stored a later heartbeat already: the stored one never moves back.
+        val heartbeat = maxOf(elapsed, lastHeartbeatWriteElapsed ?: elapsed)
         // One synchronous write before any rule runs: a process killed right after the fire must
         // find this session's heartbeat and no car-off marker, or its restart would re-arm.
         val session = prefs.edit()
             .putString(KEY_SERVICE_START_BOOT_ID, bootId)
-            .putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed)
+            .putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, heartbeat)
         // The window opens under the lock too, so an ACC_OFF right after the commit closes it.
         val cleared = synchronized(carOffLock) {
             commitClearingCarOff(session, generation, "service_start: session commit failed")
                 .also { if (it) windowEnd = elapsed + SERVICE_START_WINDOW_MS }
         }
-        lastHeartbeatWriteElapsed = elapsed
+        lastHeartbeatWriteElapsed = heartbeat
         savedBootId = bootId
         if (!cleared) {
             // The car is going off: its marker opens the session at the next start instead.
@@ -230,31 +245,62 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
      * [SERVICE_START_HEARTBEAT_MS] a lit screen refreshes the heartbeat without waiting for a tick.
      */
     fun startHeartbeat(scope: CoroutineScope, elapsed: () -> Long, interactive: () -> Boolean) {
+        val generation = synchronized(heartbeatLock) { ++heartbeatGeneration }
         heartbeatJob?.cancel()
         Log.i(TAG, "service_start: heartbeat timer started period=${SERVICE_START_HEARTBEAT_MS / 1000}s")
         heartbeatJob = scope.launch {
             while (isActive) {
                 delay(SERVICE_START_HEARTBEAT_MS)
-                beat(elapsed(), interactive())
+                beat(generation, elapsed(), interactive())
             }
         }
     }
 
     fun stopHeartbeat() {
+        synchronized(heartbeatLock) { heartbeatGeneration++ }
         heartbeatJob?.cancel()
         heartbeatJob = null
     }
 
-    private fun beat(elapsed: Long, interactive: Boolean) {
+    private fun beat(generation: Long, elapsed: Long, interactive: Boolean) = synchronized(heartbeatLock) {
+        if (generation != heartbeatGeneration) return@synchronized
+        val lastTick = lastTickElapsed
+        // A lit tick newer than this reading has already judged the screen.
+        if (lastTick != null && elapsed < lastTick) return@synchronized
+        if (!interactive) {
+            darkBeat(elapsed)
+            return@synchronized
+        }
         // Before the first lit tick the stored heartbeat is still the evidence of a gap.
-        if (!interactive || !sessionDecided) return
-        val prev = lastTickElapsed ?: return
+        if (!sessionDecided || lastTick == null) return@synchronized
+        val prev = maxOf(lastTick, lastBeatElapsed ?: lastTick)
         // More than the wake gap since the last lit tick or beat: the screen was dark or the
         // system suspended, and the next tick decides on that gap.
-        if (elapsed < prev || elapsed - prev > SERVICE_START_WAKE_GAP_MS) return
-        lastTickElapsed = elapsed
-        lastHeartbeatWriteElapsed = elapsed
-        prefs().edit().putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed).apply()
+        if (elapsed < prev || elapsed - prev > SERVICE_START_WAKE_GAP_MS) return@synchronized
+        lastBeatElapsed = elapsed
+        if (elapsed > (lastHeartbeatWriteElapsed ?: Long.MIN_VALUE)) {
+            lastHeartbeatWriteElapsed = elapsed
+            prefs().edit().putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed).apply()
+        }
+    }
+
+    /**
+     * The screen is dark on a beat while no tick may run: the car-off marker gets its dark
+     * screen and an open window closes, as on a dark tick. Opens no session.
+     */
+    private fun darkBeat(elapsed: Long) {
+        synchronized(carOffLock) {
+            // An ACC_OFF after this reading is not confirmed by it.
+            val litSince = carOffLitSince
+            if (litSince != null && litSince <= elapsed) {
+                Log.i(TAG, "service_start: screen off seen by heartbeat timer")
+                carOffLitSince = null
+            }
+        }
+        if (elapsed <= windowEnd) {
+            Log.i(TAG, "service_start: screen off, window closed")
+            windowEnd = -1L
+        }
     }
 
     /** Whether a service_start trigger of [ruleId] is true on this tick. */
