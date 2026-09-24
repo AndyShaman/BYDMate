@@ -543,14 +543,35 @@ class AutomationViewModel @Inject constructor(
         _uiState.update { it.copy(showEditor = false, editorError = null, editorRuleDeleted = false) }
     }
 
-    /** «Правило уже удалено» → «Сохранить как новое»: the draft becomes a new rule, switch as it was. */
+    /**
+     * «Правило уже удалено» → «Сохранить как новое»: the draft becomes a new rule, switch as it
+     * was. The editor and the draft stay open until the insert returns: it closes only on
+     * success, bound to this save's editor session, so a DB failure keeps the draft on screen
+     * with a message instead of losing it.
+     */
     fun saveDeletedRuleAsNew() {
         val e = _uiState.value.editing
         if (!_uiState.value.editorRuleDeleted) return
+        val session = editorSession
+        // Dismisses the confirmation dialog right away, so a second tap before the insert
+        // returns is a no-op (the guard above), without touching the rest of the editor.
+        _uiState.update { it.copy(editorRuleDeleted = false) }
         viewModelScope.launch {
-            ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)))
+            try {
+                ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)))
+                if (session == editorSession) closeEditor()
+            } catch (ex: SQLiteException) {
+                Log.w("AutomationViewModel", "saveDeletedRuleAsNew: insert failed", ex)
+                if (session == editorSession) {
+                    _uiState.update {
+                        it.copy(
+                            editorError = context.appLocalizedContext()
+                                .getString(R.string.automation_import_save_failed, ex.message ?: "?"),
+                        )
+                    }
+                }
+            }
         }
-        closeEditor()
     }
 
     /** «Правило уже удалено» dismissed by Back or outside: the editor stays with the draft. */

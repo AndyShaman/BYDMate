@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.automation
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.RuleDao
@@ -117,6 +118,47 @@ class AutomationEditorSaveViewModelTest {
         assertEquals(listOf(windowClose), ActionDef.listFromJson(inserted.captured.actions))
         assertFalse(vm.uiState.value.showEditor)
         assertFalse(vm.uiState.value.editorRuleDeleted)
+    }
+
+    @Test fun `saving a deleted rule as new keeps the editor open until the insert returns`() {
+        coEvery { ruleDao.getById(9) } returns null
+        val gate = CompletableDeferred<Long>()
+        coEvery { ruleDao.insert(any()) } coAnswers { gate.await() }
+        val vm = vm()
+        vm.openEditRule(RuleEntity(id = 9, name = "Navi", triggers = "[]", actions = "[]"))
+        vm.editWith(listOf(windowClose))
+        vm.saveRule()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.saveDeletedRuleAsNew()
+        testDispatcher.scheduler.runCurrent()
+        // Insert still in flight: editor and draft stay on screen.
+        assertTrue(vm.uiState.value.showEditor)
+        assertEquals("Navi", vm.uiState.value.editing.name)
+
+        gate.complete(30L)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(vm.uiState.value.showEditor)
+        coVerify(exactly = 1) { ruleDao.insert(any()) }
+    }
+
+    @Test fun `a failed insert on a deleted rule keeps the draft and shows a message`() {
+        coEvery { ruleDao.getById(9) } returns null
+        coEvery { ruleDao.insert(any()) } throws SQLiteException("disk full")
+        val vm = vm()
+        vm.openEditRule(RuleEntity(id = 9, name = "Navi", triggers = "[]", actions = "[]"))
+        vm.editWith(listOf(windowClose))
+        vm.saveRule()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.saveDeletedRuleAsNew()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.showEditor)
+        assertFalse(vm.uiState.value.editorRuleDeleted)
+        assertEquals("Navi", vm.uiState.value.editing.name)
+        assertEquals(listOf(windowClose), vm.uiState.value.editing.actions)
+        assertTrue(vm.uiState.value.editorError?.contains("disk full") == true)
     }
 
     @Test fun `dismissing the deleted-rule dialog keeps the editor and the draft`() {

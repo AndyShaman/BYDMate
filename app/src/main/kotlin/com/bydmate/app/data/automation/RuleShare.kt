@@ -155,6 +155,9 @@ object RuleShare {
         )
         "url" -> {
             val json = payloadOf(action.payload)
+            // A marker from an earlier export (imported straight into the payload) survives even
+            // when this address is already clean and nothing new is stripped from it.
+            val strippedBefore = json.optBoolean(PARAMS_STRIPPED, false)
             val stripped = RuleShareUrl.strip(json.optString("url"))
             json.put("url", stripped.url)
             json.remove(CONTACT_REQUIRED)
@@ -162,7 +165,7 @@ object RuleShare {
             json.remove(PARAMS_STRIPPED)
             if (stripped.contactRequired) json.put(CONTACT_REQUIRED, true)
             if (stripped.urlRequired) json.put(URL_REQUIRED, true)
-            if (stripped.paramsStripped) json.put(PARAMS_STRIPPED, true)
+            if (stripped.paramsStripped || strippedBefore) json.put(PARAMS_STRIPPED, true)
             action.copy(displayName = stripped.url, payload = json.toString())
         }
         else -> action
@@ -306,7 +309,8 @@ internal object RuleShareUrl {
     // Endings of a parameter name written without separators: `accesstoken`, `myapikey`.
     private val CREDENTIAL_ENDINGS = listOf(
         "apikey", "accesstoken", "authtoken", "refreshtoken", "clientsecret", "password", "passwd",
-        "signature", "secret", "token",
+        "signature", "secret", "token", "authkey", "accesskey", "secretkey", "privatekey", "appkey",
+        "clientkey", "licensekey", "licencekey", "consumerkey", "sessionkey", "apitoken", "bearer",
     )
 
     // Where a camelCase name starts a new word: `accessToken`, `APIKey`.
