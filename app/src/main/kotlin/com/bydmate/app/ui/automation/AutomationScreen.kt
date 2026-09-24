@@ -74,6 +74,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -200,6 +201,7 @@ fun AutomationScreen(
                     onEdit = { viewModel.openEditRule(rule) },
                     onDuplicate = { viewModel.duplicateRule(rule) },
                     onShare = { viewModel.shareRule(rule) },
+                    shareEnabled = !state.shareInProgress,
                     onDelete = { viewModel.requestDelete(rule.id) }
                 )
             }
@@ -215,6 +217,7 @@ fun AutomationScreen(
             onUpdate = { viewModel.updateEditing(it) },
             onSave = { viewModel.saveRule() },
             onShare = { viewModel.shareEditing() },
+            shareEnabled = !state.shareInProgress,
             onTestRun = { viewModel.testRun() },
             testRunning = state.testRunning,
             onTestAction = { viewModel.executeNow(it) },
@@ -236,18 +239,24 @@ fun AutomationScreen(
     }
 
     state.importDraft?.let { draft ->
-        ImportPreviewDialog(
-            draft = draft,
-            places = state.places,
-            onPickPlace = { index, place -> viewModel.resolveImportPlace(index, place) },
-            onPickContact = { index, phone, name, autoDial -> viewModel.resolveImportContact(index, phone, name, autoDial) },
-            onEnableNowChange = { viewModel.setImportEnableNow(it) },
-            onConfirm = { viewModel.confirmImport() },
-            onDismiss = { viewModel.closeImport() },
-        )
+        // A new draft starts with fresh dialog state: no sub-dialog left open on an old index.
+        key(draft.token) {
+            ImportPreviewDialog(
+                draft = draft,
+                places = state.places,
+                onPickPlace = { index, place -> viewModel.resolveImportPlace(draft.token, index, place) },
+                onPickContact = { index, phone, name, autoDial ->
+                    viewModel.resolveImportContact(draft.token, index, phone, name, autoDial)
+                },
+                onEnableNowChange = { viewModel.setImportEnableNow(it) },
+                onConfirm = { viewModel.confirmImport() },
+                onDismiss = { viewModel.closeImport() },
+            )
+        }
     }
 
-    // After «Поделиться» (card or editor): drawn last so it sits above the editor.
+    // After «Поделиться» (card or editor): drawn last so it sits above the editor. The share sheet
+    // opens over it right away; the dialog stays so the file name is there on the way back.
     state.sharedRuleFile?.let { file ->
         RuleSavedDialog(
             fileName = file.name,
@@ -296,6 +305,7 @@ private fun RuleCard(
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onShare: () -> Unit,
+    shareEnabled: Boolean,
     onDelete: () -> Unit
 ) {
     val triggers = remember(rule.triggers) { TriggerDef.listFromJson(rule.triggers) }
@@ -377,7 +387,7 @@ private fun RuleCard(
             ) {
                 CardTextButton(stringResource(R.string.automation_menu_edit), AccentGreen, onEdit)
                 CardTextButton(stringResource(R.string.automation_menu_duplicate), AccentGreen, onDuplicate)
-                CardTextButton(stringResource(R.string.automation_share_button), AccentGreen, onShare)
+                CardTextButton(stringResource(R.string.automation_share_button), AccentGreen, onShare, enabled = shareEnabled)
                 CardTextButton(stringResource(R.string.automation_menu_delete), AccentOrange, onDelete)
             }
         }
@@ -385,9 +395,9 @@ private fun RuleCard(
 }
 
 @Composable
-private fun CardTextButton(label: String, color: Color, onClick: () -> Unit) {
-    TextButton(onClick = onClick) {
-        Text(label, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+private fun CardTextButton(label: String, color: Color, onClick: () -> Unit, enabled: Boolean = true) {
+    TextButton(onClick = onClick, enabled = enabled) {
+        Text(label, color = if (enabled) color else TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -407,11 +417,8 @@ private fun HeaderOutlinedButton(label: String, icon: androidx.compose.ui.graphi
     }
 }
 
-/**
- * One trigger of the card summary, in the card's colours. Shared with the import preview so
- * a rule reads the same before and after it is added.
- */
-internal fun androidx.compose.ui.text.AnnotatedString.Builder.appendTriggerSummary(t: TriggerDef, summaryCtx: Context) {
+/** One trigger of the card summary, in the card's colours. */
+private fun androidx.compose.ui.text.AnnotatedString.Builder.appendTriggerSummary(t: TriggerDef, summaryCtx: Context) {
     when (t.kind) {
         "time_range" -> {
             // value is JSON (parsed by the engine); show the readable displayName instead.
@@ -459,6 +466,7 @@ private fun EditorDialog(
     onUpdate: (EditingRule.() -> EditingRule) -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
+    shareEnabled: Boolean,
     onTestRun: () -> Unit,
     testRunning: Boolean,
     onTestAction: (ActionDef) -> Unit,
@@ -821,7 +829,7 @@ private fun EditorDialog(
                             ) { Text(stringResource(R.string.automation_cancel_button)) }
                             Button(
                                 onClick = onShare,
-                                enabled = complete,
+                                enabled = complete && shareEnabled,
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
@@ -1264,7 +1272,7 @@ private fun DayChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 /** Readable schedule label; first token is the time so the rule summary stays compact. */
-private fun scheduleDisplayName(context: android.content.Context, spec: ScheduleSpec): String {
+internal fun scheduleDisplayName(context: android.content.Context, spec: ScheduleSpec): String {
     val time = if (spec.isExact) {
         minuteToHHmm(spec.fromMinute)
     } else {
@@ -1525,7 +1533,7 @@ private fun SteeringKeyTriggerControls(
 }
 
 /** Human label for a steering-wheel keycode, e.g. "Левая звезда" or "Кнопка (код 383)". */
-private fun steeringKeyLabel(context: Context, keyCode: Int): String {
+internal fun steeringKeyLabel(context: Context, keyCode: Int): String {
     val res = knownButtonNameRes(keyCode)
     return if (res != 0) context.getString(res)
     else context.getString(R.string.steering_button_unknown, keyCode)
@@ -3068,7 +3076,9 @@ internal fun CallEditDialog(
     initialName: String,
     initialAutoDial: Boolean,
     onDismiss: () -> Unit,
-    onSave: (phone: String, name: String, autoDial: Boolean) -> Unit
+    onSave: (phone: String, name: String, autoDial: Boolean) -> Unit,
+    /** False for a number going into a tel: / sms: link, which only opens the dialer. */
+    showAutoDial: Boolean = true,
 ) {
     var phoneText by rememberSaveable { mutableStateOf(initialPhone) }
     var nameText by rememberSaveable { mutableStateOf(initialName) }
@@ -3113,11 +3123,11 @@ internal fun CallEditDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(8.dp))
-                Row(
+                if (showAutoDial) Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(top = 8.dp)
                         .clickable { autoDial = !autoDial }
                         .padding(vertical = 4.dp)
                 ) {

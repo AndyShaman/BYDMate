@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,7 +31,7 @@ class PlacesViewModel @Inject constructor(
         )
 
     // Map: placeId -> number of rules that reference it (0 = safe to delete).
-    // Populated lazily when places list changes or after a delete attempt.
+    // Recounted when the places or the rules change, and after a delete attempt.
     private val _usageCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
     val usageCounts: StateFlow<Map<Long, Int>> = _usageCounts.asStateFlow()
 
@@ -45,11 +46,11 @@ class PlacesViewModel @Inject constructor(
         viewModelScope.launch {
             _mapTileSource.value = settingsRepository.getMapTileSource()
         }
-        // Refresh usage counts whenever the places list changes.
+        // Refresh usage counts whenever the places list or the rules change: the dialog
+        // outlives a rule edit, so counts taken when it first opened would go stale.
         viewModelScope.launch {
-            places.collect { list ->
-                refreshUsageCounts(list.map { it.id })
-            }
+            combine(places, placeRepository.ruleChanges()) { list, _ -> list.map { it.id } }
+                .collect { ids -> refreshUsageCounts(ids) }
         }
     }
 

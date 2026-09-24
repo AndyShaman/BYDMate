@@ -20,7 +20,10 @@ class RuleShareTest {
     private fun fixture(name: String): String =
         requireNotNull(javaClass.classLoader?.getResource("rule-share/$name")) { name }.readText()
 
-    /** The stored rule from `source_rule.json`: a place trigger, a call, an agent query, a url with keys. */
+    /**
+     * The stored rule from `source_rule.json`: a place trigger, a call, an agent query, and a url
+     * with keys that the voice agent also copied into the display name.
+     */
     private fun sourceEntity(): RuleEntity {
         val json = JSONObject(fixture("source_rule.json"))
         return RuleEntity(
@@ -80,8 +83,60 @@ class RuleShareTest {
     @Test fun `export strips credentials from a url and keeps the rest`() {
         val url = export().getJSONObject("rule").getJSONArray("actions").getJSONObject(2)
         val payload = JSONObject(url.getString("payload"))
-        assertEquals("https://example.com/path?q=home#top", payload.getString("url"))
+        assertEquals("https://example.com/path?q=home", payload.getString("url"))
         assertFalse(payload.getBoolean("minimize"))
+        assertFalse(payload.has("contactRequired"))
+    }
+
+    @Test fun `url display name is rebuilt and no secret is left anywhere in the file`() {
+        val url = export().getJSONObject("rule").getJSONArray("actions").getJSONObject(2)
+        assertEquals("https://example.com/path?q=home", url.getString("displayName"))
+        val text = RuleShare.exportJson(SharedRule.fromEntity(sourceEntity()), "3.18.0")
+        listOf("user:", "secret", "abc123", "access_token", "api_key", "zzz", "#top").forEach {
+            assertFalse(it, text.contains(it))
+        }
+    }
+
+    @Test fun `url query names are decoded before matching and the fragment is dropped`() {
+        assertEquals("https://a.b/c?q=1", RuleShareUrl.strip("https://a.b/c?%74oken=s1&q=1").url)
+        assertEquals("https://a.b/c?q=1", RuleShareUrl.strip("https://a.b/c?q=1&API%5FKEY=s2").url)
+        assertEquals("https://a.b/c", RuleShareUrl.strip("https://a.b/c#access_token=s3").url)
+        assertEquals("https://a.b/c", RuleShareUrl.strip("https://u%40x:p@a.b/c").url)
+        assertEquals("file:///storage/emulated/0/Download/x.mp3", RuleShareUrl.strip("file:///storage/emulated/0/Download/x.mp3").url)
+        assertEquals("mailto:a@b.c?subject=hi", RuleShareUrl.strip("mailto:a@b.c?subject=hi&token=s4").url)
+    }
+
+    @Test fun `intent link keeps its intent and loses credential extras`() {
+        assertEquals(
+            "intent://open#Intent;scheme=myapp;package=com.x;end",
+            RuleShareUrl.strip("intent://open#Intent;scheme=myapp;package=com.x;S.token=s5;end").url,
+        )
+    }
+
+    @Test fun `unparsable url keeps only what comes before the query`() {
+        assertEquals("https://a.b/my file", RuleShareUrl.strip("https://user:pw@a.b/my file?token=s6#x").url)
+    }
+
+    @Test fun `tel and sms links lose the number and need a contact`() {
+        listOf("tel:+375291234567", "TEL:+375 29 123-45-67", "sms:+375291234567?body=hi", "smsto:375291234567").forEach {
+            val stripped = RuleShareUrl.strip(it)
+            assertTrue(it, stripped.contactRequired)
+            assertFalse(it, stripped.url.any(Char::isDigit))
+        }
+        val rule = SharedRule.fromEntity(sourceEntity()).let { r ->
+            r.copy(
+                triggers = listOf(TriggerDef(param = "speed", chineseName = "", operator = ">", value = "7", displayName = "")),
+                actions = listOf(ActionDef("", "tel:+375291234567", "url", """{"url":"tel:+375291234567","minimize":true}""")),
+            )
+        }
+        val text = RuleShare.exportJson(rule, "x")
+        assertFalse(text.contains("375291234567"))
+        val parsed = (RuleShare.parse(text, "Звонок") as RuleParseResult.Ok).rule
+        assertEquals(listOf(0), parsed.unresolvedCallIndexes())
+        assertEquals("tel:", JSONObject(parsed.actions[0].payload!!).getString("url"))
+        assertTrue(JSONObject(parsed.actions[0].payload!!).getBoolean("contactRequired"))
+        assertEquals(listOf<Int>(), parsed.unresolvedPlaceIndexes())
+        assertFalse(RuleShare.toEntity(parsed, "x", enableNow = true).enabled)
     }
 
     @Test fun `export keeps settings and never writes runtime fields`() {
@@ -102,8 +157,8 @@ class RuleShareTest {
 
     @Test fun `url without credentials is unchanged`() {
         assertEquals("yandexmusic://radio/user/onyourwave?play=true",
-            RuleShare.stripUrlCredentials("yandexmusic://radio/user/onyourwave?play=true"))
-        assertEquals("https://a.b/c", RuleShare.stripUrlCredentials("https://a.b/c?token=1"))
+            RuleShareUrl.strip("yandexmusic://radio/user/onyourwave?play=true").url)
+        assertEquals("https://a.b/c", RuleShareUrl.strip("https://a.b/c?token=1").url)
     }
 
     // --- File name ---
@@ -133,6 +188,41 @@ class RuleShareTest {
         assertEquals("bydmate_rule_dom_zvonok.json", first.name)
         assertEquals("bydmate_rule_dom_zvonok_2.json", second.name)
         assertEquals("bydmate_rule_dom_zvonok_3.json", third.name)
+    }
+
+    @Test fun `export leaves no temp file and a failed write leaves nothing importable`() {
+        val dir = tmp.newFolder("Download")
+        val rule = SharedRule.fromEntity(sourceEntity())
+        val file = RuleShareFiles.writeTo(dir, rule, "x")
+        assertEquals(listOf(file.name), dir.list()!!.toList())
+        assertTrue(RuleShare.parse(file.readText(), "Звонок") is RuleParseResult.Ok)
+
+        val readOnly = tmp.newFolder("ReadOnly")
+        assertTrue(readOnly.setWritable(false))
+        try {
+            RuleShareFiles.writeTo(readOnly, rule, "x")
+            org.junit.Assert.fail("write into a read-only folder must fail")
+        } catch (expected: java.io.IOException) {
+            assertTrue(readOnly.list()!!.isEmpty())
+        } finally {
+            readOnly.setWritable(true)
+        }
+    }
+
+    @Test fun `a temp file left behind is never listed for import`() {
+        val dir = tmp.newFolder("Download")
+        java.io.File(dir, ".bydmate_rule_x.json.tmp").writeText("{")
+        assertTrue(RuleShareFiles.listRuleFiles(dir).isEmpty())
+    }
+
+    @Test fun `read stops at 256 KiB`() {
+        val dir = tmp.newFolder("Download")
+        val small = java.io.File(dir, "bydmate_rule_small.json").apply { writeText(fixture("bydmate_rule_speed.json")) }
+        assertEquals(fixture("bydmate_rule_speed.json"), RuleShareFiles.readLimited(small))
+        val exact = java.io.File(dir, "bydmate_rule_exact.json").apply { writeBytes(ByteArray(RuleShareFiles.MAX_FILE_BYTES) { 'a'.code.toByte() }) }
+        assertEquals(RuleShareFiles.MAX_FILE_BYTES, RuleShareFiles.readLimited(exact)!!.length)
+        val big = java.io.File(dir, "bydmate_rule_big.json").apply { writeBytes(ByteArray(RuleShareFiles.MAX_FILE_BYTES + 1) { 'a'.code.toByte() }) }
+        assertNull(RuleShareFiles.readLimited(big))
     }
 
     @Test fun `list returns only share files, newest first`() {
@@ -173,6 +263,23 @@ class RuleShareTest {
         assertTrue(rule.unresolvedPlaceIndexes().isEmpty())
         assertEquals(9L, rule.triggers[0].placeId)
         assertEquals("Въезд в «дача »", rule.triggers[0].displayName)
+    }
+
+    @Test fun `place name match ignores extra whitespace`() {
+        val parsed = RuleShare.parse(fixture("bydmate_rule_dacha.json").replace("\"placeName\":\"Дача\"", "\"placeName\":\" Моя   дача \""), "Звонок") as RuleParseResult.Ok
+        val places = listOf(PlaceEntity(id = 4, name = "моя дача", lat = 54.0, lon = 27.0))
+        assertEquals(4L, RuleShare.resolvePlaces(parsed.rule, places, "Въезд в", "Выезд из").triggers[0].placeId)
+    }
+
+    @Test fun `two places with the same name are left for the user to pick`() {
+        val parsed = RuleShare.parse(fixture("bydmate_rule_dacha.json"), "Звонок") as RuleParseResult.Ok
+        val places = listOf(
+            PlaceEntity(id = 1, name = "Дача", lat = 54.0, lon = 27.0),
+            PlaceEntity(id = 2, name = "дача", lat = 55.0, lon = 28.0),
+        )
+        val rule = RuleShare.resolvePlaces(parsed.rule, places, "Въезд в", "Выезд из")
+        assertEquals(listOf(0), rule.unresolvedPlaceIndexes())
+        assertNull(rule.triggers[0].placeId)
     }
 
     @Test fun `fully resolved rule is enabled only when asked`() {

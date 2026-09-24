@@ -1,10 +1,14 @@
 package com.bydmate.app.ui.automation
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.R
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.DispatchResult
+import com.bydmate.app.data.automation.RuleParseResult
+import com.bydmate.app.data.automation.RuleShare
+import com.bydmate.app.data.automation.RuleShareFiles
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
@@ -12,6 +16,7 @@ import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.util.appLocalizedContext
 import io.mockk.coEvery
@@ -21,6 +26,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -38,6 +44,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 import java.io.File
 
 /** Import, share and «Тестовый запуск» through the real AutomationViewModel. */
@@ -58,6 +65,7 @@ class AutomationRuleShareViewModelTest {
     private val rules = MutableStateFlow<List<RuleEntity>>(emptyList())
     private val places = MutableStateFlow<List<PlaceEntity>>(emptyList())
     private lateinit var downloads: File
+    private val sharedFiles = mutableListOf<File>()
 
     @Before fun setUp() {
         Dispatchers.setMain(testDispatcher)
@@ -83,6 +91,7 @@ class AutomationRuleShareViewModelTest {
     ).also {
         it.downloadsDir = { downloads }
         it.ioDispatcher = testDispatcher
+        it.shareSheet = { file -> sharedFiles += file }
         testDispatcher.scheduler.advanceUntilIdle()
     }
 
@@ -136,8 +145,9 @@ class AutomationRuleShareViewModelTest {
         places.value = listOf(dacha)
         val vm = vm()
         vm.importFile(copyFixture("bydmate_rule_dacha.json"))
-        vm.resolveImportPlace(0, dacha)
-        vm.resolveImportContact(0, "+375291234567", "Мама", true)
+        val token = vm.uiState.value.importDraft!!.token
+        vm.resolveImportPlace(token, 0, dacha)
+        vm.resolveImportContact(token, 0, "+375291234567", "Мама", true)
         vm.setImportEnableNow(true)
 
         val inserted = slot<RuleEntity>()
@@ -188,6 +198,8 @@ class AutomationRuleShareViewModelTest {
         assertEquals("bydmate_rule_bagazhnik.json", file.name)
         assertEquals(downloads, file.parentFile)
         assertFalse(file.readText().contains("375291234567"))
+        // The share sheet opens right away, the «Сохранено» dialog stays behind it.
+        assertEquals(listOf(file), sharedFiles)
     }
 
     @Test fun `test run dispatches every action and records nothing`() {
@@ -212,5 +224,214 @@ class AutomationRuleShareViewModelTest {
         coVerify(exactly = 0) { ruleDao.update(any()) }
         coVerify(exactly = 0) { ruleLogDao.insert(any()) }
         assertFalse(vm.uiState.value.testRunning)
+    }
+
+    private fun snapshot(speed: Int?) = DiParsData(
+        soc = null, speed = speed, mileage = null, power = null, chargeGunState = null, maxBatTemp = null,
+        avgBatTemp = null, minBatTemp = null, chargingStatus = null, batteryCapacityKwh = null,
+        totalElecConsumption = null, voltage12v = null, maxCellVoltage = null, minCellVoltage = null,
+        exteriorTemp = null, gear = null, powerState = null, insideTemp = null, acStatus = null, acTemp = null,
+        fanLevel = null, acCirc = null, doorFL = null, doorFR = null, doorRL = null, doorRR = null,
+        windowFL = null, windowFR = null, windowRL = null, windowRR = null, sunroof = null, trunk = null,
+        hood = null, seatbeltFL = null, lockFL = null, tirePressFL = null, tirePressFR = null,
+        tirePressRL = null, tirePressRR = null, driveMode = null, workMode = null, autoPark = null,
+        rain = null, lightLow = null, drl = null,
+    )
+
+    private fun AutomationViewModel.editWith(actions: List<ActionDef>) = updateEditing {
+        copy(
+            id = 9, isNew = false, name = "Navi",
+            triggers = listOf(TriggerDef("Speed", "车速", ">", "7", "Скорость")),
+            actions = actions,
+        )
+    }
+
+    private val windowOpen = ActionDef("车窗全开", "Открыть все окна")
+    private val sunroofToggle = ActionDef("", "Люк", "toggle", ActionDispatcher.TOGGLE_SUNROOF)
+    private val windowClose = ActionDef("车窗关闭", "Закрыть все окна")
+
+    @Test fun `test run skips speed-gated actions without a snapshot`() {
+        val vm = vm()
+        vm.liveSnapshot = { null }
+        vm.liveSnapshotAtMs = { 0L }
+        vm.editWith(listOf(windowOpen, sunroofToggle, windowClose))
+        vm.testRun()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { actionDispatcher.dispatch(windowOpen, any()) }
+        coVerify(exactly = 0) { actionDispatcher.dispatch(sunroofToggle, any()) }
+        coVerify(exactly = 1) { actionDispatcher.dispatch(windowClose, any()) }
+        val toast = ShadowToast.getTextOfLatestToast()
+        assertTrue(toast, toast.contains(ctx.appLocalizedContext().getString(R.string.automation_test_run_no_speed)))
+    }
+
+    @Test fun `test run skips speed-gated actions on a stale snapshot`() {
+        val vm = vm()
+        vm.liveSnapshot = { snapshot(0) }
+        vm.liveSnapshotAtMs = { System.currentTimeMillis() - 30_000L }
+        vm.editWith(listOf(windowOpen, windowClose))
+        vm.testRun()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { actionDispatcher.dispatch(windowOpen, any()) }
+        coVerify(exactly = 1) { actionDispatcher.dispatch(windowClose, any()) }
+    }
+
+    @Test fun `test run sends speed-gated actions with a fresh snapshot for the dispatcher gate`() {
+        val vm = vm()
+        val fresh = snapshot(0)
+        vm.liveSnapshot = { fresh }
+        vm.liveSnapshotAtMs = { System.currentTimeMillis() }
+        vm.editWith(listOf(windowOpen, sunroofToggle))
+        vm.testRun()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { actionDispatcher.dispatch(windowOpen, fresh) }
+        coVerify(exactly = 1) { actionDispatcher.dispatch(sunroofToggle, fresh) }
+    }
+
+    @Test fun `speed gate covers window, sunroof, frunk and unlock only`() {
+        assertTrue(isSpeedGatedAction(windowOpen))
+        assertTrue(isSpeedGatedAction(ActionDef("车门解锁", "Открыть замки")))
+        assertTrue(isSpeedGatedAction(ActionDef("", "Замки", "toggle", ActionDispatcher.TOGGLE_LOCKS)))
+        assertTrue(isSpeedGatedAction(ActionDef("", "Капот", "toggle", ActionDispatcher.TOGGLE_FRONT_TRUNK)))
+        assertTrue(isSpeedGatedAction(sunroofToggle))
+        assertFalse(isSpeedGatedAction(windowClose))
+        assertFalse(isSpeedGatedAction(ActionDef("", "Аварийка", "toggle", ActionDispatcher.TOGGLE_HAZARD)))
+        assertFalse(isSnapshotFresh(snapshot(0), 1_000L, 1_000L + TEST_RUN_MAX_SNAPSHOT_AGE_MS))
+        assertTrue(isSnapshotFresh(snapshot(0), 1_000L, 1_000L + TEST_RUN_MAX_SNAPSHOT_AGE_MS - 1))
+        assertFalse(isSnapshotFresh(snapshot(0), 5_000L, 1_000L))
+    }
+
+    @Test fun `closing the editor stops the test run`() {
+        coEvery { actionDispatcher.dispatch(any(), any()) } coAnswers {
+            delay(60_000)
+            DispatchResult(true)
+        }
+        val vm = vm()
+        vm.editWith(listOf(windowClose, ActionDef("", "Пауза", "delay", "10")))
+        vm.testRun()
+        testDispatcher.scheduler.runCurrent()
+        assertTrue(vm.uiState.value.testRunning)
+
+        vm.closeEditor()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.testRunning)
+        coVerify(exactly = 1) { actionDispatcher.dispatch(any(), any()) }
+        assertEquals(ctx.appLocalizedContext().getString(R.string.automation_test_run_stopped), ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test fun `import preview names a call by what it does, not by its label`() {
+        val action = ActionDef("", "Уведомление", "call", """{"phone":"+375291234567","autoDial":true}""")
+        val lc = ctx.appLocalizedContext()
+        assertEquals(
+            "${lc.getString(R.string.automation_action_call)}: +375291234567, ${lc.getString(R.string.automation_call_auto_dial_label)}",
+            RuleImportSummary.action(action, ctx),
+        )
+        val param = RuleImportSummary.action(ActionDef("车窗全开", "Уведомление"), ctx)
+        assertTrue(param, param.endsWith("(车窗全开)"))
+        val trigger = RuleImportSummary.trigger(TriggerDef("Speed", "车速", ">", "7", "Уведомление"), ctx)
+        assertTrue(trigger, trigger.contains("> 7"))
+    }
+
+    @Test fun `import preview shows the rule flags in one line`() {
+        val vm = vm()
+        vm.importFile(copyFixture("bydmate_rule_dacha.json"))
+        val rule = vm.uiState.value.importDraft!!.rule
+        val flags = RuleImportSummary.flags(rule.copy(requirePark = true, playSound = false), ctx)
+        val lc = ctx.appLocalizedContext()
+        assertTrue(flags, flags.startsWith(lc.getString(R.string.automation_rule_cooldown, rule.cooldownSeconds)))
+        assertTrue(flags, flags.contains(lc.getString(R.string.automation_setting_park_only)))
+        assertFalse(flags, flags.contains(lc.getString(R.string.automation_setting_play_sound)))
+    }
+
+    @Test fun `editing an imported disabled rule keeps it disabled`() {
+        val vm = vm()
+        vm.importFile(copyFixture("bydmate_rule_speed.json"))
+        val inserted = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(inserted)) } returns 21L
+        vm.confirmImport()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(inserted.captured.enabled)
+
+        val stored = inserted.captured.copy(id = 21, triggerCount = 3, lastTriggeredAt = 77L, createdAt = 5L)
+        coEvery { ruleDao.getById(21) } returns stored
+        vm.openEditRule(stored)
+        vm.updateEditing { copy(name = "Navi 2") }
+        val updated = slot<RuleEntity>()
+        coEvery { ruleDao.update(capture(updated)) } returns Unit
+        vm.saveRule()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Navi 2", updated.captured.name)
+        assertFalse(updated.captured.enabled)
+        assertEquals(3, updated.captured.triggerCount)
+        assertEquals(77L, updated.captured.lastTriggeredAt)
+        assertEquals(5L, updated.captured.createdAt)
+    }
+
+    @Test fun `a file over the size limit is refused as invalid`() {
+        val file = File(downloads, "bydmate_rule_big.json")
+        val body = requireNotNull(javaClass.classLoader?.getResource("rule-share/bydmate_rule_speed.json")).readText()
+        file.writeText(body.replace("\"Navi\"", "\"" + "x".repeat(RuleShareFiles.MAX_FILE_BYTES) + "\""))
+        val vm = vm()
+        vm.importFile(file)
+
+        assertNull(vm.uiState.value.importDraft)
+        assertEquals(ctx.appLocalizedContext().getString(R.string.automation_import_invalid), vm.uiState.value.importError)
+    }
+
+    @Test fun `import stops at the rule limit and keeps the preview`() {
+        coEvery { ruleDao.getCount() } returns MAX_RULES
+        val vm = vm()
+        vm.importFile(copyFixture("bydmate_rule_speed.json"))
+        vm.confirmImport()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
+        val draft = requireNotNull(vm.uiState.value.importDraft)
+        assertEquals(ctx.appLocalizedContext().getString(R.string.automation_rule_limit, MAX_RULES), draft.error)
+    }
+
+    @Test fun `a failed insert keeps the preview with the error`() {
+        coEvery { ruleDao.insert(any()) } throws SQLiteException("disk full")
+        val vm = vm()
+        vm.importFile(copyFixture("bydmate_rule_speed.json"))
+        vm.confirmImport()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val draft = requireNotNull(vm.uiState.value.importDraft)
+        assertEquals(ctx.appLocalizedContext().getString(R.string.automation_import_save_failed, "disk full"), draft.error)
+    }
+
+    @Test fun `a contact picked for an older draft does not land on the new one`() {
+        val vm = vm()
+        vm.importFile(copyFixture("bydmate_rule_dacha.json"))
+        val oldToken = vm.uiState.value.importDraft!!.token
+        vm.pickImportFile(copyFixture("bydmate_rule_dacha.json").copyTo(File(downloads, "bydmate_rule_dacha_2.json")))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.resolveImportContact(oldToken, 0, "+375291234567", "Мама", true)
+        assertEquals(listOf(0), vm.uiState.value.importDraft!!.rule.unresolvedCallIndexes())
+        assertTrue(vm.uiState.value.importDraft!!.token != oldToken)
+    }
+
+    @Test fun `two quick shares write one file`() {
+        val rule = RuleEntity(
+            id = 4, name = "Багажник",
+            triggers = TriggerDef.listToJson(listOf(TriggerDef("Speed", "车速", ">", "7", "Скорость"))),
+            actions = ActionDef.listToJson(listOf(windowClose)),
+        )
+        val vm = vm()
+        vm.shareRule(rule)
+        assertTrue(vm.uiState.value.shareInProgress)
+        vm.shareRule(rule)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(listOf("bydmate_rule_bagazhnik.json"), downloads.list()!!.toList())
+        assertEquals(1, sharedFiles.size)
+        assertFalse(vm.uiState.value.shareInProgress)
+        assertTrue(RuleShare.parse(File(downloads, "bydmate_rule_bagazhnik.json").readText(), "x") is RuleParseResult.Ok)
     }
 }

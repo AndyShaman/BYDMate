@@ -1585,12 +1585,16 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Importar</string>
     <string name="automation_share_button">Compartilhar</string>
-    <string name="automation_share_note">O arquivo não tem contatos nem chaves, só a automação.</string>
+    <string name="automation_share_note">Números de telefone, nomes de contatos, vínculos com seus locais e chaves em links são removidos do arquivo. Textos de notificações e frases, pedidos ao agente e pontos de rota permanecem, confira-os antes de enviar.</string>
     <string name="automation_share_error">Não foi possível salvar o arquivo: %1$s</string>
     <string name="automation_test_run_button">Execução de teste</string>
     <string name="automation_test_run_hint">Executa todas as ações agora, como se a condição tivesse sido atendida</string>
     <string name="automation_test_run_done">Execução de teste: todas as ações concluídas</string>
     <string name="automation_test_run_failed">Execução de teste: %1$d de %2$d ações falharam. %3$s</string>
+    <string name="automation_test_run_no_speed">sem dados recentes de velocidade, ação ignorada</string>
+    <string name="automation_test_run_stopped">Execução de teste interrompida</string>
+    <string name="automation_rule_limit">É possível ter no máximo %1$d automações</string>
+    <string name="automation_import_save_failed">Não foi possível adicionar a automação: %1$s</string>
     <string name="automation_import_pick_title">Arquivos de automação em Download</string>
     <string name="automation_import_pick_empty">Nenhum arquivo bydmate_rule_*.json na pasta Download</string>
     <string name="automation_import_invalid">Não foi possível ler o arquivo: não é uma automação do BYDMate</string>

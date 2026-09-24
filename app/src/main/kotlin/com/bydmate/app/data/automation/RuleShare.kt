@@ -6,7 +6,11 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.net.URI
+import java.net.URLDecoder
 import java.text.Normalizer
 
 /** The shareable part of a rule: everything the editor sets, nothing the engine counts. */
@@ -25,10 +29,11 @@ data class SharedRule(
     fun unresolvedPlaceIndexes(): List<Int> =
         triggers.indices.filter { triggers[it].kind in RuleShare.PLACE_KINDS && triggers[it].placeId == null }
 
-    /** Call actions without a phone number (the file never carries one). */
-    fun unresolvedCallIndexes(): List<Int> = actions.indices.filter {
-        actions[it].kind == "call" && payloadOf(actions[it].payload).optString("phone").isBlank()
-    }
+    /**
+     * Actions waiting for a phone number: calls without one (the file never carries one) and
+     * `tel:` / `sms:` links whose number was removed on export.
+     */
+    fun unresolvedCallIndexes(): List<Int> = actions.indices.filter { needsContact(actions[it]) }
 
     fun hasUnresolved(): Boolean = unresolvedPlaceIndexes().isNotEmpty() || unresolvedCallIndexes().isNotEmpty()
 
@@ -79,13 +84,8 @@ object RuleShare {
         "split_screen_close", "split_screen_toggle",
     )
 
-    /** Marker left in a stripped call payload: the importer has to ask for a contact. */
-    private const val CONTACT_REQUIRED = "contactRequired"
-
-    // Query parameters that carry a secret: dropped from a shared url action.
-    private val CREDENTIAL_PARAM = Regex(
-        "(?i)^(.*token.*|.*secret.*|.*passw(or)?d.*|pwd|pass|key|apikey|api_key|api-key|auth|authorization|sig|signature)$"
-    )
+    /** Marker left in a stripped call or tel/sms url payload: the importer has to ask for a number. */
+    internal const val CONTACT_REQUIRED = "contactRequired"
 
     // --- Export ---
 
@@ -95,12 +95,13 @@ object RuleShare {
      *   importer can find the place by name.
      * - action `call`: `phone` and `name` (the contact), and the display name (the voice agent
      *   stores the contact name there); `autoDial` stays, plus a `contactRequired` marker.
-     * - action `url`: user:password in the authority and credential query parameters
-     *   (token, secret, password, key, auth, sig...); the rest of the address stays.
+     * - action `url`: what [RuleShareUrl.strip] removes, and the display name is rebuilt from the
+     *   stripped address (the voice agent stores the original address there).
      * - every other kind (`param`, `notification*`, `app_launch`, `navigate`, `yandex_music`,
      *   `youtube`, `go_home`, `delay`, `media_volume`, `sentry`, `hotspot`, `cluster_projection`,
-     *   `toggle`, `speak`, `agent_query`, `split_screen*`): the payload holds no key, token or
-     *   contact (API keys live in settings, never in a rule), so it is copied as is.
+     *   `toggle`, `speak`, `agent_query`, `split_screen*`): copied as is. Free texts (notification
+     *   and speak texts, agent prompts, navigation points, voice phrases, the rule name) stay: the
+     *   user shares their own rule and the share note asks them to check those.
      * Rule id, enabled, lastTriggeredAt, triggerCount and createdAt are never written.
      */
     fun exportJson(rule: SharedRule, appVersion: String): String {
@@ -139,23 +140,12 @@ object RuleShare {
         )
         "url" -> {
             val json = payloadOf(action.payload)
-            json.put("url", stripUrlCredentials(json.optString("url")))
-            action.copy(payload = json.toString())
+            val stripped = RuleShareUrl.strip(json.optString("url"))
+            json.put("url", stripped.url)
+            if (stripped.contactRequired) json.put(CONTACT_REQUIRED, true) else json.remove(CONTACT_REQUIRED)
+            action.copy(displayName = stripped.url, payload = json.toString())
         }
         else -> action
-    }
-
-    internal fun stripUrlCredentials(url: String): String {
-        val noUserInfo = url.replace(Regex("^([a-zA-Z][a-zA-Z0-9+.\\-]*://)[^/?#@]*@"), "$1")
-        val hashAt = noUserInfo.indexOf('#')
-        val beforeHash = if (hashAt >= 0) noUserInfo.substring(0, hashAt) else noUserInfo
-        val fragment = if (hashAt >= 0) noUserInfo.substring(hashAt) else ""
-        val qAt = beforeHash.indexOf('?')
-        if (qAt < 0) return noUserInfo
-        val kept = beforeHash.substring(qAt + 1).split('&')
-            .filter { it.isNotEmpty() && !CREDENTIAL_PARAM.matches(it.substringBefore('=')) }
-        val base = beforeHash.substring(0, qAt)
-        return (if (kept.isEmpty()) base else base + "?" + kept.joinToString("&")) + fragment
     }
 
     // --- Import ---
@@ -208,13 +198,16 @@ object RuleShare {
         action.kind in KNOWN_ACTION_KINDS &&
             (action.kind != "toggle" || ActionDispatcher.toggleTargetNameRes(action.payload.orEmpty()) != null)
 
-    /** Links place triggers to local places by name (case-insensitive); the rest stay unresolved. */
+    /**
+     * Links place triggers to local places by name, ignoring case and extra whitespace, but only
+     * when exactly one place has that name: with none or several the user picks the place.
+     */
     fun resolvePlaces(rule: SharedRule, places: List<PlaceEntity>, enterPrefix: String, exitPrefix: String): SharedRule =
         rule.copy(triggers = rule.triggers.map { t ->
             if (t.kind !in PLACE_KINDS || t.placeId != null) return@map t
-            val wanted = t.placeName?.trim().orEmpty()
-            val place = places.firstOrNull { it.name.trim().equals(wanted, ignoreCase = true) }
-            if (place == null) t else withPlace(t, place, enterPrefix, exitPrefix)
+            val wanted = normalizedPlaceName(t.placeName.orEmpty())
+            val matches = places.filter { normalizedPlaceName(it.name) == wanted }
+            if (matches.size == 1) withPlace(t, matches.single(), enterPrefix, exitPrefix) else t
         })
 
     /** [trigger] pointed at [place], with the display name the editor would give it. */
@@ -251,11 +244,88 @@ object RuleShare {
     )
 }
 
+/** A share-safe address, and whether the importer has to enter a phone number into it. */
+data class StrippedUrl(val url: String, val contactRequired: Boolean)
+
+/**
+ * Credential stripping for a shared `url` action. The address is parsed as a [URI]:
+ * - user:password in the authority is dropped;
+ * - query parameters whose URL-decoded name looks like a credential are dropped;
+ * - the fragment is dropped (OAuth-style links carry tokens there), except in an Android
+ *   `intent:` link, where the fragment IS the intent: there only credential-named extras go;
+ * - `tel:`, `sms:` and `smsto:` lose the number and are marked contact-required, like `call`.
+ * A secret in the path (a webhook id, a file name) cannot be recognised structurally and is
+ * out of scope: the share note asks the user to check links before sending.
+ * An address [URI] cannot parse keeps only what comes before its query and fragment.
+ */
+internal object RuleShareUrl {
+    private val CONTACT_SCHEMES = setOf("tel", "sms", "smsto")
+
+    // Query parameter names that carry a secret.
+    private val CREDENTIAL_PARAM = Regex(
+        "(?i)^(.*token.*|.*secret.*|.*passw(or)?d.*|pwd|pass|key|apikey|api_key|api-key|auth|authorization|sig|signature)$"
+    )
+    private val SCHEME_AND_USER_INFO = Regex("^([a-zA-Z][a-zA-Z0-9+.\\-]*://)[^/]*@")
+
+    fun strip(url: String): StrippedUrl {
+        val trimmed = url.trim()
+        val uri = runCatching { URI(trimmed) }.getOrNull()
+        val scheme = (uri?.scheme ?: trimmed.substringBefore(':', "")).lowercase()
+        if (scheme in CONTACT_SCHEMES) return StrippedUrl("$scheme:", contactRequired = true)
+        val stripped = if (uri == null) unparsed(trimmed) else rebuild(uri)
+        return StrippedUrl(stripped, contactRequired = false)
+    }
+
+    private fun rebuild(uri: URI): String {
+        if (uri.isOpaque) {
+            // mailto:, geo:... have no authority, but may still carry a query.
+            val ssp = uri.rawSchemeSpecificPart
+            val query = if ('?' in ssp) filterQuery(ssp.substringAfter('?')) else null
+            return "${uri.scheme}:${ssp.substringBefore('?')}" + (query?.let { "?$it" } ?: "")
+        }
+        return buildString {
+            uri.scheme?.let { append(it).append(':') }
+            // Userinfo cannot hold an unescaped '@', so the host starts after the last one.
+            if (uri.rawSchemeSpecificPart.startsWith("//")) append("//").append(uri.rawAuthority?.substringAfterLast('@').orEmpty())
+            append(uri.rawPath.orEmpty())
+            filterQuery(uri.rawQuery)?.let { append('?').append(it) }
+            if (uri.scheme.equals("intent", ignoreCase = true) && uri.rawFragment != null) {
+                append('#').append(filterIntentExtras(uri.rawFragment))
+            }
+        }
+    }
+
+    /** The query without credential parameters, or null when nothing is left. */
+    private fun filterQuery(rawQuery: String?): String? =
+        rawQuery?.split('&')
+            ?.filter { it.isNotEmpty() && !isCredential(it.substringBefore('=')) }
+            ?.takeIf { it.isNotEmpty() }
+            ?.joinToString("&")
+
+    /** `#Intent;scheme=https;S.token=abc;end` without the credential-named extras (`S.token`). */
+    private fun filterIntentExtras(fragment: String): String =
+        fragment.split(';').filterNot { part ->
+            '=' in part && isCredential(part.substringBefore('=').substringAfter('.'))
+        }.joinToString(";")
+
+    // A name that does not even decode is treated as a credential: dropping it is the safe side.
+    private fun isCredential(rawName: String): Boolean {
+        val name = runCatching { URLDecoder.decode(rawName, "UTF-8") }.getOrNull() ?: return true
+        return CREDENTIAL_PARAM.matches(name.trim())
+    }
+
+    private fun unparsed(url: String): String =
+        url.substringBefore('#').substringBefore('?').replace(SCHEME_AND_USER_INFO, "$1")
+}
+
 /** Where share files live: `bydmate_rule_<slug>.json` in the public Download folder. */
 object RuleShareFiles {
     const val FILE_PREFIX = "bydmate_rule_"
     const val FILE_SUFFIX = ".json"
     private const val SLUG_MAX = 40
+
+    /** Largest share file the importer reads: a real rule is a few KiB. */
+    const val MAX_FILE_BYTES = 256 * 1024
 
     private val CYRILLIC = mapOf(
         'а' to "a", 'б' to "b", 'в' to "v", 'г' to "g", 'ґ' to "g", 'д' to "d", 'е' to "e", 'ё' to "e",
@@ -287,12 +357,41 @@ object RuleShareFiles {
         return file
     }
 
-    /** Writes [rule] to a free name in [dir] (created when missing) and returns the file. */
+    /**
+     * Writes [rule] to a free name in [dir] (created when missing) and returns the file. The text
+     * goes to a hidden temp name the import list never shows and is then renamed in one step, so
+     * a failed or half-done write never appears as a share file. Callers serialise exports.
+     */
     fun writeTo(dir: File, rule: SharedRule, appVersion: String): File {
         if (!dir.exists()) dir.mkdirs()
         val file = freeFile(dir, rule.name)
-        file.writeText(RuleShare.exportJson(rule, appVersion), Charsets.UTF_8)
+        val tmp = File(dir, ".${file.name}.tmp")
+        try {
+            tmp.writeText(RuleShare.exportJson(rule, appVersion), Charsets.UTF_8)
+            if (!tmp.renameTo(file)) throw IOException("cannot rename ${tmp.name} to ${file.name}")
+        } finally {
+            // After a successful rename there is nothing left to delete.
+            tmp.delete()
+        }
         return file
+    }
+
+    /**
+     * The text of [file], or null when it is bigger than [MAX_FILE_BYTES]. The limit is checked
+     * while reading, so a file that grows meanwhile cannot slip past it.
+     */
+    fun readLimited(file: File): String? {
+        val out = ByteArrayOutputStream()
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                out.write(buffer, 0, n)
+                if (out.size() > MAX_FILE_BYTES) return null
+            }
+        }
+        return out.toString(Charsets.UTF_8.name())
     }
 
     /** Share files in [dir], newest first (same listing approach as the backup restore picker). */
@@ -304,3 +403,13 @@ object RuleShareFiles {
 
 private fun payloadOf(payload: String?): JSONObject =
     runCatching { JSONObject(payload ?: "{}") }.getOrDefault(JSONObject())
+
+private fun needsContact(action: ActionDef): Boolean = when (action.kind) {
+    "call" -> payloadOf(action.payload).optString("phone").isBlank()
+    "url" -> payloadOf(action.payload).optBoolean(RuleShare.CONTACT_REQUIRED, false)
+    else -> false
+}
+
+private val WHITESPACE = Regex("\\s+")
+
+private fun normalizedPlaceName(name: String): String = name.trim().replace(WHITESPACE, " ").lowercase()

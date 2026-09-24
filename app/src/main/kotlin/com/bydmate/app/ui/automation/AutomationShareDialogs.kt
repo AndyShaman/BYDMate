@@ -34,7 +34,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,6 +42,7 @@ import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.ui.components.AppAlertDialog
 import com.bydmate.app.ui.settings.PlacesInlineContent
+import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.AccentOrange
 import com.bydmate.app.ui.theme.AccentTeal
@@ -57,6 +57,7 @@ import com.bydmate.app.ui.theme.TextSecondary
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 
 /** «Места» from the Automation header: the list that used to live in Settings. */
 @Composable
@@ -79,7 +80,10 @@ internal fun PlacesDialog(onDismiss: () -> Unit) {
     )
 }
 
-/** «Сохранено» after «Поделиться»: the file name, the system share sheet and «Закрыть». */
+/**
+ * «Сохранено» after «Поделиться»: the file name, what the file keeps, «Поделиться» again and
+ * «Закрыть». The system share sheet opens over it right after the save.
+ */
 @Composable
 internal fun RuleSavedDialog(fileName: String, onShare: () -> Unit, onDismiss: () -> Unit) {
     AppAlertDialog(
@@ -150,9 +154,11 @@ internal fun ImportPickDialog(
 }
 
 /**
- * Import step 2: the rule as it will be added. Places not found by name and call contacts
- * (never in the file) are asked for under «Нужно уточнить»; while any stays open the rule
- * can only be added switched off.
+ * Import step 2: the rule as it will be added. Every row is built from what will run
+ * ([RuleImportSummary]), not from the labels in the file, and the settings come in one line.
+ * Places not found by name (or found twice) and numbers of calls and tel/sms links (never in
+ * the file) are asked for under «Нужно уточнить»; while any stays open the rule can only be
+ * added switched off.
  */
 @Composable
 internal fun ImportPreviewDialog(
@@ -192,7 +198,8 @@ internal fun ImportPreviewDialog(
                     fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
                 rule.triggers.forEach { t ->
                     Text(
-                        buildAnnotatedString { appendTriggerSummary(t, context) },
+                        RuleImportSummary.trigger(t, context),
+                        color = AccentBlue,
                         fontSize = 13.sp,
                         modifier = Modifier
                             .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
@@ -202,8 +209,10 @@ internal fun ImportPreviewDialog(
                 Text(stringResource(R.string.automation_import_actions), color = TextPrimary, fontSize = 13.sp,
                     fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
                 rule.actions.forEach { a ->
-                    Text(a.displayName, color = AccentTeal, fontSize = 13.sp)
+                    Text(RuleImportSummary.action(a, context), color = AccentTeal, fontSize = 13.sp)
                 }
+                Text(RuleImportSummary.flags(rule, context), color = TextSecondary, fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp))
 
                 if (!canEnable) {
                     Column(
@@ -282,15 +291,17 @@ internal fun ImportPreviewDialog(
     )
 
     contactFor?.let { index ->
+        val action = rule.actions.getOrNull(index)
         CallEditDialog(
             initialPhone = "",
             initialName = "",
-            initialAutoDial = rule.actions.getOrNull(index)?.callAutoDial() ?: false,
+            initialAutoDial = action?.callAutoDial() ?: false,
             onDismiss = { contactFor = null },
             onSave = { phone, name, autoDial ->
                 onPickContact(index, phone, name, autoDial)
                 contactFor = null
             },
+            showAutoDial = action?.kind == "call",
         )
     }
 }
@@ -322,7 +333,16 @@ private fun PlacePickButton(places: List<PlaceEntity>, onPick: (PlaceEntity) -> 
                 }
                 places.forEach { place ->
                     DropdownMenuItem(
-                        text = { Text(place.name, fontSize = 13.sp) },
+                        // Coordinates tell apart two places with the same name.
+                        text = {
+                            Column {
+                                Text(place.name, fontSize = 13.sp)
+                                Text(
+                                    String.format(Locale.US, "%.5f, %.5f", place.lat, place.lon),
+                                    fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Monospace,
+                                )
+                            }
+                        },
                         onClick = {
                             expanded = false
                             onPick(place)

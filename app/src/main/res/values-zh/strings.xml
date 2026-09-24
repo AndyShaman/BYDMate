@@ -1703,12 +1703,16 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">导入</string>
     <string name="automation_share_button">分享</string>
-    <string name="automation_share_note">文件只包含自动化规则，不含联系人和密钥。</string>
+    <string name="automation_share_note">文件中已删除电话号码、联系人姓名、与你的地点的关联以及链接中的密钥。通知和语音文本、语音助手请求以及路线点会保留，发送前请检查。</string>
     <string name="automation_share_error">无法保存文件：%1$s</string>
     <string name="automation_test_run_button">试运行</string>
     <string name="automation_test_run_hint">立即执行所有动作，就像条件已满足一样</string>
     <string name="automation_test_run_done">试运行：所有动作已执行</string>
     <string name="automation_test_run_failed">试运行：%2$d 个动作中有 %1$d 个未执行。%3$s</string>
+    <string name="automation_test_run_no_speed">没有最新的车速数据，已跳过该操作</string>
+    <string name="automation_test_run_stopped">试运行已停止</string>
+    <string name="automation_rule_limit">最多只能有 %1$d 条自动化</string>
+    <string name="automation_import_save_failed">无法添加自动化：%1$s</string>
     <string name="automation_import_pick_title">Download 中的自动化文件</string>
     <string name="automation_import_pick_empty">Download 文件夹中没有 bydmate_rule_*.json 文件</string>
     <string name="automation_import_invalid">无法读取文件：这不是 BYDMate 自动化</string>

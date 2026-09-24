@@ -1741,12 +1741,16 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Імпарт</string>
     <string name="automation_share_button">Падзяліцца</string>
-    <string name="automation_share_note">Файл без кантактаў і ключоў, толькі правіла.</string>
+    <string name="automation_share_note">З файла выдалены нумары тэлефонаў, імёны кантактаў, прывязкі да вашых месцаў і ключы ў спасылках. Тэксты апавяшчэнняў і фраз, запыты агенту і пункты маршрутаў застаюцца, праверце іх перад адпраўкай.</string>
     <string name="automation_share_error">Не ўдалося захаваць файл: %1$s</string>
     <string name="automation_test_run_button">Тэставы запуск</string>
     <string name="automation_test_run_hint">Выканае ўсе дзеянні адразу, як быццам спрацавала ўмова</string>
     <string name="automation_test_run_done">Тэставы запуск: усе дзеянні выкананы</string>
     <string name="automation_test_run_failed">Тэставы запуск: не выканана %1$d з %2$d. %3$s</string>
+    <string name="automation_test_run_no_speed">няма свежых даных пра хуткасць, дзеянне прапушчана</string>
+    <string name="automation_test_run_stopped">Тэставы запуск спынены</string>
+    <string name="automation_rule_limit">Можна стварыць не больш за %1$d аўтаматызацый</string>
+    <string name="automation_import_save_failed">Не ўдалося дадаць аўтаматызацыю: %1$s</string>
     <string name="automation_import_pick_title">Файлы аўтаматызацый у Download</string>
     <string name="automation_import_pick_empty">У папцы Download няма файлаў bydmate_rule_*.json</string>
     <string name="automation_import_invalid">Не ўдалося прачытаць файл: гэта не аўтаматызацыя BYDMate</string>
