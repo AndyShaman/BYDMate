@@ -339,7 +339,6 @@
     <!-- TripDetailDialog -->
     <string name="trip_detail_title_trip">Поездка</string>
     <string name="trip_detail_title_stop">Стоянка</string>
-    <string name="trip_detail_stats_header">Статистика</string>
     <string name="trip_detail_gps_unavailable">GPS-данные недоступны</string>
     <string name="trip_detail_distance_label">Дистанция</string>
     <string name="trip_detail_distance_value">%1$.1f км</string>
@@ -350,8 +349,23 @@
     <string name="trip_detail_consumption_label">Потребление</string>
     <string name="trip_detail_consumption_value">%1$.1f кВт·ч</string>
     <string name="trip_detail_efficiency_label">Расход</string>
+    <string name="trip_detail_efficiency_value">%1$.1f кВт·ч/100</string>
     <string name="trip_detail_cost_label">Стоимость</string>
-    <string name="trip_detail_temp_label">Темп.</string>
+    <string name="trip_detail_date_pattern">EEEE, d MMMM</string>
+    <string name="trip_detail_close">Закрыть</string>
+    <string name="trip_detail_group_distance">Пробег</string>
+    <string name="trip_detail_group_time">Время</string>
+    <string name="trip_detail_group_energy">Энергия</string>
+    <string name="trip_detail_group_money">Деньги</string>
+    <string name="trip_detail_group_weather">Погода</string>
+    <string name="trip_detail_odometer_start_label">Одометр на старте</string>
+    <string name="trip_detail_odometer_end_label">Одометр на финише</string>
+    <string name="trip_detail_odometer_label">Одометр</string>
+    <string name="trip_detail_odometer_value">%1$,.1f км</string>
+    <string name="trip_detail_moving_label">В движении</string>
+    <string name="trip_detail_cost_per_100_label">На 100 км</string>
+    <string name="trip_detail_soc_label">Заряд</string>
+    <string name="trip_detail_ext_temp_label">За бортом</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">Все</string>

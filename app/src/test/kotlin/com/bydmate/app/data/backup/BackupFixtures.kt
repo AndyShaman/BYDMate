@@ -38,7 +38,10 @@ internal object BackupFixtures {
      * which side a row came from. Trip and charge ids are [id].
      */
     fun seedCurrent(db: SQLiteDatabase, tag: String, id: Long, token: String = TOKEN) {
-        db.execSQL("INSERT INTO trips (id, start_ts, source) VALUES ($id, 1000, '$tag')")
+        db.execSQL(
+            "INSERT INTO trips (id, start_ts, source, odometer_start_km, odometer_end_km) " +
+                "VALUES ($id, 1000, '$tag', 11042.4, 11092.9)"
+        )
         db.execSQL("INSERT INTO trip_points (trip_id, timestamp, lat, lon) VALUES ($id, 1001, 53.9, 27.5)")
         db.execSQL("INSERT INTO trip_tombstones (byd_id) VALUES ($id)")
         db.execSQL(

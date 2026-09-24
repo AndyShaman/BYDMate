@@ -9,6 +9,7 @@ import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.repository.LastSessionRepository
+import com.bydmate.app.data.repository.OdometerMarks
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.domain.cost.CostCalculator
@@ -21,7 +22,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class HistoryImporter @Inject constructor(
+class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     @ApplicationContext private val context: Context,
     private val energyDataReader: EnergyDataReader,
     private val tripRepository: TripRepository,
@@ -32,6 +33,7 @@ class HistoryImporter @Inject constructor(
     private val lastSessionRepository: LastSessionRepository,
     private val tripTombstoneDao: TripTombstoneDao,
     private val costCalculator: CostCalculator,
+    private val odometerMarks: OdometerMarks,
 ) {
     companion object {
         private const val TAG = "HistoryImporter"
@@ -142,6 +144,7 @@ class HistoryImporter @Inject constructor(
         // only one close enough in time for this temperature to belong to it.
         val nowMs = System.currentTimeMillis()
         val liveExteriorTemp = TrackingService.lastData.value?.exteriorTemp
+        val marks = odometerMarks.snapshot()
 
         for (byd in bydRecords) {
             val startTsMs = byd.startTimestamp * 1000L
@@ -172,7 +175,8 @@ class HistoryImporter @Inject constructor(
                 startTsMs + DEDUP_WINDOW_MS
             )
             if (existingByTime != null) {
-                // Update existing trip with byd_id so future syncs skip it instantly
+                // Update existing trip with byd_id so future syncs skip it instantly.
+                // The copy keeps its odometer: the km changes, the readings do not.
                 val kwh = saneKwh(
                     byd.id, byd.electricityKwh, byd.tripKm,
                     existingByTime.socStart, existingByTime.socEnd, capacity)
@@ -235,6 +239,11 @@ class HistoryImporter @Inject constructor(
                 sessionMatch?.endExteriorTemp, endTsMs, nowMs, liveExteriorTemp)
             if (tempStart != null || sessionMatch?.endExteriorTemp != null) tempFromSession++
 
+            // energydata has no odometer either: the finish comes from the live marks.
+            val odo = OdometerMarks.match(marks, startTsMs, endTsMs, byd.tripKm)
+            Log.i(TAG, "import odo: byd=${byd.id} end=$endTsMs mark=${odo.markChangeTs ?: "-"} " +
+                "finish=${odo.finishKm ?: "-"} start=${odo.startKm ?: "-"} (${odo.reason})")
+
             // Insert all records (including zero-km) as trips for visibility. The SOC pair
             // read above is what the sanity bound falls back on when BYD's own kWh is impossible.
             val kwh = saneKwh(byd.id, byd.electricityKwh, byd.tripKm, socStart, socEnd, capacity)
@@ -253,6 +262,8 @@ class HistoryImporter @Inject constructor(
                     socEnd = socEnd,
                     exteriorTemp = tempStart,
                     exteriorTempEnd = tempEnd,
+                    odometerStartKm = odo.startKm,
+                    odometerEndKm = odo.finishKm,
                     source = "energydata",
                     bydId = byd.id
                 )
@@ -343,6 +354,41 @@ class HistoryImporter @Inject constructor(
             Log.e(TAG, "energydata kwh sanity failed", e)
             0
         }
+    }
+
+    /**
+     * Fill the odometer of energydata trips imported before their marks were usable (an
+     * earlier sync in the same window). Only trips inside the marks window qualify, so old
+     * history is never backfilled; a known odometer is never overwritten.
+     */
+    suspend fun fillOdometerFromMarks() {
+        try {
+            val marks = odometerMarks.snapshot()
+            val since = marks.minOfOrNull { it.processStartTs } ?: return
+            var filled = 0
+            val candidates = tripDao.getAllSnapshot().filter {
+                it.source == "energydata" && (it.endTs ?: 0L) >= since &&
+                    it.odometerStartKm == null && it.odometerEndKm == null
+            }
+            for (trip in candidates) {
+                if (fillOdometer(trip, marks)) filled++
+            }
+            if (filled > 0) Log.i(TAG, "fillOdometerFromMarks: $filled trips")
+        } catch (e: Exception) {
+            Log.e(TAG, "fillOdometerFromMarks failed", e)
+        }
+    }
+
+    /** True when the row was actually written. */
+    private suspend fun fillOdometer(trip: TripEntity, marks: List<OdometerMarks.Mark>): Boolean {
+        val endTs = trip.endTs ?: return false
+        val odo = OdometerMarks.match(marks, trip.startTs, endTs, trip.distanceKm)
+        if (odo.finishKm == null) return false
+        // Conditional write: a sync or a cost recalculation since the snapshot is kept.
+        if (tripDao.fillOdometerIfEmpty(trip.id, odo.startKm, odo.finishKm) == 0) return false
+        Log.i(TAG, "fill odo: trip=${trip.id} end=$endTs mark=${odo.markChangeTs} " +
+            "finish=${odo.finishKm} start=${odo.startKm ?: "-"} (${odo.reason})")
+        return true
     }
 
     /**
@@ -603,6 +649,7 @@ class HistoryImporter @Inject constructor(
         val r = syncFromEnergyData()
         recalculateConsumptionFromEnergyData()
         repairImplausibleKwh()
+        fillOdometerFromMarks()
         calculateMissingCosts()
         attachGpsPoints()
         return r

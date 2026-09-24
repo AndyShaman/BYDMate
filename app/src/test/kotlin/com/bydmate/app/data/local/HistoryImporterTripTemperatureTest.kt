@@ -42,6 +42,7 @@ class HistoryImporterTripTemperatureTest {
         lastSessionRepository = lastSessionRepository,
         tripTombstoneDao = mockk<TripTombstoneDao>(relaxed = true),
         costCalculator = mockk(relaxed = true),
+        odometerMarks = mockk(relaxed = true),
     )
 
     private val record = BydTripRecord(

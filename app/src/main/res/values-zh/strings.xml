@@ -254,7 +254,6 @@
     <!-- TripDetailDialog -->
     <string name="trip_detail_title_trip">行程</string>
     <string name="trip_detail_title_stop">停留</string>
-    <string name="trip_detail_stats_header">统计</string>
     <string name="trip_detail_gps_unavailable">GPS 数据不可用</string>
     <string name="trip_detail_distance_label">距离</string>
     <string name="trip_detail_distance_value">%1$.1f 公里</string>
@@ -265,8 +264,23 @@
     <string name="trip_detail_consumption_label">能耗</string>
     <string name="trip_detail_consumption_value">%1$.1f kWh</string>
     <string name="trip_detail_efficiency_label">百公里电耗</string>
+    <string name="trip_detail_efficiency_value">%1$.1f kWh/100</string>
     <string name="trip_detail_cost_label">费用</string>
-    <string name="trip_detail_temp_label">温度</string>
+    <string name="trip_detail_date_pattern">M月d日 EEEE</string>
+    <string name="trip_detail_close">关闭</string>
+    <string name="trip_detail_group_distance">里程</string>
+    <string name="trip_detail_group_time">时间</string>
+    <string name="trip_detail_group_energy">能量</string>
+    <string name="trip_detail_group_money">金额</string>
+    <string name="trip_detail_group_weather">天气</string>
+    <string name="trip_detail_odometer_start_label">出发时里程表</string>
+    <string name="trip_detail_odometer_end_label">到达时里程表</string>
+    <string name="trip_detail_odometer_label">里程表</string>
+    <string name="trip_detail_odometer_value">%1$,.1f 公里</string>
+    <string name="trip_detail_moving_label">行驶时间</string>
+    <string name="trip_detail_cost_per_100_label">每百公里</string>
+    <string name="trip_detail_soc_label">电量</string>
+    <string name="trip_detail_ext_temp_label">车外温度</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">全部</string>

@@ -38,6 +38,7 @@ class HistoryImporterKwhSanityTest {
         lastSessionRepository = mockk<LastSessionRepository>(relaxed = true),
         tripTombstoneDao = mockk<TripTombstoneDao>(relaxed = true),
         costCalculator = mockk(relaxed = true),
+        odometerMarks = mockk(relaxed = true),
     )
 
     // VadimV, 2026-09-12: 54681,2 kWh on 38,2 km with SOC 92 -> 84.

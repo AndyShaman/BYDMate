@@ -85,6 +85,13 @@ interface TripDao {
     @Query("DELETE FROM trips WHERE COALESCE(distance_km, 0.0) = 0.0 AND source = 'energydata'")
     suspend fun deleteZeroKmTrips(): Int
 
+    /** Odometer fill that never overwrites: a row whose odometer became known meanwhile is left alone. */
+    @Query("""
+        UPDATE trips SET odometer_start_km = :startKm, odometer_end_km = :endKm
+        WHERE id = :id AND odometer_start_km IS NULL AND odometer_end_km IS NULL
+    """)
+    suspend fun fillOdometerIfEmpty(id: Long, startKm: Double?, endKm: Double?): Int
+
     /** Trips with sufficient SOC delta for battery capacity estimation. */
     @Query("""
         SELECT * FROM trips
