@@ -304,3 +304,21 @@ utterance	expected	category	danger
 выключи вентилятор	UNRECOGNIZED	fan	
 говори громко	UNRECOGNIZED	media	
 открой ролик	UNRECOGNIZED	misc	
+мне прохладно	TEMP:+1	climate	
+мне холодно	TEMP:+1	climate	
+холодно	TEMP:+1	climate	
+в салоне холодно	TEMP:+1	climate	
+замёрз	TEMP:+1	climate	
+я замерз	TEMP:+1	climate	
+я замёрзла	TEMP:+1	climate	
+я замерзла	TEMP:+1	climate	
+мне жарко	TEMP:-1	climate	
+жарко	TEMP:-1	climate	
+душно	TEMP:-1	climate	
+в машине душно	TEMP:-1	climate	
+сделай похолоднее	TEMP:-1	climate	
+не холодно	UNRECOGNIZED	climate	
+мне не жарко	UNRECOGNIZED	climate	
+жарко и холодно	UNRECOGNIZED	climate	
+в окно дует холодно	UNRECOGNIZED	climate	
+мне холодно закрой окно	主驾打开0	climate	
