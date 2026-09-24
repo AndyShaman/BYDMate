@@ -17,6 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlin.concurrent.thread
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.TestScope
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,6 +32,7 @@ import org.robolectric.shadows.ShadowLog
 // (RECEIVER_NOT_EXPORTED permission fallback) thrown from the engine's init.
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
+@Suppress("LargeClass") // one scenario suite over shared helpers
 class AutomationEngineServiceStartTest {
 
     private fun paramTrigger(param: String, op: String, value: String) = TriggerDef(
@@ -710,7 +712,7 @@ class AutomationEngineServiceStartTest {
         val (engine, _) = serviceStartEngine(bootId, unit)
         assertEquals(
             "service_start: interactive=true window=not armed consumed=0 last_heartbeat_age=- boot_id=- car_off=- " +
-                "car_off_lit=-",
+                "car_off_lit=- heartbeat=none",
             engine.serviceStartDumpLine(),
         )
         engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
@@ -718,7 +720,7 @@ class AutomationEngineServiceStartTest {
             .format(java.util.Date(t0 + AutomationEngine.SERVICE_START_WINDOW_MS))
         assertEquals(
             "service_start: interactive=true window=armed until $until consumed=1 last_heartbeat_age=0s boot_id=boot-a " +
-                "car_off=- car_off_lit=-",
+                "car_off=- car_off_lit=- heartbeat=none",
             engine.serviceStartDumpLine(),
         )
         unit.advance(45_000L)
@@ -727,8 +729,87 @@ class AutomationEngineServiceStartTest {
         unit.screenOn = false
         assertEquals(
             "service_start: interactive=false window=spent consumed=1 last_heartbeat_age=50s boot_id=boot-a " +
-                "car_off=pending car_off_lit=5s",
+                "car_off=pending car_off_lit=5s heartbeat=none",
             engine.serviceStartDumpLine(),
         )
+    }
+
+    // The heartbeat timer: a lit screen keeps the session alive while evaluate() is stalled.
+    // [ms] pass on the head unit and on the timer's clock together, one second at a time.
+    private fun TestScope.pass(unit: HeadUnit, ms: Long) {
+        repeat((ms / 1_000L).toInt()) {
+            unit.advance(1_000L)
+            testScheduler.advanceTimeBy(1_000L)
+            testScheduler.runCurrent()
+        }
+    }
+
+    @Test fun `service_start heartbeat timer keeps the session through a 120 s evaluate stall`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        val timer = TestScope()
+        engine.startServiceStartHeartbeat(timer)
+        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
+        timer.pass(unit, 120_000L)                                          // no tick, screen on
+        val beaten = storedHeartbeat()
+
+        engine.evaluate(diParsData(soc = 50), null)
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        assertFalse(engineLogs().any { it.startsWith("service_start: new session reason=wake") })
+        assertEquals(e0 + 120_000L, beaten)
+        assertTrue(engineLogs().contains("service_start: heartbeat timer started period=30s"))
+        engine.stopServiceStartHeartbeat()
+    }
+
+    @Test fun `service_start heartbeat timer writes nothing with the screen dark`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        val timer = TestScope()
+        engine.startServiceStartHeartbeat(timer)
+        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
+        val heartbeat = storedHeartbeat()
+
+        unit.screenOn = false                                               // car off, no tick
+        timer.pass(unit, 120_000L)
+        assertEquals(heartbeat, storedHeartbeat())
+        unit.screenOn = true                                                // car on, a beat before the tick
+        timer.pass(unit, 30_000L)
+        assertEquals(heartbeat, storedHeartbeat())
+
+        engine.evaluate(diParsData(soc = 50), null)
+        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().contains("service_start: new session reason=wake gap=150s"))
+        engine.stopServiceStartHeartbeat()
+    }
+
+    @Test fun `service_start heartbeat timer waits for the first tick of a restarted process`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)                // car off 15 min, process killed
+        val unit = HeadUnit(e0 + 900_000L, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        val timer = TestScope()
+        engine.startServiceStartHeartbeat(timer)
+        timer.pass(unit, 60_000L)                                           // slow start, no tick yet
+        assertEquals(e0, storedHeartbeat())
+
+        engine.evaluate(diParsData(soc = 50), null)
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().contains("service_start: new session reason=wake gap=960s"))
+        engine.stopServiceStartHeartbeat()
+    }
+
+    @Test fun `service_start heartbeat timer stops on teardown`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, _) = serviceStartEngine(bootId, unit)
+        val timer = TestScope()
+        engine.startServiceStartHeartbeat(timer)
+        engine.evaluate(diParsData(soc = 50), null)
+        assertTrue(engine.serviceStartDumpLine().endsWith(" heartbeat=timer"))
+        timer.pass(unit, 30_000L)
+        assertEquals(e0 + 30_000L, storedHeartbeat())
+
+        engine.stopServiceStartHeartbeat()
+        timer.pass(unit, 120_000L)
+        assertEquals(e0 + 30_000L, storedHeartbeat())
+        assertTrue(engine.serviceStartDumpLine().endsWith(" heartbeat=none"))
     }
 }

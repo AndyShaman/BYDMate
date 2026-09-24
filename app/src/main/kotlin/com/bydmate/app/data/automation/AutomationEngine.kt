@@ -206,6 +206,15 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
      */
     fun onCarOff() = serviceStart.onCarOff(elapsedMs())
 
+    /**
+     * Starts the service_start heartbeat timer in [scope] (the service's): a lit screen keeps the
+     * session alive even while evaluate() is stalled. Stopped by [stopServiceStartHeartbeat].
+     */
+    fun startServiceStartHeartbeat(scope: CoroutineScope) =
+        serviceStart.startHeartbeat(scope, { elapsedMs() }, { interactiveProvider() })
+
+    fun stopServiceStartHeartbeat() = serviceStart.stopHeartbeat()
+
     // Called every 3s from TrackingService poll loop.
     // tripStartedAt is passed explicitly (not read from TrackingService.tripStartedAt)
     // because the latter mirrors TripTracker via an async collect, which lags by a

@@ -10,6 +10,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * The service_start window of [AutomationEngine] (#177). A new session arms it. The session
@@ -34,7 +39,13 @@ import java.util.concurrent.ConcurrentHashMap
  * the marker at once under [carOffLock]. A tick judges the marker from one snapshot taken under
  * that lock, and clears it or opens a session only if no ACC_OFF arrived since (the generation
  * check in [commitClearingCarOff]).
+ *
+ * The heartbeat of a lit screen is kept by its own timer ([startHeartbeat]) as well as by the
+ * ticks: a tick loop stalled for over a minute with the screen on (a long action holding the
+ * mutex, a slow read) must not look like a wake gap. The timer only carries a heartbeat the ticks
+ * have already decided on; a gap it did not see closing (screen dark, suspend) is left to a tick.
  */
+@Suppress("TooManyFunctions") // one state machine: the heartbeat timer shares its private state
 internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
 
     // Deadline on elapsed: 0 = never armed, -1 = closed for this session.
@@ -66,6 +77,7 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
     private val carOffLock = Any()
     private var carOffGeneration = 0L
     private var carOffPersisted = true
+    @Volatile private var heartbeatJob: Job? = null
 
     /** The car-off state a tick judges, read at once under [carOffLock]. */
     private data class CarOff(val generation: Long, val marked: Boolean, val litSince: Long?)
@@ -213,6 +225,38 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
         }
     }
 
+    /**
+     * Starts the heartbeat timer in [scope], replacing a running one: every
+     * [SERVICE_START_HEARTBEAT_MS] a lit screen refreshes the heartbeat without waiting for a tick.
+     */
+    fun startHeartbeat(scope: CoroutineScope, elapsed: () -> Long, interactive: () -> Boolean) {
+        heartbeatJob?.cancel()
+        Log.i(TAG, "service_start: heartbeat timer started period=${SERVICE_START_HEARTBEAT_MS / 1000}s")
+        heartbeatJob = scope.launch {
+            while (isActive) {
+                delay(SERVICE_START_HEARTBEAT_MS)
+                beat(elapsed(), interactive())
+            }
+        }
+    }
+
+    fun stopHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+    }
+
+    private fun beat(elapsed: Long, interactive: Boolean) {
+        // Before the first lit tick the stored heartbeat is still the evidence of a gap.
+        if (!interactive || !sessionDecided) return
+        val prev = lastTickElapsed ?: return
+        // More than the wake gap since the last lit tick or beat: the screen was dark or the
+        // system suspended, and the next tick decides on that gap.
+        if (elapsed < prev || elapsed - prev > SERVICE_START_WAKE_GAP_MS) return
+        lastTickElapsed = elapsed
+        lastHeartbeatWriteElapsed = elapsed
+        prefs().edit().putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed).apply()
+    }
+
     /** Whether a service_start trigger of [ruleId] is true on this tick. */
     fun isActive(ruleId: Long, interactive: Boolean, elapsed: Long): Boolean =
         interactive && elapsed <= windowEnd && ruleId !in consumed
@@ -262,8 +306,9 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
         val bootId = prefs.getString(KEY_SERVICE_START_BOOT_ID, null)?.takeIf { it.isNotEmpty() } ?: "-"
         val carOff = if (prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)) "pending" else "-"
         val lit = carOffLitSince?.let { "${(elapsed - it) / 1000}s" } ?: "-"
+        val timer = if (heartbeatJob?.isActive == true) "timer" else "none"
         return "service_start: interactive=$interactive window=$window consumed=${consumed.size} " +
-            "last_heartbeat_age=$age boot_id=$bootId car_off=$carOff car_off_lit=$lit"
+            "last_heartbeat_age=$age boot_id=$bootId car_off=$carOff car_off_lit=$lit heartbeat=$timer"
     }
 
     private companion object {
