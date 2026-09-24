@@ -1294,6 +1294,9 @@ class SettingsViewModelTest {
         assertTrue("no agent section, was:\n$header", header.contains("--- agent ---"))
         assertTrue("no tool line, was:\n$header", header.contains("vehicle_control:ok"))
         assertTrue("no answer line, was:\n$header", header.contains("answer: Окна закрыты"))
+        assertTrue("no voice section, was:\n$header", header.contains("--- voice ---"))
+        assertTrue("no counters, was:\n$header", header.contains("sessions=1 nlu_ok=0 automation_ok=0 agent=1 refused=0"))
+        assertTrue("no session line, was:\n$header", header.contains("route=agent heard=\"закрой окна\" cmd=- reason=- result=ok"))
     }
 
     /** #237: the backup section names the bot and the chat tail, never the token. */

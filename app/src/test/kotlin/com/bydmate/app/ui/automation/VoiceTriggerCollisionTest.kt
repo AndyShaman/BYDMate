@@ -7,12 +7,12 @@ import org.junit.Test
 
 class VoiceTriggerCollisionTest {
     @Test fun `duplicate phrase across rules is OtherRule`() {
-        val taken = setOf(VoicePhrase.normalize("навигатор"))
-        assertEquals(VoiceTriggerValidation.Collision.OtherRule,
+        val taken = mapOf(VoicePhrase.normalize("навигатор") to "Карта")
+        assertEquals(VoiceTriggerValidation.Collision.OtherRule("Карта"),
             VoiceTriggerValidation.check("Навигатор", taken))
     }
     @Test fun `unique phrase is None`() {
         assertEquals(VoiceTriggerValidation.Collision.None,
-            VoiceTriggerValidation.check("поехали", setOf(VoicePhrase.normalize("навигатор"))))
+            VoiceTriggerValidation.check("поехали", mapOf(VoicePhrase.normalize("навигатор") to "Карта")))
     }
 }

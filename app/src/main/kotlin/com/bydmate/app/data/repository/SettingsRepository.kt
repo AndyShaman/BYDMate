@@ -146,7 +146,6 @@ open class SettingsRepository @Inject constructor(
         // Voice feature keys (also mirrored into SharedPreferences("voice") for SteeringWheelKeyService)
         const val KEY_VOICE_ENABLED = "voice_enabled"
         /** "" = follow app language; "RU" or "EN" to override */
-        const val KEY_VOICE_LANG = "voice_lang"
         const val KEY_VOICE_KEYCODE = "voice_keycode"
         /** Offline TTS for agent replies; also mirrored into SharedPreferences("voice") for VoiceGate. */
         const val KEY_TTS_ENABLED = "tts_enabled"
@@ -565,12 +564,6 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setVoiceEnabled(enabled: Boolean) =
         setString(KEY_VOICE_ENABLED, enabled.toString())
-
-    suspend fun getVoiceLang(): String =
-        getString(KEY_VOICE_LANG, "")
-
-    suspend fun setVoiceLang(lang: String) =
-        setString(KEY_VOICE_LANG, lang)
 
     suspend fun getVoiceKeycode(): Int =
         getString(KEY_VOICE_KEYCODE, "").toIntOrNull() ?: 0

@@ -2081,9 +2081,9 @@ class AgentTools @Inject constructor(
         RuleDraftValidator.validateTriggers(listOf(trigger), editingId = 0L, existingRules = existing)?.let {
             val msg = when (it) {
                 TriggerValidationError.VoicePhraseEmpty -> "не указана голосовая фраза"
-                TriggerValidationError.VoicePhraseBuiltin ->
-                    "эта фраза совпадает со встроенной голосовой командой, выбери другую"
-                TriggerValidationError.VoicePhraseTaken -> "эта фраза уже используется другой автоматизацией"
+                is TriggerValidationError.VoicePhraseBuiltin ->
+                    "эта фраза уже используется встроенной командой «${it.command}», выбери другую"
+                is TriggerValidationError.VoicePhraseTaken -> "эта фраза уже используется автоматизацией «${it.rule}»"
             }
             return JSONObject().put("error", msg).toString()
         }

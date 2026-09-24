@@ -8,7 +8,6 @@ import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.VoiceFireResult
 import com.bydmate.app.R
-import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.util.AppStrings
@@ -39,7 +38,6 @@ import javax.inject.Singleton
 class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     private val audioCapture: AudioCapture,
     private val actionDispatcher: ActionDispatcher,
-    private val localePreferences: LocalePreferences,
     private val earcon: VoiceEarcon,
     private val gate: VoiceGate,
     private val automationEngine: AutomationEngine,
@@ -55,6 +53,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     private val selectedTtsVoice: () -> TtsVoice,
     private val appStrings: AppStrings,
     private val echoFilter: SelfEchoFilter = SelfEchoFilter(),
+    private val userPhrases: VoiceUserPhrases = VoiceUserPhrases(),
 ) {
     // Process-lifetime scope (@Singleton): intentionally never cancelled.
     private val scope = CoroutineScope(SupervisorJob())
@@ -74,6 +73,12 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     // observable signal that the sequential collect consumed a dropped utterance; this counter
     // is that signal. @Volatile: written by the collect coroutine, read from the test thread.
     @Volatile private var droppedWhileBusy = 0
+
+    /** The utterance being routed: when routing started (dispatch latency in the journal) and,
+     *  once no local resolver claimed it, why it went to the agent. Routing is sequential (one
+     *  routingJob at a time), so a single slot is enough. */
+    private data class Turn(val startedAtMs: Long = 0L, val agentReason: String? = null)
+    @Volatile private var turn = Turn()
 
     /**
      * Returns true when any voice session is active: the continuous GigaAM session (sets both
@@ -172,38 +177,17 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         scheduleClear(overlay, didSpeak)
     }
 
-    /** Records one journal entry + a matching logcat line for a terminal voice-session outcome.
-     *  The Chinese command string (if any) belongs only in [logMsg], never in [detail] or
-     *  [VoiceJournalEntry.transcript] — those stay user-displayable for the debug journal screen. */
-    private fun record(
-        route: VoiceJournalEntry.Route,
-        transcript: String,
-        detail: String,
-        outcome: VoiceJournalEntry.Outcome,
-        reason: String? = null,
-        logMsg: String,
-        tools: List<com.bydmate.app.agent.AgentToolOutcome> = emptyList(),
-        answer: String? = null,
-    ) {
-        journal.add(
-            VoiceJournalEntry(
-                timestampMs = System.currentTimeMillis(),
-                transcript = transcript,
-                route = route,
-                detail = detail,
-                outcome = outcome,
-                reason = reason,
-                tools = tools,
-                answer = answer,
-            )
-        )
+    /** Records one journal entry + matching logcat lines for a terminal voice-session outcome.
+     *  The Chinese command string (if any) belongs only in [logMsg], never in the entry — its
+     *  fields stay user-displayable for the debug journal screen. An entry with [asrMs] belongs
+     *  to a routed utterance and gets its dispatch latency stamped here. */
+    private fun record(entry: VoiceJournalEntry, logMsg: String) {
+        val startedAt = turn.startedAtMs
+        val e = if (entry.asrMs != null && startedAt > 0L) entry.copy(dispatchMs = entry.timestampMs - startedAt) else entry
+        journal.add(e)
+        Log.i(TAG, "heard=\"${e.transcript}\" route=${e.route.code} cmd=${e.command ?: "-"} reason=${e.refusal ?: "-"}")
         Log.i(TAG, logMsg)
     }
-
-    // Fix D: prefer the Settings language override (via gate); fall back to app locale.
-    fun currentLang(): VoiceLang =
-        gate.preferredLang()
-            ?: if ((localePreferences.getLanguage() ?: "ru") == "en") VoiceLang.EN else VoiceLang.RU
 
     /** Supertonic voices need a side-loaded dictionary for uppercase stress marking. This runs
      *  out-of-band so a missing network/dict never blocks recognition; [TtsModelManager] itself
@@ -217,42 +201,32 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     }
 
     /** PTT toggle (Wave B): no session running -> start one (continuous GigaAM session when the
-     *  model is ready and the language is RU, else the GigaAM model is missing or the language is
-     *  non-RU (GigaAM does not support it) -> report the specific cause without starting a
-     *  session (#87): "model missing" when GigaAM isn't downloaded, "language not RU" when it
-     *  is; a continuous session already listening -> stop it immediately (barge-in stops TTS
-     *  too). */
+     *  model is ready, whatever the app language: voice is always Russian), else report the
+     *  missing model without starting a session (#87); a continuous session already listening
+     *  -> stop it immediately (barge-in stops TTS too). */
     fun onPttPressed() {
         if (!gate.isEnabled()) return
         if (_listening.value) {
             stopContinuousSession()
             return
         }
-        if (continuousAsr.isReady() && currentLang() == VoiceLang.RU) {
+        if (continuousAsr.isReady()) {
             startContinuousSession()
         } else {
-            // GigaAM model missing (or non-RU language, which GigaAM does not support):
-            // preserve the degraded UX the legacy path produced — overlay + journal ERROR.
+            // GigaAM model missing: preserve the degraded UX the legacy path produced —
+            // overlay + journal ERROR.
             if (!busy.compareAndSet(false, true)) return
             // A prior continuous-session hard stop (stopContinuousSession()) leaves stopRequested
             // set; only startContinuousSession() used to clear it. Without this reset, announce()
             // below would silently suppress this branch's overlay+speech forever for a user who
             // can never start a continuous session again to reset the flag (I-1).
             stopRequested.set(false)
-            // Two distinct causes share this branch (#87): the GigaAM model genuinely
-            // missing vs. a non-RU voice language (GigaAM is Russian-only) — the old
-            // single "model not loaded" text sent EN-locale users chasing a phantom
-            // download problem.
-            val langBlocked = continuousAsr.isReady() && currentLang() != VoiceLang.RU
-            val msg = appStrings.get(
-                if (langBlocked) R.string.voice_error_lang_not_ru
-                else R.string.voice_error_model_missing
-            )
+            val msg = appStrings.get(R.string.voice_error_model_missing)
             _state.value = VoiceUiState.NotUnderstood("")
             record(
-                VoiceJournalEntry.Route.NONE, "", "", VoiceJournalEntry.Outcome.ERROR,
-                msg,
-                "GigaAM ${if (langBlocked) "lang not supported" else "model not ready"} lang=${currentLang()}"
+                VoiceJournalEntry(transcript = "", route = VoiceJournalEntry.Route.REFUSED, detail = "",
+                    outcome = VoiceJournalEntry.Outcome.ERROR, reason = msg, refusal = VoiceRefusal.MODEL_MISSING),
+                "GigaAM model not ready"
             )
             busy.set(false)
             scheduleIdleReset()
@@ -333,8 +307,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                                         earcon.ok()
                                         _state.value = VoiceUiState.Listening
                                         runCatching { updateListeningOverlay(appStrings.get(R.string.voice_listening)) }
-                                        record(VoiceJournalEntry.Route.NONE, ev.text, "Прерван по имени",
-                                            VoiceJournalEntry.Outcome.OK, null, "Barge-in by name")
+                                        record(VoiceJournalEntry(transcript = ev.text, route = VoiceJournalEntry.Route.AGENT,
+                                            detail = "Прерван по имени", outcome = VoiceJournalEntry.Outcome.OK,
+                                            refusal = VoiceRefusal.BARGE_IN), "Barge-in by name")
                                     } ?: Log.i(TAG, "Barge-in by name ignored: no cancellable ask")
                                     return@collect
                                 }
@@ -354,7 +329,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                                     if (t is CancellationException) throw t
                                     earcon.fail()
                                     _state.value = VoiceUiState.NotUnderstood(ev.text)
-                                    record(VoiceJournalEntry.Route.NONE, ev.text, withDecodeMs(ev.text, decodeMs), VoiceJournalEntry.Outcome.ERROR, null,
+                                    record(VoiceJournalEntry(transcript = ev.text, route = VoiceJournalEntry.Route.REFUSED,
+                                        detail = withDecodeMs(ev.text, decodeMs), outcome = VoiceJournalEntry.Outcome.ERROR,
+                                        reason = t.message, refusal = VoiceRefusal.INTERNAL_ERROR, asrMs = decodeMs),
                                         "Continuous session utterance failed: decodeMs=$decodeMs ${t.message}")
                                     announce("Голос", "Отказ: ${t.message ?: "внутренняя ошибка"}", "Ошибка")
                                 } finally {
@@ -380,7 +357,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 // (caught above, session stays open), this tears the whole session down.
                 if (t is CancellationException) throw t
                 Log.w(TAG, "Continuous session failed: ${t.message}")
-                record(VoiceJournalEntry.Route.NONE, "", "", VoiceJournalEntry.Outcome.ERROR, null,
+                record(VoiceJournalEntry(transcript = "", route = VoiceJournalEntry.Route.REFUSED, detail = "",
+                    outcome = VoiceJournalEntry.Outcome.ERROR, reason = t.message, refusal = VoiceRefusal.ASR_FAILED),
                     "Continuous session failed: ${t.message}")
                 announce("Голос", "Отказ: ${t.message ?: "внутренняя ошибка"}", "Ошибка")
             } finally {
@@ -429,6 +407,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     private suspend fun routeUtterance(transcript: String, decodeMs: Long) {
         // Orb dialog: show "Ты: <phrase>" (clearing any prior answer) and cancel a pending clear so a
         // fresh turn keeps the block visible. The pill has already flipped to "Думаю" at the call site.
+        turn = Turn(startedAtMs = System.currentTimeMillis())
         showHeardHook(transcript)
         val command = AgentNameMatcher.stripLeadingName(transcript, agentIdentity().name)
         cancelScheduledClear()
@@ -439,18 +418,24 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // A silent drop: no earcon, no state change, no spoken "Не понял" -- speaking that phrase
         // would itself be noteSpoken'd and risk being echo-caught again, looping the agent's own voice.
         if (transcript == command && echoFilter.isEcho(transcript)) {
-            record(VoiceJournalEntry.Route.NONE, transcript, withDecodeMs(transcript, decodeMs),
-                VoiceJournalEntry.Outcome.NOT_UNDERSTOOD, "Эхо своей речи",
+            record(VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.REFUSED,
+                detail = withDecodeMs(transcript, decodeMs), outcome = VoiceJournalEntry.Outcome.NOT_UNDERSTOOD,
+                reason = "Эхо своей речи", refusal = VoiceRefusal.ECHO, asrMs = decodeMs),
                 "Echo filtered: transcript=\"$transcript\"")
             return
         }
 
-        // An unanswered clarifying question from the agent outranks NLU: the phrase
-        // is the ANSWER ("водителя", "назови её Дом") and must reach ask() verbatim.
+        // An unanswered clarifying question from the agent outranks every local resolver: the
+        // phrase is the ANSWER ("водителя", "назови её Дом") and must reach ask() verbatim.
         val followUp = runCatching { agentOrchestrator.expectsFollowUp() }.getOrDefault(false)
-        val res = if (followUp) null else resolve(command, currentLang())
+        val res = if (followUp) Resolution.None(VoiceRefusal.AGENT_FOLLOWUP_WINDOW) else resolve(command)
         _state.value = VoiceUiState.Thinking
-        if (res != null) apply(res, command, decodeMs) else agentFallback(command, decodeMs)
+        if (res is Resolution.None) {
+            turn = turn.copy(agentReason = res.reason)
+            agentFallback(command, decodeMs)
+        } else {
+            apply(res, command, decodeMs)
+        }
     }
 
     /** Appends the continuous-session decode latency to a journal detail string; a no-op
@@ -459,25 +444,34 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     private fun withDecodeMs(text: String, decodeMs: Long?): String =
         if (decodeMs != null) "$text decodeMs=$decodeMs" else text
 
-    /** Side-effect-free resolution of a transcript to an actionable command (built-in catalog first,
-     *  then user automations). Returns null when nothing matches — used both for early-fire probing
-     *  of partials and for routing the final. */
-    private suspend fun resolve(text: String, lang: VoiceLang): Resolution? =
-        when (val r = NluParser.parse(text, lang)) {
-            is ParseResult.Command -> Resolution.Cmd(r.commands)
-            is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
-            is ParseResult.Volume -> Resolution.Vol(r.payload)
-            ParseResult.Unrecognized -> automationResolver.match(text)?.let { Resolution.Auto(it) }
+    /** Side-effect-free resolution of a transcript to an actionable command. Precedence: user
+     *  automations (their phrase anywhere in the utterance, longest wins) > the user's own phrases
+     *  for built-in commands > the built-in NluParser > the agent (Resolution.None); the agent
+     *  follow-up window, checked by the caller, outranks all of them. User-made phrases go first
+     *  so a user can take over a phrase the parser gets wrong. */
+    private suspend fun resolve(text: String): Resolution {
+        automationResolver.match(text)?.let { return Resolution.Auto(it) }
+        userPhrases.match(text)?.let { return Resolution.Cmd(listOf(it.command), "phrase:${it.id}") }
+        return when (val o = NluOutcome.of(NluParser.parse(text, VoiceLang.RU))) {
+            is NluOutcome.Refused -> Resolution.None(o.reason)
+            is NluOutcome.Understood -> when (val r = o.result) {
+                is ParseResult.Command -> Resolution.Cmd(r.commands, VoiceCommandLabels.of(r.commands))
+                is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
+                is ParseResult.Volume -> Resolution.Vol(r.payload)
+                ParseResult.Unrecognized -> Resolution.None(VoiceRefusal.UNRECOGNIZED)
+            }
         }
+    }
 
     /** Execute a resolved command and set the terminal voice UI state. decodeMs is null for the
      *  legacy one-shot path (no per-utterance decode timing there). */
     private suspend fun apply(res: Resolution, transcript: String, decodeMs: Long? = null) {
         when (res) {
-            is Resolution.Cmd -> execute(res.commands, transcript, decodeMs)
+            is Resolution.Cmd -> execute(res.commands, transcript, decodeMs, res.label)
             is Resolution.RelTemp -> dispatchRelativeTemp(res.sign, transcript, decodeMs)
             is Resolution.Vol -> dispatchVolume(res.payload, transcript, decodeMs)
-            is Resolution.Auto -> fireAutomation(res.ruleId, transcript, decodeMs)
+            is Resolution.Auto -> fireAutomation(res.match, transcript, decodeMs)
+            is Resolution.None -> agentFallback(transcript, decodeMs)
         }
     }
 
@@ -521,7 +515,12 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         clearJob?.cancel()
     }
 
-    private suspend fun execute(commands: List<String>, transcript: String, decodeMs: Long? = null) {
+    private suspend fun execute(
+        commands: List<String>,
+        transcript: String,
+        decodeMs: Long? = null,
+        label: String = VoiceCommandLabels.of(commands),
+    ) {
         val snapshot = gate.vehicleSnapshot()
         val cmdLog = commands.joinToString("+")
         // Fail CLOSED on unknown speed for window- and sunroof-open commands (both speed-gated
@@ -535,8 +534,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             earcon.fail()
             val reason = ActionDispatcher.BlockReason.SpeedUnknown.toText(context)
             _state.value = VoiceUiState.Blocked(reason)
-            record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
-                "NLU blocked (speed unknown): cmd=$cmdLog transcript=\"$transcript\"")
+            record(nluEntry(transcript, decodeMs, label, VoiceJournalEntry.Outcome.BLOCKED)
+                .copy(reason = reason, refusal = VoiceRefusal.gate("speed_unknown")), "NLU blocked (speed unknown): cmd=$cmdLog transcript=\"$transcript\"")
             announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
             return
         }
@@ -560,7 +559,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         if (failReason == null) {
             earcon.ok()
             _state.value = VoiceUiState.Done(transcript)
-            record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.OK, null,
+            record(nluEntry(transcript, decodeMs, label, VoiceJournalEntry.Outcome.OK),
                 "NLU dispatched: cmd=$cmdLog transcript=\"$transcript\"")
             announce("Голос", "Услышал: «$transcript». Выполнено", "Готово")
             // Fire-and-forget: the note must never make the voice announce path wait on the
@@ -569,8 +568,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         } else {
             earcon.fail()
             _state.value = VoiceUiState.Blocked(failReason)
-            record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, failReason,
-                "NLU blocked: cmd=$cmdLog transcript=\"$transcript\" reason=$failReason")
+            record(nluEntry(transcript, decodeMs, label, VoiceJournalEntry.Outcome.BLOCKED)
+                .copy(reason = failReason, refusal = VoiceRefusal.DISPATCH_FAILED), "NLU blocked: cmd=$cmdLog transcript=\"$transcript\" reason=$failReason")
             announce("Голос", "Услышал: «$transcript». Отказ: $failReason", "Не получилось")
         }
     }
@@ -583,8 +582,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             earcon.fail()
             val reason = "Не знаю текущую температуру"
             _state.value = VoiceUiState.Blocked(reason)
-            record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
-                "NLU blocked (acTemp unknown): transcript=\"$transcript\"")
+            record(nluEntry(transcript, decodeMs, "ac_temp_step=$sign", VoiceJournalEntry.Outcome.BLOCKED)
+                .copy(reason = reason, refusal = VoiceRefusal.gate("ac_temp_unknown")), "NLU blocked (acTemp unknown): transcript=\"$transcript\"")
             announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
             return
         }
@@ -602,7 +601,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         if (result.success) {
             earcon.ok()
             _state.value = VoiceUiState.Done(transcript)
-            record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.OK, null,
+            record(nluEntry(transcript, decodeMs, "media_volume=$payload", VoiceJournalEntry.Outcome.OK),
                 "NLU dispatched: cmd=media_volume payload=$payload transcript=\"$transcript\"")
             announce("Голос", "Услышал: «$transcript». Выполнено", "Готово")
             scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
@@ -610,13 +609,18 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             val reason = result.reason ?: transcript
             earcon.fail()
             _state.value = VoiceUiState.Blocked(reason)
-            record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
-                "NLU blocked: cmd=media_volume payload=$payload transcript=\"$transcript\" reason=$reason")
+            record(nluEntry(transcript, decodeMs, "media_volume=$payload", VoiceJournalEntry.Outcome.BLOCKED)
+                .copy(reason = reason, refusal = VoiceRefusal.DISPATCH_FAILED), "NLU blocked: cmd=media_volume payload=$payload transcript=\"$transcript\" reason=$reason")
             announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
         }
     }
 
-    private suspend fun fireAutomation(ruleId: Long, transcript: String, decodeMs: Long? = null) {
+    private suspend fun fireAutomation(match: VoiceAutomationMatch, transcript: String, decodeMs: Long? = null) {
+        val ruleId = match.ruleId
+        fun entry(outcome: VoiceJournalEntry.Outcome, reason: String? = null, refusal: String? = null) =
+            VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.AUTOMATION,
+                detail = withDecodeMs(transcript, decodeMs), outcome = outcome, reason = reason,
+                command = match.ruleName, refusal = refusal, asrMs = decodeMs)
         when (val r = automationEngine.fireVoiceRule(ruleId, gate.vehicleSnapshot())) {
             is VoiceFireResult.Fired ->
                 if (r.success) {
@@ -624,19 +628,19 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                     // scope, not that they already finished (they may still contain a delay);
                     // say "Выполняю", not "Выполнено".
                     earcon.ok(); _state.value = VoiceUiState.Done(transcript)
-                    record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.OK, null,
+                    record(entry(VoiceJournalEntry.Outcome.OK),
                         "NLU automation fired: ruleId=$ruleId transcript=\"$transcript\"")
                     announce("Голос", "Услышал: «$transcript». Выполняю", "Выполняю")
                     scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
                 } else {
                     earcon.fail(); _state.value = VoiceUiState.Blocked(transcript)
-                    record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, transcript,
+                    record(entry(VoiceJournalEntry.Outcome.BLOCKED, transcript, VoiceRefusal.DISPATCH_FAILED),
                         "NLU automation fire failed: ruleId=$ruleId transcript=\"$transcript\"")
                     announce("Голос", "Услышал: «$transcript». Отказ: $transcript", "Не получилось")
                 }
             VoiceFireResult.Confirming -> {
                 earcon.ok(); _state.value = VoiceUiState.Done(transcript)
-                record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.OK, null,
+                record(entry(VoiceJournalEntry.Outcome.OK),
                     "NLU automation confirming: ruleId=$ruleId transcript=\"$transcript\"")
                 announce("Голос", "Услышал: «$transcript». Выполнено", "Готово")
                 scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
@@ -646,20 +650,20 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 // context follows the head unit's system locale, not the app language (#162).
                 val reason = context.appLocalizedContext().getString(R.string.voice_block_park_required)
                 earcon.fail(); _state.value = VoiceUiState.Blocked(reason)
-                record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
+                record(entry(VoiceJournalEntry.Outcome.BLOCKED, reason, VoiceRefusal.gate("park_required")),
                     "NLU automation blocked (park required): ruleId=$ruleId transcript=\"$transcript\"")
                 announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
             }
             VoiceFireResult.SpeedUnknown -> {
                 val reason = ActionDispatcher.BlockReason.SpeedUnknown.toText(context)
                 earcon.fail(); _state.value = VoiceUiState.Blocked(reason)
-                record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
+                record(entry(VoiceJournalEntry.Outcome.BLOCKED, reason, VoiceRefusal.gate("speed_unknown")),
                     "NLU automation blocked (speed unknown): ruleId=$ruleId transcript=\"$transcript\"")
                 announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
             }
             VoiceFireResult.NotFound -> {
                 earcon.fail(); _state.value = VoiceUiState.NotUnderstood(transcript)
-                record(VoiceJournalEntry.Route.NONE, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.NOT_UNDERSTOOD, null,
+                record(entry(VoiceJournalEntry.Outcome.NOT_UNDERSTOOD, refusal = VoiceRefusal.RULE_NOT_FOUND),
                     "NLU automation rule not found: ruleId=$ruleId transcript=\"$transcript\"")
                 if (transcript.isNotBlank()) {
                     announce("Голос", "Не понял: «$transcript»", "Не понял")
@@ -672,11 +676,14 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  unconfigured-off agent degrades to the pre-agent NotUnderstood behaviour. The agent's
      *  own tools re-check every dispatcher safety gate — nothing here bypasses them. */
     private suspend fun agentFallback(transcript: String, decodeMs: Long? = null) {
+        // Why no local resolver took the phrase: the agent entries below carry it.
+        val why = turn.agentReason ?: VoiceRefusal.UNRECOGNIZED
         if (transcript.isBlank()) {
             earcon.fail()
             _state.value = VoiceUiState.NotUnderstood(transcript)
-            record(VoiceJournalEntry.Route.NONE, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.NOT_UNDERSTOOD, null,
-                "Agent skipped: blank transcript")
+            record(VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.REFUSED,
+                detail = withDecodeMs(transcript, decodeMs), outcome = VoiceJournalEntry.Outcome.NOT_UNDERSTOOD,
+                refusal = VoiceRefusal.ASR_EMPTY, asrMs = decodeMs), "Agent skipped: blank transcript")
             announce("Голос", "Не понял", "Не понял")
             return
         }
@@ -721,16 +728,18 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             // that will never finish. Drop it so the driver is not left reading a stub while
             // the orb is already listening again.
             runCatching { clearDialogHook() }
-            record(VoiceJournalEntry.Route.AGENT, transcript, withDecodeMs(transcript, decodeMs),
-                VoiceJournalEntry.Outcome.ERROR, null, "Agent ask cancelled by name barge-in")
+            record(VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.AGENT,
+                detail = withDecodeMs(transcript, decodeMs), outcome = VoiceJournalEntry.Outcome.ERROR,
+                refusal = VoiceRefusal.BARGE_IN, asrMs = decodeMs), "Agent ask cancelled by name barge-in")
             return
         }
         // Hard stop gate: if the orb went off between ask.join() returning and this point,
         // the answer must not resurrect state, TTS, or the orb dialog (the path below has
         // no suspension point that would deliver the cancellation).
         if (stopRequested.get()) {
-            record(VoiceJournalEntry.Route.AGENT, transcript, withDecodeMs(transcript, decodeMs),
-                VoiceJournalEntry.Outcome.ERROR, null, "Agent answer suppressed: hard stop")
+            record(VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.AGENT,
+                detail = withDecodeMs(transcript, decodeMs), outcome = VoiceJournalEntry.Outcome.ERROR,
+                refusal = VoiceRefusal.HARD_STOP, asrMs = decodeMs), "Agent answer suppressed: hard stop")
             return
         }
         when (result) {
@@ -747,9 +756,10 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 // driver sees WHICH tools ran and whether each succeeded (no emoji — DiLink).
                 val toolsNote = if (result.tools.isEmpty()) "" else
                     " [инструменты: " + result.tools.joinToString(", ") { "${it.name}:${if (it.ok) "ok" else "err"}" } + "]"
-                record(VoiceJournalEntry.Route.AGENT, transcript, withDecodeMs(result.text + toolsNote, decodeMs), VoiceJournalEntry.Outcome.OK, null,
-                    "Agent answered: transcript=\"$transcript\" tools=${result.tools.size}",
-                    tools = result.tools, answer = result.text)
+                record(VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.AGENT,
+                    detail = withDecodeMs(result.text + toolsNote, decodeMs), outcome = VoiceJournalEntry.Outcome.OK,
+                    tools = result.tools, answer = result.text, refusal = why, asrMs = decodeMs),
+                    "Agent answered: transcript=\"$transcript\" tools=${result.tools.size}")
                 var didSpeak = queuedAny
                 if (!queuedAny && gate.ttsEnabled()) {
                     // See announce() for why this is stamped at call time, not only per-frame,
@@ -786,13 +796,16 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             }
             AgentResult.Disabled -> {
                 earcon.fail(); _state.value = VoiceUiState.NotUnderstood(transcript)
-                record(VoiceJournalEntry.Route.NONE, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.NOT_UNDERSTOOD, null,
-                    "Agent disabled: transcript=\"$transcript\"")
+                record(VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.REFUSED,
+                    detail = withDecodeMs(transcript, decodeMs), outcome = VoiceJournalEntry.Outcome.NOT_UNDERSTOOD,
+                    refusal = why, asrMs = decodeMs), "Agent disabled: transcript=\"$transcript\"")
                 announce("Голос", "Не понял: «$transcript»", "Не понял")
             }
             is AgentResult.Error -> {
                 earcon.fail(); _state.value = VoiceUiState.Blocked(result.message)
-                record(VoiceJournalEntry.Route.AGENT, transcript, withDecodeMs(result.message, decodeMs), VoiceJournalEntry.Outcome.ERROR, result.message,
+                record(VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.AGENT,
+                    detail = withDecodeMs(result.message, decodeMs), outcome = VoiceJournalEntry.Outcome.ERROR,
+                    reason = result.message, refusal = why, asrMs = decodeMs),
                     "Agent error: ${result.message} transcript=\"$transcript\"")
                 announce("Голос", "Услышал: «$transcript». Отказ: ${result.message}", "Не получилось")
             }
@@ -802,11 +815,19 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     /** A resolved, actionable command. Decoupled from ParseResult/automation so a transcript can be
      *  resolved once (side-effect-free) and applied later — the basis of early-fire vs final routing. */
     private sealed interface Resolution {
-        data class Cmd(val commands: List<String>) : Resolution
+        /** [label] is the readable command for the journal ("phrase:<id>" for a user phrase). */
+        data class Cmd(val commands: List<String>, val label: String) : Resolution
         data class RelTemp(val sign: Int) : Resolution
         data class Vol(val payload: String) : Resolution
-        data class Auto(val ruleId: Long) : Resolution
+        data class Auto(val match: VoiceAutomationMatch) : Resolution
+        /** Nothing local claimed the phrase: it goes to the agent; [reason] is a VoiceRefusal code. */
+        data class None(val reason: String) : Resolution
     }
+
+    /** Journal entry of a built-in command (parser or user phrase) outcome. */
+    private fun nluEntry(transcript: String, decodeMs: Long?, command: String, outcome: VoiceJournalEntry.Outcome) =
+        VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.NLU,
+            detail = withDecodeMs(transcript, decodeMs), outcome = outcome, command = command, asrMs = decodeMs)
 
     companion object {
         private const val TAG = "VoiceController"

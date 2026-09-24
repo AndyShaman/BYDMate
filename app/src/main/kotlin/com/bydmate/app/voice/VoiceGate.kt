@@ -14,14 +14,6 @@ interface VoiceGate {
      *  Default null keeps plain fakes honest: "unknown" rather than "fresh". */
     fun snapshotAgeMs(): Long? = null
 
-    /**
-     * Override language selected in Settings ("RU" or "EN"), or null to
-     * follow the app locale. Read from SharedPreferences("voice") so
-     * SteeringWheelKeyService and VoiceController can access it without
-     * querying Room on a background thread.
-     */
-    fun preferredLang(): VoiceLang?
-
     /** True when the user enabled spoken agent answers (Settings mirror). */
     fun ttsEnabled(): Boolean
 }

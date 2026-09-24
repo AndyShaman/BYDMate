@@ -21,10 +21,31 @@ class VoiceAutomationResolverTest {
         return VoiceAutomationResolver(dao)
     }
 
-    @Test fun `match returns rule id on normalized equality`() = runBlocking {
-        assertEquals(1L, resolver(listOf(voiceRule(1, "навигатор"))).match("Навигатор"))
+    @Test fun `match returns the rule on normalized equality`() = runBlocking {
+        assertEquals(VoiceAutomationMatch(1L, "r1"), resolver(listOf(voiceRule(1, "навигатор"))).match("Навигатор"))
     }
+
     @Test fun `match returns null when nothing matches`() = runBlocking {
         assertNull(resolver(listOf(voiceRule(1, "навигатор"))).match("музыка"))
+    }
+
+    @Test fun `phrase contained in the utterance matches, fillers and yo ignored`() = runBlocking {
+        val r = resolver(listOf(voiceRule(1, "режим ёлка")))
+        assertEquals(1L, r.match("Эй, включи мне режим елка, пожалуйста!")?.ruleId)
+    }
+
+    @Test fun `no partial-word match`() = runBlocking {
+        assertNull(resolver(listOf(voiceRule(1, "окно"))).match("окновать"))
+    }
+
+    @Test fun `longest contained phrase wins`() = runBlocking {
+        val r = resolver(listOf(voiceRule(1, "окна"), voiceRule(2, "окна дома")))
+        assertEquals(2L, r.match("открой окна дома")?.ruleId)
+        assertEquals(1L, r.match("открой окна")?.ruleId)
+    }
+
+    @Test fun `on a tie the first rule wins`() = runBlocking {
+        val r = resolver(listOf(voiceRule(1, "сцена"), voiceRule(2, "сцена")))
+        assertEquals(1L, r.match("сцена")?.ruleId)
     }
 }

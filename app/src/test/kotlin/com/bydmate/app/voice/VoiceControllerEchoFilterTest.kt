@@ -6,7 +6,6 @@ import com.bydmate.app.agent.AgentResult
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
-import com.bydmate.app.data.local.LocalePreferences
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.every
@@ -66,14 +65,11 @@ class VoiceControllerEchoFilterTest {
         val gate = mockk<VoiceGate>()
         every { gate.isEnabled() } returns true
         every { gate.vehicleSnapshot() } returns null
-        every { gate.preferredLang() } returns null
         every { gate.ttsEnabled() } returns ttsEnabled
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { }
 
-        val localePrefs = mockk<LocalePreferences>(relaxed = true)
-        every { localePrefs.getLanguage() } returns "ru"
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>(relaxed = true)
         coEvery { automationResolver.match(any()) } returns null
@@ -82,7 +78,7 @@ class VoiceControllerEchoFilterTest {
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
         return VoiceController(
-            audioCapture, dispatcher, localePrefs, earcon, gate,
+            audioCapture, dispatcher, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator,
             mockk<Context>(relaxed = true), ttsEngine, journal,
             continuousAsr,
@@ -129,11 +125,12 @@ class VoiceControllerEchoFilterTest {
         // Wait for the echo check to complete.
         awaitTrue { journal.entries.value.isNotEmpty() }
 
-        // The transcript should be journaled as an echo with route=NONE, outcome=NOT_UNDERSTOOD.
+        // The transcript should be journaled as an echo with route=REFUSED, outcome=NOT_UNDERSTOOD.
         val entries = journal.entries.value
         assertEquals("Journal should have exactly 1 entry", 1, entries.size)
         val entry = entries[0]
-        assertEquals("Route should be NONE", VoiceJournalEntry.Route.NONE, entry.route)
+        assertEquals("Route should be REFUSED", VoiceJournalEntry.Route.REFUSED, entry.route)
+        assertEquals(VoiceRefusal.ECHO, entry.refusal)
         assertEquals("Outcome should be NOT_UNDERSTOOD", VoiceJournalEntry.Outcome.NOT_UNDERSTOOD, entry.outcome)
         assertEquals("Reason should be 'Эхо своей речи'", "Эхо своей речи", entry.reason)
         assertEquals("Transcript should be preserved", "открой окно", entry.transcript)
@@ -237,6 +234,6 @@ class VoiceControllerEchoFilterTest {
         val entries = journal.entries.value
         assertEquals("Journal should have 1 entry", 1, entries.size)
         val entry = entries[0]
-        assertEquals("Route should be NLU (not NONE)", VoiceJournalEntry.Route.NLU, entry.route)
+        assertEquals("Route should be NLU (not REFUSED)", VoiceJournalEntry.Route.NLU, entry.route)
     }
 }

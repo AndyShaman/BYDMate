@@ -209,16 +209,25 @@ class RuleDraftValidatorTest {
         assertEquals(TriggerValidationError.VoicePhraseEmpty, RuleDraftValidator.validateTriggers(triggers, -1L, emptyList()))
     }
 
-    @Test fun builtin_voice_phrase_is_invalid() {
-        // "открой окна" -> NluParser -> OPEN+WINDOW_ALL -> built-in command (see VoiceTriggerValidationTest).
+    @Test fun phrase_the_builtin_parser_understands_is_valid() {
+        // Automations resolve before built-in commands, so the rule takes the phrase over.
         val triggers = listOf(TriggerDef(param = "Voice", chineseName = "语音", operator = "==", value = "открой окна", displayName = "x", kind = "voice"))
-        assertEquals(TriggerValidationError.VoicePhraseBuiltin, RuleDraftValidator.validateTriggers(triggers, -1L, emptyList()))
+        assertNull(RuleDraftValidator.validateTriggers(triggers, -1L, emptyList()))
     }
 
-    @Test fun voice_phrase_taken_by_other_rule_is_invalid() {
+    @Test fun user_phrase_of_a_builtin_command_is_invalid_and_names_the_command() {
+        val triggers = listOf(TriggerDef(param = "Voice", chineseName = "语音", operator = "==", value = "Проветрить!", displayName = "x", kind = "voice"))
+        val userPhrases = mapOf(com.bydmate.app.voice.VoicePhrase.normalize("проветрить") to "все окна на проветривание")
+        assertEquals(
+            TriggerValidationError.VoicePhraseBuiltin("все окна на проветривание"),
+            RuleDraftValidator.validateTriggers(triggers, -1L, emptyList(), userPhrases),
+        )
+    }
+
+    @Test fun voice_phrase_taken_by_other_rule_is_invalid_and_names_the_rule() {
         val triggers = listOf(TriggerDef(param = "Voice", chineseName = "语音", operator = "==", value = "навигатор", displayName = "x", kind = "voice"))
         val existing = listOf(ruleWithVoice(id = 2, phrase = "навигатор"))
-        assertEquals(TriggerValidationError.VoicePhraseTaken, RuleDraftValidator.validateTriggers(triggers, -1L, existing))
+        assertEquals(TriggerValidationError.VoicePhraseTaken("r2"), RuleDraftValidator.validateTriggers(triggers, -1L, existing))
     }
 
     @Test fun voice_phrase_taken_by_the_rule_being_edited_is_not_a_collision() {

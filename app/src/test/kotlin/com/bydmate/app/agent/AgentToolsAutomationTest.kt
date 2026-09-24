@@ -463,11 +463,13 @@ class AgentToolsAutomationTest {
         assertTrue(out.has("error"))
     }
 
-    @Test fun `voice trigger colliding with builtin command is rejected`() = runTest {
+    // Automations resolve before built-in commands, so a built-in phrase is taken over, not refused.
+    @Test fun `voice trigger with a builtin command phrase is accepted`() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
+        coEvery { ruleDao.insert(any()) } returns 1L
         val out = JSONObject(tools().execute(call("create_automation",
             createArgs(trigger = """{"kind":"voice","phrase":"открой окна"}"""))))
-        assertTrue(out.getString("error").contains("встроенн"))
+        assertTrue(out.toString(), out.getBoolean("ok"))
     }
 
     @Test fun `voice trigger taken by another rule is rejected`() = runTest {

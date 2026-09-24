@@ -87,6 +87,7 @@ import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.VoiceController
 import com.bydmate.app.voice.VoiceJournal
+import com.bydmate.app.voice.VoiceJournalDump
 import com.bydmate.app.voice.RuStressMarker
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsModelManager
@@ -229,8 +230,6 @@ data class SettingsUiState(
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
     // Voice settings
     val voiceEnabled: Boolean = false,
-    /** "RU", "EN", or "" (follow app language) */
-    val voiceLang: String = "",
     val voiceKeycode: Int = 0,
     // TTS settings (offline synthesis of agent replies)
     val ttsEnabled: Boolean = false,
@@ -525,7 +524,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
             // Voice settings
             val voiceEnabled = settingsRepository.isVoiceEnabled()
-            val voiceLang = settingsRepository.getVoiceLang()
             val voiceKeycode = settingsRepository.getVoiceKeycode().let {
                 if (it == 0) DEFAULT_VOICE_KEYCODE else it
             }
@@ -612,7 +610,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     mapTileSource = mapTileSource,
                     disableNativeAssistant = disableNativeAssistant,
                     voiceEnabled = voiceEnabled,
-                    voiceLang = voiceLang,
                     voiceKeycode = voiceKeycode,
                     ttsEnabled = ttsEnabled,
                     ttsVoice = ttsVoice,
@@ -1269,17 +1266,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         }
     }
 
-    fun setVoiceLanguage(lang: String) {
-        _uiState.update { it.copy(voiceLang = lang) }
-        viewModelScope.launch {
-            settingsRepository.setVoiceLang(lang)
-            // Mirror into SharedPreferences("voice") so VoiceGate.preferredLang()
-            // and SteeringWheelKeyService can read it without querying Room.
-            appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
-                .edit().putString("voice_lang", lang).apply()
-        }
-    }
-
     /**
      * Persists the keycode learned from [LearnButtonDialog] into Room and into
      * SharedPreferences("voice") so SteeringWheelKeyService reads the new value immediately.
@@ -1869,31 +1855,23 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("(failed to gather rules: ${e.message})")
             }
 
-            // Voice agent: which connection/model answered and what the last turns did.
-            // The journal is a RAM ring buffer, so this is the only place a user report
-            // about a wrong or fabricated answer becomes checkable.
+            // Voice agent: which connection/model answered.
             appendLine("--- agent ---")
             try {
                 val conn = llmConnectionResolver.primary()
                 appendLine("connection: ${conn?.id ?: "(not configured)"} model=${conn?.model ?: "-"}")
-                val entries = voiceJournal.entries.value.take(AGENT_DUMP_ENTRIES)
-                if (entries.isEmpty()) {
-                    appendLine("(no voice sessions this run)")
-                } else {
-                    entries.forEach { e ->
-                        val stamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(e.timestampMs))
-                        appendLine("$stamp ${e.route} ${e.outcome} \"${e.transcript}\"" +
-                            (e.reason?.let { " reason=$it" } ?: ""))
-                        if (e.tools.isNotEmpty()) {
-                            appendLine("  tools: " + e.tools.joinToString(", ") {
-                                "${it.name}:${if (it.ok) "ok" else "err"}"
-                            })
-                        }
-                        e.answer?.let { appendLine("  answer: " + com.bydmate.app.agent.AgentTrace.clip(it, AGENT_DUMP_ANSWER_CHARS)) }
-                    }
-                }
             } catch (e: Exception) {
-                appendLine("(failed to gather agent journal: ${e.message})")
+                appendLine("(failed to gather agent connection: ${e.message})")
+            }
+            // Voice sessions, persisted across restarts: what ASR heard, what it became (command,
+            // automation, agent) and why not, with the agent's tools and answer. The only place a
+            // user report about a misheard or refused command becomes checkable.
+            appendLine("--- voice ---")
+            try {
+                VoiceJournalDump.lines(voiceJournal.entries.value, AGENT_DUMP_ENTRIES, AGENT_DUMP_ANSWER_CHARS)
+                    .forEach { appendLine(it) }
+            } catch (e: Exception) {
+                appendLine("(failed to gather voice journal: ${e.message})")
             }
 
             appendLine("--- vehicle data sources ---")
