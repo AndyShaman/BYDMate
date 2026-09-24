@@ -14,6 +14,11 @@ class DashboardDurationCompactTest {
         assertEquals("10:05", formatDurationCompact(start, endAfter(605)))
     }
 
+    @Test fun `a day and a hundred hours keep every hour digit`() {
+        assertEquals("24:00", formatDurationCompact(start, endAfter(24 * 60)))
+        assertEquals("100:00", formatDurationCompact(start, endAfter(100 * 60)))
+    }
+
     @Test fun `under an hour keeps a zero hour`() {
         assertEquals("0:05", formatDurationCompact(start, endAfter(5)))
         assertEquals("0:00", formatDurationCompact(start, endAfter(0)))

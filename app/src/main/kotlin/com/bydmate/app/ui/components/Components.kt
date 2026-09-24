@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -42,9 +43,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bydmate.app.R
@@ -130,6 +135,12 @@ fun bydSwitchColors(): SwitchColors = SwitchDefaults.colors(
 // SocGauge - Premium circular arc gauge with gradient and glow
 // ============================================================================
 
+private val SocGaugeStroke = 14.dp
+private val SocGaugeIconSize = 18.dp
+private val SocGaugeNumberSize = 32.sp
+private val SocGaugeLabelSize = 12.sp
+private const val SOC_GAUGE_LABEL = "SOC %"
+
 @Composable
 fun SocGauge(
     soc: Int,
@@ -146,7 +157,7 @@ fun SocGauge(
         label = "socSweep"
     )
     val socSweep = totalSweep * animatedSoc
-    val strokeWidth = 14.dp
+    val strokeWidth = SocGaugeStroke
 
     Box(
         contentAlignment = Alignment.Center,
@@ -209,26 +220,97 @@ fun SocGauge(
                     imageVector = Icons.Outlined.Bolt,
                     contentDescription = stringResource(R.string.battery_health_charging_cd),
                     tint = AccentGreen,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(SocGaugeIconSize)
                 )
             }
             Text(
                 text = "$clampedSoc",
                 color = TextPrimary,
-                fontSize = 32.sp,
+                fontSize = SocGaugeNumberSize,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "SOC %",
+                text = SOC_GAUGE_LABEL,
                 color = TextMuted,
-                fontSize = 12.sp,
+                fontSize = SocGaugeLabelSize,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center
             )
         }
     }
+}
+
+/** One row of SocGauge's centred content, px: layout height, ink top and bottom within it, width. */
+internal data class GaugeContentRow(val height: Float, val inkTop: Float, val inkBottom: Float, val width: Float)
+
+/**
+ * Smallest square SocGauge can take before any row of its centred content reaches the arc's
+ * inner edge, which lies [strokePx] inside half the square. Pure geometry, px in and out.
+ */
+internal fun socGaugeMinSizePx(rows: List<GaugeContentRow>, strokePx: Float): Float {
+    var top = -rows.sumOf { it.height.toDouble() }.toFloat() / 2f
+    var radius = 0f
+    for (row in rows) {
+        val reach = maxOf(kotlin.math.abs(top + row.inkTop), kotlin.math.abs(top + row.inkBottom))
+        radius = maxOf(radius, kotlin.math.hypot(row.width / 2f, reach))
+        top += row.height
+    }
+    return 2f * (radius + strokePx)
+}
+
+/**
+ * Smallest SocGauge size that keeps «100», «SOC %» and, while charging, the bolt clear of the
+ * arc at the current text scale (app setting times system font scale). Glyphs of the 32 sp
+ * number are taller than the theme line height, so the ink comes from the platform paint.
+ */
+@Composable
+fun rememberSocGaugeMinSize(isCharging: Boolean): Dp {
+    val measurer = rememberTextMeasurer()
+    val baseStyle = LocalTextStyle.current
+    val density = LocalDensity.current
+    return remember(measurer, baseStyle, density, isCharging) {
+        with(density) {
+            val rows = buildList {
+                if (isCharging) {
+                    val icon = SocGaugeIconSize.toPx()
+                    add(GaugeContentRow(icon, 0f, icon, icon))
+                }
+                add(gaugeTextRow(measurer, "100",
+                    baseStyle.merge(TextStyle(fontSize = SocGaugeNumberSize, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)),
+                    android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD),
+                    SocGaugeNumberSize.toPx()))
+                add(gaugeTextRow(measurer, SOC_GAUGE_LABEL,
+                    baseStyle.merge(TextStyle(fontSize = SocGaugeLabelSize, fontWeight = FontWeight.Medium)),
+                    android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, FontWeight.Medium.weight, false),
+                    SocGaugeLabelSize.toPx()))
+            }
+            socGaugeMinSizePx(rows, SocGaugeStroke.toPx()).toDp()
+        }
+    }
+}
+
+// Row height and width as Compose lays the text out; ink bounds from the paint, on that baseline.
+private fun gaugeTextRow(
+    measurer: TextMeasurer,
+    text: String,
+    style: TextStyle,
+    typeface: android.graphics.Typeface,
+    textSizePx: Float,
+): GaugeContentRow {
+    val layout = measurer.measure(text, style, softWrap = false, maxLines = 1)
+    val ink = android.graphics.Rect()
+    android.graphics.Paint().apply {
+        this.typeface = typeface
+        textSize = textSizePx
+    }.getTextBounds(text, 0, text.length, ink)
+    return GaugeContentRow(
+        height = layout.size.height.toFloat(),
+        inkTop = layout.firstBaseline + ink.top,
+        inkBottom = layout.firstBaseline + ink.bottom,
+        width = layout.size.width.toFloat(),
+    )
 }
 
 // ============================================================================
@@ -262,7 +344,8 @@ fun TripCard(
             fontFamily = FontFamily.Monospace, modifier = Modifier.weight(2.5f))
 
         // Duration (2nd column): always one line. The worded form while the cell fits it,
-        // h:mm once a large text size leaves the cell too narrow.
+        // h:mm once a large text size leaves the cell too narrow, ellipsized if even that is
+        // too wide so a cut «24:00» never reads as a shorter time.
         val durationStyle = LocalTextStyle.current.merge(TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace))
         val measurer = rememberTextMeasurer()
         BoxWithConstraints(modifier = Modifier.weight(1f)) {
@@ -274,7 +357,7 @@ fun TripCard(
             Text(
                 text = durationText,
                 color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.End, maxLines = 1, softWrap = false,
+                textAlign = TextAlign.End, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
             )
         }
