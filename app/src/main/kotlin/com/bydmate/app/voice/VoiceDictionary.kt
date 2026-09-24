@@ -114,7 +114,7 @@ internal sealed interface CommandExpr {
     }
 
     companion object {
-        private val SLOT_REF = Regex("\\{([a-z0-9_]+)}")
+        private val SLOT_REF = Regex("\\{([a-z0-9_]+)\\}")
 
         fun parse(text: String): CommandExpr = when {
             text == "TEMP +1" -> Temp(1)

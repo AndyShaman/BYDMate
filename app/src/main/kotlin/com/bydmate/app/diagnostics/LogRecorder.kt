@@ -378,6 +378,8 @@ class LogRecorder internal constructor(
             "AdbRestore:*", "AdbProtocolClient:*",
             // Window channel probe verdicts (percent family vs CTRL, #79/#64).
             "WindowChannelRouter:*",
+            // Offline dictionary: load result, self-test and the per-phrase miss line.
+            "NluParser:*",
             // Firmware fid catalog: where it came from and every address it moved.
             "FidCatalog:*",
             // Agent wave: one line per model round, tool call and finished turn.
