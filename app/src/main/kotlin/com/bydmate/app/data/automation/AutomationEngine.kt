@@ -228,9 +228,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val rules = ruleDao.getEnabled()
         val now = nowMs()
 
-        val elapsed = elapsedMs()
-        val interactive = interactiveProvider()
-        serviceStart.tick(elapsed, interactive, bootIdProvider)
+        // The session reads the clock and the screen itself, under its lock: a reading taken here
+        // may be minutes old by the time the tick runs.
+        val serviceStartWindow = serviceStart.tick(elapsedMs, interactiveProvider, bootIdProvider)
 
         // Prune per-rule state for rules that have been deleted (or disabled
         // and removed from the active set). Without this, `lastEvalResults`,
@@ -280,7 +280,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                     }
                 }
 
-                val serviceStartActive = serviceStart.isActive(rule.id, interactive, elapsed)
+                val serviceStartActive = serviceStart.isActive(rule.id, serviceStartWindow)
                 val perTrigger = evaluateEachTrigger(triggers, data, location, placesById, serviceStartActive, networkEdge)
                 val matched = combineByLogic(perTrigger, rule.triggerLogic)
 
@@ -327,9 +327,14 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
                 // Mark triggered immediately to prevent re-fire
                 ruleDao.updateLastTriggered(rule.id, now)
-                if (serviceStartActive && triggers.any { it.kind == "service_start" }) {
-                    serviceStart.consumed.add(rule.id)
+                val serviceStartRule = serviceStartActive && triggers.any { it.kind == "service_start" }
+                // An ACC_OFF or a dark screen may have closed the window while this evaluate was
+                // suspended; nothing suspends from here to the dispatch.
+                if (serviceStartRule && !serviceStart.isActive(serviceStartWindow)) {
+                    Log.i(TAG, "service_start: window closed before dispatch")
+                    continue
                 }
+                if (serviceStartRule) serviceStart.consumed.add(rule.id)
                 if (rule.fireOncePerTrip && tripStartedAt != null) {
                     lastFiredTripByRule[rule.id] = tripStartedAt
                 }
