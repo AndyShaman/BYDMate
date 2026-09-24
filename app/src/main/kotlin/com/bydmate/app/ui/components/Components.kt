@@ -323,7 +323,8 @@ fun TripCard(
     trip: TripEntity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    currencySymbol: String = "BYN"
+    currencySymbol: String = "BYN",
+    verticalPadding: Dp = 8.dp,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Compact single-row trip card with weight-based columns
@@ -332,7 +333,7 @@ fun TripCard(
             .fillMaxWidth()
             .background(CardSurface, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = verticalPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Time range

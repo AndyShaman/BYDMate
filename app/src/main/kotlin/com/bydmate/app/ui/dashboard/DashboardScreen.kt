@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -542,12 +543,19 @@ fun DashboardScreen(
                     Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                 }
                 if (state.recentTrips.isNotEmpty()) {
-                    WholeRowsColumn(rowSpacing = 4.dp, modifier = Modifier.weight(1f)) {
+                    // The bottom padding matches the left column's, so the last row ends level
+                    // with the TRIP cards.
+                    WholeRowsColumn(
+                        rowSpacing = 4.dp,
+                        maxRows = DASHBOARD_TRIP_ROWS,
+                        modifier = Modifier.weight(1f).padding(bottom = 4.dp),
+                    ) {
                         state.recentTrips.forEach { trip ->
                             TripCard(
                                 trip = trip,
                                 onClick = { },
-                                currencySymbol = state.currencySymbol
+                                currencySymbol = state.currencySymbol,
+                                verticalPadding = 6.dp,
                             )
                         }
                     }
@@ -559,7 +567,9 @@ fun DashboardScreen(
     }
 }
 
-private val GaugeMaxSize = 150.dp
+private val GaugeMaxSize = 180.dp
+
+private const val DASHBOARD_TRIP_ROWS = 6
 
 // The gauge glow reaches 10.5 dp above its square; the column's 4 dp top padding covers the rest.
 private val GaugeGlowRoom = 8.dp
@@ -598,47 +608,67 @@ private fun GaugeYieldingColumn(
 }
 
 /**
- * Vertical list that only places rows which fit completely within the available height.
- * A row cut in half by the bottom edge is never shown; it is simply not placed. Rows keep
- * [rowSpacing] between them, matching a plain Column with the same Arrangement.spacedBy value.
+ * Vertical list of at most [maxRows] rows that only shows rows which fit completely within the
+ * available height; a row cut in half by the bottom edge is never shown. When the list is full
+ * (capped by [maxRows] or by the height), the height left over is shared out among the rows so
+ * the last one ends exactly at the bottom edge. Rows keep [rowSpacing] between them.
  */
 @Composable
 private fun WholeRowsColumn(
     rowSpacing: Dp,
+    maxRows: Int,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    Layout(content = content, modifier = modifier) { measurables, constraints ->
+    // Rows are measured twice: once at their natural height to pick the count, then at the fitted
+    // height. A measurable can be measured only once per pass, hence two subcompositions.
+    SubcomposeLayout(modifier) { constraints ->
         val spacingPx = rowSpacing.roundToPx()
-        val childConstraints = Constraints(maxWidth = constraints.maxWidth)
-        val maxHeight = constraints.maxHeight
-        val placeables = mutableListOf<androidx.compose.ui.layout.Placeable>()
-        var usedHeight = 0
-        for (measurable in measurables) {
-            val extra = if (placeables.isEmpty()) 0 else spacingPx
-            // Unbounded maxHeight means there is no limit to respect: place everything.
-            if (maxHeight != Constraints.Infinity) {
-                val placeable = measurable.measure(childConstraints)
-                if (usedHeight + extra + placeable.height > maxHeight) break
-                usedHeight += extra + placeable.height
-                placeables += placeable
-            } else {
-                val placeable = measurable.measure(childConstraints)
-                usedHeight += extra + placeable.height
-                placeables += placeable
-            }
-        }
         val width = constraints.maxWidth
-        val height = constraints.constrainHeight(usedHeight)
-        layout(width, height) {
+        val natural = subcompose(WholeRowsSlot.Natural, content)
+            .take(maxRows)
+            .map { it.measure(Constraints(maxWidth = width)).height }
+        val heights = fitWholeRows(natural, spacingPx, constraints.maxHeight, maxRows)
+        val placeables = subcompose(WholeRowsSlot.Fitted, content)
+            .zip(heights) { measurable, h -> measurable.measure(Constraints(maxWidth = width, minHeight = h, maxHeight = h)) }
+        val usedHeight = heights.sum() + spacingPx * (heights.size - 1).coerceAtLeast(0)
+        layout(width, constraints.constrainHeight(usedHeight)) {
             var y = 0
-            placeables.forEachIndexed { index, placeable ->
-                if (index > 0) y += spacingPx
+            placeables.forEach { placeable ->
                 placeable.place(0, y)
-                y += placeable.height
+                y += placeable.height + spacingPx
             }
         }
     }
+}
+
+private enum class WholeRowsSlot { Natural, Fitted }
+
+/**
+ * Heights of the rows [WholeRowsColumn] shows, given their [naturalHeights], the [spacing] between
+ * them and the [availableHeight] ([Constraints.Infinity] when unbounded). Takes as many whole rows
+ * as fit, at most [maxRows]. When the list is full ([maxRows] rows, or fewer because the height
+ * ran out), the leftover is spread over the shown rows so they fill [availableHeight] exactly; the
+ * first rows take the remainder pixels. A list shorter than [maxRows] that fits entirely keeps its
+ * natural heights, and so does an unbounded one.
+ */
+internal fun fitWholeRows(naturalHeights: List<Int>, spacing: Int, availableHeight: Int, maxRows: Int): List<Int> {
+    val candidates = naturalHeights.take(maxRows)
+    if (availableHeight == Constraints.Infinity) return candidates
+    var count = 0
+    var used = 0
+    for (height in candidates) {
+        val next = used + (if (count > 0) spacing else 0) + height
+        if (next > availableHeight) break
+        used = next
+        count++
+    }
+    if (count == 0) return emptyList()
+    if (count == candidates.size && count < maxRows) return candidates
+    val leftover = availableHeight - used
+    val extra = leftover / count
+    val remainder = leftover % count
+    return candidates.take(count).mapIndexed { i, height -> height + extra + if (i < remainder) 1 else 0 }
 }
 
 @Composable
