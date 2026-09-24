@@ -846,7 +846,7 @@ private fun EditorDialog(
                                 onClick = onSave,
                                 colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
                                 shape = RoundedCornerShape(8.dp),
-                                enabled = complete
+                                enabled = complete && !editing.saving
                             ) { Text(stringResource(R.string.automation_save_button), fontWeight = FontWeight.SemiBold) }
                         }
                     }
