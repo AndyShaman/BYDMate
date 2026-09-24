@@ -314,7 +314,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                                     } ?: Log.i(TAG, "Barge-in by name ignored: no cancellable ask")
                                     return@collect
                                 }
-                                Log.i(TAG, "Utterance dropped while busy: ${ev.text}")
+                                Log.i(TAG, busyDropLine(ev.text))
                                 droppedWhileBusy++
                                 return@collect
                             }
@@ -856,6 +856,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             AgentTrace.clip(VoiceJournalDump.oneLine(msg), LOG_DETAIL_CHARS)
 
         private const val LOG_DETAIL_CHARS = 500
+
+        /** An utterance heard while another one is routed: its transcript is capped like any detail. */
+        internal fun busyDropLine(transcript: String): String = logDetail("Utterance dropped while busy: $transcript")
 
         // Dwell on a terminal state before auto-returning to Idle. Short on purpose —
         // long enough to read "не распознал", short enough to feel instant.

@@ -27,6 +27,10 @@ object VoiceNormalizer {
      * @param unexplained a measure word nobody can read (a dangling "до"/"пол")
      * @param words indices of the tokens the readers above explain (the number words, "процентов"
      *   after a number, share, level and "до конца" words); the parser reads no other word as a measure
+     * @param levels how many levels the phrase names: each number, ordinal and "максимум"/"минимум"/
+     *   "полную" counts once, so "третий второй" or "максимум минимум" is two
+     * @param levelWords indices of the words behind [levels]; a measure word outside them ("процентов",
+     *   "наполовину") is not a level
      */
     data class Measure(
         val numbers: List<Int> = emptyList(),
@@ -38,6 +42,8 @@ object VoiceNormalizer {
         val extreme: Extreme? = null,
         val unexplained: Boolean = false,
         val words: Set<Int> = emptySet(),
+        val levels: Int = 0,
+        val levelWords: Set<Int> = emptySet(),
     ) {
         /** Some word asks for a share of an opening (numbers alone do not: they are levels elsewhere). */
         val hasShare: Boolean get() = share != null || softVent || shareConflict
@@ -74,6 +80,7 @@ object VoiceNormalizer {
 
     private val MAX_WORDS = setOf("максимум", "максимума", "максимальный", "максимальная", "максимальную", "максимальной")
     private val MIN_WORDS = setOf("минимум", "минимума", "минимальный", "минимальная", "минимальную", "минимальной")
+    private val EXTREME_WORDS = MAX_WORDS + MIN_WORDS + "полную"
     private val VENT_WORDS = setOf("чуть", "чуточку", "немного", "немножко", "слегка")
     private val FULL_WORDS = setOf("полностью", "целиком", "полную", "полной")
     private val END_WORDS = setOf("конца", "упора")
@@ -134,6 +141,7 @@ object VoiceNormalizer {
             if (t == "пол" && share == null) unexplained = true
         }
         val single = spans.singleOrNull()
+        val levelTokens = tokens.indices.filter { tokens[it] in ORDINALS || tokens[it] in EXTREME_WORDS }
         return Measure(
             numbers = spans.map { it.value },
             numberIsShare = single != null && isShareNumber(tokens, single),
@@ -144,6 +152,8 @@ object VoiceNormalizer {
             extreme = extremeOf(tokens),
             unexplained = unexplained,
             words = tokens.indices.filterTo(HashSet()) { explained(tokens, it, spans) },
+            levels = spans.size + levelTokens.size,
+            levelWords = spans.flatMapTo(HashSet()) { it.first..it.last } + levelTokens,
         )
     }
 

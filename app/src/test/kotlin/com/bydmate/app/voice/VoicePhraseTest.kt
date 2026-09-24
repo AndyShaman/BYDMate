@@ -2,17 +2,18 @@ package com.bydmate.app.voice
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VoicePhraseTest {
-    @Test fun `inflections normalize equal`() {
-        assertEquals(VoicePhrase.normalize("форточка"), VoicePhrase.normalize("форточки"))
+    // Collisions are as exact as matching: another inflection is another phrase.
+    @Test fun `inflections normalize apart`() {
+        assertNotEquals(VoicePhrase.normalize("форточка"), VoicePhrase.normalize("форточки"))
+        assertNotEquals(VoicePhrase.normalize("открой окно"), VoicePhrase.normalize("открой окна"))
     }
     @Test fun `strips punctuation and case and collapses spaces`() {
-        // VoiceStemmer.stem("поехали") -> "поехал" (strips "и")
-        // VoiceStemmer.stem("домой")   -> "дом"    (strips "ой")
-        assertEquals("поехал дом", VoicePhrase.normalize("  Поехали, домой!  "))
+        assertEquals("поехали домой", VoicePhrase.normalize("  Поехали, домой!  "))
     }
     @Test fun `blank yields blank`() {
         assertEquals("", VoicePhrase.normalize("   "))
