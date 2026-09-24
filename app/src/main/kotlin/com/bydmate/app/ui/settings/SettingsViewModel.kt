@@ -68,8 +68,8 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -100,6 +100,7 @@ import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 
 /**
@@ -1635,38 +1636,47 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         /** Shared budget for the daemon-backed dump sections (liveness + seat and steering heat reads).
          *  The dump must not hang on a wedged daemon. */
         private const val HELPER_DIAG_BUDGET_MS = 3_000L
+
+        /**
+         * A binder transact is a blocking call: wrapping it in withTimeoutOrNull here would not
+         * return until the call finished, because cancellation only takes effect at a suspension
+         * point. So the reads run in a coroutine that is NOT a child of the dump, and only the
+         * WAIT is bounded — a wedged daemon leaves an IO thread parked instead of stalling the
+         * dump the user is trying to send us. Each section is kept as soon as it is read, so a
+         * later section that hangs past [budgetMs] does not erase the earlier ones.
+         */
+        internal suspend fun collectHelperDiagnostics(
+            scope: CoroutineScope,
+            helper: com.bydmate.app.data.vehicle.HelperClient,
+            budgetMs: Long,
+            dispatcher: CoroutineDispatcher = Dispatchers.IO,
+        ): HelperDiagnostics {
+            // Single writer (the probe), read after the wait: the reference gives visibility.
+            val collected = AtomicReference(HelperDiagnostics(null, null))
+            val probe = scope.launch(dispatcher) {
+                val alive = runCatching { helper.isAlive() }.getOrNull()
+                collected.set(collected.get().copy(alive = alive))
+                // One binder round-trip for all ten seat reads.
+                val seats = runCatching { helper.readBatch(SeatsDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(seats = seats))
+                val steeringHeat = runCatching { helper.readBatch(SteeringHeatDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(steeringHeat = steeringHeat))
+            }
+            withTimeoutOrNull(budgetMs) { probe.join() }
+            return collected.get()
+        }
     }
 
-    /** What the two daemon-backed dump sections need; nulls mean "not obtained in budget". */
-    private data class HelperDiagnostics(
+    /** What the daemon-backed dump sections need; nulls mean "not obtained in budget". */
+    internal data class HelperDiagnostics(
         val alive: Boolean?,
         val seats: List<Pair<Int, Int>>?,
         val steeringHeat: List<Pair<Int, Int>>? = null,
     )
 
-    /**
-     * Collects daemon liveness and the seat fid snapshot under ONE shared budget.
-     *
-     * A binder transact is a blocking call: wrapping it in withTimeoutOrNull here would not
-     * return until the call finished, because cancellation only takes effect at a suspension
-     * point. So the reads run in a coroutine that is NOT a child of the dump, and only the
-     * WAIT is bounded — a wedged daemon leaves an IO thread parked instead of stalling the
-     * dump the user is trying to send us.
-     */
-    private suspend fun gatherHelperDiagnostics(): HelperDiagnostics {
-        val probe = viewModelScope.async(Dispatchers.IO) {
-            HelperDiagnostics(
-                alive = runCatching { helperClient.isAlive() }.getOrNull(),
-                // One binder round-trip for all ten seat reads.
-                seats = runCatching { helperClient.readBatch(SeatsDiagnostics.batchItems()) }.getOrNull(),
-                steeringHeat = runCatching {
-                    helperClient.readBatch(SteeringHeatDiagnostics.batchItems())
-                }.getOrNull(),
-            )
-        }
-        return withTimeoutOrNull(HELPER_DIAG_BUDGET_MS) { probe.await() }
-            ?: HelperDiagnostics(null, null)
-    }
+    /** Liveness, the seat fid snapshot and the steering heat snapshot under ONE shared budget. */
+    private suspend fun gatherHelperDiagnostics(): HelperDiagnostics =
+        collectHelperDiagnostics(viewModelScope, helperClient, HELPER_DIAG_BUDGET_MS)
 
     /** One-line trigger summary for the dump: param, operator and value only. */
     private fun describeTriggers(json: String): String {

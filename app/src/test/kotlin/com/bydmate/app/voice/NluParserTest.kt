@@ -159,4 +159,10 @@ class NluParserTest {
         assertEquals("方向盘加热", cmd("enable steering wheel heating", VoiceLang.EN))
         assertEquals("关闭方向盘加热", cmd("disable steering wheel heating", VoiceLang.EN))
     }
+
+    @Test fun en_steering_wheel_without_a_heat_word_is_not_the_heater() {
+        for (phrase in listOf("turn steering wheel left", "steering wheel angle", "wheel left", "turn on steering wheel")) {
+            assertEquals(phrase, ParseResult.Unrecognized, NluParser.parse(phrase, VoiceLang.EN))
+        }
+    }
 }

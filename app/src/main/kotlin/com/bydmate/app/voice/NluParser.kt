@@ -30,7 +30,7 @@ object NluParser {
         }
 
         val actions = matchSlots(stems, VoiceLexicon.actionWords(lang))
-        val devices = matchSlots(stems, VoiceLexicon.deviceWords(lang))
+        val devices = gateSteeringHeat(matchSlots(stems, VoiceLexicon.deviceWords(lang)), stems, lang)
         val qualifiers = detectQualifiers(stems, lang)
         val number = detectNumber(rawTokens, lang)
 
@@ -232,6 +232,15 @@ object NluParser {
             windshield -> devices - DeviceSlot.AC_FLOW                          // defrost wins
             else -> devices - DeviceSlot.DEFROST_FRONT                          // climate airflow default
         }
+    }
+
+    /** EN "steering"/"wheel" also names the wheel itself ("turn steering wheel left"): the
+     *  heater is meant only when a heat word comes with it. RU "руль" needs no such cue. */
+    private fun gateSteeringHeat(devices: Set<DeviceSlot>, stems: List<String>, lang: VoiceLang): Set<DeviceSlot> {
+        if (lang != VoiceLang.EN || DeviceSlot.STEERING_HEAT !in devices) return devices
+        val s = stems.toSet()
+        val heatCue = listOf("heat", "heating", "heated", "warm").any { VoiceStemmer.stem(it) in s }
+        return if (heatCue) devices else devices - DeviceSlot.STEERING_HEAT
     }
 
     /** "выключи подогрев сиденья": the noun "подогрев"/"обдув" tags a second action
