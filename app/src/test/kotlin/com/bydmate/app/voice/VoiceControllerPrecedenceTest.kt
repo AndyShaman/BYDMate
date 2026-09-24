@@ -240,14 +240,14 @@ class VoiceControllerPrecedenceTest {
     }
 
     @Test fun `negation around a user or automation phrase goes to the agent`() {
-        rig(null, phrases("windows_close_all", "открой окно")).assertRefused("не открой окно", VoiceRefusal.NEGATION)
-        rig("задраить трюм", VoiceUserPhrases()).assertRefused("нельзя задраить трюм", VoiceRefusal.NEGATION)
+        rig(null, phrases("windows_close_all", "открой окно")).assertRefused("не открой окно", VoiceRefusal.UNRECOGNIZED)
+        rig("задраить трюм", VoiceUserPhrases()).assertRefused("нельзя задраить трюм", VoiceRefusal.UNRECOGNIZED)
     }
 
-    @Test fun `parser refusals keep their reason`() {
-        rig("открой окно", VoiceUserPhrases()).assertRefused("открой окно полностью наполовину", VoiceRefusal.CONFLICTING_MEASURE)
+    @Test fun `phrases the dictionary does not hold go to the agent`() {
+        rig("открой окно", VoiceUserPhrases()).assertRefused("открой окно полностью наполовину", VoiceRefusal.UNRECOGNIZED)
         rig(null, phrases("windows_close_all", "открой окна"))
-            .assertRefused("открой окна и люк наполовину", VoiceRefusal.MULTIPLE_COMMANDS)
+            .assertRefused("открой окна и люк наполовину", VoiceRefusal.UNRECOGNIZED)
     }
 
     @Test fun `an exact user phrase with a negation word is still the user's own`() {

@@ -467,7 +467,6 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
             is ParseResult.Volume -> Resolution.Vol(r.payload)
             ParseResult.Unrecognized -> Resolution.None(VoiceRefusal.UNRECOGNIZED)
-            is ParseResult.Refused -> Resolution.None(r.reason)
         }
     }
 

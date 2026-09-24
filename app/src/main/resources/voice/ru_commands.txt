@@ -1,0 +1,276 @@
+# BYDMate built-in voice commands, Russian.
+#
+# A phrase runs offline only when it equals one phrase of this file, word for word. Anything
+# else goes to the cloud agent (or gets «не понял» without it). "A и B" and "A а также B" run
+# when every part is a command of this file on its own.
+#
+# Both the phrase and the template words are normalized the same way: lower case, ё -> е,
+# punctuation out, "%" -> "процентов", number words -> digits ("двадцать пять" -> 25).
+# Filler words (пожалуйста, можешь, мне, слушай, эй, спасибо, хочу, я) are dropped from the phrase
+# and may not appear here.
+#
+# Lines ("#" starts a comment; a line starting with a space continues the previous one):
+#   rule NAME: a|b|...                       alternatives, used as <NAME>
+#   list NAME: forms => VALUE ; forms => VALUE
+#                                            slot used as {NAME}; forms are |-separated phrases in
+#                                            template syntax or number ranges like 10..49
+#   range NAME: 16..30                       slot whose value is the number said
+#   TEMPLATE => COMMAND                      a phrase and what it runs
+#   solo TEMPLATE => COMMAND                 the same, but only as the whole phrase, never as one
+#                                            part of "A и B" (a phrase without its own verb would
+#                                            take the other part's verb there)
+# Template syntax: words, <rule>, {slot}, [optional part], (a|b) choice, a|b at the top level.
+# COMMAND: dispatch strings joined by " + ", each {slot} replaced by its value; a value of several
+# symbols "a,b" repeats the command once per symbol, in that order. Built-ins:
+#   TEMP +1, TEMP -1    cabin temperature one step up or down
+#   VOL PAYLOAD         media volume: +1, -1, mute, unmute or a level
+# Every template phrase has a row in app/src/test/resources/voice/ru_commands_golden.tsv.
+
+# ---- Verbs ---------------------------------------------------------------------------------
+
+rule open: открой|открыть|откройте|открывай|опусти|опустить
+rule close: закрой|закрыть|закройте|закрывай|подними|поднять
+# Lids (sunroof, shade, trunk) only open and close: "опусти"/"подними" say nothing clear there.
+rule open_lid: открой|открыть|откройте|открывай
+rule close_lid: закрой|закрыть|закройте|закрывай
+rule ajar: приоткрой|приоткрыть|приспусти|приспустить
+rule air: проветри|проветрить
+rule set: поставь|установи|сделай
+rule on: включи|включить|включите
+rule off: выключи|выключить|выключите|отключи|отключить
+
+# ---- How far an opening goes ---------------------------------------------------------------
+# A spoken share maps to the widest detent that does not exceed it: windows 10 (vent), 50, 100;
+# the sunroof 7 (tilt), 50, 100. Below the smallest detent nothing matches.
+
+rule full: полностью|до конца|на максимум
+rule half: наполовину|на половину|на половинку|до половины|на пол
+rule little: чуть|чуть чуть|немного|немножко|слегка|на чуть|на немножко|на щелочку|на щелку|на проветривание
+rule prep: на|до
+rule pct_word: процентов|процента|процент
+list frac: на треть|на четверть => 通风 ; на три четверти => 半开
+list pct1: 10..49 => 通风 ; 50..99 => 半开 ; 100 => 打开100
+list pcts: 10..49 => 通风 ; 50..99 => 半开 ; 100 => 全开
+list set1: 0 => 打开0 ; 10..49 => 通风 ; 50..99 => 半开 ; 100 => 打开100
+list sets: 0 => 关闭 ; 10..49 => 通风 ; 50..99 => 半开 ; 100 => 全开
+list roof_pct: 7..49 => 天窗通风 ; 50..99 => 天窗打开50 ; 100 => 天窗打开100
+list roof_frac: на треть|на четверть => 天窗通风 ; на три четверти => 天窗打开50
+
+# ---- Windows -------------------------------------------------------------------------------
+# A bare singular "окно" and "моё окно" are the driver's; "левое"/"правое" alone are the rear
+# ones (the front ones are the driver's and the passenger's).
+
+rule okno: окно|окошко|стекло
+list win: <okno>|мое <okno>|<okno> водителя|<okno> у водителя|<okno> на водительской стороне
+        |водительское [<okno>]|переднее левое <okno>|<okno> спереди слева|<okno> слева спереди
+        |форточку|форточку водителя|водительскую форточку => 主驾 ;
+    <okno> пассажира|<okno> у пассажира|<okno> на пассажирской стороне|пассажирское [<okno>]
+        |переднее правое <okno>|<okno> спереди справа|<okno> справа спереди
+        |форточку пассажира|пассажирскую форточку => 副驾 ;
+    левое <okno>|заднее левое <okno>|<okno> сзади слева|<okno> слева сзади|левую форточку [сзади] => 后左 ;
+    правое <okno>|заднее правое <okno>|<okno> сзади справа|<okno> справа сзади|правую форточку [сзади] => 后右
+list wins: окна|все окна|стекла|все стекла|окошки|окна в машине|передние и задние окна => 车窗 ;
+    передние окна|все передние окна|передние стекла|окна спереди|окна водителя и пассажира
+        |стекла водителя и пассажира => 前排车窗 ;
+    задние окна|все задние окна|задние стекла|окна сзади|заднее окно => 后排车窗
+
+# Fully open or closed.
+<open> {win} [<full>] => {win}打开100
+<open> <full> {win} => {win}打开100
+{win} <open> => {win}打开100
+<open> {wins} [<full>] => {wins}全开
+<open> <full> {wins} => {wins}全开
+{wins} <open> => {wins}全开
+[холодно] <close> {win} [полностью|до конца] => {win}打开0
+{win} <close> => {win}打开0
+[холодно] <close> {wins} [полностью|до конца] => {wins}关闭
+{wins} <close> => {wins}关闭
+
+# Halfway.
+(<open>|<close>|<ajar>|<set>) {win} <half> => {win}半开
+<open> <half> {win} => {win}半开
+<open> пол окна => 主驾半开
+solo {win} <half> => {win}半开
+(<open>|<close>|<ajar>|<set>) {wins} <half> => {wins}半开
+<open> <half> {wins} => {wins}半开
+solo {wins} <half> => {wins}半开
+
+# The vent detent: ajar, a little, airing.
+<ajar> {win} [<little>] => {win}通风
+{win} <ajar> => {win}通风
+<open> {win} <little> => {win}通风
+<air> {win} => {win}通风
+<set> {win} на проветривание => {win}通风
+сделай щелку в окне => 主驾通风
+solo {win} <little> => {win}通风
+<ajar> {wins} [<little>] => {wins}通风
+{wins} <ajar> => {wins}通风
+<open> {wins} <little> => {wins}通风
+<air> {wins} => {wins}通风
+<set> {wins} на проветривание => {wins}通风
+solo {wins} <little> => {wins}通风
+<air> салон => 车窗通风
+
+# A share by number or fraction.
+<open> {win} [<prep>] {pct1} [<pct_word>] => {win}{pct1}
+<set> {win} на {set1} [<pct_word>] => {win}{set1}
+<open> {win} {frac} => {win}{frac}
+solo {win} <prep> {pct1} [<pct_word>] => {win}{pct1}
+solo {win} {pct1} <pct_word> => {win}{pct1}
+solo {pct1} <pct_word> {win} => {win}{pct1}
+solo {win} {frac} => {win}{frac}
+<open> {wins} [<prep>] {pcts} [<pct_word>] => {wins}{pcts}
+<set> {wins} на {sets} [<pct_word>] => {wins}{sets}
+<open> {wins} {frac} => {wins}{frac}
+solo {wins} <prep> {pcts} [<pct_word>] => {wins}{pcts}
+solo {wins} {pcts} <pct_word> => {wins}{pcts}
+solo {wins} {frac} => {wins}{frac}
+
+# Every window but some: each door that is left gets its own command.
+rule all_wins: окна|все окна|стекла|все стекла
+list kept: водительского [окна]|моего [окна]|водителя|переднего левого [окна] => 副驾,后左,后右 ;
+    пассажирского [окна]|пассажира|переднего правого [окна] => 主驾,后左,后右 ;
+    заднего левого [окна] => 主驾,副驾,后右 ;
+    заднего правого [окна] => 主驾,副驾,后左 ;
+    задних [окон] => 主驾,副驾 ;
+    передних [окон] => 后左,后右 ;
+    водительского [окна] и пассажирского [окна]|водителя и пассажира => 后左,后右 ;
+    заднего левого [окна] и заднего правого [окна] => 主驾,副驾
+<open> <all_wins> кроме {kept} => {kept}打开100
+<close> <all_wins> кроме {kept} => {kept}打开0
+<ajar> <all_wins> кроме {kept} => {kept}通风
+
+# ---- Sunroof and its shade -----------------------------------------------------------------
+
+rule roof: люк|крышу
+<open_lid> <roof> [<full>] => 天窗打开100
+<roof> <open_lid> => 天窗打开100
+<close_lid> <roof> [полностью|до конца] => 天窗打开0
+<roof> <close_lid> => 天窗打开0
+(<open_lid>|<close_lid>|<ajar>|<set>) <roof> <half> => 天窗打开50
+<roof> <ajar> <half> => 天窗打开50
+solo <roof> <half> => 天窗打开50
+<ajar> <roof> [<little>] => 天窗通风
+<roof> <ajar> => 天窗通风
+<open_lid> <roof> <little> => 天窗通风
+<air> <roof> => 天窗通风
+<set> <roof> на проветривание => 天窗通风
+solo <roof> <little> => 天窗通风
+<open_lid> <roof> [<prep>] {roof_pct} [<pct_word>] => {roof_pct}
+<open_lid> <roof> {roof_frac} => {roof_frac}
+<open_lid> шторку [люка] => 遮阳帘打开
+<close_lid> шторку [люка] => 遮阳帘关闭
+
+# Windows and the sunroof together.
+<open_lid> <all_wins> (и|а также) <roof> => 车窗全开 + 天窗打开100
+<open_lid> <roof> (и|а также) <all_wins> => 天窗打开100 + 车窗全开
+<close_lid> <all_wins> (и|а также) <roof> => 车窗关闭 + 天窗打开0
+<close_lid> <roof> (и|а также) <all_wins> => 天窗打开0 + 车窗关闭
+<close_lid> <roof> (и|а также) шторку [люка] => 天窗打开0 + 遮阳帘关闭
+
+# ---- Seats ---------------------------------------------------------------------------------
+# A seat without a side is the driver's; the car is left-hand drive, so "левое" is the driver's
+# seat and "правое" the passenger's. Levels 1..3; "на полную"/"на максимум" is 3.
+
+rule heat: подогрев|обогрев
+rule blow: вентиляцию|вентиляция|обдув
+rule seat1: сиденья|сидения|сиденя|кресла
+rule seats: сидений|кресел
+list seat: <seat1>|<seat1> водителя|водительского <seat1>|моего <seat1>|левого <seat1>
+        |переднего левого <seat1> => 主驾 ;
+    <seat1> пассажира|пассажирского <seat1>|правого <seat1>|переднего правого <seat1> => 副驾 ;
+    <seats>|всех <seats>|обоих <seats>|передних <seats>|<seats> водителя и пассажира
+        |<seats> слева и справа => 主驾,副驾
+list lvl: [на] 1|[на] первый [уровень]|[на] минимум => 1 ;
+    [на] 2|[на] второй [уровень] => 2 ;
+    [на] 3|[на] третий [уровень]|[на] максимум|на полную => 3
+list lvl_ord: первый => 1 ; второй => 2 ; третий => 3
+
+[<on>|<set>] <heat> {seat} => {seat}座椅加热1档
+[<on>|<set>] <heat> {seat} {lvl} => {seat}座椅加热{lvl}档
+{lvl_ord} уровень (подогрева|обогрева) {seat} => {seat}座椅加热{lvl_ord}档
+<off> <heat> {seat} => {seat}座椅加热关闭
+[<on>|<set>] <blow> {seat} => {seat}座椅通风1档
+[<on>|<set>] <blow> {seat} {lvl} => {seat}座椅通风{lvl}档
+{lvl_ord} уровень (вентиляции|обдува) {seat} => {seat}座椅通风{lvl_ord}档
+[<on>] сильный обдув {seat} => {seat}座椅通风3档
+<off> <blow> {seat} => {seat}座椅通风关闭
+
+# ---- Steering wheel and mirrors ------------------------------------------------------------
+# "роля"/"роль" are how the recognizer hears "руля"/"руль".
+
+rule wheel: руля|роля|руль|роль
+<on> <heat> <wheel> => 方向盘加热
+<on> (руль|роль) => 方向盘加热
+<on> <heat> руля и сидений => 方向盘加热 + 主驾座椅加热1档 + 副驾座椅加热1档
+<off> <heat> <wheel> => 关闭方向盘加热
+<off> (руль|роль) => 关闭方向盘加热
+rule mirrors: зеркал|всех зеркал|зеркла
+<on> <heat> <mirrors> => 后视镜加热
+<off> <heat> <mirrors> => 关闭后视镜加热
+
+# ---- Climate -------------------------------------------------------------------------------
+
+rule ac: кондиционер|кондиционр|кандиционер|кондей|климат
+<on> <ac> => 自动空调
+<on> (авто режим|авторежим) (кондиционера|климата) => 自动空调
+климат авто => 自动空调
+<off> <ac> => 关闭空调
+<on> (обдув|вентиляцию [салона]) => 打开空调通风
+<on> [внутреннюю] рециркуляцию => 内循环
+<off> рециркуляцию => 外循环
+rule windshield: лобового [стекла]|переднего стекла|стекла
+<on> обдув <windshield> => 吹前挡
+<off> обдув <windshield> => 关闭吹前挡
+
+range temp: 16..30
+rule deg: градус|градуса|градусов
+<set> температуру [на] {temp} [<deg>] => 设置温度{temp}
+температура [на] {temp} [<deg>] => 设置温度{temp}
+[<set>] {temp} <deg> => 设置温度{temp}
+
+[сделай] (теплее|потеплее|теплей) => TEMP +1
+[сделай] (холоднее|похолоднее|прохладнее|попрохладнее) => TEMP -1
+[в салоне|в машине] (холодно|прохладно)|замерз|замерзла|замерзли => TEMP +1
+[в салоне|в машине] (жарко|душно) => TEMP -1
+
+# Fan speed 1..7.
+range fan: 1..7
+rule fan_obj: вентилятор|вентилятор климата|скорость вентилятора|скорость обдува|обдув
+list fan_lvl: на максимум|на полную => 7 ; на минимум|на первую => 1 ; на вторую => 2 ; на третью => 3 ;
+    на четвертую => 4 ; на пятую => 5 ; на шестую => 6 ; на седьмую => 7
+[<set>|<on>] <fan_obj> [на] {fan} => 风量{fan}
+[<set>|<on>] <fan_obj> {fan_lvl} => 风量{fan_lvl}
+
+# ---- Media volume --------------------------------------------------------------------------
+
+range vol: 0..100
+[сделай] (громче|погромче) => VOL +1
+[сделай] (тише|потише) => VOL -1
+(прибавь|увеличь) (громкость|звук) => VOL +1
+(убавь|уменьши) (громкость|звук) => VOL -1
+<off> звук => VOL mute
+<on> звук => VOL unmute
+[<set>] громкость [на] {vol} [<pct_word>] => VOL {vol}
+
+# ---- Locks and trunk -----------------------------------------------------------------------
+# "закрой дверь" said to a passenger is not addressed to the car: only "машину" and the lock
+# verbs lock and unlock.
+
+(закрой|запри|заблокируй) машину => 车门上锁
+(открой|отопри|разблокируй) машину => 车门解锁
+(запри|заблокируй) двери [машины] => 车门上锁
+(отопри|разблокируй) двери [машины] => 车门解锁
+rule trunk: [задний] (багажник|багажнек)
+<open_lid> <trunk> => 开后备箱
+<close_lid> <trunk> => 关后备箱
+
+# ---- Lights --------------------------------------------------------------------------------
+
+rule ambient: подсветку|амбиент|амбиентную подсветку
+<on> <ambient> => 氛围灯打开
+<off> <ambient> => 氛围灯关闭
+<on> свет [в салоне] => 打开车内灯
+<off> свет [в салоне] => 关闭车内灯
+<on> (дхо|ходовые огни) => 打开日行灯
+<off> (дхо|ходовые огни) => 关闭日行灯
