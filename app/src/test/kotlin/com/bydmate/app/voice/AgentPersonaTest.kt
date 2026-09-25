@@ -66,6 +66,25 @@ class AgentPersonaTest {
         assertTrue(female.contains("\nТы говоришь о себе в женском роде (сделала, включила)."))
     }
 
+    @Test fun `fillerPhrase returns a phrase from the persona's own filler pool`() {
+        val pools = mapOf(
+            AgentPersona.NAVIGATOR to listOf("Сейчас посмотрю.", "Секунду, проверяю.", "Минутку.", "Уже смотрю."),
+            AgentPersona.SNARKY to listOf("Ща гляну.", "Погоди, копаюсь.", "Щас, не торопи.", "Минуту, ищу."),
+            AgentPersona.ENGINEER to listOf("Запрос принят.", "Проверяю.", "Обрабатываю.", "Секунду."),
+        )
+        for ((p, pool) in pools) repeat(10) { i ->
+            assertTrue(p.fillerPhrase(Random(i)) in pool)
+        }
+    }
+
+    @Test fun `phrases includes both the outcome pools and the fillers`() {
+        for (p in AgentPersona.entries) {
+            val phrases = p.phrases()
+            assertTrue(phrases.contains(p.spokenPhrase("Готово", Random(1))))
+            assertTrue(phrases.contains(p.fillerPhrase(Random(1))))
+        }
+    }
+
     @Test fun `prompt block gender line does not disturb the start of the block`() {
         val default = AgentPersonaPrompt.block(AgentIdentity("Лео", AgentPersona.NAVIGATOR))
         val explicitMale = AgentPersonaPrompt.block(AgentIdentity("Лео", AgentPersona.NAVIGATOR, TtsGender.MALE))

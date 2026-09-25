@@ -204,7 +204,7 @@ class AgentOrchestrator @Inject constructor(
     }
 
     /** The loop itself; [rounds] carries the LLM round count out to the tracing wrapper. */
-    @Suppress("LongParameterList")
+    @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
     private suspend fun runLoopTraced(
         messages: MutableList<AgentMessage>,
         systemMessages: List<AgentMessage>,
@@ -218,15 +218,20 @@ class AgentOrchestrator @Inject constructor(
         val outcomes = mutableListOf<AgentToolOutcome>()
         val callCounts = mutableMapOf<String, Int>()
         var loopStrikes = 0
+        // True once a sentence — the model's own streamed text, or the filler below — has
+        // reached onSentence this turn; gates the filler so it never doubles up on live speech
+        // and never fires twice. Lives outside the round loop: it spans the whole turn.
+        var spoken = false
+        val speak: ((String) -> Unit)? = onSentence?.let { cb -> { s: String -> spoken = true; cb(s) } }
         repeat(MAX_ITERATIONS) {
             // Fresh chunker per LLM turn: a tool round's unterminated tail is discarded when
             // the chunker falls out of scope at the end of this iteration (only completed
             // sentences were forwarded); the final turn flushes its tail below.
-            val chunker = if (onSentence != null) SentenceChunker() else null
+            val chunker = if (speak != null) SentenceChunker() else null
             rounds[0]++
             tracer.roundStarted()
-            val onDelta: ((String) -> Unit)? = if (onSentence != null && chunker != null) {
-                { d -> tracer.delta(); chunker.feed(d).forEach(onSentence) }
+            val onDelta: ((String) -> Unit)? = if (speak != null && chunker != null) {
+                { d -> tracer.delta(); chunker.feed(d).forEach(speak) }
             } else null
             val reply = backend
                 .chat(systemMessages + messages, toolSchemas, onDelta)
@@ -239,12 +244,22 @@ class AgentOrchestrator @Inject constructor(
             if (reply.toolCalls.isEmpty()) {
                 val answer = finalAnswer(reply)
                 if (answer.isEmpty()) return AgentResult.Error("Пустой ответ модели")
-                if (onSentence != null) chunker?.flush()?.let(onSentence)
+                if (speak != null) chunker?.flush()?.let(speak)
                 messages += AgentMessage.Assistant(answer)
                 onTerminal()
                 return AgentResult.Answer(answer, outcomes.toList())
             }
             messages += AgentMessage.Assistant(reply.content, reply.toolCalls)
+            // Filler: this round is about to run a slow tool (search, weather, chargers, trip/
+            // charge stats, range, navigation) and nothing has been spoken yet this turn — speak
+            // a short persona phrase now, ahead of the tool result. Speech only: never added to
+            // messages/history and never part of the returned answer.
+            val slowCall = reply.toolCalls.firstOrNull { it.name in SLOW_TOOLS }
+            if (speak != null && !spoken && slowCall != null) {
+                val phrase = identity().persona.fillerPhrase()
+                tracer.filler(phrase, slowCall.name)
+                speak(phrase)
+            }
             for ((i, call) in reply.toolCalls.withIndex()) {
                 val key = call.name + "|" + call.arguments
                 val seen = callCounts.getOrDefault(key, 0)
@@ -320,6 +335,13 @@ class AgentOrchestrator @Inject constructor(
         private const val MAX_HISTORY = 20
         private const val MAX_IDENTICAL_CALLS = 2
         private const val MAX_LOOP_STRIKES = 2
+
+        /** Tool calls slow enough (network round-trip) that a filler phrase ahead of the result
+         *  is worth speaking; fast, local calls (vehicle_control etc.) never get one. */
+        private val SLOW_TOOLS = setOf(
+            "web_search", "get_weather", "find_chargers", "query_trips", "query_charges",
+            "range_to_destination", "navigate_to",
+        )
 
         /** Provider stop reason meaning the answer hit max_tokens, plus the mark that makes
          *  such a cut visible in the pill and in the journal. */
