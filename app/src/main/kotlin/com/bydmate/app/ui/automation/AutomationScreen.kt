@@ -22,10 +22,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.grid.LazyGridLayoutInfo
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.LaunchedEffect
@@ -892,34 +890,19 @@ internal interface RuleCells {
     fun pin()
 }
 
-/**
- * The rules on screen of the last layout pass, mapped once per pass: the drag reads them every
- * frame, and a new pass comes with a new layout info object.
- */
-private class LaidOutCells<T : Any>(private val map: (T) -> List<RuleCell>) {
-    private var laidOut: T? = null
-    private var cells = emptyList<RuleCell>()
-
-    fun of(info: T): List<RuleCell> {
-        if (info !== laidOut) {
-            cells = map(info)
-            laidOut = info
-        }
-        return cells
-    }
-}
-
 private class ListCells(private val state: LazyListState) : RuleCells {
     override val scroll: ScrollableState get() = state
     override val vertical = true
     override val viewportHeight: Int get() = state.layoutInfo.viewportSize.height
-    private val laidOut = LaidOutCells<LazyListLayoutInfo> { info ->
+    // Read afresh on every call: a small scroll moves the items of the same layout info object
+    // in place, so anything cached by that object would hand back stale offsets.
+    override fun visible(): List<RuleCell> {
+        val info = state.layoutInfo
         val width = info.viewportSize.width.toFloat()
-        info.visibleItemsInfo.mapNotNull { item ->
+        return info.visibleItemsInfo.mapNotNull { item ->
             (item.key as? Long)?.let { RuleCell(it, item.index, Rect(0f, item.offset.toFloat(), width, (item.offset + item.size).toFloat())) }
         }
     }
-    override fun visible(): List<RuleCell> = laidOut.of(state.layoutInfo)
     override fun pin() = state.requestScrollToItem(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
 }
 
@@ -927,12 +910,9 @@ private class GridCells(private val state: LazyGridState) : RuleCells {
     override val scroll: ScrollableState get() = state
     override val vertical = false
     override val viewportHeight: Int get() = state.layoutInfo.viewportSize.height
-    private val laidOut = LaidOutCells<LazyGridLayoutInfo> { info ->
-        info.visibleItemsInfo.mapNotNull { item ->
-            (item.key as? Long)?.let { RuleCell(it, item.index, Rect(item.offset.toOffset(), item.size.toSize())) }
-        }
+    override fun visible(): List<RuleCell> = state.layoutInfo.visibleItemsInfo.mapNotNull { item ->
+        (item.key as? Long)?.let { RuleCell(it, item.index, Rect(item.offset.toOffset(), item.size.toSize())) }
     }
-    override fun visible(): List<RuleCell> = laidOut.of(state.layoutInfo)
     override fun pin() = state.requestScrollToItem(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
 }
 
