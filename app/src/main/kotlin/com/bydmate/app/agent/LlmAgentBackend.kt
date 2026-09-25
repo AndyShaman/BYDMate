@@ -65,22 +65,37 @@ class LlmAgentBackend @Inject constructor(
             return call(conn, toWire(messages), tools, guarded, withExtras = false)
         }
 
+        // HTTP 200 with no text, no tool calls and finish_reason "error" is an upstream hiccup
+        // (seen on OpenRouter/Gemini) wearing a success status, not a real answer: treated as
+        // transient and retried like a 5xx/429 — but never once a delta already reached the
+        // caller, same as the forwarded guard everywhere else in this method.
+        fun isEmptyErrorReply(result: Result<AgentReply>): Boolean {
+            val reply = result.getOrNull() ?: return false
+            return !forwarded && reply.finishReason == FINISH_REASON_ERROR &&
+                reply.content.isNullOrBlank() && reply.toolCalls.isEmpty()
+        }
+
         var result = attempt(primary)
-        if (result.isSuccess) return result
+        if (result.isSuccess && !isEmptyErrorReply(result)) return result
         // Once a delta reached the caller the user has heard the beginning: replaying the
         // request (retry or fallback) would speak it twice. Fail fast instead.
         if (forwarded) return interrupted(result)
-        if (isTransient(result.exceptionOrNull()) && nowMs() - startedAt < RETRY_BUDGET_MS) {
+        if ((isTransient(result.exceptionOrNull()) || isEmptyErrorReply(result)) && nowMs() - startedAt < RETRY_BUDGET_MS) {
+            if (isEmptyErrorReply(result)) Log.w(TAG, "empty reply with finish_reason=error, retrying")
             result = attempt(primary)
-            if (result.isSuccess) return result
+            if (result.isSuccess && !isEmptyErrorReply(result)) return result
             if (forwarded) return interrupted(result)
         }
         val fallback = connections.fallback()
         if (fallback != null && nowMs() - startedAt < FALLBACK_BUDGET_MS) {
             result = attempt(fallback)
-            if (result.isSuccess) return result
+            if (result.isSuccess && !isEmptyErrorReply(result)) return result
             if (forwarded) return interrupted(result)
         }
+        // Still an empty/error reply after every attempt: hand it back as-is, success and all —
+        // AgentOrchestrator turns a blank answer into "Пустой ответ модели" itself, same as
+        // before this retry existed, instead of a new LlmError text here.
+        if (result.isSuccess) return result
         val cause = result.exceptionOrNull()
         return Result.failure(LlmError(userMessage(cause), cause))
     }
@@ -131,6 +146,8 @@ class LlmAgentBackend @Inject constructor(
         internal const val RETRY_BUDGET_MS = 10_000L
         /** Hard cap for starting a fallback attempt, counted from the start of the turn. */
         internal const val FALLBACK_BUDGET_MS = 20_000L
+        /** finish_reason value for an upstream hiccup reported as HTTP 200, no answer. */
+        private const val FINISH_REASON_ERROR = "error"
 
         /** Provider-specific payload fields that cut latency: reasoning off where the provider
          *  supports switching it off, usage stats in the stream to check prompt caching in the
