@@ -40,6 +40,9 @@ class OpenRouterTtsBackend(
         connections.get(LlmConnectionResolver.ID_OPENROUTER)?.let { HttpPrewarm.fire(ttsHttp, it.baseUrl) }
     }
 
+    override suspend fun voiceIdentity(gender: TtsGender): String =
+        "$model|${if (gender == TtsGender.MALE) maleVoice else femaleVoice}|pcm"
+
     override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm =
         withContext(Dispatchers.IO) {
             val connection = connections.get(LlmConnectionResolver.ID_OPENROUTER)

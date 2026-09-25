@@ -16,7 +16,10 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.io.IOException
 import java.util.Collections
 import java.util.concurrent.BlockingQueue
@@ -716,5 +719,157 @@ class TtsRouterTest {
         assertEquals(listOf(listOf(1f) to 24_000), delegate.playStreamCalls.toList())
         assertEquals(1, delegate.stopCalls)
         assertFalse(queue.enqueue("Второе."))
+    }
+
+    // --- persisted phrase cache (disk, second level) ---
+
+    @get:Rule val tmp = TemporaryFolder()
+
+    /** Counts synth calls; describes its voice with [identity] (null = cannot describe it). */
+    private class VoicedBackend(
+        @Volatile var identity: String? = "voice-a",
+        private val samples: FloatArray = floatArrayOf(0.1f, 0.2f),
+    ) : OnlineTtsBackend {
+        override val id = "minimax"
+        val synthesized: MutableList<Pair<String, TtsGender>> = Collections.synchronizedList(mutableListOf())
+        override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+            synthesized += text to gender
+            return TtsPcm(samples, 24_000)
+        }
+        override suspend fun configured() = true
+        override suspend fun voiceIdentity(gender: TtsGender) = identity
+    }
+
+    /** Waits until nothing launched on [scope] is left, including the detached disk writes that
+     *  finished jobs launch on their way out. */
+    private fun awaitQuiet(scope: CoroutineScope) {
+        while (scope.coroutineContext.job.children.any()) awaitIdle(scope)
+    }
+
+    private fun phraseFiles(dir: File) = dir.listFiles()?.filter { it.name.endsWith(".pcm") }.orEmpty()
+
+    private fun diskRouter(
+        backend: OnlineTtsBackend,
+        dir: File,
+        delegate: TtsEngine = FakeTtsEngine(),
+        phrases: List<String> = emptyList(),
+        scope: CoroutineScope = testScope(),
+    ) = TtsRouter(
+        delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" },
+        precachePhrases = { phrases }, scope = scope, phraseDir = dir,
+    )
+
+    /** Speaks [text] through a fresh router on [dir] and waits until it and its disk write finished. */
+    private fun speakAndSettle(backend: OnlineTtsBackend, dir: File, text: String, gender: TtsGender = TtsGender.MALE) {
+        val scope = testScope()
+        val delegate = FakeTtsEngine()
+        TtsRouter(
+            delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" },
+            selectedGender = { gender }, scope = scope, phraseDir = dir,
+        ).speak(text)
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        awaitQuiet(scope)
+    }
+
+    @Test
+    fun `a phrase persisted by one router plays in a new router with no backend call`() {
+        val dir = tmp.newFolder()
+        val first = VoicedBackend()
+        speakAndSettle(first, dir, "Готово.")
+        assertEquals(1, first.synthesized.size)
+        assertEquals(1, phraseFiles(dir).size)
+
+        val second = VoicedBackend()
+        val delegate = FakeTtsEngine()
+        diskRouter(second, dir, delegate).speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        assertTrue(second.synthesized.isEmpty())
+        val (samples, rate) = delegate.playPcmCalls.single()
+        assertEquals(24_000, rate)
+        assertEquals(0.1f, samples[0], 1e-4f)
+        assertEquals(0.2f, samples[1], 1e-4f)
+    }
+
+    @Test
+    fun `another gender, voice identity or text misses the persisted phrase`() {
+        val dir = tmp.newFolder()
+        speakAndSettle(VoicedBackend(), dir, "Готово.")
+
+        val female = VoicedBackend()
+        speakAndSettle(female, dir, "Готово.", TtsGender.FEMALE)
+        assertEquals(listOf("Готово." to TtsGender.FEMALE), female.synthesized.toList())
+
+        val otherVoice = VoicedBackend(identity = "voice-b")
+        speakAndSettle(otherVoice, dir, "Готово.")
+        assertEquals(1, otherVoice.synthesized.size)
+
+        val otherText = VoicedBackend()
+        speakAndSettle(otherText, dir, "Есть.")
+        assertEquals(listOf("Есть." to TtsGender.MALE), otherText.synthesized.toList())
+        assertEquals(4, phraseFiles(dir).size)
+    }
+
+    @Test
+    fun `precache on a warm directory makes no backend call, on a partial one only the missing phrases`() {
+        val dir = tmp.newFolder()
+        val phrases = listOf("Готово.", "Есть.", "Выполнено.")
+        val firstScope = testScope()
+        diskRouter(VoicedBackend(), dir, phrases = phrases.take(2), scope = firstScope).warmUp()
+        awaitTrue { phraseFiles(dir).size == 2 }
+        awaitQuiet(firstScope)
+
+        val partial = VoicedBackend()
+        val partialScope = testScope()
+        diskRouter(partial, dir, phrases = phrases, scope = partialScope).warmUp()
+        awaitTrue { phraseFiles(dir).size == 3 }
+        awaitQuiet(partialScope)
+        assertEquals(listOf("Выполнено." to TtsGender.MALE), partial.synthesized.toList())
+
+        val warm = VoicedBackend()
+        val warmScope = testScope()
+        val router = diskRouter(warm, dir, phrases = phrases, scope = warmScope)
+        router.warmUp()
+        awaitQuiet(warmScope)
+        assertTrue(warm.synthesized.isEmpty())
+        assertEquals(3, router.phraseCacheSizeForTest())
+    }
+
+    @Test
+    fun `a corrupt phrase file is dropped and the phrase synthesized again`() {
+        val dir = tmp.newFolder()
+        speakAndSettle(VoicedBackend(), dir, "Готово.")
+        val file = phraseFiles(dir).single()
+        file.writeBytes(file.readBytes().copyOf(15)) // truncated mid-sample
+
+        val backend = VoicedBackend()
+        speakAndSettle(backend, dir, "Готово.")
+        assertEquals(1, backend.synthesized.size)
+        // Re-synthesized and written again as a complete file.
+        assertEquals(12 + 2 * 2, phraseFiles(dir).single().length().toInt())
+    }
+
+    @Test
+    fun `the phrase directory stays within its file cap`() {
+        val dir = tmp.newFolder()
+        val cache = PhraseDiskCache(dir, maxFiles = 3)
+        repeat(5) { cache.write("key-$it", TtsPcm(floatArrayOf(0.5f), 24_000)) }
+        assertEquals(3, dir.listFiles()!!.size)
+        assertTrue(cache.read("key-4") != null)
+    }
+
+    @Test
+    fun `a backend that cannot describe its voice is never persisted`() {
+        val dir = tmp.newFolder()
+        val backend = VoicedBackend(identity = null)
+        speakAndSettle(backend, dir, "Готово.")
+        assertTrue(dir.listFiles().isNullOrEmpty())
+    }
+
+    @Test
+    fun `empty audio is never written to disk`() {
+        val dir = tmp.newFolder()
+        speakAndSettle(VoicedBackend(samples = FloatArray(0)), dir, "Готово.")
+        PhraseDiskCache(dir).write("key", TtsPcm(FloatArray(0), 24_000))
+        assertTrue(dir.listFiles().isNullOrEmpty())
     }
 }

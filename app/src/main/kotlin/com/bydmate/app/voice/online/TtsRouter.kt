@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.io.File
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.LinkedBlockingQueue
 
@@ -35,6 +36,8 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     private val precachePhrases: () -> List<String> = { emptyList() },
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val synthTimeoutMs: Long = SYNTH_TIMEOUT_MS,
+    /** App-private directory for the persisted phrase cache; null keeps phrases in memory only. */
+    phraseDir: File? = null,
 ) : TtsEngine {
 
     override val speaking: StateFlow<Boolean> = delegate.speaking
@@ -45,8 +48,10 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     @Volatile private var cancelActive: (() -> Unit)? = null
 
     // Short phrases (persona confirmations) replay from memory instead of paying a network
-    // round-trip every time. The key carries source + gender + text, so a switch of voice or
-    // source never replays the old voice; LRU-bounded so stray short replies cannot grow it.
+    // round-trip every time. The key carries source + gender + voice identity + text, so a switch
+    // of voice or source never replays the old voice; LRU-bounded so stray short replies cannot
+    // grow it. Disk is the second level: a phrase survives restarts and is synthesized once per voice.
+    private val phraseDisk = phraseDir?.let(::PhraseDiskCache)
     private val phraseCache = object : LinkedHashMap<String, TtsPcm>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TtsPcm>) =
             size > PHRASE_CACHE_ENTRIES
@@ -104,15 +109,24 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     // turn and risk the provider's rate limit. The first failure (no network yet at ignition,
     // 429, auth, a "success" without audio) stops the pass; the remaining phrases get cached on
     // first use.
+    // Phrases already on disk (the usual case after the first start with this voice) cost no
+    // network call; only the missing ones are synthesized.
     private suspend fun precache(backend: OnlineTtsBackend) {
         if (!runCatching { backend.configured() }.getOrDefault(false)) return
         val phrases = runCatching { precachePhrases() }.getOrDefault(emptyList())
-        val done = phrases.indexOfFirst { synthesizeOrNull(backend, it)?.samples?.isNotEmpty() != true }
-            .let { if (it < 0) phrases.size else it }
+        val hits = mutableMapOf<String, Int>()
+        val done = phrases.indexOfFirst { text ->
+            val hit = cachedPcm(phraseKey(backend, selectedGender(), text))
+            if (hit != null) hits.merge(hit.tier, 1, Int::plus)
+            hit == null && synthesizeOrNull(backend, text)?.samples?.isNotEmpty() != true
+        }.let { if (it < 0) phrases.size else it }
+        val memory = hits[TIER_MEMORY] ?: 0
+        val disk = hits[TIER_DISK] ?: 0
         Log.i(
             TAG,
-            "phrase precache: backend=${backend.id} phrases=${phrases.size} done=$done " +
-                "stopped=${done < phrases.size} cached=${synchronized(phraseCache) { phraseCache.size }}",
+            "phrase precache: backend=${backend.id} phrases=${phrases.size} done=$done memory=$memory disk=$disk " +
+                "synthesized=${done - memory - disk} stopped=${done < phrases.size} " +
+                "cached=${synchronized(phraseCache) { phraseCache.size }}",
         )
     }
 
@@ -150,26 +164,53 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     // One line per sentence: the network+synthesis leg of the reply latency, per backend.
     private suspend fun synthesizeOrNull(backend: OnlineTtsBackend, text: String): TtsPcm? {
         val gender = selectedGender()
-        cachedPcm(backend, gender, text)?.let {
-            Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} cached")
-            return it
+        val key = phraseKey(backend, gender, text)
+        cachedPcm(key)?.let {
+            Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} cached=${it.tier}")
+            return it.pcm
         }
         val startNs = System.nanoTime()
         val pcm = synthesizeCatching(backend, text, gender)
         Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} ms=${elapsedMs(startNs)} ok=${pcm != null}")
-        if (pcm != null) cachePhrase(backend, gender, text, pcm)
+        if (pcm != null) cachePhrase(key, pcm)
         return pcm
     }
 
-    private fun phraseKey(backend: OnlineTtsBackend, gender: TtsGender, text: String) = "${backend.id}|$gender|$text"
+    /** [persist] is false when the backend cannot describe its voice: such a phrase could replay
+     *  a stale voice after a settings change, so it stays in memory only. */
+    private class PhraseKey(val value: String, val text: String, val persist: Boolean)
 
-    private fun cachedPcm(backend: OnlineTtsBackend, gender: TtsGender, text: String): TtsPcm? =
-        synchronized(phraseCache) { phraseCache[phraseKey(backend, gender, text)] }
+    private class CacheHit(val pcm: TtsPcm, val tier: String)
+
+    private suspend fun phraseKey(backend: OnlineTtsBackend, gender: TtsGender, text: String): PhraseKey {
+        val identity = runCatching { backend.voiceIdentity(gender) }.getOrNull()
+        return PhraseKey("v$PHRASE_FORMAT|${backend.id}|$gender|${identity ?: "-"}|$text", text, identity != null)
+    }
+
+    // Memory first; a disk hit (one small file read, on the router's IO scope) is promoted to memory.
+    private fun cachedPcm(key: PhraseKey): CacheHit? {
+        synchronized(phraseCache) { phraseCache[key.value] }?.let { return CacheHit(it, TIER_MEMORY) }
+        if (!key.persist || key.text.length > PHRASE_CACHE_MAX_CHARS) return null
+        // runCatching: PhraseDiskCache handles IOException itself; anything else (SecurityException
+        // etc.) must not escape into the speech coroutines, whose scope has no exception handler.
+        val pcm = phraseDisk?.let { d ->
+            runCatching { d.read(key.value) }.onFailure { Log.w(TAG, "phrase disk read failed", it) }.getOrNull()
+        } ?: return null
+        Log.i(TAG, "phrase cache: disk hit chars=${key.text.length} samples=${pcm.samples.size}")
+        synchronized(phraseCache) { phraseCache[key.value] = pcm }
+        return CacheHit(pcm, TIER_DISK)
+    }
 
     // Empty audio (a provider "success" without samples) is never cached: it would pin silence.
-    private fun cachePhrase(backend: OnlineTtsBackend, gender: TtsGender, text: String, pcm: TtsPcm) {
-        if (text.length > PHRASE_CACHE_MAX_CHARS || pcm.samples.isEmpty()) return
-        synchronized(phraseCache) { phraseCache[phraseKey(backend, gender, text)] = pcm }
+    // The disk write runs detached, so it never delays the playback of the phrase just synthesized.
+    private fun cachePhrase(key: PhraseKey, pcm: TtsPcm) {
+        if (key.text.length > PHRASE_CACHE_MAX_CHARS || pcm.samples.isEmpty()) return
+        synchronized(phraseCache) { phraseCache[key.value] = pcm }
+        val disk = phraseDisk ?: return
+        // Detached on a scope without an exception handler: an escaping throwable would crash the app.
+        if (key.persist) scope.launch {
+            runCatching { disk.write(key.value, pcm) }.onFailure { Log.w(TAG, "phrase disk write failed", it) }
+        }
     }
 
     /** Test seam: entry count of the phrase cache. */
@@ -217,7 +258,7 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
                 "online stream: backend=${backend.id} chars=${text.length} first_chunk_ms=$firstChunkMs " +
                     "total_ms=${elapsedMs(startNs)} chunks=$count ok=$ok",
             )
-            if (ok && kept != null) cachePhrase(backend, gender, text, TtsPcm(mergeChunks(kept), sampleRate))
+            if (ok && kept != null) cachePhrase(phraseKey(backend, gender, text), TtsPcm(mergeChunks(kept), sampleRate))
             return when {
                 ok -> true
                 count > 0 -> false
@@ -272,7 +313,7 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         private val synthJob: Job = scope.launch {
             for (text in pending) {
                 val gender = selectedGender()
-                val rate = if (cachedPcm(backend, gender, text) == null) backend.streamSampleRate() else null
+                val rate = if (cachedPcm(phraseKey(backend, gender, text)) == null) backend.streamSampleRate() else null
                 val sentence = if (rate == null) {
                     WholeSentence(async { synthesizeOrNull(backend, text) })
                 } else {
@@ -372,5 +413,10 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         internal const val PHRASE_CACHE_MAX_CHARS = 40
         // Three persona pools of ~13 phrases fit with room for both genders of one pool.
         internal const val PHRASE_CACHE_ENTRIES = 48
+        // Part of every phrase key: bump when the stored format or the synthesis request changes
+        // so phrases persisted by an older build are never replayed.
+        private const val PHRASE_FORMAT = 1
+        private const val TIER_MEMORY = "memory"
+        private const val TIER_DISK = "disk"
     }
 }
