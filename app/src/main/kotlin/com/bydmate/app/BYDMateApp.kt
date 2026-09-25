@@ -201,7 +201,7 @@ class BYDMateApp : Application(), Configuration.Provider {
             splitOverlay.setOwnAppForegrounded(false)
             val prefs = WidgetPreferences(app)
             if (prefs.isEnabled() && Settings.canDrawOverlays(app)) {
-                WidgetController.attach(app)
+                WidgetController.attach(app, "app_backgrounded")
             }
         }
 

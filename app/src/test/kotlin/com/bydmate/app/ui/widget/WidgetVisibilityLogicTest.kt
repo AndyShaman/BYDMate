@@ -1,7 +1,9 @@
 package com.bydmate.app.ui.widget
 
 import com.bydmate.app.data.camera.CameraStateMonitor
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -58,5 +60,35 @@ class WidgetVisibilityLogicTest {
         assertFalse(WidgetController.shouldHideOverlay(
             cameraActive = false, youtubeForeground = true, hideOnYoutube = false,
             foregroundPkg = "anddea.youtube", hideInApps = setOf("com.android.chrome")))
+    }
+
+    @Test fun `car settings foreground hides the widget with an empty hide list`() {
+        assertTrue(WidgetController.shouldHideOverlay(
+            cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
+            foregroundPkg = "com.byd.carsettings", hideInApps = emptySet()))
+    }
+
+    @Test fun `a different byd package does not hide the widget`() {
+        assertFalse(WidgetController.shouldHideOverlay(
+            cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
+            foregroundPkg = "com.byd.music", hideInApps = emptySet()))
+    }
+
+    @Test fun `hideReason names which rule fired`() {
+        assertEquals("camera", WidgetController.hideReason(
+            cameraActive = true, youtubeForeground = false, hideOnYoutube = false,
+            foregroundPkg = null, hideInApps = emptySet()))
+        assertEquals("car_settings", WidgetController.hideReason(
+            cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
+            foregroundPkg = "com.byd.carsettings", hideInApps = emptySet()))
+        assertEquals("youtube", WidgetController.hideReason(
+            cameraActive = false, youtubeForeground = true, hideOnYoutube = true,
+            foregroundPkg = null, hideInApps = emptySet()))
+        assertEquals("app:com.android.chrome", WidgetController.hideReason(
+            cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
+            foregroundPkg = "com.android.chrome", hideInApps = setOf("com.android.chrome")))
+        assertNull(WidgetController.hideReason(
+            cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
+            foregroundPkg = null, hideInApps = emptySet()))
     }
 }

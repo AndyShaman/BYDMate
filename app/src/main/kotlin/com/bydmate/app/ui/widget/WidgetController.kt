@@ -137,7 +137,7 @@ object WidgetController {
     private var rootContainer: android.widget.FrameLayout? = null
 
     @Synchronized
-    fun attach(context: Context) {
+    fun attach(context: Context, reason: String = "unspecified") {
         if (appForegrounded && !previewMode) return  // race-guard, but preview wins
         if (widgetView != null) return               // already attached
 
@@ -268,17 +268,18 @@ object WidgetController {
             windowManager.addView(root, params)
         } catch (e: Exception) {
             Log.e(TAG, "addView failed: ${e.message}")
-            detach()
+            detach("addview_failed")
             return
         }
 
+        Log.i(TAG, "widget: attached ($reason)")
         startDataSubscription(appCtx)
     }
 
     @Synchronized
     fun setAppForegrounded(foreground: Boolean) {
         appForegrounded = foreground
-        if (foreground && !previewMode) detach()
+        if (foreground && !previewMode) detach("app_foreground")
     }
 
     /**
@@ -313,14 +314,15 @@ object WidgetController {
             if (prefs.isEnabled() &&
                 widgetView == null &&
                 android.provider.Settings.canDrawOverlays(appCtx)
-            ) attach(appCtx)
+            ) attach(appCtx, "preview")
         } else if (appForegrounded) {
-            detach()
+            detach("preview_end")
         }
     }
 
     @Synchronized
-    fun detach() {
+    fun detach(reason: String = "unspecified") {
+        val wasAttached = widgetView != null
         dataJob?.cancel()
         dataJob = null
         dataScope?.cancel()
@@ -347,15 +349,16 @@ object WidgetController {
         expandedState.value = false
         listeningState.value = false
         wm = null
+        if (wasAttached) Log.i(TAG, "widget: detached ($reason)")
     }
 
     private fun startDataSubscription(appCtx: Context) {
         val scope = CoroutineScope(Dispatchers.Main)
         dataScope = scope
-        // Camera surface always hides the widget; YouTube hides it only when the user
-        // opted in through the Settings toggle, and so does any app in the user-picked list.
-        // Our own overlays (blind-spot camera PiP) are ORed on top: combine(...) is typed only
-        // up to 5 flows, so the suppression is folded in around the five inputs above.
+        // Camera, car settings and (opt-in) YouTube/hide-list hide the widget with their own
+        // named reason; our own overlays (blind-spot camera PiP) are ORed on top under a
+        // "suppressed:<reasons>" label. combine(...) is typed only up to 5 flows, so the
+        // suppression is folded in around the five inputs above.
         val hideFlow = combine(
             combine(
                 TrackingService.cameraActive,
@@ -363,9 +366,11 @@ object WidgetController {
                 prefsHideOnYoutubeFlow,
                 TrackingService.foregroundPackage,
                 prefsHideInAppsFlow,
-            ) { cam, yt, hideYt, fgPkg, hideApps -> shouldHideOverlay(cam, yt, hideYt, fgPkg, hideApps) },
+            ) { cam, yt, hideYt, fgPkg, hideApps -> hideReason(cam, yt, hideYt, fgPkg, hideApps) },
             suppressReasons,
-        ) { hide, reasons -> hide || reasons.isNotEmpty() }
+        ) { reason, reasons ->
+            reason ?: reasons.takeIf { it.isNotEmpty() }?.let { "suppressed:${it.joinToString(",")}" }
+        }
         // Stock combine(...) is typed only up to 5 flows — bundle consumption +
         // alpha + scale + hideOverlay into one UiBundle so we stay under the limit.
         val uiFlow = combine(
@@ -374,6 +379,7 @@ object WidgetController {
             prefsScaleFlow,
             hideFlow,
         ) { c, a, s, hide -> UiBundle(c, a, s, hide) }
+        var lastHideReason: String? = null
         dataJob = scope.launch {
             combine(
                 TrackingService.lastData,
@@ -409,14 +415,19 @@ object WidgetController {
                     applyScaleChange(snap.scale)
                 }
 
-                // Hide widget while the BYD camera surface is up (com.byd.avc) or, when the
-                // toggle is on, while a YouTube client is foreground.
-                val hide = snap.hideOverlay
+                // Hide the widget while the BYD camera or car-settings surface is up, or, when
+                // opted in, over YouTube/a listed app, or one of our own overlays covers it.
+                val reason = snap.hideOverlay
+                if (reason != lastHideReason) {
+                    if (reason != null) Log.i(TAG, "widget: hidden ($reason)")
+                    else Log.i(TAG, "widget: shown (was $lastHideReason)")
+                    lastHideReason = reason
+                }
                 // Hide the entire root (panel + button layer) so the buttons
                 // don't stay drawn over the camera view when the panel is expanded.
                 // Re-show is symmetric: same view, VISIBLE.
-                rootContainer?.visibility = if (hide) View.GONE else View.VISIBLE
-                if (hide) hideTrashZone()
+                rootContainer?.visibility = if (reason != null) View.GONE else View.VISIBLE
+                if (reason != null) hideTrashZone()
             }
         }
 
@@ -485,14 +496,14 @@ object WidgetController {
         val consumption: ConsumptionState,
         val alpha: Float,
         val scale: Float,
-        val hideOverlay: Boolean,
+        val hideOverlay: String?,
     )
 
     private data class UiBundle(
         val consumption: ConsumptionState,
         val alpha: Float,
         val scale: Float,
-        val hideOverlay: Boolean,
+        val hideOverlay: String?,
     )
 
     // --- Button panel expand/collapse ---
@@ -689,7 +700,7 @@ object WidgetController {
 
     @Synchronized
     fun relocale(appCtx: Context) {
-        if (widgetView != null) detach()
+        if (widgetView != null) detach("relocale")
         // C-5: always invoke via caller-supplied appCtx, not widgetView?.context.
         splitOverlayRelocaleAction(appCtx)
     }
@@ -708,20 +719,38 @@ object WidgetController {
     private fun dpFromMetrics(metrics: DisplayMetrics, dp: Int): Int =
         (dp * metrics.density).toInt()
 
+    // Official BYD car-settings app: some of its screens sit under the widget, so it
+    // always hides it while foreground, no preference involved (like the camera).
+    // Package not yet confirmed on every car; extend if another variant surfaces.
+    private val CAR_SETTINGS_PACKAGES = setOf("com.byd.carsettings")
+
     /**
-     * Pure visibility decision, unit-tested: camera always hides, YouTube only by opt-in,
-     * plus any package the user put on the "hide in these apps" list.
+     * Pure visibility decision, unit-tested: camera and car settings always hide, YouTube
+     * only by opt-in, plus any package the user put on the "hide in these apps" list.
+     * Returns the reason that fired, or null when the widget should stay visible.
      */
+    fun hideReason(
+        cameraActive: Boolean,
+        youtubeForeground: Boolean,
+        hideOnYoutube: Boolean,
+        foregroundPkg: String?,
+        hideInApps: Set<String>,
+    ): String? = when {
+        cameraActive -> "camera"
+        foregroundPkg != null && foregroundPkg in CAR_SETTINGS_PACKAGES -> "car_settings"
+        youtubeForeground && hideOnYoutube -> "youtube"
+        foregroundPkg != null && foregroundPkg in hideInApps -> "app:$foregroundPkg"
+        else -> null
+    }
+
+    /** Boolean wrapper over [hideReason] for callers that only need the yes/no answer. */
     fun shouldHideOverlay(
         cameraActive: Boolean,
         youtubeForeground: Boolean,
         hideOnYoutube: Boolean,
         foregroundPkg: String?,
         hideInApps: Set<String>,
-    ): Boolean =
-        cameraActive ||
-            (youtubeForeground && hideOnYoutube) ||
-            (foregroundPkg != null && foregroundPkg in hideInApps)
+    ): Boolean = hideReason(cameraActive, youtubeForeground, hideOnYoutube, foregroundPkg, hideInApps) != null
 
     /**
      * Split-mode left tap, as an inverse toggle: no session → restore the last pair
@@ -815,7 +844,7 @@ object WidgetController {
                     val runnable = Runnable {
                         if (dragging) return@Runnable
                         prefs.setHiddenUntilAppLaunch(true)
-                        detach()
+                        detach("long_press_hide")
                         try {
                             android.widget.Toast.makeText(
                                 context,
@@ -929,7 +958,7 @@ object WidgetController {
                         // End drag
                         if (trashActive.value) {
                             prefs.setEnabled(false)
-                            detach()
+                            detach("disabled")
                             return true
                         } else {
                             collapsedX = params.x

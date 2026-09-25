@@ -961,7 +961,7 @@ class TrackingService : Service(), LocationListener {
         if (prefs.isEnabled() && android.provider.Settings.canDrawOverlays(this)) {
             // ActivityLifecycleCallbacks detaches the widget when an Activity is resumed,
             // so calling attach unconditionally here is safe.
-            com.bydmate.app.ui.widget.WidgetController.attach(this)
+            com.bydmate.app.ui.widget.WidgetController.attach(this, "service_start")
         }
     }
 
@@ -1314,7 +1314,7 @@ class TrackingService : Service(), LocationListener {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
-        com.bydmate.app.ui.widget.WidgetController.detach()
+        com.bydmate.app.ui.widget.WidgetController.detach("service_destroy")
         ChainLog.append(this, "TrackingService onDestroy")
         pollingJob?.cancel()
         hudController.stop()
