@@ -67,6 +67,17 @@ class AgentOrchestratorFillerTest {
         assertTrue("$lines", lines.any { it == "filler: \"${fillers[0]}\" tool=web_search" })
     }
 
+    // where_am_i waits on Overpass, a network round-trip like web_search.
+    @Test fun `where_am_i gets a filler`() = runTest {
+        coEvery { tools.execute(any()) } returns """{"settlements":[]}"""
+        val backend = FakeBackend(replies = ArrayDeque(listOf(toolCall("where_am_i"), answer("Не знаю."))))
+        val lines = mutableListOf<String>()
+        val fillers = mutableListOf<String>()
+        orchestrator(backend, lines).ask("где я", onFiller = { fillers += it }, onSentence = {})
+        assertEquals(1, fillers.size)
+        assertTrue("$lines", lines.any { it == "filler: \"${fillers[0]}\" tool=where_am_i" })
+    }
+
     @Test fun `filler is not spoken for a fast tool`() = runTest {
         coEvery { tools.execute(any()) } returns """{"ok":true}"""
         val backend = FakeBackend(replies = ArrayDeque(listOf(toolCall("vehicle_control"), answer("Готово."))))
