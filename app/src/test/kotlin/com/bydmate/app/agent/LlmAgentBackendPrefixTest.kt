@@ -69,6 +69,20 @@ class LlmAgentBackendPrefixTest {
         assertEquals("СТАТИКА", bodies[1].getJSONObject(0).getString("content"))
     }
 
+    // On Gemini the breakpoint makes OpenRouter write the cache inside the request (+1.3 s to the
+    // first token on every turn after a 5-minute pause), so Gemini models go without it.
+    @Test fun openrouter_gemini_gets_no_cache_breakpoint() = runTest {
+        coEvery { resolver.primary() } returns
+            LlmConnection(LlmConnectionResolver.ID_OPENROUTER, "OpenRouter", "https://openrouter/v1", "key",
+                "google/gemini-3.5-flash-lite")
+        coEvery { resolver.fallback() } returns null
+        val captured = slot<JSONArray>()
+        coEvery { client.chatRaw(any(), any(), any(), capture(captured), any(), any()) } returns
+            Result.success(JSONObject("""{"content":"ок"}"""))
+        backend.chat(messages, null)
+        assertEquals("СТАТИКА", captured.captured.getJSONObject(0).getString("content"))
+    }
+
     @Test fun other_endpoints_get_plain_string_content() = runTest {
         val wire = wireFor(LlmConnectionResolver.ID_CUSTOM)
         assertEquals("СТАТИКА", wire.getJSONObject(0).getString("content"))
