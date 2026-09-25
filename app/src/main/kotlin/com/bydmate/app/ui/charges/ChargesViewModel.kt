@@ -15,6 +15,7 @@ import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.data.repository.equivalentFullCycles
 import com.bydmate.app.data.repository.fullCycleKwh
 import com.bydmate.app.domain.battery.BatteryStateRepository
+import com.bydmate.app.util.CalendarPeriods
 import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -369,24 +370,9 @@ class ChargesViewModel @Inject constructor(
                 cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
                 cal.timeInMillis to now
             }
-            ChargesPeriod.WEEK -> {
-                cal.add(Calendar.DAY_OF_YEAR, -7)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
-            ChargesPeriod.MONTH -> {
-                cal.set(Calendar.DAY_OF_MONTH, 1)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
-            ChargesPeriod.YEAR -> {
-                cal.set(Calendar.DAY_OF_YEAR, 1)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
+            ChargesPeriod.WEEK -> CalendarPeriods.startOfWeek(now) to now
+            ChargesPeriod.MONTH -> CalendarPeriods.startOfMonth(now) to now
+            ChargesPeriod.YEAR -> CalendarPeriods.startOfYear(now) to now
             ChargesPeriod.ALL -> 0L to now
         }
     }
