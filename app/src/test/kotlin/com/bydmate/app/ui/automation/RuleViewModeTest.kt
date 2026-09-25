@@ -54,6 +54,7 @@ class RuleViewModeTest {
             placeRepository = placeRepository,
             vehicleApi = mockk(relaxed = true),
             actionDispatcher = mockk(relaxed = true),
+            settingsRepository = mockk(relaxed = true),
             context = ctx,
         ).also { testDispatcher.scheduler.advanceUntilIdle() }
     }

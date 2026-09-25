@@ -96,6 +96,7 @@ class AutomationRuleShareViewModelTest {
         placeRepository = placeRepository,
         vehicleApi = mockk(relaxed = true),
         actionDispatcher = actionDispatcher,
+        settingsRepository = mockk(relaxed = true),
         context = ctx,
     ).also {
         it.downloadsDir = { downloads }

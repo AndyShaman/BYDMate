@@ -35,6 +35,7 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.repository.PlaceRepository
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.loop.TimedSnapshot
 import com.bydmate.app.data.remote.DiParsData
@@ -416,12 +417,14 @@ data class AutomationUiState(
 )
 
 @HiltViewModel
-class AutomationViewModel @Inject constructor(
+@Suppress("LargeClass") // the whole Automation tab: rules, editor, import/share, journal
+class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     private val ruleDao: RuleDao,
     private val ruleLogDao: RuleLogDao,
     private val placeRepository: PlaceRepository,
     private val vehicleApi: VehicleApi,
     private val actionDispatcher: ActionDispatcher,
+    private val settingsRepository: SettingsRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -452,11 +455,15 @@ class AutomationViewModel @Inject constructor(
     private var editorSession = 0L
     private val shareMutex = Mutex()
 
+    /** Rule ids in the driver's own order, as last saved; empty = newest first. */
+    private var ruleOrder: List<Long> = emptyList()
+
     init {
         viewModelScope.launch { insertStarterTemplatesIfNeeded() }
         viewModelScope.launch {
+            ruleOrder = RuleOrder.parse(settingsRepository.getAutomationRuleOrder())
             ruleDao.getAll().collect { rules ->
-                _uiState.update { it.copy(rules = rules) }
+                _uiState.update { it.copy(rules = RuleOrder.apply(ruleOrder, rules)) }
             }
         }
         viewModelScope.launch {
@@ -478,6 +485,21 @@ class AutomationViewModel @Inject constructor(
     fun setViewMode(mode: RuleViewMode) {
         _uiState.update { it.copy(viewMode = mode) }
         RuleViewMode.prefs(context).edit().putString(RuleViewMode.KEY, mode.name).apply()
+    }
+
+    /**
+     * A rule dropped into [target]'s place (#249): the new order shows at once and is saved once,
+     * as the whole list of ids, so the rules a filter hides keep their places too.
+     */
+    fun moveRule(moved: Long, target: Long) {
+        val rules = _uiState.value.rules
+        val ids = rules.map { it.id }
+        val next = RuleOrder.move(ids, moved, target)
+        if (next == ids) return
+        ruleOrder = next
+        _uiState.update { it.copy(rules = RuleOrder.apply(next, it.rules)) }
+        Log.i("AutomationViewModel", "rule order: moved id=$moved from=${ids.indexOf(moved)} to=${next.indexOf(moved)}")
+        viewModelScope.launch { settingsRepository.setAutomationRuleOrder(RuleOrder.serialize(next)) }
     }
 
     fun toggleEnabled(rule: RuleEntity) {
@@ -523,7 +545,8 @@ class AutomationViewModel @Inject constructor(
             val msg = if (result.isSuccess) lc.getString(R.string.auto_msg_dispatch_sent)
                       else lc.getString(
                           R.string.auto_msg_dispatch_error,
-                          result.exceptionOrNull()?.message ?: lc.getString(R.string.auto_msg_unavailable),
+                          result.exceptionOrNull()?.let { actionDispatcher.vehicleFailureReason(it) }
+                              ?: lc.getString(R.string.auto_msg_unavailable),
                       )
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         }
