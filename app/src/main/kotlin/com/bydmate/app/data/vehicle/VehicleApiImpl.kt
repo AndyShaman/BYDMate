@@ -137,7 +137,7 @@ class VehicleApiImpl @Inject constructor(
             // All panes were commanded, so they can be judged together: one verification
             // window for the burst instead of one per pane (~400 ms instead of ~1.6 s).
             verifyWindowBurst(windowChecks)?.let { stuck ->
-                if (firstError == null) firstError = VehicleWriteError.ReadbackMismatch(commandString, stuck)
+                if (firstError == null) firstError = windowsStuck(commandString, stuck)
             }
         }
         return firstError?.let { Result.failure(it) } ?: Result.success(Unit)
@@ -374,9 +374,20 @@ class VehicleApiImpl @Inject constructor(
     /** Verdict for a single write, as the error it should fail with (null when it is fine). */
     private suspend fun windowFailure(check: WindowVerify): VehicleWriteError? {
         val stuck = verifyWindowBurst(listOf(check)) ?: return null
-        val err = VehicleWriteError.ReadbackMismatch(check.actionName, stuck)
+        val err = windowsStuck(check.actionName, stuck)
         maybeReportValidatedFailure(check.actionName, err, check.entry)
         return err
+    }
+
+    /**
+     * The failure for [panes] that never moved. The driver reads it in the app language, worded
+     * from [panes] by ActionDispatcher; the Russian details are what the logs show.
+     */
+    private fun windowsStuck(action: String, panes: List<WindowPane>): VehicleWriteError.ReadbackMismatch {
+        val labels = panes.map { paneLabel(it) }
+        val details = if (labels.size == 1) "${labels[0]} не сдвинулось с места, команда не сработала"
+        else "не сдвинулись с места: " + labels.joinToString(", ")
+        return VehicleWriteError.ReadbackMismatch(action, details, panes)
     }
 
     /**
@@ -386,14 +397,13 @@ class VehicleApiImpl @Inject constructor(
      * as nothing is left to judge. A four-window command therefore costs the same wait as one.
      * Any movement — even a pane still travelling — proves its write landed.
      *
-     * Returns null when every pane is accounted for, else a short Russian reason naming the
-     * panes that never moved.
+     * Returns null when every pane is accounted for, else the panes that never moved.
      *
      * Deliberately fail-open: a read that does not complete, a sentinel, a pane already at the
      * requested position, or a command with no comparable target (CTRL detents) all count as
      * "no evidence", never as a failure.
      */
-    private suspend fun verifyWindowBurst(checks: List<WindowVerify>): String? {
+    private suspend fun verifyWindowBurst(checks: List<WindowVerify>): List<WindowPane>? {
         val samples = sampleWindows(checks)
         val stuck = watchPanes(samples.pending)
         val left = retryOnPercentChannel(stuck, samples.blind)
@@ -405,9 +415,7 @@ class VehicleApiImpl @Inject constructor(
             logWrite(pane.check.actionName, pane.check.entry.dev, pane.check.entry.writeFid,
                 pane.check.value, null, false, "window_noop", pane.check.entry.validated)
         }
-        val panes = failed.map { paneLabel(it.check.actionName) }
-        return if (panes.size == 1) "${panes[0]} не сдвинулось с места, команда не сработала"
-        else "не сдвинулись с места: " + panes.joinToString(", ")
+        return failed.map { WindowPane.of(it.check.actionName) }
     }
 
     /** Watches [pending] until each pane shows movement; returns the ones that never did. */
@@ -595,13 +603,13 @@ class VehicleApiImpl @Inject constructor(
         else -> null
     }
 
-    /** Pane name for the failure the driver hears. */
-    private fun paneLabel(actionName: String): String = when {
-        actionName.startsWith("window_driver") -> "окно водителя"
-        actionName.startsWith("window_passenger") -> "окно пассажира"
-        actionName.startsWith("window_rear_left") -> "заднее левое окно"
-        actionName.startsWith("window_rear_right") -> "заднее правое окно"
-        else -> "стекло"
+    /** Pane name for the log line of a stuck window. */
+    private fun paneLabel(pane: WindowPane): String = when (pane) {
+        WindowPane.DRIVER -> "окно водителя"
+        WindowPane.PASSENGER -> "окно пассажира"
+        WindowPane.REAR_LEFT -> "заднее левое окно"
+        WindowPane.REAR_RIGHT -> "заднее правое окно"
+        WindowPane.OTHER -> "стекло"
     }
 
     /** Read address actually sampled, plus the position read right now (raw, sentinels kept as-is). */

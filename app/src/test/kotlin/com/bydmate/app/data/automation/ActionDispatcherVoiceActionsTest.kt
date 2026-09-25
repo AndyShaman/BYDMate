@@ -2,6 +2,7 @@ package com.bydmate.app.data.automation
 
 import android.app.NotificationManager
 import android.content.Context
+import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
@@ -38,7 +39,8 @@ class ActionDispatcherVoiceActionsTest {
     }
 
     // Factory for the cluster_projection tests below: same shape, but takes the
-    // ClusterVoiceControl mock directly so tests can verify apply(on).
+    // ClusterVoiceControl mock directly so tests can verify apply(on). The failure reasons
+    // come from AppStrings, stubbed with their Russian texts.
     private fun makeDispatcherWithCluster(clusterVoiceControl: ClusterVoiceControl): ActionDispatcher {
         val vehicleApi = mockk<VehicleApi>(relaxed = true)
         val helper = mockk<HelperClient>(relaxed = true)
@@ -46,10 +48,13 @@ class ActionDispatcherVoiceActionsTest {
         val notificationManager = mockk<NotificationManager>(relaxed = true)
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         val voiceActions = mockk<VoiceAutomationActions>(relaxed = true)
+        val strings = mockk<com.bydmate.app.util.AppStrings>(relaxed = true)
+        every { strings.get(R.string.dispatch_cluster_not_on) } returns "проекция на приборку не включилась"
+        every { strings.get(R.string.dispatch_cluster_daemon_restarting) } returns "служебный процесс перезапускается"
         return ActionDispatcher(vehicleApi, helper, context, dagger.Lazy { voiceActions }, clusterVoiceControl,
             mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
             mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true))
+            strings)
     }
 
     @Test fun `speak action routes payload text to the coordinator`() = runTest {
@@ -123,6 +128,7 @@ class ActionDispatcherVoiceActionsTest {
         val r = d.dispatch(clusterAction("1"), data = null)
         assertFalse(r.success)
         assertEquals("проекция на приборку не включилась", r.reason)
+        assertFalse(r.daemonRestarting)
     }
 
     @Test fun `cluster_projection blames the restarting daemon when it is the known cause`() = runTest {
@@ -133,6 +139,7 @@ class ActionDispatcherVoiceActionsTest {
         val r = d.dispatch(clusterAction("1"), data = null)
         assertFalse(r.success)
         assertEquals("служебный процесс перезапускается", r.reason)
+        assertTrue(r.daemonRestarting)
     }
 
     // The projection coming up a beat later is still a success: we poll, not sample once.

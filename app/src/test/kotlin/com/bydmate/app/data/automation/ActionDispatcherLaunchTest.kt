@@ -7,7 +7,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.cluster.ClusterVoiceControl
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
@@ -39,6 +41,8 @@ class ActionDispatcherLaunchTest {
     private val dispatcher: ActionDispatcher
 
     init {
+        // Reasons come from the real resources, asserted in Russian.
+        LocalePreferences(ApplicationProvider.getApplicationContext()).setLanguage("ru")
         every { context.packageManager } returns packageManager
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         dispatcher = ActionDispatcher(vehicleApi, helper, context,
@@ -46,7 +50,7 @@ class ActionDispatcherLaunchTest {
             mockk<ClusterVoiceControl>(relaxed = true),
             mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
             mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true))
+            com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()))
     }
 
     private fun launchAction(pkg: String) = ActionDef(

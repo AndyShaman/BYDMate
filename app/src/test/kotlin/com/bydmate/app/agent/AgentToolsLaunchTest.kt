@@ -417,7 +417,7 @@ class AgentToolsLaunchTest {
         every { clusterVoiceControl.projectionMode() } returns ClusterMode.OFF
         every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
         coEvery { dispatcher.dispatch(any(), any()) } returns
-            DispatchResult(false, ActionDispatcher.DAEMON_RESTART_REASON)
+            DispatchResult(false, "служебный процесс перезапускается", daemonRestarting = true)
         val out = JSONObject(tools().execute(
             AgentToolCall("1", "set_cluster_projection", """{"on":true}""")))
         assertFalse(out.getBoolean("ok"))

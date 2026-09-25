@@ -2,6 +2,7 @@ package com.bydmate.app.data.automation
 
 import android.app.NotificationManager
 import android.content.Context
+import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.vehicle.HelperClient
@@ -30,6 +31,7 @@ import org.junit.Test
 class ActionDispatcherSplitToggleTest {
     private val splitManager = mockk<SplitSessionManager>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
+    private val strings = mockk<com.bydmate.app.util.AppStrings>(relaxed = true)
     private val dispatcher: ActionDispatcher
 
     private val pair = SplitPair("com.nav", "com.music", SplitSide.RIGHT)
@@ -43,7 +45,7 @@ class ActionDispatcherSplitToggleTest {
             mockk<ClusterVoiceControl>(relaxed = true),
             mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
             splitManager,
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true),
+            strings,
         )
     }
 
@@ -95,6 +97,7 @@ class ActionDispatcherSplitToggleTest {
     @Test fun `toggle without a saved pair fails without opening the picker`() = runBlocking {
         stateIs(SplitSessionState.Idle)
         coEvery { splitManager.startLastPair() } returns null
+        every { strings.get(R.string.dispatch_split_pair_not_saved) } returns "пара для разделения экрана не сохранена"
         val result = dispatcher.dispatch(action("split_screen_toggle"), null)
         assertFalse(result.success)
         assertTrue(result.reason?.isNotBlank() == true)

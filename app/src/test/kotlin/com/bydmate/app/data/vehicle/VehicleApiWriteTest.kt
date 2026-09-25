@@ -199,6 +199,8 @@ class VehicleApiWriteTest {
         assertTrue(result.isFailure)
         val err = result.exceptionOrNull() as VehicleWriteError.ReadbackMismatch
         assertTrue(err.message!!, err.message!!.contains("не сдвинулось"))
+        // The driver's text is worded from the pane, in the app language (#242).
+        assertEquals(listOf(WindowPane.DRIVER), err.stuckPanes)
     }
 
     @Test fun `window write that starts the pane moving is a success`() = runTest {
@@ -341,6 +343,7 @@ class VehicleApiWriteTest {
         val message = result.exceptionOrNull()!!.message!!
         assertTrue(message, message.contains("заднее правое окно"))
         assertFalse(message, message.contains("заднее левое"))
+        assertEquals(listOf(WindowPane.REAR_RIGHT), (result.exceptionOrNull() as VehicleWriteError.ReadbackMismatch).stuckPanes)
     }
 
     // Two 400 ms passes is the worst case for a burst where nothing moves at all.
