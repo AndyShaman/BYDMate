@@ -550,15 +550,20 @@ class VoiceControllerAgentFallbackTest {
             agentOrchestrator = agentOrchestrator,
             ttsEnabled = true, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
+        val answerHookCalls = java.util.Collections.synchronizedList(mutableListOf<String>())
+        controller.showAnswerHook = { text -> answerHookCalls.add(text) }
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
         awaitSubscribed(fakeAsr.events)
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("что там на трассе"))
-        Thread.sleep(500)
+        // The final showAnswerHook call carries result.text, right after the speak() fallback --
+        // same completion signal as "filler goes to the TTS queue only" above.
+        awaitTrue { answerHookCalls.size == 2 }
 
         verify { queue.enqueue("Сейчас посмотрю.") }
-        verify { ttsEngine.speak("Нашёл.") }
+        verify { queue.enqueue("Нашёл.") } // the answer sentence was attempted, not skipped
+        verify(exactly = 1) { ttsEngine.speak("Нашёл.") }
     }
 
     @Test fun `with TTS off there is no filler at all`() {

@@ -8,6 +8,8 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -101,6 +103,12 @@ class MiniMaxTtsBackend(
         }
         try {
             block()
+        } catch (e: IOException) {
+            // call.cancel() from the watcher's finally surfaces here as a plain IOException; if
+            // that's because this coroutine was cancelled, ensureActive() rethrows the real
+            // CancellationException so callers see a cancellation, not an ordinary synth failure.
+            currentCoroutineContext().ensureActive()
+            throw e
         } finally {
             watcher.cancel()
         }

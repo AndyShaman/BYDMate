@@ -9,8 +9,13 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -23,6 +28,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -34,6 +40,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
 class MiniMaxTtsBackendTest {
@@ -513,27 +520,37 @@ class MiniMaxTtsBackendTest {
     }
 
     @Test
-    fun `cancelling the whole-sentence synthesize while the server never responds returns promptly`() {
+    fun `cancelling the whole-sentence synthesize after the request lands surfaces as a cancellation`() {
         stubSettings(provider = "official")
-        // Same setup as the streaming cancellation test above: the job is cancelled while
-        // synthesizeOfficial is already inside its IO block, before the watcher is launched; the
-        // server never answers, so only call.cancel() can unblock execute().
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "") } coAnswers {
-            currentCoroutineContext().job.cancel()
-            "mm-test-key"
-        }
+        // Unlike the streaming test above, the job is cancelled only once MockWebServer confirms
+        // the request went out, so execute() is genuinely blocked on the watcher's normal path --
+        // this is what actually happens on barge-in or a router timeout mid-call, and it's the
+        // path that must surface as CancellationException, not a plain IOException.
         official.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         val slowBackend = MiniMaxTtsBackend(
             http = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
             settingsRepository = settingsRepository,
             officialBaseUrl = official.url("/").toString().trimEnd('/'),
         )
+        val job = Job()
+        val failure = AtomicReference<Throwable?>()
         val finished = CountDownLatch(1)
-        thread {
-            runCatching { runBlocking { slowBackend.synthesize("привет", TtsGender.MALE) } }
-            finished.countDown()
+        CoroutineScope(Dispatchers.IO + job).launch {
+            try {
+                slowBackend.synthesize("привет", TtsGender.MALE)
+            } catch (e: Throwable) {
+                failure.set(e)
+            } finally {
+                finished.countDown()
+            }
         }
-        assertTrue("execute() stayed blocked after cancellation", finished.await(10, TimeUnit.SECONDS))
+        assertNotNull("MockWebServer never received the request", official.takeRequest(5, TimeUnit.SECONDS))
+        val start = System.nanoTime()
+        job.cancel()
+        assertTrue("execute() stayed blocked after cancellation", finished.await(5, TimeUnit.SECONDS))
+        val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
+        assertTrue("cancellation took ${elapsedMs}ms, expected well under the 60s read timeout", elapsedMs < 5_000)
+        assertTrue("expected CancellationException, got ${failure.get()}", failure.get() is CancellationException)
     }
 
     @Test
