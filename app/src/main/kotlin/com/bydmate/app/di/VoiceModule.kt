@@ -114,6 +114,7 @@ object VoiceModule {
             },
             selectedGender = { if (prefs().getString("agent_gender", "m") == "f") TtsGender.FEMALE else TtsGender.MALE },
             precachePhrases = { AgentPersona.fromId(prefs().getString("agent_persona", null)).phrases() },
+            phraseDir = File(ctx.filesDir, "tts_phrases"),
         )
     }
 

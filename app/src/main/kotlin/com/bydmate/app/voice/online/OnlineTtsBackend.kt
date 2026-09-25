@@ -18,6 +18,11 @@ interface OnlineTtsBackend {
     /** True when this backend's API key/config is present and usable. */
     suspend fun configured(): Boolean
 
+    /** Everything besides the text that decides the audio for [gender] (transport, model, voice
+     *  id, output format), or null when this backend cannot describe it -- its phrases are then
+     *  cached in memory only, never persisted across restarts. */
+    suspend fun voiceIdentity(gender: TtsGender): String? = null
+
     /** Fire-and-forget: opens the connection to the synthesis host ahead of the first sentence. */
     suspend fun prewarm() {}
 

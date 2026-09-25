@@ -53,6 +53,14 @@ class MiniMaxTtsBackend(
         HttpPrewarm.fire(http, base)
     }
 
+    // Official renders raw PCM at a fixed rate, fal/Replicate a WAV each: the transport is part
+    // of the identity. language_boost depends only on the text, which the cache key carries.
+    override suspend fun voiceIdentity(gender: TtsGender): String {
+        val provider = settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_PROVIDER, PROVIDER_OFFICIAL)
+        val format = if (provider == PROVIDER_FAL || provider == PROVIDER_REPLICATE) "wav" else "pcm$OFFICIAL_SAMPLE_RATE"
+        return "$provider|$MODEL|${if (gender == TtsGender.MALE) MALE_VOICE else FEMALE_VOICE}|$format"
+    }
+
     override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm =
         withContext(Dispatchers.IO) {
             val key = settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "")
