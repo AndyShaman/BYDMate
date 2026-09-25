@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.18.2] - 2026-09-25
+
 ### Новое
 - Автоматизации можно расставить в своём порядке: долгое нажатие на правило поднимает его, дальше его можно перетащить на новое место. Работает и списком, и сеткой, порядок сохраняется (#249).
 - Плавающий виджет прячется, пока открыты настройки машины, и возвращается, когда их закрыли.
@@ -1237,7 +1239,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.18.1...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.18.2...HEAD
+[3.18.2]: https://github.com/AndyShaman/BYDMate/compare/v3.18.1...v3.18.2
 [3.18.1]: https://github.com/AndyShaman/BYDMate/compare/v3.18.0...v3.18.1
 [3.18.0]: https://github.com/AndyShaman/BYDMate/compare/v3.17.5...v3.18.0
 [3.17.5]: https://github.com/AndyShaman/BYDMate/compare/v3.17.4...v3.17.5
