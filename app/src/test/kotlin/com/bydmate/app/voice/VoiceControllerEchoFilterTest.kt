@@ -68,7 +68,7 @@ class VoiceControllerEchoFilterTest {
         every { gate.ttsEnabled() } returns ttsEnabled
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { }
+        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { }
 
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>(relaxed = true)
