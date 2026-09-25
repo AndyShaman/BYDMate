@@ -180,6 +180,17 @@ class AgentTools @Inject constructor(
     internal var locationProvider: () -> Pair<Double, Double>? =
         { TrackingService.lastLocation.value?.let { it.latitude to it.longitude } }
 
+    /** A GPS fix for where_am_i: [ageMs] since it was taken, [live] = delivered by the GPS
+     *  listener in this service run rather than the start-time last-known seed. */
+    internal data class GpsFix(val lat: Double, val lon: Double, val ageMs: Long, val live: Boolean)
+
+    /** Test seam - [locationProvider] plus the age and origin of the fix, for where_am_i. */
+    internal var gpsFixProvider: () -> GpsFix? = {
+        TrackingService.lastLocation.value?.let {
+            GpsFix(it.latitude, it.longitude, (nowMs() - it.time).coerceAtLeast(0L), TrackingService.lastLocationIsLive)
+        }
+    }
+
     /** Test seam - launchable apps as label to package pairs. */
     internal var launcherAppsProvider: () -> List<Pair<String, String>> = { queryLauncherApps() }
 
@@ -391,8 +402,9 @@ class AgentTools @Inject constructor(
             "where_am_i",
             "Где сейчас машина: ближайшие населённые пункты вокруг текущей GPS-позиции (данные " +
                 "OpenStreetMap) с расстоянием до центра в км и стороной света от машины, ближайший " +
-                "первым, плюс ближайший город. Вызывай на вопросы \"где я\", \"что рядом\", " +
-                "\"какой это населённый пункт\"; не ищи координаты через web_search.",
+                "первым, плюс ближайший город. Известны только центры, не границы: ответ говорит, " +
+                "насколько машина близко к месту, а не в каком месте она. Вызывай на вопросы \"где я\", " +
+                "\"что рядом\", \"какой это населённый пункт\"; не ищи координаты через web_search.",
             JSONObject(), emptyList(),
         ))
         // Always declared: with no Exa key the execute path below falls back to the primary
@@ -1659,11 +1671,13 @@ class AgentTools @Inject constructor(
     // --- where_am_i ---
 
     private suspend fun whereAmI(): String {
-        val (lat, lon) = locationProvider()
+        val fix = gpsFixProvider()
             ?: return """{"error":"нет GPS-позиции машины, не могу определить, где мы"}"""
+        val lat = fix.lat
+        val lon = fix.lon
         val client = settlementSearchClient
             ?: return """{"error":"поиск населённых пунктов недоступен"}"""
-        Log.i(TAG, "where_am_i: request")
+        Log.i(TAG, "where_am_i: request, fix age=${fix.ageMs / 1000}s live=${fix.live}")
         val found = runCatchingCancellable {
             client.search(lat, lon, SETTLEMENT_RADIUS_M, TOWN_RADIUS_M)
         }.getOrNull()?.getOrElse {
@@ -1677,17 +1691,34 @@ class AgentTools @Inject constructor(
         val town = found.filter { it.place == "city" || it.place == "town" }.minByOrNull { km(it) }
         Log.i(TAG, "where_am_i: ${found.size} found, nearest=" + settlementLabel(lat, lon, nearest.firstOrNull()) +
             ", town=" + settlementLabel(lat, lon, town))
+        val json = JSONObject().put("fix_age_min", fix.ageMs / 60_000L)
+        staleFixNote(fix)?.let { json.put("fix_note", it) }
         if (nearest.isEmpty()) {
-            return JSONObject().put("settlements", JSONArray())
+            return json.put("settlements", JSONArray())
                 .put("note", "рядом населённых пунктов в OpenStreetMap не найдено; не называй место наугад")
                 .toString()
         }
-        val json = JSONObject().put("settlements", JSONArray().apply {
+        json.put("settlements", JSONArray().apply {
             nearest.forEach { put(settlementJson(lat, lon, it)) }
         })
         if (town != null) json.put("nearest_town", settlementJson(lat, lon, town))
-        return json.put("note", "distance_km до центра населённого пункта; меньше 1-2 км значит машина в нём " +
-            "или на его краю. Называй только эти места").toString()
+        return json.put("note", "distance_km - по прямой до центра населённого пункта, direction_from_car - " +
+            "в какой стороне он от машины. Границ в данных нет: даже при малом расстоянии не говори, что машина " +
+            "в нём, говори «примерно N км от X, X к северу от нас». Называй только эти места").toString()
+    }
+
+    /** Null for a fresh fix. A live fix that stopped updating is normal while parked (8 m GPS
+     *  filter) but means a lost signal on the move; a start-time seed may predate the drive. */
+    private fun staleFixNote(fix: GpsFix): String? {
+        if (fix.ageMs <= FRESH_FIX_MS) return null
+        val min = fix.ageMs / 60_000L
+        return if (fix.live) {
+            "GPS-позиция не менялась $min мин: на стоянке это нормально, но если машина в движении, " +
+                "сигнал пропал - тогда говори «по последним данным»"
+        } else {
+            "свежего GPS-сигнала после запуска не было, позиция сохранена $min мин назад - говори " +
+                "«по последним данным»"
+        }
     }
 
     private fun settlementJson(lat: Double, lon: Double, s: SettlementSearchClient.Settlement): JSONObject =
@@ -2605,6 +2636,8 @@ class AgentTools @Inject constructor(
         private const val SETTLEMENT_RADIUS_M = 15_000
         private const val TOWN_RADIUS_M = 50_000
         private const val MAX_SETTLEMENTS = 5
+        // where_am_i: a fix older than this gets fix_note so the model hedges.
+        private const val FRESH_FIX_MS = 120_000L
         private val SETTLEMENT_TYPES = mapOf(
             "city" to "город", "town" to "город", "village" to "деревня или посёлок",
             "hamlet" to "деревня", "suburb" to "район города", "isolated_dwelling" to "хутор",

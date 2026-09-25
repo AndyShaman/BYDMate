@@ -401,6 +401,13 @@ class TrackingService : Service(), LocationListener {
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
 
+        /** True once [lastLocation] holds a fix the GPS listener delivered in this service run;
+         *  false while it is only the getLastKnownLocation() seed from start, which may predate
+         *  the whole drive. A live fix then stays put while parked (8 m filter), so its age alone
+         *  does not mean the position is wrong. */
+        @Volatile var lastLocationIsLive: Boolean = false
+            private set
+
         // GPS fix older than this is not forwarded to ABRP: a stale coordinate would
         // pin the car marker to an old position, which is worse than sending none.
         private const val TELEMETRY_LOCATION_FRESH_MS = 60_000L
@@ -1404,6 +1411,7 @@ class TrackingService : Service(), LocationListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onLocationChanged(location: Location) {
+        lastLocationIsLive = true
         _lastLocation.value = location
         // AC-06: never log raw coordinates in release — logcat is readable on DiLink
         // and ends up in user-shared diagnostic dumps.
@@ -1883,6 +1891,7 @@ class TrackingService : Service(), LocationListener {
         try {
             val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
             if (lastKnown != null) {
+                lastLocationIsLive = false
                 _lastLocation.value = lastKnown
                 Log.i(TAG, "lastKnownLocation: provider=${lastKnown.provider} " +
                     "age=${(System.currentTimeMillis() - lastKnown.time) / 1000}s")

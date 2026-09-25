@@ -47,6 +47,7 @@ class AgentPromptTest {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("where_am_i"))
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("не угадывай и не ищи координаты через web_search"))
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("скажи, что не знаешь, где мы"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("не говори, что мы в населённом пункте"))
     }
 
     @Test fun prompt_admits_forgetting_instead_of_denying() {
