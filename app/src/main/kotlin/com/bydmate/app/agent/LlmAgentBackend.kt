@@ -30,6 +30,10 @@ class LlmAgentBackend @Inject constructor(
 
     override suspend fun isConfigured(): Boolean = connections.primary() != null
 
+    override suspend fun prewarm() {
+        connections.primary()?.let { client.prewarm(it.baseUrl) }
+    }
+
     override suspend fun chat(
         messages: List<AgentMessage>,
         tools: JSONArray?,

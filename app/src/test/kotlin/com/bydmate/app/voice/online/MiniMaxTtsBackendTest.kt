@@ -129,6 +129,19 @@ class MiniMaxTtsBackendTest {
     }
 
     @Test
+    fun `official transport boosts Russian for Cyrillic text and leaves other text as before`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(MockResponse().setBody(officialSuccessBody()))
+        official.enqueue(MockResponse().setBody(officialSuccessBody()))
+
+        backend.synthesize("Заряд 80 процентов", TtsGender.MALE)
+        backend.synthesize("Battery at 80 percent", TtsGender.MALE)
+
+        assertEquals("Russian", JSONObject(official.takeRequest().body.readUtf8()).getString("language_boost"))
+        assertFalse(JSONObject(official.takeRequest().body.readUtf8()).has("language_boost"))
+    }
+
+    @Test
     fun `official transport uses the female voice for FEMALE gender`() = runTest {
         stubSettings(provider = "official")
         official.enqueue(MockResponse().setBody(officialSuccessBody()))

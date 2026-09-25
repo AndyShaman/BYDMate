@@ -1863,6 +1863,17 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             } catch (e: Exception) {
                 appendLine("(failed to gather agent connection: ${e.message})")
             }
+            // Voice speed wave: which TTS source speaks the replies (online latency depends on it).
+            try {
+                val voicePrefs = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                val source = voicePrefs.getString("tts_source", TtsRouter.OFFLINE) ?: TtsRouter.OFFLINE
+                val minimaxProvider = settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_PROVIDER, "official")
+                val voice = voicePrefs.getString("tts_voice", TtsModelManager.DEFAULT_VOICE_ID)
+                val gender = voicePrefs.getString("agent_gender", "m")
+                appendLine("tts: source=$source minimax_provider=$minimaxProvider offline_voice=$voice gender=$gender")
+            } catch (e: Exception) {
+                appendLine("(failed to gather tts source: ${e.message})")
+            }
             // Voice sessions, persisted across restarts: what ASR heard, what it became (command,
             // automation, agent) and why not, with the agent's tools and answer. The only place a
             // user report about a misheard or refused command becomes checkable.

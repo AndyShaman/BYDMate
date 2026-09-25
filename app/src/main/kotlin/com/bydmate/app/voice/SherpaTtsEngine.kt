@@ -283,6 +283,7 @@ class SherpaTtsEngine(
     override fun playPcm(samples: FloatArray, sampleRate: Int): Boolean {
         if (samples.isEmpty()) return false
         Log.i(TAG, "playPcm: samples=${samples.size} rate=$sampleRate")
+        val calledNs = System.nanoTime()
         val myGen = generation.incrementAndGet()
         val requestedRate = rate()  // frozen once; both worker and caller use this snapshot, no race
         val writeOutcome = CompletableFuture<Boolean>()
@@ -313,6 +314,9 @@ class SherpaTtsEngine(
                     }
                     var framesWritten = 0L
                     if (generation.get() == myGen) {
+                        // Voice speed wave: the moment this PCM starts feeding a playing track, and how
+                        // long it waited behind the previous sentence's drain on the worker.
+                        Log.i(TAG, "playPcm write start: waitMs=${(System.nanoTime() - calledNs) / 1_000_000}")
                         // Same publish-before-write ordering as speak()/enqueue() -- see writeSentence's doc.
                         val written = writeSentence(
                             samples = samples,

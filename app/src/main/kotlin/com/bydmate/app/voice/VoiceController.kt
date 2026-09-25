@@ -257,6 +257,10 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // idempotent (volume already at the duck target returns null), so the inner call becomes
         // a no-op and this early saved volume is the one restored at session teardown.
         val earlyDuck = runCatching { audioCapture.duckMusic() }.getOrNull()
+        // Warm the model and online-voice connections while the driver is still speaking: a cold
+        // turn otherwise pays DNS + TLS on both hosts inside the reply latency.
+        runCatching { ttsEngine.prewarmNetwork() }
+        scope.launch { runCatching { agentOrchestrator.prewarm() } }
         sessionJob = scope.launch {
             val session = coroutineContext[Job]
             runCatching { showListeningOverlay(appStrings.get(R.string.voice_listening)) }

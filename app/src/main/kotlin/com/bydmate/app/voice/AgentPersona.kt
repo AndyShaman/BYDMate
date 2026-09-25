@@ -12,6 +12,9 @@ enum class AgentPersona(val id: String) {
     fun spokenPhrase(spoken: String, random: Random = Random.Default): String =
         pools(this)[spoken]?.random(random) ?: spoken
 
+    /** Every phrase this persona can say for a terminal outcome (for the online-voice cache). */
+    fun phrases(): List<String> = pools(this).values.flatten()
+
     companion object {
         fun fromId(id: String?): AgentPersona = entries.firstOrNull { it.id == id } ?: NAVIGATOR
 

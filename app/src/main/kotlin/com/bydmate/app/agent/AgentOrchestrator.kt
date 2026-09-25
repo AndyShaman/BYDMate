@@ -23,6 +23,7 @@ import javax.inject.Singleton
  * via Mutex — concurrent PTT + chat asks serialize, history stays consistent.
  */
 @Singleton
+@Suppress("TooManyFunctions") // the turn loop plus its small prompt/history helpers
 class AgentOrchestrator @Inject constructor(
     private val backend: AgentBackend,
     private val tools: AgentTools,
@@ -43,6 +44,11 @@ class AgentOrchestrator @Inject constructor(
     private val mutex = Mutex()
     private val history = mutableListOf<AgentMessage>()
     private var lastAnswerAt = 0L
+
+    /** Warms the model host on push-to-talk, before the utterance is even recognized. */
+    suspend fun prewarm() {
+        if (settingsRepository.isAgentEnabled()) backend.prewarm()
+    }
 
     suspend fun ask(userText: String, onSentence: ((String) -> Unit)? = null): AgentResult {
         mutex.withLock {

@@ -25,6 +25,18 @@ class LlmAgentBackendTest {
     private fun okMessage() = JSONObject("""{"content":"привет"}""")
 
     @Test
+    fun `prewarm opens the primary connection host, nothing when unconfigured`() = runTest {
+        coEvery { resolver.primary() } returns conn("openrouter")
+        io.mockk.every { client.prewarm(any()) } returns Unit
+        backend.prewarm()
+        io.mockk.verify(exactly = 1) { client.prewarm("https://openrouter/v1") }
+
+        coEvery { resolver.primary() } returns null
+        backend.prewarm()
+        io.mockk.verify(exactly = 1) { client.prewarm(any()) }
+    }
+
+    @Test
     fun `transient failure retries primary once then succeeds`() = runTest {
         coEvery { resolver.primary() } returns conn("zai")
         coEvery { resolver.fallback() } returns null

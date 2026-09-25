@@ -29,6 +29,10 @@ interface TtsEngine {
      *  the model load; no-op when not ready or already created. */
     fun warmUp() {}
 
+    /** Opens the network connection to an online voice ahead of the reply (push-to-talk);
+     *  no-op for engines that synthesize locally. */
+    fun prewarmNetwork() {}
+
     /** True from the moment an utterance actually starts playing until its audio has fully
      *  drained from the output device (or stop() cuts it short). The continuous voice
      *  session mutes its mic off this real signal instead of guessing speech duration. */
