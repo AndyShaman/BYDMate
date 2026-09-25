@@ -41,6 +41,11 @@ internal class AgentTrace(private val clock: () -> Long, private val sink: (Stri
         sink("reply failed round=${clock() - roundStart}ms error=${clip(message)}")
     }
 
+    /** The filler spoken while a slow tool call (web search, weather, ...) is in flight. */
+    fun filler(phrase: String, toolName: String) {
+        sink("filler: \"$phrase\" tool=$toolName")
+    }
+
     /** One line per tool call: name, arguments and verdict, so a "said done, did nothing"
      *  report can be read straight out of the user's log. */
     fun tool(call: AgentToolCall, verdict: String, tookMs: Long, result: String) {

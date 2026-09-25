@@ -12,8 +12,13 @@ enum class AgentPersona(val id: String) {
     fun spokenPhrase(spoken: String, random: Random = Random.Default): String =
         pools(this)[spoken]?.random(random) ?: spoken
 
-    /** Every phrase this persona can say for a terminal outcome (for the online-voice cache). */
-    fun phrases(): List<String> = pools(this).values.flatten()
+    /** A random short filler ("Сейчас посмотрю.") spoken while a slow tool call is in flight,
+     *  so the driver hears something before the real answer. */
+    fun fillerPhrase(random: Random = Random.Default): String = FILLER_POOLS.getValue(this).random(random)
+
+    /** Every phrase this persona can speak (outcome pools + fillers), for the online-voice
+     *  TTS precache -- nothing here is picked at runtime by index, only by content. */
+    fun phrases(): List<String> = pools(this).values.flatten() + FILLER_POOLS.getValue(this)
 
     companion object {
         fun fromId(id: String?): AgentPersona = entries.firstOrNull { it.id == id } ?: NAVIGATOR
@@ -45,6 +50,12 @@ enum class AgentPersona(val id: String) {
             NAVIGATOR -> NAVIGATOR_POOLS
             ENGINEER -> ENGINEER_POOLS
         }
+
+        private val FILLER_POOLS = mapOf(
+            NAVIGATOR to listOf("Сейчас посмотрю.", "Секунду, проверяю.", "Минутку.", "Уже смотрю."),
+            SNARKY to listOf("Ща гляну.", "Погоди, копаюсь.", "Щас, не торопи.", "Минуту, ищу."),
+            ENGINEER to listOf("Запрос принят.", "Проверяю.", "Обрабатываю.", "Секунду."),
+        )
     }
 }
 

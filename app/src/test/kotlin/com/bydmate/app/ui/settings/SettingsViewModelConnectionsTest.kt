@@ -443,7 +443,7 @@ class SettingsViewModelConnectionsTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(SettingsViewModel.DEFAULT_OPENROUTER_MODEL, vm.uiState.value.openRouterModel)
-        assertEquals("gemini-3.8-flash", vm.uiState.value.openRouterModelName)
+        assertEquals("gemini-3.5-flash-lite", vm.uiState.value.openRouterModelName)
     }
 
     @Test fun `testConnection second tap while running is ignored`() = runTest {
