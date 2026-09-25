@@ -528,6 +528,39 @@ class VoiceControllerAgentFallbackTest {
         verify(exactly = 0) { ttsEngine.speak(any()) }
     }
 
+    // The filler must not itself count as the answer being queued: if it is accepted but the
+    // answer sentence is then rejected by the queue, the driver must still hear the real answer
+    // via the legacy speak() fallback, not just the filler.
+    @Test fun `filler accepted, answer sentence rejected, final answer still spoken via fallback`() {
+        val agentOrchestrator = mockk<AgentOrchestrator>()
+        val ttsEngine = quietTtsEngine()
+        val queue = mockk<TtsEngine.SpeechQueue>(relaxed = true)
+        every { ttsEngine.startQueue() } returns queue
+        every { queue.enqueue("Сейчас посмотрю.") } returns true
+        every { queue.enqueue("Нашёл.") } returns false
+        every { ttsEngine.speak(any()) } returns true
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } coAnswers {
+            secondArg<((String) -> Unit)?>()?.invoke("Сейчас посмотрю.")
+            thirdArg<((String) -> Unit)?>()?.invoke("Нашёл.")
+            AgentResult.Answer("Нашёл.", emptyList())
+        }
+
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(
+            agentOrchestrator = agentOrchestrator,
+            ttsEnabled = true, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
+        )
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("что там на трассе"))
+        Thread.sleep(500)
+
+        verify { queue.enqueue("Сейчас посмотрю.") }
+        verify { ttsEngine.speak("Нашёл.") }
+    }
+
     @Test fun `with TTS off there is no filler at all`() {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         val ttsEngine = quietTtsEngine()

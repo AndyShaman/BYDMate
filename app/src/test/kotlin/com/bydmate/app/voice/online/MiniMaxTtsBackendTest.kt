@@ -513,6 +513,30 @@ class MiniMaxTtsBackendTest {
     }
 
     @Test
+    fun `cancelling the whole-sentence synthesize while the server never responds returns promptly`() {
+        stubSettings(provider = "official")
+        // Same setup as the streaming cancellation test above: the job is cancelled while
+        // synthesizeOfficial is already inside its IO block, before the watcher is launched; the
+        // server never answers, so only call.cancel() can unblock execute().
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "") } coAnswers {
+            currentCoroutineContext().job.cancel()
+            "mm-test-key"
+        }
+        official.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val slowBackend = MiniMaxTtsBackend(
+            http = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
+            settingsRepository = settingsRepository,
+            officialBaseUrl = official.url("/").toString().trimEnd('/'),
+        )
+        val finished = CountDownLatch(1)
+        thread {
+            runCatching { runBlocking { slowBackend.synthesize("привет", TtsGender.MALE) } }
+            finished.countDown()
+        }
+        assertTrue("execute() stayed blocked after cancellation", finished.await(10, TimeUnit.SECONDS))
+    }
+
+    @Test
     fun `streamSampleRate is 24000 for official, unset and unknown providers, null for fal and replicate`() = runTest {
         stubSettings(provider = "official")
         assertEquals(24_000, backend.streamSampleRate())

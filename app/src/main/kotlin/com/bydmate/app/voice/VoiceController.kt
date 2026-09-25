@@ -703,6 +703,11 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         val queue = if (gate.ttsEnabled()) runCatching { ttsEngine.startQueue() }.getOrNull() else null
         val streamed = StringBuilder()
         var queuedAny = false
+        // Whether the filler alone reached the TTS queue. Audible, but not an answer sentence:
+        // must not suppress the earcon+legacy-speak fallback below (queuedAny gates that), or the
+        // driver hears only the filler when the real answer fails to enqueue. Still counts toward
+        // "something was said aloud" for the dialog dwell timer (didSpeak below).
+        var fillerQueued = false
         var r: AgentResult? = null
         coroutineScope {
             // LAZY so the body cannot run before askJob is assigned: the callback below gates
@@ -722,7 +727,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                                 runCatching { q.enqueue(phrase) }.getOrDefault(false)
                             ) {
                                 echoFilter.noteSpoken(phrase)
-                                queuedAny = true
+                                fillerQueued = true
                                 lastSpeakingSeenMs = System.currentTimeMillis()
                             }
                         }
@@ -789,7 +794,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                     detail = withDecodeMs(result.text + toolsNote, decodeMs), outcome = VoiceJournalEntry.Outcome.OK,
                     tools = result.tools, answer = result.text, refusal = why, asrMs = decodeMs),
                     "Agent answered: transcript=\"$transcript\" tools=${result.tools.size}")
-                var didSpeak = queuedAny
+                var didSpeak = queuedAny || fillerQueued
                 if (!queuedAny && gate.ttsEnabled()) {
                     // See announce() for why this is stamped at call time, not only per-frame,
                     // and only when speak() actually enqueued playback.
