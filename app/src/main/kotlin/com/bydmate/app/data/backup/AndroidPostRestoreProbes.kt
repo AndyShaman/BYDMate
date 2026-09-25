@@ -55,7 +55,7 @@ class AndroidPostRestoreProbes(
     override suspend fun grantOverlayViaDaemon(): Boolean =
         helperBootstrap.ensureRunning() && helperClient.grantOverlayPermission()
 
-    override suspend fun attachWidget() = withContext(Dispatchers.Main) { WidgetController.attach(context) }
+    override suspend fun attachWidget() = withContext(Dispatchers.Main) { WidgetController.attach(context, "post_restore") }
 
     private companion object {
         // Ids of the online backends wired into TtsRouter in VoiceModule; any other source value

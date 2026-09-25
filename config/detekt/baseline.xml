@@ -271,7 +271,7 @@
     <ID>LongMethod:VehicleApiImpl.kt$VehicleApiImpl$internal suspend fun doWrite( requestedAction: String, requestedValue: Int, verifyInto: MutableList&lt;WindowVerify&gt;? = null, ): Result&lt;Unit&gt;</ID>
     <ID>LongMethod:VoiceController.kt$VoiceController$private fun startContinuousSession()</ID>
     <ID>LongMethod:VoiceController.kt$VoiceController$private suspend fun agentFallback(transcript: String, decodeMs: Long? = null)</ID>
-    <ID>LongMethod:WidgetController.kt$WidgetController$@Synchronized fun attach(context: Context)</ID>
+    <ID>LongMethod:WidgetController.kt$WidgetController$@Synchronized fun attach(context: Context, reason: String = "unspecified")</ID>
     <ID>LongMethod:WidgetController.kt$WidgetController$private fun startDataSubscription(appCtx: Context)</ID>
     <ID>LongMethod:WidgetController.kt$WidgetController.WidgetTouchListener$override fun onTouch(v: android.view.View, event: MotionEvent): Boolean</ID>
     <ID>LongParameterList:AgentOrchestrator.kt$AgentOrchestrator$( messages: MutableList&lt;AgentMessage&gt;, systemMessages: List&lt;AgentMessage&gt;, toolSchemas: JSONArray, allowAutomationTools: Boolean, onSentence: ((String) -&gt; Unit)?, onTerminal: () -&gt; Unit, )</ID>

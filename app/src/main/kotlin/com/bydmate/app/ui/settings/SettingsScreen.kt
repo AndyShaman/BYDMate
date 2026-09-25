@@ -824,7 +824,7 @@ private fun WidgetSection() {
                     if (requested) {
                         if (AndroidSettings.canDrawOverlays(context)) {
                             prefs.setEnabled(true)
-                            WidgetController.attach(context)
+                            WidgetController.attach(context, "settings_toggle_on")
                         } else {
                             val intent = Intent(
                                 AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -834,7 +834,7 @@ private fun WidgetSection() {
                         }
                     } else {
                         prefs.setEnabled(false)
-                        WidgetController.detach()
+                        WidgetController.detach("settings_toggle_off")
                     }
                 },
             )
@@ -884,8 +884,8 @@ private fun WidgetSection() {
                 onClick = {
                     prefs.resetPosition()
                     if (enabled && AndroidSettings.canDrawOverlays(context)) {
-                        WidgetController.detach()
-                        WidgetController.attach(context)
+                        WidgetController.detach("reset_position")
+                        WidgetController.attach(context, "reset_position")
                     }
                 },
                 style = SettingButtonStyle.Secondary,

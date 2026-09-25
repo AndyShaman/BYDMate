@@ -126,7 +126,9 @@ class CameraStateMonitor @Inject constructor(
         val beginTs = if (lastEventTs == 0L) now - INITIAL_LOOKBACK_MS else lastEventTs + 1
         try {
             val latest = latestResumed(usm, beginTs, now + 1)
-            if (latest != null) acceptForeground(latest.first, latest.second)
+            if (latest != null && acceptForeground(latest.first, latest.second)) {
+                Log.i(TAG, "foreground: ${latest.first} (poll)")
+            }
             // No new events => keep prior foreground (camera still on, etc.).
             // Forward through start() ensures the very first call has lastEventTs=0,
             // forcing the wider window above.
