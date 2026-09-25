@@ -136,6 +136,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_TECH_CARD_ORDER = "tech_card_order"
         /** "true" once a card has actually been dragged — hides the reorder hint. */
         const val KEY_TECH_ORDER_HINT_SEEN = "tech_card_order_hint_seen"
+        /** Comma-separated automation rule ids in the order the driver dragged them into (#249). */
+        const val KEY_AUTOMATION_RULE_ORDER = "automation_rule_order"
         const val KEY_MIGRATION_V2_4_17 = "migration_v2_4_17_done"
         const val KEY_INSIGHT_CACHE_V2_MIGRATION_DONE = "insight_cache_v2_migration_done"
         // One-shot migration flag: v2.8.1 — clear stale "DIPLUS" data_source value
@@ -544,6 +546,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setTechOrderHintSeen() =
         setString(KEY_TECH_ORDER_HINT_SEEN, "true")
+
+    suspend fun getAutomationRuleOrder(): String =
+        getString(KEY_AUTOMATION_RULE_ORDER, "")
+
+    suspend fun setAutomationRuleOrder(ids: String) =
+        setString(KEY_AUTOMATION_RULE_ORDER, ids)
 
     suspend fun isMigrationV2_4_17Done(): Boolean =
         getString(KEY_MIGRATION_V2_4_17, "false") == "true"
