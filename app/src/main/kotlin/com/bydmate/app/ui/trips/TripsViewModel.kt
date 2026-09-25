@@ -7,6 +7,7 @@ import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.util.CalendarPeriods
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -357,24 +358,9 @@ class TripsViewModel @Inject constructor(
                 cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
                 cal.timeInMillis to now
             }
-            TripPeriod.WEEK -> {
-                cal.add(Calendar.DAY_OF_YEAR, -7)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
-            TripPeriod.MONTH -> {
-                cal.add(Calendar.DAY_OF_YEAR, -30)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
-            TripPeriod.YEAR -> {
-                cal.add(Calendar.YEAR, -1)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
+            TripPeriod.WEEK -> CalendarPeriods.startOfWeek(now) to now
+            TripPeriod.MONTH -> CalendarPeriods.startOfMonth(now) to now
+            TripPeriod.YEAR -> CalendarPeriods.startOfYear(now) to now
             TripPeriod.ALL -> 0L to now
         }
     }

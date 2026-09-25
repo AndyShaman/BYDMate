@@ -21,6 +21,7 @@ import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.util.CalendarPeriods
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -312,28 +313,12 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun periodRange(period: DashboardPeriod): Pair<Long, Long> {
-        val cal = Calendar.getInstance()
-        val now = cal.timeInMillis
+        val now = System.currentTimeMillis()
         return when (period) {
             DashboardPeriod.TODAY -> todayRange()
-            DashboardPeriod.WEEK -> {
-                cal.add(Calendar.DAY_OF_YEAR, -7)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
-            DashboardPeriod.MONTH -> {
-                cal.add(Calendar.DAY_OF_YEAR, -30)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
-            DashboardPeriod.YEAR -> {
-                cal.add(Calendar.YEAR, -1)
-                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                cal.timeInMillis to now
-            }
+            DashboardPeriod.WEEK -> CalendarPeriods.startOfWeek(now) to now
+            DashboardPeriod.MONTH -> CalendarPeriods.startOfMonth(now) to now
+            DashboardPeriod.YEAR -> CalendarPeriods.startOfYear(now) to now
             DashboardPeriod.ALL -> 0L to now
         }
     }
