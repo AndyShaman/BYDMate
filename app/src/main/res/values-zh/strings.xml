@@ -213,7 +213,7 @@
 
     <!-- Settings: Autoservice status -->
     <string name="settings_autoservice_disconnected_title">未连接</string>
-    <string name="settings_autoservice_disconnected_detail">如果开发者设置中已启用 ADB，请重启应用</string>
+    <string name="settings_autoservice_disconnected_detail">如果 ADB 已开启，请重启应用</string>
     <string name="settings_autoservice_sentinel_title">已连接，但数据不可读</string>
     <string name="settings_autoservice_sentinel_detail">此功能可能仅适用于 钛3</string>
     <string name="settings_autoservice_connected_title">已连接</string>
@@ -816,7 +816,7 @@
     <string name="settings_adb_restore_title">重启后恢复 ADB</string>
     <string name="settings_adb_restore_desc">适用于每次重启后 ADB 都会关闭的固件。需要打开 Wi-Fi。</string>
     <string name="settings_adb_restore_help_title">ADB 恢复功能的工作原理</string>
-    <string name="settings_adb_restore_help_body">在较新的 DiLink 固件上（2026 年夏季之后），ADB 端口在每次重启后都会关闭，BYDMate 会失去对车辆控制功能的访问。\n\n应用可以通过 Android 内置的无线调试重新打开 ADB。为此：\n\n1. 车机的 Wi-Fi 必须打开并连接到网络：家里的网络、手机热点或其他任意网络。没有 Wi-Fi 时 Android 不允许开启无线调试，这是系统限制。\n\n2. 在每个新网络上首次开启时，屏幕上会出现系统对话框“Allow wireless debugging on this network?”。请勾选“Always allow on this network”并点击 ALLOW。之后在该网络上不会再询问，因此建议一直使用同一个网络。\n\n3. 在 ADB 仍然可用时，应用会一次性给自己授予所需的系统权限。如果状态行显示“需要激活”，请按常规方式连接一次 ADB，然后重启应用。\n\n如果您的固件在重启后 ADB 本来就能工作，则无需开启：状态行会显示“无需开启”。</string>
+    <string name="settings_adb_restore_help_body">在较新的 DiLink 固件上（2026 年夏季之后），ADB 端口在每次重启后都会关闭，BYDMate 会失去对车辆控制功能的访问。\n\n应用可以通过 Android 内置的无线调试重新打开 ADB。为此：\n\n1. 车机的 Wi-Fi 必须打开并连接到网络：家里的网络、手机热点或其他任意网络。没有 Wi-Fi 时 Android 不允许开启无线调试，这是系统限制。\n\n2. 在每个新网络上首次开启时，屏幕上会出现系统对话框“Allow wireless debugging on this network?”。恢复功能开启时，BYDMate 会通过自己的无障碍服务自动确认。如果该服务已关闭，请勾选“Always allow on this network”并点击 ALLOW。\n\n3. 在 ADB 仍然可用时，应用会一次性给自己授予所需的系统权限。如果状态行显示“需要激活”，请按常规方式连接一次 ADB，然后重启应用。\n\n如果您的固件在重启后 ADB 本来就能工作，则无需开启：状态行会显示“无需开启”。</string>
     <string name="settings_adb_restore_status_not_needed">无需开启：ADB 已在工作</string>
     <string name="settings_adb_restore_status_needs_activation">需要激活：请先正常连接一次 ADB，然后重启应用</string>
     <string name="settings_adb_restore_status_waiting_wifi">等待 Wi-Fi</string>
@@ -833,10 +833,9 @@
     <string name="adb_verdict_link_how">如何开启</string>
     <string name="adb_verdict_link_more">详情</string>
     <string name="adb_dialog_not_enabled_title">ADB 未开启</string>
-    <string name="adb_dialog_not_enabled_body">车辆控制、分屏、仪表盘和方向盘按键无法使用。电池和行程数据仍可读取。</string>
-    <string name="adb_enable_step_1">1. DiLink 设置 → 关于系统 → 连续点击版本号七次</string>
-    <string name="adb_enable_step_2">2. 开发者选项 → 开启“无线调试”</string>
-    <string name="adb_enable_step_3">3. 返回 BYDMate 并点击“检查”</string>
+    <string name="adb_dialog_not_enabled_body">没有 ADB，实时数据、车辆控制、分屏、仪表盘和方向盘按键都无法使用。行程历史仍可查看。</string>
+    <string name="adb_enable_step_1">1. 按照说明开启 ADB：GitHub 上的 BYDMate，“激活 ADB”一节</string>
+    <string name="adb_enable_step_2">2. 返回 BYDMate 并点击“检查”</string>
     <string name="adb_dialog_off_after_reboot_title">重启后 ADB 已关闭</string>
     <string name="adb_dialog_off_after_reboot_body">在此固件上，ADB 每次重启都会关闭。BYDMate 可以自动重新开启，需要 Wi-Fi。</string>
     <string name="adb_dialog_no_access_title">无 ADB 访问权限</string>
@@ -848,10 +847,8 @@
     <string name="adb_dialog_enable_restore">启用恢复</string>
     <string name="adb_dialog_open_diagnostics">打开诊断</string>
     <string name="welcome_adb_title">通过 ADB 访问车辆</string>
-    <string name="welcome_adb_intro">没有 ADB，应用只能读取数据。要控制车辆，请开启一次调试：</string>
+    <string name="welcome_adb_intro">没有 ADB，应用只显示行程历史。请开启一次 ADB：</string>
     <string name="welcome_adb_gives">ADB 的作用：车窗和空调控制、分屏、仪表盘、方向盘按键。</string>
-    <string name="welcome_adb_no_dev_title">如果没有“开发者选项”</string>
-    <string name="welcome_adb_no_dev_body">部分固件需要通过带二维码的应用开启调试。说明见右侧按钮。</string>
     <string name="welcome_adb_check_title">检查</string>
     <string name="welcome_adb_state_not_checked">尚未检查</string>
     <string name="welcome_adb_state_failed">ADB 未开启</string>
@@ -861,8 +858,8 @@
     <string name="welcome_adb_check_again_button">再次检查</string>
     <string name="welcome_adb_checking">正在检查…</string>
     <string name="welcome_adb_check_hint">检查只需几秒钟。</string>
-    <string name="welcome_adb_instruction_title">说明</string>
-    <string name="welcome_adb_instruction_button">打开详细说明</string>
+    <string name="welcome_adb_instruction_title">重启后 ADB 失效？</string>
+    <string name="welcome_adb_instruction_button">恢复功能如何工作</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">车机系统</string>
     <string name="settings_car_language_title">车机界面语言</string>
