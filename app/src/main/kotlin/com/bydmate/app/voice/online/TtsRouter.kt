@@ -172,7 +172,7 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         val startNs = System.nanoTime()
         val pcm = synthesizeCatching(backend, text, gender)
         Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} ms=${elapsedMs(startNs)} ok=${pcm != null}")
-        if (pcm != null) cachePhrase(key, pcm)
+        if (pcm != null) cacheIfKeyStable(backend, gender, text, key, pcm)
         return pcm
     }
 
@@ -185,6 +185,20 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     private suspend fun phraseKey(backend: OnlineTtsBackend, gender: TtsGender, text: String): PhraseKey {
         val identity = runCatching { backend.voiceIdentity(gender) }.getOrNull()
         return PhraseKey("v$PHRASE_FORMAT|${backend.id}|$gender|${identity ?: "-"}|$text", text, identity != null)
+    }
+
+    // The voice identity a key carries can drift while synthesis is in flight (the user switches
+    // provider or voice mid-request): caching under the pre-synthesis key would then persist audio
+    // of the OLD voice under a key that, from now on, names the NEW voice -- permanently, since the
+    // disk file survives restarts. Recomputing the key right after synthesis and requiring both to
+    // match closes that window; a mismatch only skips caching, the audio just synthesized still plays.
+    private suspend fun cacheIfKeyStable(backend: OnlineTtsBackend, gender: TtsGender, text: String, before: PhraseKey, pcm: TtsPcm) {
+        val after = phraseKey(backend, gender, text)
+        if (after.value != before.value) {
+            Log.w(TAG, "voice identity changed mid-synthesis; not caching '${backend.id}' chars=${text.length}")
+            return
+        }
+        cachePhrase(before, pcm)
     }
 
     // Memory first; a disk hit (one small file read, on the router's IO scope) is promoted to memory.
@@ -231,6 +245,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         var firstChunkMs = -1L
         var count = 0
         val kept = if (text.length <= PHRASE_CACHE_MAX_CHARS) mutableListOf<FloatArray>() else null
+        // Computed before the stream starts, like synthesizeOrNull's key; cacheIfKeyStable
+        // recomputes it after and only caches if the two agree (see its comment).
+        val keyBefore = kept?.let { phraseKey(backend, gender, text) }
         try {
             val ok = try {
                 withTimeout(synthTimeoutMs) {
@@ -258,7 +275,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
                 "online stream: backend=${backend.id} chars=${text.length} first_chunk_ms=$firstChunkMs " +
                     "total_ms=${elapsedMs(startNs)} chunks=$count ok=$ok",
             )
-            if (ok && kept != null) cachePhrase(phraseKey(backend, gender, text), TtsPcm(mergeChunks(kept), sampleRate))
+            if (ok && kept != null && keyBefore != null) {
+                cacheIfKeyStable(backend, gender, text, keyBefore, TtsPcm(mergeChunks(kept), sampleRate))
+            }
             return when {
                 ok -> true
                 count > 0 -> false
@@ -415,7 +434,7 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         internal const val PHRASE_CACHE_ENTRIES = 48
         // Part of every phrase key: bump when the stored format or the synthesis request changes
         // so phrases persisted by an older build are never replayed.
-        private const val PHRASE_FORMAT = 1
+        private const val PHRASE_FORMAT = 2 // v2: file format gained a CRC32 trailer, see PhraseDiskCache
         private const val TIER_MEMORY = "memory"
         private const val TIER_DISK = "disk"
     }
