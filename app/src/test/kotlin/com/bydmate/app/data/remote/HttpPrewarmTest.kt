@@ -34,9 +34,13 @@ class HttpPrewarmTest {
         assertEquals("HEAD", head.method)
         assertEquals("/api/v1", head.path)
 
-        // The prewarm response is closed on the dispatcher thread; give it a moment to return
-        // the connection to the pool before the real request asks for one.
-        Thread.sleep(200)
+        // The prewarm response is closed on the dispatcher thread: wait until the connection is
+        // back in the pool, otherwise the real request would open a second one.
+        val deadline = System.currentTimeMillis() + 5_000
+        while (http.connectionPool.idleConnectionCount() < 1 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10)
+        }
+        assertEquals(1, http.connectionPool.idleConnectionCount())
         val post = Request.Builder().url(server.url("/api/v1/chat/completions"))
             .post("{}".toRequestBody("application/json".toMediaType())).build()
         derived.newCall(post).execute().use { assertEquals(200, it.code) }

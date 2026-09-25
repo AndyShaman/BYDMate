@@ -90,6 +90,16 @@ class OpenRouterTtsBackendTest {
     }
 
     @Test
+    fun `prewarm sends one HEAD to the OpenRouter connection host`() = runTest {
+        stubConnection()
+        server.enqueue(MockResponse().setResponseCode(404))
+        backend.prewarm()
+        val head = server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS)
+        assertEquals("HEAD", head?.method)
+        assertEquals("/api/v1", head?.path)
+    }
+
+    @Test
     fun `configured is false when OpenRouter is not set up`() = runTest {
         coEvery { connections.get(LlmConnectionResolver.ID_OPENROUTER) } returns null
         assertFalse(backend.configured())
