@@ -17,4 +17,7 @@ interface OnlineTtsBackend {
 
     /** True when this backend's API key/config is present and usable. */
     suspend fun configured(): Boolean
+
+    /** Fire-and-forget: opens the connection to the synthesis host ahead of the first sentence. */
+    suspend fun prewarm() {}
 }

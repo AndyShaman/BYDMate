@@ -22,11 +22,13 @@ import kotlinx.coroutines.withTimeout
  *  fails or times out, the reply stays SILENT (its text remains visible in the orb dialog). The
  *  offline engine is always the delegate for stop/speaking/audible/reload, so barge-in and the
  *  mic-mute machinery stay exactly as they are today regardless of which source spoke. */
-class TtsRouter(
+class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambdas plus test seams
     private val delegate: TtsEngine,
     private val backends: List<OnlineTtsBackend> = emptyList(),
     private val selectedSource: () -> String = { OFFLINE },
     private val selectedGender: () -> TtsGender = { TtsGender.MALE },
+    /** Short phrases worth synthesizing ahead of use (the persona's confirmation pools). */
+    private val precachePhrases: () -> List<String> = { emptyList() },
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val synthTimeoutMs: Long = SYNTH_TIMEOUT_MS,
 ) : TtsEngine {
@@ -37,6 +39,14 @@ class TtsRouter(
     // stop() -- called on barge-in -- can never let a sentence still awaiting synthesis play
     // out after the caller already considers speech stopped.
     @Volatile private var cancelActive: (() -> Unit)? = null
+
+    // Short phrases (persona confirmations) replay from memory instead of paying a network
+    // round-trip every time. The key carries source + gender + text, so a switch of voice or
+    // source never replays the old voice; LRU-bounded so stray short replies cannot grow it.
+    private val phraseCache = object : LinkedHashMap<String, TtsPcm>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TtsPcm>) =
+            size > PHRASE_CACHE_ENTRIES
+    }
 
     /** Online source is ready when its backend is configured. There is no offline fallback
      *  any more (user contract: it either works or it does not), so the local model's
@@ -75,11 +85,28 @@ class TtsRouter(
 
     override fun reload() = delegate.reload()
 
-    /** Only the offline delegate holds a model worth pre-loading; online backends are stateless
-     *  HTTP clients. */
     /** Loads the offline model ahead of time only when it is the engine that will speak;
-     *  with an online source selected the sherpa model would sit in memory unused. */
-    override fun warmUp() { if (onlineBackend() == null) delegate.warmUp() }
+     *  with an online source selected the sherpa model would sit in memory unused, and the
+     *  persona's short phrases are synthesized into the cache instead. */
+    override fun warmUp() {
+        val backend = onlineBackend()
+        if (backend == null) delegate.warmUp() else scope.launch { precache(backend) }
+    }
+
+    // One request at a time, in the background: a burst would compete with the driver's first
+    // turn and risk the provider's rate limit. A failure (no network yet at ignition) just
+    // leaves that phrase to be cached on first use.
+    private suspend fun precache(backend: OnlineTtsBackend) {
+        if (!runCatching { backend.configured() }.getOrDefault(false)) return
+        val phrases = runCatching { precachePhrases() }.getOrDefault(emptyList())
+        phrases.forEach { synthesizeOrNull(backend, it) }
+        Log.i(TAG, "phrase precache: backend=${backend.id} phrases=${phrases.size} cached=${synchronized(phraseCache) { phraseCache.size }}")
+    }
+
+    override fun prewarmNetwork() {
+        val backend = onlineBackend() ?: return
+        scope.launch { runCatching { backend.prewarm() } }
+    }
 
     override fun audible(): Boolean = delegate.audible()
 
@@ -104,12 +131,28 @@ class TtsRouter(
         return backends.find { it.id == source }
     }
 
+    // One line per sentence: the network+synthesis leg of the reply latency, per backend.
+    private suspend fun synthesizeOrNull(backend: OnlineTtsBackend, text: String): TtsPcm? {
+        val gender = selectedGender()
+        val key = "${backend.id}|$gender|$text"
+        synchronized(phraseCache) { phraseCache[key] }?.let {
+            Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} cached")
+            return it
+        }
+        val startNs = System.nanoTime()
+        val pcm = synthesizeCatching(backend, text, gender)
+        val ms = (System.nanoTime() - startNs) / 1_000_000
+        Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} ms=$ms ok=${pcm != null}")
+        if (pcm != null && text.length <= PHRASE_CACHE_MAX_CHARS) synchronized(phraseCache) { phraseCache[key] = pcm }
+        return pcm
+    }
+
     // Timeouts and ordinary failures return null (reply stays silent); a structural cancellation
     // (stop() tearing down this job on barge-in) must propagate instead, or the coroutine would
     // carry on past the cancellation point and speak the interrupted reply anyway.
-    private suspend fun synthesizeOrNull(backend: OnlineTtsBackend, text: String): TtsPcm? =
+    private suspend fun synthesizeCatching(backend: OnlineTtsBackend, text: String, gender: TtsGender): TtsPcm? =
         try {
-            withTimeout(synthTimeoutMs) { backend.synthesize(text, selectedGender()) }
+            withTimeout(synthTimeoutMs) { backend.synthesize(text, gender) }
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "online tts synth failed for '${backend.id}'", e)
             null
@@ -179,5 +222,10 @@ class TtsRouter(
         // so long sentences legitimately take many seconds -- a tight cap here silences
         // every long reply (field defect APK 346: 2s cap killed all long Gemini answers).
         const val SYNTH_TIMEOUT_MS = 18_000L
+
+        // The longest persona phrase is 37 chars; agent replies are longer (median 59).
+        internal const val PHRASE_CACHE_MAX_CHARS = 40
+        // Three persona pools of ~13 phrases fit with room for both genders of one pool.
+        internal const val PHRASE_CACHE_ENTRIES = 48
     }
 }

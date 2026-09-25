@@ -396,7 +396,11 @@ class LogRecorder internal constructor(
             // Post-3.17.5 wave: auto backup (scheduler, worker, runner), backup restore path,
             // post-restore check and the APK cleanup after an update. Their acceptance lines
             // never reached the recorded log because the tags were missing here.
-            "AutoBackup:*", "BackupManager:*", "PostRestoreCheck:*", "UpdateApkCleanup:*"
+            "AutoBackup:*", "BackupManager:*", "PostRestoreCheck:*", "UpdateApkCleanup:*",
+            // Voice speed wave: which TTS source spoke and its per-sentence synth time, LLM
+            // retries, the per-round token usage line (prompt cache hits via cached_tokens) and
+            // the push-to-talk connection prewarm.
+            "TtsRouter:*", "LlmAgentBackend:*", "OpenRouterClient:*", "HttpPrewarm:*"
         )
     }
 }

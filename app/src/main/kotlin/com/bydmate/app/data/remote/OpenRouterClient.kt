@@ -33,6 +33,9 @@ class OpenRouterClient @Inject constructor(
         internal const val FINISH_REASON = "finish_reason"
     }
 
+    /** Warms a pooled connection to the LLM host before the turn's first request, see [HttpPrewarm]. */
+    fun prewarm(baseUrl: String) = HttpPrewarm.fire(httpClient, baseUrl)
+
     /**
      * Fetches a model list from any OpenAI-compatible endpoint (not just OpenRouter).
      * Parses {"data":[{"id":"..."},...]} and returns model ids.

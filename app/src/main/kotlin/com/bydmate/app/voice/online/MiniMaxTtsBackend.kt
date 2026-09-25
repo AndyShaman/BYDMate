@@ -1,5 +1,6 @@
 package com.bydmate.app.voice.online
 
+import com.bydmate.app.data.remote.HttpPrewarm
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.voice.TtsGender
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,16 @@ class MiniMaxTtsBackend(
     override suspend fun configured(): Boolean =
         settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "").isNotBlank()
 
+    override suspend fun prewarm() {
+        if (!configured()) return
+        val base = when (settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_PROVIDER, PROVIDER_OFFICIAL)) {
+            PROVIDER_FAL -> falBaseUrl
+            PROVIDER_REPLICATE -> replicateBaseUrl
+            else -> officialBaseUrl
+        }
+        HttpPrewarm.fire(http, base)
+    }
+
     override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm =
         withContext(Dispatchers.IO) {
             val key = settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "")
@@ -49,6 +60,10 @@ class MiniMaxTtsBackend(
             put("model", MODEL)
             put("text", text)
             put("voice_setting", JSONObject().put("voice_id", voice))
+            // Tells the model the text is Russian instead of letting it guess per sentence (short
+            // replies are where a guess goes wrong). Non-Cyrillic text keeps the old request
+            // untouched, so replies in other interface languages sound as before.
+            if (text.any { it in '\u0400'..'\u04FF' }) put("language_boost", "Russian")
             put(
                 "audio_setting",
                 JSONObject().apply {

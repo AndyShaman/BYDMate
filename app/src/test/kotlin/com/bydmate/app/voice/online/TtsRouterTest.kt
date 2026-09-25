@@ -67,6 +67,18 @@ class TtsRouterTest {
         override suspend fun configured(): Boolean = true
     }
 
+    /** Counts synth and prewarm calls; synthesis always succeeds. */
+    private class CountingBackend(override val id: String = "minimax") : OnlineTtsBackend {
+        val synthesized = java.util.Collections.synchronizedList(mutableListOf<Pair<String, TtsGender>>())
+        @Volatile var prewarmCalls = 0
+        override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+            synthesized += text to gender
+            return TtsPcm(floatArrayOf(0.1f, 0.2f), 24_000)
+        }
+        override suspend fun configured(): Boolean = true
+        override suspend fun prewarm() { prewarmCalls++ }
+    }
+
     /** Polls [condition] on a real clock -- the router dispatches online work onto a real
      *  background dispatcher (Dispatchers.IO by default), so tests wait for it the same way
      *  SherpaTtsEngineTest waits for its own worker thread, instead of a virtual-time TestScope
@@ -355,6 +367,82 @@ class TtsRouterTest {
         val router = TtsRouter(delegate = delegate, selectedSource = { TtsRouter.OFFLINE })
         router.warmUp()
         assertEquals(1, delegate.warmUpCalls)
+    }
+
+    // --- short-phrase cache (voice speed wave 1b) ---
+
+    @Test
+    fun `short phrase is synthesized once and replayed from the cache`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 2 }
+        assertEquals(2, delegate.playPcmCalls.size)
+        assertEquals(1, backend.synthesized.size)
+    }
+
+    @Test
+    fun `long reply is never cached`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        val reply = "Заряд восемьдесят процентов, запаса хватит на триста километров."
+        router.speak(reply)
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        router.speak(reply)
+        awaitTrue { delegate.playPcmCalls.size == 2 }
+        assertEquals(2, backend.synthesized.size)
+    }
+
+    @Test
+    fun `gender switch misses the cache so the old voice is never replayed`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        var gender = TtsGender.MALE
+        val router = TtsRouter(
+            delegate = delegate, backends = listOf(backend),
+            selectedSource = { "minimax" }, selectedGender = { gender },
+        )
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        gender = TtsGender.FEMALE
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 2 }
+        assertEquals(listOf("Готово." to TtsGender.MALE, "Готово." to TtsGender.FEMALE), backend.synthesized.toList())
+    }
+
+    @Test
+    fun `warmUp on an online source precaches the phrases, later speech uses them`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(
+            delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" },
+            precachePhrases = { listOf("Есть.", "Выполнено.") },
+        )
+        router.warmUp()
+        awaitTrue { backend.synthesized.size == 2 }
+        router.speak("Выполнено.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        assertEquals(2, backend.synthesized.size)
+        assertEquals(0, delegate.warmUpCalls)
+    }
+
+    @Test
+    fun `prewarmNetwork reaches the online backend only`() {
+        val backend = CountingBackend()
+        TtsRouter(delegate = FakeTtsEngine(), backends = listOf(backend), selectedSource = { "minimax" })
+            .prewarmNetwork()
+        awaitTrue { backend.prewarmCalls == 1 }
+        assertEquals(1, backend.prewarmCalls)
+
+        val offline = CountingBackend()
+        TtsRouter(delegate = FakeTtsEngine(), backends = listOf(offline), selectedSource = { TtsRouter.OFFLINE })
+            .prewarmNetwork()
+        Thread.sleep(100)
+        assertEquals(0, offline.prewarmCalls)
     }
 
     @Test

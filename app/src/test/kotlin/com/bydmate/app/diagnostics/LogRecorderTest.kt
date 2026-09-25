@@ -110,6 +110,11 @@ class LogRecorderTest {
         assertTrue(spawned[1].contains("BootReceiver:*"))
         // #180: the "decode rejected" line lives on this tag.
         assertTrue(spawned[1].contains("NativeParsReader:*"))
+        // Voice speed wave: TTS source + synth time, LLM retries, token usage lines.
+        assertTrue(spawned[1].contains("TtsRouter:*"))
+        assertTrue(spawned[1].contains("LlmAgentBackend:*"))
+        assertTrue(spawned[1].contains("OpenRouterClient:*"))
+        assertTrue(spawned[1].contains("HttpPrewarm:*"))
 
         val state = recorder.state.value
         assertTrue(state.isRecording)
