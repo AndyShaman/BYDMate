@@ -87,7 +87,7 @@
     <string name="settings_adb_restore_title">Przywracaj ADB po restarcie</string>
     <string name="settings_adb_restore_desc">Dla oprogramowania, w którym ADB wyłącza się przy każdym restarcie. Wymagane włączone Wi-Fi.</string>
     <string name="settings_adb_restore_help_title">Jak działa przywracanie ADB</string>
-    <string name="settings_adb_restore_help_body">W nowszym oprogramowaniu DiLink (od lata 2026) port ADB zamyka się przy każdym restarcie, a BYDMate traci dostęp do funkcji sterowania samochodem.\n\nAplikacja potrafi ponownie uruchomić ADB przez wbudowane w Androida debugowanie bezprzewodowe. W tym celu:\n\n1. Wi-Fi w samochodzie musi być włączone i połączone z siecią: domową, hotspotem telefonu lub dowolną inną. Bez Wi-Fi Android nie pozwala włączyć debugowania bezprzewodowego, to ograniczenie systemu.\n\n2. Przy pierwszym włączeniu w każdej nowej sieci na ekranie pojawi się systemowe okno „Allow wireless debugging on this network?”. Zaznacz „Always allow on this network” i naciśnij ALLOW. Dalej w tej sieci wszystko dzieje się bez pytań, dlatego wygodnie jest używać tej samej sieci.\n\n3. Raz, dopóki ADB jeszcze działa, aplikacja nadaje sobie potrzebne uprawnienie systemowe. Jeśli wiersz stanu pokazuje „Potrzebna aktywacja”, podłącz ADB w zwykły sposób i uruchom aplikację ponownie.\n\nJeśli ADB w Twoim oprogramowaniu i tak działa po restarcie, nie trzeba tego włączać: wiersz stanu pokaże „Niepotrzebne”.</string>
+    <string name="settings_adb_restore_help_body">W nowszym oprogramowaniu DiLink (od lata 2026) port ADB zamyka się przy każdym restarcie, a BYDMate traci dostęp do funkcji sterowania samochodem.\n\nAplikacja potrafi ponownie uruchomić ADB przez wbudowane w Androida debugowanie bezprzewodowe. W tym celu:\n\n1. Wi-Fi w samochodzie musi być włączone i połączone z siecią: domową, hotspotem telefonu lub dowolną inną. Bez Wi-Fi Android nie pozwala włączyć debugowania bezprzewodowego, to ograniczenie systemu.\n\n2. Przy pierwszym włączeniu w każdej nowej sieci na ekranie pojawi się systemowe okno „Allow wireless debugging on this network?”. Gdy przywracanie jest włączone, BYDMate potwierdza je sam przez swoją usługę ułatwień dostępu. Jeśli usługa jest wyłączona, zaznacz „Always allow on this network” i naciśnij ALLOW.\n\n3. Raz, dopóki ADB jeszcze działa, aplikacja nadaje sobie potrzebne uprawnienie systemowe. Jeśli wiersz stanu pokazuje „Potrzebna aktywacja”, podłącz ADB w zwykły sposób i uruchom aplikację ponownie.\n\nJeśli ADB w Twoim oprogramowaniu i tak działa po restarcie, nie trzeba tego włączać: wiersz stanu pokaże „Niepotrzebne”.</string>
     <string name="settings_adb_restore_status_not_needed">Niepotrzebne: ADB już działa</string>
     <string name="settings_adb_restore_status_needs_activation">Potrzebna aktywacja: podłącz ADB raz i uruchom aplikację ponownie</string>
     <string name="settings_adb_restore_status_waiting_wifi">Oczekiwanie na Wi-Fi</string>
@@ -104,10 +104,9 @@
     <string name="adb_verdict_link_how">Jak włączyć</string>
     <string name="adb_verdict_link_more">Szczegóły</string>
     <string name="adb_dialog_not_enabled_title">ADB jest wyłączone</string>
-    <string name="adb_dialog_not_enabled_body">Sterowanie autem, podział ekranu, zestaw wskaźników i przycisk na kierownicy nie działają. Dane baterii i podróży są odczytywane.</string>
-    <string name="adb_enable_step_1">1. Ustawienia DiLink → O systemie → dotknij numeru kompilacji siedem razy</string>
-    <string name="adb_enable_step_2">2. Opcje programisty → włącz „Debugowanie przez Wi-Fi”</string>
-    <string name="adb_enable_step_3">3. Wróć do BYDMate i naciśnij „Sprawdź”</string>
+    <string name="adb_dialog_not_enabled_body">Bez ADB nie działają dane na żywo, sterowanie autem, podział ekranu, zestaw wskaźników i przycisk na kierownicy. Historia podróży jest dostępna.</string>
+    <string name="adb_enable_step_1">1. Włącz ADB według instrukcji: BYDMate na GitHubie, sekcja „Enable ADB”</string>
+    <string name="adb_enable_step_2">2. Wróć do BYDMate i naciśnij „Sprawdź”</string>
     <string name="adb_dialog_off_after_reboot_title">ADB wyłączyło się po restarcie</string>
     <string name="adb_dialog_off_after_reboot_body">W tym oprogramowaniu ADB wyłącza się przy każdym restarcie. BYDMate potrafi włączać je sam, potrzebne jest Wi-Fi.</string>
     <string name="adb_dialog_no_access_title">Brak dostępu do ADB</string>
@@ -119,10 +118,8 @@
     <string name="adb_dialog_enable_restore">Włącz przywracanie</string>
     <string name="adb_dialog_open_diagnostics">Otwórz diagnostykę</string>
     <string name="welcome_adb_title">Dostęp do auta przez ADB</string>
-    <string name="welcome_adb_intro">Bez ADB aplikacja tylko odczytuje dane. Aby sterować autem, włącz debugowanie jeden raz:</string>
+    <string name="welcome_adb_intro">Bez ADB aplikacja pokazuje tylko historię podróży. Włącz ADB jeden raz:</string>
     <string name="welcome_adb_gives">Co daje ADB: sterowanie szybami i klimatyzacją, podział ekranu, zestaw wskaźników, przycisk na kierownicy.</string>
-    <string name="welcome_adb_no_dev_title">Jeśli nie ma pozycji „Opcje programisty”</string>
-    <string name="welcome_adb_no_dev_body">W części oprogramowań debugowanie włącza się przez aplikację z kodem QR. Instrukcja pod przyciskiem po prawej.</string>
     <string name="welcome_adb_check_title">Sprawdzenie</string>
     <string name="welcome_adb_state_not_checked">Jeszcze nie sprawdzono</string>
     <string name="welcome_adb_state_failed">ADB jest wyłączone</string>
@@ -132,8 +129,8 @@
     <string name="welcome_adb_check_again_button">Sprawdź ponownie</string>
     <string name="welcome_adb_checking">Sprawdzamy…</string>
     <string name="welcome_adb_check_hint">Sprawdzenie trwa kilka sekund.</string>
-    <string name="welcome_adb_instruction_title">Instrukcja</string>
-    <string name="welcome_adb_instruction_button">Otwórz szczegółową instrukcję</string>
+    <string name="welcome_adb_instruction_title">ADB znika po restarcie?</string>
+    <string name="welcome_adb_instruction_button">Jak działa przywracanie</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">System samochodu</string>
     <string name="settings_car_language_title">Język interfejsu samochodu</string>
@@ -297,7 +294,7 @@
 
     <!-- Settings: Autoservice status -->
     <string name="settings_autoservice_disconnected_title">brak połączenia</string>
-    <string name="settings_autoservice_disconnected_detail">zrestartuj aplikację, jeśli ADB jest włączone w Opcjach programisty</string>
+    <string name="settings_autoservice_disconnected_detail">zrestartuj aplikację, jeśli ADB jest już włączone</string>
     <string name="settings_autoservice_sentinel_title">połączono, ale dane nie są odczytywane</string>
     <string name="settings_autoservice_sentinel_detail">możliwe, że funkcja działa tylko na Leopard 3</string>
     <string name="settings_autoservice_connected_title">połączono</string>

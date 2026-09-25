@@ -104,10 +104,10 @@ internal fun AdbVerdictDialog(
     }
 }
 
-/** The three «how to enable ADB» steps, shared by the dialog and the welcome wizard. */
+/** The «how to enable ADB» steps, shared by the dialog and the welcome wizard. */
 @Composable
 internal fun AdbEnableSteps() {
-    listOf(R.string.adb_enable_step_1, R.string.adb_enable_step_2, R.string.adb_enable_step_3).forEach {
+    listOf(R.string.adb_enable_step_1, R.string.adb_enable_step_2).forEach {
         Text(stringResource(it), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }

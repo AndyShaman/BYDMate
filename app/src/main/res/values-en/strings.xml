@@ -83,7 +83,7 @@
     <string name="settings_adb_restore_title">Restore ADB after a reboot</string>
     <string name="settings_adb_restore_desc">For firmwares where ADB turns off at every reboot. Wi-Fi must be on.</string>
     <string name="settings_adb_restore_help_title">How ADB restore works</string>
-    <string name="settings_adb_restore_help_body">On newer DiLink firmwares (since summer 2026) the ADB port closes at every reboot, and BYDMate loses access to the car control features.\n\nThe app can bring ADB back up through the wireless debugging built into Android. For that:\n\n1. Wi-Fi in the car must be on and connected to a network: your home one, a phone hotspot or any other. Without Wi-Fi, Android does not allow wireless debugging to be enabled, that is a system limitation.\n\n2. The first time on each new network the system dialog “Allow wireless debugging on this network?” appears on the screen. Tick “Always allow on this network” and press ALLOW. After that everything happens without questions on this network, so it is convenient to use the same one.\n\n3. Once, while ADB still works, the app grants itself the system permission it needs. If the status line shows “Activation needed”, connect ADB the usual way and restart the app.\n\nIf ADB on your firmware works after a reboot anyway, there is no need to turn this on: the status line will show “Not needed”.</string>
+    <string name="settings_adb_restore_help_body">On newer DiLink firmwares (since summer 2026) the ADB port closes at every reboot, and BYDMate loses access to the car control features.\n\nThe app can bring ADB back up through the wireless debugging built into Android. For that:\n\n1. Wi-Fi in the car must be on and connected to a network: your home one, a phone hotspot or any other. Without Wi-Fi, Android does not allow wireless debugging to be enabled, that is a system limitation.\n\n2. The first time on each new network the system dialog “Allow wireless debugging on this network?” appears on the screen. When restore is on, BYDMate confirms it by itself through its accessibility service. If the service is off, tick “Always allow on this network” and press ALLOW.\n\n3. Once, while ADB still works, the app grants itself the system permission it needs. If the status line shows “Activation needed”, connect ADB the usual way and restart the app.\n\nIf ADB on your firmware works after a reboot anyway, there is no need to turn this on: the status line will show “Not needed”.</string>
     <string name="settings_adb_restore_status_not_needed">Not needed: ADB already works</string>
     <string name="settings_adb_restore_status_needs_activation">Activation needed: connect ADB once and restart the app</string>
     <string name="settings_adb_restore_status_waiting_wifi">Waiting for Wi-Fi</string>
@@ -100,10 +100,9 @@
     <string name="adb_verdict_link_how">How to enable</string>
     <string name="adb_verdict_link_more">Details</string>
     <string name="adb_dialog_not_enabled_title">ADB is off</string>
-    <string name="adb_dialog_not_enabled_body">Car control, split screen, the instrument cluster and the steering wheel button do not work. Battery and trip data are still read.</string>
-    <string name="adb_enable_step_1">1. DiLink Settings → About → tap the build number seven times</string>
-    <string name="adb_enable_step_2">2. Developer options → turn on “Wireless debugging”</string>
-    <string name="adb_enable_step_3">3. Return to BYDMate and tap “Check”</string>
+    <string name="adb_dialog_not_enabled_body">Without ADB, live data, car control, split screen, the instrument cluster and the steering wheel button do not work. Trip history is available.</string>
+    <string name="adb_enable_step_1">1. Turn on ADB following the guide: BYDMate on GitHub, section “Enable ADB”</string>
+    <string name="adb_enable_step_2">2. Return to BYDMate and tap “Check”</string>
     <string name="adb_dialog_off_after_reboot_title">ADB turned off after reboot</string>
     <string name="adb_dialog_off_after_reboot_body">On this firmware ADB turns off at every reboot. BYDMate can turn it back on by itself, Wi-Fi is required.</string>
     <string name="adb_dialog_no_access_title">No ADB access</string>
@@ -115,10 +114,8 @@
     <string name="adb_dialog_enable_restore">Enable restore</string>
     <string name="adb_dialog_open_diagnostics">Open diagnostics</string>
     <string name="welcome_adb_title">Car access via ADB</string>
-    <string name="welcome_adb_intro">Without ADB the app only reads data. To control the car, turn on debugging once:</string>
+    <string name="welcome_adb_intro">Without ADB the app shows only trip history. Turn on ADB once:</string>
     <string name="welcome_adb_gives">What ADB gives: window and climate control, split screen, instrument cluster, steering wheel button.</string>
-    <string name="welcome_adb_no_dev_title">If there is no “Developer options” item</string>
-    <string name="welcome_adb_no_dev_body">On some firmwares debugging is enabled through an app with a QR code. The instructions are behind the button on the right.</string>
     <string name="welcome_adb_check_title">Check</string>
     <string name="welcome_adb_state_not_checked">Not checked yet</string>
     <string name="welcome_adb_state_failed">ADB is off</string>
@@ -128,8 +125,8 @@
     <string name="welcome_adb_check_again_button">Check again</string>
     <string name="welcome_adb_checking">Checking…</string>
     <string name="welcome_adb_check_hint">The check takes a couple of seconds.</string>
-    <string name="welcome_adb_instruction_title">Instructions</string>
-    <string name="welcome_adb_instruction_button">Open detailed instructions</string>
+    <string name="welcome_adb_instruction_title">ADB lost after a reboot?</string>
+    <string name="welcome_adb_instruction_button">How restore works</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">Car system</string>
     <string name="settings_car_language_title">Car interface language</string>
@@ -277,7 +274,7 @@
     <string name="settings_update_check_toggle_description">Check GitHub 30 seconds after startup and suggest updating</string>
     <string name="settings_update_check_button">Check for updates now</string>
     <string name="settings_autoservice_disconnected_title">not connected</string>
-    <string name="settings_autoservice_disconnected_detail">restart the app if ADB is enabled in Developer settings</string>
+    <string name="settings_autoservice_disconnected_detail">restart the app if ADB is already on</string>
     <string name="settings_autoservice_sentinel_title">connected, but data is not readable</string>
     <string name="settings_autoservice_sentinel_detail">the feature may work only on Leopard 3</string>
     <string name="settings_autoservice_connected_title">connected</string>

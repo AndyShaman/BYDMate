@@ -242,10 +242,6 @@ private fun AdbStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(stringResource(R.string.welcome_adb_gives), color = TextMuted, fontSize = 11.sp)
             }
-
-            SectionCard(stringResource(R.string.welcome_adb_no_dev_title)) {
-                Text(stringResource(R.string.welcome_adb_no_dev_body), color = TextSecondary, fontSize = 13.sp)
-            }
         }
 
         // RIGHT: Check + instructions + navigation
