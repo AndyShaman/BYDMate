@@ -20,4 +20,14 @@ interface OnlineTtsBackend {
 
     /** Fire-and-forget: opens the connection to the synthesis host ahead of the first sentence. */
     suspend fun prewarm() {}
+
+    /** Sample rate of [synthesizeStream]'s chunks, or null when this backend cannot stream with
+     *  the current settings -- the router then synthesizes whole sentences. */
+    suspend fun streamSampleRate(): Int? = null
+
+    /** Synthesizes [text] delivering mono PCM chunks to [onChunk] as they arrive (never an empty
+     *  one). Throws on any failure, like [synthesize]. Default: the whole sentence as one chunk. */
+    suspend fun synthesizeStream(text: String, gender: TtsGender, onChunk: (FloatArray) -> Unit) {
+        onChunk(synthesize(text, gender).samples)
+    }
 }

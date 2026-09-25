@@ -12,10 +12,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.BlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 
 /** Wraps an offline [TtsEngine] (the Sherpa/Piper voice) and, when an online source is selected,
  *  speaks through a cloud [OnlineTtsBackend]. There is NO offline fallback: if the online backend
@@ -72,6 +76,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
 
     private suspend fun speakOnline(backend: OnlineTtsBackend, text: String) {
         val pcm = synthesizeOrNull(backend, text)
+        // A cache hit never suspends, so a stop() that already cancelled this job must be
+        // observed here or the interrupted phrase would still play.
+        currentCoroutineContext().ensureActive()
         val played = pcm != null && delegate.playPcm(pcm.samples, pcm.sampleRate)
         Log.i(TAG, "online pcm: samples=${pcm?.samples?.size} rate=${pcm?.sampleRate} played=$played")
         if (!played) Log.w(TAG, "online speak failed; reply stays silent (no fallback)")
@@ -94,13 +101,17 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     }
 
     // One request at a time, in the background: a burst would compete with the driver's first
-    // turn and risk the provider's rate limit. A failure (no network yet at ignition) just
-    // leaves that phrase to be cached on first use.
+    // turn and risk the provider's rate limit. The first failure (no network yet at ignition,
+    // 429, auth) stops the pass; the remaining phrases get cached on first use.
     private suspend fun precache(backend: OnlineTtsBackend) {
         if (!runCatching { backend.configured() }.getOrDefault(false)) return
         val phrases = runCatching { precachePhrases() }.getOrDefault(emptyList())
-        phrases.forEach { synthesizeOrNull(backend, it) }
-        Log.i(TAG, "phrase precache: backend=${backend.id} phrases=${phrases.size} cached=${synchronized(phraseCache) { phraseCache.size }}")
+        val done = phrases.indexOfFirst { synthesizeOrNull(backend, it) == null }.let { if (it < 0) phrases.size else it }
+        Log.i(
+            TAG,
+            "phrase precache: backend=${backend.id} phrases=${phrases.size} done=$done " +
+                "stopped=${done < phrases.size} cached=${synchronized(phraseCache) { phraseCache.size }}",
+        )
     }
 
     override fun prewarmNetwork() {
@@ -111,6 +122,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     override fun audible(): Boolean = delegate.audible()
 
     override fun playPcm(samples: FloatArray, sampleRate: Int): Boolean = delegate.playPcm(samples, sampleRate)
+
+    override fun playPcmStream(chunks: BlockingQueue<FloatArray>, sampleRate: Int): Boolean =
+        delegate.playPcmStream(chunks, sampleRate)
 
     /** For an online source, synthesis runs one sentence AHEAD of playback (prefetch), so the
      *  network round-trip of sentence N+1 overlaps the playback of sentence N -- this removes
@@ -134,17 +148,95 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     // One line per sentence: the network+synthesis leg of the reply latency, per backend.
     private suspend fun synthesizeOrNull(backend: OnlineTtsBackend, text: String): TtsPcm? {
         val gender = selectedGender()
-        val key = "${backend.id}|$gender|$text"
-        synchronized(phraseCache) { phraseCache[key] }?.let {
+        cachedPcm(backend, gender, text)?.let {
             Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} cached")
             return it
         }
         val startNs = System.nanoTime()
         val pcm = synthesizeCatching(backend, text, gender)
-        val ms = (System.nanoTime() - startNs) / 1_000_000
-        Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} ms=$ms ok=${pcm != null}")
-        if (pcm != null && text.length <= PHRASE_CACHE_MAX_CHARS) synchronized(phraseCache) { phraseCache[key] = pcm }
+        Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} ms=${elapsedMs(startNs)} ok=${pcm != null}")
+        if (pcm != null) cachePhrase(backend, gender, text, pcm)
         return pcm
+    }
+
+    private fun phraseKey(backend: OnlineTtsBackend, gender: TtsGender, text: String) = "${backend.id}|$gender|$text"
+
+    private fun cachedPcm(backend: OnlineTtsBackend, gender: TtsGender, text: String): TtsPcm? =
+        synchronized(phraseCache) { phraseCache[phraseKey(backend, gender, text)] }
+
+    // Empty audio (a provider "success" without samples) is never cached: it would pin silence.
+    private fun cachePhrase(backend: OnlineTtsBackend, gender: TtsGender, text: String, pcm: TtsPcm) {
+        if (text.length > PHRASE_CACHE_MAX_CHARS || pcm.samples.isEmpty()) return
+        synchronized(phraseCache) { phraseCache[phraseKey(backend, gender, text)] = pcm }
+    }
+
+    /** Test seam: entry count of the phrase cache. */
+    internal fun phraseCacheSizeForTest(): Int = synchronized(phraseCache) { phraseCache.size }
+
+    /** Streams one sentence into [chunks] (the engine plays them as they arrive); the end marker
+     *  always follows, whatever happens. A failure before the first chunk falls back to one
+     *  whole-sentence synthesis; after audio started there is no fallback. True = the sentence
+     *  was delivered completely. */
+    private suspend fun streamSentence(
+        backend: OnlineTtsBackend,
+        text: String,
+        gender: TtsGender,
+        sampleRate: Int,
+        chunks: BlockingQueue<FloatArray>,
+    ): Boolean {
+        val startNs = System.nanoTime()
+        var firstChunkMs = -1L
+        var count = 0
+        val kept = if (text.length <= PHRASE_CACHE_MAX_CHARS) mutableListOf<FloatArray>() else null
+        try {
+            val ok = try {
+                withTimeout(synthTimeoutMs) {
+                    backend.synthesizeStream(text, gender) { samples ->
+                        if (samples.isNotEmpty()) {
+                            if (count == 0) firstChunkMs = elapsedMs(startNs)
+                            count++
+                            kept?.add(samples)
+                            chunks.put(samples)
+                        }
+                    }
+                }
+                true
+            } catch (e: TimeoutCancellationException) {
+                Log.w(TAG, "online tts stream failed for '${backend.id}'", e)
+                false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Log.w(TAG, "online tts stream failed for '${backend.id}'", e)
+                false
+            }
+            Log.i(
+                TAG,
+                "online stream: backend=${backend.id} chars=${text.length} first_chunk_ms=$firstChunkMs " +
+                    "total_ms=${elapsedMs(startNs)} chunks=$count ok=$ok",
+            )
+            if (ok && kept != null) cachePhrase(backend, gender, text, TtsPcm(mergeChunks(kept), sampleRate))
+            return when {
+                ok -> true
+                count > 0 -> false
+                else -> wholeFallback(backend, text, sampleRate, chunks)
+            }
+        } finally {
+            chunks.put(END_OF_STREAM)
+        }
+    }
+
+    private suspend fun wholeFallback(
+        backend: OnlineTtsBackend,
+        text: String,
+        sampleRate: Int,
+        chunks: BlockingQueue<FloatArray>,
+    ): Boolean {
+        val pcm = synthesizeOrNull(backend, text)
+        val samples = pcm?.takeIf { it.sampleRate == sampleRate }?.samples?.takeIf { it.isNotEmpty() }
+        Log.w(TAG, "online stream failed before first chunk; whole fallback: ok=${pcm != null} rate=${pcm?.sampleRate} usable=${samples != null}")
+        samples?.let(chunks::put)
+        return samples != null
     }
 
     // Timeouts and ordinary failures return null (reply stays silent); a structural cancellation
@@ -166,33 +258,60 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     /** For an online source, synthesis runs one sentence AHEAD of playback (prefetch), so the
      *  network round-trip of sentence N+1 overlaps the playback of sentence N -- this removes
      *  the audible inter-sentence pauses. Playback order stays strict: the single player
-     *  coroutine consumes the synthesized deferreds in send order. There is NO offline
-     *  fallback: the first failed/timed-out sentence silences the rest of the reply (its text
-     *  is still shown in the orb dialog). */
+     *  coroutine consumes the synthesized sentences in send order. A backend that can stream
+     *  plays each sentence from its first network chunk (cache hits stay whole). There is NO
+     *  offline fallback: the first failed/timed-out sentence silences the rest of the reply (its
+     *  text is still shown in the orb dialog). */
     private inner class OnlineSpeechQueue(private val backend: OnlineTtsBackend) : TtsEngine.SpeechQueue {
         private val pending = Channel<String>(Channel.UNLIMITED)
-        private val synthesized = Channel<Deferred<TtsPcm?>>(capacity = 1)
+        private val synthesized = Channel<QueuedSentence>(capacity = 1)
         @Volatile private var superseded = false
 
         private val synthJob: Job = scope.launch {
-            for (text in pending) synthesized.send(async { synthesizeOrNull(backend, text) })
+            for (text in pending) {
+                val gender = selectedGender()
+                val rate = if (cachedPcm(backend, gender, text) == null) backend.streamSampleRate() else null
+                val sentence = if (rate == null) {
+                    WholeSentence(async { synthesizeOrNull(backend, text) })
+                } else {
+                    val chunks = LinkedBlockingQueue<FloatArray>()
+                    StreamedSentence(chunks, rate, async { streamSentence(backend, text, gender, rate, chunks) })
+                }
+                synthesized.send(sentence)
+            }
             synthesized.close()
         }
 
         private val playJob: Job = scope.launch {
             var failed = false
-            for (d in synthesized) {
-                val pcm = d.await()
-                if (failed) continue
-                if (pcm == null) {
-                    Log.w(TAG, "online synth failed; silencing the rest of the reply (no fallback)")
-                    failed = true
-                    continue
+            for (sentence in synthesized) {
+                when (sentence) {
+                    is WholeSentence -> {
+                        val pcm = sentence.pcm.await()
+                        if (failed) continue
+                        if (pcm == null) {
+                            Log.w(TAG, "online synth failed; silencing the rest of the reply (no fallback)")
+                            failed = true
+                            continue
+                        }
+                        currentCoroutineContext().ensureActive() // see speakOnline
+                        val played = delegate.playPcm(pcm.samples, pcm.sampleRate)
+                        Log.i(TAG, "online pcm: samples=${pcm.samples.size} rate=${pcm.sampleRate} played=$played")
+                        if (!played) failed = true
+                    }
+                    is StreamedSentence -> if (failed) sentence.job.cancel() else failed = !playStreamed(sentence)
                 }
-                val played = delegate.playPcm(pcm.samples, pcm.sampleRate)
-                Log.i(TAG, "online pcm: samples=${pcm.samples.size} rate=${pcm.sampleRate} played=$played")
-                if (!played) failed = true
             }
+        }
+
+        private suspend fun playStreamed(sentence: StreamedSentence): Boolean {
+            currentCoroutineContext().ensureActive() // see speakOnline
+            val played = delegate.playPcmStream(sentence.chunks, sentence.sampleRate)
+            if (!played) sentence.job.cancel()
+            val streamed = played && sentence.job.await()
+            Log.i(TAG, "online pcm stream: rate=${sentence.sampleRate} played=$played streamed=$streamed")
+            if (!streamed) Log.w(TAG, "online stream failed; silencing the rest of the reply (no fallback)")
+            return streamed
         }
 
         override fun enqueue(text: String): Boolean {
@@ -213,9 +332,33 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         }
     }
 
+    /** One reply sentence in playback order: whole PCM, or chunks streamed in by [StreamedSentence.job]. */
+    private sealed interface QueuedSentence
+    private class WholeSentence(val pcm: Deferred<TtsPcm?>) : QueuedSentence
+    private class StreamedSentence(
+        val chunks: BlockingQueue<FloatArray>,
+        val sampleRate: Int,
+        val job: Deferred<Boolean>,
+    ) : QueuedSentence
+
     companion object {
         private const val TAG = "TtsRouter"
         const val OFFLINE = "offline"
+
+        // TtsEngine.playPcmStream's end-of-stream marker.
+        private val END_OF_STREAM = FloatArray(0)
+
+        private fun elapsedMs(startNs: Long): Long = (System.nanoTime() - startNs) / 1_000_000
+
+        private fun mergeChunks(chunks: List<FloatArray>): FloatArray {
+            val merged = FloatArray(chunks.sumOf { it.size })
+            var offset = 0
+            for (chunk in chunks) {
+                chunk.copyInto(merged, offset)
+                offset += chunk.size
+            }
+            return merged
+        }
 
         // Safety net over the backends' own network timeouts (OpenRouter callTimeout=15s;
         // MiniMax official has none). Cloud TTS renders a whole sentence before responding,
