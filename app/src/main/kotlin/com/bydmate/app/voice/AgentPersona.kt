@@ -53,7 +53,7 @@ enum class AgentPersona(val id: String) {
 
         private val FILLER_POOLS = mapOf(
             NAVIGATOR to listOf("Сейчас посмотрю.", "Секунду, проверяю.", "Минутку.", "Уже смотрю."),
-            SNARKY to listOf("Ща гляну.", "Погоди, копаюсь.", "Щас, не торопи.", "Минуту, ищу."),
+            SNARKY to listOf("Сейчас гляну.", "Погоди, смотрю.", "Секунду, не торопи.", "Минуту, ищу."),
             ENGINEER to listOf("Запрос принят.", "Проверяю.", "Обрабатываю.", "Секунду."),
         )
     }

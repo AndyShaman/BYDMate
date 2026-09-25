@@ -69,7 +69,7 @@ class AgentPersonaTest {
     @Test fun `fillerPhrase returns a phrase from the persona's own filler pool`() {
         val pools = mapOf(
             AgentPersona.NAVIGATOR to listOf("Сейчас посмотрю.", "Секунду, проверяю.", "Минутку.", "Уже смотрю."),
-            AgentPersona.SNARKY to listOf("Ща гляну.", "Погоди, копаюсь.", "Щас, не торопи.", "Минуту, ищу."),
+            AgentPersona.SNARKY to listOf("Сейчас гляну.", "Погоди, смотрю.", "Секунду, не торопи.", "Минуту, ищу."),
             AgentPersona.ENGINEER to listOf("Запрос принят.", "Проверяю.", "Обрабатываю.", "Секунду."),
         )
         for ((p, pool) in pools) repeat(10) { i ->
