@@ -26,16 +26,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+@Suppress("LargeClass") // the whole voice session: capture marks, ASR events, routing, agent turns
 class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     private val audioCapture: AudioCapture,
     private val actionDispatcher: ActionDispatcher,
@@ -110,7 +113,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     // never be observed. speak() returning false (blank text, or engine not ready -- e.g. voice
     // not downloaded) means no audio was actually enqueued, so no stamp: a playback window for a
     // no-op would drop the user's next phrase for nothing.
-    // (2) inline in the mic filter for every frame where ttsEngine.speaking reads
+    // (2) in the capture-time frame mark for every frame where ttsEngine.audible() reads
     // true, which extends the stamp across longer utterances (no collect()-based watcher --
     // collecting a StateFlow can conflate a fast true->false->true transition away, silently
     // missing a window; reading .value per frame always reflects that exact instant).
@@ -121,18 +124,31 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     // deterministic condition, instead of a fixed sleep -- no public API surface added.
     @Volatile internal var lastSpeakingSeenMs: Long = 0L
 
-    // Written by the mic filter, read by the ASR event handler. frameInPlayback: the latest frame
-    // fell inside the playback window. segmentOverlapsPlayback: a frame of the current speech
-    // segment did -- taken from the frame that triggered SpeechStart, then OR-ed per frame, so a
-    // phrase the agent started talking over is echo-contaminated the same way. audibleSinceMs:
-    // start of the current audible run, 0 while silent (barge-in log only).
+    // Test seam: the clock of the playback window, the self-name guard and the barge-in logs.
+    internal var clock: () -> Long = System::currentTimeMillis
+
+    // Set by the mic filter from each frame's capture-time mark (see FrameMark), read by the ASR
+    // event handler. frameInPlayback: the latest frame was captured inside the playback window.
+    // segmentOverlapsPlayback: a frame of the current speech segment was -- taken from the frame
+    // that triggered SpeechStart, then OR-ed per frame, so a phrase the agent started talking over
+    // is echo-contaminated the same way. frameSelfNameGuard / segmentSelfNameGuarded: the same
+    // for the self-name guard. audibleSinceMs: start of the current audible run, 0 while silent
+    // (barge-in log only).
     @Volatile private var frameInPlayback = false
+    @Volatile private var frameSelfNameGuard = false
     @Volatile private var segmentOverlapsPlayback = false
+    @Volatile private var segmentSelfNameGuarded = false
     @Volatile private var audibleSinceMs = 0L
-    // Self-trigger guard: when the agent last handed TTS a text containing its own name. Its echo
-    // can start an overlapped utterance with that name, so within SELF_NAME_GUARD_MS (the echo
-    // filter's phrase TTL) a leading name does not barge in.
-    @Volatile private var selfNameSpokenAtMs = 0L
+    // Self-trigger guard: the reply being played names the agent, and its echo can start an
+    // overlapped utterance with that name, so a leading name does not barge in while it is up.
+    // TTS reports no per-sentence playback, so the guard follows the whole reply: armed when a
+    // text with the name is handed to TTS, held SPEAK_START_GRACE_MS past every own text handed
+    // over while it is up (a queued sentence may still wait for synthesis), and for
+    // SELF_NAME_GRACE_MS past the last frame captured while TTS was audible or speaking.
+    // The deadline in clock() ms, 0 = released.
+    private val selfNameGuardUntilMs = AtomicLong(0L)
+    // Wave P play_music auto-close waiting for the reply to end; a name barge-in cancels it.
+    @Volatile private var musicCloseJob: Job? = null
     // Same role as droppedWhileBusy, for utterances dropped as playback-overlapped.
     @Volatile private var droppedDuringPlayback = 0
     internal fun droppedDuringPlaybackForTest(): Int = droppedDuringPlayback
@@ -197,12 +213,32 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     }
 
     /** Everything the agent hands to TTS: the echo filter's memory, the playback-window stamp
-     *  (see [lastSpeakingSeenMs]) and the self-name guard (see [selfNameSpokenAtMs]). */
+     *  (see [lastSpeakingSeenMs]) and the self-name guard (see [selfNameGuardUntilMs]). */
     private fun noteOwnSpeech(text: String) {
         echoFilter.noteSpoken(text)
-        val now = System.currentTimeMillis()
-        if (AgentNameMatcher.matches(text, agentIdentity().name)) selfNameSpokenAtMs = now
+        val now = clock()
+        val named = AgentNameMatcher.matches(text, agentIdentity().name)
+        selfNameGuardUntilMs.updateAndGet { if (named || it != 0L) maxOf(it, now + SPEAK_START_GRACE_MS) else it }
+        if (named) Log.i(TAG, "Self-name guard armed: the reply names the agent")
         lastSpeakingSeenMs = now
+    }
+
+    /** Capture-time mark of one mic frame (see [AudioCapture.captureSession]). */
+    private class FrameMark(val inPlayback: Boolean, val selfNameGuard: Boolean)
+
+    /** Whether the self-name guard covers a frame captured at [now]: held while TTS is audible
+     *  or speaking, released once its deadline has passed (see [selfNameGuardUntilMs]). */
+    private fun selfNameGuardAt(now: Long, audible: Boolean): Boolean {
+        if (selfNameGuardUntilMs.get() == 0L) return false
+        if (audible || ttsEngine.speaking.value) {
+            selfNameGuardUntilMs.updateAndGet { if (it == 0L) 0L else maxOf(it, now + SELF_NAME_GRACE_MS) }
+            return true
+        }
+        val until = selfNameGuardUntilMs.get()
+        if (until == 0L) return false
+        if (now < until) return true
+        if (selfNameGuardUntilMs.compareAndSet(until, 0L)) Log.i(TAG, "Self-name guard released: the reply naming the agent is over")
+        return false
     }
 
     /** Records one journal entry + matching logcat lines for a terminal voice-session outcome.
@@ -273,9 +309,11 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         runCatching { ttsEngine.stop() }
         lastSpeakingSeenMs = 0L
         frameInPlayback = false
+        frameSelfNameGuard = false
         segmentOverlapsPlayback = false
+        segmentSelfNameGuarded = false
         audibleSinceMs = 0L
-        selfNameSpokenAtMs = 0L
+        selfNameGuardUntilMs.set(0L)
         processingUtterance = false
         routingJob = null
         cancellableAskJob = null
@@ -296,42 +334,63 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             val session = coroutineContext[Job]
             runCatching { showListeningOverlay(appStrings.get(R.string.voice_listening)) }
             var lastEventMs = System.currentTimeMillis()
-            var wasAudible = false
+            var wasAudible = false   // capture thread only
+            // Silence for the auto-stop, counted the way it was while playback muted the mic: a
+            // frame captured in the playback window does not count, so a long answer never eats
+            // the driver's waiting time after it. Derived from GigaAM's cumulative SilenceTick,
+            // which restarts at every SpeechStart.
+            var silentMs = 0L
+            var lastTickSilentMs = 0L
             try {
-                val pcm = audioCapture.captureSession(maxMs = Long.MAX_VALUE) // Wave P: no session cap; silence auto-stop below is the only auto-exit
-                    .filter {
+                // Wave P: no session cap; silence auto-stop below is the only auto-exit.
+                // The mark runs on the capture thread when the frame is read, not when it is
+                // processed: frames pile up in the capture channel while GigaAM decodes, and a
+                // frame the agent's voice was captured in must stay marked however late it comes.
+                val pcm = audioCapture.captureSession(maxMs = Long.MAX_VALUE) {
+                    // Read the real, physical playback signal each frame (see
+                    // lastSpeakingSeenMs above for why not a collect()-based watcher):
+                    // audible(), not the logical speaking flag, which is deliberately held
+                    // true across a whole streamed reply (including silent tool rounds) so
+                    // this mark would otherwise flag the mic as overlapped while the agent "thinks".
+                    val audible = ttsEngine.audible()
+                    val now = clock()
+                    if (audible) {
+                        lastSpeakingSeenMs = now
+                        if (!wasAudible) audibleSinceMs = now
+                    } else if (wasAudible) {
+                        // Transition from audible to silent: notify echo filter
+                        echoFilter.onPlaybackEnd()
+                        audibleSinceMs = 0L
+                    }
+                    wasAudible = audible
+                    FrameMark(
+                        inPlayback = inPlaybackWindow(now, lastSpeakingSeenMs + TTS_ECHO_GRACE_MS, audible),
+                        selfNameGuard = selfNameGuardAt(now, audible),
+                    )
+                }
+                    .filter { frame ->
                         // Once a stop has been requested (see stopContinuousSession()) no further
                         // frames are forwarded to the recognizer, even while an in-flight utterance
                         // started before the stop is still being routed.
                         if (stopRequested.get()) return@filter false
-                        // Read the real, physical playback signal each frame (see
-                        // lastSpeakingSeenMs above for why not a collect()-based watcher):
-                        // audible(), not the logical speaking flag, which is deliberately held
-                        // true across a whole streamed reply (including silent tool rounds) so
-                        // this filter would otherwise flag the mic as overlapped while the agent "thinks".
-                        val audible = ttsEngine.audible()
-                        val now = System.currentTimeMillis()
-                        if (audible) {
-                            lastSpeakingSeenMs = now
-                            if (!wasAudible) audibleSinceMs = now
-                        } else if (wasAudible) {
-                            // Transition from audible to silent: notify echo filter
-                            echoFilter.onPlaybackEnd()
-                            audibleSinceMs = 0L
-                        }
-                        wasAudible = audible
                         // Frames in the playback window pass too: the utterance they belong to is
                         // marked instead, see onPlaybackOverlapped().
-                        val inPlayback = inPlaybackWindow(now, lastSpeakingSeenMs + TTS_ECHO_GRACE_MS, audible)
-                        frameInPlayback = inPlayback
-                        if (inPlayback) segmentOverlapsPlayback = true
+                        frameInPlayback = frame.mark.inPlayback
+                        frameSelfNameGuard = frame.mark.selfNameGuard
+                        if (frame.mark.inPlayback) segmentOverlapsPlayback = true
+                        if (frame.mark.selfNameGuard) segmentSelfNameGuarded = true
                         true
                     }
+                    .map { it.pcm }
                 continuousAsr.transcribe(pcm).collect { ev ->
                     when (ev) {
                         is ContinuousAsrEvent.SpeechStart -> {
                             lastEventMs = System.currentTimeMillis()
                             segmentOverlapsPlayback = frameInPlayback
+                            segmentSelfNameGuarded = frameSelfNameGuard
+                            lastTickSilentMs = 0L
+                            // A muted frame never started speech before the name barge-in.
+                            if (!frameInPlayback) silentMs = 0L
                             // The live VAD now detects speech while a routing child is in
                             // flight; clobbering Thinking here would violate the busy-drop
                             // contract (no state change while an utterance is being routed).
@@ -341,16 +400,22 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                         }
                         is ContinuousAsrEvent.SilenceTick -> {
                             lastEventMs = System.currentTimeMillis()
+                            val tickMs = if (ev.silentMs >= lastTickSilentMs) ev.silentMs - lastTickSilentMs else ev.silentMs
+                            lastTickSilentMs = ev.silentMs
+                            if (!frameInPlayback) silentMs += tickMs
                             // Frames flow during playback, so a quiet reply counts as silence
                             // for the VAD: never auto-stop while the agent is still talking.
-                            if (ev.silentMs >= SILENCE_AUTOSTOP_MS && !processingUtterance && !frameInPlayback) throw StopSession
+                            if (silentMs >= SILENCE_AUTOSTOP_MS && !processingUtterance && !frameInPlayback) throw StopSession
                         }
                         is ContinuousAsrEvent.Utterance -> {
                             val decodeMs = System.currentTimeMillis() - lastEventMs
                             val overlapped = segmentOverlapsPlayback
+                            val selfNameGuarded = segmentSelfNameGuarded
                             segmentOverlapsPlayback = false
+                            segmentSelfNameGuarded = false
                             if (overlapped) {
-                                onPlaybackOverlapped(ev.text, decodeMs)
+                                // The driver took the turn: the silence wait starts over.
+                                if (onPlaybackOverlapped(ev, decodeMs, selfNameGuarded)) silentMs = 0L
                                 return@collect
                             }
                             if (processingUtterance) {
@@ -430,35 +495,48 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     /** An utterance whose audio overlapped our own playback: the mic heard the agent as well, so
      *  it is never routed as a command, and the text after a leading name is not trusted either.
      *  A leading agent name barges in whether or not an ask is still in flight -- the last
-     *  sentences keep playing after routing has finished. Anything else is dropped. */
-    private fun onPlaybackOverlapped(transcript: String, decodeMs: Long) {
+     *  sentences keep playing after routing has finished -- unless [selfNameGuarded] (a frame of
+     *  it was captured while the self-name guard was up). Anything else is dropped.
+     *  @return true when it barged in. */
+    private fun onPlaybackOverlapped(ev: ContinuousAsrEvent.Utterance, decodeMs: Long, selfNameGuarded: Boolean): Boolean {
+        val transcript = ev.text
         val name = agentIdentity().name
-        val named = AgentNameMatcher.startsWithName(transcript, name)
-        val now = System.currentTimeMillis()
-        val selfName = named && selfNameSpokenAtMs > 0L && now - selfNameSpokenAtMs < SELF_NAME_GUARD_MS
+        val nameAt = AgentNameMatcher.nameIndex(transcript, name)
+        val named = nameAt == 0
+        val selfName = named && selfNameGuarded
         val decision = when {
             !named -> "dropped"
-            selfName -> "dropped (agent spoke its own name ${now - selfNameSpokenAtMs} ms ago)"
+            selfName -> "dropped (self-name guard: the reply being played names the agent)"
             else -> "barge-in"
         }
-        Log.i(TAG, logDetail("Playback-overlapped utterance: heard=\"$transcript\" nameMatch=$named decision=$decision decodeMs=$decodeMs"))
+        // segmentMs and nameAt (word index, -1 = none) measure on the car how often the agent's
+        // own voice opens the segment and pushes a real name past the first word.
+        Log.i(TAG, logDetail("Playback-overlapped utterance: heard=\"$transcript\" nameMatch=$named nameAt=$nameAt " +
+            "segmentMs=${ev.audioMs} decision=$decision decodeMs=$decodeMs"))
         if (!named || selfName) {
             droppedDuringPlayback++
-            return
+            return false
         }
         val rest = AgentNameMatcher.stripLeadingName(transcript, name)
         if (rest != transcript) Log.i(TAG, logDetail("Barge-in remainder not routed (echo-contaminated): \"$rest\""))
+        val now = clock()
         val since = audibleSinceMs
         val ask = cancellableAskJob?.takeIf { it.isActive }
         Log.i(TAG, "Barge-in by name during playback: audibleForMs=${if (since > 0L) now - since else -1} " +
             "sinceLastAudioMs=${now - lastSpeakingSeenMs} askActive=${ask != null} routing=$processingUtterance")
         ask?.cancel()
         bargeIn(transcript, "Barge-in by name during playback")
+        return true
     }
 
     /** Name barge-in: silence the agent and hand the turn back to the driver. The caller has
      *  already cancelled the in-flight ask, if there was one. */
     private fun bargeIn(transcript: String, logMsg: String) {
+        // Before stop(): the play_music auto-close resumes on the very speaking=false it causes.
+        musicCloseJob?.takeIf { it.isActive }?.let {
+            it.cancel()
+            Log.i(TAG, "play_music auto-close cancelled by barge-in: the driver stays in the dialog")
+        }
         runCatching { ttsEngine.stop() }
         earcon.ok()
         _state.value = VoiceUiState.Listening
@@ -895,7 +973,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 // no session to close) is untouched.
                 val closingJob = sessionJob
                 if (closingJob != null && result.tools.any { it.name == "play_music" && it.ok }) {
-                    scope.launch {
+                    musicCloseJob = scope.launch {
                         // speak()/enqueue() returns before the TTS worker flips speaking=true, so
                         // waiting for !speaking alone completes immediately and would cut the reply
                         // before it starts. Wait (bounded) for playback to begin, then for it to
@@ -994,8 +1072,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // tail of the agent's voice can still reach the mic (see lastSpeakingSeenMs).
         private const val TTS_ECHO_GRACE_MS = 500L
 
-        // Self-name guard span, the same as SelfEchoFilter's phrase TTL (see selfNameSpokenAtMs).
-        private const val SELF_NAME_GUARD_MS = 20_000L
+        // Self-name guard hold after the last frame TTS was audible or speaking in (see
+        // selfNameGuardUntilMs): the echo tail, as long as SelfEchoFilter's short-echo window.
+        private const val SELF_NAME_GRACE_MS = 1_500L
 
         /** Pure so it is unit-testable without a real clock/session: whether the mic currently
          *  hears our own playback -- either TTS is audible right now, or we're still inside the

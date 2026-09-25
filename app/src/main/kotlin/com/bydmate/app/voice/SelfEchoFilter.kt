@@ -32,7 +32,8 @@ class SelfEchoFilter(private val now: () -> Long = System::currentTimeMillis) {
     )
 
     private val phraseBuffer = mutableListOf<SpokenPhrase>()
-    private var playbackEndMs = 0L
+    // Written from the mic capture thread (VoiceController's frame mark).
+    @Volatile private var playbackEndMs = 0L
 
     /**
      * Records a spoken TTS phrase at current time.

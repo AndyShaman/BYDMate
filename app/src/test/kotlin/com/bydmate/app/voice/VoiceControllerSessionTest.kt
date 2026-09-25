@@ -143,7 +143,7 @@ class VoiceControllerSessionTest {
         },
         ttsEngine: TtsEngine = quietTtsEngine(),
         audioCapture: AudioCapture = mockk<AudioCapture>(relaxed = true).also {
-            every { it.captureSession(any()) } returns flow { /* fake ignores pcm content */ }
+            every { it.captureSession(any(), any<() -> Any?>()) } returns flow { /* fake ignores pcm content */ }
         },
         journal: VoiceJournal = VoiceJournal(),
         earcon: VoiceEarcon = mockk(relaxed = true),
@@ -484,7 +484,7 @@ class VoiceControllerSessionTest {
         // deliberately stop the session, not flip false on its own the instant it's collected.
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -554,7 +554,7 @@ class VoiceControllerSessionTest {
         every { gate.ttsEnabled() } returns false
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { }
+        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { }
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
@@ -589,7 +589,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { }
+        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { }
         val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -597,7 +597,7 @@ class VoiceControllerSessionTest {
         // session coroutine has necessarily reached captureSession() -- poll the verify itself
         // (like awaitVerify elsewhere) instead of asserting once right after the flag.
         // Wave P: no hard session cap; Long.MAX_VALUE means "run until silence or user stops".
-        awaitVerify { verify(exactly = 1) { audioCapture.captureSession(Long.MAX_VALUE) } }
+        awaitVerify { verify(exactly = 1) { audioCapture.captureSession(Long.MAX_VALUE, any<() -> Any?>()) } }
         assertTrue(controller.listening.value)
     }
 
@@ -606,7 +606,7 @@ class VoiceControllerSessionTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -637,7 +637,7 @@ class VoiceControllerSessionTest {
         every { ttsEngine.audible() } answers { speaking.value }
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -667,7 +667,7 @@ class VoiceControllerSessionTest {
         every { ttsEngine.audible() } answers { speaking.value }
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -708,7 +708,7 @@ class VoiceControllerSessionTest {
         every { ttsEngine.audible() } returns false
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -730,7 +730,7 @@ class VoiceControllerSessionTest {
         every { ttsEngine.audible() } returns true
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -764,7 +764,7 @@ class VoiceControllerSessionTest {
         every { ttsEngine.speak(any()) } returns true
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Answer("Готово")
@@ -824,7 +824,7 @@ class VoiceControllerSessionTest {
         every { ttsEngine.speak(any()) } returns false // e.g. voice not downloaded
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Answer("Готово")
@@ -1043,7 +1043,7 @@ class VoiceControllerSessionTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(failingAsr, dispatcher, audioCapture = audioCapture, context = stubbedContext())
         val answers = Collections.synchronizedList(mutableListOf<String>())
         controller.showAnswerHook = { text -> answers.add(text) }
@@ -1153,7 +1153,7 @@ class VoiceControllerSessionTest {
         }
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val journal = VoiceJournal()
         var hidden = false
         val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture, journal = journal, context = stubbedContext())
@@ -1299,7 +1299,7 @@ class VoiceControllerSessionTest {
         // arrives, and the collecting barrier below must not miss its window (an empty flow{}
         // flips collecting true->false before awaitTrue can observe it).
         val rawFrames = MutableSharedFlow<ShortArray>()
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -1314,7 +1314,7 @@ class VoiceControllerSessionTest {
 
         verifyOrder {
             audioCapture.duckMusic()       // early duck, before captureSession() is even called
-            audioCapture.captureSession(any())
+            audioCapture.captureSession(any(), any<() -> Any?>())
         }
         verify { audioCapture.restoreMusic(20) }   // finally restored the early-duck volume
     }
@@ -1343,7 +1343,7 @@ class VoiceControllerSessionTest {
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val ttsEngine = quietTtsEngine()
         val controller = makeController(
             fakeAsr, dispatcher,
@@ -1383,7 +1383,7 @@ class VoiceControllerSessionTest {
         }
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -1413,7 +1413,7 @@ class VoiceControllerSessionTest {
         }
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val ttsEngine = mockk<TtsEngine>(relaxed = true)
         every { ttsEngine.speaking } returns MutableStateFlow(true)
         val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture, ttsEngine = ttsEngine)
@@ -1457,7 +1457,7 @@ class VoiceControllerSessionTest {
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val ttsEngine = quietTtsEngine()
         val controller = makeController(
             fakeAsr, dispatcher,
@@ -1496,7 +1496,7 @@ class VoiceControllerSessionTest {
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
         val answers = mutableListOf<String>()
         controller.showAnswerHook = { text -> answers.add(text) }
@@ -1542,7 +1542,7 @@ class VoiceControllerSessionTest {
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val controller = makeController(
             fakeAsr, dispatcher,
             agentOrchestrator = agentOrchestrator,
@@ -1733,7 +1733,7 @@ class VoiceControllerSessionTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns rawFrames
+        audioCapture.stubFrames(rawFrames)
         val ttsEngine = mockk<TtsEngine>(relaxed = true)
         every { ttsEngine.speaking } returns MutableStateFlow(false)
 

@@ -120,7 +120,7 @@ class VoiceControllerSafetyTest {
         every { gate.ttsEnabled() } returns ttsEnabled
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { /* empty — completes immediately */ }
+        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { /* empty — completes immediately */ }
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
@@ -154,7 +154,7 @@ class VoiceControllerSafetyTest {
         every { gate.ttsEnabled() } returns false
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { /* empty — completes immediately */ }
+        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { /* empty — completes immediately */ }
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
@@ -563,7 +563,7 @@ class VoiceControllerSafetyTest {
         every { gate.ttsEnabled() } returns false
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { /* empty — completes immediately */ }
+        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { /* empty — completes immediately */ }
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
@@ -622,7 +622,7 @@ class VoiceControllerSafetyTest {
         every { gate.ttsEnabled() } returns false
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { /* empty */ }
+        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { /* empty */ }
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
@@ -693,7 +693,7 @@ class VoiceControllerSafetyTest {
         every { gate.ttsEnabled() } returns false
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { /* empty */ }
+        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { /* empty */ }
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 

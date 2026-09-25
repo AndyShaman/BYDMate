@@ -13,10 +13,13 @@ object AgentNameMatcher {
 
     /** Whether the first word is the name ("леш посмотри" for "Лёша"), under the same fuzzy
      *  rule as [matches]; a transcript that is only the name counts. */
-    fun startsWithName(transcript: String, name: String): Boolean {
+    fun startsWithName(transcript: String, name: String): Boolean = nameIndex(transcript, name) == 0
+
+    /** Word index of the first name token under the same fuzzy rule as [matches], -1 if none. */
+    fun nameIndex(transcript: String, name: String): Int {
         val target = normalize(name)
-        if (target.isEmpty()) return false
-        return tokens(transcript).firstOrNull()?.let { tokenMatches(it, target) } ?: false
+        if (target.isEmpty()) return -1
+        return tokens(transcript).indexOfFirst { tokenMatches(it, target) }
     }
 
     /** Drops a leading name token ("Лео, открой окно" -> "открой окно") so NLU/agent see
