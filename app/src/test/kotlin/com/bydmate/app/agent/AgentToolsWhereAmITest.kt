@@ -43,7 +43,7 @@ class AgentToolsWhereAmITest {
         mockk<ZaiSearchClient>(relaxed = true), mockk<LlmConnectionResolver>(relaxed = true),
     ).also {
         it.injectSettlementSearch(settlements)
-        it.locationProvider = { 54.0 to 27.0 }
+        it.gpsFixProvider = { AgentTools.GpsFix(54.0, 27.0, ageMs = 5_000L, live = true) }
     }
 
     private suspend fun whereAmI() = JSONObject(tools.execute(AgentToolCall("1", "where_am_i", "{}")))
@@ -104,9 +104,52 @@ class AgentToolsWhereAmITest {
     }
 
     @Test fun no_gps_fix_is_an_error_without_a_network_call() = runTest {
-        tools.locationProvider = { null }
+        tools.gpsFixProvider = { null }
         assertTrue(whereAmI().getString("error").contains("нет GPS-позиции"))
         coVerify(exactly = 0) { settlements.search(any(), any(), any(), any()) }
+    }
+
+    // Review of 30f1f01d: only centre points are known, a car 1 km from a compact village is
+    // not in it; the old note told the model "меньше 1-2 км значит машина в нём".
+    @Test fun note_never_claims_the_car_is_inside_a_settlement() = runTest {
+        coEvery { settlements.search(any(), any(), any(), any()) } returns
+            Result.success(listOf(s("Северная", "village", 54.005, 27.0)))
+        val note = whereAmI().getString("note")
+        assertFalse(note, note.contains("значит машина в нём"))
+        assertTrue(note, note.contains("не говори, что машина в нём"))
+        assertTrue(note, note.contains("примерно N км от X"))
+    }
+
+    @Test fun fresh_fix_reports_its_age_without_a_hedge() = runTest {
+        coEvery { settlements.search(any(), any(), any(), any()) } returns
+            Result.success(listOf(s("Северная", "village", 54.01, 27.0)))
+        val out = whereAmI()
+        assertEquals(0L, out.getLong("fix_age_min"))
+        assertFalse(out.has("fix_note"))
+    }
+
+    // Parked car: the 8 m GPS filter stops updates, the fix is old but still right.
+    @Test fun old_live_fix_answers_and_hedges_only_on_the_move() = runTest {
+        tools.gpsFixProvider = { AgentTools.GpsFix(54.0, 27.0, ageMs = 45 * 60_000L, live = true) }
+        coEvery { settlements.search(any(), any(), any(), any()) } returns
+            Result.success(listOf(s("Северная", "village", 54.01, 27.0)))
+        val out = whereAmI()
+        assertEquals(45L, out.getLong("fix_age_min"))
+        assertEquals("Северная", out.getJSONArray("settlements").getJSONObject(0).getString("name"))
+        val fixNote = out.getString("fix_note")
+        assertTrue(fixNote, fixNote.contains("на стоянке это нормально"))
+        assertTrue(fixNote, fixNote.contains("по последним данным"))
+    }
+
+    // Start without a fresh fix: only the last-known seed, possibly from before the drive.
+    @Test fun start_time_seed_is_reported_as_last_known_data() = runTest {
+        tools.gpsFixProvider = { AgentTools.GpsFix(54.0, 27.0, ageMs = 600 * 60_000L, live = false) }
+        coEvery { settlements.search(any(), any(), any(), any()) } returns Result.success(emptyList())
+        val out = whereAmI()
+        assertEquals(600L, out.getLong("fix_age_min"))
+        val fixNote = out.getString("fix_note")
+        assertTrue(fixNote, fixNote.contains("свежего GPS-сигнала после запуска не было"))
+        assertTrue(fixNote, fixNote.contains("по последним данным"))
     }
 
     @Test fun tool_is_declared_and_steers_away_from_web_search() = runTest {
@@ -115,5 +158,6 @@ class AgentToolsWhereAmITest {
             .single { it.getString("name") == "where_am_i" }
         assertTrue(fn.getString("description").contains("где я"))
         assertTrue(fn.getString("description").contains("не ищи координаты через web_search"))
+        assertTrue(fn.getString("description").contains("а не в каком месте она"))
     }
 }
