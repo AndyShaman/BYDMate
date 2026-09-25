@@ -844,8 +844,8 @@ class TtsRouterTest {
         val backend = VoicedBackend()
         speakAndSettle(backend, dir, "Готово.")
         assertEquals(1, backend.synthesized.size)
-        // Re-synthesized and written again as a complete file.
-        assertEquals(12 + 2 * 2, phraseFiles(dir).single().length().toInt())
+        // Re-synthesized and written again as a complete file (16-byte header: crc32 + magic + rate + count).
+        assertEquals(16 + 2 * 2, phraseFiles(dir).single().length().toInt())
     }
 
     @Test
