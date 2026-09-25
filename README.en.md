@@ -15,7 +15,7 @@
 
 **English** | [中文](README.zh.md) | [Русский](README.md)
 
-**Real consumption, GPS routes, automation, AI analytics. Local-first; cloud features are optional.**
+**Real consumption, GPS routes, automation, local AI analytics.**
 
 Split screen 1/3 and 2/3, navigation on the instrument cluster, Yandex Navigator guidance on the windshield, turn-signal blind-spot cameras, a Russian voice assistant, ABRP telemetry.
 
@@ -254,7 +254,7 @@ In **Settings → Display**, next to the projection toggle, you choose the clust
 
 **"Extended".** The navigator launches as a separate window right on the cluster display, so the voice agent and the HUD see the route during projection. To do this, the app turns on a system window-mode setting (enable_freeform_support). The mode turns on only through a dialog that explains it, and after turning it on you need a one-time head-unit reboot (long-press the volume wheel). The new mode applies the next time you project.
 
-On some firmware (DiLink 4.0, Song Plus 2021, and similar) the cluster screen is hidden from apps, and "Factory" mode cannot work there: the app finds the cluster through a service channel by itself and projects the navigator in "Extended" mode regardless of what you picked. This is confirmed on a car with DiLink 4.0. The "Cluster window size" setting does not work in this mode.
+On some firmware (DiLink 4.0, Song Plus 2021, and similar) the cluster screen is hidden from apps, and "Factory" mode cannot work there: the app finds the cluster through a service channel by itself and projects the navigator in "Extended" mode regardless of what you picked. This is confirmed on a car with DiLink 4.0. In this mode, the "Scale" slider in the "Cluster window size" setting does not work.
 
 **How to restore factory settings.** Switch the mode back to "Factory": the app immediately restores the system setting to its factory value, and rebooting DiLink completes the rollback. After that the system is in the same state as before BYDMate was installed.
 
@@ -756,7 +756,7 @@ On **BYD Leopard 3 (Fangchengbao Tai 3)** BYDMate reads this value directly from
 
 On other BYD models, access to this value is not yet confirmed, so SoH does not show there. The rest of the card (battery temperature, 12V, cell balance, insulation resistance) works on every supported model.
 
-Tapping the card opens the **"Tech"** screen: traction battery voltage and current, available battery power, BMS charge and discharge limits, cell balance, motor and inverter temperatures, front/rear power split in percent, climate, tire pressure and temperature, SoH and mileage history, the number of full battery charge cycles with a note on which kWh sum it is figured from. Every parameter has a "?" badge with a plain-language tip. If the car does not report a parameter, the line shows "-", and empty cards are hidden.
+Tapping the card opens the **"Tech"** screen: traction battery voltage and current, remaining battery energy in kWh per BMS data, available battery power, BMS charge and discharge limits, cell balance, motor and inverter temperatures, front/rear power split in percent, climate, tire pressure and temperature, SoH and mileage history, the number of full battery charge cycles with a note on which kWh sum it is figured from. Every parameter has a "?" badge with a plain-language tip. If the car does not report a parameter, the line shows "-", and empty cards are hidden.
 
 If SoH is available on your car and you want to help add support, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your model and year.
 
