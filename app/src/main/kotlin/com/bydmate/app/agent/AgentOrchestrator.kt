@@ -74,7 +74,7 @@ class AgentOrchestrator @Inject constructor(
 
             clearStaleHistory()
             val snapshot = history.toList()
-            history += AgentMessage.User(if (isMoving()) "$text $MOVING_TAG" else text)
+            history += AgentMessage.User(withTimeTag(text) + if (isMoving()) " $MOVING_TAG" else "")
             try {
                 trimHistory()
                 val result = runLoop(
@@ -145,7 +145,7 @@ class AgentOrchestrator @Inject constructor(
             if (!backend.isConfigured()) return AgentResult.Error("Агент не настроен: заполните адрес, API-ключ и модель в Настройки, Интеграции")
             val text = userText.trim()
             if (text.isEmpty()) return AgentResult.Disabled
-            val messages = mutableListOf<AgentMessage>(AgentMessage.User(text))
+            val messages = mutableListOf<AgentMessage>(AgentMessage.User(withTimeTag(text)))
             return runLoop(messages, systemMessages(includeMemory = false), tools.schemas(includeAutomationTools = false),
                 allowAutomationTools = false, onSentence = null, onFiller = null, onTerminal = {})
         } finally {
@@ -153,13 +153,19 @@ class AgentOrchestrator @Inject constructor(
         }
     }
 
+    /** The driver's line plus the local clock time ([TIME_TAG_PREFIX]). The time rides on the
+     *  user message, like [MOVING_TAG], because a per-minute value in the system messages would
+     *  break the cached prefix on every turn. */
+    private fun withTimeTag(text: String): String =
+        "$text ($TIME_TAG_PREFIX " + SimpleDateFormat("HH:mm", Locale.ROOT).format(Date(nowMs())) + ")"
+
     /**
      * Two system messages, and the split is the point: the first is [SYSTEM_PROMPT] and
      * nothing else, byte-identical on every turn of every day, so the provider can cache it
      * (the backend puts the cache breakpoint on exactly this message, where a breakpoint pays:
      * see LlmAgentBackend.cachesStaticPrefix). Everything that moves
      * — today's date, the persona, the driver facts — goes into the second one, after the
-     * breakpoint. Per-turn state (driving or not) rides on the user message instead (see
+     * breakpoint. Per-turn state (clock time, driving or not) rides on the user message instead (see
      * [MOVING_TAG]). A detached turn (automation rule, not the driver) carries no memory —
      * neither the driver facts nor today's exchanges.
      */
@@ -342,6 +348,10 @@ class AgentOrchestrator @Inject constructor(
         /** Appended to the driver's own line while the car moves; the terse-answer rule for it
          *  lives in the static [SYSTEM_PROMPT]. */
         internal const val MOVING_TAG = "(машина в движении)"
+
+        /** Opens the "(время HH:mm)" tag [withTimeTag] adds to every user line; the rule that
+         *  time comes only from it lives in the static [SYSTEM_PROMPT]. */
+        internal const val TIME_TAG_PREFIX = "время"
         private const val SESSION_TTL_MS = 300_000L
         private const val FOLLOW_UP_WINDOW_MS = 60_000L
         private const val MAX_ITERATIONS = 8
@@ -353,7 +363,7 @@ class AgentOrchestrator @Inject constructor(
          *  is worth speaking; fast, local calls (vehicle_control etc.) never get one. */
         private val SLOW_TOOLS = setOf(
             "web_search", "get_weather", "find_chargers", "query_trips", "query_charges",
-            "range_to_destination", "navigate_to",
+            "range_to_destination", "navigate_to", "where_am_i",
         )
 
         /** Provider stop reason meaning the answer hit max_tokens, plus the mark that makes
@@ -391,6 +401,8 @@ class AgentOrchestrator @Inject constructor(
               его нулём или выключенным.
             - Не выдумывай функции, которых нет среди инструментов: скажи прямо, что не умеешь.
             - Помни контекст: "а теперь закрой" относится к предыдущей команде.
+            - Ты видишь только последние реплики разговора. Если о чём-то спрашивают, а этого нет
+              в разговоре перед тобой, скажи, что не помню; не утверждай, что такого не было.
             - Если инструмент вернул error - коротко назови причину; не говори, что выполнил.
             - Вопросы про заряд до конца маршрута (хватит ли батареи, сколько останется на финише) - вызови get_route_info и отвечай по полю energy_estimate, сам арифметику не считай.
             - Если инструмент вернул status "ожидает подтверждения на экране" - команда ЕЩЁ НЕ
@@ -405,6 +417,11 @@ class AgentOrchestrator @Inject constructor(
               по имени изредка, не в каждой фразе.
             - Если реплика водителя заканчивается пометкой "$MOVING_TAG" - отвечай максимально
               коротко, одним подтверждением.
+            - Текущее время приходит пометкой "($TIME_TAG_PREFIX ЧЧ:ММ)" в реплике водителя. Называй
+              время только по пометке в последней реплике; другого источника времени у тебя нет.
+            - Где машина, какой населённый пункт, что рядом - вызови where_am_i. Называй места
+              только из его ответа, не угадывай и не ищи координаты через web_search. Если
+              where_am_i вернул error или пустой список - скажи, что не знаешь, где мы.
 
             АВТОМАТИЗАЦИИ И МЕСТА: у пользователя есть автоматизации (триггер + действия) и
             Места (гео-точки). Для триггеров place_enter/place_exit сначала проверь имя через

@@ -37,6 +37,23 @@ class AgentPromptTest {
         assertFalse(AgentOrchestrator.SYSTEM_PROMPT.contains("Никогда не называй машину гибридом"))
     }
 
+    // On-car log 25.09: the model named the time, villages and a "never asked" from thin air.
+    @Test fun prompt_takes_time_only_from_the_tag() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("(${AgentOrchestrator.TIME_TAG_PREFIX} ЧЧ:ММ)"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("другого источника времени у тебя нет"))
+    }
+
+    @Test fun prompt_names_places_only_from_where_am_i() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("where_am_i"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("не угадывай и не ищи координаты через web_search"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("скажи, что не знаешь, где мы"))
+    }
+
+    @Test fun prompt_admits_forgetting_instead_of_denying() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("скажи, что не помню"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("не утверждай, что такого не было"))
+    }
+
     @Test fun prompt_explains_pending_confirmation_status() {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("ожидает подтверждения на экране"))
     }

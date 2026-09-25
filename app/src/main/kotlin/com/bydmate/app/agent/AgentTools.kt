@@ -2,6 +2,7 @@ package com.bydmate.app.agent
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.camera.BlindSpotPreferences
@@ -143,6 +144,16 @@ class AgentTools @Inject constructor(
     @Inject
     internal fun injectUserPhrases(phrases: VoiceUserPhrases) {
         userPhrases = phrases
+    }
+
+    // Same method-injection reason as splitPrefs above. Null until Hilt injects it; where_am_i
+    // then answers with an error instead of guessing.
+    private var settlementSearchClient: SettlementSearchClient? = null
+
+    /** Called by Hilt after construction; call manually in unit tests of where_am_i. */
+    @Inject
+    internal fun injectSettlementSearch(client: SettlementSearchClient) {
+        settlementSearchClient = client
     }
 
     /** Sorted names of the enabled automations, kept in step with the rules table by
@@ -375,6 +386,14 @@ class AgentTools @Inject constructor(
                 .put("type", "string")
                 .put("description", "Имя контакта, как записано в телефонной книге")),
             listOf("name"),
+        ))
+        put(tool(
+            "where_am_i",
+            "Где сейчас машина: ближайшие населённые пункты вокруг текущей GPS-позиции (данные " +
+                "OpenStreetMap) с расстоянием до центра в км и стороной света от машины, ближайший " +
+                "первым, плюс ближайший город. Вызывай на вопросы \"где я\", \"что рядом\", " +
+                "\"какой это населённый пункт\"; не ищи координаты через web_search.",
+            JSONObject(), emptyList(),
         ))
         // Always declared: with no Exa key the execute path below falls back to the primary
         // connection's native search (openrouter:web_search server tool or z.ai web_search).
@@ -807,6 +826,7 @@ class AgentTools @Inject constructor(
             when (call.name) {
                 "get_vehicle_state" -> vehicleState()
                 "get_weather" -> getWeather(args)
+                "where_am_i" -> whereAmI()
                 "call_contact" -> callContact(args)
                 "web_search" -> webSearch(args)
                 "query_trips" -> queryTrips(args)
@@ -1634,6 +1654,61 @@ class AgentTools @Inject constructor(
                     .put("lon", c.lon))
             }
         }).put("note", "данные OpenStreetMap, наличие и мощность не гарантированы").toString()
+    }
+
+    // --- where_am_i ---
+
+    private suspend fun whereAmI(): String {
+        val (lat, lon) = locationProvider()
+            ?: return """{"error":"нет GPS-позиции машины, не могу определить, где мы"}"""
+        val client = settlementSearchClient
+            ?: return """{"error":"поиск населённых пунктов недоступен"}"""
+        Log.i(TAG, "where_am_i: request")
+        val found = runCatchingCancellable {
+            client.search(lat, lon, SETTLEMENT_RADIUS_M, TOWN_RADIUS_M)
+        }.getOrNull()?.getOrElse {
+            Log.w(TAG, "where_am_i: search failed: ${it.message}")
+            null
+        } ?: return """{"error":"сервис карт недоступен, не могу определить, где мы"}"""
+        fun km(s: SettlementSearchClient.Settlement) = PlaceGeometry.distanceMeters(lat, lon, s.lat, s.lon) / 1000.0
+        // A lone farmstead is a poor answer to "где я" while any real settlement is around.
+        val regular = found.filter { it.place != "isolated_dwelling" }
+        val nearest = (regular.ifEmpty { found }).sortedBy { km(it) }.take(MAX_SETTLEMENTS)
+        val town = found.filter { it.place == "city" || it.place == "town" }.minByOrNull { km(it) }
+        Log.i(TAG, "where_am_i: ${found.size} found, nearest=" + settlementLabel(lat, lon, nearest.firstOrNull()) +
+            ", town=" + settlementLabel(lat, lon, town))
+        if (nearest.isEmpty()) {
+            return JSONObject().put("settlements", JSONArray())
+                .put("note", "рядом населённых пунктов в OpenStreetMap не найдено; не называй место наугад")
+                .toString()
+        }
+        val json = JSONObject().put("settlements", JSONArray().apply {
+            nearest.forEach { put(settlementJson(lat, lon, it)) }
+        })
+        if (town != null) json.put("nearest_town", settlementJson(lat, lon, town))
+        return json.put("note", "distance_km до центра населённого пункта; меньше 1-2 км значит машина в нём " +
+            "или на его краю. Называй только эти места").toString()
+    }
+
+    private fun settlementJson(lat: Double, lon: Double, s: SettlementSearchClient.Settlement): JSONObject =
+        JSONObject()
+            .put("name", s.name)
+            .put("type", SETTLEMENT_TYPES[s.place] ?: s.place)
+            .put("distance_km", round1(PlaceGeometry.distanceMeters(lat, lon, s.lat, s.lon) / 1000.0))
+            .put("direction_from_car", compassRu(lat, lon, s.lat, s.lon))
+
+    private fun settlementLabel(lat: Double, lon: Double, s: SettlementSearchClient.Settlement?): String =
+        s?.let { "${it.name} ${round1(PlaceGeometry.distanceMeters(lat, lon, it.lat, it.lon) / 1000.0)} km" } ?: "none"
+
+    /** Eight-point compass direction from the car to the point, in Russian. */
+    private fun compassRu(fromLat: Double, fromLon: Double, toLat: Double, toLon: Double): String {
+        val phi1 = Math.toRadians(fromLat)
+        val phi2 = Math.toRadians(toLat)
+        val dLon = Math.toRadians(toLon - fromLon)
+        val y = Math.sin(dLon) * Math.cos(phi2)
+        val x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon)
+        val bearing = (Math.toDegrees(Math.atan2(y, x)) + 360.0) % 360.0
+        return COMPASS_RU[((bearing + 22.5) / 45.0).toInt() % 8]
     }
 
     // Same saved-place-then-geocode lookup as navigateTo, plus a straight-line distance
@@ -2524,6 +2599,19 @@ class AgentTools @Inject constructor(
         // Straight-line distance underestimates real road distance; this fudge factor
         // brings the estimate closer to typical highway/road routing.
         private const val ROAD_FACTOR = 1.25
+
+        private const val TAG = "AgentTools"
+        // where_am_i: villages within 15 km, towns within 50 km, at most five answers.
+        private const val SETTLEMENT_RADIUS_M = 15_000
+        private const val TOWN_RADIUS_M = 50_000
+        private const val MAX_SETTLEMENTS = 5
+        private val SETTLEMENT_TYPES = mapOf(
+            "city" to "город", "town" to "город", "village" to "деревня или посёлок",
+            "hamlet" to "деревня", "suburb" to "район города", "isolated_dwelling" to "хутор",
+        )
+        private val COMPASS_RU = listOf(
+            "север", "северо-восток", "восток", "юго-восток", "юг", "юго-запад", "запад", "северо-запад",
+        )
 
         // Any wheel below this is clearly deflated (Leopard 3 cold placard ~250 kPa).
         private const val TIRE_WARN_MIN_KPA = 210

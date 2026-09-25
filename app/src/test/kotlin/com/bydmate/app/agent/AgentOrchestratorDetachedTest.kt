@@ -48,10 +48,13 @@ class AgentOrchestratorDetachedTest {
     ): AgentOrchestrator {
         val repo = mockk<SettingsRepository>()
         coEvery { repo.isAgentEnabled() } returns agentEnabled
-        return AgentOrchestrator(backend, tools, repo, isMoving = { moving })
+        return AgentOrchestrator(backend, tools, repo, isMoving = { moving }).also { it.nowMs = { clock } }
     }
 
     private var moving = false
+    private var clock = java.util.Calendar.getInstance().apply {
+        clear(); set(2026, java.util.Calendar.SEPTEMBER, 25, 7, 30)
+    }.timeInMillis
 
     // A detached turn talks to an automation rule, not the driver: the memory tools are
     // withheld there, and the driver facts must not ride in its system prompt either.
@@ -110,7 +113,32 @@ class AgentOrchestratorDetachedTest {
         val backend = FakeBackend(reply = answer("Погода солнечная"))
         makeOrchestrator(backend = backend).askDetached("сводка погоды")
         val user = backend.requests.single().last() as AgentMessage.User
-        assertEquals("сводка погоды", user.content)
+        assertEquals("сводка погоды (время 07:30)", user.content)
+    }
+
+    // A scheduled "morning summary" needs the clock as much as the driver does.
+    @Test
+    fun `detached prompt carries the local time`() = runTest {
+        val backend = FakeBackend(reply = answer("Доброе утро"))
+        makeOrchestrator(backend = backend).askDetached("утренняя сводка")
+        val user = backend.requests.single().last() as AgentMessage.User
+        assertEquals("утренняя сводка (время 07:30)", user.content)
+    }
+
+    // No memory rides in a detached prompt, so both system messages must be byte-identical
+    // between two turns minutes apart: the time lives only on the user line.
+    @Test
+    fun `detached system messages do not change with the clock`() = runTest {
+        val first = FakeBackend(reply = answer("ок"))
+        makeOrchestrator(backend = first).askDetached("сводка")
+        clock += 17 * 60_000L
+        val second = FakeBackend(reply = answer("ок"))
+        makeOrchestrator(backend = second).askDetached("сводка")
+        val a = first.requests.single().filterIsInstance<AgentMessage.System>()
+        val b = second.requests.single().filterIsInstance<AgentMessage.System>()
+        assertEquals(2, a.size)
+        assertEquals(a, b)
+        assertEquals("сводка (время 07:47)", (second.requests.single().last() as AgentMessage.User).content)
     }
 
     @Test
