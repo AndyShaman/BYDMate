@@ -156,7 +156,8 @@ class AgentOrchestrator @Inject constructor(
     /**
      * Two system messages, and the split is the point: the first is [SYSTEM_PROMPT] and
      * nothing else, byte-identical on every turn of every day, so the provider can cache it
-     * (the backend puts the cache breakpoint on exactly this message). Everything that moves
+     * (the backend puts the cache breakpoint on exactly this message, where a breakpoint pays:
+     * see LlmAgentBackend.cachesStaticPrefix). Everything that moves
      * — today's date, the persona, the driver facts — goes into the second one, after the
      * breakpoint. Per-turn state (driving or not) rides on the user message instead (see
      * [MOVING_TAG]). A detached turn (automation rule, not the driver) carries no memory —

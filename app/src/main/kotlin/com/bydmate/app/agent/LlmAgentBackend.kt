@@ -51,8 +51,11 @@ class LlmAgentBackend @Inject constructor(
         // once, so a field the provider does not know can never silence the agent.
         suspend fun attempt(conn: LlmConnection): Result<AgentReply> {
             // The cache breakpoint is OpenRouter/Anthropic wire syntax; a custom endpoint or
-            // z.ai gets the plain string content it understands.
-            val wire = toWire(messages, cacheStaticPrefix = conn.id == LlmConnectionResolver.ID_OPENROUTER)
+            // z.ai gets the plain string content it understands. Gemini gets none either: there
+            // the breakpoint creates the cache synchronously inside the request (+1.3 s to the
+            // first token, measured 2026-09-25), the cache lives 5 minutes from that write, and a
+            // read saves only ~60 ms over no cache at all, so every turn after a pause paid the write.
+            val wire = toWire(messages, cacheStaticPrefix = cachesStaticPrefix(conn))
             val first = call(conn, wire, tools, guarded, withExtras = true)
             if (first.isSuccess || forwarded || !rejectedExtras(conn, first, guarded != null)) return first
             Log.w(TAG, "provider ${conn.id} rejected request extras (HTTP 400), retrying plain")
@@ -166,6 +169,13 @@ class LlmAgentBackend @Inject constructor(
                 null
             }
         }
+
+        /** Whether [conn] gets the cache breakpoint: OpenRouter only, and not for Gemini models
+         *  (see the call site in chat()). */
+        internal fun cachesStaticPrefix(conn: LlmConnection): Boolean =
+            conn.id == LlmConnectionResolver.ID_OPENROUTER && !conn.model.startsWith(GEMINI_MODEL_PREFIX)
+
+        private const val GEMINI_MODEL_PREFIX = "google/gemini"
 
         /**
          * OpenRouter wire encoding of the message history. With [cacheStaticPrefix] the FIRST
