@@ -353,11 +353,6 @@
     <string name="trip_detail_cost_label">Стоимость</string>
     <string name="trip_detail_date_pattern">EEEE, d MMMM</string>
     <string name="trip_detail_close">Закрыть</string>
-    <string name="trip_detail_group_distance">Пробег</string>
-    <string name="trip_detail_group_time">Время</string>
-    <string name="trip_detail_group_energy">Энергия</string>
-    <string name="trip_detail_group_money">Деньги</string>
-    <string name="trip_detail_group_weather">Погода</string>
     <string name="trip_detail_odometer_start_label">Одометр на старте</string>
     <string name="trip_detail_odometer_end_label">Одометр на финише</string>
     <string name="trip_detail_odometer_label">Одометр</string>

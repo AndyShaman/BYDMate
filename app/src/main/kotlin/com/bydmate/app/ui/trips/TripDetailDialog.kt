@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -161,9 +162,9 @@ fun TripDetailDialog(
                                 }
                             }
 
-                            // RIGHT: Stats, grouped; a row without data and a group without rows are hidden
+                            // RIGHT: Stats in groups split by a thin line; a row without data and a group without rows are hidden
                             val groups = buildList {
-                                add(stringResource(R.string.trip_detail_group_distance) to buildList {
+                                add(buildList {
                                     trip.distanceKm?.let {
                                         add(StatRow(stringResource(R.string.trip_detail_distance_label),
                                             stringResource(R.string.trip_detail_distance_value, it), main = true))
@@ -184,7 +185,7 @@ fun TripDetailDialog(
                                         }
                                     }
                                 })
-                                add(stringResource(R.string.trip_detail_group_time) to buildList {
+                                add(buildList {
                                     if (trip.endTs != null) {
                                         add(StatRow(stringResource(R.string.trip_detail_duration_label),
                                             formatDuration(ctx, trip.startTs, trip.endTs)))
@@ -207,7 +208,7 @@ fun TripDetailDialog(
                                         }
                                     }
                                 })
-                                add(stringResource(R.string.trip_detail_group_energy) to buildList {
+                                add(buildList {
                                     trip.kwhConsumed?.let {
                                         add(StatRow(stringResource(R.string.trip_detail_consumption_label),
                                             stringResource(R.string.trip_detail_consumption_value, it)))
@@ -222,7 +223,7 @@ fun TripDetailDialog(
                                             note = "(${TripDetailStats.socChangeLabel(trip.socStart, trip.socEnd)})"))
                                     }
                                 })
-                                add(stringResource(R.string.trip_detail_group_money) to buildList {
+                                add(buildList {
                                     trip.cost?.let {
                                         add(StatRow(stringResource(R.string.trip_detail_cost_label),
                                             "%.2f %s".format(it, currencySymbol), AccentGreen))
@@ -232,12 +233,12 @@ fun TripDetailDialog(
                                             "%.2f %s".format(it, currencySymbol)))
                                     }
                                 })
-                                add(stringResource(R.string.trip_detail_group_weather) to buildList {
+                                add(buildList {
                                     TripDetailStats.exteriorTempLabel(trip.exteriorTemp, trip.exteriorTempEnd)?.let {
                                         add(StatRow(stringResource(R.string.trip_detail_ext_temp_label), it))
                                     }
                                 })
-                            }.filter { it.second.isNotEmpty() }
+                            }.filter { it.isNotEmpty() }
 
                             TripStatsColumn(
                                 groups = groups,
@@ -322,8 +323,7 @@ private data class StatRow(
 )
 
 @Composable
-private fun TripStatsColumn(groups: List<Pair<String, List<StatRow>>>, modifier: Modifier = Modifier) {
-    val locale = LocalConfiguration.current.locales[0]
+private fun TripStatsColumn(groups: List<List<StatRow>>, modifier: Modifier = Modifier) {
     val scroll = rememberScrollState()
     Box(modifier = modifier) {
         Column(
@@ -332,15 +332,10 @@ private fun TripStatsColumn(groups: List<Pair<String, List<StatRow>>>, modifier:
                 .verticalScroll(scroll)
                 .padding(start = 8.dp, end = 4.dp)
         ) {
-            groups.forEachIndexed { index, (caption, rows) ->
-                Text(
-                    caption.uppercase(locale),
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.08.em,
-                    modifier = Modifier.padding(top = if (index == 0) 0.dp else 7.dp, bottom = 2.dp)
-                )
+            groups.forEachIndexed { index, rows ->
+                if (index > 0) {
+                    HorizontalDivider(color = CardBorder, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                }
                 rows.forEach { DetailRow(it) }
             }
         }

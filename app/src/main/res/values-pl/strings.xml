@@ -353,11 +353,6 @@
     <string name="trip_detail_cost_label">Koszt</string>
     <string name="trip_detail_date_pattern">EEEE, d MMMM</string>
     <string name="trip_detail_close">Zamknij</string>
-    <string name="trip_detail_group_distance">Przebieg</string>
-    <string name="trip_detail_group_time">Czas</string>
-    <string name="trip_detail_group_energy">Energia</string>
-    <string name="trip_detail_group_money">Pieniądze</string>
-    <string name="trip_detail_group_weather">Pogoda</string>
     <string name="trip_detail_odometer_start_label">Licznik na starcie</string>
     <string name="trip_detail_odometer_end_label">Licznik na mecie</string>
     <string name="trip_detail_odometer_label">Licznik</string>

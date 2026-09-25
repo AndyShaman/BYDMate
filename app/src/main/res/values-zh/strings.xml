@@ -268,11 +268,6 @@
     <string name="trip_detail_cost_label">费用</string>
     <string name="trip_detail_date_pattern">M月d日 EEEE</string>
     <string name="trip_detail_close">关闭</string>
-    <string name="trip_detail_group_distance">里程</string>
-    <string name="trip_detail_group_time">时间</string>
-    <string name="trip_detail_group_energy">能量</string>
-    <string name="trip_detail_group_money">金额</string>
-    <string name="trip_detail_group_weather">天气</string>
     <string name="trip_detail_odometer_start_label">出发时里程表</string>
     <string name="trip_detail_odometer_end_label">到达时里程表</string>
     <string name="trip_detail_odometer_label">里程表</string>

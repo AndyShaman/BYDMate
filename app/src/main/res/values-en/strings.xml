@@ -326,11 +326,6 @@
     <string name="trip_detail_cost_label">Cost</string>
     <string name="trip_detail_date_pattern">EEEE, MMMM d</string>
     <string name="trip_detail_close">Close</string>
-    <string name="trip_detail_group_distance">Mileage</string>
-    <string name="trip_detail_group_time">Time</string>
-    <string name="trip_detail_group_energy">Energy</string>
-    <string name="trip_detail_group_money">Money</string>
-    <string name="trip_detail_group_weather">Weather</string>
     <string name="trip_detail_odometer_start_label">Odometer at start</string>
     <string name="trip_detail_odometer_end_label">Odometer at finish</string>
     <string name="trip_detail_odometer_label">Odometer</string>
