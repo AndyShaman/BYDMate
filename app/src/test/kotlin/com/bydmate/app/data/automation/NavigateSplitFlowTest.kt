@@ -1,17 +1,35 @@
 package com.bydmate.app.data.automation
 
+import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.split.SplitPair
 import com.bydmate.app.split.SplitSide
+import com.bydmate.app.util.AppStrings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+// Robolectric: the reasons come from the app strings, the Russian texts below are the real ones.
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [29])
 class NavigateSplitFlowTest {
 
     private val pair = SplitPair("ru.yandex.yandexnavi", "com.byd.music", SplitSide.LEFT)
+
+    private fun lang(tag: String) = LocalePreferences(ApplicationProvider.getApplicationContext()).setLanguage(tag)
+
+    init {
+        lang("ru")
+    }
+
+    @After fun restoreLanguage() = lang("ru")
 
     /**
      * Fake car: the «Поехали» button appears [buttonAfterMs] of waiting after the intent and
@@ -89,6 +107,10 @@ class NavigateSplitFlowTest {
         override fun log(line: String) {
             log += line
         }
+
+        private val strings = AppStrings(ApplicationProvider.getApplicationContext())
+
+        override fun text(id: Int, vararg args: Any): String = strings.get(id, *args)
     }
 
     @Test
@@ -184,6 +206,16 @@ class NavigateSplitFlowTest {
     }
 
     @Test
+    fun `a click that does not land - honest verdict`() = runTest {
+        val env = FakeEnv(pair = null).apply { clickWorks = false }
+
+        val result = NavigateSplitFlow(env).run(go = true, autoGoSupported = true)
+
+        assertFalse(result.success)
+        assertEquals("не получилось нажать Поехали", result.reason)
+    }
+
+    @Test
     fun `a failed intent restores the split and reports the intent failure`() = runTest {
         val env = FakeEnv(pair = pair, sendResult = DispatchResult(false, "Навигатор не установлен"))
 
@@ -245,5 +277,34 @@ class NavigateSplitFlowTest {
         assertEquals(0, env.clicks)
         assertEquals(1, env.restores)
         assertTrue(env.log.contains("auto-go: stale preview still on screen after 5000ms"))
+    }
+
+    @Test
+    fun `a route failure and a split that does not come back are both named`() = runTest {
+        val env = FakeEnv(pair = pair, buttonAfterMs = null).apply { restoreFailure = "не удалось запустить окна" }
+
+        val result = NavigateSplitFlow(env).run(go = true, autoGoSupported = true)
+
+        assertEquals("кнопка Поехали не найдена за 20 с; сплит не восстановлен: не удалось запустить окна", result.reason)
+    }
+
+    @Test
+    fun `every reason follows the app language`() = runTest {
+        lang("en")
+        suspend fun reason(env: FakeEnv) = NavigateSplitFlow(env).run(go = true, autoGoSupported = true).reason!!
+
+        val reasons = listOf(
+            reason(FakeEnv(pair = pair, buttonAfterMs = 1_000L)),
+            reason(FakeEnv(pair = pair, buttonAfterMs = null)),
+            reason(FakeEnv(pair = pair, buttonAfterMs = null).apply { restoreFailure = "Failed to launch split screen" }),
+            reason(FakeEnv(pair = null).apply { a11y = false }),
+            reason(FakeEnv(pair = null).apply { clickWorks = false }),
+            reason(FakeEnv(pair = null, goneAfterMs = null)),
+            reason(FakeEnv(pair = pair, visibleBeforeSend = true, staleHoldMs = null)),
+        )
+
+        assertEquals("route built, split screen restored", reasons[0])
+        assertEquals("Go button not found in 20 s, split screen restored", reasons[1])
+        reasons.forEach { assertFalse(it, it.any { c -> c in 'Ѐ'..'ӿ' }) }
     }
 }

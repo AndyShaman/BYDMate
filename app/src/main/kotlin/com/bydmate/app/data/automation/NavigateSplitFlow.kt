@@ -1,5 +1,7 @@
 package com.bydmate.app.data.automation
 
+import androidx.annotation.StringRes
+import com.bydmate.app.R
 import com.bydmate.app.split.SplitPair
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -36,6 +38,8 @@ internal class NavigateSplitFlow(
         fun clickGo(): Boolean
         suspend fun wait(ms: Long)
         fun log(line: String)
+        /** A reason the driver reads, in the app language. */
+        fun text(@StringRes id: Int, vararg args: Any): String
     }
 
     data class Config(
@@ -107,10 +111,11 @@ internal class NavigateSplitFlow(
         return when {
             restoreFailure != null -> DispatchResult(
                 false,
-                listOfNotNull(failure, "сплит не восстановлен: $restoreFailure").joinToString("; ")
+                listOfNotNull(failure, env.text(R.string.dispatch_navigate_split_not_restored, restoreFailure))
+                    .joinToString("; ")
             )
-            failure != null -> DispatchResult(false, "$failure, сплит восстановлен")
-            else -> DispatchResult(true, "маршрут построен, сплит восстановлен")
+            failure != null -> DispatchResult(false, env.text(R.string.dispatch_navigate_split_restored, failure))
+            else -> DispatchResult(true, env.text(R.string.dispatch_navigate_route_built))
         }
     }
 
@@ -118,11 +123,11 @@ internal class NavigateSplitFlow(
     private suspend fun awaitRoute(go: Boolean, stale: Boolean): String? {
         if (!env.a11yConnected()) {
             env.log("auto-go: служба специальных возможностей выключена")
-            return "не удалось проверить маршрут: служба специальных возможностей выключена"
+            return env.text(R.string.dispatch_navigate_a11y_off)
         }
         if (stale && !awaitStaleGone()) {
             // The old preview never left: its «Поехали» cannot be told from the new route's.
-            return if (go) "на экране уже был маршрут, новый не отличить: нажмите Поехали сами" else null
+            return if (go) env.text(R.string.dispatch_navigate_stale_route) else null
         }
         var waited = 0L
         while (waited < cfg.buttonTimeoutMs && !env.goButtonVisible()) {
@@ -131,7 +136,7 @@ internal class NavigateSplitFlow(
         }
         if (waited >= cfg.buttonTimeoutMs && !env.goButtonVisible()) {
             env.log("auto-go: button not found in ${cfg.buttonTimeoutMs}ms")
-            return "кнопка Поехали не найдена за ${cfg.buttonTimeoutMs / 1000} с"
+            return env.text(R.string.dispatch_navigate_go_not_found, cfg.buttonTimeoutMs / 1000)
         }
         env.log("auto-go: go=$go button seen after ${waited}ms")
         return if (go) pressGo() else null
@@ -170,8 +175,8 @@ internal class NavigateSplitFlow(
                 "gone_after=${if (gone) "${waited}ms" else "-"}"
         )
         return when {
-            !clicked -> "не получилось нажать Поехали"
-            !gone -> "нажал Поехали, но ведение не началось"
+            !clicked -> env.text(R.string.dispatch_navigate_go_click_failed)
+            !gone -> env.text(R.string.dispatch_navigate_go_no_guidance)
             else -> null
         }
     }

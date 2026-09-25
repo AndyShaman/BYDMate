@@ -1,8 +1,11 @@
 package com.bydmate.app.voice
 
 import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.agent.AgentOrchestrator
 import com.bydmate.app.agent.AgentResult
+import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.util.AppStrings
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -11,12 +14,29 @@ import io.mockk.verify
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+// Robolectric: the refusal reasons come from the app strings, the Russian texts below are the real ones.
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [29])
 class VoiceAutomationActionsAgentQueryTest {
+
+    private val strings = AppStrings(ApplicationProvider.getApplicationContext())
+
+    private fun lang(tag: String) = LocalePreferences(ApplicationProvider.getApplicationContext()).setLanguage(tag)
+
+    init {
+        lang("ru")
+    }
+
+    @After fun restoreLanguage() = lang("ru")
 
     // Factory duplicated from VoiceAutomationActionsSpeakTest — duplication in tests is fine.
     private fun makeActions(
@@ -44,6 +64,7 @@ class VoiceAutomationActionsAgentQueryTest {
             agentOrchestrator = dagger.Lazy { orchestrator },
             voiceController = dagger.Lazy { controller },
             context = mockk<Context>(relaxed = true),
+            strings = strings,
         )
         // Never touch the real static overlay in JVM tests.
         actions.isOrbShowing = { false }
@@ -66,6 +87,16 @@ class VoiceAutomationActionsAgentQueryTest {
         val (actions, _) = makeActions(orchestrator = orch)
         val r = actions.agentQuery("тест")
         assertFalse(r.success)
+        assertEquals("агент выключен в настройках", r.reason)
+    }
+
+    @Test fun `blank prompt - refused without calling the agent`() = runTest {
+        val orch = mockk<AgentOrchestrator>(relaxed = true)
+        val (actions, _) = makeActions(orchestrator = orch)
+        val r = actions.agentQuery("   ")
+        assertFalse(r.success)
+        assertEquals("не задан запрос", r.reason)
+        coVerify(exactly = 0) { orch.askDetached(any()) }
     }
 
     @Test fun `agent error message is surfaced as the failure reason`() = runTest {
@@ -134,6 +165,7 @@ class VoiceAutomationActionsAgentQueryTest {
             agentOrchestrator = dagger.Lazy { orch },
             voiceController = dagger.Lazy { controller },
             context = mockk(relaxed = true),
+            strings = strings,
         )
         actions.isOrbShowing = { false }
         actions.canShowOrb = { false }
@@ -169,5 +201,29 @@ class VoiceAutomationActionsAgentQueryTest {
             "запрос агенту не чаще раза в ${VoiceAutomationActions.AGENT_QUERY_COOLDOWN_MS / 1000} секунд",
             r2.reason,
         )
+    }
+
+    @Test fun `refusals follow the app language`() = runTest {
+        lang("en")
+        val disabled = mockk<AgentOrchestrator>()
+        coEvery { disabled.askDetached(any()) } returns AgentResult.Disabled
+        val slow = mockk<AgentOrchestrator>()
+        coEvery { slow.askDetached(any()) } coAnswers {
+            delay(120_000L)
+            AgentResult.Answer("never", emptyList())
+        }
+        val (timed, _) = makeActions(orchestrator = slow)
+        timed.nowMs = { 1_000_000L }
+
+        val reasons = listOf(
+            makeActions().first.agentQuery(" ").reason!!,
+            makeActions(orchestrator = disabled).first.agentQuery("x").reason!!,
+            timed.agentQuery("x").reason!!,
+            timed.agentQuery("x").reason!!,    // inside the cooldown
+        )
+
+        assertEquals("the agent did not answer in time", reasons[2])
+        assertEquals("the agent can be asked at most once every 30 seconds", reasons[3])
+        reasons.forEach { assertFalse(it, it.any { c -> c in 'Ѐ'..'ӿ' }) }
     }
 }

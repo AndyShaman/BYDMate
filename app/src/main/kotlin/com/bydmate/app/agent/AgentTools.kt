@@ -1861,7 +1861,7 @@ class AgentTools @Inject constructor(
         return when {
             result.success -> JSONObject().put("ok", true).put("app", label).toString()
             // The daemon restart is a "try again in a minute", not a failed command.
-            on && result.reason == ActionDispatcher.DAEMON_RESTART_REASON -> JSONObject().put("ok", false)
+            on && result.daemonRestarting -> JSONObject().put("ok", false)
                 .put("note", "служебный процесс перезапускается, попробуй ещё раз через минуту").toString()
             on -> JSONObject().put("error",
                 "проекция не включилась. Попробуй повторить команду через несколько секунд").toString()

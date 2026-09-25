@@ -1,8 +1,11 @@
 package com.bydmate.app.voice
 
 import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.agent.AgentOrchestrator
 import com.bydmate.app.data.automation.DispatchResult
+import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.util.AppStrings
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -10,12 +13,29 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+// Robolectric: the refusal reasons come from the app strings, the Russian texts below are the real ones.
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [29])
 class VoiceAutomationActionsSpeakTest {
+
+    private val strings = AppStrings(ApplicationProvider.getApplicationContext())
+
+    private fun lang(tag: String) = LocalePreferences(ApplicationProvider.getApplicationContext()).setLanguage(tag)
+
+    init {
+        lang("ru")
+    }
+
+    @After fun restoreLanguage() = lang("ru")
 
     private fun makeActions(
         ttsEnabled: Boolean = true,
@@ -42,6 +62,7 @@ class VoiceAutomationActionsSpeakTest {
             agentOrchestrator = dagger.Lazy { orchestrator },
             voiceController = dagger.Lazy { controller },
             context = mockk<Context>(relaxed = true),
+            strings = strings,
         )
         // Never touch the real static overlay in JVM tests.
         actions.isOrbShowing = { false }
@@ -110,6 +131,7 @@ class VoiceAutomationActionsSpeakTest {
             agentOrchestrator = dagger.Lazy { mockk(relaxed = true) },
             voiceController = dagger.Lazy { controller },
             context = mockk(relaxed = true),
+            strings = strings,
         )
         actions.isOrbShowing = { false }
         actions.canShowOrb = { false }
@@ -130,7 +152,9 @@ class VoiceAutomationActionsSpeakTest {
         val capture = mockk<AudioCapture>(relaxed = true)
         io.mockk.every { capture.duckMusic() } returns 12
         val (actions, _) = makeActions(speakOk = false, audioCapture = capture)
-        assertFalse(actions.speak("тест").success)
+        val r = actions.speak("тест")
+        assertFalse(r.success)
+        assertEquals("озвучка не запустилась", r.reason)
         verify(exactly = 1) { capture.restoreMusic(12) }
     }
 
@@ -165,4 +189,47 @@ class VoiceAutomationActionsSpeakTest {
         job.cancelAndJoin()           // cancel while suspended; finally must fire
         io.mockk.verify(exactly = 1) { capture.restoreMusic(15) }
     }
+
+    @Test fun `a second speak while the first still plays - refused as busy`() = runTest {
+        val tts = mockk<TtsEngine>(relaxed = true) {
+            every { speaking } returns MutableStateFlow(true)
+            every { speak(any()) } returns true
+        }
+        val (actions, _) = makeActions(ttsEngine = tts)
+        val first = launch { actions.speak("раз") }
+        testScheduler.runCurrent()    // the first speak now hangs in the drain
+
+        val r = actions.speak("два")
+        first.cancelAndJoin()
+
+        assertFalse(r.success)
+        assertEquals("другое голосовое действие ещё выполняется", r.reason)
+    }
+
+    @Test fun `refusals follow the app language`() = runTest {
+        lang("en")
+        val stuck = mockk<TtsEngine>(relaxed = true) {
+            every { speaking } returns MutableStateFlow(true)
+            every { speak(any()) } returns true
+        }
+        val (playing, _) = makeActions(ttsEngine = stuck)
+        val first = launch { playing.speak("one") }
+        testScheduler.runCurrent()
+        val reasons = listOf(
+            makeActions(voiceEnabled = false).first.speak("x").reason!!,
+            makeActions(ttsEnabled = false).first.speak("x").reason!!,
+            makeActions(listening = true).first.speak("x").reason!!,
+            makeActions().first.speak(" ").reason!!,
+            makeActions(speakOk = false).first.speak("x").reason!!,
+            playing.speak("two").reason!!,
+        )
+        first.cancelAndJoin()
+        val timedOut = makeActions(ttsEngine = stuck).first.speak("x").reason!!
+
+        assertEquals("the voice assistant is off in settings", reasons[0])
+        assertEquals("another voice action is still running", reasons[5])
+        (reasons + timedOut).forEach { assertFalse(it, it.hasCyrillic()) }
+    }
+
+    private fun String.hasCyrillic() = any { it in 'Ѐ'..'ӿ' }
 }

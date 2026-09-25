@@ -23,6 +23,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.vehicle.VehicleWriteError
+import com.bydmate.app.data.vehicle.WindowPane
 import com.bydmate.app.data.vehicle.WriteAllowlist
 import com.bydmate.app.media.MediaSessionListenerService
 import com.bydmate.app.navdata.NavPackages
@@ -42,7 +43,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class DispatchResult(val success: Boolean, val reason: String? = null)
+/** [daemonRestarting]: the cluster projection failed because its daemon is restarting (retriable, not broken). */
+data class DispatchResult(val success: Boolean, val reason: String? = null, val daemonRestarting: Boolean = false)
 
 @Singleton
 class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
@@ -206,9 +208,6 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
          * a call. NOT windows/climate/sunroof/door-lock/front-trunk (low harm or
          * already speed-gated). Pure function — unit-testable without Android.
          */
-        /** Projection failed because the cluster daemon is restarting: retriable, not broken. */
-        internal const val DAEMON_RESTART_REASON = "служебный процесс перезапускается"
-
         internal fun isDangerousAction(action: ActionDef): Boolean = when (action.kind) {
             "param" -> isDoorUnlockCommand(action.command) || isRearTrunkOpenCommand(action.command)
             "sentry" -> action.payload == "0"
@@ -325,10 +324,28 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
 
         /** Why a param dispatch failed, as the step reason. Only the steering heat channel
-         *  reports NotEquipped (see VehicleWriteError); it gets a readable, localized text. */
-        private fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when (err) {
-            is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
+         *  reports NotEquipped (see VehicleWriteError); it and the windows that never moved get
+         *  a readable, localized text. */
+        internal fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when {
+            err is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
+            err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
+                stuckWindowsReason(err.stuckPanes, strings)
             else -> err?.message ?: "dispatch failed"
+        }
+
+        /** «окно водителя не сдвинулось…» for one pane, «не сдвинулись с места: …» for several. */
+        private fun stuckWindowsReason(panes: List<WindowPane>, strings: AppStrings): String {
+            val names = panes.map { strings.get(windowPaneName(it)) }
+            return if (names.size == 1) strings.get(R.string.window_stuck_one, names[0])
+            else strings.get(R.string.window_stuck_many, names.joinToString(", "))
+        }
+
+        private fun windowPaneName(pane: WindowPane): Int = when (pane) {
+            WindowPane.DRIVER -> R.string.window_pane_driver
+            WindowPane.PASSENGER -> R.string.window_pane_passenger
+            WindowPane.REAR_LEFT -> R.string.window_pane_rear_left
+            WindowPane.REAR_RIGHT -> R.string.window_pane_rear_right
+            WindowPane.OTHER -> R.string.window_pane_other
         }
 
         /** Hazard blinkers: the turn-signal mask reads 6 while they run. */
@@ -521,11 +538,11 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val value = when (action.payload) {
             "1" -> 1
             "0" -> 0
-            else -> return DispatchResult(false, "Некорректное состояние охранного режима")
+            else -> return DispatchResult(false, appStrings.get(R.string.dispatch_sentry_invalid_state))
         }
         val ok = helper.putGlobalSetting(SENTRY_SETTING_KEY, value)
         return if (ok) DispatchResult(true)
-        else DispatchResult(false, "Не удалось переключить охранный режим")
+        else DispatchResult(false, appStrings.get(R.string.dispatch_sentry_failed))
     }
 
     // --- hotspot (Wi-Fi tethering via helper daemon, shell uid holds TETHER_PRIVILEGED) ---
@@ -534,11 +551,11 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val enable = when (action.payload) {
             "1" -> true
             "0" -> false
-            else -> return DispatchResult(false, "Некорректное состояние точки доступа Wi-Fi")
+            else -> return DispatchResult(false, appStrings.get(R.string.dispatch_hotspot_invalid_state))
         }
         val ok = helper.setHotspot(enable)
         return if (ok) DispatchResult(true)
-        else DispatchResult(false, "Не удалось переключить точку доступа Wi-Fi")
+        else DispatchResult(false, appStrings.get(R.string.dispatch_hotspot_failed))
     }
 
     // --- cluster projection (steering-wheel star key path, via ClusterVoiceControl) ---
@@ -558,7 +575,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val on = when (action.payload) {
             "1" -> true
             "0" -> false
-            else -> return DispatchResult(false, "Некорректное состояние проекции на приборку")
+            else -> return DispatchResult(false, appStrings.get(R.string.dispatch_cluster_invalid_state))
         }
         val want = if (on) ClusterMode.FULLSCREEN else ClusterMode.OFF
         clusterVoiceControl.apply(on)
@@ -567,15 +584,16 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             delay(clusterPollIntervalMs)
         }
         if (clusterVoiceControl.projectionMode() == want) return DispatchResult(true)
-        val reason = if (clusterVoiceControl.lastFailure() == "daemon") {
-            DAEMON_RESTART_REASON
+        val daemonRestarting = clusterVoiceControl.lastFailure() == "daemon"
+        val reason = if (daemonRestarting) {
+            appStrings.get(R.string.dispatch_cluster_daemon_restarting)
         } else if (on) {
-            "проекция на приборку не включилась"
+            appStrings.get(R.string.dispatch_cluster_not_on)
         } else {
-            "проекция с приборки не убралась"
+            appStrings.get(R.string.dispatch_cluster_not_off)
         }
         Log.w(TAG, "cluster projection did not reach $want: $reason")
-        return DispatchResult(false, reason)
+        return DispatchResult(false, reason, daemonRestarting)
     }
 
     // --- toggle (flip a panel / the locks / the projection from its current state) ---
@@ -678,14 +696,14 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     /** "speak": say the payload text verbatim via the voice coordinator (orb + duck + TTS). */
     private suspend fun dispatchSpeak(action: ActionDef): DispatchResult {
         val text = parsePayload(action.payload)?.optString("text")?.trim().orEmpty()
-        if (text.isEmpty()) return DispatchResult(false, "не задан текст")
+        if (text.isEmpty()) return DispatchResult(false, appStrings.get(R.string.dispatch_speak_text_missing))
         return voiceActions.get().speak(text)
     }
 
     /** "agent_query": run the payload prompt through an isolated agent turn, speak the answer. */
     private suspend fun dispatchAgentQuery(action: ActionDef): DispatchResult {
         val prompt = parsePayload(action.payload)?.optString("prompt")?.trim().orEmpty()
-        if (prompt.isEmpty()) return DispatchResult(false, "не задан запрос")
+        if (prompt.isEmpty()) return DispatchResult(false, appStrings.get(R.string.dispatch_agent_query_prompt_missing))
         return voiceActions.get().agentQuery(prompt)
     }
 
@@ -696,15 +714,15 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      */
     private suspend fun dispatchSplitScreen(action: ActionDef): DispatchResult {
         val json = parsePayload(action.payload)
-            ?: return DispatchResult(false, "payload не задан")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_payload_missing))
         val narrow = json.optString("narrow").takeIf(String::isNotBlank)
-            ?: return DispatchResult(false, "narrow не задан")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_split_narrow_missing))
         val wide = json.optString("wide").takeIf(String::isNotBlank)
-            ?: return DispatchResult(false, "wide не задан")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_split_wide_missing))
         val side = when (json.optString("side")) {
             "left" -> SplitSide.LEFT
             "right" -> SplitSide.RIGHT
-            else -> return DispatchResult(false, "неверная сторона")
+            else -> return DispatchResult(false, appStrings.get(R.string.dispatch_split_invalid_side))
         }
         return when (splitSessionManager.start(SplitPair(narrow, wide, side))) {
             SplitStartResult.OK -> DispatchResult(true)
@@ -739,7 +757,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             return DispatchResult(true)
         }
         return when (splitSessionManager.startLastPair()) {
-            null -> DispatchResult(false, "пара для разделения экрана не сохранена")
+            null -> DispatchResult(false, appStrings.get(R.string.dispatch_split_pair_not_saved))
             SplitStartResult.OK -> DispatchResult(true)
             SplitStartResult.FREEFORM_UNAVAILABLE ->
                 DispatchResult(false, freeformUnavailableHint())
@@ -761,9 +779,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
 
     private suspend fun dispatchDelay(action: ActionDef): DispatchResult {
         val ms = action.payload?.toLongOrNull()
-            ?: return DispatchResult(false, "Длительность паузы не задана")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_delay_missing))
         if (ms < 0 || ms > MAX_DELAY_MS) {
-            return DispatchResult(false, "Длительность паузы вне диапазона (0..${MAX_DELAY_MS} мс)")
+            return DispatchResult(false, appStrings.get(R.string.dispatch_delay_out_of_range, MAX_DELAY_MS))
         }
         kotlinx.coroutines.delay(ms)
         return DispatchResult(true)
@@ -772,9 +790,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     // --- media volume (standard AudioManager, no autoservice) ---
 
     private fun setMediaVolume(action: ActionDef): DispatchResult {
-        val payload = action.payload ?: return DispatchResult(false, "Уровень громкости не задан")
+        val payload = action.payload ?: return DispatchResult(false, appStrings.get(R.string.dispatch_volume_missing))
         val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            ?: return DispatchResult(false, "AudioManager недоступен")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_audio_unavailable))
         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         // During a voice-session duck the stream sits at the near-zero duck level: "+N"/"-N"
         // must step from the volume the user actually perceives (the pending restore value),
@@ -796,7 +814,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
                 am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
                 DispatchResult(true)
             }
-            VolumeOp.Invalid -> DispatchResult(false, "Некорректный уровень громкости: $payload")
+            VolumeOp.Invalid -> DispatchResult(false, appStrings.get(R.string.dispatch_volume_invalid, payload))
         }
     }
 
@@ -815,6 +833,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val reason = if (!success) paramFailureReason(result.exceptionOrNull(), appStrings) else null
         return DispatchResult(success, reason)
     }
+
+    /** A failed [VehicleApi] write in the app language, the same text a rule step reports. */
+    fun vehicleFailureReason(err: Throwable): String = paramFailureReason(err, appStrings)
 
     // Delegate to the companion pure function so all callers (dispatch + manual test button)
     // share identical gate logic.
@@ -875,9 +896,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private suspend fun launchApp(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload)
         val pkg = payload?.optString("packageName")?.takeIf(String::isNotBlank)
-            ?: return DispatchResult(false, "packageName не задан")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_package_missing))
         if (context.packageManager.getLaunchIntentForPackage(pkg) == null) {
-            return DispatchResult(false, "Приложение не установлено: $pkg")
+            return DispatchResult(false, appStrings.get(R.string.dispatch_app_not_installed, pkg))
         }
         // Authoritative launch via the shell-uid daemon (am start): a startActivity from
         // this @ApplicationContext can lose the foreground race when BYDMate is on top
@@ -898,7 +919,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private suspend fun dial(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload)
         val phone = payload?.optString("phone")?.takeIf(String::isNotBlank)
-            ?: return DispatchResult(false, "phone не задан")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_phone_missing))
         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val result = tryStartActivity(intent, "dial:$phone")
@@ -927,7 +948,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      *   preview is pressed for him.
      */
     private suspend fun navigate(action: ActionDef): DispatchResult {
-        val payload = parsePayload(action.payload) ?: return DispatchResult(false, "payload не задан")
+        val payload = parsePayload(action.payload)
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_payload_missing))
         val shortcut = payload.optString("shortcut").takeIf(String::isNotBlank)
         val flow = NavigateSplitFlow(object : NavigateSplitFlow.Env {
             override fun activeSplitPair(): SplitPair? =
@@ -964,6 +986,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             override fun log(line: String) {
                 Log.i(TAG, line)
             }
+
+            override fun text(id: Int, vararg args: Any): String = appStrings.get(id, *args)
         })
         return flow.run(go = autoGoRequested(payload), autoGoSupported = autoGoSupported(payload))
     }
@@ -1012,13 +1036,13 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             !isPackageInstalled(RouteNavigatorUris.DGIS_PACKAGE)
         if (dgisFellBack) {
             Log.i(TAG, "navigate: 2gis not installed, falling back to yandex")
-            return RouteNavigatorUris.YANDEX to "2ГИС не установлен, открыт Яндекс Навигатор"
+            return RouteNavigatorUris.YANDEX to appStrings.get(R.string.dispatch_dgis_fallback)
         }
         val mapsFellBack = chosen == RouteNavigatorUris.MAPS &&
             NavPackages.YANDEX_MAPS.none { isPackageInstalled(it) }
         if (mapsFellBack) {
             Log.i(TAG, "navigate: yandex maps not installed, falling back to yandex")
-            return RouteNavigatorUris.YANDEX to "Яндекс Карты не установлены, открыт Яндекс Навигатор"
+            return RouteNavigatorUris.YANDEX to appStrings.get(R.string.dispatch_maps_fallback)
         }
         return chosen to null
     }
@@ -1041,7 +1065,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             val intentAction = when (shortcut) {
                 "home" -> "ru.yandex.yandexmaps.action.ROUTE_TO_HOME_SHORTCUT"
                 "work" -> "ru.yandex.yandexmaps.action.ROUTE_TO_WORK_SHORTCUT"
-                else -> return DispatchResult(false, "неизвестный shortcut: $shortcut")
+                else -> return DispatchResult(false, appStrings.get(R.string.dispatch_shortcut_unknown, shortcut))
             }
             val intent = Intent(intentAction)
                 .setPackage(NAVI_PACKAGE)
@@ -1060,7 +1084,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
         val lat = payload.optDouble("lat", Double.NaN)
         val lon = payload.optDouble("lon", Double.NaN)
-        if (lat.isNaN() || lon.isNaN()) return DispatchResult(false, "lat/lon не заданы")
+        if (lat.isNaN() || lon.isNaN()) return DispatchResult(false, appStrings.get(R.string.dispatch_coords_missing))
         // Show-only mode: drop a pin instead of building a route ("где находится X").
         if (payload.optBoolean("show", false)) {
             val desc = payload.optString("label").takeIf(String::isNotBlank)
@@ -1103,7 +1127,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             val intentAction = when (shortcut) {
                 "home" -> "ru.yandex.yandexmaps.action.ROUTE_TO_HOME_SHORTCUT"
                 "work" -> "ru.yandex.yandexmaps.action.ROUTE_TO_WORK_SHORTCUT"
-                else -> return DispatchResult(false, "неизвестный shortcut: $shortcut")
+                else -> return DispatchResult(false, appStrings.get(R.string.dispatch_shortcut_unknown, shortcut))
             }
             var failure: DispatchResult? = null
             for (pkg in NavPackages.YANDEX_MAPS) {
@@ -1124,7 +1148,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             RouteNavigatorUris.MODE_SEARCH, RouteNavigatorUris.mapsSearch(query), "navigate_maps_search:$query")
         val lat = payload.optDouble("lat", Double.NaN)
         val lon = payload.optDouble("lon", Double.NaN)
-        if (lat.isNaN() || lon.isNaN()) return DispatchResult(false, "lat/lon не заданы")
+        if (lat.isNaN() || lon.isNaN()) return DispatchResult(false, appStrings.get(R.string.dispatch_coords_missing))
         if (payload.optBoolean("show", false)) {
             val desc = payload.optString("label").takeIf(String::isNotBlank)
             return startMapsIntent(
@@ -1170,7 +1194,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private suspend fun openUrl(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload)
         val url = payload?.optString("url")?.takeIf(String::isNotBlank)
-            ?: return DispatchResult(false, "url не задан")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_url_missing))
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val result = tryStartActivity(intent, "url:$url")
@@ -1182,9 +1206,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val payload = parsePayload(action.payload)
         val mode = payload?.optString("mode")?.takeIf(String::isNotBlank) ?: "mybeat"
         if (mode == "play") {
-            val playPayload = payload ?: return DispatchResult(false, "query не задан")
+            val playPayload = payload ?: return DispatchResult(false, appStrings.get(R.string.dispatch_query_missing))
             val query = playPayload.optString("query").takeIf(String::isNotBlank)
-                ?: return DispatchResult(false, "query не задан")
+                ?: return DispatchResult(false, appStrings.get(R.string.dispatch_query_missing))
             // Real playback path: playFromSearch on Yandex Music's live MediaSession actually
             // starts the top hit; the MEDIA_PLAY_FROM_SEARCH intent below only opens the search
             // screen (field defect APK 337). Needs notification-listener access (self-granted).
@@ -1204,7 +1228,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
         if (mode == "search") {
             val query = payload?.optString("query")?.takeIf(String::isNotBlank)
-                ?: return DispatchResult(false, "query не задан")
+                ?: return DispatchResult(false, appStrings.get(R.string.dispatch_query_missing))
             val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
                 .setPackage(YANDEX_MUSIC_PACKAGE)
                 .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
@@ -1216,7 +1240,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
         val deeplink = when (mode) {
             "mybeat" -> "yandexmusic://radio/user/onyourwave?play=true"
-            else -> return DispatchResult(false, "Неизвестный режим Я.Музыки: $mode")
+            else -> return DispatchResult(false, appStrings.get(R.string.dispatch_yandex_music_mode_unknown, mode))
         }
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(deeplink))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1230,9 +1254,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private suspend fun launchYoutube(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload)
         val query = payload?.optString("query")?.takeIf(String::isNotBlank)
-            ?: return DispatchResult(false, "query не задан")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_query_missing))
         val pkg = YOUTUBE_PACKAGES.firstOrNull { isPackageInstalled(it) }
-            ?: return DispatchResult(false, "Приложение YouTube не установлено")
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_youtube_not_installed))
         val mode = payload.optString("mode").takeIf(String::isNotBlank) ?: "play"
         val intent = when (mode) {
             // Assistant-style voice search: stock YouTube auto-plays the top hit for this intent.
@@ -1247,7 +1271,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
                 Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)))
                 .setPackage(pkg)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            else -> return DispatchResult(false, "Неизвестный режим YouTube: $mode")
+            else -> return DispatchResult(false, appStrings.get(R.string.dispatch_youtube_mode_unknown, mode))
         }
         val result = tryStartActivity(intent, "youtube_$mode:$query")
         if (result.success) maybeMinimize(payload)
@@ -1282,10 +1306,10 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         DispatchResult(true)
     } catch (e: ActivityNotFoundException) {
         Log.w(TAG, "$label: ${e.message}")
-        DispatchResult(false, "Нет приложения для обработки: ${e.message}")
+        DispatchResult(false, appStrings.get(R.string.dispatch_no_handler_app, e.message.toString()))
     } catch (e: SecurityException) {
         Log.w(TAG, "$label (security): ${e.message}")
-        DispatchResult(false, "Нет разрешения: ${e.message}")
+        DispatchResult(false, appStrings.get(R.string.dispatch_no_permission, e.message.toString()))
     }
 
     // --- helpers ---
