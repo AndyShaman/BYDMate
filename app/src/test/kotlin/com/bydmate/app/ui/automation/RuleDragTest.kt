@@ -1,8 +1,11 @@
 package com.bydmate.app.ui.automation
 
 import androidx.compose.ui.geometry.Rect
+import com.bydmate.app.data.local.entity.RuleEntity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** #249: where a held rule goes and when the list scrolls under it, list and grid. */
@@ -17,9 +20,8 @@ class RuleDragTest {
     /** The lifted list card at [top]. */
     private fun listCard(top: Float) = Rect(0f, top, 800f, top + 100f)
 
-    /** A grid card of rule [id] (index id - 1): 3 columns of 200x150 px cells, 12 px apart. */
-    private fun gridCell(id: Long, scroll: Float = 0f): RuleCell {
-        val i = (id - 1).toInt()
+    /** A grid card of rule [id] at [i]: 3 columns of 200x150 px cells, 12 px apart. */
+    private fun gridCell(id: Long, scroll: Float = 0f, i: Int = (id - 1).toInt()): RuleCell {
         val left = (i % 3) * 212f
         val top = (i / 3) * 162f - scroll
         return RuleCell(id, i, Rect(left, top, left + 200f, top + 150f))
@@ -58,6 +60,49 @@ class RuleDragTest {
         val stale = (4L..8L).map { row(it, -20f + (it - 4) * 106f) }
         assertNull(dragTarget(stale, moved, held = 1L, card = listCard(480f)))
         assertNull(dragTarget(stale, moved, held = 8L, card = listCard(200f)))
+    }
+
+    @Test fun `grid - a move the layout was late for is taken once the layout catches up`() {
+        val nine = (1L..9L).toList()
+        // Rule 1 went onto 3; the finger is on to rule 6 before the grid has re-flowed.
+        val moved = RuleOrder.move(nine, 1L, 3L)
+        val onSix = gridCard(524f, 237f)
+        assertNull(dragTarget(nine.map { gridCell(it) }, moved, held = 1L, card = onSix))
+        // Next frame, laid out in the new order: 6 is where it was, 1 now third.
+        val caughtUp = moved.mapIndexed { i, id -> gridCell(id, i = i) }
+        assertEquals(6L, dragTarget(caughtUp, moved, held = 1L, card = onSix))
+    }
+
+    @Test fun `list - held rule off screen comes back over a taller row`() {
+        // Rule 1 (100 px) scrolled off the top; rule 2 spans 0..400 and has the centre (150).
+        val visible = listOf(row(2L, 0f, height = 400f), row(3L, 406f))
+        assertEquals(2L, dragTarget(visible, ten, held = 1L, card = listCard(100f)))
+    }
+
+    @Test fun `a single rule stays put wherever it is held`() {
+        val one = listOf(1L)
+        val visible = listOf(row(1L, 0f))
+        for (top in listOf(-300f, 0f, 50f, 600f)) {
+            assertNull(dragTarget(visible, one, held = 1L, card = listCard(top)))
+        }
+        assertNull(dragTarget(listOf(gridCell(1L)), one, held = 1L, card = gridCard(530f, 399f)))
+    }
+
+    @Test fun `no rules on screen, no target`() {
+        assertNull(dragTarget(emptyList(), emptyList(), held = 1L, card = listCard(0f)))
+        assertNull(dragTarget(emptyList(), ten, held = 1L, card = listCard(200f)))
+    }
+
+    @Test fun `the drag lets go when the rules shown change, not when they re-order or update`() {
+        fun rule(id: Long, enabled: Boolean = true) =
+            RuleEntity(id = id, name = "r$id", enabled = enabled, triggers = "[]", actions = "[]", createdAt = id)
+        val held = listOf(1L, 2L, 3L)
+        assertTrue(sameRules(held, listOf(rule(3), rule(1), rule(2))))
+        assertTrue(sameRules(held, listOf(rule(1), rule(2, enabled = false), rule(3))))
+        // «Активные» switched on with 2 disabled; a rule added; a rule deleted.
+        assertFalse(sameRules(held, listOf(rule(1), rule(3))))
+        assertFalse(sameRules(held, listOf(rule(4), rule(1), rule(2), rule(3))))
+        assertFalse(sameRules(held, listOf(rule(1), rule(2))))
     }
 
     @Test fun `list - the last rule held past the bottom stays put`() {
@@ -148,6 +193,19 @@ class RuleDragTest {
         assertEquals(0f, scroll(listCard(400f), movedUp = true, movedDown = true), 0f)
         assertEquals(0f, scroll(listCard(64f), movedUp = true, movedDown = true), 0f)
         assertEquals(0f, scroll(listCard(836f), movedUp = true, movedDown = true), 0f)
+    }
+
+    @Test fun `a card taller than the list goes by its centre and never flips back and forth`() {
+        fun tall(top: Float) = Rect(0f, top, 800f, top + 1200f)
+        // Centred (500): still. 16 px above or below the middle: half speed that way.
+        assertEquals(0f, scroll(tall(-100f), movedUp = true, movedDown = true), 0f)
+        assertEquals(-0.5f, scroll(tall(-116f), movedUp = true, movedDown = true), 1e-6f)
+        assertEquals(0.5f, scroll(tall(-84f), movedUp = true, movedDown = true), 1e-6f)
+        // One speed per position, only growing as the card goes down: no up-down-up on the way.
+        val speeds = (-300..100 step 4).map { scroll(tall(it.toFloat()), movedUp = true, movedDown = true) }
+        assertEquals(speeds.sorted(), speeds)
+        // Moved only down: the top band does not count yet.
+        assertEquals(1f, scroll(tall(-100f), movedUp = false, movedDown = true), 0f)
     }
 
     @Test fun `a grid card scrolls the same wherever it is across`() {

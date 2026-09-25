@@ -916,7 +916,8 @@ private class GridCells(private val state: LazyGridState) : RuleCells {
  * A rule held and dragged in the list or the grid. The lifted card follows the finger; once its
  * centre is over another rule it takes that rule's place in [order] and the layout re-flows
  * under it. Nothing is saved while the finger is down: the drop reports one move, from where
- * the rule was lifted to where it was let go.
+ * the rule was lifted to where it was let go. A filter switched or a rule added or deleted under
+ * the finger lets go without a move.
  */
 @Stable
 private class RuleDragState(
@@ -932,6 +933,8 @@ private class RuleDragState(
     private var start = emptyList<Long>()
     /** The rules the drag started from: the list keeps the drag's order until new ones arrive. */
     private var liftedFrom: List<RuleEntity>? = null
+    /** The rules [frame] last checked against the drag's order. */
+    private var checkedRules: List<RuleEntity>? = null
     private var startRect = Rect.Zero
     private var dragged by mutableStateOf(Offset.Zero)
     /** Whether the finger has moved the card up, and down, since the lift: see [edgeScroll]. */
@@ -956,6 +959,7 @@ private class RuleDragState(
         val cell = cells.visible().firstOrNull { it.rect.contains(at) } ?: return false
         start = shown(rules.value).map { it.id }
         liftedFrom = rules.value
+        checkedRules = rules.value
         order = start
         startRect = cell.rect
         dragged = Offset.Zero
@@ -969,14 +973,28 @@ private class RuleDragState(
         dragged += if (cells.vertical) Offset(0f, amount.y) else amount
         if (amount.y < 0f) movedUp = true
         if (amount.y > 0f) movedDown = true
-        follow()
     }
 
-    /** One frame of scrolling while the held card is in an edge band. */
-    suspend fun autoScroll(edge: Float, maxStep: Float) {
+    /**
+     * One frame while a rule is held: scrolls while the card is in an edge band and moves the held
+     * rule to where the card is now. Every frame, not only on a drag or a scroll, so a move the
+     * layout had not caught up with yet is taken on the next one. Rules shown changing under the
+     * finger let go without a move: the drag's order no longer matches what the list shows.
+     */
+    suspend fun frame(edge: Float, maxStep: Float) {
+        if (held == null) return
+        val now = rules.value
+        if (now !== checkedRules) {
+            checkedRules = now
+            if (!sameRules(order, now)) {
+                held = null
+                liftedFrom = null
+                return
+            }
+        }
         val speed = edgeScroll(liftedRect, cells.viewportHeight, edge, movedUp, movedDown)
-        if (speed == 0f) return
-        if (cells.scroll.scrollBy(speed * maxStep) != 0f) follow()
+        if (speed != 0f) cells.scroll.scrollBy(speed * maxStep)
+        follow()
     }
 
     /** How far the held card is drawn from its place in the layout: to where the finger has it. */
@@ -1010,23 +1028,29 @@ private class RuleDragState(
  */
 internal fun dragTarget(visible: List<RuleCell>, order: List<Long>, held: Long, card: Rect): Long? {
     // The layout has not caught up with the last move yet: its bounds would undo that move.
-    if (visible.any { it.index != order.indexOf(it.id) }) return null
+    if (visible.any { order.getOrNull(it.index) != it.id }) return null
     val centre = card.center
-    val heldOffScreen = visible.none { it.id == held }
+    val slot = visible.firstOrNull { it.id == held }
     val target = visible.firstOrNull { it.rect.contains(centre) }
         ?: pastEdge(visible, centre)
-        ?: (if (heldOffScreen) visible.minByOrNull { it.rect.distanceSquaredTo(centre) } else null)
+        ?: (if (slot == null) visible.minByOrNull { it.rect.distanceSquaredTo(centre) } else null)
         ?: return null
     if (target.id == held) return null
+    // Off screen, the held rule has no place on screen to swap straight back into.
+    if (slot == null) return target.id
     // Rows differ in height: the centre has to reach the place the held rule is about to take,
     // or a taller neighbour would still hold it after the move and swap the two straight back.
-    val reached = if (order.indexOf(target.id) > order.indexOf(held)) {
-        centre.y >= target.rect.bottom - card.height
+    val reached = if (target.index > slot.index) {
+        centre.y >= target.rect.bottom - slot.rect.height
     } else {
-        centre.y <= target.rect.top + card.height
+        centre.y <= target.rect.top + slot.rect.height
     }
     return if (reached) target.id else null
 }
+
+/** Whether [rules] are the ones [order] holds, in any order: the same rules, not a filter's subset. */
+internal fun sameRules(order: List<Long>, rules: List<RuleEntity>): Boolean =
+    rules.mapTo(HashSet()) { it.id } == order.toSet()
 
 /**
  * The first rule on screen when [centre] is before it: above it, or left of it on its row; the
@@ -1052,7 +1076,8 @@ private fun Rect.distanceSquaredTo(point: Offset): Float {
  * How fast the held [card] scrolls the list this frame, from -1 (full speed up) to 1 (full speed
  * down): in the [edge] band along the top or the bottom of the viewport, the deeper the faster.
  * A band counts once the finger has moved the card towards its edge ([movedUp], [movedDown]), so
- * a rule lifted inside one does not set the list moving by itself.
+ * a rule lifted inside one does not set the list moving by itself. A card in both bands at once,
+ * taller than the list, goes by its centre: up above the middle, down below it, still in between.
  */
 internal fun edgeScroll(card: Rect, viewportHeight: Int, edge: Float, movedUp: Boolean, movedDown: Boolean): Float {
     val up = if (movedUp) (card.top - edge).coerceAtMost(0f) else 0f
@@ -1060,7 +1085,7 @@ internal fun edgeScroll(card: Rect, viewportHeight: Int, edge: Float, movedUp: B
     return ((up + down) / edge).coerceIn(-1f, 1f)
 }
 
-/** The drag of one list or grid; while a rule is held, scrolls it each frame the card is in an edge band. */
+/** The drag of one list or grid; while a rule is held, runs its [RuleDragState.frame] every frame. */
 @Composable
 private fun rememberRuleDrag(cells: RuleCells, rules: List<RuleEntity>, onDrop: (Long, Long) -> Unit): RuleDragState {
     val latestRules = rememberUpdatedState(rules)
@@ -1074,7 +1099,7 @@ private fun rememberRuleDrag(cells: RuleCells, rules: List<RuleEntity>, onDrop: 
         val step = with(density) { AUTO_SCROLL_STEP.toPx() }
         while (drag.held != null) {
             withFrameNanos { }
-            drag.autoScroll(edge, step)
+            drag.frame(edge, step)
         }
     }
     return drag
