@@ -72,7 +72,7 @@ class VoiceControllerPrecedenceTest {
         val engine = mockk<AutomationEngine>(relaxed = true)
         coEvery { engine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired(true)
         val agent = mockk<AgentOrchestrator>(relaxed = true)
-        coEvery { agent.ask(any(), any()) } returns AgentResult.Disabled
+        coEvery { agent.ask(any(), any(), any()) } returns AgentResult.Disabled
         coEvery { agent.expectsFollowUp() } returns false
         val ctx = mockk<Context>(relaxed = true)
         every { ctx.createConfigurationContext(any()) } returns ctx

@@ -102,11 +102,13 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
 
     // One request at a time, in the background: a burst would compete with the driver's first
     // turn and risk the provider's rate limit. The first failure (no network yet at ignition,
-    // 429, auth) stops the pass; the remaining phrases get cached on first use.
+    // 429, auth, a "success" without audio) stops the pass; the remaining phrases get cached on
+    // first use.
     private suspend fun precache(backend: OnlineTtsBackend) {
         if (!runCatching { backend.configured() }.getOrDefault(false)) return
         val phrases = runCatching { precachePhrases() }.getOrDefault(emptyList())
-        val done = phrases.indexOfFirst { synthesizeOrNull(backend, it) == null }.let { if (it < 0) phrases.size else it }
+        val done = phrases.indexOfFirst { synthesizeOrNull(backend, it)?.samples?.isNotEmpty() != true }
+            .let { if (it < 0) phrases.size else it }
         Log.i(
             TAG,
             "phrase precache: backend=${backend.id} phrases=${phrases.size} done=$done " +

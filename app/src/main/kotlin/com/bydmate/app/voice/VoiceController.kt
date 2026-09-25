@@ -711,7 +711,23 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             // which would un-mute late callbacks from this already-hard-stopped turn.
             lateinit var askJob: Job
             askJob = launch(start = CoroutineStart.LAZY) {
-                r = agentOrchestrator.ask(transcript) { sentence ->
+                r = agentOrchestrator.ask(
+                    transcript,
+                    // The filler is speech only: queued for TTS, never shown in the orb's answer
+                    // row. With TTS off (no queue) there is no filler at all.
+                    onFiller = queue?.let { q ->
+                        { phrase ->
+                            // Same hard stop gate as the sentence callback below.
+                            if (!stopRequested.get() && !askJob.isCancelled &&
+                                runCatching { q.enqueue(phrase) }.getOrDefault(false)
+                            ) {
+                                echoFilter.noteSpoken(phrase)
+                                queuedAny = true
+                                lastSpeakingSeenMs = System.currentTimeMillis()
+                            }
+                        }
+                    },
+                ) { sentence ->
                     // Hard stop gate: the SSE loop can emit one more sentence between the ask
                     // job's cancellation and its next suspension point; this callback is
                     // non-suspend, so it must check for itself (the TTS queue is already

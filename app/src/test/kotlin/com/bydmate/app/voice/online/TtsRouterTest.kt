@@ -2,10 +2,17 @@ package com.bydmate.app.voice.online
 
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,6 +20,7 @@ import org.junit.Test
 import java.io.IOException
 import java.util.Collections
 import java.util.concurrent.BlockingQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class TtsRouterTest {
@@ -27,6 +35,8 @@ class TtsRouterTest {
         var stopCalls = 0
         var warmUpCalls = 0
         var playPcmResult = true
+        /** Released once playPcmStream has taken its first chunk: the player is really playing. */
+        val streamChunkTaken = CountDownLatch(1)
 
         override fun isReady() = ready
         override fun speak(text: String): Boolean {
@@ -46,6 +56,7 @@ class TtsRouterTest {
             var chunk = chunks.poll(5, TimeUnit.SECONDS)
             while (chunk != null && chunk.isNotEmpty()) {
                 got += chunk.toList()
+                streamChunkTaken.countDown()
                 chunk = chunks.poll(5, TimeUnit.SECONDS)
             }
             playStreamCalls += got to sampleRate
@@ -109,6 +120,14 @@ class TtsRouterTest {
             Thread.sleep(pollMs)
         }
     }
+
+    /** Joins everything the router launched on [scope] -- proof the work finished, so negative
+     *  assertions after it cannot miss a late action. */
+    private fun awaitIdle(scope: CoroutineScope) = runBlocking {
+        withTimeout(5_000) { scope.coroutineContext.job.children.toList().joinAll() }
+    }
+
+    private fun testScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // --- speak(): offline source delegates straight through ---
 
@@ -509,13 +528,35 @@ class TtsRouterTest {
             }
             override suspend fun configured() = true
         }
+        val scope = testScope()
         val router = TtsRouter(
             delegate = FakeTtsEngine(), backends = listOf(backend), selectedSource = { "minimax" },
-            precachePhrases = { listOf("Готово.", "Есть.", "Выполнено.") },
+            precachePhrases = { listOf("Готово.", "Есть.", "Выполнено.") }, scope = scope,
         )
         router.warmUp()
-        awaitTrue { calls.size == 2 }
-        Thread.sleep(200) // a third call would land well within this window
+        awaitIdle(scope)
+        assertEquals(listOf("Готово.", "Есть."), calls.toList())
+        assertEquals(1, router.phraseCacheSizeForTest())
+    }
+
+    @Test
+    fun `precache stops at the first phrase that comes back without audio`() {
+        val calls = Collections.synchronizedList(mutableListOf<String>())
+        val backend = object : OnlineTtsBackend {
+            override val id = "minimax"
+            override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+                calls += text
+                return TtsPcm(if (text == "Есть.") FloatArray(0) else floatArrayOf(0.1f), 24_000)
+            }
+            override suspend fun configured() = true
+        }
+        val scope = testScope()
+        val router = TtsRouter(
+            delegate = FakeTtsEngine(), backends = listOf(backend), selectedSource = { "minimax" },
+            precachePhrases = { listOf("Готово.", "Есть.", "Выполнено.") }, scope = scope,
+        )
+        router.warmUp()
+        awaitIdle(scope)
         assertEquals(listOf("Готово.", "Есть."), calls.toList())
         assertEquals(1, router.phraseCacheSizeForTest())
     }
@@ -630,13 +671,13 @@ class TtsRouterTest {
             failAfterFirst = setOf("Первое."),
         )
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        val scope = testScope()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" }, scope = scope)
         val queue = router.startQueue()!!
         queue.enqueue("Первое.")
         queue.enqueue("Второе.")
         queue.finish()
-        awaitTrue { delegate.playStreamCalls.size == 1 }
-        Thread.sleep(300) // the second sentence would play well within this window
+        awaitIdle(scope)
         assertEquals(listOf(listOf(1f) to 24_000), delegate.playStreamCalls.toList())
         assertTrue(backend.synthesized.isEmpty()) // no whole fallback once audio started
         assertTrue(delegate.playPcmCalls.isEmpty())
@@ -663,13 +704,13 @@ class TtsRouterTest {
     fun `stop during a stream cancels the backend job and ends playback`() {
         val backend = StreamingBackend(mapOf("Первое." to listOf(f(1f), f(2f))), hang = setOf("Первое."))
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        val scope = testScope()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" }, scope = scope)
         val queue = router.startQueue()!!
         queue.enqueue("Первое.")
-        awaitTrue { backend.streamed.size == 1 }
-        Thread.sleep(50)
+        assertTrue(delegate.streamChunkTaken.await(3, TimeUnit.SECONDS))
         router.stop()
-        awaitTrue { backend.cancelled && delegate.playStreamCalls.size == 1 }
+        awaitIdle(scope)
         assertTrue(backend.cancelled)
         // The end marker still reaches the player, so it stops at the chunk already delivered.
         assertEquals(listOf(listOf(1f) to 24_000), delegate.playStreamCalls.toList())

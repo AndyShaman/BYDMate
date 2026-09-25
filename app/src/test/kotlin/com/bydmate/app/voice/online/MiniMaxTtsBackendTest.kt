@@ -1,13 +1,22 @@
 package com.bydmate.app.voice.online
 
+import android.util.Log
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.voice.TtsGender
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.mockk.verify
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import okio.Buffer
 import org.json.JSONObject
 import org.junit.After
@@ -23,6 +32,9 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 class MiniMaxTtsBackendTest {
 
@@ -445,6 +457,59 @@ class MiniMaxTtsBackendTest {
         } catch (e: IOException) {
             assertTrue(e.message!!.contains("without audio"))
         }
+    }
+
+    @Test
+    fun `stream closed after audio without a status 2 event is a failure`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(sse(sseEvent(hex(pcm16(1000, -1000)))))
+        val chunks = mutableListOf<FloatArray>()
+        try {
+            backend.synthesizeStream("привет", TtsGender.MALE) { chunks += it }
+            fail("expected synthesizeStream to throw")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("before synthesis completed"))
+        }
+        assertEquals(1, chunks.size) // the audio that did arrive was still delivered
+    }
+
+    @Test
+    fun `an odd trailing byte at the end is dropped with a warning and the sentence still succeeds`() = runTest {
+        stubSettings(provider = "official")
+        val bytes = pcm16(1000, -1000)
+        official.enqueue(sse(sseEvent(hex(bytes + byteArrayOf(0x11))), sseEvent("", status = 2)))
+        mockkStatic(Log::class)
+        try {
+            every { Log.w(any(), any<String>()) } returns 0
+            val samples = collectStream().flatMap { it.toList() }
+            assertEquals(listOf(1000 / 32_768f, -1000 / 32_768f), samples)
+            verify { Log.w(any(), match<String> { it.contains("unpaired PCM byte") }) }
+        } finally {
+            unmockkStatic(Log::class)
+        }
+    }
+
+    @Test
+    fun `a cancellation landing before the watcher is dispatched still cancels the blocking call`() {
+        stubSettings(provider = "official")
+        // The job is cancelled while synthesizeStream is already inside its IO block, before the
+        // watcher is launched; the server never answers, so only call.cancel() can unblock execute().
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "") } coAnswers {
+            currentCoroutineContext().job.cancel()
+            "mm-test-key"
+        }
+        official.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val slowBackend = MiniMaxTtsBackend(
+            http = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
+            settingsRepository = settingsRepository,
+            officialBaseUrl = official.url("/").toString().trimEnd('/'),
+        )
+        val finished = CountDownLatch(1)
+        thread {
+            runCatching { runBlocking { slowBackend.synthesizeStream("привет", TtsGender.MALE) {} } }
+            finished.countDown()
+        }
+        assertTrue("execute() stayed blocked after cancellation", finished.await(10, TimeUnit.SECONDS))
     }
 
     @Test

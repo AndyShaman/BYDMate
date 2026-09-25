@@ -129,7 +129,7 @@ class VoiceControllerSafetyTest {
         coEvery { automationResolver.match(any()) } returns null
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Disabled
         // Default: no pending agent question (individual tests override AFTER construction).
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
@@ -165,7 +165,7 @@ class VoiceControllerSafetyTest {
         coEvery { automationResolver.match(any()) } returns VoiceAutomationMatch(matchedRuleId, "rule$matchedRuleId")
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Disabled
         // Default: no pending agent question (individual tests override AFTER construction).
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
@@ -571,7 +571,7 @@ class VoiceControllerSafetyTest {
         coEvery { automationResolver.match(any()) } returns null
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Disabled
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
         // Simulates a busy AgentOrchestrator mutex (e.g. a concurrent ask() holding the lock) —
         // if VoiceController awaited this call, the whole voice session would stall behind it.
@@ -630,7 +630,7 @@ class VoiceControllerSafetyTest {
         coEvery { automationResolver.match(any()) } returns VoiceAutomationMatch(42L, "rule42")
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Disabled
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
         coEvery { agentOrchestrator.noteAction(any()) } returns Unit
 
@@ -701,7 +701,7 @@ class VoiceControllerSafetyTest {
         coEvery { automationResolver.match(any()) } returns VoiceAutomationMatch(7L, "rule7")
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Disabled
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
         val fakeAsr = FakeContinuousAsr(ready = true)

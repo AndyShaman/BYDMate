@@ -50,7 +50,13 @@ class AgentOrchestrator @Inject constructor(
         if (settingsRepository.isAgentEnabled()) backend.prewarm()
     }
 
-    suspend fun ask(userText: String, onSentence: ((String) -> Unit)? = null): AgentResult {
+    /** [onFiller] gets the speech-only filler phrase (see runLoopTraced); it sits before
+     *  [onSentence] so a trailing lambda keeps meaning the streamed answer sentences. */
+    suspend fun ask(
+        userText: String,
+        onFiller: ((String) -> Unit)? = null,
+        onSentence: ((String) -> Unit)? = null,
+    ): AgentResult {
         mutex.withLock {
             if (!settingsRepository.isAgentEnabled()) {
                 // Close the follow-up window: a disabled/unconfigured agent must not swallow NLU traffic.
@@ -73,7 +79,7 @@ class AgentOrchestrator @Inject constructor(
                 trimHistory()
                 val result = runLoop(
                     history, systemMessages(), tools.schemas(),
-                    allowAutomationTools = true, onSentence,
+                    allowAutomationTools = true, onSentence, onFiller,
                     onTerminal = { lastAnswerAt = nowMs() },
                 )
                 // Only finished exchanges are worth keeping: an error or a disabled agent is
@@ -141,7 +147,7 @@ class AgentOrchestrator @Inject constructor(
             if (text.isEmpty()) return AgentResult.Disabled
             val messages = mutableListOf<AgentMessage>(AgentMessage.User(text))
             return runLoop(messages, systemMessages(includeMemory = false), tools.schemas(includeAutomationTools = false),
-                allowAutomationTools = false, onSentence = null, onTerminal = {})
+                allowAutomationTools = false, onSentence = null, onFiller = null, onTerminal = {})
         } finally {
             mutex.unlock()
         }
@@ -167,12 +173,14 @@ class AgentOrchestrator @Inject constructor(
     /** The LLM/tool loop shared by [ask] (live, persistent history) and [askDetached]
      *  (automation origin, throwaway messages). [onTerminal] fires exactly where the live
      *  path used to stamp lastAnswerAt. Caller must hold [mutex]. */
+    @Suppress("LongParameterList") // the loop's inputs and callbacks, passed straight through
     private suspend fun runLoop(
         messages: MutableList<AgentMessage>,
         systemMessages: List<AgentMessage>,
         toolSchemas: JSONArray,
         allowAutomationTools: Boolean,
         onSentence: ((String) -> Unit)?,
+        onFiller: ((String) -> Unit)?,
         onTerminal: () -> Unit,
     ): AgentResult {
         val startedAt = nowMs()
@@ -181,7 +189,7 @@ class AgentOrchestrator @Inject constructor(
         var outcome = "cancelled"
         try {
             val result = runLoopTraced(
-                messages, systemMessages, toolSchemas, allowAutomationTools, onSentence, onTerminal,
+                messages, systemMessages, toolSchemas, allowAutomationTools, onSentence, onFiller, onTerminal,
                 rounds, tracer,
             )
             outcome = when (result) {
@@ -211,6 +219,7 @@ class AgentOrchestrator @Inject constructor(
         toolSchemas: JSONArray,
         allowAutomationTools: Boolean,
         onSentence: ((String) -> Unit)?,
+        onFiller: ((String) -> Unit)?,
         onTerminal: () -> Unit,
         rounds: IntArray,
         tracer: AgentTrace,
@@ -218,9 +227,10 @@ class AgentOrchestrator @Inject constructor(
         val outcomes = mutableListOf<AgentToolOutcome>()
         val callCounts = mutableMapOf<String, Int>()
         var loopStrikes = 0
-        // True once a sentence — the model's own streamed text, or the filler below — has
-        // reached onSentence this turn; gates the filler so it never doubles up on live speech
-        // and never fires twice. Lives outside the round loop: it spans the whole turn.
+        // True once a sentence — the model's own streamed text via onSentence, or the filler
+        // below via onFiller — has been handed out this turn; gates the filler so it never
+        // doubles up on live speech and never fires twice. Lives outside the round loop: it
+        // spans the whole turn.
         var spoken = false
         val speak: ((String) -> Unit)? = onSentence?.let { cb -> { s: String -> spoken = true; cb(s) } }
         repeat(MAX_ITERATIONS) {
@@ -252,13 +262,15 @@ class AgentOrchestrator @Inject constructor(
             messages += AgentMessage.Assistant(reply.content, reply.toolCalls)
             // Filler: this round is about to run a slow tool (search, weather, chargers, trip/
             // charge stats, range, navigation) and nothing has been spoken yet this turn — speak
-            // a short persona phrase now, ahead of the tool result. Speech only: never added to
-            // messages/history and never part of the returned answer.
+            // a short persona phrase now, ahead of the tool result. Speech only: its own callback
+            // (never the answer text stream), never added to messages/history and never part of
+            // the returned answer.
             val slowCall = reply.toolCalls.firstOrNull { it.name in SLOW_TOOLS }
-            if (speak != null && !spoken && slowCall != null) {
+            if (onFiller != null && !spoken && slowCall != null) {
                 val phrase = identity().persona.fillerPhrase()
                 tracer.filler(phrase, slowCall.name)
-                speak(phrase)
+                spoken = true
+                onFiller(phrase)
             }
             for ((i, call) in reply.toolCalls.withIndex()) {
                 val key = call.name + "|" + call.arguments
