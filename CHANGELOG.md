@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.18.1] - 2026-09-25
+
 ### Новое
 - Главная: последних поездок всегда шесть на обычном и крупном тексте, список заканчивается вровень с карточками TRIP. Нижняя панель вкладок стала ниже, на всех экранах стало больше места.
 - Автоматизация: правила можно смотреть компактным списком или карточками в три колонки, переключатель в шапке, выбор запоминается. У каждого правила видно, сколько раз и когда оно срабатывало. Кнопки «Изменить», «Дублировать», «Поделиться» и «Удалить» крупные и с подписями, на узком экране подписи сменяются значками.
@@ -1220,7 +1222,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.18.0...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.18.1...HEAD
+[3.18.1]: https://github.com/AndyShaman/BYDMate/compare/v3.18.0...v3.18.1
 [3.18.0]: https://github.com/AndyShaman/BYDMate/compare/v3.17.5...v3.18.0
 [3.17.5]: https://github.com/AndyShaman/BYDMate/compare/v3.17.4...v3.17.5
 [3.17.4]: https://github.com/AndyShaman/BYDMate/compare/v3.17.3...v3.17.4
