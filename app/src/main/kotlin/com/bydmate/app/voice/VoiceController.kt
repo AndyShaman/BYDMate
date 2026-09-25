@@ -259,7 +259,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         val earlyDuck = runCatching { audioCapture.duckMusic() }.getOrNull()
         // Warm the model and online-voice connections while the driver is still speaking: a cold
         // turn otherwise pays DNS + TLS on both hosts inside the reply latency.
-        runCatching { ttsEngine.prewarmNetwork() }
+        runCatching { if (gate.ttsEnabled()) ttsEngine.prewarmNetwork() }
         scope.launch { runCatching { agentOrchestrator.prewarm() } }
         sessionJob = scope.launch {
             val session = coroutineContext[Job]

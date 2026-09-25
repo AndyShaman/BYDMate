@@ -1,6 +1,7 @@
 package com.bydmate.app.voice.online
 
 import com.bydmate.app.agent.LlmConnectionResolver
+import com.bydmate.app.data.remote.HttpPrewarm
 import com.bydmate.app.voice.TtsGender
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,6 +34,11 @@ class OpenRouterTtsBackend(
 
     override suspend fun configured(): Boolean =
         connections.get(LlmConnectionResolver.ID_OPENROUTER) != null
+
+    // The LLM prewarm covers this host only when the agent also runs on OpenRouter.
+    override suspend fun prewarm() {
+        connections.get(LlmConnectionResolver.ID_OPENROUTER)?.let { HttpPrewarm.fire(ttsHttp, it.baseUrl) }
+    }
 
     override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm =
         withContext(Dispatchers.IO) {

@@ -1715,4 +1715,60 @@ class VoiceControllerSessionTest {
         assertEquals(VoiceJournalEntry.Outcome.ERROR, journal.entries.value.first().outcome)
         awaitTrue { answers.contains(modelMissingMsg) }
     }
+
+    // --- Voice speed wave step 1: PTT prewarms the online TTS network connection while the
+    // driver is still speaking, so a cold turn does not pay DNS+TLS inside the reply latency.
+    // Gated on gate.ttsEnabled() -- prewarming a connection nobody will use is wasted work.
+
+    @Test fun `ptt session start prewarms the tts network when spoken replies are enabled`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
+        val audioCapture = mockk<AudioCapture>(relaxed = true)
+        every { audioCapture.captureSession(any()) } returns rawFrames
+        val ttsEngine = mockk<TtsEngine>(relaxed = true)
+        every { ttsEngine.speaking } returns MutableStateFlow(false)
+
+        val agentOrchestrator = mockk<AgentOrchestrator>()
+        coEvery { agentOrchestrator.noteAction(any()) } returns Unit
+        coEvery { agentOrchestrator.expectsFollowUp() } returns false
+
+        val gate = mockk<VoiceGate>()
+        every { gate.isEnabled() } returns true
+        every { gate.vehicleSnapshot() } returns null
+        every { gate.ttsEnabled() } returns true // must be true so PTT prewarms the connection
+
+        val earcon = mockk<VoiceEarcon>(relaxed = true)
+        val automationEngine = mockk<AutomationEngine>(relaxed = true)
+        val automationResolver = mockk<VoiceAutomationResolver>()
+        coEvery { automationResolver.match(any()) } returns null
+
+        val controller = VoiceController(audioCapture, dispatcher, earcon, gate,
+            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
+            ttsEngine, VoiceJournal(), fakeAsr,
+            agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
+            ttsModelManager = mockk(relaxed = true),
+            ruStressMarker = RuStressMarker { null },
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(mockk<Context>(relaxed = true)))
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+
+        verify(exactly = 1) { ttsEngine.prewarmNetwork() }
+    }
+
+    @Test fun `ptt session start does not prewarm the tts network when spoken replies are disabled`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val ttsEngine = mockk<TtsEngine>(relaxed = true)
+        every { ttsEngine.speaking } returns MutableStateFlow(false)
+        // makeController's default gate.ttsEnabled() is false.
+        val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine)
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+
+        verify(exactly = 0) { ttsEngine.prewarmNetwork() }
+    }
 }
