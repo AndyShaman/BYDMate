@@ -13,6 +13,7 @@ class CalendarPeriodsTest {
     // zone where that transition falls exactly at midnight (Europe/Moscow does not use DST).
     private val santiago = TimeZone.getTimeZone("America/Santiago")
 
+    @Suppress("LongParameterList")
     private fun ts(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0, zone: TimeZone = this.zone): Long {
         val cal = Calendar.getInstance(zone)
         cal.clear()
