@@ -11,8 +11,10 @@ import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import org.json.JSONObject
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -138,6 +140,19 @@ class MiniMaxTtsBackendTest {
         backend.synthesize("Battery at 80 percent", TtsGender.MALE)
 
         assertEquals("Russian", JSONObject(official.takeRequest().body.readUtf8()).getString("language_boost"))
+        assertFalse(JSONObject(official.takeRequest().body.readUtf8()).has("language_boost"))
+    }
+
+    @Test
+    fun `official transport sends no language_boost for Belarusian or Ukrainian Cyrillic`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(MockResponse().setBody(officialSuccessBody()))
+        official.enqueue(MockResponse().setBody(officialSuccessBody()))
+
+        backend.synthesize("Зарад восемдзесят працэнтаў", TtsGender.MALE)
+        backend.synthesize("Заряд вісімдесят відсотків", TtsGender.MALE)
+
+        assertFalse(JSONObject(official.takeRequest().body.readUtf8()).has("language_boost"))
         assertFalse(JSONObject(official.takeRequest().body.readUtf8()).has("language_boost"))
     }
 
@@ -316,5 +331,135 @@ class MiniMaxTtsBackendTest {
 
         assertEquals(0, official.requestCount)
         assertEquals(0, replicate.requestCount)
+    }
+
+    // --- official streaming (SSE) ---
+
+    private fun pcm16(vararg values: Int): ByteArray =
+        ByteBuffer.allocate(values.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+            .apply { values.forEach { putShort(it.toShort()) } }.array()
+
+    private fun sseEvent(audioHex: String, status: Int = 1, statusCode: Int = 0, statusMsg: String = "") =
+        "data: " + JSONObject().apply {
+            put("data", JSONObject().put("audio", audioHex).put("status", status))
+            put("base_resp", JSONObject().put("status_code", statusCode).put("status_msg", statusMsg))
+        } + "\n\n"
+
+    private fun sse(vararg events: String) =
+        MockResponse().setHeader("Content-Type", "text/event-stream").setBody(events.joinToString(""))
+
+    private suspend fun collectStream(text: String = "привет"): List<FloatArray> {
+        val chunks = mutableListOf<FloatArray>()
+        backend.synthesizeStream(text, TtsGender.MALE) { chunks += it }
+        return chunks
+    }
+
+    @Test
+    fun `stream request carries stream, exclude_aggregated_audio and language_boost`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(sse(sseEvent(hex(pcm16(1000))), sseEvent("", status = 2)))
+
+        collectStream("Заряд 80 процентов")
+
+        val req = official.takeRequest()
+        assertEquals("/v1/t2a_v2", req.path)
+        assertEquals("Bearer mm-test-key", req.getHeader("Authorization"))
+        val sent = JSONObject(req.body.readUtf8())
+        assertTrue(sent.getBoolean("stream"))
+        assertTrue(sent.getJSONObject("stream_options").getBoolean("exclude_aggregated_audio"))
+        assertEquals("Russian", sent.getString("language_boost"))
+        assertEquals("speech-2.8-turbo", sent.getString("model"))
+        assertEquals("pcm", sent.getJSONObject("audio_setting").getString("format"))
+    }
+
+    @Test
+    fun `stream delivers decoded chunks in order and never the final aggregated audio`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(
+            sse(
+                sseEvent(hex(pcm16(1000, -1000))),
+                sseEvent(hex(pcm16(2000))),
+                sseEvent(hex(pcm16(1000, -1000, 2000)), status = 2), // whole sentence again
+            ),
+        )
+
+        val chunks = collectStream()
+
+        assertEquals(2, chunks.size)
+        assertArrayEquals(floatArrayOf(1000 / 32_768f, -1000 / 32_768f), chunks[0], 0f)
+        assertArrayEquals(floatArrayOf(2000 / 32_768f), chunks[1], 0f)
+    }
+
+    @Test
+    fun `stream carries an odd trailing byte over so a split sample decodes intact`() = runTest {
+        stubSettings(provider = "official")
+        val bytes = pcm16(1000, -1000, 3000)
+        official.enqueue(
+            sse(
+                sseEvent(hex(bytes.copyOfRange(0, 3))),
+                sseEvent(hex(bytes.copyOfRange(3, 6))),
+                sseEvent("", status = 2),
+            ),
+        )
+
+        val samples = collectStream().flatMap { it.toList() }
+
+        assertEquals(listOf(1000 / 32_768f, -1000 / 32_768f, 3000 / 32_768f), samples)
+    }
+
+    @Test
+    fun `stream throws on a base_resp error event`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(sse(sseEvent("", statusCode = 1002, statusMsg = "rate limited")))
+        try {
+            collectStream()
+            fail("expected synthesizeStream to throw")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("rate limited"))
+        }
+    }
+
+    @Test
+    fun `stream throws on a plain JSON error body`() = runTest {
+        stubSettings(provider = "official")
+        val body = JSONObject().put(
+            "base_resp",
+            JSONObject().put("status_code", 1004).put("status_msg", "authorization failed"),
+        )
+        official.enqueue(MockResponse().setBody(body.toString()))
+        try {
+            collectStream()
+            fail("expected synthesizeStream to throw")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("authorization failed"))
+        }
+    }
+
+    @Test
+    fun `stream throws when it ends without a single chunk`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(sse(sseEvent(hex(pcm16(1000, 2000)), status = 2)))
+        try {
+            collectStream()
+            fail("expected synthesizeStream to throw")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("without audio"))
+        }
+    }
+
+    @Test
+    fun `streamSampleRate is 24000 for official, unset and unknown providers, null for fal and replicate`() = runTest {
+        stubSettings(provider = "official")
+        assertEquals(24_000, backend.streamSampleRate())
+        stubSettings(provider = "something-new")
+        assertEquals(24_000, backend.streamSampleRate())
+        stubSettings(provider = "fal")
+        assertNull(backend.streamSampleRate())
+        stubSettings(provider = "replicate")
+        assertNull(backend.streamSampleRate())
+        coEvery {
+            settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_PROVIDER, any())
+        } answers { secondArg() }
+        assertEquals(24_000, backend.streamSampleRate())
     }
 }
