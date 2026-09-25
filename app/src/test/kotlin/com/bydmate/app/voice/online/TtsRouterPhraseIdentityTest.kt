@@ -95,12 +95,15 @@ class TtsRouterPhraseIdentityTest {
 
     private fun testScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // Fails the test on timeout instead of returning silently -- a silent return would let
+    // assertions after it pass on a condition that never actually happened (review finding).
     private fun awaitTrue(deadlineMs: Long = 3_000, pollMs: Long = 20L, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + deadlineMs
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
             Thread.sleep(pollMs)
         }
+        throw AssertionError("awaitTrue timed out after ${deadlineMs}ms")
     }
 
     private fun awaitIdle(scope: CoroutineScope) = runBlocking {
@@ -132,6 +135,7 @@ class TtsRouterPhraseIdentityTest {
         gate.complete(Unit)
         awaitTrue { delegate.playPcmCalls.size == 1 } // the reply still plays once
         awaitQuiet(scope)
+        assertEquals("the audio just synthesized must still play once even though caching is skipped", 1, delegate.playPcmCalls.size)
         assertTrue("no phrase file must survive under either voice's key", dir.listFiles().isNullOrEmpty())
         assertEquals(0, router.phraseCacheSizeForTest())
     }
@@ -152,6 +156,7 @@ class TtsRouterPhraseIdentityTest {
         gate.complete(Unit) // identity never changes
         awaitTrue { delegate.playPcmCalls.size == 1 }
         awaitQuiet(scope)
+        assertEquals(1, delegate.playPcmCalls.size)
         assertEquals(1, phraseFiles(dir).size)
         assertEquals(1, router.phraseCacheSizeForTest())
     }
@@ -175,6 +180,31 @@ class TtsRouterPhraseIdentityTest {
         gate.complete(Unit)
         awaitTrue { delegate.playStreamCalls.size == 1 } // the reply still plays once
         awaitQuiet(scope)
+        assertEquals("the audio just streamed must still play once even though caching is skipped", 1, delegate.playStreamCalls.size)
         assertTrue("no phrase file must survive under either voice's key", dir.listFiles().isNullOrEmpty())
+        assertEquals(0, router.phraseCacheSizeForTest())
+    }
+
+    @Test
+    fun `voice identity unchanged during a stream still caches the phrase`() {
+        val dir = tmp.newFolder()
+        val gate = CompletableDeferred<Unit>()
+        val backend = GatedStreamBackend(gate = gate)
+        val delegate = FakeTtsEngine()
+        val scope = testScope()
+        val router = TtsRouter(
+            delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" },
+            scope = scope, phraseDir = dir,
+        )
+        val queue = router.startQueue()!!
+        queue.enqueue("Готово.")
+        queue.finish()
+        awaitTrue { backend.streamed.isNotEmpty() }
+        gate.complete(Unit) // identity never changes
+        awaitTrue { delegate.playStreamCalls.size == 1 }
+        awaitQuiet(scope)
+        assertEquals(1, delegate.playStreamCalls.size)
+        assertEquals(1, phraseFiles(dir).size)
+        assertEquals(1, router.phraseCacheSizeForTest())
     }
 }
