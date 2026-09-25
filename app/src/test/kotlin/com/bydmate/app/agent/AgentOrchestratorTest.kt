@@ -404,7 +404,7 @@ class AgentOrchestratorTest {
         )
         val orch = orchestrator(backend)
         val sentences = mutableListOf<String>()
-        val r = orch.ask("заряд", { s -> sentences += s })
+        val r = orch.ask("заряд", onSentence = { s -> sentences += s })
         assertEquals(listOf("Заряд 80.", "Хватит до дома"), sentences)
         assertEquals("Заряд 80. Хватит до дома", (r as AgentResult.Answer).text)
     }
@@ -419,7 +419,7 @@ class AgentOrchestratorTest {
         )
         val orch = orchestrator(backend)
         val sentences = mutableListOf<String>()
-        orch.ask("проверь", { s -> sentences += s })
+        orch.ask("проверь", onSentence = { s -> sentences += s })
         assertEquals(listOf("Готово."), sentences)
     }
 

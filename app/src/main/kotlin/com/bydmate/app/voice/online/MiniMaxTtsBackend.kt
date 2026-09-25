@@ -1,8 +1,10 @@
 package com.bydmate.app.voice.online
 
+import android.util.Log
 import com.bydmate.app.data.remote.HttpPrewarm
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.voice.TtsGender
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
@@ -80,7 +82,9 @@ class MiniMaxTtsBackend(
             val call = http.newCall(officialRequest(key, officialPayload(text, voice, stream = true)))
             // A blocked read never observes coroutine cancellation by itself: the sibling watcher
             // cancels the OkHttp call on barge-in, unblocking it (same pattern as chatStream).
-            val watcher = launch {
+            // UNDISPATCHED: the watcher enters its try before execute() blocks, so a cancellation
+            // that lands before the watcher would have been dispatched still runs its finally.
+            val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
                 try {
                     awaitCancellation()
                 } finally {
@@ -104,15 +108,23 @@ class MiniMaxTtsBackend(
         val pcm = Pcm16Chunker(onChunk)
         val plain = StringBuilder()
         var done = false
-        while (!done) {
+        var eof = false
+        while (!done && !eof) {
             val line = source.readUtf8Line()
             when {
-                line == null -> done = true
+                line == null -> eof = true
                 line.startsWith("data:") -> done = onStreamEvent(JSONObject(line.removePrefix("data:").trim()), pcm)
                 else -> plain.append(line.trim())
             }
         }
-        if (pcm.delivered > 0) return
+        if (pcm.carried > 0) Log.w(TAG, "stream ended with ${pcm.carried} unpaired PCM byte(s), dropped")
+        if (done && pcm.delivered > 0) return
+        // Only status 2 confirms the sentence is complete: a connection closed after some audio
+        // is a cut-off sentence, a mid-stream failure (never cached, rest of the reply silent).
+        if (pcm.delivered > 0) {
+            Log.w(TAG, "stream ended without status 2 after ${pcm.delivered} chunk(s)")
+            throw IOException("MiniMax TTS: stream ended before synthesis completed")
+        }
         // HTTP 200 with a plain JSON body instead of SSE: an API error.
         runCatching { JSONObject(plain.toString()) }.getOrNull()?.optJSONObject("base_resp")?.let(::checkBaseResp)
         throw IOException("MiniMax TTS: stream ended without audio")
@@ -135,6 +147,7 @@ class MiniMaxTtsBackend(
         private var carry = ByteArray(0)
         var delivered = 0
             private set
+        val carried: Int get() = carry.size
 
         fun feed(bytes: ByteArray) {
             val all = carry + bytes
@@ -262,6 +275,7 @@ class MiniMaxTtsBackend(
     }
 
     companion object {
+        private const val TAG = "MiniMaxTts"
         private val JSON_MEDIA = "application/json".toMediaType()
         private const val OFFICIAL_SAMPLE_RATE = 24_000
         private const val STREAM_STATUS_DONE = 2

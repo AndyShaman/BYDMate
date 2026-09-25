@@ -8,6 +8,7 @@ import android.media.PlaybackParams
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import com.bydmate.app.voice.online.TtsRouter
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -919,9 +920,15 @@ class SherpaTtsEngine(
         // no-chunk stall limit, queue poll interval and the caller's hang-rescue bound.
         internal const val STREAM_PREROLL_MS = 300
         internal const val STREAM_STARVE_MARGIN_MS = 150L
-        internal const val STREAM_STALL_MS = 10_000L
         private const val STREAM_POLL_MS = 40L
-        private const val STREAM_WAIT_BOUND_MS = 60_000L
+        internal const val STREAM_WAIT_BOUND_MS = 60_000L
+
+        // The stall limit must never give up before TtsRouter does: the router always puts the
+        // end marker, but only after its stream timeout plus a possible whole-sentence fallback
+        // with the same timeout. Barge-in does not wait for it -- the generation check ends the
+        // pump within one poll. Stays below STREAM_WAIT_BOUND_MS, the caller's hang rescue.
+        private const val STREAM_STALL_MARGIN_MS = 4_000L
+        internal const val STREAM_STALL_MS = 2 * TtsRouter.SYNTH_TIMEOUT_MS + STREAM_STALL_MARGIN_MS
 
         /** What [pumpStream] did. [played] = the stream reached its end marker with every received
          *  frame written, and there was something to write. */
@@ -962,15 +969,21 @@ class SherpaTtsEngine(
             var lastChunkAt = now()
             while (stillCurrent() && !pump.done && !stalled) {
                 val chunk = next(pollMs)
-                when {
-                    chunk != null -> {
-                        lastChunkAt = now()
-                        pump.take(chunk)
-                    }
-                    now() - lastChunkAt >= stallMs -> stalled = true
-                    pump.playing && now() >= audibleUntil() - STREAM_STARVE_MARGIN_MS -> pump.park()
+                // A stop() during the blocking poll paused and released the track: never touch it again.
+                if (!stillCurrent()) break
+                if (chunk != null) {
+                    lastChunkAt = now()
+                    pump.take(chunk)
+                } else if (now() - lastChunkAt >= stallMs) {
+                    stalled = true
                 }
+                // Every iteration, not only on an empty poll: chunks that trickle in carrying less
+                // audio than the time between them drain the buffer just the same.
+                if (!stalled && pump.starving(now(), audibleUntil())) pump.park()
             }
+            // A stall while parked would leave the written tail stuck in a paused track, and the
+            // drain wait after the pump would watch a head that never moves: resume it to play out.
+            if (stalled && stillCurrent()) pump.resumeParked()
             return StreamPumpResult(pump.written, pump.received, pump.pauses, stalled, pump.ended && !pump.shortWrite)
         }
 
@@ -999,10 +1012,19 @@ class SherpaTtsEngine(
                 if (playing || ended || pendingFrames >= prerollFrames) flush()
             }
 
+            fun starving(nowMs: Long, audibleUntilMs: Long): Boolean =
+                !done && playing && nowMs >= audibleUntilMs - STREAM_STARVE_MARGIN_MS
+
             fun park() {
                 pause()
                 playing = false
                 pauses++
+            }
+
+            fun resumeParked() {
+                if (playing || pauses == 0) return
+                play()
+                playing = true
             }
 
             private fun flush() {

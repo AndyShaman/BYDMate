@@ -131,11 +131,12 @@ class VoiceControllerSessionTest {
         every { speaking } returns MutableStateFlow(false)
     }
 
+    @Suppress("LongParameterList") // test factory: every collaborator is an overridable default
     private fun makeController(
         continuousAsr: ContinuousAsr,
         dispatcher: ActionDispatcher,
         agentOrchestrator: AgentOrchestrator = mockk<AgentOrchestrator>().also {
-            coEvery { it.ask(any(), any()) } returns AgentResult.Disabled
+            coEvery { it.ask(any(), any(), any()) } returns AgentResult.Disabled
             coEvery { it.noteAction(any()) } returns Unit
             // Default: no pending agent question (individual tests override AFTER construction).
             coEvery { it.expectsFollowUp() } returns false
@@ -272,7 +273,7 @@ class VoiceControllerSessionTest {
         val askCancelled = CompletableDeferred<Unit>()
         val releaseAsk = CompletableDeferred<Unit>()
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } coAnswers {
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } coAnswers {
             askStarted.complete(Unit)
             try {
                 releaseAsk.await()
@@ -334,7 +335,7 @@ class VoiceControllerSessionTest {
         val askCancelled = CompletableDeferred<Unit>()
         val releaseAsk = CompletableDeferred<Unit>()
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } coAnswers {
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } coAnswers {
             askStarted.complete(Unit)
             try {
                 releaseAsk.await()
@@ -376,7 +377,7 @@ class VoiceControllerSessionTest {
         val askCancelled = CompletableDeferred<Unit>()
         val releaseAsk = CompletableDeferred<Unit>()
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } coAnswers {
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } coAnswers {
             askStarted.complete(Unit)
             try {
                 releaseAsk.await()
@@ -524,7 +525,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Уточните, пожалуйста")
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Answer("Уточните, пожалуйста")
         coEvery { agentOrchestrator.noteAction(any()) } returns Unit
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
         val controller = makeController(fakeAsr, dispatcher, agentOrchestrator = agentOrchestrator)
@@ -767,7 +768,7 @@ class VoiceControllerSessionTest {
         every { audioCapture.captureSession(any()) } returns rawFrames
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Готово")
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Answer("Готово")
         coEvery { agentOrchestrator.noteAction(any()) } returns Unit
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
@@ -824,7 +825,7 @@ class VoiceControllerSessionTest {
         every { audioCapture.captureSession(any()) } returns rawFrames
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Готово")
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } returns AgentResult.Answer("Готово")
         coEvery { agentOrchestrator.noteAction(any()) } returns Unit
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
@@ -1322,7 +1323,7 @@ class VoiceControllerSessionTest {
         val askCancelled = CompletableDeferred<Unit>()
         val agentOrchestrator = mockk<AgentOrchestrator>()
         // Ask hangs forever — simulates a slow or stuck LLM SSE stream.
-        coEvery { agentOrchestrator.ask(any(), any()) } coAnswers {
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } coAnswers {
             askStarted.complete(Unit)
             try {
                 CompletableDeferred<AgentResult>().await() // blocked until cancelled
@@ -1435,8 +1436,8 @@ class VoiceControllerSessionTest {
         val releaseAsk = CompletableDeferred<Unit>()
         val lateSentenceFired = CompletableDeferred<Unit>()
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } coAnswers {
-            val onSentence = secondArg<(String) -> Unit>()
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } coAnswers {
+            val onSentence = thirdArg<(String) -> Unit>()
             askStarted.complete(Unit)
             // Swallow the hard stop's cancellation, then emit one more sentence — models the
             // real SSE loop running past the cancellation until its next suspension point.
@@ -1520,8 +1521,8 @@ class VoiceControllerSessionTest {
         val releaseAsk = CompletableDeferred<Unit>()
         val lateSentenceFired = CompletableDeferred<Unit>()
         val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } coAnswers {
-            val onSentence = secondArg<(String) -> Unit>()
+        coEvery { agentOrchestrator.ask(any(), any(), any()) } coAnswers {
+            val onSentence = thirdArg<(String) -> Unit>()
             askStarted.complete(Unit)
             // Survives the hard stop's cancellation: models the real SSE loop still running
             // on the HTTP thread and delivering one more sentence long after the stop.
@@ -1577,7 +1578,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val agent = mockk<AgentOrchestrator>()
-        coEvery { agent.ask(any(), any()) } returns AgentResult.Answer(
+        coEvery { agent.ask(any(), any(), any()) } returns AgentResult.Answer(
             "Включаю", listOf(AgentToolOutcome("play_music", true)))
         coEvery { agent.noteAction(any()) } returns Unit
         coEvery { agent.expectsFollowUp() } returns false
@@ -1606,7 +1607,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val agent = mockk<AgentOrchestrator>()
-        coEvery { agent.ask(any(), any()) } returns AgentResult.Answer(
+        coEvery { agent.ask(any(), any(), any()) } returns AgentResult.Answer(
             "Включаю", listOf(AgentToolOutcome("play_music", true)))
         coEvery { agent.noteAction(any()) } returns Unit
         coEvery { agent.expectsFollowUp() } returns false
@@ -1634,7 +1635,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val agent = mockk<AgentOrchestrator>()
-        coEvery { agent.ask(any(), any()) } returns AgentResult.Answer(
+        coEvery { agent.ask(any(), any(), any()) } returns AgentResult.Answer(
             "Заряд 80%", listOf(AgentToolOutcome("get_battery", true)))
         coEvery { agent.noteAction(any()) } returns Unit
         coEvery { agent.expectsFollowUp() } returns false
@@ -1656,7 +1657,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val agent = mockk<AgentOrchestrator>()
-        coEvery { agent.ask(any(), any()) } returns AgentResult.Answer(
+        coEvery { agent.ask(any(), any(), any()) } returns AgentResult.Answer(
             "Включаю", listOf(AgentToolOutcome("play_music", true)))
         coEvery { agent.noteAction(any()) } returns Unit
         coEvery { agent.expectsFollowUp() } returns false

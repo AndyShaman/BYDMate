@@ -54,24 +54,26 @@ class AgentOrchestratorFillerTest {
     // The default identity's persona is NAVIGATOR (AgentOrchestrator's identity default).
     private val navigatorFillers = listOf("Сейчас посмотрю.", "Секунду, проверяю.", "Минутку.", "Уже смотрю.")
 
-    @Test fun `filler is spoken once when round 1 calls a slow tool`() = runTest {
+    @Test fun `filler is spoken once when round 1 calls a slow tool, through onFiller only`() = runTest {
         coEvery { tools.execute(any()) } returns """{"results":[]}"""
         val backend = FakeBackend(replies = ArrayDeque(listOf(toolCall("web_search"), answer("Нашёл."))))
         val lines = mutableListOf<String>()
+        val fillers = mutableListOf<String>()
         val sentences = mutableListOf<String>()
-        orchestrator(backend, lines).ask("что там на трассе", { s -> sentences += s })
-        assertEquals(1, sentences.size)
-        assertTrue(sentences[0], sentences[0] in navigatorFillers)
-        assertTrue("$lines", lines.any { it == "filler: \"${sentences[0]}\" tool=web_search" })
+        orchestrator(backend, lines).ask("что там на трассе", onFiller = { fillers += it }, onSentence = { sentences += it })
+        assertEquals(1, fillers.size)
+        assertTrue(fillers[0], fillers[0] in navigatorFillers)
+        assertTrue("$sentences", sentences.none { it in navigatorFillers })
+        assertTrue("$lines", lines.any { it == "filler: \"${fillers[0]}\" tool=web_search" })
     }
 
     @Test fun `filler is not spoken for a fast tool`() = runTest {
         coEvery { tools.execute(any()) } returns """{"ok":true}"""
         val backend = FakeBackend(replies = ArrayDeque(listOf(toolCall("vehicle_control"), answer("Готово."))))
         val lines = mutableListOf<String>()
-        val sentences = mutableListOf<String>()
-        orchestrator(backend, lines).ask("закрой окна", { s -> sentences += s })
-        assertTrue(sentences.isEmpty())
+        val fillers = mutableListOf<String>()
+        orchestrator(backend, lines).ask("закрой окна", onFiller = { fillers += it }, onSentence = {})
+        assertTrue(fillers.isEmpty())
         assertFalse(lines.any { it.startsWith("filler:") })
     }
 
@@ -87,18 +89,22 @@ class AgentOrchestratorFillerTest {
             deltasPerReply = ArrayDeque(listOf(listOf("Секунду, ищу. "))),
         )
         val lines = mutableListOf<String>()
+        val fillers = mutableListOf<String>()
         val sentences = mutableListOf<String>()
-        orchestrator(backend, lines).ask("что там на трассе", { s -> sentences += s })
+        orchestrator(backend, lines).ask("что там на трассе", onFiller = { fillers += it }, onSentence = { sentences += it })
         assertEquals(listOf("Секунду, ищу."), sentences)
+        assertTrue(fillers.isEmpty())
         assertFalse(lines.any { it.startsWith("filler:") })
     }
 
-    @Test fun `filler is not spoken when onSentence is null`() = runTest {
+    @Test fun `filler is not spoken when onFiller is null`() = runTest {
         coEvery { tools.execute(any()) } returns """{"results":[]}"""
         val backend = FakeBackend(replies = ArrayDeque(listOf(toolCall("web_search"), answer("Нашёл."))))
         val lines = mutableListOf<String>()
-        val result = orchestrator(backend, lines).ask("что там на трассе")
+        val sentences = mutableListOf<String>()
+        val result = orchestrator(backend, lines).ask("что там на трассе") { sentences += it }
         assertEquals("Нашёл.", (result as AgentResult.Answer).text)
+        assertTrue("$sentences", sentences.none { it in navigatorFillers })
         assertFalse(lines.any { it.startsWith("filler:") })
     }
 
@@ -108,28 +114,33 @@ class AgentOrchestratorFillerTest {
             toolCall("get_weather"), toolCall("find_chargers"), answer("Готово."),
         )))
         val lines = mutableListOf<String>()
-        val sentences = mutableListOf<String>()
-        orchestrator(backend, lines).ask("погода и зарядки", { s -> sentences += s })
-        assertEquals(1, sentences.size)
-        assertTrue(sentences[0], sentences[0] in navigatorFillers)
+        val fillers = mutableListOf<String>()
+        orchestrator(backend, lines).ask("погода и зарядки", onFiller = { fillers += it }, onSentence = {})
+        assertEquals(1, fillers.size)
+        assertTrue(fillers[0], fillers[0] in navigatorFillers)
         assertEquals(1, lines.count { it.startsWith("filler:") })
     }
 
     @Test fun `filler never reaches history or the answer text`() = runTest {
         coEvery { tools.execute(any()) } returns """{"results":[]}"""
-        val backend = FakeBackend(replies = ArrayDeque(listOf(toolCall("web_search"), answer("Нашёл."))))
+        val backend = FakeBackend(replies = ArrayDeque(listOf(toolCall("web_search"), answer("Нашёл."), answer("Ещё раз нашёл."))))
         val orch = orchestrator(backend)
-        val result = orch.ask("что там на трассе") { } as AgentResult.Answer
+        val fillers = mutableListOf<String>()
+        val result = orch.ask("что там на трассе", onFiller = { fillers += it }, onSentence = {}) as AgentResult.Answer
+        assertEquals(1, fillers.size)
         assertEquals("Нашёл.", result.text)
-        navigatorFillers.forEach { assertFalse(result.text.contains(it)) }
+        assertFalse(result.text.contains(fillers[0]))
 
         orch.ask("а ещё раз")  // same clock tick: history survives the TTL and is replayed
-        val replayed = backend.requests[1]
+        // The first turn made two requests (tool round + answer); the next turn's request is the third.
+        assertEquals(3, backend.requests.size)
+        val replayed = backend.requests[2]
+        assertTrue(replayed.any { it is AgentMessage.Assistant && it.content == "Нашёл." })
         replayed.filterIsInstance<AgentMessage.Assistant>().forEach { msg ->
-            navigatorFillers.forEach { filler -> assertFalse(msg.content?.contains(filler) == true) }
+            assertFalse(msg.content?.contains(fillers[0]) == true)
         }
         replayed.filterIsInstance<AgentMessage.Tool>().forEach { msg ->
-            navigatorFillers.forEach { filler -> assertFalse(msg.content.contains(filler)) }
+            assertFalse(msg.content.contains(fillers[0]))
         }
     }
 }
