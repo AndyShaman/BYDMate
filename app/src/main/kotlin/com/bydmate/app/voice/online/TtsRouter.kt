@@ -434,7 +434,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         internal const val PHRASE_CACHE_ENTRIES = 48
         // Part of every phrase key: bump when the stored format or the synthesis request changes
         // so phrases persisted by an older build are never replayed.
-        private const val PHRASE_FORMAT = 2 // v2: file header gained a CRC32 check, see PhraseDiskCache
+        // v2: file header gained a CRC32 check, see PhraseDiskCache.
+        // v3: a take is frozen once cached; re-roll every phrase after the filler text change.
+        private const val PHRASE_FORMAT = 3
         private const val TIER_MEMORY = "memory"
         private const val TIER_DISK = "disk"
     }

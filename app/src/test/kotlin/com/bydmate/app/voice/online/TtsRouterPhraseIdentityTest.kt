@@ -207,4 +207,26 @@ class TtsRouterPhraseIdentityTest {
         assertEquals(1, phraseFiles(dir).size)
         assertEquals(1, router.phraseCacheSizeForTest())
     }
+
+    @Test
+    fun `a phrase cached by a v2 build is re-synthesized once and stored under a v3 key`() {
+        val dir = tmp.newFolder()
+        val key = "minimax|MALE|voice-a|Готово."
+        PhraseDiskCache(dir).write("v2|$key", TtsPcm(floatArrayOf(0.9f, 0.9f, 0.9f), 24_000))
+        val gate = CompletableDeferred<Unit>().apply { complete(Unit) }
+        val backend = GatedIdentityBackend(gate = gate)
+        val delegate = FakeTtsEngine()
+        val scope = testScope()
+        val router = TtsRouter(
+            delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" },
+            scope = scope, phraseDir = dir,
+        )
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        awaitQuiet(scope)
+        assertEquals("the old take must not be replayed", listOf("Готово."), backend.synthesized)
+        assertEquals(2, delegate.playPcmCalls.single().first.size)
+        assertTrue(PhraseDiskCache(dir).read("v3|$key") != null)
+        assertEquals("the v2 file is left for the prune to age out", 2, phraseFiles(dir).size)
+    }
 }

@@ -11,6 +11,14 @@ object AgentNameMatcher {
         return tokens(transcript).any { tokenMatches(it, target) }
     }
 
+    /** Whether the first word is the name ("леш посмотри" for "Лёша"), under the same fuzzy
+     *  rule as [matches]; a transcript that is only the name counts. */
+    fun startsWithName(transcript: String, name: String): Boolean {
+        val target = normalize(name)
+        if (target.isEmpty()) return false
+        return tokens(transcript).firstOrNull()?.let { tokenMatches(it, target) } ?: false
+    }
+
     /** Drops a leading name token ("Лео, открой окно" -> "открой окно") so NLU/agent see
      *  the command itself; a transcript that is ONLY the name is returned unchanged. */
     fun stripLeadingName(transcript: String, name: String): String {
