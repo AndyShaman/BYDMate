@@ -353,11 +353,6 @@
     <string name="trip_detail_cost_label">Кошт</string>
     <string name="trip_detail_date_pattern">EEEE, d MMMM</string>
     <string name="trip_detail_close">Закрыць</string>
-    <string name="trip_detail_group_distance">Прабег</string>
-    <string name="trip_detail_group_time">Час</string>
-    <string name="trip_detail_group_energy">Энергія</string>
-    <string name="trip_detail_group_money">Грошы</string>
-    <string name="trip_detail_group_weather">Надвор’е</string>
     <string name="trip_detail_odometer_start_label">Адометр на старце</string>
     <string name="trip_detail_odometer_end_label">Адометр на фінішы</string>
     <string name="trip_detail_odometer_label">Адометр</string>

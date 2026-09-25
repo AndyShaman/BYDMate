@@ -323,11 +323,6 @@
     <string name="trip_detail_cost_label">Custo</string>
     <string name="trip_detail_date_pattern">EEEE, d \'de\' MMMM</string>
     <string name="trip_detail_close">Fechar</string>
-    <string name="trip_detail_group_distance">Percurso</string>
-    <string name="trip_detail_group_time">Tempo</string>
-    <string name="trip_detail_group_energy">Energia</string>
-    <string name="trip_detail_group_money">Custos</string>
-    <string name="trip_detail_group_weather">Clima</string>
     <string name="trip_detail_odometer_start_label">Hodômetro na partida</string>
     <string name="trip_detail_odometer_end_label">Hodômetro na chegada</string>
     <string name="trip_detail_odometer_label">Hodômetro</string>
