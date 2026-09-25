@@ -22,8 +22,10 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridLayoutInfo
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.toOffset
@@ -876,7 +879,7 @@ private val AUTO_SCROLL_STEP = 16.dp
 internal class RuleCell(val id: Long, val index: Int, val rect: Rect)
 
 /** What the drag needs of the LazyColumn or the LazyVerticalGrid it runs in. */
-private interface RuleCells {
+internal interface RuleCells {
     val scroll: ScrollableState
     /** List rows only move up and down; grid cards follow the finger both ways. */
     val vertical: Boolean
@@ -889,16 +892,34 @@ private interface RuleCells {
     fun pin()
 }
 
+/**
+ * The rules on screen of the last layout pass, mapped once per pass: the drag reads them every
+ * frame, and a new pass comes with a new layout info object.
+ */
+private class LaidOutCells<T : Any>(private val map: (T) -> List<RuleCell>) {
+    private var laidOut: T? = null
+    private var cells = emptyList<RuleCell>()
+
+    fun of(info: T): List<RuleCell> {
+        if (info !== laidOut) {
+            cells = map(info)
+            laidOut = info
+        }
+        return cells
+    }
+}
+
 private class ListCells(private val state: LazyListState) : RuleCells {
     override val scroll: ScrollableState get() = state
     override val vertical = true
     override val viewportHeight: Int get() = state.layoutInfo.viewportSize.height
-    override fun visible(): List<RuleCell> {
-        val width = state.layoutInfo.viewportSize.width.toFloat()
-        return state.layoutInfo.visibleItemsInfo.mapNotNull { item ->
+    private val laidOut = LaidOutCells<LazyListLayoutInfo> { info ->
+        val width = info.viewportSize.width.toFloat()
+        info.visibleItemsInfo.mapNotNull { item ->
             (item.key as? Long)?.let { RuleCell(it, item.index, Rect(0f, item.offset.toFloat(), width, (item.offset + item.size).toFloat())) }
         }
     }
+    override fun visible(): List<RuleCell> = laidOut.of(state.layoutInfo)
     override fun pin() = state.requestScrollToItem(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
 }
 
@@ -906,21 +927,24 @@ private class GridCells(private val state: LazyGridState) : RuleCells {
     override val scroll: ScrollableState get() = state
     override val vertical = false
     override val viewportHeight: Int get() = state.layoutInfo.viewportSize.height
-    override fun visible(): List<RuleCell> = state.layoutInfo.visibleItemsInfo.mapNotNull { item ->
-        (item.key as? Long)?.let { RuleCell(it, item.index, Rect(item.offset.toOffset(), item.size.toSize())) }
+    private val laidOut = LaidOutCells<LazyGridLayoutInfo> { info ->
+        info.visibleItemsInfo.mapNotNull { item ->
+            (item.key as? Long)?.let { RuleCell(it, item.index, Rect(item.offset.toOffset(), item.size.toSize())) }
+        }
     }
+    override fun visible(): List<RuleCell> = laidOut.of(state.layoutInfo)
     override fun pin() = state.requestScrollToItem(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
 }
 
 /**
  * A rule held and dragged in the list or the grid. The lifted card follows the finger; once its
  * centre is over another rule it takes that rule's place in [order] and the layout re-flows
- * under it. Nothing is saved while the finger is down: the drop reports one move, from where
- * the rule was lifted to where it was let go. A filter switched or a rule added or deleted under
- * the finger lets go without a move.
+ * under it. Nothing is saved while the finger is down: the release reports one move, from where
+ * the rule was lifted to where it was let go. A cancelled gesture, or a filter switched or a rule
+ * added or deleted under the finger, lets go without a move: see [finish].
  */
 @Stable
-private class RuleDragState(
+internal class RuleDragState(
     private val cells: RuleCells,
     private val rules: State<List<RuleEntity>>,
     private val onDrop: State<(moved: Long, target: Long) -> Unit>,
@@ -987,8 +1011,7 @@ private class RuleDragState(
         if (now !== checkedRules) {
             checkedRules = now
             if (!sameRules(order, now)) {
-                held = null
-                liftedFrom = null
+                finish(commit = false)
                 return
             }
         }
@@ -1003,10 +1026,22 @@ private class RuleDragState(
         return liftedRect.topLeft - slot.rect.topLeft
     }
 
-    /** Lets go: a rule that ended up elsewhere is moved into the place of the rule that was there. */
-    fun drop() {
+    /**
+     * Ends the hold, every way it ends. A finger lifted ([commit]) takes the card's last position
+     * and moves a rule that ended up elsewhere into the place of the rule that was there, once,
+     * while the rules shown are still the ones held over. A cancelled gesture or changed rules
+     * save nothing, and the card drops back into the list's own order.
+     */
+    fun finish(commit: Boolean) {
         val id = held ?: return
+        val save = commit && sameRules(order, rules.value)
+        // The finger can cross onto the next rule and lift before a frame has taken the move.
+        if (save) follow()
         held = null
+        if (!save) {
+            liftedFrom = null
+            return
+        }
         val target = start.getOrNull(order.indexOf(id))
         if (target != null && target != id) onDrop.value(id, target)
     }
@@ -1108,22 +1143,27 @@ private fun rememberRuleDrag(cells: RuleCells, rules: List<RuleEntity>, onDrop: 
 /**
  * Long press lifts the rule under the finger, dragging moves it, letting go drops it. Taps and
  * scrolling reach the cards and the list as before: a scroll that starts first cancels the press.
+ * Only a finger lifted saves the move: a gesture cancelled by the system, or by the list leaving
+ * the screen (a switch to the grid, another tab), drops the card back.
  */
 private fun Modifier.ruleDrag(drag: RuleDragState): Modifier = pointerInput(drag) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
         if (!drag.lift(press.position)) return@awaitEachGesture
+        var released = false
         try {
             // Held, the gesture is the drag's alone: every change is consumed on the Initial pass,
             // before the card, its switch and buttons see it, so letting go is never also a tap.
             do {
                 val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == press.id }
                 if (change != null && change.pressed) drag.dragBy(change.positionChange())
+                // A system cancel arrives as an up already consumed; a finger lifted does not.
+                released = change?.changedToUp() == true
                 change?.consume()
             } while (change?.pressed == true)
         } finally {
-            drag.drop()
+            drag.finish(commit = released)
         }
     }
 }

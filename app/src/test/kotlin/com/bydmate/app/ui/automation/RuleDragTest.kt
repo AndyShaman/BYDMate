@@ -1,7 +1,11 @@
 package com.bydmate.app.ui.automation
 
+import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import com.bydmate.app.data.local.entity.RuleEntity
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -29,6 +33,9 @@ class RuleDragTest {
 
     /** The lifted grid card centred at ([x], [y]). */
     private fun gridCard(x: Float, y: Float) = Rect(x - 100f, y - 75f, x + 100f, y + 75f)
+
+    private fun rule(id: Long, enabled: Boolean = true) =
+        RuleEntity(id = id, name = "r$id", enabled = enabled, triggers = "[]", actions = "[]", createdAt = id)
 
     // --- Where the held rule goes ---
 
@@ -94,8 +101,6 @@ class RuleDragTest {
     }
 
     @Test fun `the drag lets go when the rules shown change, not when they re-order or update`() {
-        fun rule(id: Long, enabled: Boolean = true) =
-            RuleEntity(id = id, name = "r$id", enabled = enabled, triggers = "[]", actions = "[]", createdAt = id)
         val held = listOf(1L, 2L, 3L)
         assertTrue(sameRules(held, listOf(rule(3), rule(1), rule(2))))
         assertTrue(sameRules(held, listOf(rule(1), rule(2, enabled = false), rule(3))))
@@ -157,6 +162,79 @@ class RuleDragTest {
     @Test fun `grid - a gutter keeps an on-screen held rule where it is`() {
         val visible = (1L..9L).map { gridCell(it) }
         assertNull(dragTarget(visible, (1L..9L).toList(), held = 1L, card = gridCard(208f, 237f)))
+    }
+
+    // --- How a hold ends: rules 1-3 in a list whose layout stays as it was at the lift ---
+
+    private val rules = mutableStateOf(listOf(rule(1), rule(2), rule(3)))
+    private val saved = mutableListOf<Pair<Long, Long>>()
+    private val drag = RuleDragState(
+        object : RuleCells {
+            override val scroll = ScrollableState { 0f }
+            override val vertical = true
+            override val viewportHeight = 500
+            override fun visible() = listOf(row(1L, 0f), row(2L, 106f), row(3L, 212f))
+            override fun pin() = Unit
+        },
+        rules,
+        mutableStateOf<(Long, Long) -> Unit>({ moved, target -> saved += moved to target }),
+    )
+
+    private fun shownIds() = drag.shown(rules.value).map { it.id }
+
+    /** Lifts rule 1 and drags the card's centre onto rule 2 (156), with no frame in between. */
+    private fun holdOverTwo() {
+        assertTrue(drag.lift(Offset(10f, 50f)))
+        drag.dragBy(Offset(0f, 106f))
+    }
+
+    @Test fun `a release right after crossing onto the next rule saves that move`() {
+        holdOverTwo()
+        drag.finish(commit = true)
+        assertEquals(listOf(1L to 2L), saved)
+        assertNull(drag.held)
+        assertEquals(listOf(2L, 1L, 3L), shownIds())
+    }
+
+    @Test fun `a release the layout is late for saves the last move a frame took`() {
+        holdOverTwo()
+        runBlocking { drag.frame(edge = 64f, maxStep = 16f) }
+        drag.dragBy(Offset(0f, 106f))
+        drag.finish(commit = true)
+        assertEquals(listOf(1L to 2L), saved)
+    }
+
+    @Test fun `a release after the rules shown changed saves nothing`() {
+        holdOverTwo()
+        rules.value = listOf(rule(1), rule(3))
+        drag.finish(commit = true)
+        assertEquals(emptyList<Pair<Long, Long>>(), saved)
+        assertEquals(listOf(1L, 3L), shownIds())
+    }
+
+    @Test fun `rules shown changing under the finger drop the card back on the next frame`() {
+        holdOverTwo()
+        rules.value = listOf(rule(1), rule(3))
+        runBlocking { drag.frame(edge = 64f, maxStep = 16f) }
+        assertNull(drag.held)
+        drag.finish(commit = true)
+        assertEquals(emptyList<Pair<Long, Long>>(), saved)
+    }
+
+    @Test fun `a cancelled gesture saves nothing and the card drops back`() {
+        holdOverTwo()
+        drag.finish(commit = false)
+        assertEquals(emptyList<Pair<Long, Long>>(), saved)
+        assertNull(drag.held)
+        assertEquals(listOf(1L, 2L, 3L), shownIds())
+    }
+
+    @Test fun `a finger lifted saves the move exactly once`() {
+        holdOverTwo()
+        drag.finish(commit = true)
+        drag.finish(commit = true)
+        drag.finish(commit = false)
+        assertEquals(listOf(1L to 2L), saved)
     }
 
     // --- Auto-scroll: a 1000 px list, 64 px bands ---
