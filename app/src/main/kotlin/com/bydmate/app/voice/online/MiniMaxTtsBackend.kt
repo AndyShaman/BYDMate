@@ -7,8 +7,10 @@ import com.bydmate.app.voice.TtsGender
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -80,22 +82,27 @@ class MiniMaxTtsBackend(
             if (key.isBlank()) throw IOException("MiniMax TTS: connection not configured")
             val voice = if (gender == TtsGender.MALE) MALE_VOICE else FEMALE_VOICE
             val call = http.newCall(officialRequest(key, officialPayload(text, voice, stream = true)))
-            // A blocked read never observes coroutine cancellation by itself: the sibling watcher
-            // cancels the OkHttp call on barge-in, unblocking it (same pattern as chatStream).
-            // UNDISPATCHED: the watcher enters its try before execute() blocks, so a cancellation
-            // that lands before the watcher would have been dispatched still runs its finally.
-            val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
-                try {
-                    awaitCancellation()
-                } finally {
-                    call.cancel()
-                }
-            }
+            callWithCancelWatcher(call) { call.execute().use { resp -> readAudioStream(streamSource(resp), onChunk) } }
+        }
+    }
+
+    /** A blocked read never observes coroutine cancellation by itself: the sibling watcher
+     *  cancels [call] on barge-in or a router timeout, unblocking [block] (same pattern for the
+     *  streaming and the whole-sentence official transport). UNDISPATCHED: the watcher enters its
+     *  try before [block] starts blocking, so a cancellation that lands before the watcher would
+     *  have been dispatched still runs its finally. */
+    private suspend fun <T> callWithCancelWatcher(call: Call, block: () -> T): T = coroutineScope {
+        val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
             try {
-                call.execute().use { resp -> readAudioStream(streamSource(resp), onChunk) }
+                awaitCancellation()
             } finally {
-                watcher.cancel()
+                call.cancel()
             }
+        }
+        try {
+            block()
+        } finally {
+            watcher.cancel()
         }
     }
 
@@ -159,14 +166,18 @@ class MiniMaxTtsBackend(
         }
     }
 
-    private fun synthesizeOfficial(key: String, text: String, voice: String): TtsPcm =
-        http.newCall(officialRequest(key, officialPayload(text, voice, stream = false))).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("MiniMax TTS HTTP ${resp.code}")
-            val body = JSONObject(resp.body?.string() ?: throw IOException("MiniMax TTS: empty body"))
-            checkBaseResp(body.getJSONObject("base_resp"))
-            val bytes = hexToBytes(body.getJSONObject("data").getString("audio"))
-            WavCodec.decodePcm16(bytes, OFFICIAL_SAMPLE_RATE)
+    private suspend fun synthesizeOfficial(key: String, text: String, voice: String): TtsPcm {
+        val call = http.newCall(officialRequest(key, officialPayload(text, voice, stream = false)))
+        return callWithCancelWatcher(call) {
+            call.execute().use { resp ->
+                if (!resp.isSuccessful) throw IOException("MiniMax TTS HTTP ${resp.code}")
+                val body = JSONObject(resp.body?.string() ?: throw IOException("MiniMax TTS: empty body"))
+                checkBaseResp(body.getJSONObject("base_resp"))
+                val bytes = hexToBytes(body.getJSONObject("data").getString("audio"))
+                WavCodec.decodePcm16(bytes, OFFICIAL_SAMPLE_RATE)
+            }
         }
+    }
 
     private fun officialPayload(text: String, voice: String, stream: Boolean) = JSONObject().apply {
         put("model", MODEL)
