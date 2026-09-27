@@ -2,6 +2,7 @@ package com.bydmate.app.data.vehicle
 
 import android.util.Log
 import com.bydmate.app.data.autoservice.SentinelDecoder
+import com.bydmate.app.data.nativestack.FidAddresses
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -44,12 +45,14 @@ fun interface DriveModeReader {
  * Status-classified single write with a last-instant guard, supplied by
  * VehicleApiImpl.doWriteOutcome. [beforeSend] runs after the write's (suspending) audit-row
  * insert, then inside HelperClient's own transport lock immediately before the transact — no
- * queue wait behind another helper request can separate the check from the send. Returning
- * false aborts the send and the write reports TRANSIENT. Own interface rather than [SeatWriter]
- * because the seat channel has no equivalent guard.
+ * queue wait behind another helper request can separate the check from the send. It is handed a
+ * [LockedReader] bound to that same lock, so the guard's own re-check reads through the daemon
+ * instead of a separately blockable ADB call. Returning false aborts the send and the write
+ * reports TRANSIENT. Own interface rather than [SeatWriter] because the seat channel has no
+ * equivalent guard.
  */
 fun interface DriveModeWriter {
-    suspend fun write(actionName: String, value: Int, beforeSend: suspend () -> Boolean): WriteOutcome
+    suspend fun write(actionName: String, value: Int, beforeSend: suspend (LockedReader) -> Boolean): WriteOutcome
 }
 
 /**
@@ -116,7 +119,8 @@ class DriveModeChannel(
         // The guard runs inside writer.write, after its audit-log insert, then inside
         // HelperClient's own transport lock right before the transact — the actual
         // last-instant re-check, see terrainSpeedGuard.
-        val status = writer.write(mode.actionName, mode.value) { terrainSpeedGuard(a) }.also { a.status = it }
+        val status = writer.write(mode.actionName, mode.value) { locked -> terrainSpeedGuard(a, locked) }
+            .also { a.status = it }
         a.speedVerdict?.let { return a.done(Result.SPEED, it, null) }
         if (status == WriteOutcome.TRANSIENT) return a.done(Result.UNREACHABLE, "unreachable", current)
         repeat(READBACK_ATTEMPTS) {
@@ -132,8 +136,12 @@ class DriveModeChannel(
     private suspend fun readSpeed(): Int? =
         runCatching { speed() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
 
-    /** [DriveModeWriter.beforeSend] guard: for a terrain mode, re-reads speed one last time —
-     *  this runs after doWriteOutcome's audit-row insert, inside HelperClient's own transport
+    /** [DriveModeWriter.beforeSend] guard: for a terrain mode, re-reads speed one last time
+     *  through [reader] — the daemon, not ADB (2026-09-27, review round 3): AutoserviceClient's
+     *  ADB path shares a `@Synchronized` monitor with every other in-flight ADB call, and a guard
+     *  blocked on THAT monitor cannot be interrupted by HelperClient's own guard timeout, holding
+     *  the transport mutex — and every unrelated helper call queued behind it — past its budget.
+     *  This runs after doWriteOutcome's audit-row insert, inside HelperClient's own transport
      *  lock right before EACH transact attempt (retry included), so a speed that only rose
      *  during that suspend, while queued behind another helper request, or between a dead-binder
      *  retry, is still caught — and refuses when it is now unknown or above the limit; a
@@ -141,21 +149,33 @@ class DriveModeChannel(
      *  BEFORE the read, not after: HelperClient bounds this guard to its own GUARD_TIMEOUT_MS,
      *  well under the shared write timeout, and a cut-off read must still leave switchTo seeing
      *  "speed unknown" instead of falling through to a bare "unreachable" — a timeout here is a
-     *  refusal, not a crashed read (2026-09-27, review round 2). */
-    private suspend fun terrainSpeedGuard(a: Attempt): Boolean {
+     *  refusal, not a crashed read. */
+    private suspend fun terrainSpeedGuard(a: Attempt, locked: LockedReader): Boolean {
         if (!a.mode.terrain) return true
         a.speedVerdict = "speed unknown"
         var readFinished = false
         try {
-            a.kmh = readSpeed()
+            a.kmh = readGuardSpeed(locked)
             readFinished = true
         } finally {
             if (!readFinished) Log.w(TAG, "DriveMode: guard speed read cut off, refusing as speed unknown")
         }
+        Log.i(TAG, "DriveMode: guard speed source=daemon value=${a.kmh ?: "unknown"}")
         val kmh = a.kmh
         if (kmh != null && kmh <= DriveMode.TERRAIN_MAX_SPEED_KMH) { a.speedVerdict = null; return true }
         if (kmh != null) a.speedVerdict = "too fast"
         return false
+    }
+
+    /** Rounded UP, not truncated — same reasoning as VehicleApiImpl's pre-write speed closure: a
+     *  plain toInt() would turn 15.9 km/h into 15 and let a terrain mode through above the limit.
+     *  A throwing read is a failed read (unknown), not a verdict. */
+    private suspend fun readGuardSpeed(locked: LockedReader): Int? {
+        val address = FidAddresses.of("speed")
+        return runCatching { locked.readFloat(address.device, address.fid) }
+            .onFailure { if (it is CancellationException) throw it }
+            .getOrNull()
+            ?.let { kotlin.math.ceil(it).toInt() }
     }
 
     /** What one attempt has seen so far; [done] writes its single log line. [kmh] is mutable:

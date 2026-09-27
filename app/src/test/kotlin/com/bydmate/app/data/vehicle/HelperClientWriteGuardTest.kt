@@ -5,6 +5,7 @@ import android.os.IBinder
 import android.os.IInterface
 import android.os.Parcel
 import com.bydmate.app.helper.HelperBinderProtocol
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -87,6 +88,30 @@ class HelperClientWriteGuardTest {
         }
     }
 
+    /** Replies to a single-item TX_READ_BATCH with [floatBits] (raw IEEE-754 bits, status 0) and
+     *  to TX_WRITE with [writeStatus]; records every transact code it sees, in order, so a test
+     *  can prove the guard's batch-read runs before the write, on this SAME binder. */
+    private class RecordingFake(private val floatBits: Int, private val writeStatus: Int = 1) : FakeIBinder() {
+        val codes = mutableListOf<Int>()
+        override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            codes += code
+            when (code) {
+                HelperBinderProtocol.TX_READ_BATCH -> {
+                    reply!!.writeInt(1)         // one item
+                    reply.writeInt(0)           // status ok
+                    reply.writeInt(floatBits)   // raw tx=7 word
+                }
+                HelperBinderProtocol.TX_WRITE -> {
+                    reply!!.writeInt(writeStatus)
+                    reply.writeInt(0)
+                }
+                else -> return false
+            }
+            reply.setDataPosition(0)
+            return true
+        }
+    }
+
     private fun CountDownLatch.awaitOrFail(label: String) {
         assertTrue(label, await(LATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS))
     }
@@ -116,16 +141,24 @@ class HelperClientWriteGuardTest {
                 try {
                     fake.started.awaitOrFail("the first call never reached transact")
 
+                    // Test seam, not a countdown placed before the writeStatus call below: that
+                    // race let a scheduler pause pass a guard-before-the-mutex regression, since
+                    // "about to call writeStatus" and "about to acquire the mutex" are not the
+                    // same instant. onBeforeLock fires exactly once per transact, right before the
+                    // mutex.withLock in transactParsed — set only now, after the first call's own
+                    // (no-op, onBeforeLock was still null) firing has already happened, so only
+                    // the second call's firing reaches this latch.
+                    client.onBeforeLock = { secondCallEntered.countDown() }
+
                     val secondCall = async(Dispatchers.IO) {
                         runCatching {
-                            secondCallEntered.countDown() // counted right before the writeStatus call below
                             client.writeStatus(dev = 1023, fid = 1276260400, value = 4) {
                                 guardCalls.incrementAndGet()
                                 !speedNowHigh.get()
                             }
                         }
                     }
-                    secondCallEntered.awaitOrFail("the second call never started")
+                    secondCallEntered.awaitOrFail("the second call never reached the lock")
 
                     // The mutex is still held by the (blocked) first call: a short bounded wait
                     // gives a regression — the guard running BEFORE the mutex is acquired — a
@@ -174,20 +207,27 @@ class HelperClientWriteGuardTest {
             withTimeout(TEST_TIMEOUT_MS) {
                 val fake = liveFake(status = 1)
                 val client = clientWith(fake)
-                val started = System.nanoTime()
+                // Deterministic in place of a wall-clock "< 1800ms" assertion (flaky under load,
+                // 2026-09-27 review round 3): the guard observes ITS OWN cancellation when
+                // GUARD_TIMEOUT_MS (1000 ms) cuts it off mid-delay, well before its own
+                // SLOW_GUARD_DELAY_MS (1500 ms) — which proves the cutoff regardless of how slow
+                // or loaded the test machine is.
+                val guardCancelled = CountDownLatch(1)
                 val result = runCatching {
                     client.writeStatus(dev = 1023, fid = 1276260400, value = 4) {
-                        // Longer than HelperClient's own GUARD_TIMEOUT_MS (1000 ms) but
-                        // under the shared REQ_TIMEOUT_MS (2000 ms) budget.
-                        delay(SLOW_GUARD_DELAY_MS)
-                        true
+                        try {
+                            delay(SLOW_GUARD_DELAY_MS)
+                            true
+                        } catch (e: CancellationException) {
+                            guardCancelled.countDown()
+                            throw e
+                        }
                     }
                 }
-                val elapsedMs = (System.nanoTime() - started) / 1_000_000
                 assertTrue("a slow guard must be refused, not returned as a plain null status",
                     result.exceptionOrNull() is WriteGuardRefused)
-                assertTrue("a slow guard must not be allowed to eat the whole shared write budget " +
-                    "(took ${elapsedMs}ms)", elapsedMs < SHARED_BUDGET_MARGIN_MS)
+                guardCancelled.awaitOrFail(
+                    "a slow guard must be cut off by its own GUARD_TIMEOUT_MS budget, not merely outrun")
             }
         }
 
@@ -208,6 +248,48 @@ class HelperClientWriteGuardTest {
         }
     }
 
+    @Test
+    fun `the guard's reader runs a batch-read transaction right before the write, on the same binder, with no second lock`() =
+        runBlocking {
+            withTimeout(TEST_TIMEOUT_MS) {
+                val fake = RecordingFake(floatBits = java.lang.Float.floatToRawIntBits(5.0f))
+                val client = clientWith(fake)
+                var readerValue: Float? = null
+                val status = client.writeStatus(dev = 1023, fid = 1276260400, value = 4) { reader ->
+                    readerValue = reader.readFloat(1013, -1807745016)
+                    true
+                }
+                assertEquals(1, status)
+                assertEquals(5.0f, readerValue)
+                // A second mutex.withLock from inside readFloat would deadlock this same coroutine
+                // and time the test out instead of completing; reaching this line already disproves
+                // it. The code order below additionally pins down "right before the write".
+                assertEquals(
+                    "the batch-read must run before the write transact, on the same binder",
+                    listOf(HelperBinderProtocol.TX_READ_BATCH, HelperBinderProtocol.TX_WRITE),
+                    fake.codes,
+                )
+            }
+        }
+
+    @Test
+    fun `a sentinel speed from the batch read is refused, not treated as a real value`() = runBlocking {
+        withTimeout(TEST_TIMEOUT_MS) {
+            val sentinelBits = java.lang.Float.floatToRawIntBits(-1.0f) // "not initialized" sentinel
+            val fake = RecordingFake(sentinelBits)
+            val client = clientWith(fake)
+            val result = runCatching {
+                client.writeStatus(dev = 1023, fid = 1276260400, value = 4) { reader ->
+                    reader.readFloat(1013, -1807745016) != null
+                }
+            }
+            assertTrue("a sentinel speed must refuse the send, not be read as a real value",
+                result.exceptionOrNull() is WriteGuardRefused)
+            assertEquals("the refused write must never reach the binder",
+                listOf(HelperBinderProtocol.TX_READ_BATCH), fake.codes)
+        }
+    }
+
     private companion object {
         /** Hang-guard: no test in this class may block the suite forever. */
         const val TEST_TIMEOUT_MS = 10_000L
@@ -220,8 +302,5 @@ class HelperClientWriteGuardTest {
         const val GUARD_RACE_WINDOW_MS = 200L
         /** Longer than HelperClientImpl's own GUARD_TIMEOUT_MS (1000 ms). */
         const val SLOW_GUARD_DELAY_MS = 1_500L
-        /** Well under the shared REQ_TIMEOUT_MS (2000 ms): proves a slow guard was cut off by
-         *  its own budget, not by the shared timeout. */
-        const val SHARED_BUDGET_MARGIN_MS = 1_800L
     }
 }
