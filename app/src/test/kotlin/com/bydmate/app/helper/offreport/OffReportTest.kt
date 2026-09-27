@@ -239,7 +239,8 @@ class OffReportTest {
         reads[level] = 2
         OffReport.arm(ArmRequest("a1", "tok", 42L, "t", ""))
         work()
-        started = null // the pending pass of the arm
+        started!!.run() // the pending pass of the arm, nothing on disk
+        started = null
         push(level, 0)
         assertTrue(sent.isEmpty())
         assertEquals(OffReportState.SENDING, OffReport.status("a1").queried.state)
@@ -557,6 +558,91 @@ class OffReportTest {
         drainSender()
         assertEquals(1, synchronized(sent) { sent.size } - before)
         assertEquals(1, pending.count())
+    }
+
+    // --- one delivery loop, one event per power-off ---
+
+    @Test fun `an old send of a reused report id deletes only its own event, the newer one still waits`() {
+        answers = { noNet }
+        cycle("x1")
+        val oldKey = pending.list().single().key
+        push(level, 2) // the next drive
+        mono += OffReport.PENDING_BACKOFF_MAX_MS
+        val before = sent.size
+        OffReport.send = realSend
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val calls = AtomicInteger(0)
+        OffReport.sender = { token, chatId, text, _, _ ->
+            synchronized(sent) { sent += Sent(token, chatId, text) }
+            if (calls.incrementAndGet() == 1) {
+                started.countDown()
+                release.await(5, TimeUnit.SECONDS)
+                ok
+            } else {
+                noNet
+            }
+        }
+        arm("x1", "<b>x1 off at ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>") // unchanged report, same id
+        assertTrue(started.await(5, TimeUnit.SECONDS)) // the pass is sending the old event
+        wall += 60_000L
+        push(level, 0) // a newer power-off under the same report id
+        val newKey = "$wall-x1"
+        assertEquals(listOf(oldKey, newKey), pending.list().map { it.key })
+        release.countDown()
+        drainSender()
+        assertEquals(listOf(newKey), pending.list().map { it.key })
+        val texts = synchronized(sent) { sent.drop(before).map { it.text } }
+        assertTrue(texts.first().startsWith("<b>x1 off at ${TelegramReportBuilder.formatTime(wall - 60_000L)}</b>\n"))
+        // Then the newer event's own burst, every attempt meeting no network.
+        assertTrue(texts.size > 1)
+        assertTrue(texts.drop(1).all { it == "<b>x1 off at ${TelegramReportBuilder.formatTime(wall)}</b>" })
+    }
+
+    @Test fun `a power-off while a pass waits on the sender is sent exactly once`() {
+        reads[level] = 2
+        arm("a1")
+        OffReport.send = realSend
+        drainSender()
+        val busy = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        OffReport.send(Runnable { busy.countDown(); release.await(5, TimeUnit.SECONDS) })
+        assertTrue(busy.await(5, TimeUnit.SECONDS))
+        OffReport.arm(ArmRequest("a2", "tok-a2", 42L, "a2 at ${TelegramReportBuilder.TIME_PLACEHOLDER}", ""))
+        push(level, 0) // saved, its burst and the arm's pass both wait
+        OffReport.arm(ArmRequest("a3", "tok-a3", 42L, "a3", "")) // same chat, before the sender runs
+        release.countDown()
+        drainSender()
+        assertEquals(1, synchronized(sent) { sent.size })
+        assertEquals(0, pending.count())
+    }
+
+    @Test fun `a temp file a failed rename left is gone after the send and never comes back`() {
+        reads[level] = 2
+        arm("a1")
+        val key = "$wall-a1"
+        val blocker = File(dir, "$key.rep").apply { mkdirs() } // a non-empty directory: the rename fails
+        File(blocker, "x").writeText("x")
+        push(level, 0)
+        assertEquals("sent from memory though the disk refused it", 1, sent.size)
+        assertFalse(File(dir, "$key.tmp").exists())
+        blocker.deleteRecursively()
+        push(level, 2)
+        arm("b1")
+        assertEquals(1, sent.size)
+        assertTrue(pending.list().isEmpty())
+    }
+
+    @Test fun `a fresh power-off goes out at once while an older report backs off`() {
+        answers = { noNet }
+        cycle("a1")
+        push(level, 2)
+        arm("b1") // its pass meets no network: backoff
+        val before = sent.size
+        answers = { ok }
+        push(level, 0)
+        assertEquals(listOf("<b>off at ${TelegramReportBuilder.formatTime(wall)}</b>"), sent.drop(before).map { it.text })
+        assertEquals(listOf("a1"), pending.list().map { it.id })
     }
 
     @Test fun `a disarm that cannot delete a pending file is not confirmed`() {

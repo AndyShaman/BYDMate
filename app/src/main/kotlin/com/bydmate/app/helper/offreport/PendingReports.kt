@@ -15,7 +15,14 @@ import java.io.IOException
  * token: a pending report goes out with the bot of the report armed at the time. toString never
  * shows the chat or the text.
  */
-internal class PendingReport(val id: String, val chatId: Long, val powerOffMs: Long, val text: String) {
+internal class PendingReport(
+    val id: String,
+    val chatId: Long,
+    val powerOffMs: Long,
+    val text: String,
+    /** The event's identity, its file name without the suffix: a report id is reused, an event is not. */
+    val key: String = "$powerOffMs-${safe(id)}",
+) {
     override fun toString(): String = "PendingReport(id=$id, len=${text.length})"
 }
 
@@ -63,7 +70,7 @@ internal class PendingReports(
         return try {
             if (!dir.isDirectory && !dir.mkdirs()) throw IOException("mkdirs")
             ownerOnly(dir, directory = true)
-            val name = "${report.powerOffMs}-${safe(report.id)}"
+            val name = report.key
             val tmp = File(dir, name + TMP_SUFFIX)
             FileOutputStream(tmp).use { out ->
                 ownerOnly(tmp, directory = false)
@@ -97,9 +104,10 @@ internal class PendingReports(
         return reports.sortedBy { it.powerOffMs }
     }
 
+    /** One event, its report and any temp file a failed save left, so neither comes back. */
     @Synchronized
-    fun delete(id: String) {
-        val gone = files().filter { it.name.endsWith("-${safe(id)}$SUFFIX") }
+    fun delete(key: String) {
+        val gone = listOf(File(dir, key + SUFFIX), File(dir, key + TMP_SUFFIX)).filter { it.exists() }
         gone.forEach { it.delete() }
         if (gone.isNotEmpty()) syncDirQuietly()
     }
@@ -142,7 +150,7 @@ internal class PendingReports(
     private fun trim() {
         val all = list()
         all.take((all.size - MAX).coerceAtLeast(0)).forEach {
-            delete(it.id)
+            delete(it.key)
             Log.i(TAG, "offreport: pending dropped id=${it.id} reason=cap")
         }
     }
@@ -185,7 +193,7 @@ internal class PendingReports(
             if (size !in 1..MAX_TEXT_BYTES) return null
             val text = ByteArray(size).also { input.readFully(it) }
             if (input.read() != -1) return null
-            PendingReport(id, chatId, powerOffMs, String(text, Charsets.UTF_8))
+            PendingReport(id, chatId, powerOffMs, String(text, Charsets.UTF_8), key = file.name.substringBeforeLast('.'))
         }
     } catch (@Suppress("SwallowedException") e: IOException) { // cut short or unreadable: the caller drops it
         null
