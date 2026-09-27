@@ -18,6 +18,8 @@ import com.bydmate.app.domain.battery.BatteryState
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.domain.calculator.RangeEstimate
+import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.data.vehicle.WriteAllowlist
 import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -461,6 +463,27 @@ class AgentToolsReadTest {
     @Test fun `drive mode 4 is snow`() = runTest {
         every { gate.vehicleSnapshot() } returns snapshot().copy(driveMode = 4)
         assertEquals("SNOW", JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).getString("drive_mode"))
+    }
+
+    @Test fun `drive mode reports sand from the target fid, not the stale dev 1006 mapping`() = runTest {
+        // dev=1006 (driveMode) never leaves NORMAL for sand -- the real mode comes from the target fid.
+        every { gate.vehicleSnapshot() } returns snapshot().copy(driveMode = 3)
+        val helper = mockk<HelperClient>()
+        coEvery { helper.read(WriteAllowlist.DRIVE_MODE_DEV, WriteAllowlist.DRIVE_MODE_TARGET_FID, any()) } returns 5L
+        val out = JSONObject(
+            tools().also { it.injectHelperClient(helper) }.execute(AgentToolCall("1", "get_vehicle_state", "{}")),
+        )
+        assertEquals("SAND", out.getString("drive_mode"))
+    }
+
+    @Test fun `drive mode falls back to the dev 1006 mapping when the target read fails`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot().copy(driveMode = 4)
+        val helper = mockk<HelperClient>()
+        coEvery { helper.read(WriteAllowlist.DRIVE_MODE_DEV, WriteAllowlist.DRIVE_MODE_TARGET_FID, any()) } throws RuntimeException("daemon down")
+        val out = JSONObject(
+            tools().also { it.injectHelperClient(helper) }.execute(AgentToolCall("1", "get_vehicle_state", "{}")),
+        )
+        assertEquals("SNOW", out.getString("drive_mode"))
     }
 
     @Test fun `drl 1 is on 2 is off 0 omitted`() = runTest {

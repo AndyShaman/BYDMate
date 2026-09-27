@@ -55,7 +55,9 @@ class VehicleApiImpl @Inject constructor(
     private val driveModeChannel = DriveModeChannel(
         SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
         DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
-        speed = { FidAddresses.of("speed").let { autoservice.getFloat(it.device, it.fid) }?.toInt() },
+        // Rounded UP, not truncated: a plain toInt() turns 15.9 km/h into 15 and lets a
+        // terrain mode through above the owner's 15 km/h limit (finding 2026-09-27).
+        speed = { FidAddresses.of("speed").let { autoservice.getFloat(it.device, it.fid) }?.let { kotlin.math.ceil(it).toInt() } },
     )
 
     // Owns the window position samples taken around a write. A write that fails before the

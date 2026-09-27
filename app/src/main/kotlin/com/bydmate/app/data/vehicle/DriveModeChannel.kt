@@ -46,11 +46,13 @@ fun interface DriveModeReader {
  * while the car holds the emergency flotation mode. In order:
  *  - terrain mode, speed unknown or above [DriveMode.TERRAIN_MAX_SPEED_KMH]
  *                                       → SPEED, nothing read or written beyond the speed
- *  - support flag unreadable            → UNREADABLE, nothing written
- *  - support flag != 0                  → NOT_SUPPORTED, nothing written
+ *  - support flag unreadable / a sentinel → UNREADABLE, nothing written
+ *  - support flag a real non-zero value → NOT_SUPPORTED, nothing written
  *  - target unreadable / a sentinel     → UNREADABLE, nothing written
  *  - target == 10 (flotation)           → FLOTATION, nothing written
  *  - target == requested                → OK ("already"), nothing written
+ *  - terrain mode, speed now unknown or above the limit (re-checked right before the write)
+ *                                       → SPEED, nothing written
  *  - write not accepted (daemon down)   → UNREACHABLE
  *  - target == requested within ~3 s    → OK
  *  - otherwise                          → NOT_CHANGED
@@ -74,7 +76,7 @@ class DriveModeChannel(
     suspend fun actuate(mode: DriveMode): Outcome = mutex.withLock { run(mode) }
 
     private suspend fun run(mode: DriveMode): Outcome {
-        val kmh = runCatching { speed() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+        val kmh = readSpeed()
         val attempt = Attempt(mode, kmh)
         if (mode.terrain && (kmh == null || kmh > DriveMode.TERRAIN_MAX_SPEED_KMH)) {
             return attempt.done(Result.SPEED, if (kmh == null) "speed unknown" else "too fast", null)
@@ -89,11 +91,18 @@ class DriveModeChannel(
         val before = read(WriteAllowlist.DRIVE_MODE_TARGET_FID).also { a.before = it }
         a.probed = true
         if (flag == null) return a.done(Result.UNREADABLE, "support flag unreadable", null)
-        if (flag != 0) return a.done(Result.NOT_SUPPORTED, "not supported", before)
+        val flagValue = SentinelDecoder.decodeInt(flag)
+            ?: return a.done(Result.UNREADABLE, "support flag sentinel", null)
+        if (flagValue != 0) return a.done(Result.NOT_SUPPORTED, "not supported", before)
         val current = before?.let { SentinelDecoder.decodeInt(it) }
             ?: return a.done(Result.UNREADABLE, "target unreadable", null)
         if (current == DriveMode.TARGET_FLOTATION) return a.done(Result.FLOTATION, "flotation", current)
         if (current == mode.value) return a.done(Result.OK, "already", current)
+
+        // The support flag and target reads above both suspend; re-check speed right before
+        // committing the write so a terrain mode can't slip through on a speed that was fine
+        // when [run] checked it but no longer is.
+        terrainSpeedRefusal(a)?.let { return it }
 
         val status = writer.write(mode.actionName, mode.value).also { a.status = it }
         if (status == WriteOutcome.TRANSIENT) return a.done(Result.UNREACHABLE, "unreachable", current)
@@ -106,8 +115,24 @@ class DriveModeChannel(
         return a.done(Result.NOT_CHANGED, "not changed", a.after.lastOrNull())
     }
 
-    /** What one attempt has seen so far; [done] writes its single log line. */
-    private class Attempt(val mode: DriveMode, val kmh: Int?) {
+    /** A throwing speed read is a failed read (unknown), not a verdict. */
+    private suspend fun readSpeed(): Int? =
+        runCatching { speed() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+
+    /** SPEED refusal for a terrain mode whose speed, re-read right before the write, is now
+     *  unknown or above the limit; null (proceed) for a non-terrain mode or an OK speed. */
+    private suspend fun terrainSpeedRefusal(a: Attempt): Outcome? {
+        if (!a.mode.terrain) return null
+        a.kmh = readSpeed()
+        val kmh = a.kmh
+        if (kmh != null && kmh <= DriveMode.TERRAIN_MAX_SPEED_KMH) return null
+        return a.done(Result.SPEED, if (kmh == null) "speed unknown" else "too fast", null)
+    }
+
+    /** What one attempt has seen so far; [done] writes its single log line. [kmh] is mutable:
+     *  the pre-write re-check overwrites it so the log and the Outcome report the speed that
+     *  actually decided the verdict, not the stale one from the first check. */
+    private class Attempt(val mode: DriveMode, var kmh: Int?) {
         var flag: Int? = null
         var before: Int? = null
         var probed = false
