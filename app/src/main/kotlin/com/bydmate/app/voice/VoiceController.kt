@@ -13,6 +13,7 @@ import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
+import com.bydmate.app.voice.online.TtsRouter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -142,9 +143,11 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     // Self-trigger guard: the reply being played names the agent, and its echo can start an
     // overlapped utterance with that name, so a leading name does not barge in while it is up.
     // TTS reports no per-sentence playback, so the guard follows the whole reply: armed when a
-    // text with the name is handed to TTS, held SPEAK_START_GRACE_MS past every own text handed
-    // over while it is up (a queued sentence may still wait for synthesis), and for
-    // SELF_NAME_GRACE_MS past the last frame captured while TTS was audible or speaking.
+    // text with the name is handed to TTS and held SELF_NAME_SPEAK_HOLD_MS past it (the named
+    // sentence may still wait for synthesis), held SPEAK_START_GRACE_MS past every other own
+    // text handed over while it is up, and for SELF_NAME_GRACE_MS past the last frame captured
+    // while TTS was audible or speaking. Released when a new reply starts or a name barges in:
+    // a reply arms it only if its own text names the agent.
     // The deadline in clock() ms, 0 = released.
     private val selfNameGuardUntilMs = AtomicLong(0L)
     // Wave P play_music auto-close waiting for the reply to end; a name barge-in cancels it.
@@ -200,6 +203,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             // never get stamped at all, since speaking never reads true on any frame. Only
             // stamp when speak() actually enqueued playback -- see lastSpeakingSeenMs above.
             val phrase = agentIdentity().persona.spokenPhrase(spoken)
+            releaseSelfNameGuardForNewReply()
             if (runCatching { ttsEngine.speak(phrase) }.getOrDefault(false)) {
                 noteOwnSpeech(phrase)
                 didSpeak = true
@@ -218,9 +222,20 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         echoFilter.noteSpoken(text)
         val now = clock()
         val named = AgentNameMatcher.matches(text, agentIdentity().name)
-        selfNameGuardUntilMs.updateAndGet { if (named || it != 0L) maxOf(it, now + SPEAK_START_GRACE_MS) else it }
+        selfNameGuardUntilMs.updateAndGet {
+            when {
+                named -> maxOf(it, now + SELF_NAME_SPEAK_HOLD_MS)
+                it != 0L -> maxOf(it, now + SPEAK_START_GRACE_MS)
+                else -> it
+            }
+        }
         if (named) Log.i(TAG, "Self-name guard armed: the reply names the agent")
         lastSpeakingSeenMs = now
+    }
+
+    /** A new reply supersedes the previous one: its guard must not carry over (see [selfNameGuardUntilMs]). */
+    private fun releaseSelfNameGuardForNewReply() {
+        if (selfNameGuardUntilMs.getAndSet(0L) != 0L) Log.i(TAG, "Self-name guard released: a new reply starts")
     }
 
     /** Capture-time mark of one mic frame (see [AudioCapture.captureSession]). */
@@ -874,6 +889,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             announce("Голос", "Не понял", "Не понял")
             return
         }
+        releaseSelfNameGuardForNewReply()
         val queue = if (gate.ttsEnabled()) runCatching { ttsEngine.startQueue() }.getOrNull() else null
         val streamed = StringBuilder()
         var queuedAny = false
@@ -1094,6 +1110,10 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // Self-name guard hold after the last frame TTS was audible or speaking in (see
         // selfNameGuardUntilMs): the echo tail, as long as SelfEchoFilter's short-echo window.
         private const val SELF_NAME_GRACE_MS = 1_500L
+
+        // Self-name guard hold after a text with the name is handed to TTS: the longest online
+        // synthesis TtsRouter allows before that sentence starts playing, plus a margin.
+        private const val SELF_NAME_SPEAK_HOLD_MS = TtsRouter.SYNTH_TIMEOUT_MS + 2_000L
 
         /** Pure so it is unit-testable without a real clock/session: whether the mic currently
          *  hears our own playback -- either TTS is audible right now, or we're still inside the

@@ -345,8 +345,8 @@ class VoiceControllerPlaybackBargeInTest {
         assertEquals(1, r.controller.droppedDuringPlaybackForTest())
         assertTrue(r.journal.bargeIns().isEmpty())
 
-        r.silence(60) // past the start grace of the reply and the guard's own grace
-        audible = true // a later reply without the name
+        r.silence(210) // past the synthesis hold of the named text and the guard's own grace
+        audible = true // later audio without the name
         r.utter("Лео")
         r.sync()
 
@@ -354,11 +354,50 @@ class VoiceControllerPlaybackBargeInTest {
         verify(exactly = 1) { r.tts.stop() }
     }
 
+    @Test fun `echo of a named sentence whose online synthesis took longer than 5 s is ignored`() {
+        val r = rig(orchestrator(AgentResult.Answer("Лео на связи.")), ttsEnabled = true)
+        r.askAgent("как тебя зовут")
+
+        r.silence(70) // 7 s of online synthesis: nothing audible, not speaking yet
+        speaking.value = true
+        audible = true
+        r.utter("Лео на связи") // its own voice, echoed back through the mic
+        r.sync()
+
+        assertEquals(1, r.controller.droppedDuringPlaybackForTest())
+        verify(exactly = 0) { r.tts.stop() }
+        assertTrue(r.journal.bargeIns().isEmpty())
+    }
+
+    @Test fun `a new reply without the name started within the hold of a named reply is interruptible`() {
+        val orchestrator = orchestrator()
+        coEvery { orchestrator.ask(any(), any(), any()) } returnsMany
+            listOf(AgentResult.Answer("Лео на связи."), AgentResult.Answer("Пять градусов."))
+        val r = rig(orchestrator, ttsEnabled = true)
+        r.askAgent("как тебя зовут")
+
+        speaking.value = true
+        audible = true
+        r.silence(3) // the short named reply plays
+        speaking.value = false
+        audible = false
+        r.silence(10)
+        r.utter("а на улице") // a new question a second later, well within the hold
+        await(r.journal.entries) { list -> list.any { it.answer == "Пять градусов." } }
+        speaking.value = true
+        audible = true
+        r.utter("Лео")
+        r.sync()
+
+        assertEquals(0, r.controller.droppedDuringPlaybackForTest())
+        assertEquals(1, r.journal.bargeIns().size)
+    }
+
     @Test fun `a named reply that never played does not block a real name later`() {
         val r = rig(orchestrator(AgentResult.Answer("Лео на связи.")), ttsEnabled = true)
         r.askAgent("как тебя зовут") // speak() accepted it, but synthesis failed: never audible
 
-        r.silence(60)
+        r.silence(210) // past the synthesis hold of the named text
         audible = true
         r.utter("Лео")
         r.sync()
