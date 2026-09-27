@@ -20,6 +20,14 @@ interface RuleLogDao {
     @Query("SELECT * FROM automation_log ORDER BY triggered_at DESC LIMIT :limit")
     fun getRecent(limit: Int = 50): Flow<List<RuleLogEntity>>
 
+    /** The newest entry of every rule: the card status line under the rule name. */
+    @Query(
+        "SELECT * FROM automation_log WHERE id IN (SELECT (SELECT m.id FROM automation_log m " +
+            "WHERE m.rule_id = r.rule_id ORDER BY m.triggered_at DESC, m.id DESC LIMIT 1) " +
+            "FROM (SELECT DISTINCT rule_id FROM automation_log) r)"
+    )
+    fun getLastPerRule(): Flow<List<RuleLogEntity>>
+
     @Query("DELETE FROM automation_log WHERE triggered_at < :before")
     suspend fun deleteOlderThan(before: Long): Int
 
