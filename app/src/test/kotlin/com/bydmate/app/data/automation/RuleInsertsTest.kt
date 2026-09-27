@@ -54,6 +54,33 @@ class RuleInsertsTest {
         assertEquals(LIMIT, db.ruleDao().getCount())
     }
 
+    @Test fun `two templates racing an agent insert at 48 rules never pass 50`() = runBlocking {
+        repeat(LIMIT - 2) { db.ruleDao().insert(rule(it)) }
+
+        val templates = async(Dispatchers.IO) {
+            RuleInserts.insertAllWithinLimit(db.ruleDao(), listOf(rule(200), rule(201)), LIMIT)
+        }
+        val agent = async(Dispatchers.IO) { RuleInserts.insertWithinLimit(db.ruleDao(), rule(300), LIMIT) }
+        val templateIds = templates.await()
+        val agentId = agent.await()
+
+        // Whichever went first: both templates and no agent rule (50), or the agent rule and no template (49).
+        if (templateIds != null) {
+            assertEquals(2, templateIds.size)
+            assertNull(agentId)
+            assertEquals(LIMIT, db.ruleDao().getCount())
+        } else {
+            assertEquals(LIMIT - 1, db.ruleDao().getCount())
+        }
+    }
+
+    @Test fun `two templates at 49 rules go in not at all`() = runBlocking {
+        repeat(LIMIT - 1) { db.ruleDao().insert(rule(it)) }
+
+        assertNull(RuleInserts.insertAllWithinLimit(db.ruleDao(), listOf(rule(200), rule(201)), LIMIT))
+        assertEquals(LIMIT - 1, db.ruleDao().getCount())
+    }
+
     private companion object {
         const val LIMIT = 50
     }
