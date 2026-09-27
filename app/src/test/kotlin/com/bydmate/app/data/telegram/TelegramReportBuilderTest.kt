@@ -38,11 +38,10 @@ class TelegramReportBuilderTest {
     private fun inputs(
         data: com.bydmate.app.data.remote.DiParsData? = fullData,
         rangeKm: Double? = 312.4,
-        lat: Double? = 53.9,
-        lon: Double? = 27.56,
+        location: Pair<Double, Double>? = 53.9 to 27.56,
         live: LiveTrip? = null,
         last: TripEntity? = null,
-    ) = ReportInputs(data, rangeKm, lat, lon, live, last)
+    ) = ReportInputs(data, rangeKm, location?.first, location?.second, live, last)
 
     private fun build(
         fields: Set<ReportField> = ReportField.entries.toSet(),
@@ -69,7 +68,7 @@ class TelegramReportBuilderTest {
 
     @Test fun `an item the car does not report is left out, never faked`() {
         val data = diParsData(soc = 51)
-        val report = build(inputs = inputs(data = data, rangeKm = null, lat = null, lon = null))
+        val report = build(inputs = inputs(data = data, rangeKm = null, location = null))
         assertEquals(listOf("<b>BYDMate: Где машина</b>", "Заряд 51%"), report.text.lines())
         assertEquals(listOf(ReportField.SOC), report.taken)
         assertEquals(

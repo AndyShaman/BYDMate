@@ -38,6 +38,7 @@ data class BuiltReport(val text: String, val taken: List<ReportField>, val skipp
  * Layout (mock 2026-09-27, frame 3): bold header, the user's own text, «Заряд 64%, запас 312 км»,
  * the trip, «Снаружи +12°, в салоне +19°», what is open, tires, and the map link last.
  */
+@Suppress("TooManyFunctions") // one small function per report line
 object TelegramReportBuilder {
 
     /** Stands for HH:MM in the power-off header; the helper daemon puts the real time in (phase B). */
@@ -83,33 +84,12 @@ object TelegramReportBuilder {
         nowMs: Long,
     ): BuiltReport {
         val locale = Locale.forLanguageTag(lang)
-        val d = inputs.data
-        val soc = d?.soc?.takeIf { ReportField.SOC in fields && it in 0..100 }
-            ?.let { text(strings, R.string.tg_report_soc, it) }
-        val range = inputs.rangeKm?.takeIf { ReportField.RANGE in fields && it > 0.0 }
-            ?.let { text(strings, R.string.tg_report_range, it.roundToInt()) }
-        val temps = if (ReportField.TEMPS in fields) {
-            sentence(
-                listOfNotNull(
-                    d?.exteriorTemp?.let { text(strings, R.string.tg_report_temp_outside, it) },
-                    d?.insideTemp?.let { text(strings, R.string.tg_report_temp_inside, it) },
-                ),
-                locale,
-            )
-        } else null
-        val found = mapOf(
-            ReportField.SOC to soc,
-            ReportField.RANGE to range,
-            ReportField.TRIP to (if (ReportField.TRIP in fields) tripLine(inputs, strings, nowMs) else null),
-            ReportField.TEMPS to temps,
-            ReportField.OPENINGS to (if (ReportField.OPENINGS in fields) d?.let { openingsLine(it, strings) } else null),
-            ReportField.TIRES to (if (ReportField.TIRES in fields) d?.let { tiresLine(it, strings, locale) } else null),
-            ReportField.LOCATION to (if (ReportField.LOCATION in fields) locationLine(inputs, lang, strings) else null),
-        )
+        val found = ReportField.entries.filter { it in fields }
+            .associateWith { itemText(it, inputs, lang, strings, nowMs) }
 
         val lines = mutableListOf("<b>${escape(header)}</b>")
         customText.trim().takeIf { it.isNotEmpty() }?.let { lines += escape(it) }
-        sentence(listOfNotNull(soc, range), locale)?.let { lines += escape(it) }
+        sentence(listOfNotNull(found[ReportField.SOC], found[ReportField.RANGE]), locale)?.let { lines += escape(it) }
         listOf(ReportField.TRIP, ReportField.TEMPS, ReportField.OPENINGS, ReportField.TIRES)
             .mapNotNull { found[it] }
             .forEach { lines += escape(it) }
@@ -134,6 +114,30 @@ object TelegramReportBuilder {
         return if (lang == "ru" || lang == "be") "https://yandex.ru/maps/?pt=$lo,$la&z=16&l=map"
         else "https://www.google.com/maps/search/?api=1&query=$la,$lo"
     }
+
+    /** One item's text, or null when the car does not report it. */
+    private fun itemText(field: ReportField, inputs: ReportInputs, lang: String, strings: ReportStrings, nowMs: Long): String? {
+        val d = inputs.data
+        val locale = Locale.forLanguageTag(lang)
+        return when (field) {
+            ReportField.SOC -> d?.soc?.takeIf { it in 0..100 }?.let { text(strings, R.string.tg_report_soc, it) }
+            ReportField.RANGE -> inputs.rangeKm?.takeIf { it > 0.0 }?.let { text(strings, R.string.tg_report_range, it.roundToInt()) }
+            ReportField.TRIP -> tripLine(inputs, strings, nowMs)
+            ReportField.TEMPS -> d?.let { tempsLine(it, strings, locale) }
+            ReportField.OPENINGS -> d?.let { openingsLine(it, strings) }
+            ReportField.TIRES -> d?.let { tiresLine(it, strings, locale) }
+            ReportField.LOCATION -> locationLine(inputs, lang, strings)
+        }
+    }
+
+    /** «Снаружи +12°, в салоне +19°», either half alone when only one is reported. */
+    private fun tempsLine(d: DiParsData, strings: ReportStrings, locale: Locale): String? = sentence(
+        listOfNotNull(
+            d.exteriorTemp?.let { text(strings, R.string.tg_report_temp_outside, it) },
+            d.insideTemp?.let { text(strings, R.string.tg_report_temp_inside, it) },
+        ),
+        locale,
+    )
 
     /** «заряд 64%» + «запас 312 км» -> «Заряд 64%, запас 312 км»; null when there is no part. */
     private fun sentence(parts: List<String>, locale: Locale): String? =
@@ -186,24 +190,28 @@ object TelegramReportBuilder {
      */
     private fun openingsLine(d: DiParsData, strings: ReportStrings): String? {
         val flags = listOf(
-            R.string.tg_report_open_door_fl to d.doorFL?.let { it == 1 },
-            R.string.tg_report_open_door_fr to d.doorFR?.let { it == 1 },
-            R.string.tg_report_open_door_rl to d.doorRL?.let { it == 1 },
-            R.string.tg_report_open_door_rr to d.doorRR?.let { it == 1 },
-            R.string.window_pane_driver to d.windowFL?.let { it in 1..100 },
-            R.string.window_pane_passenger to d.windowFR?.let { it in 1..100 },
-            R.string.window_pane_rear_left to d.windowRL?.let { it in 1..100 },
-            R.string.window_pane_rear_right to d.windowRR?.let { it in 1..100 },
-            R.string.tg_report_open_sunroof to d.sunroof?.let { it in 1..100 },
-            R.string.tg_report_open_trunk to d.trunk?.let { it == 1 },
-            R.string.tg_report_open_front_trunk to d.frontTrunk?.let { it == 1 },
-            R.string.tg_report_open_hood to d.hood?.let { it == 1 },
+            R.string.tg_report_open_door_fl to panelOpen(d.doorFL),
+            R.string.tg_report_open_door_fr to panelOpen(d.doorFR),
+            R.string.tg_report_open_door_rl to panelOpen(d.doorRL),
+            R.string.tg_report_open_door_rr to panelOpen(d.doorRR),
+            R.string.window_pane_driver to paneOpen(d.windowFL),
+            R.string.window_pane_passenger to paneOpen(d.windowFR),
+            R.string.window_pane_rear_left to paneOpen(d.windowRL),
+            R.string.window_pane_rear_right to paneOpen(d.windowRR),
+            R.string.tg_report_open_sunroof to paneOpen(d.sunroof),
+            R.string.tg_report_open_trunk to panelOpen(d.trunk),
+            R.string.tg_report_open_front_trunk to panelOpen(d.frontTrunk),
+            R.string.tg_report_open_hood to panelOpen(d.hood),
         ).filter { it.second != null }
         if (flags.isEmpty()) return null
         val open = flags.filter { it.second == true }.map { text(strings, it.first) }
         return if (open.isEmpty()) text(strings, R.string.tg_report_all_closed)
         else text(strings, R.string.tg_report_open_list, open.joinToString(", "))
     }
+
+    private fun panelOpen(state: Int?): Boolean? = state?.let { it == 1 }
+
+    private fun paneOpen(percent: Int?): Boolean? = percent?.let { it in 1..100 }
 
     /**
      * «Шины: 2,4 / 2,4 / 2,3 / 2,4 бар» in the order front left, front right, rear left, rear right,

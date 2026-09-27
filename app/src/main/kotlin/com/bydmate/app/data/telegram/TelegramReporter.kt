@@ -51,6 +51,7 @@ data class PowerOffReport(val id: String, val token: String, val chatId: Long, v
  * or the coordinates, since users post their logs in public issues.
  */
 @Singleton
+@Suppress("TooManyFunctions") // send, outbox on disk and the dump, kept in one place
 class TelegramReporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sink: TelegramBackupSink,
@@ -81,6 +82,7 @@ class TelegramReporter @Inject constructor(
     internal var clock: () -> Long = System::currentTimeMillis
     internal var language: () -> String = { context.appLanguageTag() }
 
+    @Suppress("SpreadOperator") // at most three format arguments per string
     private val strings = ReportStrings { id, args -> appStrings.get(id, *args) }
     private val outboxMutex = Mutex()
 
