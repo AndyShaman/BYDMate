@@ -30,8 +30,12 @@ class VehicleApiDriveModeTest {
     }
     private val audit = mutableListOf<VehicleWriteLogEntity>()
     private val dao = mockk<VehicleWriteLogDao> { coEvery { insert(capture(audit)) } returns Unit }
+    private var kmh: Float? = 0f
+    private val autoservice = mockk<AutoserviceClient>(relaxed = true).also {
+        coEvery { it.getFloat(1013, any()) } answers { kmh }
+    }
     private val impl = VehicleApiImpl(
-        mockk<ParsReader>(relaxed = true), mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
+        mockk<ParsReader>(relaxed = true), autoservice, helper, allowlist,
         dao, seatStore, windowStore,
     )
     private val target = WriteAllowlist.DRIVE_MODE_TARGET_FID
@@ -77,5 +81,15 @@ class VehicleApiDriveModeTest {
         assertTrue("got $err", err is VehicleWriteError.StateBlocked)
         coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
         assertEquals("verdict=flotation", verdictRow().error)
+    }
+
+    @Test fun `a terrain mode above 15 kmh is refused inside VehicleApi, whoever calls it`() = runTest {
+        kmh = 40f
+        val err = impl.dispatch("雪地模式").exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
+        assertEquals(40, (err as VehicleWriteError.SpeedBlocked).speed)
+        coVerify(exactly = 0) { helper.read(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+        assertEquals("verdict=too fast", verdictRow().error)
     }
 }

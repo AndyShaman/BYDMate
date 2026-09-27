@@ -353,15 +353,16 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             else -> err?.message ?: "dispatch failed"
         }
 
-        /** A failed drive mode switch: not on this car, flotation, no change, or no answer. */
-        private fun driveModeFailureReason(err: VehicleWriteError, strings: AppStrings): String = strings.get(
-            when (err) {
-                is VehicleWriteError.NotEquipped -> R.string.drive_mode_not_supported
-                is VehicleWriteError.StateBlocked -> R.string.drive_mode_flotation
-                is VehicleWriteError.ReadbackMismatch -> R.string.drive_mode_not_changed
-                else -> R.string.drive_mode_failed
-            },
-        )
+        /** A failed drive mode switch: too fast, not on this car, flotation, no change, or no answer. */
+        private fun driveModeFailureReason(err: VehicleWriteError, strings: AppStrings): String = when (err) {
+            is VehicleWriteError.SpeedBlocked -> err.speed
+                ?.let { strings.get(R.string.gate_drive_mode_speed, it) }
+                ?: strings.get(R.string.gate_drive_mode_speed_unknown)
+            is VehicleWriteError.NotEquipped -> strings.get(R.string.drive_mode_not_supported)
+            is VehicleWriteError.StateBlocked -> strings.get(R.string.drive_mode_flotation)
+            is VehicleWriteError.ReadbackMismatch -> strings.get(R.string.drive_mode_not_changed)
+            else -> strings.get(R.string.drive_mode_failed)
+        }
 
         /** «окно водителя не сдвинулось…» for one pane, «не сдвинулись с места: …» for several. */
         private fun stuckWindowsReason(panes: List<WindowPane>, strings: AppStrings): String {

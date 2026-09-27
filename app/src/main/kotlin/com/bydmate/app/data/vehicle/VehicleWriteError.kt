@@ -57,6 +57,12 @@ sealed class VehicleWriteError(
     class StateBlocked(action: String, details: String) : VehicleWriteError(action, details)
 
     /**
+     * Refused by a speed limit enforced below ActionDispatcher: a terrain drive mode above
+     * 15 km/h, or at unknown [speed] (null). Raised only by DriveModeChannel.
+     */
+    class SpeedBlocked(action: String, details: String, val speed: Int?) : VehicleWriteError(action, details)
+
+    /**
      * HelperClient returned false for a non-validated entry. The action is in
      * the competitor allowlist but has not been live-confirmed on Leopard 3.
      */
