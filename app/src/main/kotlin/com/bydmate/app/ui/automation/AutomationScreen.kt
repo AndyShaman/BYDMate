@@ -191,6 +191,12 @@ import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
 import com.bydmate.app.cluster.VOLUME_KNOB_PRESS_KEYCODE
 import com.bydmate.app.cluster.knownButtonNameRes
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.time.ZoneId
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.minuteToHHmm
@@ -442,7 +448,6 @@ fun AutomationScreen(
         val journalRule = state.journalRuleId?.let { id -> state.rules.firstOrNull { it.id == id } }
         JournalDialog(
             logs = if (state.journalRuleId != null) state.ruleLogs else state.logs,
-            rules = state.rules,
             ruleName = journalRule?.name ?: state.journalRuleId?.let { "" },
             onDismiss = { viewModel.hideJournal() }
         )
@@ -523,11 +528,36 @@ private fun labelWidths(labels: List<String>, style: TextStyle): List<Dp> {
 
 private fun rowCellWidth(labelWidth: Dp): Dp = maxOf(ROW_CELL_MIN, labelWidth + ROW_CELL_PADDING * 2)
 
+/**
+ * Today's day number, re-read when the screen comes back and at every midnight: a remember key
+ * for the words that say «сегодня» or «вчера».
+ */
+@Composable
+private fun rememberToday(): Long {
+    var today by remember { mutableLongStateOf(epochDay(System.currentTimeMillis(), ZoneId.systemDefault())) }
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) today = epochDay(System.currentTimeMillis(), ZoneId.systemDefault())
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(msUntilNextDay(System.currentTimeMillis(), ZoneId.systemDefault()))
+            today = epochDay(System.currentTimeMillis(), ZoneId.systemDefault())
+        }
+    }
+    return today
+}
+
 /** The card phrase: conditions in the text colour, actions in teal; a disabled rule is all grey. */
 @Composable
 private fun rulePhraseText(rule: RuleEntity): AnnotatedString {
     val context = LocalContext.current
-    val phrase = remember(rule.triggers, rule.triggerLogic, rule.actions, context) { rulePhrase(rule, context) }
+    val today = rememberToday()
+    val phrase = remember(rule.triggers, rule.triggerLogic, rule.actions, today, context) { rulePhrase(rule, context) }
     if (!rule.enabled) return AnnotatedString(phrase.text(context))
     val full = phrase.text(context)
     val at = if (phrase.actions.isEmpty()) -1 else full.lastIndexOf(phrase.actions)
@@ -582,7 +612,8 @@ private fun RuleStatusKind.color(): Color = when (this) {
 @Composable
 private fun RuleStatusChip(rule: RuleEntity, last: RuleLogEntity?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val status = remember(rule, last, context) { ruleStatus(rule, last, context) }
+    val today = rememberToday()
+    val status = remember(rule, last, today, context) { ruleStatus(rule, last, context) }
     val shape = RoundedCornerShape(50)
     Row(
         modifier = modifier
@@ -1179,6 +1210,7 @@ private fun Missing.anchor(): Pair<Boolean, String> = when (this) {
     Missing.NoConditions -> true to "addTrigger"
     is Missing.Param -> true to "t${condition - 1}"
     is Missing.Value -> true to "t${condition - 1}"
+    is Missing.Operator -> true to "t${condition - 1}"
     is Missing.Number -> true to "t${condition - 1}"
     is Missing.Key -> true to "t${condition - 1}"
     Missing.NoActions -> false to "addAction"
@@ -3283,13 +3315,12 @@ private fun MessagePill(text: String, modifier: Modifier = Modifier) {
  * ([ruleName] set, opened from the card's status pill).
  */
 @Composable
-private fun JournalDialog(logs: List<RuleLogEntity>, rules: List<RuleEntity>, ruleName: String?, onDismiss: () -> Unit) {
+private fun JournalDialog(logs: List<RuleLogEntity>, ruleName: String?, onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         ScaledDialogContent {
-            val rulesById = remember(rules) { rules.associateBy { it.id } }
             Column(
                 modifier = Modifier
                     .fillMaxWidth(0.6f)
@@ -3324,7 +3355,7 @@ private fun JournalDialog(logs: List<RuleLogEntity>, rules: List<RuleEntity>, ru
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(logs, key = { it.id }) { log ->
-                            LogItem(log, rulesById[log.ruleId], showRuleName = ruleName == null)
+                            LogItem(log, showRuleName = ruleName == null)
                         }
                     }
                 }
@@ -3335,9 +3366,10 @@ private fun JournalDialog(logs: List<RuleLogEntity>, rules: List<RuleEntity>, ru
 
 /** One entry: verdict and time, what ran, why; the stripe and icon in the verdict's colour. */
 @Composable
-private fun LogItem(log: RuleLogEntity, rule: RuleEntity?, showRuleName: Boolean) {
+private fun LogItem(log: RuleLogEntity, showRuleName: Boolean) {
     val context = LocalContext.current
-    val line = remember(log, rule, context) { journalLine(log, rule, context) }
+    val today = rememberToday()
+    val line = remember(log, today, context) { journalLine(log, context) }
     val color = line.kind.color()
     Row(
         modifier = Modifier

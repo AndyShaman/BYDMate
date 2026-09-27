@@ -645,10 +645,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 "rule ${rule.id} step ${i + 1}/${actions.size} ${action.kind} speed=${stepData?.speed} " +
                     "-> ${if (result.success) "ok" else "failed: ${result.reason}"}",
             )
-            results.put(JSONObject().apply {
-                put("command", action.command)
-                put("displayName", action.displayName)
-                put("kind", action.kind)
+            results.put(RuleJournal.recordedAction(action).apply {
                 put("success", result.success)
                 if (result.reason != null) put("reason", result.reason)
             })

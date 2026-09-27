@@ -1970,6 +1970,7 @@
     <string name="auto_ui_miss_conditions">请添加条件</string>
     <string name="auto_ui_miss_param">请选择条件 %1$d 要检查的内容</string>
     <string name="auto_ui_miss_value">请选择条件 %1$d 的值</string>
+    <string name="auto_ui_miss_operator">请在条件 %1$d 中选择“等于”或“不等于”</string>
     <string name="auto_ui_miss_number">请在条件 %1$d 中输入数字</string>
     <string name="auto_ui_miss_key">请为条件 %1$d 设置方向盘按键</string>
     <string name="auto_ui_miss_actions">请添加动作</string>

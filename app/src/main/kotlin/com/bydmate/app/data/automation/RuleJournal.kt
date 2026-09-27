@@ -4,6 +4,7 @@ import android.util.Log
 import com.bydmate.app.R
 import com.bydmate.app.data.autoservice.LogThrottle
 import com.bydmate.app.data.local.dao.RuleLogDao
+import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.util.AppStrings
@@ -56,7 +57,10 @@ internal class RuleJournal(
     }
 
     private suspend fun insert(rule: RuleEntity, snapshot: String, at: Long, result: String, reason: Int) {
-        val entry = JSONObject().put("result", result).put("reason", appStrings.get(reason))
+        // The actions as they were at this moment: a later edit of the rule must not rewrite the entry.
+        val actions = JSONArray()
+        ActionDef.listFromJson(rule.actions).forEach { actions.put(recordedAction(it)) }
+        val entry = JSONObject().put("result", result).put("reason", appStrings.get(reason)).put("actions", actions)
         ruleLogDao.insert(
             RuleLogEntity(
                 ruleId = rule.id,
@@ -113,5 +117,39 @@ internal class RuleJournal(
         /** [text] with every URI-like run replaced by `<uri>`: older builds put the exception
          *  message, the whole intent with its token, number or coordinates, in the reason. */
         internal fun redactUris(text: String): String = LinkRedaction.redactAll(text)
+
+        /**
+         * [action] as the journal keeps it: command, name, kind and [shownPayload]. The payload key
+         * is always there (null when the line needs none), which tells a recorded entry from one
+         * written before the journal kept payloads.
+         */
+        internal fun recordedAction(action: ActionDef): JSONObject = JSONObject()
+            .put("command", action.command)
+            .put("displayName", action.displayName)
+            .put("kind", action.kind)
+            .put("payload", shownPayload(action) ?: JSONObject.NULL)
+
+        /**
+         * The part of [action]'s payload the journal line shows: an on/off, pause, volume or toggle
+         * target as it is; of a text payload only the one field the line quotes (a call keeps the
+         * name, or the number when there is no name). Null for kinds whose line reads no payload.
+         */
+        @Suppress("CyclomaticComplexMethod") // one branch per action kind
+        internal fun shownPayload(action: ActionDef): String? {
+            val p = action.payload ?: return null
+            val json by lazy { try { JSONObject(p) } catch (_: Exception) { null } }
+            fun field(key: String): String? = json?.let { JSONObject().put(key, it.optString(key)).toString() }
+            return when (action.kind) {
+                "toggle", "delay", "sentry", "hotspot", "cluster_projection", "media_volume" -> p
+                "notification", "notification_silent", "notification_sound" -> field("title")
+                "speak" -> field("text")
+                "agent_query" -> field("prompt")
+                "app_launch" -> field("appLabel")
+                "navigate" -> field("name")
+                "url" -> field("url")
+                "call" -> field(if (json?.optString("name").isNullOrBlank()) "phone" else "name")
+                else -> null
+            }
+        }
     }
 }

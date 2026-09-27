@@ -4,12 +4,14 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.OneShotTrigger
+import com.bydmate.app.data.automation.RuleJournal
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.util.appLocalizedContext
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -208,31 +210,84 @@ class RuleTextTest {
     // --- Journal ---
 
     @Test fun `journal lines`() {
-        val ok = journalLine(entry(ms(2026, 9, 27, 8, 12), true, snapshot = """{"Gear":1,"Speed":0.0}"""), rule(), ctx, now, zone)
+        val ok = journalLine(entry(ms(2026, 9, 27, 8, 12), true, snapshot = """{"Gear":1,"Speed":0.0}"""), ctx, now, zone)
         assertEquals("Выполнено", ok.status)
         assertEquals("Сегодня в 08:12", ok.time)
         assertEquals("Темп. 22°C", ok.what)
         assertEquals("Передача P, скорость 0 км/ч", ok.why)
 
-        val err = journalLine(entry(ms(2026, 9, 24, 8, 10), false, reason = "Машина не приняла команду"), rule(), ctx, now, zone)
+        val err = journalLine(entry(ms(2026, 9, 24, 8, 10), false, reason = "Машина не приняла команду"), ctx, now, zone)
         assertEquals(RuleStatusKind.ERROR, err.kind)
         assertEquals("Темп. 22°C не выполнено", err.what)
         assertEquals("Машина не приняла команду", err.why)
 
-        val cancelled = journalLine(entry(now, false, "cancelled", "Отменено в окне подтверждения"), rule(), ctx, now, zone)
+        val cancelled = journalLine(entry(now, false, "cancelled", "Отменено в окне подтверждения"), ctx, now, zone)
         assertEquals("Отменено", cancelled.status)
-        assertEquals("Закрыть все окна, темп. 22°C", cancelled.what)
+        // Written before the journal kept the actions: none, rather than the rule's current ones.
+        assertEquals("", cancelled.what)
 
-        val test = journalLine(entry(now, false, "skipped", "x", snapshot = """{"$TEST_RUN_KEY":true}"""), rule(), ctx, now, zone)
+        val test = journalLine(entry(now, false, "skipped", "x", snapshot = """{"$TEST_RUN_KEY":true}"""), ctx, now, zone)
         assertEquals("Не выполнено", test.status)
         assertEquals("Тестовый запуск", test.what)
 
-        val once = journalLine(entry(now, true, snapshot = """{"once_at":"2026-09-27T07:30"}"""), rule(), ctx, now, zone)
+        val once = journalLine(entry(now, true, snapshot = """{"once_at":"2026-09-27T07:30"}"""), ctx, now, zone)
         assertEquals("Выполнено, правило выключено", once.status)
         assertEquals("Разовое правило", once.why)
 
-        val expired = journalLine(entry(now, false, "expired", "x"), null, ctx, now, zone)
+        val expired = journalLine(entry(now, false, "expired", "x"), ctx, now, zone)
         assertEquals("Не выполнено, правило выключено", expired.status)
+    }
+
+    private fun run(vararg steps: JSONObject, success: Boolean = true) = RuleLogEntity(
+        ruleId = 1, ruleName = "R", triggeredAt = now, triggersSnapshot = "{}", success = success,
+        actionsResult = JSONArray().apply { steps.forEach { put(it) } }.toString(),
+    )
+
+    private fun recorded(a: ActionDef, success: Boolean = true) = RuleJournal.recordedAction(a).put("success", success)
+
+    /** A step as builds before 3.20 wrote it: no payload key. */
+    private fun legacy(a: ActionDef, success: Boolean = true) =
+        JSONObject().put("command", a.command).put("displayName", a.displayName).put("kind", a.kind).put("success", success)
+
+    @Test fun `a run shows the parameters it recorded`() {
+        val pause = ActionDef("", "Пауза", "delay", "30000")
+        val note = ActionDef("", "Уведомление", "notification", """{"title":"Заряд","text":"t"}""")
+        val sentry = ActionDef("", "Охрана", "sentry", "1")
+        assertEquals(
+            "Подождать 30 с, уведомление «Заряд», режим охраны, включить",
+            journalLine(run(recorded(pause), recorded(note), recorded(sentry)), ctx, now, zone).what,
+        )
+        assertEquals(
+            "Режим охраны, включить не выполнено",
+            journalLine(run(recorded(pause), recorded(sentry, success = false), success = false), ctx, now, zone).what,
+        )
+    }
+
+    @Test fun `an old run never shows a parameter it did not record`() {
+        val line = journalLine(run(legacy(ActionDef("", "Пауза", "delay")), legacy(ActionDef("", "", "sentry"))), ctx, now, zone)
+        assertEquals("Пауза, режим охраны", line.what)
+        // A param step reads its command, as before.
+        assertEquals("Закрыть все окна", journalLine(run(legacy(cmd("车窗关闭"))), ctx, now, zone).what)
+    }
+
+    @Test fun `a cancelled entry shows the actions it recorded`() {
+        val entry = JSONObject().put("result", "cancelled").put("reason", "x")
+            .put("actions", JSONArray().put(RuleJournal.recordedAction(ActionDef("", "Багажник", "toggle", ActionDispatcher.TOGGLE_TRUNK))))
+        val line = journalLine(
+            RuleLogEntity(ruleId = 1, ruleName = "R", triggeredAt = now, triggersSnapshot = "{}", success = false,
+                actionsResult = JSONArray().put(entry).toString()),
+            ctx, now, zone,
+        )
+        assertEquals(actionText(ActionDef("", "", "toggle", ActionDispatcher.TOGGLE_TRUNK), ctx.appLocalizedContext()), line.what)
+    }
+
+    // --- The day the relative dates hang on ---
+
+    @Test fun `the day turns at midnight`() {
+        val beforeMidnight = ms(2026, 9, 27, 23, 59)
+        assertEquals(60_000L, msUntilNextDay(beforeMidnight, zone))
+        assertEquals(epochDay(beforeMidnight, zone) + 1, epochDay(beforeMidnight + msUntilNextDay(beforeMidnight, zone), zone))
+        assertEquals(24L * 60 * 60 * 1000, msUntilNextDay(ms(2026, 9, 28, 0, 0), zone))
     }
 
     // --- Editor ---
@@ -261,6 +316,15 @@ class RuleTextTest {
         assertEquals("Введите число в условии 1 и добавьте действие", saveReason(listOf(Missing.Number(1), Missing.NoActions), ctx))
         assertEquals("Введите название и ещё 5", saveReason(missing, ctx))
         assertEquals(listOf(Missing.NoConditions), missingParts(complete.copy(triggers = emptyList()), ctx))
+    }
+
+    @Test fun `a list condition saved with a number operator asks for one`() {
+        val gearAbove = complete.copy(triggers = listOf(param("Gear", ">", "1")))
+        assertEquals(listOf(Missing.Operator(1)), missingParts(gearAbove, ctx))
+        assertEquals("Выберите «равно» или «не равно» в условии 1", saveReason(missingParts(gearAbove, ctx), ctx))
+        assertTrue(missingParts(complete.copy(triggers = listOf(param("Gear", "!=", "1"))), ctx).isEmpty())
+        // A number keeps all six operators.
+        assertTrue(missingParts(complete.copy(triggers = listOf(param("Speed", ">=", "5"))), ctx).isEmpty())
     }
 
     @Test fun `a decimal comma is a number`() =

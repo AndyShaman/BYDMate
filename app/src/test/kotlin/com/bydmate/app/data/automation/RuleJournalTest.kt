@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.util.AppStrings
@@ -164,5 +165,53 @@ class RuleJournalTest {
 
     @Test fun `an empty journal says so`() = runTest {
         assertEquals(listOf("(journal empty)"), journal.dumpLines())
+    }
+
+    // --- The actions as they were (review 3.20 items 1-2) ---
+
+    private val call = ActionDef("", "Звонок", "call", """{"phone":"+375291234567","name":"Мама","autoDial":true}""")
+    private val callNoName = ActionDef("", "Звонок", "call", """{"phone":"+375291234567","name":"","autoDial":true}""")
+    private val nav = ActionDef("", "Навигатор", "navigate", """{"lat":53.9,"lon":27.56,"name":"Дом"}""")
+    private val note = ActionDef("", "Уведомление", "notification", """{"title":"Заряд","text":"секретный текст"}""")
+    private val pause = ActionDef("", "Пауза", "delay", "30000")
+    private val window = ActionDef("车窗关闭", "Закрыть окна")
+
+    @Test fun `only the field the line shows is kept of a payload`() {
+        assertEquals("""{"name":"Мама"}""", RuleJournal.shownPayload(call))
+        assertEquals("""{"phone":"+375291234567"}""", RuleJournal.shownPayload(callNoName))
+        assertEquals("""{"name":"Дом"}""", RuleJournal.shownPayload(nav))
+        assertEquals("""{"title":"Заряд"}""", RuleJournal.shownPayload(note))
+        assertEquals("30000", RuleJournal.shownPayload(pause))
+        assertEquals(null, RuleJournal.shownPayload(window))
+        // The payload key is there even when empty: it marks an entry that recorded payloads.
+        assertTrue(RuleJournal.recordedAction(window).has("payload"))
+    }
+
+    @Test fun `a non-run records the rule's actions as they were`() = runTest {
+        val withActions = rule.copy(actions = ActionDef.listToJson(listOf(pause, note)))
+        journal.cancelled(withActions, "{}", 1_000L)
+
+        val actions = JSONArray(only().actionsResult).getJSONObject(0).getJSONArray("actions")
+        assertEquals(2, actions.length())
+        assertEquals("delay", actions.getJSONObject(0).getString("kind"))
+        assertEquals("30000", actions.getJSONObject(0).getString("payload"))
+        assertEquals("""{"title":"Заряд"}""", actions.getJSONObject(1).getString("payload"))
+    }
+
+    @Test fun `the dump prints no recorded payload`() = runTest {
+        journal.cancelled(rule.copy(actions = ActionDef.listToJson(listOf(call, nav, note))), "{}", 1_000L)
+        dao.insert(
+            RuleLogEntity(
+                ruleId = 7, ruleName = "Окна", triggeredAt = 2_000L, triggersSnapshot = "{}", success = true,
+                actionsResult = JSONArray().put(RuleJournal.recordedAction(callNoName).put("success", true)).toString(),
+            )
+        )
+
+        val dump = journal.dumpLines().joinToString("\n")
+        for (secret in listOf("Мама", "+375291234567", "Дом", "Заряд", "секретный")) {
+            assertFalse("$secret in $dump", dump.contains(secret))
+        }
+        assertTrue(dump, dump.contains("steps=[call:ok]"))
+        assertTrue(dump, dump.contains("steps=[cancelled:fail("))
     }
 }

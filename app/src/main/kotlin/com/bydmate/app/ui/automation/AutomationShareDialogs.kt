@@ -90,7 +90,7 @@ internal fun ShareNoteDialog(onContinue: () -> Unit, onDismiss: () -> Unit) {
         containerColor = CardSurfaceElevated,
         title = { Text(stringResource(R.string.automation_share_button), color = TextPrimary) },
         text = {
-            Text(stringResource(R.string.automation_share_note), color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(stringResource(R.string.automation_share_note), color = TextSecondary, fontSize = 14.sp, lineHeight = 18.sp)
         },
         confirmButton = {
             TextButton(onClick = onContinue) {
@@ -155,12 +155,12 @@ internal fun ImportPickDialog(
                             .clickable { onPick(file) }
                             .padding(horizontal = 4.dp, vertical = 8.dp)
                     ) {
-                        Text(file.name, color = TextPrimary, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-                        Text(dateFormat.format(Date(file.lastModified())), color = TextSecondary, fontSize = 12.sp)
+                        Text(file.name, color = TextPrimary, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                        Text(dateFormat.format(Date(file.lastModified())), color = TextSecondary, fontSize = 14.sp)
                     }
                 }
                 if (error != null) {
-                    Text(error, color = SocRed, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text(error, color = SocRed, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         },
@@ -218,25 +218,25 @@ internal fun ImportPreviewDialog(
                         .border(1.dp, CardBorder, RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 8.dp)
                 )
-                Text(stringResource(R.string.automation_import_conditions), color = TextPrimary, fontSize = 13.sp,
+                Text(stringResource(R.string.automation_import_conditions), color = TextPrimary, fontSize = 14.sp,
                     fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
-                Text(preview.logic, color = TextSecondary, fontSize = 12.sp)
+                Text(preview.logic, color = TextSecondary, fontSize = 14.sp)
                 preview.triggers.forEach { line ->
                     Text(
                         line,
                         color = AccentBlue,
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         modifier = Modifier
                             .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
-                Text(stringResource(R.string.automation_import_actions), color = TextPrimary, fontSize = 13.sp,
+                Text(stringResource(R.string.automation_import_actions), color = TextPrimary, fontSize = 14.sp,
                     fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
                 preview.actions.forEach { line ->
-                    Text(line, color = AccentTeal, fontSize = 13.sp)
+                    Text(line, color = AccentTeal, fontSize = 14.sp)
                 }
-                Text(preview.flags, color = TextSecondary, fontSize = 12.sp,
+                Text(preview.flags, color = TextSecondary, fontSize = 14.sp,
                     modifier = Modifier.padding(top = 4.dp))
 
                 if (!canEnable || strippedUrls.isNotEmpty()) {
@@ -251,7 +251,7 @@ internal fun ImportPreviewDialog(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(stringResource(R.string.automation_import_need_attention), color = AccentOrange,
-                            fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         unresolvedPlaces.forEach { index ->
                             UnresolvedRow(
                                 text = stringResource(R.string.automation_import_place_missing, rule.triggers[index].placeName.orEmpty()),
@@ -262,16 +262,16 @@ internal fun ImportPreviewDialog(
                         unresolvedCalls.forEach { index ->
                             UnresolvedRow(text = stringResource(R.string.automation_import_contact_missing)) {
                                 OutlinedButton(onClick = { contactFor = index }, enabled = idle, shape = RoundedCornerShape(8.dp)) {
-                                    Text(stringResource(R.string.automation_import_pick_contact) + " ▾", color = TextPrimary, fontSize = 13.sp)
+                                    Text(stringResource(R.string.automation_import_pick_contact) + " ▾", color = TextPrimary, fontSize = 14.sp)
                                 }
                             }
                         }
                         if (unresolvedUrls.isNotEmpty()) {
-                            Text(stringResource(R.string.automation_import_url_required), color = TextPrimary, fontSize = 13.sp)
+                            Text(stringResource(R.string.automation_import_url_required), color = TextPrimary, fontSize = 14.sp)
                         }
                         // Softer than the rows above: the rule may still be enabled right away.
                         if (strippedUrls.isNotEmpty()) {
-                            Text(stringResource(R.string.automation_import_url_params_stripped), color = TextPrimary, fontSize = 13.sp)
+                            Text(stringResource(R.string.automation_import_url_params_stripped), color = TextPrimary, fontSize = 14.sp)
                         }
                     }
                 }
@@ -295,14 +295,14 @@ internal fun ImportPreviewDialog(
                     )
                     Spacer(Modifier.width(4.dp))
                     Column(modifier = Modifier.padding(top = 12.dp)) {
-                        Text(stringResource(R.string.automation_import_enable_now), fontSize = 13.sp,
+                        Text(stringResource(R.string.automation_import_enable_now), fontSize = 14.sp,
                             color = if (canEnable) TextPrimary else TextMuted)
-                        Text(stringResource(R.string.automation_import_enable_now_hint), fontSize = 11.sp, color = TextMuted)
+                        Text(stringResource(R.string.automation_import_enable_now_hint), fontSize = 14.sp, color = TextSecondary)
                     }
                 }
 
                 if (draft.error != null) {
-                    Text(draft.error, color = SocRed, fontSize = 13.sp)
+                    Text(draft.error, color = SocRed, fontSize = 14.sp)
                 }
             }
         },
@@ -342,7 +342,7 @@ internal fun ImportPreviewDialog(
 @Composable
 private fun UnresolvedRow(text: String, button: @Composable () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(text, color = TextPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f).padding(end = 8.dp))
+        Text(text, color = TextPrimary, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(end = 8.dp))
         button()
     }
 }
@@ -352,14 +352,14 @@ private fun PlacePickButton(places: List<PlaceEntity>, enabled: Boolean, onPick:
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { expanded = true }, enabled = enabled, shape = RoundedCornerShape(8.dp)) {
-            Text(stringResource(R.string.automation_import_pick_place) + " ▾", color = TextPrimary, fontSize = 13.sp)
+            Text(stringResource(R.string.automation_import_pick_place) + " ▾", color = TextPrimary, fontSize = 14.sp)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ScaledDialogContent {
                 if (places.isEmpty()) {
                     DropdownMenuItem(
                         text = {
-                            Text(stringResource(R.string.automation_trigger_type_place_empty_hint), fontSize = 13.sp, color = TextMuted)
+                            Text(stringResource(R.string.automation_trigger_type_place_empty_hint), fontSize = 14.sp, color = TextSecondary)
                         },
                         onClick = { expanded = false },
                     )
@@ -369,10 +369,10 @@ private fun PlacePickButton(places: List<PlaceEntity>, enabled: Boolean, onPick:
                         // Coordinates tell apart two places with the same name.
                         text = {
                             Column {
-                                Text(place.name, fontSize = 13.sp)
+                                Text(place.name, fontSize = 14.sp)
                                 Text(
                                     String.format(Locale.US, "%.5f, %.5f", place.lat, place.lon),
-                                    fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Monospace,
+                                    fontSize = 14.sp, color = TextSecondary, fontFamily = FontFamily.Monospace,
                                 )
                             }
                         },

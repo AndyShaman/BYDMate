@@ -2023,6 +2023,7 @@
     <string name="auto_ui_miss_conditions">Добавьте условие</string>
     <string name="auto_ui_miss_param">Выберите, что проверять в условии %1$d</string>
     <string name="auto_ui_miss_value">Выберите значение в условии %1$d</string>
+    <string name="auto_ui_miss_operator">Выберите «равно» или «не равно» в условии %1$d</string>
     <string name="auto_ui_miss_number">Введите число в условии %1$d</string>
     <string name="auto_ui_miss_key">Назначьте клавишу руля в условии %1$d</string>
     <string name="auto_ui_miss_actions">Добавьте действие</string>

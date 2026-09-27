@@ -1852,6 +1852,7 @@
     <string name="auto_ui_miss_conditions">Adicione uma condição</string>
     <string name="auto_ui_miss_param">Escolha o que verificar na condição %1$d</string>
     <string name="auto_ui_miss_value">Escolha um valor na condição %1$d</string>
+    <string name="auto_ui_miss_operator">Escolha “igual a” ou “diferente de” na condição %1$d</string>
     <string name="auto_ui_miss_number">Digite um número na condição %1$d</string>
     <string name="auto_ui_miss_key">Defina a tecla do volante na condição %1$d</string>
     <string name="auto_ui_miss_actions">Adicione uma ação</string>
