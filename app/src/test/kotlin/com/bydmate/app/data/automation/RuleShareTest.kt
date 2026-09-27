@@ -491,6 +491,21 @@ class RuleShareTest {
         assertEquals("Navi", RuleShare.uniqueName("Navi", listOf("Other"), "импорт"))
     }
 
+    // Audit 3.19 item 2: a file shared before the Trunk fix still says 0 for closed.
+    @Test fun `an old Trunk closed value is read as the code the car reports`() {
+        val rule = SharedRule.fromEntity(
+            RuleEntity(
+                name = "Trunk",
+                triggers = TriggerDef.listToJson(listOf(TriggerDef("Trunk", "后备箱门", "==", "0", "x"))),
+                actions = ActionDef.listToJson(listOf(ActionDef("c", "x"))),
+            )
+        )
+
+        val parsed = (RuleShare.parse(RuleShare.exportJson(rule, "3.18.2"), "Звонок") as RuleParseResult.Ok).rule
+
+        assertEquals("2", parsed.triggers.single().value)
+    }
+
     @Test fun `every kind the editor can create is known`() {
         val created = listOf(
             TriggerDef("Speed", "车速", ">", "0", "x").kind,
