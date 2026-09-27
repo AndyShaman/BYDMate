@@ -384,26 +384,17 @@
     <string name="automation_journal_button">Journal</string>
     <string name="automation_create_button">+ Create</string>
     <string name="automation_menu_edit">Edit</string>
-    <string name="automation_menu_duplicate">Duplicate</string>
     <string name="automation_menu_delete">Delete</string>
     <string name="automation_delete_confirm_title">Delete rule?</string>
     <string name="automation_delete_confirm_text">This action cannot be undone.</string>
     <string name="automation_delete_button">Delete</string>
     <string name="automation_cancel_button">Cancel</string>
-    <string name="automation_rule_triggered_count">Triggered: %1$d</string>
-    <string name="automation_rule_last_trigger">Last: %1$s</string>
     <string name="automation_rule_cooldown">Cooldown: %1$d s</string>
-    <string name="automation_rule_logic_and"> AND </string>
-    <string name="automation_rule_logic_or"> OR </string>
     <string name="automation_editor_new_rule_title">New rule</string>
     <string name="automation_rule_name_placeholder">Rule name</string>
     <string name="automation_section_when">WHEN (conditions)</string>
     <string name="automation_section_then">THEN (actions)</string>
     <string name="automation_section_settings">SETTINGS</string>
-    <string name="automation_logic_and">AND</string>
-    <string name="automation_logic_or">OR</string>
-    <string name="automation_setting_cooldown">Cooldown between triggers</string>
-    <string name="automation_setting_unit_sec">s</string>
     <string name="automation_setting_park_only">Only in Park (P)</string>
     <string name="automation_setting_confirm_before">Ask before running</string>
     <string name="automation_setting_once_per_trip">Run once per trip</string>
@@ -414,7 +405,6 @@
     <string name="automation_trigger_place_enter_prefix">Place enter</string>
     <string name="automation_trigger_place_exit_prefix">Place exit</string>
     <string name="automation_trigger_place_deleted_placeholder">&lt;deleted&gt;</string>
-    <string name="automation_trigger_time_of_day_label">Time of day:</string>
     <string name="automation_trigger_day">Day</string>
     <string name="automation_trigger_night">Night</string>
     <string name="automation_trigger_dawn">Dawn</string>
@@ -431,9 +421,7 @@
     <string name="automation_trigger_type_internet">Internet available</string>
     <string name="automation_trigger_type_button_press">Button press</string>
     <string name="automation_trigger_button_label">Button %1$d</string>
-    <string name="automation_trigger_button_picker_label">Button</string>
     <string name="automation_trigger_type_steering_key">Steering-wheel key</string>
-    <string name="automation_trigger_steering_key_picker_label">Steering-wheel key</string>
     <string name="automation_trigger_steering_key_unassigned">Key not assigned</string>
     <string name="automation_trigger_steering_key_assign">assign</string>
     <string name="automation_steering_key_occupied_projection">This key turns navigation on the instrument cluster on. Free it up in Settings, Display section, or pick another one.</string>
@@ -458,16 +446,6 @@
     <string name="automation_day_fri">Fri</string>
     <string name="automation_day_sat">Sat</string>
     <string name="automation_day_sun">Sun</string>
-    <string name="automation_action_delay_label">Delay</string>
-    <string name="automation_delay_0_5s">0.5 s</string>
-    <string name="automation_delay_1s">1 s</string>
-    <string name="automation_delay_2s">2 s</string>
-    <string name="automation_delay_3s">3 s</string>
-    <string name="automation_delay_5s">5 s</string>
-    <string name="automation_delay_10s">10 s</string>
-    <string name="automation_delay_30s">30 s</string>
-    <string name="automation_delay_60s">1 min</string>
-    <string name="automation_delay_display_name">Delay %1$s</string>
     <string name="automation_add_action_button">+ Add action</string>
     <string name="automation_action_dplus_command">Vehicle command</string>
     <string name="automation_action_notification">Notification</string>
@@ -542,7 +520,6 @@
     <string name="automation_music_minimize_label">Minimize after launch (after 3 s)</string>
     <string name="automation_journal_title">Trigger journal</string>
     <string name="automation_journal_empty">Journal is empty</string>
-    <string name="automation_time_yesterday">yesterday %1$s</string>
     <string name="places_tab_title">Places</string>
     <string name="places_back_content_description">Back</string>
     <string name="places_add_button">+ Add</string>
@@ -1153,7 +1130,6 @@
     <string name="auto_trig_place_enter">Enter «%1$s»</string>
     <string name="auto_trig_service_start">BYDMate startup</string>
     <string name="auto_trig_network_available">Internet available</string>
-    <string name="auto_act_delay_1s">Delay 1 sec</string>
     <string name="auto_act_media_volume">Media volume: 2</string>
     <string name="auto_trig_time_of_day_night">Night</string>
     <!-- automation: executeNow toast + a11y -->

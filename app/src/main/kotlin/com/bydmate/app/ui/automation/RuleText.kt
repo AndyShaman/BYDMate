@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // one small wording function per rule part
+
 package com.bydmate.app.ui.automation
 
 import android.content.Context
@@ -39,6 +41,7 @@ internal data class RulePhrase(val conditions: String, val actions: String) {
 internal fun rulePhrase(rule: RuleEntity, context: Context, now: Long = System.currentTimeMillis()): RulePhrase =
     rulePhrase(TriggerDef.listFromJson(rule.triggers), rule.triggerLogic, ActionDef.listFromJson(rule.actions), context, now)
 
+@Suppress("LongParameterList") // the rule's parts plus the clock, so tests pin the day
 internal fun rulePhrase(
     triggers: List<TriggerDef>,
     logic: String,
@@ -106,6 +109,7 @@ private fun withUnit(value: String, unit: String): String = when {
     else -> "$value $unit"
 }
 
+@Suppress("CyclomaticComplexMethod") // one branch per trigger kind
 internal fun conditionText(t: TriggerDef, lc: Context, now: Long, zone: ZoneId): String = when (t.kind) {
     "param" -> paramConditionText(t, lc)
     "place_enter" -> lc.getString(R.string.auto_trig_place_enter, t.placeName ?: "?")
@@ -216,6 +220,7 @@ private fun onOffText(nameRes: Int, onRes: Int, offRes: Int, payload: String?, l
     return lc.getString(R.string.auto_ui_act_with, name, decapitalize(state, lc))
 }
 
+@Suppress("CyclomaticComplexMethod") // one branch per action kind
 internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
     "param" -> ACTION_COMMANDS.firstOrNull { it.toggleTarget == null && it.command == a.command }
         ?.let { lc.getString(it.nameRes) } ?: a.displayName
@@ -306,6 +311,7 @@ internal data class JournalLine(
     val why: String?,
 )
 
+@Suppress("CyclomaticComplexMethod") // non-runs, runs and failures each read their own fields
 internal fun journalLine(
     log: RuleLogEntity,
     rule: RuleEntity?,
@@ -404,7 +410,7 @@ internal fun missingParts(e: EditingRule, context: Context): List<Missing> {
         }
     }
     if (e.actions.isEmpty()) out += Missing.NoActions
-    RuleDraftValidator.validateActions(e.actions)?.let { out += Missing.Action(it.index(), it.text(lc)) }
+    RuleDraftValidator.validateActions(e.actions)?.let { out += it.toMissing(lc) }
     return out
 }
 
@@ -461,44 +467,25 @@ internal fun withParam(t: TriggerDef, option: TriggerParamOption, context: Conte
 /** A new param condition: nothing picked yet. */
 internal fun newParamTrigger(): TriggerDef = TriggerDef(param = "", chineseName = "", operator = "==", value = "", displayName = "")
 
-internal fun ActionValidationError.index(): Int = when (this) {
-    is ActionValidationError.CommandMissing -> index
-    is ActionValidationError.NotifTitleEmpty -> index
-    is ActionValidationError.AppNotSelected -> index
-    is ActionValidationError.PhoneInvalid -> index
-    is ActionValidationError.NavDestMissing -> index
-    is ActionValidationError.UrlEmpty -> index
-    is ActionValidationError.UrlNoScheme -> index
-    is ActionValidationError.YandexMusicModeMissing -> index
-    is ActionValidationError.MediaVolumeMissing -> index
-    is ActionValidationError.SentryInvalid -> index
-    is ActionValidationError.HotspotInvalid -> index
-    is ActionValidationError.SpeakTextEmpty -> index
-    is ActionValidationError.AgentQueryPromptEmpty -> index
-    is ActionValidationError.SplitScreenNarrowEmpty -> index
-    is ActionValidationError.SplitScreenWideEmpty -> index
-    is ActionValidationError.SplitScreenSamePackage -> index
-    is ActionValidationError.SplitScreenInvalidSide -> index
-    is ActionValidationError.TelegramReportEmpty -> index
-}
-
-internal fun ActionValidationError.text(lc: Context): String = when (this) {
-    is ActionValidationError.CommandMissing -> lc.getString(R.string.auto_msg_command_missing, index)
-    is ActionValidationError.NotifTitleEmpty -> lc.getString(R.string.auto_msg_notif_title_empty, index)
-    is ActionValidationError.AppNotSelected -> lc.getString(R.string.auto_msg_app_not_selected, index)
-    is ActionValidationError.PhoneInvalid -> lc.getString(R.string.auto_msg_phone_invalid, index)
-    is ActionValidationError.NavDestMissing -> lc.getString(R.string.auto_msg_nav_dest_missing, index)
-    is ActionValidationError.UrlEmpty -> lc.getString(R.string.auto_msg_url_empty, index)
-    is ActionValidationError.UrlNoScheme -> lc.getString(R.string.auto_msg_url_no_scheme, index)
-    is ActionValidationError.YandexMusicModeMissing -> lc.getString(R.string.auto_msg_ymusic_mode_missing, index)
-    is ActionValidationError.MediaVolumeMissing -> lc.getString(R.string.auto_msg_media_volume_missing, index)
-    is ActionValidationError.SentryInvalid -> lc.getString(R.string.auto_msg_sentry_invalid, index)
-    is ActionValidationError.HotspotInvalid -> lc.getString(R.string.auto_msg_hotspot_invalid, index)
-    is ActionValidationError.SpeakTextEmpty -> lc.getString(R.string.auto_msg_speak_text_empty, index)
-    is ActionValidationError.AgentQueryPromptEmpty -> lc.getString(R.string.auto_msg_agent_query_prompt_empty, index)
-    is ActionValidationError.SplitScreenNarrowEmpty -> lc.getString(R.string.auto_msg_split_narrow_empty, index)
-    is ActionValidationError.SplitScreenWideEmpty -> lc.getString(R.string.auto_msg_split_wide_empty, index)
-    is ActionValidationError.SplitScreenSamePackage -> lc.getString(R.string.auto_msg_split_same_package, index)
-    is ActionValidationError.SplitScreenInvalidSide -> lc.getString(R.string.auto_msg_split_invalid_side, index)
-    is ActionValidationError.TelegramReportEmpty -> lc.getString(R.string.auto_msg_tg_report_empty, index)
+/** The first action the validator refuses, with its line. */
+@Suppress("CyclomaticComplexMethod") // one branch per error type
+internal fun ActionValidationError.toMissing(lc: Context): Missing.Action = when (this) {
+    is ActionValidationError.CommandMissing -> Missing.Action(index, lc.getString(R.string.auto_msg_command_missing, index))
+    is ActionValidationError.NotifTitleEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_notif_title_empty, index))
+    is ActionValidationError.AppNotSelected -> Missing.Action(index, lc.getString(R.string.auto_msg_app_not_selected, index))
+    is ActionValidationError.PhoneInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_phone_invalid, index))
+    is ActionValidationError.NavDestMissing -> Missing.Action(index, lc.getString(R.string.auto_msg_nav_dest_missing, index))
+    is ActionValidationError.UrlEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_url_empty, index))
+    is ActionValidationError.UrlNoScheme -> Missing.Action(index, lc.getString(R.string.auto_msg_url_no_scheme, index))
+    is ActionValidationError.YandexMusicModeMissing -> Missing.Action(index, lc.getString(R.string.auto_msg_ymusic_mode_missing, index))
+    is ActionValidationError.MediaVolumeMissing -> Missing.Action(index, lc.getString(R.string.auto_msg_media_volume_missing, index))
+    is ActionValidationError.SentryInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_sentry_invalid, index))
+    is ActionValidationError.HotspotInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_hotspot_invalid, index))
+    is ActionValidationError.SpeakTextEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_speak_text_empty, index))
+    is ActionValidationError.AgentQueryPromptEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_agent_query_prompt_empty, index))
+    is ActionValidationError.SplitScreenNarrowEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_split_narrow_empty, index))
+    is ActionValidationError.SplitScreenWideEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_split_wide_empty, index))
+    is ActionValidationError.SplitScreenSamePackage -> Missing.Action(index, lc.getString(R.string.auto_msg_split_same_package, index))
+    is ActionValidationError.SplitScreenInvalidSide -> Missing.Action(index, lc.getString(R.string.auto_msg_split_invalid_side, index))
+    is ActionValidationError.TelegramReportEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_tg_report_empty, index))
 }

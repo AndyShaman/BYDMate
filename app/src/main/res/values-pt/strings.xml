@@ -381,26 +381,17 @@
     <string name="automation_journal_button">Diário</string>
     <string name="automation_create_button">+ Criar</string>
     <string name="automation_menu_edit">Editar</string>
-    <string name="automation_menu_duplicate">Duplicar</string>
     <string name="automation_menu_delete">Excluir</string>
     <string name="automation_delete_confirm_title">Excluir regra\?</string>
     <string name="automation_delete_confirm_text">Esta ação não pode ser desfeita.</string>
     <string name="automation_delete_button">Excluir</string>
     <string name="automation_cancel_button">Cancelar</string>
-    <string name="automation_rule_triggered_count">Acionada: %1$d</string>
-    <string name="automation_rule_last_trigger">Última: %1$s</string>
     <string name="automation_rule_cooldown">Tempo de espera: %1$d s</string>
-    <string name="automation_rule_logic_and">E</string>
-    <string name="automation_rule_logic_or">OU</string>
     <string name="automation_editor_new_rule_title">Nova regra</string>
     <string name="automation_rule_name_placeholder">Nome da regra</string>
     <string name="automation_section_when">QUANDO (condições)</string>
     <string name="automation_section_then">ENTÃO (ações)</string>
     <string name="automation_section_settings">CONFIGURAÇÕES</string>
-    <string name="automation_logic_and">E</string>
-    <string name="automation_logic_or">OU</string>
-    <string name="automation_setting_cooldown">Tempo de espera entre acionamentos</string>
-    <string name="automation_setting_unit_sec">s</string>
     <string name="automation_setting_park_only">Apenas estacionado (P)</string>
     <string name="automation_setting_confirm_before">Perguntar antes de executar</string>
     <string name="automation_setting_once_per_trip">Executar uma vez por viagem</string>
@@ -411,7 +402,6 @@
     <string name="automation_trigger_place_enter_prefix">Entrar no local</string>
     <string name="automation_trigger_place_exit_prefix">Sair do local</string>
     <string name="automation_trigger_place_deleted_placeholder">&lt;excluído&gt;</string>
-    <string name="automation_trigger_time_of_day_label">Período do dia:</string>
     <string name="automation_trigger_day">Dia</string>
     <string name="automation_trigger_night">Noite</string>
     <string name="automation_trigger_dawn">Madrugada</string>
@@ -428,9 +418,7 @@
     <string name="automation_trigger_type_internet">Internet disponível</string>
     <string name="automation_trigger_type_button_press">Pressionamento de botão</string>
     <string name="automation_trigger_button_label">Botão %1$d</string>
-    <string name="automation_trigger_button_picker_label">Botão</string>
     <string name="automation_trigger_type_steering_key">Tecla do volante</string>
-    <string name="automation_trigger_steering_key_picker_label">Tecla do volante</string>
     <string name="automation_trigger_steering_key_unassigned">Tecla não atribuída</string>
     <string name="automation_trigger_steering_key_assign">atribuir</string>
     <string name="automation_steering_key_occupied_projection">Esta tecla liga a navegação no painel de instrumentos. Libere-a em Configurações, seção Tela, ou escolha outra.</string>
@@ -451,16 +439,6 @@
     <string name="automation_day_fri">Sex</string>
     <string name="automation_day_sat">Sáb</string>
     <string name="automation_day_sun">Dom</string>
-    <string name="automation_action_delay_label">Atraso</string>
-    <string name="automation_delay_0_5s">0.5 s</string>
-    <string name="automation_delay_1s">1 s</string>
-    <string name="automation_delay_2s">2 s</string>
-    <string name="automation_delay_3s">3 s</string>
-    <string name="automation_delay_5s">5 s</string>
-    <string name="automation_delay_10s">10 s</string>
-    <string name="automation_delay_30s">30 s</string>
-    <string name="automation_delay_60s">1 min</string>
-    <string name="automation_delay_display_name">Atraso %1$s</string>
     <string name="automation_add_action_button">+ Adicionar ação</string>
     <string name="automation_action_dplus_command">Comando do veículo</string>
     <string name="automation_action_notification">Notificação</string>
@@ -535,7 +513,6 @@
     <string name="automation_music_minimize_label">Minimizar após abrir (após 3 s)</string>
     <string name="automation_journal_title">Diário de acionamentos</string>
     <string name="automation_journal_empty">O diário está vazio</string>
-    <string name="automation_time_yesterday">ontem %1$s</string>
     <string name="places_tab_title">Locais</string>
     <string name="places_back_content_description">Voltar</string>
     <string name="places_add_button">+ Adicionar</string>
@@ -1146,7 +1123,6 @@
     <string name="auto_trig_place_enter">Entrada em «%1$s»</string>
     <string name="auto_trig_service_start">Inicialização do BYDMate</string>
     <string name="auto_trig_network_available">Internet disponível</string>
-    <string name="auto_act_delay_1s">Pausa 1 s</string>
     <string name="auto_act_media_volume">Volume de mídia: 2</string>
     <string name="auto_trig_time_of_day_night">Noite</string>
     <!-- automation: executeNow toast + a11y -->

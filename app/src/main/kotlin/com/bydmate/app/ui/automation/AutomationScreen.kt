@@ -13,9 +13,41 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.layout.onSizeChanged
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.WbTwilight
+import androidx.compose.material.icons.outlined.WifiTethering
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import com.bydmate.app.data.automation.AutomationEngine
+import com.bydmate.app.data.automation.OneShotTrigger
+import com.bydmate.app.util.appLocalizedContext
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -194,123 +226,148 @@ fun AutomationScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        // Header: title and filters on the left; «Места» / «Журнал», a divider, then «Импорт» /
-        // «+ Создать» and the list/grid toggle on the right. When both groups do not fit one
-        // line, the action group moves whole under the filters (and wraps only if still too wide).
-        HeaderLayout {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(stringResource(R.string.automation_tab_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
-                    modifier = Modifier.align(Alignment.CenterVertically).padding(end = 12.dp))
-                // 40dp visible, the chip's own minimum interactive size makes the touch area 48dp.
-                val chipModifier = Modifier.heightIn(min = 40.dp)
-                AutoChip(stringResource(R.string.automation_filter_all), state.filter == RuleFilter.ALL, chipModifier) { viewModel.setFilter(RuleFilter.ALL) }
-                AutoChip(stringResource(R.string.automation_filter_active), state.filter == RuleFilter.ENABLED, chipModifier) { viewModel.setFilter(RuleFilter.ENABLED) }
-                AutoChip(stringResource(R.string.automation_filter_disabled), state.filter == RuleFilter.DISABLED, chipModifier) { viewModel.setFilter(RuleFilter.DISABLED) }
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                HeaderOutlinedButton(stringResource(R.string.settings_section_places_title), Icons.Outlined.Place) { showPlaces = true }
-                HeaderOutlinedButton(stringResource(R.string.automation_journal_button), null) { viewModel.showJournal() }
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 6.dp)
-                        .width(1.dp)
-                        .height(36.dp)
-                        .background(CardBorder)
-                        .align(Alignment.CenterVertically)
-                )
-                HeaderOutlinedButton(stringResource(R.string.automation_import_button), Icons.Outlined.FileOpen) { viewModel.openImport() }
-                Button(
-                    onClick = { viewModel.openNewRule() },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                ) { Text(stringResource(R.string.automation_create_button), fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-                ViewModeToggle(state.viewMode, viewModel::setViewMode)
-            }
+    // A note (rule limit, test run refused) hides itself after a few seconds.
+    state.message?.let { msg ->
+        LaunchedEffect(msg) {
+            delay(MESSAGE_SHOW_MS)
+            viewModel.dismissMessage()
         }
+    }
 
-        Spacer(Modifier.height(12.dp))
-
-        // Rule list: compact rows or a 3-column grid of cards, chosen in the header. A long press
-        // lifts a rule, dragging moves it, letting go saves the new order.
-        val actionsFor: @Composable (RuleEntity) -> List<RuleAction> = { rule ->
-            ruleActions(
-                onEdit = { viewModel.openEditRule(rule) },
-                onDuplicate = { viewModel.duplicateRule(rule) },
-                onShare = { viewModel.shareRule(rule) },
-                shareEnabled = !state.shareInProgress,
-                onDelete = { viewModel.requestDelete(rule.id) },
-            )
-        }
-        when (state.viewMode) {
-            RuleViewMode.LIST -> BoxWithConstraints(Modifier.fillMaxSize()) {
-                // Narrow windows (DiLink 3/4, split screen): the buttons give way before the text.
-                val labels = ruleActions({}, {}, {}, true, {}).map { it.label }
-                val labelWidth = maxLabelWidth(labels, ROW_LABEL_STYLE)
-                val mode = listActionMode(
-                    rowWidth = maxWidth,
-                    labeledActionsWidth = (ROW_BUTTON_CHROME + labelWidth) * 4 + ROW_ACTION_SPACING * 3,
-                    minTextWidth = with(LocalDensity.current) { MIN_ROW_TEXT.toDp() },
-                )
-                val listState = rememberLazyListState()
-                val drag = rememberRuleDrag(remember(listState) { ListCells(listState) }, filtered, viewModel::moveRule)
-                LazyColumn(
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxSize().ruleDrag(drag)
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            // Header: title and filters on the left; «Места» / «Журнал», a divider, then «Импорт» /
+            // «+ Создать» and the list/grid toggle on the right. When both groups do not fit one
+            // line, the action group moves whole under the filters (and wraps only if still too wide).
+            HeaderLayout {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    items(drag.shown(filtered), key = { it.id }) { rule ->
-                        RuleListRow(
-                            rule = rule,
-                            actions = actionsFor(rule),
-                            mode = mode,
-                            onToggle = { viewModel.toggleEnabled(rule) },
-                            onClick = { viewModel.openEditRule(rule) },
-                            modifier = Modifier.liftedWhen(drag, rule.id),
-                        )
+                    Text(stringResource(R.string.automation_tab_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
+                        modifier = Modifier.align(Alignment.CenterVertically).padding(end = 12.dp))
+                    // 40dp visible, the chip's own minimum interactive size makes the touch area 48dp.
+                    val chipModifier = Modifier.heightIn(min = 40.dp)
+                    AutoChip(stringResource(R.string.automation_filter_all), state.filter == RuleFilter.ALL, chipModifier) { viewModel.setFilter(RuleFilter.ALL) }
+                    AutoChip(stringResource(R.string.automation_filter_active), state.filter == RuleFilter.ENABLED, chipModifier) { viewModel.setFilter(RuleFilter.ENABLED) }
+                    AutoChip(stringResource(R.string.automation_filter_disabled), state.filter == RuleFilter.DISABLED, chipModifier) { viewModel.setFilter(RuleFilter.DISABLED) }
+                }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    HeaderOutlinedButton(stringResource(R.string.settings_section_places_title), Icons.Outlined.Place) { showPlaces = true }
+                    HeaderOutlinedButton(stringResource(R.string.automation_journal_button), null) { viewModel.showJournal() }
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp)
+                            .width(1.dp)
+                            .height(36.dp)
+                            .background(CardBorder)
+                            .align(Alignment.CenterVertically)
+                    )
+                    HeaderOutlinedButton(stringResource(R.string.automation_import_button), Icons.Outlined.FileOpen) { viewModel.openImport() }
+                    Button(
+                        onClick = { viewModel.openNewRule() },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                    ) { Text(stringResource(R.string.automation_create_button), fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+                    ViewModeToggle(state.viewMode, viewModel::setViewMode)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Rule list: compact rows or a 3-column grid of cards, chosen in the header. A long press
+            // lifts a rule, dragging moves it, letting go saves the new order.
+            val actionsFor: @Composable (RuleEntity) -> List<RuleAction> = { rule ->
+                ruleActions(
+                    onEdit = { viewModel.openEditRule(rule) },
+                    onDuplicate = { viewModel.duplicateRule(rule) },
+                    onShare = { viewModel.shareRule(rule) },
+                    shareEnabled = !state.shareInProgress,
+                    onDelete = { viewModel.requestDelete(rule.id) },
+                )
+            }
+            when (state.viewMode) {
+                RuleViewMode.LIST -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                    // Narrow windows (DiLink 3/4, split screen): the buttons give way before the text.
+                    val cellWidths = labelWidths(ruleActions({}, {}, {}, true, {}).map { it.label }, ACTION_LABEL_STYLE)
+                        .map { rowCellWidth(it) }
+                    val mode = listActionMode(
+                        rowWidth = maxWidth,
+                        labeledActionsWidth = cellWidths.fold(ROW_DIVIDER_SLOT) { sum, w -> sum + w } + ROW_ACTION_SPACING * 3,
+                        minTextWidth = with(LocalDensity.current) { MIN_ROW_TEXT.toDp() },
+                    )
+                    val listState = rememberLazyListState()
+                    val drag = rememberRuleDrag(remember(listState) { ListCells(listState) }, filtered, viewModel::moveRule)
+                    LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxSize().ruleDrag(drag)
+                    ) {
+                        items(drag.shown(filtered), key = { it.id }) { rule ->
+                            RuleListRow(
+                                rule = rule,
+                                last = state.lastLogs[rule.id],
+                                actions = actionsFor(rule),
+                                cellWidths = cellWidths,
+                                mode = mode,
+                                onToggle = { viewModel.toggleEnabled(rule) },
+                                onClick = { viewModel.openEditRule(rule) },
+                                onStatus = { viewModel.showRuleJournal(rule.id) },
+                                modifier = Modifier.liftedWhen(drag, rule.id),
+                            )
+                        }
+                    }
+                }
+                RuleViewMode.GRID -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                    // Columns keep every card button at least 48dp wide; labels go icon-only in every
+                    // card when the widest one does not fit its cell.
+                    val columns = gridColumns(maxWidth)
+                    val labelWidth = labelWidths(ruleActions({}, {}, {}, true, {}).map { it.label }, ACTION_LABEL_STYLE).max()
+                    val showLabels = labelWidth <= footCellWidth(maxWidth, columns) - FOOT_CELL_PADDING * 2
+                    val gridState = rememberLazyGridState()
+                    val drag = rememberRuleDrag(remember(gridState) { GridCells(gridState) }, filtered, viewModel::moveRule)
+                    // Each card's natural body height by rule id: a card grows to the tallest of its row.
+                    val bodyHeights = remember { mutableStateMapOf<Long, Int>() }
+                    val density = LocalDensity.current
+                    val shown = drag.shown(filtered)
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(columns),
+                        state = gridState,
+                        horizontalArrangement = Arrangement.spacedBy(GRID_SPACING),
+                        verticalArrangement = Arrangement.spacedBy(GRID_SPACING),
+                        modifier = Modifier.fillMaxSize().ruleDrag(drag)
+                    ) {
+                        itemsIndexed(shown, key = { _, rule -> rule.id }) { index, rule ->
+                            val row = shown.subList(index - index % columns, minOf(shown.size, index - index % columns + columns))
+                            val rowHeight = row.maxOf { bodyHeights[it.id] ?: 0 }
+                            RuleGridCard(
+                                rule = rule,
+                                last = state.lastLogs[rule.id],
+                                actions = actionsFor(rule),
+                                showLabels = showLabels,
+                                bodyMinHeight = with(density) { rowHeight.toDp() },
+                                onBodyHeight = { bodyHeights[rule.id] = it },
+                                onToggle = { viewModel.toggleEnabled(rule) },
+                                onClick = { viewModel.openEditRule(rule) },
+                                onStatus = { viewModel.showRuleJournal(rule.id) },
+                                modifier = Modifier.liftedWhen(drag, rule.id),
+                            )
+                        }
                     }
                 }
             }
-            RuleViewMode.GRID -> BoxWithConstraints(Modifier.fillMaxSize()) {
-                // Columns keep every card button at least 48dp wide; labels go icon-only in every
-                // card when the widest one does not fit its cell.
-                val columns = gridColumns(maxWidth)
-                val labelWidth = maxLabelWidth(ruleActions({}, {}, {}, true, {}).map { it.label }, FOOT_LABEL_STYLE)
-                val showLabels = labelWidth <= footCellWidth(maxWidth, columns) - FOOT_CELL_PADDING * 2
-                val gridState = rememberLazyGridState()
-                val drag = rememberRuleDrag(remember(gridState) { GridCells(gridState) }, filtered, viewModel::moveRule)
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(columns),
-                    state = gridState,
-                    horizontalArrangement = Arrangement.spacedBy(GRID_SPACING),
-                    verticalArrangement = Arrangement.spacedBy(GRID_SPACING),
-                    modifier = Modifier.fillMaxSize().ruleDrag(drag)
-                ) {
-                    items(drag.shown(filtered), key = { it.id }) { rule ->
-                        RuleGridCard(
-                            rule = rule,
-                            actions = actionsFor(rule),
-                            showLabels = showLabels,
-                            onToggle = { viewModel.toggleEnabled(rule) },
-                            onClick = { viewModel.openEditRule(rule) },
-                            modifier = Modifier.liftedWhen(drag, rule.id),
-                        )
-                    }
-                }
-            }
         }
+        // Over the editor the note is drawn inside the editor's own window instead.
+        if (!state.showEditor) state.message?.let { MessagePill(it, Modifier.align(Alignment.BottomCenter)) }
     }
 
     // Editor dialog
@@ -320,6 +377,7 @@ fun AutomationScreen(
             places = state.places,
             tgBotConnected = state.tgBotConnected,
             editorError = state.editorError,
+            message = state.message,
             onUpdate = { viewModel.updateEditing(it) },
             onSave = { viewModel.saveRule() },
             onShare = { viewModel.shareEditing() },
@@ -381,8 +439,11 @@ fun AutomationScreen(
 
     // Journal dialog
     if (state.showJournal) {
+        val journalRule = state.journalRuleId?.let { id -> state.rules.firstOrNull { it.id == id } }
         JournalDialog(
-            logs = state.logs,
+            logs = if (state.journalRuleId != null) state.ruleLogs else state.logs,
+            rules = state.rules,
+            ruleName = journalRule?.name ?: state.journalRuleId?.let { "" },
             onDismiss = { viewModel.hideJournal() }
         )
     }
@@ -410,16 +471,20 @@ fun AutomationScreen(
 
 // --- Rule list: rows and cards ---
 
-private val FOOT_CELL_PADDING = 4.dp
 private val RULE_CARD_SHAPE = RoundedCornerShape(12.dp)
-private val FOOT_LABEL_STYLE = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
-private val ROW_LABEL_STYLE = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-/** Labeled list button without its label: 12 + 14 padding, 24 icon, 8 gap. */
-private val ROW_BUTTON_CHROME = 58.dp
+/** Card and row buttons: 20dp icon over a 14sp label, no frame. */
+private val ACTION_LABEL_STYLE = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+/** A labeled list button: at least this wide, else its label plus 8dp each side. */
+private val ROW_CELL_MIN = 56.dp
+private val ROW_CELL_PADDING = 8.dp
+/** A labeled button is 72dp tall to touch. */
+private val ROW_CELL_HEIGHT = 72.dp
+/** The thin line between the row text and its buttons, with 8dp on each side. */
+private val ROW_DIVIDER_SLOT = 17.dp
 /** Least width the list row text keeps beside the buttons; in sp so it grows with the text size. */
 private val MIN_ROW_TEXT = 240.sp
 
-/** One of the four buttons of a rule: Изменить / Дублировать / Поделиться / Удалить. */
+/** One of the four buttons of a rule: Изменить / Копия / Отправить / Удалить. */
 private class RuleAction(
     val label: String,
     val icon: ImageVector,
@@ -437,8 +502,8 @@ private fun ruleActions(
     onDelete: () -> Unit,
 ): List<RuleAction> = listOf(
     RuleAction(stringResource(R.string.automation_menu_edit), Icons.Outlined.Edit, false, true, onEdit),
-    RuleAction(stringResource(R.string.automation_menu_duplicate), Icons.Outlined.ContentCopy, false, true, onDuplicate),
-    RuleAction(stringResource(R.string.automation_share_button), Icons.Outlined.Share, false, shareEnabled, onShare),
+    RuleAction(stringResource(R.string.auto_ui_card_copy), Icons.Outlined.ContentCopy, false, true, onDuplicate),
+    RuleAction(stringResource(R.string.auto_ui_card_share), Icons.Outlined.Share, false, shareEnabled, onShare),
     RuleAction(stringResource(R.string.automation_menu_delete), Icons.Outlined.Delete, true, true, onDelete),
 )
 
@@ -448,49 +513,92 @@ private fun RuleAction.contentColor(): Color = when {
     else -> AccentGreen
 }
 
-/** Width of the widest of [labels] on one line at the current text size. */
+/** Widths of [labels] on one line at the current text size. */
 @Composable
-private fun maxLabelWidth(labels: List<String>, style: TextStyle): Dp {
+private fun labelWidths(labels: List<String>, style: TextStyle): List<Dp> {
     val measurer = rememberTextMeasurer()
-    val widest = labels.maxOf { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width }
-    return with(LocalDensity.current) { widest.toDp() }
+    val density = LocalDensity.current
+    return labels.map { with(density) { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width.toDp() } }
 }
 
-/** Trigger → action line; a disabled rule shows it all muted. */
+private fun rowCellWidth(labelWidth: Dp): Dp = maxOf(ROW_CELL_MIN, labelWidth + ROW_CELL_PADDING * 2)
+
+/** The card phrase: conditions in the text colour, actions in teal; a disabled rule is all grey. */
 @Composable
-private fun ruleLogic(rule: RuleEntity): AnnotatedString {
-    val triggers = remember(rule.triggers) { TriggerDef.listFromJson(rule.triggers) }
-    val actions = remember(rule.actions) { ActionDef.listFromJson(rule.actions) }
-    val logicAndLabel = stringResource(R.string.automation_rule_logic_and)
-    val logicOrLabel = stringResource(R.string.automation_rule_logic_or)
-    val summaryCtx = LocalContext.current
-    val logic = buildAnnotatedString {
-        triggers.forEachIndexed { i, t ->
-            if (i > 0) {
-                withStyle(SpanStyle(color = TextMuted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)) {
-                    append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
-                }
-            }
-            appendTriggerSummary(t, summaryCtx)
-        }
-        withStyle(SpanStyle(color = TextMuted)) { append(" → ") }
-        withStyle(SpanStyle(color = AccentTeal)) {
-            append(actions.joinToString(", ") { it.displayName })
+private fun rulePhraseText(rule: RuleEntity): AnnotatedString {
+    val context = LocalContext.current
+    val phrase = remember(rule.triggers, rule.triggerLogic, rule.actions, context) { rulePhrase(rule, context) }
+    if (!rule.enabled) return AnnotatedString(phrase.text(context))
+    val full = phrase.text(context)
+    val at = if (phrase.actions.isEmpty()) -1 else full.lastIndexOf(phrase.actions)
+    return buildAnnotatedString {
+        if (at < 0) {
+            append(full)
+        } else {
+            append(full.substring(0, at))
+            withStyle(SpanStyle(color = AccentTeal)) { append(phrase.actions) }
+            append(full.substring(at + phrase.actions.length))
         }
     }
-    return if (rule.enabled) logic else AnnotatedString(logic.text)
 }
 
-/** «Сработало: N · Последний: … · Пауза: N сек». */
 @Composable
-private fun ruleStats(rule: RuleEntity): String {
-    val triggeredLabel = stringResource(R.string.automation_rule_triggered_count, rule.triggerCount)
-    val localContext = LocalContext.current
-    val lastLabel = rule.lastTriggeredAt?.let { ts ->
-        " · " + stringResource(R.string.automation_rule_last_trigger, formatRelativeTime(ts, localContext))
-    } ?: ""
-    val cooldownLabel = " · " + stringResource(R.string.automation_rule_cooldown, rule.cooldownSeconds)
-    return triggeredLabel + lastLabel + cooldownLabel
+private fun RulePhraseLine(rule: RuleEntity, modifier: Modifier = Modifier) {
+    Text(
+        rulePhraseText(rule), fontSize = 16.sp, lineHeight = 22.sp,
+        color = if (rule.enabled) TextPrimary else TextSecondary, modifier = modifier,
+    )
+}
+
+@Composable
+private fun RuleName(rule: RuleEntity, modifier: Modifier = Modifier) {
+    Text(
+        rule.name, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
+        color = if (rule.enabled) TextPrimary else TextSecondary, modifier = modifier,
+    )
+}
+
+private fun RuleStatusKind.icon(): ImageVector = when (this) {
+    RuleStatusKind.OK -> Icons.Outlined.CheckCircle
+    RuleStatusKind.CANCELLED -> Icons.Outlined.Block
+    RuleStatusKind.SKIPPED -> Icons.Outlined.Block
+    RuleStatusKind.ERROR -> Icons.Outlined.ErrorOutline
+    RuleStatusKind.NEVER -> Icons.Outlined.RemoveCircleOutline
+    RuleStatusKind.PLANNED -> Icons.Outlined.CalendarMonth
+}
+
+private fun RuleStatusKind.color(): Color = when (this) {
+    RuleStatusKind.OK -> AccentGreen
+    RuleStatusKind.CANCELLED, RuleStatusKind.SKIPPED -> AccentOrange
+    RuleStatusKind.ERROR -> SocRed
+    RuleStatusKind.NEVER -> TextSecondary
+    RuleStatusKind.PLANNED -> AccentBlue
+}
+
+/**
+ * The rule's last result with its time, as a pill: only the icon is coloured. A tap opens this
+ * rule's journal; the pill is 32dp to see and 48dp to touch.
+ */
+@Composable
+private fun RuleStatusChip(rule: RuleEntity, last: RuleLogEntity?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val status = remember(rule, last, context) { ruleStatus(rule, last, context) }
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .clip(shape)
+            .border(1.dp, CardBorder, shape)
+            .clickable(onClick = onClick)
+            .heightIn(min = 32.dp)
+            .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(status.kind.icon(), null, tint = status.kind.color(), modifier = Modifier.size(18.dp))
+        Text(status.text, fontSize = 14.sp, lineHeight = 18.sp, color = TextSecondary)
+        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+    }
 }
 
 @Composable
@@ -507,7 +615,7 @@ private fun RuleDot(enabled: Boolean) {
 /** The rule's switch centred in a 64x48dp slot; the M3 switch itself is 52x48dp to touch. */
 @Composable
 private fun RuleSwitch(enabled: Boolean, onToggle: () -> Unit) {
-    Box(Modifier.size(64.dp, 48.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(SWITCH_SLOT, 48.dp), contentAlignment = Alignment.Center) {
         Switch(checked = enabled, onCheckedChange = { onToggle() }, colors = bydSwitchColors())
     }
 }
@@ -535,142 +643,139 @@ private fun RuleContainer(
     )
 }
 
+/** Dot, name and the status pill (wrapping under the name when they do not fit), the phrase below. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun RuleRowText(rule: RuleEntity, last: RuleLogEntity?, onStatus: () -> Unit, modifier: Modifier) {
+    Column(modifier) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.align(Alignment.CenterVertically), verticalAlignment = Alignment.CenterVertically) {
+                RuleDot(rule.enabled)
+                Spacer(Modifier.width(8.dp))
+                RuleName(rule)
+            }
+            RuleStatusChip(rule, last, onStatus, Modifier.align(Alignment.CenterVertically))
+        }
+        RulePhraseLine(rule, Modifier.padding(start = 16.dp))
+    }
+}
+
 /**
- * List view: text on the left, four 48dp buttons, the switch at the far right. In a narrow
- * window ([mode]) the buttons drop their labels, then move under the text across the row.
+ * List view: text on the left, then behind a thin line four buttons (20dp icon over a 14sp
+ * label, no frame) and the switch, all centred on the row's height. In a narrow window ([mode])
+ * the buttons drop their labels, then move under the text across the row.
  */
 @Composable
 private fun RuleListRow(
     rule: RuleEntity,
+    last: RuleLogEntity?,
     actions: List<RuleAction>,
+    cellWidths: List<Dp>,
     mode: ListActionMode,
     onToggle: () -> Unit,
     onClick: () -> Unit,
+    onStatus: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val padding = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)
     RuleContainer(rule, onClick, modifier) {
         when (mode) {
             ListActionMode.LABELED, ListActionMode.ICONS -> Row(
-                modifier = padding,
+                modifier = padding.height(IntrinsicSize.Min),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                RuleRowText(rule, ruleLogic(rule), ruleStats(rule), Modifier.weight(1f))
-                if (mode == ListActionMode.LABELED) {
-                    // Equal widths: every button is as wide as the widest label needs.
-                    Row(Modifier.width(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(ROW_ACTION_SPACING)) {
-                        actions.forEach { RowActionButton(it, showLabel = true, Modifier.weight(1f)) }
-                    }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(ROW_ACTION_SPACING)) {
-                        actions.forEach { RowActionButton(it, showLabel = false, Modifier.width(MIN_TOUCH)) }
-                    }
+                RuleRowText(rule, last, onStatus, Modifier.weight(1f).padding(end = 8.dp))
+                Box(Modifier.fillMaxHeight().width(ROW_DIVIDER_SLOT).padding(horizontal = 8.dp).background(CardBorder))
+                val labeled = mode == ListActionMode.LABELED
+                actions.forEachIndexed { i, action ->
+                    ActionCell(action, labeled, Modifier.width(if (labeled) cellWidths[i] else MIN_TOUCH))
                 }
                 RuleSwitch(rule.enabled, onToggle)
             }
             ListActionMode.BELOW_LABELED, ListActionMode.BELOW_ICONS -> Column(
                 modifier = padding,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RuleRowText(rule, ruleLogic(rule), ruleStats(rule), Modifier.weight(1f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RuleRowText(rule, last, onStatus, Modifier.weight(1f).padding(end = 8.dp))
                     RuleSwitch(rule.enabled, onToggle)
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ROW_ACTION_SPACING)) {
-                    val showLabel = mode == ListActionMode.BELOW_LABELED
-                    actions.forEach { RowActionButton(it, showLabel, Modifier.weight(1f)) }
+                HorizontalDivider(color = CardBorder, modifier = Modifier.padding(end = 12.dp))
+                Row(Modifier.fillMaxWidth()) {
+                    val labeled = mode == ListActionMode.BELOW_LABELED
+                    actions.forEach { ActionCell(it, labeled, Modifier.weight(1f)) }
                 }
             }
         }
     }
 }
 
+/** A rule button: the icon over its label, or the icon alone in a 48x48dp cell. */
+@Composable
+private fun ActionCell(action: RuleAction, showLabel: Boolean, modifier: Modifier, labeledHeight: Dp = ROW_CELL_HEIGHT) {
+    val color = action.contentColor()
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = action.enabled, role = Role.Button, onClick = action.onClick)
+            .heightIn(min = if (showLabel) labeledHeight else MIN_TOUCH)
+            .padding(horizontal = 2.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+    ) {
+        Icon(action.icon, if (showLabel) null else action.label, tint = color, modifier = Modifier.size(20.dp))
+        if (showLabel) {
+            Text(action.label, color = color, style = ACTION_LABEL_STYLE, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
 /**
- * Dot + name with the stats beside the name when they fit, otherwise on their own line under
- * the logic. Name and stats wrap rather than get cut; only the logic line ellipsizes.
+ * Grid view: name and switch, the phrase (wrapping, never cut), the status pill, then four
+ * buttons across the card. [bodyMinHeight] is the tallest body of the card's grid row, so the
+ * cards of a row come out the same height; [onBodyHeight] reports this card's own.
  */
 @Composable
-private fun RuleRowText(rule: RuleEntity, logic: AnnotatedString, stats: String, modifier: Modifier) {
-    Layout(
-        content = {
-            RuleDot(rule.enabled)
-            Text(
-                rule.name, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold,
-                color = if (rule.enabled) TextPrimary else TextSecondary,
-            )
-            Text(stats, fontSize = 11.sp, lineHeight = 14.sp, color = TextMuted)
-            Text(
-                logic, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = if (rule.enabled) TextPrimary else TextMuted,
-            )
-        },
-        modifier = modifier,
-    ) { measurables, constraints ->
-        val dotM = measurables[0]
-        val nameM = measurables[1]
-        val statsM = measurables[2]
-        val logicM = measurables[3]
-        val indent = 16.dp.roundToPx()
-        val gap = 12.dp.roundToPx()
-        val rowGap = 2.dp.roundToPx()
-        val width = constraints.maxWidth
-        val textMax = (width - indent).coerceAtLeast(0)
-        val dot = dotM.measure(Constraints())
-        val name = nameM.measure(Constraints(maxWidth = textMax))
-        val statsBeside = name.width + gap + statsM.maxIntrinsicWidth(Constraints.Infinity) <= textMax
-        val stats = statsM.measure(
-            Constraints(maxWidth = if (statsBeside) textMax - name.width - gap else textMax)
-        )
-        val logic = logicM.measure(Constraints(maxWidth = textMax))
-
-        val statsX: Int
-        val statsY: Int
-        val logicY: Int
-        val height: Int
-        if (statsBeside) {
-            // Stats share the name's baseline.
-            statsX = indent + name.width + gap
-            statsY = (name[FirstBaseline] - stats[FirstBaseline]).coerceAtLeast(0)
-            logicY = maxOf(name.height, statsY + stats.height) + rowGap
-            height = logicY + logic.height
-        } else {
-            statsX = indent
-            logicY = name.height + rowGap
-            statsY = logicY + logic.height + rowGap
-            height = statsY + stats.height
+private fun RuleGridCard(
+    rule: RuleEntity,
+    last: RuleLogEntity?,
+    actions: List<RuleAction>,
+    showLabels: Boolean,
+    bodyMinHeight: Dp,
+    onBodyHeight: (Int) -> Unit,
+    onToggle: () -> Unit,
+    onClick: () -> Unit,
+    onStatus: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    RuleContainer(rule, onClick, modifier) {
+        Box(Modifier.heightIn(min = bodyMinHeight)) {
+            Column(
+                modifier = Modifier
+                    .onSizeChanged { onBodyHeight(it.height) }
+                    .padding(start = 14.dp, end = 4.dp, bottom = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RuleDot(rule.enabled)
+                    Spacer(Modifier.width(8.dp))
+                    RuleName(rule, Modifier.weight(1f))
+                    RuleSwitch(rule.enabled, onToggle)
+                }
+                RulePhraseLine(rule, Modifier.padding(end = 10.dp))
+                RuleStatusChip(rule, last, onStatus)
+            }
         }
-        val nameLine = minOf(name.height, 20.sp.roundToPx())
-        layout(width, height) {
-            dot.place(0, (nameLine - dot.height) / 2)
-            name.place(indent, 0)
-            stats.place(statsX, statsY)
-            logic.place(indent, logicY)
+        HorizontalDivider(color = CardBorder)
+        Row(Modifier.fillMaxWidth()) {
+            actions.forEach { ActionCell(it, showLabels, Modifier.weight(1f), labeledHeight = FOOT_CELL_HEIGHT) }
         }
     }
 }
 
-@Composable
-private fun RowActionButton(action: RuleAction, showLabel: Boolean, modifier: Modifier) {
-    val shape = RoundedCornerShape(10.dp)
-    val color = action.contentColor()
-    Row(
-        modifier = modifier
-            .height(48.dp)
-            .clip(shape)
-            .background(if (action.destructive) AccentOrange.copy(alpha = 0.10f) else CardSurfaceElevated)
-            .border(1.dp, if (action.destructive) AccentOrange.copy(alpha = 0.40f) else CardBorder, shape)
-            .clickable(enabled = action.enabled, onClick = action.onClick)
-            .padding(start = if (showLabel) 12.dp else 0.dp, end = if (showLabel) 14.dp else 0.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-    ) {
-        Icon(action.icon, if (showLabel) null else action.label, tint = color, modifier = Modifier.size(24.dp))
-        if (showLabel) {
-            Text(action.label, color = color, style = ROW_LABEL_STYLE, maxLines = 1, softWrap = false)
-        }
-    }
-}
+/** A card's foot button: 56dp tall with its label. */
+private val FOOT_CELL_HEIGHT = 56.dp
+private val FOOT_CELL_PADDING = 4.dp
 
 /** Title with filters and the action group: one line when both fit whole, else stacked. */
 @Composable
@@ -692,72 +797,6 @@ private fun HeaderLayout(content: @Composable () -> Unit) {
                 left.place(0, 0)
                 right.place(width - right.width, left.height + lineGap)
             }
-        }
-    }
-}
-
-/**
- * Grid view: name + switch, one logic line, the stats line, then four equal buttons across the
- * card. Every text line is single, so all cards of a row come out the same height.
- */
-@Composable
-private fun RuleGridCard(
-    rule: RuleEntity,
-    actions: List<RuleAction>,
-    showLabels: Boolean,
-    onToggle: () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    RuleContainer(rule, onClick, modifier) {
-        Column(
-            modifier = Modifier.padding(start = 14.dp, end = 4.dp, bottom = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RuleDot(rule.enabled)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    rule.name, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (rule.enabled) TextPrimary else TextSecondary,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                )
-                RuleSwitch(rule.enabled, onToggle)
-            }
-            Text(
-                ruleLogic(rule), fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = if (rule.enabled) TextPrimary else TextMuted, modifier = Modifier.padding(end = 10.dp),
-            )
-            Text(
-                ruleStats(rule), fontSize = 11.sp, lineHeight = 14.sp, color = TextMuted,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 10.dp),
-            )
-        }
-        HorizontalDivider(color = CardBorder)
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            actions.forEachIndexed { i, action ->
-                if (i > 0) VerticalDivider(color = CardBorder)
-                FootActionButton(action, showLabels, Modifier.weight(1f).fillMaxHeight())
-            }
-        }
-    }
-}
-
-@Composable
-private fun FootActionButton(action: RuleAction, showLabel: Boolean, modifier: Modifier) {
-    val color = action.contentColor()
-    Column(
-        modifier = modifier
-            .background(if (action.destructive) AccentOrange.copy(alpha = 0.10f) else Color.Transparent)
-            .clickable(enabled = action.enabled, onClick = action.onClick)
-            .heightIn(min = 48.dp)
-            .padding(horizontal = FOOT_CELL_PADDING, vertical = if (showLabel) 6.dp else 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
-    ) {
-        Icon(action.icon, if (showLabel) null else action.label, tint = color, modifier = Modifier.size(24.dp))
-        if (showLabel) {
-            Text(action.label, color = color, style = FOOT_LABEL_STYLE, maxLines = 1, softWrap = false)
         }
     }
 }
@@ -818,48 +857,10 @@ private fun HeaderOutlinedButton(label: String, icon: androidx.compose.ui.graphi
         // On the 40dp button itself, not around its 48dp touch area.
         border = androidx.compose.foundation.BorderStroke(1.5.dp, CardBorder),
     ) {
-        Text(label, fontSize = 13.sp)
+        Text(label, fontSize = 14.sp)
         if (icon != null) {
             Spacer(Modifier.width(6.dp))
             Icon(icon, null, modifier = Modifier.size(18.dp))
-        }
-    }
-}
-
-/** One trigger of the card summary, in the card's colours. */
-private fun androidx.compose.ui.text.AnnotatedString.Builder.appendTriggerSummary(t: TriggerDef, summaryCtx: Context) {
-    when (t.kind) {
-        "time_range" -> {
-            // value is JSON (parsed by the engine); show the readable displayName instead.
-            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
-        }
-        "button_press" -> {
-            // Localized "Кнопка N", derived from value, not the
-            // stored displayName, so language always matches the UI.
-            val n = t.value.toIntOrNull() ?: 0
-            withStyle(SpanStyle(color = AccentBlue)) {
-                append(summaryCtx.getString(R.string.automation_trigger_button_label, n))
-            }
-        }
-        "steering_key" -> {
-            // Same rule as button_press: the label comes from the stored
-            // keycode, so it follows the UI language.
-            val code = t.value.toIntOrNull() ?: 0
-            withStyle(SpanStyle(color = AccentBlue)) {
-                append(
-                    if (code > 0) steeringKeyLabel(summaryCtx, code)
-                    else summaryCtx.getString(R.string.automation_trigger_steering_key_unassigned)
-                )
-            }
-        }
-        else -> {
-            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
-            append(" ")
-            withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
-            append(" ")
-            withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
-                append(triggerValueLabel(t, summaryCtx))
-            }
         }
     }
 }
@@ -1167,6 +1168,29 @@ private fun Modifier.liftedWhen(drag: RuleDragState, id: Long): Modifier =
 
 // --- Editor Dialog ---
 
+/** Fields, chips and dropdowns: 40dp to see, 48dp to touch. */
+private val FIELD_HEIGHT = 40.dp
+private val FIELD_SHAPE = RoundedCornerShape(8.dp)
+private val EDITOR_TEXT = 16.sp
+
+/** Where a missing part sits in the editor: left column (conditions) or right (actions), and its key. */
+private fun Missing.anchor(): Pair<Boolean, String> = when (this) {
+    Missing.Name -> true to "name"
+    Missing.NoConditions -> true to "addTrigger"
+    is Missing.Param -> true to "t${condition - 1}"
+    is Missing.Value -> true to "t${condition - 1}"
+    is Missing.Number -> true to "t${condition - 1}"
+    is Missing.Key -> true to "t${condition - 1}"
+    Missing.NoActions -> false to "addAction"
+    is Missing.Action -> false to "a${action - 1}"
+}
+
+/**
+ * The rule editor, almost the whole screen: conditions on the left, actions and settings on
+ * the right. What the draft still misses is outlined in orange and named beside «Сохранить»;
+ * a tap on the grey «Сохранить» scrolls to the first such place. «Назад», the cross and
+ * «Отмена» ask before dropping changes.
+ */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun EditorDialog(
@@ -1174,6 +1198,7 @@ private fun EditorDialog(
     places: List<PlaceEntity>,
     tgBotConnected: Boolean,
     editorError: String?,
+    message: String?,
     onUpdate: (EditingRule.() -> EditingRule) -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
@@ -1183,8 +1208,14 @@ private fun EditorDialog(
     onTestAction: (ActionDef) -> Unit,
     onDismiss: () -> Unit
 ) {
+    // The draft as the editor opened: leaving with anything else asks first.
+    val original = remember { editing }
+    var askUnsaved by remember { mutableStateOf(false) }
+    val requestClose = {
+        if (hasUnsavedChanges(original, editing)) askUnsaved = true else onDismiss()
+    }
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = requestClose,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnClickOutside = false
@@ -1192,374 +1223,368 @@ private fun EditorDialog(
     ) {
         ScaledDialogContent {
             val context = LocalContext.current
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.65f)
-                    .fillMaxHeight(0.85f)
-                    .background(NavyDeep, RoundedCornerShape(16.dp))
-                    .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
-            ) {
-                // Title bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp, 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        if (editing.isNew) stringResource(R.string.automation_editor_new_rule_title) else editing.name,
-                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Outlined.Close, "close", tint = TextMuted)
-                    }
-                }
-                HorizontalDivider(color = CardBorder)
+            val missing = remember(editing, context) { missingParts(editing, context) }
+            val leftScroll = rememberScrollState()
+            val rightScroll = rememberScrollState()
+            // Content y of every row, so the grey «Сохранить» can scroll to what is missing.
+            val leftY = remember { mutableStateMapOf<String, Int>() }
+            val rightY = remember { mutableStateMapOf<String, Int>() }
+            val scope = rememberCoroutineScope()
+            fun Modifier.anchor(left: Boolean, key: String) = onGloballyPositioned {
+                (if (left) leftY else rightY)[key] = it.positionInParent().y.toInt()
+            }
+            val hasOneShot = editing.triggers.any { it.kind == OneShotTrigger.KIND }
 
-                // Two columns
-                Row(modifier = Modifier.weight(1f)) {
-                    // Left: Name + Triggers
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp, 12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = editing.name,
-                            onValueChange = { v -> onUpdate { copy(name = v) } },
-                            placeholder = { Text(stringResource(R.string.automation_rule_name_placeholder), color = TextMuted) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AccentGreen,
-                                unfocusedBorderColor = CardBorder,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                cursorColor = AccentGreen
-                            ),
-                            singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        SectionHeader(stringResource(R.string.automation_section_when))
-
-                        // AND/OR toggle
-                        Row {
-                            LogicChip(stringResource(R.string.automation_logic_and), editing.triggerLogic == "AND") {
-                                onUpdate { copy(triggerLogic = "AND") }
-                            }
-                            LogicChip(stringResource(R.string.automation_logic_or), editing.triggerLogic == "OR") {
-                                onUpdate { copy(triggerLogic = "OR") }
-                            }
-                        }
-                        Spacer(Modifier.height(8.dp))
-
-                        editing.triggers.forEachIndexed { idx, trigger ->
-                            TriggerRow(
-                                index = idx,
-                                trigger = trigger,
-                                places = places,
-                                onUpdate = { newTrigger ->
-                                    onUpdate {
-                                        copy(triggers = triggers.toMutableList().apply { set(idx, newTrigger) })
-                                    }
-                                },
-                                onMoveUp = if (idx > 0) {
-                                    { onUpdate { copy(triggers = triggers.moveItem(idx, up = true)) } }
-                                } else null,
-                                onMoveDown = if (idx < editing.triggers.lastIndex) {
-                                    { onUpdate { copy(triggers = triggers.moveItem(idx, up = false)) } }
-                                } else null,
-                                onDelete = {
-                                    onUpdate {
-                                        copy(triggers = triggers.toMutableList().apply { removeAt(idx) })
-                                    }
-                                }
-                            )
-                            Spacer(Modifier.height(4.dp))
-                        }
-
-                        if (editing.triggers.size < 5) {
-                            AddTriggerButton(
-                                places = places,
-                                onAddParam = {
-                                    val p = TRIGGER_PARAMS.first()
-                                    onUpdate {
-                                        copy(triggers = triggers + TriggerDef(p.param, p.chineseName, ">", "0", p.localizedName(context)))
-                                    }
-                                },
-                                onAddPlace = { place ->
-                                    onUpdate { copy(triggers = triggers + newPlaceTrigger(place, context)) }
-                                },
-                                onAddTimeOfDay = {
-                                    onUpdate { copy(triggers = triggers + newTimeOfDayTrigger(context)) }
-                                },
-                                onAddSchedule = {
-                                    onUpdate { copy(triggers = triggers + newScheduleTrigger()) }
-                                },
-                                onAddServiceStart = {
-                                    onUpdate { copy(triggers = triggers + newServiceStartTrigger(context)) }
-                                },
-                                onAddNetworkAvailable = {
-                                    onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger(context)) }
-                                },
-                                onAddButtonPress = {
-                                    onUpdate { copy(triggers = triggers + newButtonPressTrigger(1)) }
-                                },
-                                onAddSteeringKey = {
-                                    onUpdate { copy(triggers = triggers + newSteeringKeyTrigger(0)) }
-                                },
-                                onAddVoice = {
-                                    onUpdate { copy(triggers = triggers + newVoiceTrigger(context)) }
-                                },
-                            )
-                        }
-                    }
-
-                    // Divider
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(1.dp)
-                            .background(CardBorder)
-                    )
-
-                    // Right: Actions + Settings
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp, 12.dp)
-                    ) {
-                        SectionHeader(stringResource(R.string.automation_section_then))
-
-                        editing.actions.forEachIndexed { idx, action ->
-                            ActionRow(
-                                index = idx,
-                                action = action,
-                                places = places,
-                                tgBotConnected = tgBotConnected,
-                                onUpdate = { newAction ->
-                                    onUpdate {
-                                        copy(actions = actions.toMutableList().apply { set(idx, newAction) })
-                                    }
-                                },
-                                onTest = onTestAction,
-                                onMoveUp = if (idx > 0) {
-                                    { onUpdate { copy(actions = actions.moveItem(idx, up = true)) } }
-                                } else null,
-                                onMoveDown = if (idx < editing.actions.lastIndex) {
-                                    { onUpdate { copy(actions = actions.moveItem(idx, up = false)) } }
-                                } else null,
-                                onDelete = {
-                                    onUpdate {
-                                        copy(actions = actions.toMutableList().apply { removeAt(idx) })
-                                    }
-                                }
-                            )
-                            Spacer(Modifier.height(4.dp))
-                        }
-
-                        if (editing.actions.size < 10) {
-                            AddActionButton(
-                                onAddParam = {
-                                    val a = ACTION_COMMANDS.first()
-                                    onUpdate { copy(actions = actions + actionDefFor(a, context)) }
-                                },
-                                onAddNotification = {
-                                    onUpdate { copy(actions = actions + newNotificationAction(context)) }
-                                },
-                                onAddAppLaunch = {
-                                    onUpdate { copy(actions = actions + newAppLaunchAction(context)) }
-                                },
-                                onAddCall = {
-                                    onUpdate { copy(actions = actions + newCallAction(context)) }
-                                },
-                                onAddNavigate = {
-                                    onUpdate { copy(actions = actions + newNavigateAction(context)) }
-                                },
-                                onAddUrl = {
-                                    onUpdate { copy(actions = actions + newUrlAction(context)) }
-                                },
-                                onAddYandexMusic = {
-                                    onUpdate { copy(actions = actions + newYandexMusicAction(context)) }
-                                },
-                                onAddDelay = {
-                                    onUpdate { copy(actions = actions + newDelayAction(context)) }
-                                },
-                                onAddMediaVolume = {
-                                    onUpdate { copy(actions = actions + newMediaVolumeAction(context)) }
-                                },
-                                onAddSentry = {
-                                    onUpdate { copy(actions = actions + newSentryAction(context)) }
-                                },
-                                onAddHotspot = {
-                                    onUpdate { copy(actions = actions + newHotspotAction(context)) }
-                                },
-                                onAddSpeak = {
-                                    onUpdate { copy(actions = actions + newSpeakAction(context)) }
-                                },
-                                onAddAgentQuery = {
-                                    onUpdate { copy(actions = actions + newAgentQueryAction(context)) }
-                                },
-                                onAddCluster = {
-                                    onUpdate { copy(actions = actions + newClusterAction(context)) }
-                                },
-                                onAddSplitScreen = {
-                                    onUpdate { copy(actions = actions + newSplitScreenAction(context)) }
-                                },
-                                onAddSplitScreenClose = {
-                                    onUpdate { copy(actions = actions + newSplitScreenCloseAction(context)) }
-                                },
-                                onAddSplitScreenToggle = {
-                                    onUpdate { copy(actions = actions + newSplitScreenToggleAction(context)) }
-                                },
-                                onAddTelegramReport = {
-                                    onUpdate { copy(actions = actions + newTelegramReportAction(context)) }
-                                },
-                            )
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-                        SectionHeader(stringResource(R.string.automation_section_settings))
-
-                        // Cooldown
-                        SettingRow(stringResource(R.string.automation_setting_cooldown)) {
-                            // The field owns its text: binding it to cooldownSeconds.toString() made an
-                            // empty field unrepresentable, so Backspace on the last digit was reverted
-                            // and the caret jumped to the start (#163). Empty commits as 0.
-                            var cooldownText by remember(editing.id) {
-                                mutableStateOf(editing.cooldownSeconds.toString())
-                            }
-                            OutlinedTextField(
-                                value = cooldownText,
-                                onValueChange = { v ->
-                                    val digits = v.filter { it.isDigit() }
-                                    cooldownText = digits
-                                    onUpdate { copy(cooldownSeconds = digits.toIntOrNull() ?: 0) }
-                                },
-                                // Frozen while the draft is [EditingRule.saving]: onUpdate is a
-                                // no-op then, and without this the field's own remembered text
-                                // would still change, diverging from the frozen snapshot.
-                                enabled = !editing.saving,
-                                modifier = Modifier.width(70.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = AccentGreen, unfocusedBorderColor = CardBorder,
-                                    focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = AccentGreen
-                                ),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.automation_setting_unit_sec), fontSize = 12.sp, color = TextMuted)
-                        }
-                        Spacer(Modifier.height(4.dp))
-
-                        // Require park
-                        SettingRow(stringResource(R.string.automation_setting_park_only)) {
-                            Switch(
-                                checked = editing.requirePark,
-                                onCheckedChange = { v -> onUpdate { copy(requirePark = v) } },
-                                colors = bydSwitchColors(),
-                            )
-                        }
-
-                        // Confirm before execute
-                        SettingRow(stringResource(R.string.automation_setting_confirm_before)) {
-                            Switch(
-                                checked = editing.confirmBeforeExecute,
-                                onCheckedChange = { v -> onUpdate { copy(confirmBeforeExecute = v) } },
-                                colors = bydSwitchColors(),
-                            )
-                        }
-
-                        // Fire once per trip
-                        SettingRow(stringResource(R.string.automation_setting_once_per_trip)) {
-                            Switch(
-                                checked = editing.fireOncePerTrip,
-                                onCheckedChange = { v -> onUpdate { copy(fireOncePerTrip = v) } },
-                                colors = bydSwitchColors(),
-                            )
-                        }
-
-                        // Play chime once when the rule fires
-                        SettingRow(stringResource(R.string.automation_setting_play_sound)) {
-                            Switch(
-                                checked = editing.playSound,
-                                onCheckedChange = { v -> onUpdate { copy(playSound = v) } },
-                                colors = bydSwitchColors(),
-                            )
-                        }
-                    }
-                }
-
-                // Footer
-                HorizontalDivider(color = CardBorder)
+            Box(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 20.dp)) {
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp, 10.dp)
+                        .fillMaxSize()
+                        .background(NavyDeep, RoundedCornerShape(16.dp))
+                        .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
                 ) {
-                    editorError?.let { err ->
-                        Text(
-                            text = err,
-                            color = Color(0xFFEF4444),
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    }
-                    val complete = editing.name.isNotBlank() && editing.triggers.isNotEmpty() && editing.actions.isNotEmpty()
+                    // Title bar
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (editing.isNew) stringResource(R.string.automation_editor_new_rule_title) else editing.name,
+                            fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = requestClose, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Outlined.Close, stringResource(R.string.automation_cancel_button), tint = TextSecondary)
+                        }
+                    }
+                    HorizontalDivider(color = CardBorder)
+
+                    // Two columns
+                    Row(modifier = Modifier.weight(1f)) {
+                        // Left: Name + Triggers
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .verticalScroll(leftScroll)
+                                .padding(16.dp, 12.dp)
+                        ) {
+                            EditorField(
+                                value = editing.name,
+                                onValueChange = { v -> onUpdate { copy(name = v) } },
+                                placeholder = stringResource(R.string.automation_rule_name_placeholder),
+                                highlight = Missing.Name in missing,
+                                enabled = !editing.saving,
+                                textStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary),
+                                modifier = Modifier.fillMaxWidth().anchor(true, "name"),
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            SectionHeader(stringResource(R.string.automation_section_when))
+
+                            // «Все условия / Любое условие» only once there is something to combine.
+                            if (editing.triggers.size >= 2) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    ChoiceChip(stringResource(R.string.auto_ui_logic_all), editing.triggerLogic == "AND") {
+                                        onUpdate { copy(triggerLogic = "AND") }
+                                    }
+                                    // A one-shot rule combines only with «Все условия».
+                                    ChoiceChip(
+                                        stringResource(R.string.auto_ui_logic_any), editing.triggerLogic == "OR",
+                                        enabled = !hasOneShot || editing.triggerLogic == "OR",
+                                    ) {
+                                        onUpdate { copy(triggerLogic = "OR") }
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                            }
+
+                            editing.triggers.forEachIndexed { idx, trigger ->
+                                TriggerRow(
+                                    index = idx,
+                                    trigger = trigger,
+                                    places = places,
+                                    missing = missing,
+                                    showArrows = editing.triggers.size > 1,
+                                    onUpdate = { newTrigger ->
+                                        onUpdate {
+                                            copy(triggers = triggers.toMutableList().apply { set(idx, newTrigger) })
+                                        }
+                                    },
+                                    onMoveUp = if (idx > 0) {
+                                        { onUpdate { copy(triggers = triggers.moveItem(idx, up = true)) } }
+                                    } else null,
+                                    onMoveDown = if (idx < editing.triggers.lastIndex) {
+                                        { onUpdate { copy(triggers = triggers.moveItem(idx, up = false)) } }
+                                    } else null,
+                                    onDelete = {
+                                        onUpdate {
+                                            copy(triggers = triggers.toMutableList().apply { removeAt(idx) })
+                                        }
+                                    },
+                                    modifier = Modifier.anchor(true, "t$idx"),
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
+
+                            eventTriggerWithOthers(editing.triggers)?.let { kind ->
+                                EventTriggerWarning(kind)
+                                Spacer(Modifier.height(8.dp))
+                            }
+
+                            if (editing.triggers.size < 5) {
+                                AddTriggerButton(
+                                    places = places,
+                                    highlight = Missing.NoConditions in missing,
+                                    modifier = Modifier.anchor(true, "addTrigger"),
+                                    onAdd = { t ->
+                                        onUpdate {
+                                            copy(
+                                                triggers = triggers + t,
+                                                triggerLogic = if (t.kind == OneShotTrigger.KIND) "AND" else triggerLogic,
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                        }
+
+                        // Divider
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(1.dp)
+                                .background(CardBorder)
+                        )
+
+                        // Right: Actions + Settings
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .verticalScroll(rightScroll)
+                                .padding(16.dp, 12.dp)
+                        ) {
+                            SectionHeader(stringResource(R.string.automation_section_then))
+
+                            editing.actions.forEachIndexed { idx, action ->
+                                ActionRow(
+                                    index = idx,
+                                    action = action,
+                                    places = places,
+                                    tgBotConnected = tgBotConnected,
+                                    highlight = missing.any { it is Missing.Action && it.action == idx + 1 },
+                                    showArrows = editing.actions.size > 1,
+                                    onUpdate = { newAction ->
+                                        onUpdate {
+                                            copy(actions = actions.toMutableList().apply { set(idx, newAction) })
+                                        }
+                                    },
+                                    onTest = onTestAction,
+                                    onMoveUp = if (idx > 0) {
+                                        { onUpdate { copy(actions = actions.moveItem(idx, up = true)) } }
+                                    } else null,
+                                    onMoveDown = if (idx < editing.actions.lastIndex) {
+                                        { onUpdate { copy(actions = actions.moveItem(idx, up = false)) } }
+                                    } else null,
+                                    onDelete = {
+                                        onUpdate {
+                                            copy(actions = actions.toMutableList().apply { removeAt(idx) })
+                                        }
+                                    },
+                                    modifier = Modifier.anchor(false, "a$idx"),
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
+
+                            if (editing.actions.size < 10) {
+                                AddActionButton(
+                                    highlight = Missing.NoActions in missing,
+                                    modifier = Modifier.anchor(false, "addAction"),
+                                    onAdd = { a -> onUpdate { copy(actions = actions + a) } },
+                                )
+                            }
+
+                            Spacer(Modifier.height(20.dp))
+                            SectionHeader(stringResource(R.string.automation_section_settings))
+
+                            // Cooldown: «Не чаще, чем раз в 60 с»
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(stringResource(R.string.auto_ui_cooldown), fontSize = EDITOR_TEXT, color = TextPrimary)
+                                Spacer(Modifier.width(12.dp))
+                                // The field owns its text: binding it to cooldownSeconds.toString() made an
+                                // empty field unrepresentable, so Backspace on the last digit was reverted
+                                // and the caret jumped to the start (#163). Empty commits as 0.
+                                var cooldownText by remember(editing.id) {
+                                    mutableStateOf(editing.cooldownSeconds.toString())
+                                }
+                                EditorField(
+                                    value = cooldownText,
+                                    onValueChange = { v ->
+                                        val digits = v.filter { it.isDigit() }
+                                        cooldownText = digits
+                                        onUpdate { copy(cooldownSeconds = digits.toIntOrNull() ?: 0) }
+                                    },
+                                    // Frozen while the draft is [EditingRule.saving]: onUpdate is a
+                                    // no-op then, and without this the field's own remembered text
+                                    // would still change, diverging from the frozen snapshot.
+                                    enabled = !editing.saving,
+                                    keyboardType = KeyboardType.Number,
+                                    centered = true,
+                                    modifier = Modifier.width(96.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.auto_ui_unit_s), fontSize = EDITOR_TEXT, color = TextSecondary)
+                            }
+                            Spacer(Modifier.height(4.dp))
+
+                            SettingRow(stringResource(R.string.automation_setting_park_only)) {
+                                Switch(
+                                    checked = editing.requirePark,
+                                    onCheckedChange = { v -> onUpdate { copy(requirePark = v) } },
+                                    colors = bydSwitchColors(),
+                                )
+                            }
+                            SettingRow(stringResource(R.string.automation_setting_confirm_before)) {
+                                Switch(
+                                    checked = editing.confirmBeforeExecute,
+                                    onCheckedChange = { v -> onUpdate { copy(confirmBeforeExecute = v) } },
+                                    colors = bydSwitchColors(),
+                                )
+                            }
+                            SettingRow(stringResource(R.string.automation_setting_once_per_trip)) {
+                                Switch(
+                                    checked = editing.fireOncePerTrip,
+                                    onCheckedChange = { v -> onUpdate { copy(fireOncePerTrip = v) } },
+                                    colors = bydSwitchColors(),
+                                )
+                            }
+                            // Play chime once when the rule fires
+                            SettingRow(stringResource(R.string.automation_setting_play_sound)) {
+                                Switch(
+                                    checked = editing.playSound,
+                                    onCheckedChange = { v -> onUpdate { copy(playSound = v) } },
+                                    colors = bydSwitchColors(),
+                                )
+                            }
+                        }
+                    }
+
+                    // Footer
+                    HorizontalDivider(color = CardBorder)
+                    val reason = remember(missing, context) { saveReason(missing, context) }
+                    val complete = missing.isEmpty()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp, 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // «Тестовый запуск»: every action now, as if the conditions had matched.
-                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                            Button(
-                                onClick = onTestRun,
+                        Column(modifier = Modifier.widthIn(max = 360.dp).padding(end = 16.dp)) {
+                            OutlinedEditorButton(
+                                stringResource(R.string.automation_test_run_button),
                                 enabled = editing.actions.isNotEmpty() && !testRunning,
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                            ) {
-                                Text(stringResource(R.string.automation_test_run_button))
-                                Spacer(Modifier.width(6.dp))
-                                Icon(Icons.Outlined.PlayArrow, null, tint = AccentGreen, modifier = Modifier.size(16.dp))
-                            }
+                                leadingIcon = Icons.Outlined.PlayArrow,
+                                onClick = onTestRun,
+                            )
                             Text(
                                 stringResource(R.string.automation_test_run_hint),
-                                fontSize = 11.sp, color = TextMuted, lineHeight = 14.sp,
+                                fontSize = 14.sp, color = TextSecondary, lineHeight = 18.sp,
                                 modifier = Modifier.padding(top = 2.dp)
                             )
                         }
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        // What is still missing, or why the last save was refused.
+                        Row(
+                            modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Button(
-                                onClick = onDismiss,
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                            ) { Text(stringResource(R.string.automation_cancel_button)) }
-                            Button(
-                                onClick = onShare,
-                                enabled = complete && shareEnabled,
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                            ) { Text(stringResource(R.string.automation_share_button)) }
-                            Button(
-                                onClick = onSave,
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
-                                shape = RoundedCornerShape(8.dp),
-                                enabled = complete && !editing.saving
-                            ) { Text(stringResource(R.string.automation_save_button), fontWeight = FontWeight.SemiBold) }
+                            val line = editorError ?: reason
+                            if (line != null) {
+                                Icon(
+                                    Icons.Outlined.WarningAmber, null,
+                                    tint = if (editorError != null) SocRed else AccentOrange,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    line, fontSize = EDITOR_TEXT, lineHeight = 22.sp,
+                                    color = if (editorError != null) SocRed else AccentOrange,
+                                )
+                            }
                         }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedEditorButton(stringResource(R.string.automation_cancel_button), onClick = requestClose)
+                            OutlinedEditorButton(
+                                stringResource(R.string.automation_share_button),
+                                enabled = complete && shareEnabled,
+                                onClick = onShare,
+                            )
+                            // Grey while something is missing; a tap then scrolls to the first such place.
+                            Button(
+                                onClick = {
+                                    val first = missing.firstOrNull()
+                                    if (first == null) {
+                                        onSave()
+                                    } else {
+                                        val (left, key) = first.anchor()
+                                        val y = (if (left) leftY else rightY)[key] ?: 0
+                                        scope.launch { (if (left) leftScroll else rightScroll).animateScrollTo(y) }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (complete) AccentGreen else CardSurfaceElevated,
+                                    contentColor = if (complete) NavyDark else TextSecondary,
+                                ),
+                                shape = FIELD_SHAPE,
+                                enabled = !editing.saving,
+                            ) { Text(stringResource(R.string.automation_save_button), fontSize = EDITOR_TEXT, fontWeight = FontWeight.SemiBold) }
+                        }
+                    }
+                }
+                message?.let { MessagePill(it, Modifier.align(Alignment.BottomCenter)) }
+            }
+        }
+    }
+
+    if (askUnsaved) {
+        UnsavedChangesDialog(
+            onDiscard = { askUnsaved = false; onDismiss() },
+            onCancel = { askUnsaved = false },
+            onSave = { askUnsaved = false; onSave() },
+        )
+    }
+}
+
+/** «Сохранить изменения?»: «Не сохранять» stands alone on the left, far from «Сохранить». */
+@Composable
+private fun UnsavedChangesDialog(onDiscard: () -> Unit, onCancel: () -> Unit, onSave: () -> Unit) {
+    Dialog(onDismissRequest = onCancel) {
+        ScaledDialogContent {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 560.dp)
+                    .background(CardSurface, RoundedCornerShape(24.dp))
+                    .padding(24.dp)
+            ) {
+                Text(stringResource(R.string.auto_ui_unsaved_title), fontSize = 22.sp, color = TextPrimary)
+                Spacer(Modifier.height(12.dp))
+                Text(stringResource(R.string.auto_ui_unsaved_text), fontSize = EDITOR_TEXT, color = TextSecondary)
+                Spacer(Modifier.height(20.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onDiscard) {
+                        Text(stringResource(R.string.auto_ui_unsaved_discard), fontSize = EDITOR_TEXT, color = AccentOrange)
+                    }
+                    Spacer(Modifier.weight(1f).widthIn(min = 24.dp))
+                    TextButton(onClick = onCancel) {
+                        Text(stringResource(R.string.automation_cancel_button), fontSize = EDITOR_TEXT, color = TextSecondary)
+                    }
+                    TextButton(onClick = onSave) {
+                        Text(stringResource(R.string.automation_save_button), fontSize = EDITOR_TEXT, color = AccentGreen)
                     }
                 }
             }
@@ -1567,171 +1592,455 @@ private fun EditorDialog(
     }
 }
 
-// --- Trigger Row ---
+/** A widget button, a steering key or a voice phrase fires the rule at once: the other conditions are not checked. */
+@Composable
+private fun EventTriggerWarning(kind: String) {
+    val name = stringResource(
+        when (kind) {
+            "button_press" -> R.string.auto_ui_event_button
+            AutomationEngine.TRIGGER_KIND_STEERING_KEY -> R.string.auto_ui_event_key
+            else -> R.string.auto_ui_event_voice
+        }
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(AccentOrange.copy(alpha = 0.08f), FIELD_SHAPE)
+            .border(1.dp, AccentOrange, FIELD_SHAPE)
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(Icons.Outlined.WarningAmber, null, tint = AccentOrange, modifier = Modifier.size(20.dp))
+        Column {
+            Text(stringResource(R.string.auto_ui_event_warn, name), fontSize = EDITOR_TEXT, lineHeight = 22.sp, color = TextPrimary)
+            Text(stringResource(R.string.auto_ui_event_warn_hint), fontSize = 14.sp, lineHeight = 20.sp, color = TextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun OutlinedEditorButton(
+    label: String,
+    enabled: Boolean = true,
+    leadingIcon: ImageVector? = null,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary, disabledContentColor = TextMuted),
+        shape = FIELD_SHAPE,
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, CardBorder),
+    ) {
+        if (leadingIcon != null) {
+            Icon(leadingIcon, null, tint = if (enabled) AccentGreen else TextMuted, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(label, fontSize = EDITOR_TEXT)
+    }
+}
+
+/**
+ * A one-line text field, 40dp to see, 48dp to touch (a tap anywhere in the 48dp band focuses
+ * it); an orange frame marks a value still missing.
+ */
+@Composable
+private fun EditorField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    highlight: Boolean = false,
+    enabled: Boolean = true,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    centered: Boolean = false,
+    textStyle: TextStyle = TextStyle(fontSize = EDITOR_TEXT, color = TextPrimary),
+) {
+    val focus = remember { FocusRequester() }
+    val style = textStyle.merge(
+        TextStyle(textAlign = if (centered) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start)
+    )
+    Box(
+        modifier = modifier
+            .heightIn(min = MIN_TOUCH)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = enabled) {
+                focus.requestFocus()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = enabled,
+            singleLine = true,
+            textStyle = style,
+            cursorBrush = SolidColor(AccentGreen),
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focus)
+                .heightIn(min = FIELD_HEIGHT)
+                .background(CardSurface, FIELD_SHAPE)
+                .border(if (highlight) 1.5.dp else 1.dp, if (highlight) AccentOrange else CardBorder, FIELD_SHAPE),
+            decorationBox = { inner ->
+                Box(
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = if (centered) Alignment.Center else Alignment.CenterStart,
+                ) {
+                    if (value.isEmpty() && placeholder.isNotEmpty()) {
+                        Text(placeholder, style = style.copy(color = TextSecondary, fontWeight = FontWeight.Normal))
+                    }
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+/** A selectable chip: green filled when selected, 40dp to see, 48dp to touch. */
+@Composable
+private fun ChoiceChip(label: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .heightIn(min = FIELD_HEIGHT)
+            .clip(FIELD_SHAPE)
+            .background(if (selected) AccentGreen else CardSurface)
+            .border(if (selected) 0.dp else 1.dp, CardBorder, FIELD_SHAPE)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, fontSize = EDITOR_TEXT, fontWeight = FontWeight.SemiBold,
+            color = when {
+                selected -> NavyDark
+                enabled -> TextSecondary
+                else -> TextMuted
+            },
+        )
+    }
+}
+
+/** A dropdown button: the current choice and a chevron, 40dp to see, 48dp to touch. */
+@Composable
+private fun DropdownField(
+    text: String,
+    modifier: Modifier = Modifier,
+    highlight: Boolean = false,
+    color: Color = TextPrimary,
+    fillWidth: Boolean = false,
+    items: List<String>,
+    onSelect: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier.minimumInteractiveComponentSize()) {
+        Row(
+            modifier = (if (fillWidth) Modifier.fillMaxWidth() else Modifier)
+                .heightIn(min = FIELD_HEIGHT)
+                .clip(FIELD_SHAPE)
+                .background(CardSurface)
+                .border(if (highlight) 1.5.dp else 1.dp, if (highlight) AccentOrange else CardBorder, FIELD_SHAPE)
+                .clickable { expanded = true }
+                .padding(start = 12.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text, fontSize = EDITOR_TEXT, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = if (fillWidth) Modifier.weight(1f) else Modifier,
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Outlined.KeyboardArrowDown, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ScaledDialogContent {
+                items.forEachIndexed { i, item ->
+                    DropdownMenuItem(
+                        text = { Text(item, fontSize = EDITOR_TEXT) },
+                        onClick = {
+                            expanded = false
+                            onSelect(i)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
 
 /** Up/down reorder arrows shared by trigger and action rows. A null callback = boundary, shown dimmed and disabled. */
 @Composable
 private fun ReorderArrows(onMoveUp: (() -> Unit)?, onMoveDown: (() -> Unit)?) {
-    IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null, modifier = Modifier.size(24.dp)) {
+    IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null, modifier = Modifier.size(MIN_TOUCH)) {
         Icon(Icons.Outlined.KeyboardArrowUp, stringResource(R.string.auto_a11y_move_up),
-            tint = TextSecondary.copy(alpha = if (onMoveUp != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
+            tint = TextSecondary.copy(alpha = if (onMoveUp != null) 1f else 0.25f), modifier = Modifier.size(20.dp))
     }
-    IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null, modifier = Modifier.size(24.dp)) {
+    IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null, modifier = Modifier.size(MIN_TOUCH)) {
         Icon(Icons.Outlined.KeyboardArrowDown, stringResource(R.string.auto_a11y_move_down),
-            tint = TextSecondary.copy(alpha = if (onMoveDown != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
+            tint = TextSecondary.copy(alpha = if (onMoveDown != null) 1f else 0.25f), modifier = Modifier.size(20.dp))
+    }
+}
+
+/** The arrows (only when the list has more than one row), a thin line, then the orange bin. */
+@Composable
+private fun RowButtons(showArrows: Boolean, onMoveUp: (() -> Unit)?, onMoveDown: (() -> Unit)?, onDelete: () -> Unit) {
+    if (showArrows) ReorderArrows(onMoveUp = onMoveUp, onMoveDown = onMoveDown)
+    Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(24.dp).background(CardBorder))
+    IconButton(onClick = onDelete, modifier = Modifier.size(MIN_TOUCH)) {
+        Icon(Icons.Outlined.Delete, stringResource(R.string.automation_delete_button), tint = AccentOrange, modifier = Modifier.size(20.dp))
     }
 }
 
 /** Icons per row in the widget-button icon picker menu. */
 private const val ICON_PICKER_COLUMNS = 6
 
+private fun triggerIcon(kind: String): ImageVector = when (kind) {
+    "place_enter", "place_exit" -> Icons.Outlined.Place
+    "time_of_day" -> Icons.Outlined.WbTwilight
+    "time_range" -> Icons.Outlined.Schedule
+    "service_start" -> Icons.Outlined.PlayArrow
+    "network_available" -> Icons.Outlined.Wifi
+    "button_press" -> Icons.Outlined.TouchApp
+    AutomationEngine.TRIGGER_KIND_STEERING_KEY -> Icons.Outlined.Gamepad
+    "voice" -> Icons.Outlined.RecordVoiceOver
+    OneShotTrigger.KIND -> Icons.Outlined.CalendarMonth
+    else -> Icons.Outlined.Tune
+}
+
+@Composable
+private fun triggerTitle(kind: String): String = stringResource(
+    when (kind) {
+        "place_enter", "place_exit" -> R.string.automation_trigger_type_place
+        "time_of_day" -> R.string.automation_trigger_type_time_of_day
+        "time_range" -> R.string.automation_trigger_type_schedule
+        "service_start" -> R.string.automation_trigger_type_service_start
+        "network_available" -> R.string.automation_trigger_type_internet
+        "button_press" -> R.string.auto_ui_event_button
+        AutomationEngine.TRIGGER_KIND_STEERING_KEY -> R.string.auto_ui_event_key
+        "voice" -> R.string.auto_ui_event_voice
+        OneShotTrigger.KIND -> R.string.auto_ui_trigger_once
+        else -> R.string.automation_trigger_type_param
+    }
+)
+
+/**
+ * One condition in two lines: on top the parameter across the row (or the kind's icon and name)
+ * with the row buttons, below the operator, value and unit. What is missing is outlined orange.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun TriggerRow(
     index: Int,
     trigger: TriggerDef,
     places: List<PlaceEntity>,
+    missing: List<Missing>,
+    showArrows: Boolean,
     onUpdate: (TriggerDef) -> Unit,
     onMoveUp: (() -> Unit)?,
     onMoveDown: (() -> Unit)?,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = Modifier
+    val context = LocalContext.current
+    val n = index + 1
+    Column(
+        modifier = modifier
             .fillMaxWidth()
-            .background(CardSurface, RoundedCornerShape(8.dp))
-            .border(1.dp, CardBorder, RoundedCornerShape(8.dp))
-            .padding(8.dp, 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .background(CardSurface, FIELD_SHAPE)
+            .border(1.dp, CardBorder, FIELD_SHAPE)
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
     ) {
-        Text("${index + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted,
-            modifier = Modifier.width(16.dp))
-
-        // Bounded like ActionRow: wide controls (parameter + operator + value + unit) used to push
-        // the arrows and the delete button past the card edge (#165).
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("$n", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextSecondary, modifier = Modifier.width(24.dp))
+            Box(Modifier.weight(1f)) {
+                if (trigger.kind == "param") {
+                    val option = TRIGGER_PARAMS.find { it.param == trigger.param }
+                    CatalogDropdown(
+                        selected = option?.localizedName(context) ?: "",
+                        placeholder = stringResource(R.string.auto_ui_pick_param),
+                        highlight = Missing.Param(n) in missing,
+                        items = TRIGGER_PARAMS.map { it.localizedName(context) },
+                        categories = TRIGGER_PARAMS.map { it.localizedCategory(context) },
+                        modifier = Modifier.fillMaxWidth(),
+                        onSelect = { idx -> onUpdate(withParam(trigger, TRIGGER_PARAMS[idx], context)) }
+                    )
+                } else {
+                    Row(Modifier.heightIn(min = MIN_TOUCH), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(triggerIcon(trigger.kind), null, tint = AccentGreen, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(triggerTitle(trigger.kind), fontSize = EDITOR_TEXT, color = TextPrimary)
+                    }
+                }
+            }
+            RowButtons(showArrows, onMoveUp, onMoveDown, onDelete)
+        }
+        Column(Modifier.padding(start = 24.dp, end = 8.dp)) {
             when (trigger.kind) {
                 "place_enter", "place_exit" -> PlaceTriggerControls(trigger, places, onUpdate)
                 "time_of_day" -> TimeOfDayTriggerControls(trigger, onUpdate)
                 "time_range" -> ScheduleTriggerControls(trigger, onUpdate)
-                "service_start" -> ServiceStartTriggerControls()
-                "network_available" -> NetworkAvailableTriggerControls()
+                "service_start", "network_available" -> Unit
                 "button_press" -> ButtonPressTriggerControls(trigger, onUpdate)
-                "steering_key" -> SteeringKeyTriggerControls(trigger, onUpdate)
+                AutomationEngine.TRIGGER_KIND_STEERING_KEY ->
+                    SteeringKeyTriggerControls(trigger, highlight = Missing.Key(n) in missing, onUpdate = onUpdate)
                 "voice" -> VoiceTriggerControls(trigger, onUpdate)
-                else -> ParamTriggerControls(trigger, onUpdate)
-            }
-        }
-
-        ReorderArrows(onMoveUp = onMoveUp, onMoveDown = onMoveDown)
-        IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-            Icon(Icons.Outlined.Close, "delete", tint = Color(0xFFEF4444).copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
-        }
-    }
-}
-
-@Composable
-private fun ParamTriggerControls(
-    trigger: TriggerDef,
-    onUpdate: (TriggerDef) -> Unit
-) {
-    val context = LocalContext.current
-    // Param dropdown
-    CatalogDropdown(
-        selected = TRIGGER_PARAMS.find { it.param == trigger.param }?.localizedName(context) ?: trigger.param,
-        items = TRIGGER_PARAMS.map { it.localizedName(context) },
-        categories = TRIGGER_PARAMS.map { it.localizedCategory(context) },
-        modifier = Modifier.width(150.dp),
-        onSelect = { idx ->
-            val p = TRIGGER_PARAMS[idx]
-            onUpdate(trigger.copy(param = p.param, chineseName = p.chineseName,
-                displayName = "${p.localizedName(context)} ${trigger.operator} ${trigger.value}"))
-        }
-    )
-    Spacer(Modifier.width(4.dp))
-
-    // Operator dropdown
-    var opExpanded by remember { mutableStateOf(false) }
-    Box {
-        Text(
-            trigger.operator,
-            fontSize = 13.sp, color = AccentOrange, fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .background(CardSurface, RoundedCornerShape(6.dp))
-                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                .clickable { opExpanded = true }
-                .padding(8.dp, 6.dp)
-                .width(30.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-        DropdownMenu(expanded = opExpanded, onDismissRequest = { opExpanded = false }) {
-            ScaledDialogContent {
-                OPERATORS.forEach { op ->
-                    DropdownMenuItem(
-                        text = { Text(op, fontWeight = FontWeight.Bold) },
-                        onClick = {
-                            opExpanded = false
-                            onUpdate(trigger.copy(operator = op))
-                        }
+                OneShotTrigger.KIND -> OneShotTriggerControls(trigger, onUpdate)
+                else -> TRIGGER_PARAMS.find { it.param == trigger.param }?.let { option ->
+                    ParamTriggerControls(
+                        trigger, option,
+                        valueMissing = Missing.Value(n) in missing,
+                        numberMissing = Missing.Number(n) in missing,
+                        onUpdate = onUpdate,
                     )
                 }
             }
         }
     }
-    Spacer(Modifier.width(4.dp))
+}
 
-    // Value: enum dropdown or text input with unit
-    val paramOption = TRIGGER_PARAMS.find { it.param == trigger.param }
-    if (paramOption?.enumValues != null) {
-        // Enum dropdown
-        var enumExpanded by remember { mutableStateOf(false) }
-        val enumLabel = paramOption.localizedEnumLabel(trigger.value, context)
-        Box {
-            Text(
-                enumLabel,
-                fontSize = 13.sp, color = AccentGreen,
-                modifier = Modifier
-                    .background(CardSurface, RoundedCornerShape(6.dp))
-                    .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                    .clickable { enumExpanded = true }
-                    .padding(8.dp, 6.dp)
-            )
-            DropdownMenu(expanded = enumExpanded, onDismissRequest = { enumExpanded = false }) {
-                ScaledDialogContent {
-                    paramOption.enumValues.forEach { (value, _) ->
-                        DropdownMenuItem(
-                            text = { Text(paramOption.localizedEnumLabel(value, context), fontSize = 13.sp) },
-                            onClick = {
-                                enumExpanded = false
-                                // The chosen operator stays; picking a value must not reset it (VadimV).
-                                onUpdate(trigger.copy(value = value))
-                            }
-                        )
+/**
+ * The second line of a parameter condition. A list (gear, doors, trunk, belts) offers only
+ * «равно / не равно» as buttons and a value dropdown; a number offers the six operators as
+ * words, the field and its unit, with «Введите число, например 12,5» under a missing number.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ParamTriggerControls(
+    trigger: TriggerDef,
+    option: TriggerParamOption,
+    valueMissing: Boolean,
+    numberMissing: Boolean,
+    onUpdate: (TriggerDef) -> Unit
+) {
+    val context = LocalContext.current
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (option.enumValues != null) {
+            listOf("==", "!=").forEach { op ->
+                Box(Modifier.align(Alignment.CenterVertically)) {
+                    ChoiceChip(operatorWord(op, context.appLocalizedContext()), trigger.operator == op) {
+                        onUpdate(trigger.copy(operator = op))
                     }
                 }
             }
-        }
-    } else {
-        // Numeric input
-        OutlinedTextField(
-            value = trigger.value,
-            onValueChange = { v -> onUpdate(trigger.copy(value = v)) },
-            modifier = Modifier.width(70.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = AccentGreen, unfocusedBorderColor = CardBorder,
-                focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = AccentGreen
-            ),
-            singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(
-                fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            val values = option.enumValues
+            DropdownField(
+                text = if (trigger.value.isBlank()) stringResource(R.string.auto_ui_pick_value)
+                    else option.localizedEnumLabel(trigger.value, context),
+                color = if (trigger.value.isBlank()) TextSecondary else TextPrimary,
+                highlight = valueMissing,
+                items = values.map { (v, _) -> option.localizedEnumLabel(v, context) },
+                // The chosen operator stays; picking a value must not reset it (VadimV).
+                onSelect = { i -> onUpdate(trigger.copy(value = values[i].first)) },
+                modifier = Modifier.align(Alignment.CenterVertically),
             )
-        )
-        if (paramOption != null && paramOption.localizedUnit(context).isNotEmpty()) {
-            Spacer(Modifier.width(4.dp))
-            Text(paramOption.localizedUnit(context), fontSize = 12.sp, color = TextMuted)
+        } else {
+            val ops = operatorsFor(option)
+            val lc = context.appLocalizedContext()
+            DropdownField(
+                text = operatorWord(trigger.operator, lc),
+                items = ops.map { operatorWord(it, lc) },
+                onSelect = { i -> onUpdate(trigger.copy(operator = ops[i])) },
+                modifier = Modifier.align(Alignment.CenterVertically),
+            )
+            EditorField(
+                value = trigger.value,
+                onValueChange = { v -> onUpdate(trigger.copy(value = v)) },
+                highlight = numberMissing,
+                keyboardType = KeyboardType.Decimal,
+                centered = true,
+                modifier = Modifier.width(96.dp).align(Alignment.CenterVertically),
+            )
+            val unit = option.localizedUnit(context)
+            if (unit.isNotEmpty()) {
+                Text(unit, fontSize = EDITOR_TEXT, color = TextSecondary, modifier = Modifier.align(Alignment.CenterVertically))
+            }
+        }
+    }
+    if (numberMissing) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+            Icon(Icons.Outlined.WarningAmber, null, tint = AccentOrange, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.auto_ui_number_hint), fontSize = 14.sp, color = AccentOrange)
         }
     }
 }
 
+/**
+ * «Один раз: дата и время»: the date opens the system calendar, the time the system clock.
+ * The rule runs once at that moment and then switches itself off.
+ */
+@Composable
+private fun OneShotTriggerControls(trigger: TriggerDef, onUpdate: (TriggerDef) -> Unit) {
+    val context = LocalContext.current
+    val lc = context.appLocalizedContext()
+    val at = remember(trigger.value) {
+        OneShotTrigger.momentMs(trigger.value)?.let {
+            java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+        } ?: defaultOneShotMoment()
+    }
+    fun push(next: java.time.LocalDateTime) = onUpdate(trigger.copy(value = OneShotTrigger.format(next)))
+    val dateText = at.format(
+        java.time.format.DateTimeFormatter.ofPattern(lc.getString(R.string.auto_ui_date_chip_pattern), lc.resources.configuration.locales[0])
+    ).replaceFirstChar { it.titlecase(lc.resources.configuration.locales[0]) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        IconChip(Icons.Outlined.CalendarMonth, dateText) {
+            android.app.DatePickerDialog(
+                context,
+                { _, y, m, d -> push(at.withYear(y).withMonth(m + 1).withDayOfMonth(d)) },
+                at.year, at.monthValue - 1, at.dayOfMonth,
+            ).show()
+        }
+        Text(stringResource(R.string.auto_ui_once_at), fontSize = EDITOR_TEXT, color = TextSecondary)
+        IconChip(Icons.Outlined.Schedule, minuteToHHmm(at.hour * 60 + at.minute), monospace = true) {
+            TimePickerDialog(context, { _, h, m -> push(at.withHour(h).withMinute(m)) }, at.hour, at.minute, true).show()
+        }
+    }
+    Text(
+        stringResource(R.string.auto_ui_once_hint), fontSize = 14.sp, color = TextSecondary,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+}
+
+/** Tomorrow at 08:00: where a new one-shot condition starts. */
+private fun defaultOneShotMoment(): java.time.LocalDateTime =
+    java.time.LocalDate.now().plusDays(1).atTime(8, 0)
+
+private fun newOneShotTrigger(context: Context): TriggerDef = TriggerDef(
+    param = OneShotTrigger.PARAM,
+    chineseName = "单次",
+    operator = "==",
+    value = OneShotTrigger.format(defaultOneShotMoment()),
+    displayName = context.getString(R.string.auto_ui_trigger_once),
+    kind = OneShotTrigger.KIND,
+)
+
+/** A green value chip with an icon (date, time): 40dp to see, 48dp to touch. */
+@Composable
+private fun IconChip(icon: ImageVector, text: String, monospace: Boolean = false, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .heightIn(min = FIELD_HEIGHT)
+            .clip(FIELD_SHAPE)
+            .background(CardSurface)
+            .border(1.dp, CardBorder, FIELD_SHAPE)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = AccentGreen, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text, fontSize = EDITOR_TEXT, color = AccentGreen, fontWeight = FontWeight.Bold,
+            fontFamily = if (monospace) FontFamily.Monospace else null,
+        )
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun PlaceTriggerControls(
     trigger: TriggerDef,
@@ -1740,88 +2049,42 @@ private fun PlaceTriggerControls(
 ) {
     val placeExists = places.any { it.id == trigger.placeId }
     val isStale = trigger.placeId != null && !placeExists
+    val enterPrefix = stringResource(R.string.automation_trigger_place_enter_prefix)
+    val exitPrefix = stringResource(R.string.automation_trigger_place_exit_prefix)
 
-    Icon(
-        Icons.Outlined.Place,
-        contentDescription = null,
-        tint = TextMuted,
-        modifier = Modifier.size(16.dp)
-    )
-    Spacer(Modifier.width(4.dp))
-
-    if (isStale || (trigger.placeId == null && places.isEmpty())) {
-        // Show warning when the referenced place was deleted
-        Text(
-            stringResource(R.string.automation_trigger_place_deleted),
-            fontSize = 13.sp,
-            color = Color(0xFFEF4444),
-            modifier = Modifier
-                .background(Color(0xFFEF4444).copy(alpha = 0.08f), RoundedCornerShape(6.dp))
-                .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-                .padding(8.dp, 6.dp)
-        )
-    } else {
-        // Place-name dropdown
-        var placeExpanded by remember { mutableStateOf(false) }
-        val deletedPlaceholder = stringResource(R.string.automation_trigger_place_deleted_placeholder)
-        Box(modifier = Modifier.width(150.dp)) {
-            Text(
-                trigger.placeName ?: deletedPlaceholder,
-                fontSize = 13.sp, color = TextPrimary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(CardSurface, RoundedCornerShape(6.dp))
-                    .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                    .clickable { placeExpanded = true }
-                    .padding(8.dp, 7.dp),
-                maxLines = 1
-            )
-            val enterPrefix = stringResource(R.string.automation_trigger_place_enter_prefix)
-            val exitPrefix = stringResource(R.string.automation_trigger_place_exit_prefix)
-            DropdownMenu(expanded = placeExpanded, onDismissRequest = { placeExpanded = false }) {
-                ScaledDialogContent {
-                    places.forEach { place ->
-                        DropdownMenuItem(
-                            text = { Text(place.name, fontSize = 13.sp) },
-                            onClick = {
-                                placeExpanded = false
-                                val kindLabel = if (trigger.kind == "place_enter") enterPrefix else exitPrefix
-                                onUpdate(trigger.copy(
-                                    placeId = place.id,
-                                    placeName = place.name,
-                                    displayName = "$kindLabel «${place.name}»"
-                                ))
-                            }
-                        )
-                    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Kind: Въезд / Выезд
+        listOf("place_enter" to R.string.automation_trigger_place_enter_label, "place_exit" to R.string.automation_trigger_place_exit_label)
+            .forEach { (kind, label) ->
+                ChoiceChip(stringResource(label), trigger.kind == kind) {
+                    val kindLabel = if (kind == "place_enter") enterPrefix else exitPrefix
+                    onUpdate(trigger.copy(kind = kind, displayName = "$kindLabel «${trigger.placeName ?: "?"}»"))
                 }
             }
-        }
-    }
-    Spacer(Modifier.width(4.dp))
-
-    // Kind toggle pill: Въезд / Выезд
-    val isEnter = trigger.kind == "place_enter"
-    val enterLabel = stringResource(R.string.automation_trigger_place_enter_label)
-    val exitLabel = stringResource(R.string.automation_trigger_place_exit_label)
-    val enterPrefix2 = stringResource(R.string.automation_trigger_place_enter_prefix)
-    val exitPrefix2 = stringResource(R.string.automation_trigger_place_exit_prefix)
-    val label = if (isEnter) enterLabel else exitLabel
-    Box(
-        modifier = Modifier
-            .background(CardSurface, RoundedCornerShape(6.dp))
-            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-            .clickable {
-                val newKind = if (isEnter) "place_exit" else "place_enter"
-                val kindLabel = if (newKind == "place_enter") enterPrefix2 else exitPrefix2
-                onUpdate(trigger.copy(
-                    kind = newKind,
-                    displayName = "$kindLabel «${trigger.placeName ?: "?"}»"
-                ))
+        if (isStale || (trigger.placeId == null && places.isEmpty())) {
+            // The referenced place was deleted
+            Box(Modifier.heightIn(min = MIN_TOUCH), contentAlignment = Alignment.Center) {
+                Text(
+                    stringResource(R.string.automation_trigger_place_deleted),
+                    fontSize = EDITOR_TEXT,
+                    color = SocRed,
+                    modifier = Modifier
+                        .background(SocRed.copy(alpha = 0.08f), FIELD_SHAPE)
+                        .border(1.dp, SocRed.copy(alpha = 0.3f), FIELD_SHAPE)
+                        .padding(12.dp, 8.dp)
+                )
             }
-            .padding(8.dp, 6.dp)
-    ) {
-        Text(label, color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        } else {
+            DropdownField(
+                text = trigger.placeName ?: stringResource(R.string.automation_trigger_place_deleted_placeholder),
+                items = places.map { it.name },
+                onSelect = { i ->
+                    val place = places[i]
+                    val kindLabel = if (trigger.kind == "place_enter") enterPrefix else exitPrefix
+                    onUpdate(trigger.copy(placeId = place.id, placeName = place.name, displayName = "$kindLabel «${place.name}»"))
+                },
+            )
+        }
     }
 }
 
@@ -1830,44 +2093,21 @@ private fun TimeOfDayTriggerControls(
     trigger: TriggerDef,
     onUpdate: (TriggerDef) -> Unit
 ) {
-    val dayLabel = stringResource(R.string.automation_trigger_day)
-    val nightLabel = stringResource(R.string.automation_trigger_night)
-    val dawnLabel = stringResource(R.string.automation_trigger_dawn)
-    val duskLabel = stringResource(R.string.automation_trigger_dusk)
-    val phases = listOf("DAY" to dayLabel, "NIGHT" to nightLabel, "DAWN" to dawnLabel, "DUSK" to duskLabel)
+    val phases = listOf(
+        "DAY" to stringResource(R.string.automation_trigger_day),
+        "NIGHT" to stringResource(R.string.automation_trigger_night),
+        "DAWN" to stringResource(R.string.automation_trigger_dawn),
+        "DUSK" to stringResource(R.string.automation_trigger_dusk),
+    )
     val current = phases.find { it.first == trigger.value.uppercase() } ?: phases[1]
-    var expanded by remember { mutableStateOf(false) }
-
-    Text(stringResource(R.string.automation_trigger_time_of_day_label), fontSize = 12.sp, color = TextMuted)
-    Spacer(Modifier.width(4.dp))
-    Box {
-        Text(
-            current.second,
-            fontSize = 13.sp,
-            color = AccentGreen,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .background(CardSurface, RoundedCornerShape(6.dp))
-                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                .clickable { expanded = true }
-                .padding(8.dp, 6.dp)
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ScaledDialogContent {
-                phases.forEach { (value, label) ->
-                    DropdownMenuItem(
-                        text = { Text(label, fontSize = 13.sp) },
-                        onClick = {
-                            expanded = false
-                            onUpdate(trigger.copy(value = value, displayName = label))
-                        }
-                    )
-                }
-            }
-        }
-    }
+    DropdownField(
+        text = current.second,
+        items = phases.map { it.second },
+        onSelect = { i -> onUpdate(trigger.copy(value = phases[i].first, displayName = phases[i].second)) },
+    )
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ScheduleTriggerControls(
     trigger: TriggerDef,
@@ -1902,48 +2142,40 @@ private fun ScheduleTriggerControls(
     )
 
     Column {
-        // Mode toggle: exact vs range
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FilterChip(
-                selected = isExact,
-                onClick = { if (!isExact) push(spec.copy(toMinute = spec.fromMinute)) },
-                label = { Text(stringResource(R.string.automation_schedule_mode_exact), fontSize = 12.sp) },
-            )
-            Spacer(Modifier.width(6.dp))
-            FilterChip(
-                selected = !isExact,
-                onClick = {
-                    // Open a 2h window so "from" and "to" differ when switching to range.
-                    if (isExact) push(spec.copy(toMinute = (spec.fromMinute + 120) % 1440))
-                },
-                label = { Text(stringResource(R.string.automation_schedule_mode_range), fontSize = 12.sp) },
-            )
-        }
-        Spacer(Modifier.height(6.dp))
-        // Time picker(s)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (isExact) {
-                Text(stringResource(R.string.automation_schedule_time_label) + " ", fontSize = 12.sp, color = TextMuted)
-                TimeChip(minuteToHHmm(spec.fromMinute)) {
-                    pickTime(spec.fromMinute) { push(spec.copy(fromMinute = it, toMinute = it)) }
-                }
-            } else {
-                Text(stringResource(R.string.automation_schedule_from) + " ", fontSize = 12.sp, color = TextMuted)
-                TimeChip(minuteToHHmm(spec.fromMinute)) {
-                    pickTime(spec.fromMinute) { push(spec.copy(fromMinute = it)) }
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.automation_schedule_to) + " ", fontSize = 12.sp, color = TextMuted)
-                TimeChip(minuteToHHmm(spec.toMinute)) {
-                    pickTime(spec.toMinute) { push(spec.copy(toMinute = it)) }
+        // Mode (exact / range) and the time picker(s) on one line, wrapping when narrow.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChoiceChip(stringResource(R.string.automation_schedule_mode_exact), isExact) {
+                if (!isExact) push(spec.copy(toMinute = spec.fromMinute))
+            }
+            // Open a 2h window so "from" and "to" differ when switching to range.
+            ChoiceChip(stringResource(R.string.automation_schedule_mode_range), !isExact) {
+                if (isExact) push(spec.copy(toMinute = (spec.fromMinute + 120) % 1440))
+            }
+            Row(Modifier.heightIn(min = MIN_TOUCH), verticalAlignment = Alignment.CenterVertically) {
+                if (isExact) {
+                    Text(stringResource(R.string.automation_schedule_time_label), fontSize = EDITOR_TEXT, color = TextSecondary)
+                    Spacer(Modifier.width(8.dp))
+                    TimeChip(minuteToHHmm(spec.fromMinute)) {
+                        pickTime(spec.fromMinute) { push(spec.copy(fromMinute = it, toMinute = it)) }
+                    }
+                } else {
+                    Text(stringResource(R.string.automation_schedule_from), fontSize = EDITOR_TEXT, color = TextSecondary)
+                    Spacer(Modifier.width(8.dp))
+                    TimeChip(minuteToHHmm(spec.fromMinute)) {
+                        pickTime(spec.fromMinute) { push(spec.copy(fromMinute = it)) }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.automation_schedule_to), fontSize = EDITOR_TEXT, color = TextSecondary)
+                    Spacer(Modifier.width(8.dp))
+                    TimeChip(minuteToHHmm(spec.toMinute)) {
+                        pickTime(spec.toMinute) { push(spec.copy(toMinute = it)) }
+                    }
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
         // Days of week (none selected = every day)
-        Text(stringResource(R.string.automation_schedule_days_label), fontSize = 11.sp, color = TextMuted)
-        Spacer(Modifier.height(2.dp))
-        Row {
+        Text(stringResource(R.string.automation_schedule_days_label), fontSize = 14.sp, color = TextSecondary)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             dayLabels.forEach { (d, label) ->
                 DayChip(
                     label = label,
@@ -1953,7 +2185,6 @@ private fun ScheduleTriggerControls(
                         push(spec.copy(days = newDays))
                     },
                 )
-                Spacer(Modifier.width(3.dp))
             }
         }
     }
@@ -1961,33 +2192,41 @@ private fun ScheduleTriggerControls(
 
 @Composable
 private fun TimeChip(text: String, onClick: () -> Unit) {
-    Text(
-        text,
-        fontSize = 13.sp,
-        color = AccentGreen,
-        fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Monospace,
+    Box(
         modifier = Modifier
-            .background(CardSurface, RoundedCornerShape(6.dp))
-            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .minimumInteractiveComponentSize()
+            .heightIn(min = FIELD_HEIGHT)
+            .clip(FIELD_SHAPE)
+            .background(CardSurface)
+            .border(1.dp, CardBorder, FIELD_SHAPE)
             .clickable { onClick() }
-            .padding(8.dp, 6.dp)
-    )
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, fontSize = EDITOR_TEXT, color = AccentGreen, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+    }
 }
 
+/** A weekday, 48x48dp. */
 @Composable
 private fun DayChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        fontSize = 12.sp,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-        color = if (selected) AccentGreen else TextMuted,
+    Box(
         modifier = Modifier
-            .background(if (selected) AccentGreen.copy(alpha = 0.15f) else CardSurface, RoundedCornerShape(6.dp))
-            .border(1.dp, if (selected) AccentGreen else CardBorder, RoundedCornerShape(6.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 6.dp, vertical = 5.dp)
-    )
+            .padding(vertical = 2.dp)
+            .size(MIN_TOUCH)
+            .clip(FIELD_SHAPE)
+            .background(if (selected) AccentGreen.copy(alpha = 0.15f) else CardSurface)
+            .border(1.dp, if (selected) AccentGreen else CardBorder, FIELD_SHAPE)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontSize = EDITOR_TEXT,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) AccentGreen else TextSecondary,
+        )
+    }
 }
 
 /** Readable schedule label; first token is the time so the rule summary stays compact. */
@@ -2016,54 +2255,15 @@ private fun scheduleDaysShort(context: android.content.Context, days: Set<Int>):
 }
 
 @Composable
-private fun ServiceStartTriggerControls() {
-    Icon(
-        Icons.Outlined.PlayArrow,
-        contentDescription = null,
-        tint = AccentGreen,
-        modifier = Modifier.size(16.dp)
-    )
-    Spacer(Modifier.width(6.dp))
-    Text(
-        stringResource(R.string.automation_trigger_service_start),
-        fontSize = 13.sp,
-        color = AccentGreen,
-        fontWeight = FontWeight.Bold
-    )
-}
-
-@Composable
-private fun NetworkAvailableTriggerControls() {
-    Icon(
-        Icons.Outlined.Wifi,
-        contentDescription = null,
-        tint = AccentGreen,
-        modifier = Modifier.size(16.dp)
-    )
-    Spacer(Modifier.width(6.dp))
-    Text(
-        stringResource(R.string.automation_trigger_internet),
-        fontSize = 13.sp,
-        color = AccentGreen,
-        fontWeight = FontWeight.Bold
-    )
-}
-
-@Composable
 private fun VoiceTriggerControls(trigger: TriggerDef, onUpdate: (TriggerDef) -> Unit) {
     val voiceLabel = stringResource(R.string.automation_trigger_type_voice)
-    OutlinedTextField(
+    EditorField(
         value = trigger.value,
         onValueChange = { phrase ->
             onUpdate(trigger.copy(value = phrase, displayName = phrase.ifBlank { voiceLabel }))
         },
-        label = { Text(stringResource(R.string.automation_trigger_voice_phrase_label), fontSize = 12.sp) },
-        singleLine = true,
+        placeholder = stringResource(R.string.automation_trigger_voice_phrase_label),
         modifier = Modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = AccentGreen, unfocusedBorderColor = CardBorder,
-            focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = AccentGreen
-        )
     )
 }
 
@@ -2073,56 +2273,23 @@ private fun ButtonPressTriggerControls(
     onUpdate: (TriggerDef) -> Unit,
 ) {
     val context = LocalContext.current
-    Icon(
-        Icons.Outlined.TouchApp,
-        contentDescription = null,
-        tint = AccentGreen,
-        modifier = Modifier.size(16.dp),
-    )
-    Spacer(Modifier.width(6.dp))
-    Text(
-        stringResource(R.string.automation_trigger_button_picker_label),
-        fontSize = 13.sp,
-        color = AccentGreen,
-        fontWeight = FontWeight.Bold,
-    )
-    Spacer(Modifier.width(6.dp))
-
-    var expanded by remember { mutableStateOf(false) }
     val current = trigger.value.toIntOrNull() ?: 1
-    Box {
-        Text(
-            current.toString(),
-            fontSize = 13.sp, color = AccentGreen, fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .background(CardSurface, RoundedCornerShape(6.dp))
-                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                .clickable { expanded = true }
-                .padding(8.dp, 6.dp)
-                .width(30.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ScaledDialogContent {
-                (1..4).forEach { n ->
-                    DropdownMenuItem(
-                        text = { Text(n.toString(), fontWeight = FontWeight.Bold) },
-                        onClick = {
-                            expanded = false
-                            onUpdate(
-                                trigger.copy(
-                                    value = n.toString(),
-                                    displayName = context.getString(R.string.automation_trigger_button_label, n),
-                                )
-                            )
-                        },
+    val labels = (1..4).map { stringResource(R.string.automation_trigger_button_label, it) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DropdownField(
+            text = labels.getOrElse(current - 1) { current.toString() },
+            items = labels,
+            onSelect = { i ->
+                onUpdate(
+                    trigger.copy(
+                        value = (i + 1).toString(),
+                        displayName = context.getString(R.string.automation_trigger_button_label, i + 1),
                     )
-                }
-            }
-        }
+                )
+            },
+        )
+        ButtonIconPicker(buttonNumber = current)
     }
-    Spacer(Modifier.width(8.dp))
-    ButtonIconPicker(buttonNumber = current)
 }
 
 /**
@@ -2142,25 +2309,26 @@ private fun ButtonIconPicker(buttonNumber: Int) {
     Box {
         Box(
             modifier = Modifier
-                .background(CardSurface, RoundedCornerShape(6.dp))
-                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                .clickable { open = true }
-                .padding(6.dp)
-                .size(20.dp),
+                .minimumInteractiveComponentSize()
+                .size(FIELD_HEIGHT)
+                .clip(FIELD_SHAPE)
+                .background(CardSurface)
+                .border(1.dp, CardBorder, FIELD_SHAPE)
+                .clickable { open = true },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = selected?.vector ?: Icons.Outlined.AddPhotoAlternate,
                 contentDescription = stringResource(R.string.widget_button_icon_hint),
-                tint = if (selected != null) AccentGreen else TextMuted,
-                modifier = Modifier.size(18.dp),
+                tint = if (selected != null) AccentGreen else TextSecondary,
+                modifier = Modifier.size(20.dp),
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             ScaledDialogContent {
                 Text(
                     stringResource(R.string.widget_button_icon_hint),
-                    fontSize = 11.sp,
+                    fontSize = 14.sp,
                     color = TextSecondary,
                     modifier = Modifier.padding(12.dp, 6.dp),
                 )
@@ -2208,36 +2376,29 @@ private fun ButtonIconPicker(buttonNumber: Int) {
 @Composable
 private fun SteeringKeyTriggerControls(
     trigger: TriggerDef,
+    highlight: Boolean,
     onUpdate: (TriggerDef) -> Unit,
 ) {
     val context = LocalContext.current
-    Icon(
-        Icons.Outlined.Gamepad,
-        contentDescription = null,
-        tint = AccentGreen,
-        modifier = Modifier.size(16.dp),
-    )
-    Spacer(Modifier.width(6.dp))
-    Text(
-        stringResource(R.string.automation_trigger_steering_key_picker_label),
-        fontSize = 13.sp,
-        color = AccentGreen,
-        fontWeight = FontWeight.Bold,
-    )
-    Spacer(Modifier.width(6.dp))
-
     var learning by remember { mutableStateOf(false) }
     val code = trigger.value.toIntOrNull() ?: 0
-    Text(
-        if (code > 0) "${steeringKeyLabel(context, code)} ($code)"
-        else stringResource(R.string.automation_trigger_steering_key_assign),
-        fontSize = 13.sp, color = AccentGreen, fontWeight = FontWeight.Bold,
+    Box(
         modifier = Modifier
-            .background(CardSurface, RoundedCornerShape(6.dp))
-            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .minimumInteractiveComponentSize()
+            .heightIn(min = FIELD_HEIGHT)
+            .clip(FIELD_SHAPE)
+            .background(CardSurface)
+            .border(if (highlight) 1.5.dp else 1.dp, if (highlight) AccentOrange else CardBorder, FIELD_SHAPE)
             .clickable { learning = true }
-            .padding(8.dp, 6.dp),
-    )
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (code > 0) "${steeringKeyLabel(context, code)} ($code)"
+            else stringResource(R.string.automation_trigger_steering_key_assign),
+            fontSize = EDITOR_TEXT, color = AccentGreen, fontWeight = FontWeight.Bold,
+        )
+    }
 
     if (learning) {
         LearnButtonDialog(
@@ -2287,76 +2448,40 @@ private fun steeringKeyOccupiedReason(context: Context): (Int) -> String? {
 
 // --- Action Row ---
 
+/**
+ * One action: «Выполнить сейчас» (green triangle in a light circle) at the left before the
+ * action, the action's own controls across the row, then the arrows and the orange bin at the
+ * far end. Every button is 48x48dp.
+ */
 @Composable
 private fun ActionRow(
     index: Int,
     action: ActionDef,
     places: List<PlaceEntity>,
     tgBotConnected: Boolean,
+    highlight: Boolean,
+    showArrows: Boolean,
     onUpdate: (ActionDef) -> Unit,
     onTest: (ActionDef) -> Unit,
     onMoveUp: (() -> Unit)?,
     onMoveDown: (() -> Unit)?,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .background(CardSurface, RoundedCornerShape(8.dp))
-            .border(1.dp, AccentTeal.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-            .padding(8.dp, 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .background(CardSurface, FIELD_SHAPE)
+            .border(
+                if (highlight) 1.5.dp else 1.dp,
+                if (highlight) AccentOrange else AccentTeal.copy(alpha = 0.2f),
+                FIELD_SHAPE,
+            )
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Text("${index + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AccentTeal,
-            modifier = Modifier.width(16.dp))
-
-        when (action.kind) {
-            "notification", "notification_silent", "notification_sound" ->
-                NotificationActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "app_launch" ->
-                AppLaunchActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "call" ->
-                CallActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "navigate" ->
-                NavigateActionControls(action = action, places = places, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "url" ->
-                UrlActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "yandex_music" ->
-                YandexMusicActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "delay" ->
-                DelayActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "media_volume" ->
-                MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "sentry" ->
-                SentryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "hotspot" ->
-                HotspotActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "cluster_projection" ->
-                ClusterActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            // A toggle on sentry or the cluster goes back to its own three-state row, so the
-            // user can return to Вкл/Выкл; every other target is edited by the target dropdown.
-            "toggle" -> when (toggleRowSpecFor(action)) {
-                SENTRY_ROW ->
-                    SentryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-                CLUSTER_ROW ->
-                    ClusterActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-                else ->
-                    ToggleActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            }
-            "speak" ->
-                SpeakActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "agent_query" ->
-                AgentQueryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "split_screen" ->
-                SplitScreenActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "split_screen_close", "split_screen_toggle" ->
-                SplitScreenStateActionControls(kind = action.kind, modifier = Modifier.weight(1f))
-            TELEGRAM_REPORT_KIND ->
-                TelegramReportActionControls(
-                    action = action, tgBotConnected = tgBotConnected, onUpdate = onUpdate, modifier = Modifier.weight(1f),
-                )
-            else -> // "param" (default)
-                ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+        Box(Modifier.width(24.dp).height(MIN_TOUCH), contentAlignment = Alignment.CenterStart) {
+            Text("${index + 1}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AccentTeal)
         }
 
         // "Выполнить сейчас" — fire this vehicle action immediately for live testing.
@@ -2365,15 +2490,72 @@ private fun ActionRow(
         val testable = (action.kind == "param" && action.command.isNotBlank()) ||
             (action.kind == "toggle" && !action.payload.isNullOrBlank())
         if (testable) {
+            IconButton(onClick = { onTest(action) }, modifier = Modifier.size(MIN_TOUCH)) {
+                Box(
+                    Modifier.size(36.dp).background(AccentGreen.copy(alpha = 0.16f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.PlayArrow, stringResource(R.string.auto_a11y_run_now), tint = AccentGreen, modifier = Modifier.size(20.dp))
+                }
+            }
             Spacer(Modifier.width(4.dp))
-            IconButton(onClick = { onTest(action) }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Outlined.PlayArrow, stringResource(R.string.auto_a11y_run_now), tint = AccentGreen, modifier = Modifier.size(16.dp))
+        }
+
+        Box(Modifier.weight(1f).heightIn(min = MIN_TOUCH), contentAlignment = Alignment.CenterStart) {
+            val fill = Modifier.fillMaxWidth()
+            when (action.kind) {
+                "notification", "notification_silent", "notification_sound" ->
+                    NotificationActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "app_launch" ->
+                    AppLaunchActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "call" ->
+                    CallActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "navigate" ->
+                    NavigateActionControls(action = action, places = places, onUpdate = onUpdate, modifier = fill)
+                "url" ->
+                    UrlActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "yandex_music" ->
+                    YandexMusicActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "delay" ->
+                    DelayActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "media_volume" ->
+                    MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "sentry" ->
+                    SentryActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "hotspot" ->
+                    HotspotActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "cluster_projection" ->
+                    ClusterActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                // A toggle on sentry or the cluster goes back to its own three-state row, so the
+                // user can return to Вкл/Выкл; every other target is edited by the target dropdown.
+                "toggle" -> when (toggleRowSpecFor(action)) {
+                    SENTRY_ROW ->
+                        SentryActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                    CLUSTER_ROW ->
+                        ClusterActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                    else ->
+                        ToggleActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                }
+                "speak" ->
+                    SpeakActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "agent_query" ->
+                    AgentQueryActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "split_screen" ->
+                    SplitScreenActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "split_screen_close", "split_screen_toggle" ->
+                    SplitScreenStateActionControls(kind = action.kind, modifier = fill)
+                TELEGRAM_REPORT_KIND ->
+                    TelegramReportActionControls(
+                        action = action, tgBotConnected = tgBotConnected, onUpdate = onUpdate, modifier = fill,
+                    )
+                else -> // "param" (default)
+                    ParamActionControls(action = action, onUpdate = onUpdate, modifier = fill)
             }
         }
+
         Spacer(Modifier.width(4.dp))
-        ReorderArrows(onMoveUp = onMoveUp, onMoveDown = onMoveDown)
-        IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-            Icon(Icons.Outlined.Close, "delete", tint = Color(0xFFEF4444).copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
+        Row(Modifier.height(MIN_TOUCH), verticalAlignment = Alignment.CenterVertically) {
+            RowButtons(showArrows, onMoveUp, onMoveDown, onDelete)
         }
     }
 }
@@ -2394,83 +2576,41 @@ private fun ParamActionControls(
     )
 }
 
-// Delay option keys — labels are resolved at runtime via stringResource
+// Delay options, in ms
 private val DELAY_OPTION_MS = listOf(500L, 1000L, 2000L, 3000L, 5000L, 10000L, 30000L, 60000L)
 
+private fun delayAction(ms: Long, context: Context): ActionDef {
+    val lc = context.appLocalizedContext()
+    return ActionDef(
+        command = "delay_$ms",
+        displayName = lc.getString(R.string.auto_ui_act_wait, durationText(ms, lc)),
+        kind = "delay",
+        payload = ms.toString(),
+    )
+}
+
+/** «Подождать 30 с»: the wait between two actions. */
 @Composable
 private fun DelayActionControls(
     action: ActionDef,
     onUpdate: (ActionDef) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val lc = context.appLocalizedContext()
     val currentMs = action.payload?.toLongOrNull() ?: 1000L
-    val label0_5s = stringResource(R.string.automation_delay_0_5s)
-    val label1s = stringResource(R.string.automation_delay_1s)
-    val label2s = stringResource(R.string.automation_delay_2s)
-    val label3s = stringResource(R.string.automation_delay_3s)
-    val label5s = stringResource(R.string.automation_delay_5s)
-    val label10s = stringResource(R.string.automation_delay_10s)
-    val label30s = stringResource(R.string.automation_delay_30s)
-    val label60s = stringResource(R.string.automation_delay_60s)
-    val delayLabels = listOf(
-        500L to label0_5s,
-        1000L to label1s,
-        2000L to label2s,
-        3000L to label3s,
-        5000L to label5s,
-        10000L to label10s,
-        30000L to label30s,
-        60000L to label60s
-    )
-    // Pre-build display names for onClick lambdas (stringResource cannot be called in non-Composable onClick)
-    val delayDisplayNames = delayLabels.associate { (ms, lbl) ->
-        ms to stringResource(R.string.automation_delay_display_name, lbl)
-    }
-    val currentLabel = delayLabels.find { it.first == currentMs }?.second ?: "${currentMs}ms"
-    var expanded by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            Icons.Outlined.Pause,
-            contentDescription = null,
-            tint = AccentTeal,
-            modifier = Modifier.size(16.dp)
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.HourglassEmpty, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.auto_ui_wait), fontSize = EDITOR_TEXT, color = TextPrimary)
+        Spacer(Modifier.width(8.dp))
+        DropdownField(
+            text = durationText(currentMs, lc),
+            fillWidth = true,
+            items = DELAY_OPTION_MS.map { durationText(it, lc) },
+            onSelect = { i -> onUpdate(delayAction(DELAY_OPTION_MS[i], context)) },
+            modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(6.dp))
-        Text(stringResource(R.string.automation_action_delay_label), fontSize = 13.sp, color = TextMuted)
-        Spacer(Modifier.width(6.dp))
-        Box {
-            Text(
-                currentLabel,
-                fontSize = 13.sp,
-                color = AccentTeal,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .background(CardSurface, RoundedCornerShape(6.dp))
-                    .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                    .clickable { expanded = true }
-                    .padding(8.dp, 6.dp)
-            )
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                ScaledDialogContent {
-                    delayLabels.forEach { (ms, label) ->
-                        DropdownMenuItem(
-                            text = { Text(label, fontSize = 13.sp) },
-                            onClick = {
-                                expanded = false
-                                onUpdate(action.copy(
-                                    payload = ms.toString(),
-                                    displayName = delayDisplayNames[ms] ?: label
-                                ))
-                            }
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -2498,10 +2638,10 @@ private fun MediaVolumeActionControls(
             Icons.Outlined.VolumeUp,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(20.dp)
         )
-        Spacer(Modifier.width(6.dp))
-        Text(label, fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontSize = EDITOR_TEXT, color = TextPrimary)
         Spacer(Modifier.width(8.dp))
         Slider(
             value = current.toFloat(),
@@ -2516,10 +2656,10 @@ private fun MediaVolumeActionControls(
         Spacer(Modifier.width(8.dp))
         Text(
             "$current/$maxVolume",
-            fontSize = 13.sp,
+            fontSize = EDITOR_TEXT,
             color = AccentTeal,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(40.dp)
+            modifier = Modifier.widthIn(min = 48.dp)
         )
     }
 }
@@ -2535,6 +2675,7 @@ private fun SentryActionControls(
     val context = LocalContext.current
     OnOffToggleControls(
         action = action,
+        icon = Icons.Outlined.Shield,
         displayLabel = stringResource(R.string.automation_action_sentry),
         onLabel = stringResource(R.string.automation_action_sentry_on),
         offLabel = stringResource(R.string.automation_action_sentry_off),
@@ -2547,13 +2688,16 @@ private fun SentryActionControls(
 
 /**
  * On / off / «переключить» for a kind that has its own control row and a state the car can be
- * asked for. The first two store the row's own kind with payload "1"/"0" — also when the row
- * currently holds a toggle, so «Переключить» is never a one-way door; the third stores the very
- * same `toggle` action the catalog entries store, so one target has one storage shape.
+ * asked for: the name on top, the three buttons below. The first two store the row's own kind
+ * with payload "1"/"0" — also when the row currently holds a toggle, so «Переключить» is never a
+ * one-way door; the third stores the very same `toggle` action the catalog entries store, so one
+ * target has one storage shape.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun OnOffToggleControls(
     action: ActionDef,
+    icon: ImageVector,
     displayLabel: String,
     onLabel: String,
     offLabel: String,
@@ -2564,42 +2708,52 @@ private fun OnOffToggleControls(
 ) {
     val toggleLabel = stringResource(R.string.automation_action_toggle_short)
     val isToggle = action.kind == "toggle"
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(displayLabel, fontSize = 13.sp, color = TextMuted)
-        Spacer(Modifier.weight(1f))
-        StateChip(onLabel, selected = !isToggle && action.payload == "1") {
-            onUpdate(rowStateAction(spec, "1", "$displayLabel: $onLabel"))
+    Column(modifier = modifier) {
+        Row(Modifier.heightIn(min = MIN_TOUCH), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(displayLabel, fontSize = EDITOR_TEXT, color = TextPrimary)
         }
-        Spacer(Modifier.width(4.dp))
-        StateChip(offLabel, selected = !isToggle && action.payload == "0") {
-            onUpdate(rowStateAction(spec, "0", "$displayLabel: $offLabel"))
-        }
-        Spacer(Modifier.width(4.dp))
-        StateChip(toggleLabel, selected = isToggle) {
-            onUpdate(
-                ActionDef(
-                    command = "",
-                    displayName = toggleDisplayName(context, spec.toggleTarget),
-                    kind = "toggle",
-                    payload = spec.toggleTarget,
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StateChip(onLabel, selected = !isToggle && action.payload == "1") {
+                onUpdate(rowStateAction(spec, "1", "$displayLabel: $onLabel"))
+            }
+            StateChip(offLabel, selected = !isToggle && action.payload == "0") {
+                onUpdate(rowStateAction(spec, "0", "$displayLabel: $offLabel"))
+            }
+            StateChip(toggleLabel, selected = isToggle) {
+                onUpdate(
+                    ActionDef(
+                        command = "",
+                        displayName = toggleDisplayName(context, spec.toggleTarget),
+                        kind = "toggle",
+                        payload = spec.toggleTarget,
+                    )
                 )
-            )
+            }
         }
     }
 }
 
+/** «Включить / Отключить / Переключить»: green outline when chosen, 40dp to see, 48dp to touch. */
 @Composable
 private fun StateChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        fontSize = 12.sp,
-        color = if (selected) AccentGreen else TextSecondary,
+    Box(
         modifier = Modifier
-            .background(CardSurface, RoundedCornerShape(6.dp))
-            .border(1.dp, if (selected) AccentGreen else CardBorder, RoundedCornerShape(6.dp))
+            .minimumInteractiveComponentSize()
+            .heightIn(min = FIELD_HEIGHT)
+            .clip(FIELD_SHAPE)
+            .background(if (selected) AccentGreen.copy(alpha = 0.12f) else CardSurface)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) AccentGreen else CardBorder, FIELD_SHAPE)
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-    )
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, fontSize = EDITOR_TEXT, fontWeight = FontWeight.SemiBold,
+            color = if (selected) AccentGreen else TextSecondary,
+        )
+    }
 }
 
 // --- Hotspot Action Controls ---
@@ -2619,14 +2773,16 @@ private fun HotspotActionControls(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(displayLabel, fontSize = 13.sp, color = TextMuted)
+        Icon(Icons.Outlined.WifiTethering, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(displayLabel, fontSize = EDITOR_TEXT, color = TextPrimary)
         Spacer(Modifier.weight(1f))
         Text(
             if (isEnabled) onLabel else offLabel,
-            fontSize = 13.sp,
+            fontSize = EDITOR_TEXT,
             color = if (isEnabled) AccentGreen else TextSecondary
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(8.dp))
         Switch(
             checked = isEnabled,
             onCheckedChange = { checked ->
@@ -2650,6 +2806,7 @@ private fun ClusterActionControls(
     val context = LocalContext.current
     OnOffToggleControls(
         action = action,
+        icon = Icons.Outlined.Speed,
         displayLabel = stringResource(R.string.automation_action_cluster_projection),
         onLabel = stringResource(R.string.automation_action_cluster_projection_on),
         offLabel = stringResource(R.string.automation_action_cluster_projection_off),
@@ -2663,9 +2820,9 @@ private fun ClusterActionControls(
 // --- Toggle Action Controls ---
 
 /**
- * Row for the "toggle" action: one dropdown picking what gets flipped. The label
- * comes from the target id, so it follows an in-app language switch; displayName is
- * rewritten on pick because that is what the journal and the dump show.
+ * Row for the "toggle" action: one dropdown picking what gets flipped, «Передний багажник,
+ * переключить». The label comes from the target id, so it follows an in-app language switch;
+ * displayName is rewritten on pick because that is what the journal and the dump show.
  */
 @Composable
 private fun ToggleActionControls(
@@ -2675,47 +2832,22 @@ private fun ToggleActionControls(
 ) {
     val context = LocalContext.current
     val current = action.payload ?: ActionDispatcher.TOGGLE_TRUNK
-    val targetNames = ActionDispatcher.TOGGLE_TARGETS.associateWith { target ->
-        stringResource(ActionDispatcher.toggleTargetNameRes(target) ?: R.string.automation_action_toggle)
+    val targetNames = ActionDispatcher.TOGGLE_TARGETS.map { target ->
+        stringResource(
+            R.string.auto_ui_act_toggle,
+            stringResource(ActionDispatcher.toggleTargetNameRes(target) ?: R.string.automation_action_toggle),
+        )
     }
-    var expanded by remember { mutableStateOf(false) }
-
-    Row(
+    DropdownField(
+        text = targetNames.getOrNull(ActionDispatcher.TOGGLE_TARGETS.indexOf(current)) ?: current,
+        fillWidth = true,
+        items = targetNames,
+        onSelect = { i ->
+            val target = ActionDispatcher.TOGGLE_TARGETS[i]
+            onUpdate(action.copy(payload = target, displayName = toggleDisplayName(context, target)))
+        },
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(stringResource(R.string.automation_action_toggle), fontSize = 13.sp, color = TextMuted)
-        Spacer(Modifier.width(6.dp))
-        Box {
-            Text(
-                targetNames[current] ?: current,
-                fontSize = 13.sp,
-                color = AccentTeal,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .background(CardSurface, RoundedCornerShape(6.dp))
-                    .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                    .clickable { expanded = true }
-                    .padding(8.dp, 6.dp)
-            )
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                ScaledDialogContent {
-                    ActionDispatcher.TOGGLE_TARGETS.forEach { target ->
-                        DropdownMenuItem(
-                            text = { Text(targetNames[target] ?: target, fontSize = 13.sp) },
-                            onClick = {
-                                expanded = false
-                                onUpdate(action.copy(
-                                    payload = target,
-                                    displayName = toggleDisplayName(context, target)
-                                ))
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
+    )
 }
 
 // --- Catalog Dropdown (with category headers) ---
@@ -2736,12 +2868,18 @@ internal fun expandedCategoriesFor(
     return setOf(categories[index])
 }
 
+/**
+ * The catalog of parameters or car commands, grouped by category; 48dp, 16sp items. An empty
+ * [selected] shows [placeholder] instead, outlined orange when [highlight].
+ */
 @Composable
 private fun CatalogDropdown(
     selected: String,
     items: List<String>,
     categories: List<String>,
     modifier: Modifier = Modifier,
+    placeholder: String = "",
+    highlight: Boolean = false,
     onSelect: (Int) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -2751,22 +2889,29 @@ private fun CatalogDropdown(
             expandedCategoriesFor(selected, items, categories).forEach { put(it, true) }
         }
     }
-    Box(modifier = modifier) {
-        Text(
-            selected,
-            fontSize = 13.sp, color = TextPrimary,
+    Box(modifier = modifier.minimumInteractiveComponentSize()) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(CardSurface, RoundedCornerShape(6.dp))
-                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                .heightIn(min = FIELD_HEIGHT)
+                .clip(FIELD_SHAPE)
+                .background(CardSurface)
+                .border(if (highlight) 1.5.dp else 1.dp, if (highlight) AccentOrange else CardBorder, FIELD_SHAPE)
                 .clickable { expanded = true }
-                .padding(8.dp, 7.dp),
-            maxLines = 1
-        )
+                .padding(start = 12.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                selected.ifEmpty { placeholder },
+                fontSize = EDITOR_TEXT, color = if (selected.isEmpty()) TextSecondary else TextPrimary,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            Icon(Icons.Outlined.KeyboardArrowDown, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+        }
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxHeight(0.5f)
+            modifier = Modifier.fillMaxHeight(0.6f)
         ) {
             ScaledDialogContent {
                 var lastCat = ""
@@ -2778,9 +2923,12 @@ private fun CatalogDropdown(
                         DropdownMenuItem(
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(if (open) "▼" else "▶", fontSize = 11.sp, color = AccentGreen)
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(cat, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                                    Icon(
+                                        if (open) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                                        null, tint = AccentGreen, modifier = Modifier.size(20.dp),
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(cat, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
                                 }
                             },
                             onClick = { openCategories[cat] = !open }
@@ -2788,7 +2936,7 @@ private fun CatalogDropdown(
                     }
                     if (openCategories[cat] == true) {
                         DropdownMenuItem(
-                            text = { Text(item, fontSize = 13.sp) },
+                            text = { Text(item, fontSize = EDITOR_TEXT, modifier = Modifier.padding(start = 28.dp)) },
                             onClick = { expanded = false; onSelect(idx) }
                         )
                     }
@@ -2798,44 +2946,228 @@ private fun CatalogDropdown(
     }
 }
 
-// --- Journal Dialog ---
+// --- «Добавить действие» ---
+
+/** One tile of the action picker: its label and the action it adds. */
+private class PickerTile(val label: String, val needsOverlay: Boolean = false, val make: (Context) -> ActionDef)
+
+private class PickerSection(val name: String, val tiles: List<PickerTile>)
+
+/** The section the picker opened on last time: it opens there again. */
+private object ActionPickerMemory {
+    var section = 0
+}
+
+/** The car's catalog sections in the picker's order, then messages, apps, screen, system and waits. */
+private val CATALOG_SECTIONS = listOf(
+    R.string.auto_cat_windows, R.string.auto_cat_climate, R.string.auto_cat_seats, R.string.auto_cat_sunroof,
+    R.string.auto_cat_locks, R.string.auto_cat_body, R.string.auto_cat_light, R.string.auto_cat_mirrors,
+    R.string.auto_cat_drive_mode, R.string.auto_cat_fridge,
+)
 
 @Composable
-private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+private fun pickerSections(): List<PickerSection> {
+    val context = LocalContext.current
+    val lc = context.appLocalizedContext()
+    return remember(lc) {
+        val catalog = CATALOG_SECTIONS.map { cat ->
+            PickerSection(
+                lc.getString(cat),
+                ACTION_COMMANDS.filter { it.categoryRes == cat }.map { option ->
+                    PickerTile(option.localizedName(lc)) { actionDefFor(option, it) }
+                },
+            )
+        }.filter { it.tiles.isNotEmpty() }
+        catalog + listOf(
+            PickerSection(lc.getString(R.string.auto_ui_section_messages), listOf(
+                PickerTile(lc.getString(R.string.automation_action_notification), needsOverlay = true) { newNotificationAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_speak)) { newSpeakAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_agent_query)) { newAgentQueryAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_tg_report_add)) { newTelegramReportAction(it) },
+            )),
+            PickerSection(lc.getString(R.string.auto_ui_section_apps), listOf(
+                PickerTile(lc.getString(R.string.automation_action_app_launch)) { newAppLaunchAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_yandex_music)) { newYandexMusicAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_call)) { newCallAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_navigate)) { newNavigateAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_url)) { newUrlAction(it) },
+            )),
+            PickerSection(lc.getString(R.string.auto_ui_section_screen), listOf(
+                PickerTile(lc.getString(R.string.automation_action_cluster_projection)) { newClusterAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_split_screen)) { newSplitScreenAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_split_screen_close)) { newSplitScreenCloseAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_split_screen_toggle)) { newSplitScreenToggleAction(it) },
+            )),
+            PickerSection(lc.getString(R.string.auto_ui_section_system), listOf(
+                PickerTile(lc.getString(R.string.automation_action_sentry)) { newSentryAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_hotspot)) { newHotspotAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_media_volume)) { newMediaVolumeAction(it) },
+            )),
+            PickerSection(lc.getString(R.string.auto_ui_wait), DELAY_OPTION_MS.map { ms ->
+                PickerTile(lc.getString(R.string.auto_ui_act_wait, durationText(ms, lc))) { delayAction(ms, it) }
+            }),
+        )
+    }
+}
+
+/** «+ Добавить действие»: opens the picker; outlined orange while the rule has no action. */
+@Composable
+private fun AddActionButton(
+    highlight: Boolean,
+    modifier: Modifier = Modifier,
+    onAdd: (ActionDef) -> Unit,
+) {
+    val context = LocalContext.current
+    var picking by remember { mutableStateOf(false) }
+    var showOverlayPrompt by remember { mutableStateOf(false) }
+
+    AddRowButton(stringResource(R.string.automation_add_action_button).removePrefix("+ ").removePrefix("+"), highlight, modifier) {
+        picking = true
+    }
+
+    if (picking) {
+        ActionPickerDialog(
+            onPick = { tile ->
+                picking = false
+                onAdd(tile.make(context))
+                if (tile.needsOverlay && !android.provider.Settings.canDrawOverlays(context)) {
+                    showOverlayPrompt = true
+                }
+            },
+            onDismiss = { picking = false },
+        )
+    }
+
+    if (showOverlayPrompt) {
+        AppAlertDialog(
+            onDismissRequest = { showOverlayPrompt = false },
+            containerColor = CardSurface,
+            title = { Text(stringResource(R.string.automation_overlay_permission_title), color = TextPrimary, fontSize = 18.sp) },
+            text = {
+                Text(
+                    stringResource(R.string.automation_overlay_permission_text),
+                    fontSize = EDITOR_TEXT,
+                    color = TextPrimary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showOverlayPrompt = false
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:${context.packageName}")
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    try { context.startActivity(intent) } catch (_: Exception) {}
+                }) {
+                    Text(stringResource(R.string.automation_overlay_open_settings), color = AccentGreen, fontSize = EDITOR_TEXT)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOverlayPrompt = false }) {
+                    Text(stringResource(R.string.automation_overlay_later), color = TextSecondary, fontSize = EDITOR_TEXT)
+                }
+            }
+        )
+    }
+}
+
+/** «+ Добавить условие / действие»: a 48dp row across the column with a plus. */
+@Composable
+private fun AddRowButton(label: String, highlight: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = MIN_TOUCH)
+            .clip(FIELD_SHAPE)
+            .border(if (highlight) 1.5.dp else 1.dp, if (highlight) AccentOrange else CardBorder, FIELD_SHAPE)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        val color = if (highlight) AccentOrange else TextSecondary
+        Icon(Icons.Outlined.Add, null, tint = color, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontSize = EDITOR_TEXT, color = color)
+    }
+}
+
+/**
+ * «Добавить действие»: sections on the left, the section's actions as large tiles on the right.
+ * A tap on a tile adds the action and closes the window; it opens on the section used last.
+ */
+@Composable
+private fun ActionPickerDialog(onPick: (PickerTile) -> Unit, onDismiss: () -> Unit) {
+    val sections = pickerSections()
+    var section by remember { mutableStateOf(ActionPickerMemory.section.coerceIn(0, sections.lastIndex)) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         ScaledDialogContent {
-            val context = LocalContext.current
             Column(
                 modifier = Modifier
-                    .fillMaxWidth(0.4f)
-                    .fillMaxHeight(0.75f)
-                    .background(NavyDeep, RoundedCornerShape(16.dp))
+                    .fillMaxWidth(0.75f)
+                    .fillMaxHeight(0.85f)
+                    .background(NavyMid, RoundedCornerShape(16.dp))
                     .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(14.dp, 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(stringResource(R.string.automation_journal_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
-                        modifier = Modifier.weight(1f))
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Outlined.Close, "close", tint = TextMuted)
+                    Text(
+                        stringResource(R.string.auto_ui_add_action_title), fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary, modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(MIN_TOUCH)) {
+                        Icon(Icons.Outlined.Close, stringResource(R.string.automation_cancel_button), tint = TextSecondary)
                     }
                 }
                 HorizontalDivider(color = CardBorder)
-
-                if (logs.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.automation_journal_empty), color = TextMuted, fontSize = 14.sp)
+                Row(Modifier.weight(1f)) {
+                    LazyColumn(
+                        modifier = Modifier.width(240.dp).fillMaxHeight(),
+                        contentPadding = PaddingValues(8.dp),
+                    ) {
+                        itemsIndexed(sections) { i, s ->
+                            val selected = i == section
+                            Text(
+                                s.name, fontSize = EDITOR_TEXT,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selected) AccentGreen else TextPrimary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = MIN_TOUCH)
+                                    .clip(FIELD_SHAPE)
+                                    .background(if (selected) AccentGreen.copy(alpha = 0.12f) else Color.Transparent)
+                                    .selectable(selected = selected, role = Role.Tab) {
+                                        section = i
+                                        ActionPickerMemory.section = i
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                            )
+                        }
                     }
-                } else {
-                    LazyColumn(modifier = Modifier.padding(8.dp)) {
-                        items(logs, key = { it.id }) { log ->
-                            LogItem(log)
-                            Spacer(Modifier.height(4.dp))
+                    Box(Modifier.fillMaxHeight().width(1.dp).background(CardBorder))
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(sections[section].tiles) { tile ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 56.dp)
+                                    .clip(FIELD_SHAPE)
+                                    .background(CardSurface)
+                                    .border(1.dp, CardBorder, FIELD_SHAPE)
+                                    .clickable { onPick(tile) }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                Text(tile.label, fontSize = EDITOR_TEXT, color = TextPrimary)
+                            }
                         }
                     }
                 }
@@ -2844,71 +3176,192 @@ private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
     }
 }
 
+// --- «Добавить условие» ---
+
+/** «+ Добавить условие»: a list of condition kinds; outlined orange while the rule has none. */
 @Composable
-private fun LogItem(log: RuleLogEntity) {
+private fun AddTriggerButton(
+    places: List<PlaceEntity>,
+    highlight: Boolean,
+    modifier: Modifier = Modifier,
+    onAdd: (TriggerDef) -> Unit,
+) {
     val context = LocalContext.current
-    val borderColor = if (log.success) AccentGreen else Color(0xFFEF4444)
-    val bgColor = if (log.success) AccentGreen.copy(alpha = 0.05f) else Color(0xFFEF4444).copy(alpha = 0.05f)
-
-    val actionsText = remember(log.actionsResult) {
-        try {
-            val arr = JSONArray(log.actionsResult)
-            (0 until arr.length()).joinToString(", ") {
-                val obj = arr.getJSONObject(it)
-                obj.optString("displayName", obj.optString("command", ""))
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box(modifier) {
+        AddRowButton(stringResource(R.string.automation_add_condition_button).removePrefix("+ ").removePrefix("+"), highlight) {
+            menuExpanded = true
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            ScaledDialogContent {
+                fun add(t: TriggerDef) {
+                    menuExpanded = false
+                    onAdd(t)
+                }
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_param), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newParamTrigger()) }
+                )
+                val firstPlace = places.firstOrNull()
+                DropdownMenuItem(
+                    text = {
+                        if (firstPlace != null) {
+                            Text(stringResource(R.string.automation_trigger_type_place), fontSize = EDITOR_TEXT)
+                        } else {
+                            Column {
+                                Text(stringResource(R.string.automation_trigger_type_place), fontSize = EDITOR_TEXT, color = TextSecondary)
+                                Text(stringResource(R.string.automation_trigger_type_place_empty_hint), fontSize = 14.sp, color = TextSecondary)
+                            }
+                        }
+                    },
+                    onClick = { if (firstPlace != null) add(newPlaceTrigger(firstPlace, context)) },
+                    enabled = firstPlace != null
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_time_of_day), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newTimeOfDayTrigger(context)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_schedule), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newScheduleTrigger()) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.auto_ui_trigger_once), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newOneShotTrigger(context)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_service_start), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newServiceStartTrigger(context)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_internet), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newNetworkAvailableTrigger(context)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_button_press), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newButtonPressTrigger(1)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_steering_key), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newSteeringKeyTrigger(0)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_voice), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newVoiceTrigger(context)) }
+                )
             }
-        } catch (_: Exception) { log.actionsResult }
+        }
     }
+}
 
-    val reasonText = remember(log.actionsResult) {
-        try {
-            val arr = JSONArray(log.actionsResult)
-            (0 until arr.length()).mapNotNull {
-                val obj = arr.getJSONObject(it)
-                obj.optString("reason", "").ifEmpty { null }
-            }.firstOrNull()
-        } catch (_: Exception) { null }
+/** How long a note at the bottom of the tab stays. */
+private const val MESSAGE_SHOW_MS = 4_000L
+
+/** A short note at the bottom of the screen: info icon and one or two lines of text. */
+@Composable
+private fun MessagePill(text: String, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(24.dp)
+    Row(
+        modifier = modifier
+            .padding(24.dp)
+            .widthIn(max = 720.dp)
+            .background(CardSurfaceElevated, shape)
+            .border(1.dp, CardBorder, shape)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(Icons.Outlined.Info, null, tint = AccentOrange, modifier = Modifier.size(22.dp))
+        Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = TextPrimary)
     }
+}
 
-    val snapshotText = remember(log.triggersSnapshot) {
-        try {
-            val obj = JSONObject(log.triggersSnapshot)
-            obj.keys().asSequence().joinToString(" · ") { key ->
-                val paramName = TRIGGER_PARAMS.find { it.param == key }?.localizedName(context) ?: key
-                "$paramName: ${obj.get(key)}"
+// --- Journal Dialog ---
+
+/**
+ * The journal: all rules (header «Журнал», each entry names its rule on top) or one rule
+ * ([ruleName] set, opened from the card's status pill).
+ */
+@Composable
+private fun JournalDialog(logs: List<RuleLogEntity>, rules: List<RuleEntity>, ruleName: String?, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        ScaledDialogContent {
+            val rulesById = remember(rules) { rules.associateBy { it.id } }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .fillMaxHeight(0.85f)
+                    .background(NavyDeep, RoundedCornerShape(16.dp))
+                    .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (ruleName != null) stringResource(R.string.auto_ui_journal_rule_title, ruleName)
+                        else stringResource(R.string.automation_journal_title),
+                        fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Outlined.Close, stringResource(R.string.automation_cancel_button), tint = TextSecondary)
+                    }
+                }
+                HorizontalDivider(color = CardBorder)
+
+                if (logs.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.automation_journal_empty), color = TextSecondary, fontSize = 16.sp)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        contentPadding = PaddingValues(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(logs, key = { it.id }) { log ->
+                            LogItem(log, rulesById[log.ruleId], showRuleName = ruleName == null)
+                        }
+                    }
+                }
             }
-        } catch (_: Exception) { "" }
+        }
     }
+}
 
+/** One entry: verdict and time, what ran, why; the stripe and icon in the verdict's colour. */
+@Composable
+private fun LogItem(log: RuleLogEntity, rule: RuleEntity?, showRuleName: Boolean) {
+    val context = LocalContext.current
+    val line = remember(log, rule, context) { journalLine(log, rule, context) }
+    val color = line.kind.color()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(8.dp))
-            .background(bgColor)
+            .background(CardSurface)
     ) {
-        // Left color stripe
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .fillMaxHeight()
-                .background(borderColor)
-        )
-        // Content
-        Column(modifier = Modifier.weight(1f).padding(8.dp, 6.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(log.ruleName, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-                Text(
-                    formatRelativeTime(log.triggeredAt, LocalContext.current),
-                    fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = TextMuted
-                )
-            }
-            Text("→ $actionsText", fontSize = 12.sp, color = AccentTeal)
-            if (reasonText != null) {
-                Text(reasonText, fontSize = 11.sp, color = AccentOrange)
-            }
-            if (snapshotText.isNotEmpty()) {
-                Text(snapshotText, fontSize = 11.sp, color = TextSecondary)
+        Box(Modifier.width(4.dp).fillMaxHeight().background(color))
+        Row(Modifier.weight(1f).padding(12.dp, 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(line.kind.icon(), null, tint = color, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f)) {
+                if (showRuleName) {
+                    Text(log.ruleName, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        line.status, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary, modifier = Modifier.weight(1f),
+                    )
+                    Text(line.time, fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(start = 12.dp))
+                }
+                if (line.what.isNotEmpty()) Text(line.what, fontSize = 16.sp, lineHeight = 22.sp, color = TextPrimary)
+                line.why?.let { Text(it, fontSize = 14.sp, lineHeight = 20.sp, color = TextSecondary) }
             }
         }
     }
@@ -2922,7 +3375,7 @@ private fun AutoChip(label: String, selected: Boolean, modifier: Modifier = Modi
         selected = selected,
         onClick = onClick,
         modifier = modifier,
-        label = { Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+        label = { Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = AccentGreen,
             selectedLabelColor = NavyDark,
@@ -2939,28 +3392,9 @@ private fun AutoChip(label: String, selected: Boolean, modifier: Modifier = Modi
 }
 
 @Composable
-private fun LogicChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .background(
-                if (selected) AccentGreen else CardSurface,
-                RoundedCornerShape(6.dp)
-            )
-            .border(if (selected) 0.dp else 1.dp, CardBorder, RoundedCornerShape(6.dp))
-            .clickable { onClick() }
-            .padding(10.dp, 5.dp)
-    ) {
-        Text(
-            label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-            color = if (selected) NavyDark else TextSecondary
-        )
-    }
-}
-
-@Composable
 private fun SectionHeader(text: String) {
     Text(
-        text, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted,
+        text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextSecondary,
         letterSpacing = 1.2.sp,
         modifier = Modifier.padding(bottom = 10.dp)
     )
@@ -2973,161 +3407,8 @@ private fun SettingRow(label: String, content: @Composable () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, fontSize = 13.sp, color = TextSecondary)
+        Text(label, fontSize = EDITOR_TEXT, color = TextPrimary, modifier = Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) { content() }
-    }
-}
-
-@Composable
-private fun AddActionButton(
-    onAddParam: () -> Unit,
-    onAddNotification: () -> Unit,
-    onAddAppLaunch: () -> Unit,
-    onAddCall: () -> Unit,
-    onAddNavigate: () -> Unit,
-    onAddUrl: () -> Unit,
-    onAddYandexMusic: () -> Unit,
-    onAddDelay: () -> Unit,
-    onAddMediaVolume: () -> Unit,
-    onAddSentry: () -> Unit,
-    onAddHotspot: () -> Unit,
-    onAddSpeak: () -> Unit,
-    onAddAgentQuery: () -> Unit,
-    onAddCluster: () -> Unit,
-    onAddSplitScreen: () -> Unit,
-    onAddSplitScreenClose: () -> Unit,
-    onAddSplitScreenToggle: () -> Unit,
-    onAddTelegramReport: () -> Unit,
-) {
-    val context = LocalContext.current
-    var menuExpanded by remember { mutableStateOf(false) }
-    var showOverlayPrompt by remember { mutableStateOf(false) }
-
-    Box {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                .clickable { menuExpanded = true }
-                .padding(8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(stringResource(R.string.automation_add_action_button), fontSize = 12.sp, color = TextMuted)
-        }
-        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            ScaledDialogContent {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_dplus_command), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddParam() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_notification), fontSize = 13.sp) },
-                    onClick = {
-                        menuExpanded = false
-                        onAddNotification()
-                        if (!android.provider.Settings.canDrawOverlays(context)) {
-                            showOverlayPrompt = true
-                        }
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_app_launch), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddAppLaunch() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_yandex_music), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddYandexMusic() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_call), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddCall() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_navigate), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddNavigate() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_url), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddUrl() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_delay), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddDelay() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_media_volume), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddMediaVolume() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_sentry), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddSentry() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_hotspot), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddHotspot() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_speak), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddSpeak() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_agent_query), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddAgentQuery() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_cluster_projection), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddCluster() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_split_screen), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddSplitScreen() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_split_screen_close), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddSplitScreenClose() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_split_screen_toggle), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddSplitScreenToggle() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_action_tg_report_add), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddTelegramReport() }
-                )
-            }
-        }
-    }
-
-    if (showOverlayPrompt) {
-        AppAlertDialog(
-            onDismissRequest = { showOverlayPrompt = false },
-            containerColor = CardSurface,
-            title = { Text(stringResource(R.string.automation_overlay_permission_title), color = TextPrimary, fontSize = 16.sp) },
-            text = {
-                Text(
-                    stringResource(R.string.automation_overlay_permission_text),
-                    fontSize = 13.sp,
-                    color = TextPrimary
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showOverlayPrompt = false
-                    val intent = android.content.Intent(
-                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        android.net.Uri.parse("package:${context.packageName}")
-                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    try { context.startActivity(intent) } catch (_: Exception) {}
-                }) {
-                    Text(stringResource(R.string.automation_overlay_open_settings), color = AccentGreen)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showOverlayPrompt = false }) {
-                    Text(stringResource(R.string.automation_overlay_later), color = TextSecondary)
-                }
-            }
-        )
     }
 }
 
@@ -3152,20 +3433,21 @@ private fun NotificationActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.Notifications,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (title.isBlank() && text.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (title.isBlank() && text.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1
         )
     }
@@ -3267,20 +3549,21 @@ private fun SpeakActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.RecordVoiceOver,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (text.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (text.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1
         )
     }
@@ -3369,20 +3652,21 @@ private fun AgentQueryActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.Chat,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (prompt.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (prompt.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1
         )
     }
@@ -3495,12 +3779,12 @@ private fun TelegramReportActionControls(
         Column {
             Text(
                 text = stringResource(R.string.automation_action_tg_report),
-                fontSize = 13.sp, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                fontSize = 16.sp, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             if (summary.isNotEmpty()) {
                 Text(
                     text = summary,
-                    fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    fontSize = 14.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -3569,7 +3853,7 @@ private fun TelegramReportEditDialog(
                             )
                             Text(
                                 stringResource(field.descRes),
-                                color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp,
+                                color = TextSecondary, fontSize = 14.sp, lineHeight = 16.sp,
                             )
                         }
                     }
@@ -3594,13 +3878,13 @@ private fun TelegramReportEditDialog(
                 )
                 Text(
                     stringResource(R.string.automation_tg_report_text_hint),
-                    color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp,
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 16.sp,
                     modifier = Modifier.padding(start = 16.dp),
                 )
                 if (!tgBotConnected) {
                     Text(
                         stringResource(R.string.automation_tg_report_no_bot),
-                        color = AccentOrange, fontSize = 13.sp, lineHeight = 18.sp,
+                        color = AccentOrange, fontSize = 16.sp, lineHeight = 18.sp,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -3648,20 +3932,21 @@ private fun SplitScreenActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = Icons.Outlined.Apps,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (narrowLabel.isBlank() || wideLabel.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (narrowLabel.isBlank() || wideLabel.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1,
         )
     }
@@ -3693,14 +3978,15 @@ private fun SplitScreenStateActionControls(kind: String, modifier: Modifier = Mo
         modifier = modifier
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = Icons.Outlined.Apps,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(6.dp))
         Text(
@@ -3708,7 +3994,7 @@ private fun SplitScreenStateActionControls(kind: String, modifier: Modifier = Mo
                 if (kind == "split_screen_close") R.string.automation_action_split_screen_close
                 else R.string.automation_action_split_screen_toggle
             ),
-            fontSize = 13.sp,
+            fontSize = 16.sp,
             color = TextPrimary,
             maxLines = 1,
         )
@@ -3755,14 +4041,14 @@ private fun SplitScreenEditDialog(
                 Column {
                     Text(
                         stringResource(R.string.split_action_narrow_label),
-                        fontSize = 12.sp,
-                        color = TextMuted,
+                        fontSize = 14.sp,
+                        color = TextSecondary,
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = narrowLabel.ifBlank { stringResource(R.string.split_action_tap_to_configure) },
-                        fontSize = 13.sp,
-                        color = if (narrowLabel.isBlank()) TextMuted else TextPrimary,
+                        fontSize = 16.sp,
+                        color = if (narrowLabel.isBlank()) TextSecondary else TextPrimary,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(CardSurface, RoundedCornerShape(6.dp))
@@ -3776,14 +4062,14 @@ private fun SplitScreenEditDialog(
                 Column {
                     Text(
                         stringResource(R.string.split_action_wide_label),
-                        fontSize = 12.sp,
-                        color = TextMuted,
+                        fontSize = 14.sp,
+                        color = TextSecondary,
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = wideLabel.ifBlank { stringResource(R.string.split_action_tap_to_configure) },
-                        fontSize = 13.sp,
-                        color = if (wideLabel.isBlank()) TextMuted else TextPrimary,
+                        fontSize = 16.sp,
+                        color = if (wideLabel.isBlank()) TextSecondary else TextPrimary,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(CardSurface, RoundedCornerShape(6.dp))
@@ -3798,13 +4084,13 @@ private fun SplitScreenEditDialog(
                     FilterChip(
                         selected = side == "right",
                         onClick = { side = "right" },
-                        label = { Text(sideRightLabel, fontSize = 12.sp) },
+                        label = { Text(sideRightLabel, fontSize = 14.sp) },
                     )
                     Spacer(Modifier.width(8.dp))
                     FilterChip(
                         selected = side == "left",
                         onClick = { side = "left" },
-                        label = { Text(sideLeftLabel, fontSize = 12.sp) },
+                        label = { Text(sideLeftLabel, fontSize = 14.sp) },
                     )
                 }
             }
@@ -3878,20 +4164,21 @@ private fun AppLaunchActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.Apps,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (label.isBlank() && pkg.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (label.isBlank() && pkg.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1
         )
     }
@@ -3936,20 +4223,21 @@ private fun CallActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.Call,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (phone.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (phone.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1
         )
     }
@@ -4040,11 +4328,11 @@ internal fun CallEditDialog(
                     )
                     Spacer(Modifier.width(4.dp))
                     Column {
-                        Text(stringResource(R.string.automation_call_auto_dial_label), color = TextPrimary, fontSize = 13.sp)
+                        Text(stringResource(R.string.automation_call_auto_dial_label), color = TextPrimary, fontSize = 16.sp)
                         Text(
                             stringResource(R.string.automation_call_auto_dial_hint),
-                            color = TextMuted,
-                            fontSize = 11.sp
+                            color = TextSecondary,
+                            fontSize = 14.sp
                         )
                     }
                 }
@@ -4084,20 +4372,21 @@ private fun NavigateActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.Navigation,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (name.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (name.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1
         )
     }
@@ -4155,16 +4444,16 @@ private fun NavigateEditDialog(
             if (places.isEmpty()) {
                 Text(
                     text = stringResource(R.string.automation_navigate_no_places_hint),
-                    fontSize = 13.sp,
-                    color = TextMuted
+                    fontSize = 16.sp,
+                    color = TextSecondary
                 )
             } else {
                 Column {
                     Box(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = selectedPlace?.name ?: stringResource(R.string.automation_navigate_pick_place_placeholder),
-                            fontSize = 13.sp,
-                            color = if (selectedPlace == null) TextMuted else TextPrimary,
+                            fontSize = 16.sp,
+                            color = if (selectedPlace == null) TextSecondary else TextPrimary,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(CardSurface, RoundedCornerShape(8.dp))
@@ -4177,7 +4466,7 @@ private fun NavigateEditDialog(
                             ScaledDialogContent {
                                 places.forEach { place ->
                                     DropdownMenuItem(
-                                        text = { Text(place.name, fontSize = 13.sp) },
+                                        text = { Text(place.name, fontSize = 16.sp) },
                                         onClick = {
                                             placeExpanded = false
                                             selectedPlace = place
@@ -4226,20 +4515,21 @@ private fun UrlActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.Link,
             contentDescription = null,
             tint = AccentTeal,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (url.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (url.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1
         )
     }
@@ -4318,7 +4608,7 @@ private fun UrlEditDialog(
                     )
                     Text(
                         stringResource(R.string.automation_url_minimize_label),
-                        fontSize = 13.sp,
+                        fontSize = 16.sp,
                         color = TextPrimary
                     )
                 }
@@ -4360,19 +4650,20 @@ private fun YandexMusicActionControls(
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable { editing = true }
-            .padding(8.dp, 7.dp),
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = preview,
-            fontSize = 13.sp,
-            color = if (mode.isBlank()) TextMuted else TextPrimary,
+            fontSize = 16.sp,
+            color = if (mode.isBlank()) TextSecondary else TextPrimary,
             maxLines = 1,
             modifier = Modifier.weight(1f)
         )
         if (minimize) {
             Spacer(Modifier.width(6.dp))
-            Text("↓", fontSize = 13.sp, color = TextMuted)
+            Text("↓", fontSize = 16.sp, color = TextSecondary)
         }
     }
 
@@ -4408,7 +4699,7 @@ private fun YandexMusicEditDialog(
         title = { Text(stringResource(R.string.automation_music_dialog_title), color = TextPrimary, fontSize = 16.sp) },
         text = {
             Column {
-                Text(stringResource(R.string.automation_music_what_to_play), fontSize = 12.sp, color = TextMuted)
+                Text(stringResource(R.string.automation_music_what_to_play), fontSize = 14.sp, color = TextSecondary)
                 Spacer(Modifier.height(4.dp))
                 Box {
                     val label = modes.find { it.first == selectedMode }?.second ?: selectedMode
@@ -4431,7 +4722,7 @@ private fun YandexMusicEditDialog(
                         ScaledDialogContent {
                             modes.forEach { (value, label) ->
                                 DropdownMenuItem(
-                                    text = { Text(label, fontSize = 13.sp) },
+                                    text = { Text(label, fontSize = 16.sp) },
                                     onClick = {
                                         selectedMode = value
                                         dropdownExpanded = false
@@ -4460,7 +4751,7 @@ private fun YandexMusicEditDialog(
                     )
                     Text(
                         stringResource(R.string.automation_music_minimize_label),
-                        fontSize = 13.sp,
+                        fontSize = 16.sp,
                         color = TextPrimary
                     )
                 }
@@ -4477,111 +4768,6 @@ private fun YandexMusicEditDialog(
             }
         }
     )
-}
-
-@Composable
-private fun AddTriggerButton(
-    places: List<PlaceEntity>,
-    onAddParam: () -> Unit,
-    onAddPlace: (PlaceEntity) -> Unit,
-    onAddTimeOfDay: () -> Unit,
-    onAddSchedule: () -> Unit,
-    onAddServiceStart: () -> Unit,
-    onAddNetworkAvailable: () -> Unit,
-    onAddButtonPress: () -> Unit,
-    onAddSteeringKey: () -> Unit,
-    onAddVoice: () -> Unit,
-) {
-    var menuExpanded by remember { mutableStateOf(false) }
-    Box {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                .clickable { menuExpanded = true }
-                .padding(8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(stringResource(R.string.automation_add_condition_button), fontSize = 12.sp, color = TextMuted)
-        }
-        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            ScaledDialogContent {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_trigger_type_param), fontSize = 13.sp) },
-                    onClick = { menuExpanded = false; onAddParam() }
-                )
-                val firstPlace = places.firstOrNull()
-                DropdownMenuItem(
-                    text = {
-                        if (firstPlace != null) {
-                            Text(stringResource(R.string.automation_trigger_type_place), fontSize = 13.sp)
-                        } else {
-                            Column {
-                                Text(stringResource(R.string.automation_trigger_type_place), fontSize = 13.sp, color = TextSecondary)
-                                Text(stringResource(R.string.automation_trigger_type_place_empty_hint), fontSize = 11.sp, color = TextMuted)
-                            }
-                        }
-                    },
-                    onClick = {
-                        if (firstPlace != null) {
-                            menuExpanded = false
-                            onAddPlace(firstPlace)
-                        }
-                    },
-                    enabled = firstPlace != null
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_trigger_type_time_of_day), fontSize = 13.sp) },
-                    onClick = {
-                        menuExpanded = false
-                        onAddTimeOfDay()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_trigger_type_schedule), fontSize = 13.sp) },
-                    onClick = {
-                        menuExpanded = false
-                        onAddSchedule()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_trigger_type_service_start), fontSize = 13.sp) },
-                    onClick = {
-                        menuExpanded = false
-                        onAddServiceStart()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_trigger_type_internet), fontSize = 13.sp) },
-                    onClick = {
-                        menuExpanded = false
-                        onAddNetworkAvailable()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_trigger_type_button_press), fontSize = 13.sp) },
-                    onClick = {
-                        menuExpanded = false
-                        onAddButtonPress()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_trigger_type_steering_key), fontSize = 13.sp) },
-                    onClick = {
-                        menuExpanded = false
-                        onAddSteeringKey()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.automation_trigger_type_voice), fontSize = 13.sp) },
-                    onClick = {
-                        menuExpanded = false
-                        onAddVoice()
-                    }
-                )
-            }
-        }
-    }
 }
 
 private fun newPlaceTrigger(place: PlaceEntity, context: android.content.Context): TriggerDef {
@@ -4628,13 +4814,6 @@ private fun newVoiceTrigger(context: android.content.Context): TriggerDef = Trig
     kind = "voice"
 )
 
-private fun newDelayAction(context: android.content.Context): ActionDef = ActionDef(
-    command = "delay_1000",
-    displayName = context.getString(R.string.auto_act_delay_1s),
-    kind = "delay",
-    payload = "1000"
-)
-
 private fun newMediaVolumeAction(context: android.content.Context): ActionDef = ActionDef(
     command = "media_volume",
     displayName = context.getString(R.string.auto_act_media_volume),
@@ -4665,19 +4844,4 @@ private fun newScheduleTrigger(): TriggerDef {
         displayName = "${minuteToHHmm(spec.fromMinute)}-${minuteToHHmm(spec.toMinute)}",
         kind = "time_range"
     )
-}
-
-// --- Helpers ---
-
-private fun formatRelativeTime(ts: Long, context: android.content.Context): String {
-    val now = System.currentTimeMillis()
-    val diff = now - ts
-    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-    val dateSdf = SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
-
-    return when {
-        diff < 24 * 60 * 60 * 1000L -> sdf.format(Date(ts))
-        diff < 48 * 60 * 60 * 1000L -> context.getString(R.string.automation_time_yesterday, sdf.format(Date(ts)))
-        else -> dateSdf.format(Date(ts))
-    }
 }
