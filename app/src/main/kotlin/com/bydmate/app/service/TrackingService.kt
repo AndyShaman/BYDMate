@@ -124,6 +124,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var postRestoreCheck: com.bydmate.app.data.backup.PostRestoreCheck
     @Inject lateinit var appStrings: com.bydmate.app.util.AppStrings
     @Inject lateinit var telegramReporter: com.bydmate.app.data.telegram.TelegramReporter
+    @Inject lateinit var powerOffArmer: com.bydmate.app.data.telegram.PowerOffArmer
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -667,6 +668,9 @@ class TrackingService : Service(), LocationListener {
         // a slow / failed bootstrap must not block trip recording or dashboard.
         // Writes that race the bootstrap fail-soft via VehicleApi.HelperUnreachable.
         serviceScope.launch {
+            // How the last power-off report fared, asked of the daemon that is up now: the
+            // bootstrap below replaces a daemon of another version, and its answer with it.
+            powerOffArmer.checkBeforeBootstrap()
             try {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
@@ -722,6 +726,8 @@ class TrackingService : Service(), LocationListener {
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")
+            } finally {
+                powerOffArmer.bootstrapAttempted()
             }
         }
 
@@ -800,6 +806,9 @@ class TrackingService : Service(), LocationListener {
             telegramReporter.drainOutbox("service_start")
             networkAvailableMonitor.edges.collect { at -> if (at > 0L) telegramReporter.drainOutbox("network") }
         }
+        // The power-off report: keeps the helper daemon armed while the car is on (it sends the
+        // report itself at the power-off, when this process is already killed).
+        serviceScope.launch { powerOffArmer.run() }
         startPolling()
         startCameraMonitor()
         // Pushed fid values are laid into the live snapshot as they arrive; the poll above is

@@ -52,6 +52,7 @@ class TelegramReporterTest {
     private lateinit var settings: SettingsRepository
     private val sink = mockk<TelegramBackupSink>()
     private lateinit var reporter: TelegramReporter
+    private val offState = PowerOffArmState()
     private var now = 1_759_000_000_000L
     private val sent = mutableListOf<String>()
 
@@ -60,7 +61,7 @@ class TelegramReporterTest {
     @Before fun setUp() {
         LocalePreferences(ctx).setLanguage("ru")
         settings = SettingsRepository(dao, LocalePreferences(ctx))
-        reporter = TelegramReporter(ctx, sink, settings, mockk(relaxed = true), AppStrings(ctx))
+        reporter = TelegramReporter(ctx, sink, settings, mockk(relaxed = true), AppStrings(ctx), offState)
         reporter.inputs = { ReportInputs(diParsData(soc = 64), 312.0, null, null, null, null) }
         reporter.clock = { now }
         reporter.language = { "ru" }
@@ -197,6 +198,18 @@ class TelegramReporterTest {
         assertFalse(report.toString().contains("tok"))
     }
 
+    @Test fun `an unchanged power-off report comes back as the same one, a change makes a new id`() = runBlocking {
+        settings.setTgReportOffEnabled(true)
+        connect()
+        settings.setTgReportOffFields(setOf(ReportField.SOC))
+        val first = reporter.powerOffReport()!!
+        assertTrue(first === reporter.powerOffReport(first))
+        reporter.inputs = { ReportInputs(diParsData(soc = 63), 312.0, null, null, null, null) }
+        val second = reporter.powerOffReport(first)!!
+        assertFalse(second.id == first.id)
+        assertTrue(second.text.endsWith("63%"))
+    }
+
     @Test fun `a drain that runs while a send is in flight still catches the report once it fails`() = runBlocking {
         connect()
         val proceed = CompletableDeferred<Unit>()
@@ -262,6 +275,24 @@ class TelegramReporterTest {
         assertEquals(
             "telegram report: off=on fields=[location,soc,range,trip] armed=- daemon=- outbox=1",
             reporter.diagnosticsLines().first(),
+        )
+    }
+
+    @Test fun `the dump shows the armed age, the daemon and its last power-off`() = runBlocking {
+        offState.armedAtMs = now - 12_000L
+        offState.daemon = PowerOffArmState.DAEMON_OK
+        offState.last = com.bydmate.app.helper.offreport.OffReportOutcome(
+            "a1", com.bydmate.app.helper.offreport.OffReportState.SENT, now, now + 1_400L, 2, "200",
+        )
+        val lines = reporter.diagnosticsLines()
+        assertEquals(
+            "telegram report: off=off fields=[location,soc,range,trip] armed=12s daemon=ok outbox=0",
+            lines[0],
+        )
+        assertEquals(
+            "telegram report last_off: sent id=a1 off=${TelegramReportBuilder.formatDateTime(now)} " +
+                "attempts=2 rc=200 sent_after=1400ms",
+            lines[1],
         )
     }
 }
