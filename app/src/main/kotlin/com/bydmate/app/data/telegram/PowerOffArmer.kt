@@ -18,43 +18,34 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import org.json.JSONException
-import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The report the app last handed to the daemon, kept on disk: what the next start re-sends when
- * the daemon could not. toString never shows the chat or the text.
- */
-data class ArmedRecord(val id: String, val chatId: Long, val text: String, val armedAtMs: Long) {
-    override fun toString(): String = "ArmedRecord(id=$id, len=${text.length})"
-}
-
-interface ArmedStore {
-    fun load(): ArmedRecord?
-    fun save(record: ArmedRecord)
-    fun clear()
-}
-
-/**
  * App side of the power-off report (3.19, phase B). While the car is on and the report is switched
  * on, keeps the daemon armed with the current report ([TelegramReporter.powerOffReport]): checked
  * every [REFRESH_MS], re-armed only when the text changed or the daemon lost it, at once when the
- * settings change; disarmed when the report is switched off or the bot disconnected. Every report
- * is also kept on disk ([ArmedStore]).
+ * settings change; disarmed (retried until the daemon confirms) when the report is switched off or
+ * the bot disconnected. Each new text goes to disk ([PowerOffStore], the last two), and a heartbeat
+ * is written at most every [HEARTBEAT_EVERY_MS].
  *
- * On the first start of the process (the app dies at every power-off) it asks the daemon how that
- * stored report fared: sent -> forgotten; failed, lost by the daemon (reboot) or no daemon to ask ->
- * queued in the outbox with its power-off time (the daemon's, else the last refresh). Asked before
- * the helper bootstrap, which replaces a daemon of another version and would lose its answer; asked
- * again after the bootstrap when no daemon answered.
+ * On the first start of the process (the app dies at every power-off), after the helper bootstrap,
+ * it settles the stored reports by the daemon's last fired outcome (captured before a replace by
+ * [PowerOffOutcomeCapture], else asked live):
+ * - fired for one of them: sent -> forgotten; failed -> that report re-sent with the daemon's
+ *   power-off time; still sending -> asked again every [SENDING_POLL_MS] for [SENDING_WAIT_MS],
+ *   never sent in parallel with the daemon.
+ * - nothing fired (reboot, old or missing daemon, a listener that never fired): no proof of a
+ *   power-off, so only a gap over [STOP_GAP_MS] since the heartbeat counts as a real stop, and the
+ *   newest report goes out under the neutral «последнее состояние машины на HH:MM» header.
+ *   A shorter gap is an app restart on a running car: dropped.
+ * Re-sent reports carry the outbox's «(записано в HH:MM)» mark when they go out late.
  *
  * Log tag `TgReport`; ids, lengths and states only, never the token, the chat or the text.
  */
 @Singleton
-@Suppress("TooManyFunctions") // start-up check, arming loop and the store, kept in one place
+@Suppress("TooManyFunctions") // start-up settle, arming loop and disarm, kept in one place
 class PowerOffArmer @Inject constructor(
     @ApplicationContext context: Context,
     private val reporter: TelegramReporter,
@@ -65,72 +56,48 @@ class PowerOffArmer @Inject constructor(
     companion object {
         private const val TAG = "TgReport"
         const val REFRESH_MS = 10_000L
+        const val HEARTBEAT_EVERY_MS = 60_000L
 
-        /** A report still being sent (the car was switched on again within 8 s) is asked again. */
-        const val SENDING_POLL_MS = 1_000L
-        const val SENDING_POLLS = 10
+        /** An app gone this long was a real stop: the quickest power cycle plus restart is far shorter. */
+        const val STOP_GAP_MS = 3 * 60_000L
 
-        private const val PREFS = "tg_offreport"
-        private const val KEY_ARMED = "armed"
+        /** A report the daemon is still sending (the car was switched on again at once) is asked again. */
+        const val SENDING_POLL_MS = 10_000L
+        const val SENDING_WAIT_MS = 2 * 60_000L
+
+        /** Arm lines on every change of verdict, else at most this often (the text moves every tick). */
+        const val ARM_LOG_EVERY_MS = 60_000L
     }
 
     /** Test seams. */
-    internal var store: ArmedStore = PrefsArmedStore(context)
+    internal var store: PowerOffStore = PrefsPowerOffStore(context)
     internal var clock: () -> Long = System::currentTimeMillis
     internal var pause: suspend (Long) -> Unit = { delay(it) }
 
-    private sealed interface Answer {
-        data class Known(val status: OffReportStatus) : Answer
-        /** Alive, but it does not know the verbs: a daemon of an older build. */
-        data object Outdated : Answer
-        data object Unreachable : Answer
-    }
-
     private val checked = AtomicBoolean(false)
     private val bootstrapped = CompletableDeferred<Unit>()
-    @Volatile private var askAfterBootstrap: ArmedRecord? = null
     private val pokes = Channel<Unit>(Channel.CONFLATED)
 
     // Owned by the loop in [run].
     private var current: PowerOffReport? = null
-    private var disarmChecked = false
+    private var disarmPending = true
+    private var disarmFailLogged = false
+    private var lastHeartbeat = 0L
+    private var lastArmLog = 0L
 
-    /**
-     * Start-up check against the daemon that is up right now, before the helper bootstrap may
-     * replace it. Once per process: a service restart inside a live process is no power cycle.
-     */
-    suspend fun checkBeforeBootstrap() {
-        if (!checked.compareAndSet(false, true)) return
-        guarded("check") {
-            val record = store.load() ?: return@guarded
-            if (!settings.isTgReportOffEnabled()) {
-                store.clear()
-                Log.i(TAG, "offreport outcome id=${record.id} action=drop reason=report_off")
-                return@guarded
-            }
-            val answer = ask(record.id)
-            if (answer == Answer.Unreachable) {
-                Log.i(TAG, "offreport outcome id=${record.id} daemon unreachable, asking after the bootstrap")
-                askAfterBootstrap = record
-            } else {
-                settle(record, answer)
-            }
-        }
-    }
-
-    /** The helper bootstrap ran (whatever its result): the arming loop may start. */
+    /** The helper bootstrap ran (whatever its result): the start-up check and the loop may start. */
     fun bootstrapAttempted() {
         bootstrapped.complete(Unit)
     }
 
-    /** The arming loop, for the service's lifetime. Starts once [bootstrapAttempted] was called. */
+    /** Start-up check, then the arming loop, for the service's lifetime. */
     suspend fun run() {
         bootstrapped.await()
-        askAfterBootstrap?.let { record ->
-            askAfterBootstrap = null
-            guarded("check") { settle(record, ask(record.id)) }
-        }
         coroutineScope {
+            // Once per process: a service restart inside a live process is no power cycle.
+            if (checked.compareAndSet(false, true)) {
+                guarded("check") { settleLastCycle { wait -> launch { guarded("wait") { wait() } } } }
+            }
             launch { settingsChanges().collect { pokes.trySend(Unit) } }
             while (true) {
                 guarded("refresh") { refresh() }
@@ -139,17 +106,132 @@ class PowerOffArmer @Inject constructor(
         }
     }
 
+    // --- start-up check ---
+
+    private suspend fun settleLastCycle(background: (suspend () -> Unit) -> Unit) {
+        val records = store.records()
+        val captured = store.takeCaptured()
+        if (records.isEmpty()) return
+        if (!settings.isTgReportOffEnabled()) {
+            store.clearRecords()
+            Log.i(TAG, "offreport outcome ids=${ids(records)} action=drop reason=report_off")
+            return
+        }
+        val live = helper.offReportStatus(records.first().id)
+        live?.let { state.note(it) }
+        val fired = listOfNotNull(captured, live?.last).firstOrNull { o -> records.any { it.id == o.id } }
+        if (fired == null) {
+            settleWithoutProof(records.first(), noProofReason(live))
+            return
+        }
+        val record = records.first { it.id == fired.id }
+        when {
+            fired.state == OffReportState.SENT -> {
+                store.clearRecords()
+                Log.i(
+                    TAG,
+                    "offreport outcome id=${fired.id} state=sent attempts=${fired.attempts} " +
+                        "after_ms=${fired.sentAtMs - fired.powerOffMs} action=drop",
+                )
+            }
+            // Live and still sending: the daemon may yet deliver it, so no parallel send.
+            fired.state == OffReportState.SENDING && fired !== captured -> {
+                store.clearRecords()
+                Log.i(TAG, "offreport outcome id=${fired.id} state=sending action=wait")
+                background { awaitSending(record) }
+            }
+            // Failed, or caught mid-send by a daemon replace: the power-off is proven.
+            else -> resend(
+                record,
+                "${OffReportState.name(fired.state)} attempts=${fired.attempts} rc=${fired.rc}",
+                text = TelegramReportBuilder.fillTime(record.text, fired.powerOffMs),
+                createdMs = fired.powerOffMs,
+            )
+        }
+    }
+
+    /** No fired outcome for our reports: only a long absence of the app is taken as a stop. */
+    private suspend fun settleWithoutProof(newest: ArmedRecord, reason: String) {
+        val heartbeat = store.heartbeat()
+        val gap = if (heartbeat > 0L) clock() - heartbeat else -1L
+        if (heartbeat <= 0L || gap <= STOP_GAP_MS) {
+            store.clearRecords()
+            Log.i(TAG, "offreport outcome id=${newest.id} action=drop reason=$reason gap_s=${gap / 1000}")
+            return
+        }
+        val at = maxOf(heartbeat, newest.createdMs)
+        resend(
+            newest,
+            "$reason gap_s=${gap / 1000} header=last_state",
+            text = TelegramReportBuilder.replaceHeader(newest.text, reporter.lastStateHeader(at)),
+            createdMs = at,
+        )
+    }
+
+    private suspend fun awaitSending(record: ArmedRecord) {
+        var waited = 0L
+        while (waited < SENDING_WAIT_MS) {
+            pause(SENDING_POLL_MS)
+            waited += SENDING_POLL_MS
+            val q = helper.offReportStatus(record.id)?.queried ?: continue
+            when (q.state) {
+                OffReportState.SENT -> {
+                    Log.i(TAG, "offreport outcome id=${record.id} state=sent after_wait_s=${waited / 1000} action=drop")
+                    return
+                }
+                OffReportState.FAILED -> {
+                    resend(
+                        record, "failed attempts=${q.attempts} rc=${q.rc}",
+                        text = TelegramReportBuilder.fillTime(record.text, q.powerOffMs),
+                        createdMs = q.powerOffMs,
+                    )
+                    return
+                }
+                OffReportState.SENDING -> Unit
+                else -> {
+                    Log.w(TAG, "offreport outcome id=${record.id} state=${OffReportState.name(q.state)} while waiting: leave")
+                    return
+                }
+            }
+        }
+        Log.w(TAG, "offreport outcome id=${record.id} still sending after ${SENDING_WAIT_MS / 1000}s: leave, no send")
+    }
+
+    /** Outbox first, then the stored reports go (synchronously), then a drain. */
+    private suspend fun resend(record: ArmedRecord, reason: String, text: String, createdMs: Long) {
+        Log.i(TAG, "offreport outcome id=${record.id} action=resend reason=$reason")
+        reporter.enqueue(OutboxEntry(id = record.id, chatId = record.chatId, createdMs = createdMs, text = text))
+        store.clearRecords()
+        reporter.drainOutbox("power_off")
+    }
+
+    private suspend fun noProofReason(live: OffReportStatus?): String = when {
+        live != null -> "daemon_${OffReportState.name(live.queried.state)}"
+        helper.isAlive() -> {
+            state.daemon = PowerOffArmState.DAEMON_OUTDATED
+            Log.w(TAG, "offreport: daemon outdated")
+            "daemon_outdated"
+        }
+        else -> "daemon_unreachable"
+    }
+
+    // --- arming loop ---
+
     private suspend fun refresh() {
+        val now = clock()
+        if (now - lastHeartbeat >= HEARTBEAT_EVERY_MS) {
+            lastHeartbeat = now
+            store.setHeartbeat(now)
+        }
         val report = reporter.powerOffReport(current)
         if (report == null) {
             disarm()
             return
         }
-        val now = clock()
-        store.save(ArmedRecord(report.id, report.chatId, report.text, now))
+        disarmPending = false
         val changed = report !== current
+        if (changed) store.pushRecord(ArmedRecord(report.id, report.chatId, report.text, now))
         current = report
-        disarmChecked = false
         if (changed || !daemonHolds(report.id)) arm(report, now)
     }
 
@@ -160,110 +242,48 @@ class PowerOffArmer @Inject constructor(
             helper.isAlive() -> PowerOffArmState.DAEMON_OUTDATED
             else -> PowerOffArmState.DAEMON_UNKNOWN
         }
-        if (ok) {
-            state.armedAtMs = now
-            Log.i(TAG, "offreport arm id=${report.id} len=${report.text.length} rc=ok")
-        } else {
-            state.armedAtMs = 0L
-            // Once per change of verdict: the text changes every tick while driving.
-            if (verdict != state.daemon) {
-                val why = if (verdict == PowerOffArmState.DAEMON_OUTDATED) "daemon outdated" else "daemon unreachable"
-                Log.w(TAG, "offreport arm id=${report.id} rc=$why: the report goes out at the next start")
+        state.armedAtMs = if (ok) now else 0L
+        if (verdict != state.daemon || now - lastArmLog >= ARM_LOG_EVERY_MS) {
+            lastArmLog = now
+            val rc = when (verdict) {
+                PowerOffArmState.DAEMON_OK -> "ok"
+                PowerOffArmState.DAEMON_OUTDATED -> "daemon outdated"
+                else -> "daemon unreachable"
             }
+            Log.i(TAG, "offreport arm id=${report.id} len=${report.text.length} rc=$rc")
         }
         state.daemon = verdict
     }
 
     /** False only when the daemon answers and does not hold [id] armed (it restarted). */
     private suspend fun daemonHolds(id: String): Boolean {
-        val answer = ask(id) as? Answer.Known ?: return true
-        val held = answer.status.queried.state == OffReportState.ARMED
+        val status = helper.offReportStatus(id) ?: return true
+        state.note(status)
+        val held = status.queried.state == OffReportState.ARMED
         if (!held) Log.i(TAG, "offreport daemon lost id=$id, re-arming")
         return held
     }
 
-    /** Report switched off or bot gone: drop the daemon's copy and the one on disk. */
+    /**
+     * Report switched off or bot gone: the daemon must drop its copy (it holds the token). The local
+     * state goes only once the daemon confirmed; until then every tick tries again. The first tick of
+     * a process disarms too: the daemon may hold a report of the last one.
+     */
     private suspend fun disarm() {
+        if (current == null && !disarmPending) return
+        disarmPending = true
         val had = current
-        // The first tick of a process disarms too: the daemon may hold a report of the last one.
-        if (had == null && disarmChecked) return
-        disarmChecked = true
-        current = null
-        store.clear()
-        state.armedAtMs = 0L
-        val ok = helper.offReportDisarm()
-        if (had != null || ok) Log.i(TAG, "offreport disarm id=${had?.id ?: "-"} rc=${if (ok) "ok" else "no_daemon"}")
-    }
-
-    private suspend fun ask(id: String): Answer {
-        val status = helper.offReportStatus(id)
-        if (status != null) {
-            status.last?.let { state.last = it }
-            return Answer.Known(status)
+        if (helper.offReportDisarm()) {
+            current = null
+            disarmPending = false
+            disarmFailLogged = false
+            store.clearRecords()
+            state.armedAtMs = 0L
+            Log.i(TAG, "offreport disarm id=${had?.id ?: "-"} rc=ok")
+        } else if (had != null && !disarmFailLogged) {
+            disarmFailLogged = true
+            Log.w(TAG, "offreport disarm id=${had.id} rc=no_daemon, retrying every tick")
         }
-        return if (helper.isAlive()) Answer.Outdated else Answer.Unreachable
-    }
-
-    /** What to do with the stored report of the last power cycle, from the daemon's answer. */
-    private suspend fun settle(record: ArmedRecord, first: Answer) {
-        var answer = first
-        var polls = 0
-        while (answer is Answer.Known && answer.status.queried.state == OffReportState.SENDING && polls < SENDING_POLLS) {
-            pause(SENDING_POLL_MS)
-            answer = ask(record.id)
-            polls++
-        }
-        when (answer) {
-            Answer.Outdated -> {
-                state.daemon = PowerOffArmState.DAEMON_OUTDATED
-                Log.w(TAG, "offreport outcome id=${record.id}: daemon outdated")
-                resend(record, record.armedAtMs, "daemon_outdated")
-            }
-            Answer.Unreachable -> resend(record, record.armedAtMs, "daemon_unreachable")
-            is Answer.Known -> settleKnown(record, answer.status)
-        }
-    }
-
-    private suspend fun settleKnown(record: ArmedRecord, status: OffReportStatus) {
-        val q = status.queried
-        when (q.state) {
-            OffReportState.SENT -> {
-                store.clear()
-                Log.i(
-                    TAG,
-                    "offreport outcome id=${record.id} state=sent attempts=${q.attempts} " +
-                        "after_ms=${q.sentAtMs - q.powerOffMs} action=drop",
-                )
-            }
-            // Armed and never fired while the listener is live: the app restarted on a running
-            // car, the report is still to come. With no listener the daemon cannot tell.
-            OffReportState.ARMED -> if (status.listening > 0) {
-                Log.i(TAG, "offreport outcome id=${record.id} state=armed action=keep")
-            } else {
-                resend(record, record.armedAtMs, "armed_no_listener")
-            }
-            OffReportState.FAILED, OffReportState.SENDING -> {
-                val at = q.powerOffMs.takeIf { it > 0L } ?: record.armedAtMs
-                resend(record, at, "${OffReportState.name(q.state)} attempts=${q.attempts} rc=${q.rc}")
-            }
-            else -> resend(record, record.armedAtMs, "unknown_to_daemon")
-        }
-    }
-
-    /** Into the outbox with the time filled in; the header already says when, so no late mark. */
-    private suspend fun resend(record: ArmedRecord, powerOffMs: Long, reason: String) {
-        Log.i(TAG, "offreport outcome id=${record.id} action=resend reason=$reason")
-        reporter.enqueue(
-            OutboxEntry(
-                id = record.id,
-                chatId = record.chatId,
-                createdMs = powerOffMs,
-                text = TelegramReportBuilder.fillTime(record.text, powerOffMs),
-                lateMark = false,
-            )
-        )
-        store.clear()
-        reporter.drainOutbox("power_off")
     }
 
     private fun settingsChanges(): Flow<List<String?>> = combine(
@@ -275,6 +295,8 @@ class PowerOffArmer @Inject constructor(
         .distinctUntilChanged()
         .drop(1)
 
+    private fun ids(records: List<ArmedRecord>): String = records.joinToString(",") { it.id }
+
     /** A failure costs this step only; the loop and the service go on. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun guarded(step: String, block: suspend () -> Unit) {
@@ -284,32 +306,6 @@ class PowerOffArmer @Inject constructor(
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "offreport $step failed: ${e.javaClass.simpleName}")
-        }
-    }
-
-    private class PrefsArmedStore(context: Context) : ArmedStore {
-        private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
-        override fun load(): ArmedRecord? {
-            val raw = prefs.getString(KEY_ARMED, null) ?: return null
-            return try {
-                val o = JSONObject(raw)
-                ArmedRecord(o.getString("id"), o.getLong("chat"), o.getString("text"), o.getLong("at"))
-            } catch (e: JSONException) {
-                Log.w(TAG, "offreport stored report unreadable, cleared: ${e.javaClass.simpleName}")
-                clear()
-                null
-            }
-        }
-
-        override fun save(record: ArmedRecord) {
-            val json = JSONObject().put("id", record.id).put("chat", record.chatId)
-                .put("text", record.text).put("at", record.armedAtMs)
-            prefs.edit().putString(KEY_ARMED, json.toString()).apply()
-        }
-
-        override fun clear() {
-            prefs.edit().remove(KEY_ARMED).apply()
         }
     }
 }

@@ -34,7 +34,8 @@ class OffReportWireTest {
 
     @Test fun `a status survives the parcel, with and without a last power-off`() {
         val last = OffReportOutcome("a0", OffReportState.FAILED, 1_000L, 0L, 13, "io:UnknownHostException")
-        val full = OffReportStatus(OffReportOutcome("a1", OffReportState.ARMED), "a1", 5_000L, 2, last)
+        val fids = listOf(OffReportFid(1001, 315621418, "OK"), OffReportFid(1023, 315621408, "pending"))
+        val full = OffReportStatus(OffReportOutcome("a1", OffReportState.ARMED), "a1", 5_000L, 1, last, fids)
         val empty = OffReportStatus(OffReportOutcome("x", OffReportState.UNKNOWN), "", 0L, -1, null)
         for (status in listOf(full, empty)) {
             val p = Parcel.obtain()
@@ -43,5 +44,66 @@ class OffReportWireTest {
             assertEquals(status, readOffReportStatus(p))
             p.recycle()
         }
+    }
+
+    /** The status reply field by field, in wire order, so a test can stop after any of them. */
+    private val statusFields: List<(Parcel) -> Unit> = listOf(
+        { it.writeString("a1") }, { it.writeInt(OffReportState.ARMED) }, { it.writeLong(0L) }, { it.writeLong(0L) },
+        { it.writeInt(0) }, { it.writeString("-") },
+        { it.writeString("a1") }, { it.writeLong(5_000L) }, { it.writeInt(2) }, { it.writeInt(1) },
+        { it.writeString("a0") }, { it.writeInt(OffReportState.SENT) }, { it.writeLong(1_000L) }, { it.writeLong(2_000L) },
+        { it.writeInt(1) }, { it.writeString("200") },
+        { it.writeInt(2) },
+        { it.writeInt(1001) }, { it.writeInt(315621418) }, { it.writeString("OK") },
+        { it.writeInt(1023) }, { it.writeInt(315621408) }, { it.writeString("OK") },
+    )
+
+    @Test fun `a status cut short anywhere is refused, never half read`() {
+        for (cut in 0 until statusFields.size) {
+            val p = Parcel.obtain()
+            statusFields.take(cut).forEach { it(p) }
+            p.setDataPosition(0)
+            assertNull("cut after $cut fields", readOffReportStatus(p))
+            p.recycle()
+        }
+        val whole = Parcel.obtain()
+        statusFields.forEach { it(whole) }
+        whole.setDataPosition(0)
+        assertEquals(2, readOffReportStatus(whole)!!.fids.size)
+        whole.recycle()
+    }
+
+    @Test fun `a status with a bad flag or an absurd fid count is refused`() {
+        for (tail in listOf(listOf(2), listOf(0, -1), listOf(0, OFF_REPORT_MAX_FIDS + 1), listOf(0, 1_000_000))) {
+            val p = Parcel.obtain()
+            p.writeString("a1"); p.writeInt(1); p.writeLong(0L); p.writeLong(0L); p.writeInt(0); p.writeString("-")
+            p.writeString(""); p.writeLong(0L); p.writeInt(-1)
+            tail.forEach { p.writeInt(it) }
+            p.setDataPosition(0)
+            assertNull("tail $tail", readOffReportStatus(p))
+            p.recycle()
+        }
+    }
+
+    @Test fun `an arm cut short or oversized is refused`() {
+        val armFields: List<(Parcel) -> Unit> =
+            listOf({ it.writeString("a1") }, { it.writeString("123:tok") }, { it.writeLong(7L) }, { it.writeString("text") })
+        for (cut in 0 until armFields.size) {
+            val c = Parcel.obtain()
+            armFields.take(cut).forEach { it(c) }
+            c.setDataPosition(0)
+            assertNull("cut after $cut fields", readOffReportArm(c))
+            c.recycle()
+        }
+        val long = Parcel.obtain()
+        writeOffReportArm(long, "a1", "123:tok", 7L, "x".repeat(OFF_REPORT_MAX_TEXT + 1))
+        long.setDataPosition(0)
+        assertNull(readOffReportArm(long))
+        long.recycle()
+        val longId = Parcel.obtain()
+        writeOffReportArm(longId, "a".repeat(OFF_REPORT_MAX_ID + 1), "123:tok", 7L, "t")
+        longId.setDataPosition(0)
+        assertNull(readOffReportArm(longId))
+        longId.recycle()
     }
 }

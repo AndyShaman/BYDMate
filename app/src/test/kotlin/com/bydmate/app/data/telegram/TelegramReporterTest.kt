@@ -127,6 +127,16 @@ class TelegramReporterTest {
         assertEquals((3..12).map { "text r$it" }, sent)
     }
 
+    @Test fun `a report already in the outbox is not queued a second time`() = runBlocking {
+        reporter.enqueue(entry("a", now))
+        reporter.enqueue(OutboxEntry("a", chat, now + 5, "other text"))
+        assertEquals(1, reporter.outboxSize())
+        connect()
+        answer()
+        reporter.drainOutbox("test")
+        assertEquals(listOf("text a"), sent)
+    }
+
     @Test fun `a report sent late gets the recorded time, a fresh one does not`() = runBlocking {
         connect()
         answer()
@@ -294,5 +304,11 @@ class TelegramReporterTest {
                 "attempts=2 rc=200 sent_after=1400ms",
             lines[1],
         )
+        assertEquals("telegram report listener: -", lines[2])
+        offState.fids = listOf(
+            com.bydmate.app.helper.offreport.OffReportFid(1001, 315621418, "OK"),
+            com.bydmate.app.helper.offreport.OffReportFid(1023, 315621408, "pending"),
+        )
+        assertEquals("telegram report listener: 315621418=OK 315621408=pending", reporter.diagnosticsLines()[2])
     }
 }

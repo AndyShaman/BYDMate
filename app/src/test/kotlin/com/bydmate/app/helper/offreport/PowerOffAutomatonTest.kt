@@ -47,9 +47,14 @@ class PowerOffAutomatonTest {
         val a = PowerOffAutomaton()
         a.seed(level, 2)
         assertTrue(a.primed)
-        a.seed(level, 0)
-        assertFalse(a.primed)
+        assertTrue(a.onEvent(level, 0))
+    }
+
+    @Test fun `a seed of 0 never unprimes, so a pending 0 push still fires`() {
+        val a = PowerOffAutomaton()
         a.seed(level, 2)
+        a.seed(level, 0) // read raced ahead of the queued push
+        assertTrue(a.primed)
         assertTrue(a.onEvent(level, 0))
     }
 

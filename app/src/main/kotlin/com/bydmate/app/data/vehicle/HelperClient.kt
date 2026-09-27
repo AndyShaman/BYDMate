@@ -1096,9 +1096,8 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         transactParsed(
             HelperBinderProtocol.TX_OFFREPORT_ARM,
             { p -> writeOffReportArm(p, id, token, chatId, text) },
-            // The first arm registers the daemon's power listener (vendor calls) and reads the
-            // power fids, past the 2 s default on a cold head unit.
-            timeoutMs = OFF_REPORT_ARM_TIMEOUT_MS,
+            // The daemon only stores the report and answers; registration and reads run on its
+            // worker, so the call holds the shared channel for a few ms, never a vendor call.
         ) { reply -> reply.dataAvail() >= 4 && reply.readInt() == 0 } ?: false
 
     override suspend fun offReportDisarm(): Boolean =
@@ -1276,8 +1275,5 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         /** Safety cap on the number of TX_DUMP_FIDS loop iterations (chunks). 64 × 64 KiB = 4 MiB,
          *  far above any realistic SDK catalog size; guards against a misbehaving daemon. */
         private const val MAX_DUMP_CHUNKS = 64
-
-        /** TX_OFFREPORT_ARM budget: the first arm registers two vendor listeners and reads two fids. */
-        private const val OFF_REPORT_ARM_TIMEOUT_MS = 5_000L
     }
 }

@@ -1858,6 +1858,7 @@
     <string name="tg_report_field_openings">未关闭项</string>
     <string name="tg_report_field_tires">胎压</string>
     <string name="tg_report_header_off">BYDMate：车辆于 %1$s 熄火</string>
+    <string name="tg_report_header_last_state">BYDMate：车辆最后状态（%1$s）</string>
     <string name="tg_report_map_link">在地图上打开</string>
     <string name="tg_report_soc">电量 %1$d%%</string>
     <string name="tg_report_range">续航 %1$d 公里</string>

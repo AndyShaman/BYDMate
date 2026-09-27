@@ -450,7 +450,8 @@ object HelperBinderProtocol {
     /**
      * Arms the power-off Telegram report (3.19): the daemon keeps it and sends it itself when its
      * own listener on the power fids sees the car switched off (see helper/offreport). A repeated
-     * call replaces the report; the first one registers the listener.
+     * call replaces the report. The handler only stores it and answers: the listener registration
+     * (retried every 30 s while a fid is missing) and the priming reads run on the daemon's worker.
      *
      * Request: [String id, String token, long chatId, String text with `{{time}}`]
      * Reply:   [int status (0 = armed, -1 = refused / failed)]
@@ -464,8 +465,9 @@ object HelperBinderProtocol {
 
     /**
      * Where one report id stands (unknown / armed / sending / sent / failed, with the power-off
-     * time), plus what is armed now and the last power-off — asked by the app on its next start and
-     * by the dump.
+     * time), plus what is armed now, the last power-off whatever its id, and each power fid's
+     * registration state — asked by the app on its next start, before a daemon replace and by the
+     * dump.
      *
      * Request: [String id] -> Reply: [int status (0 = ok), OffReportStatus (see OffReportWire)]
      */

@@ -1,6 +1,8 @@
 package com.bydmate.app.data.telegram
 
+import com.bydmate.app.helper.offreport.OffReportFid
 import com.bydmate.app.helper.offreport.OffReportOutcome
+import com.bydmate.app.helper.offreport.OffReportStatus
 import com.bydmate.app.helper.offreport.OffReportState
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,6 +22,17 @@ class PowerOffArmState @Inject constructor() {
 
     /** The daemon's last power-off; null until the loop has read one. */
     @Volatile var last: OffReportOutcome? = null
+
+    /** Registration state of the daemon's power listener per fid, as last read. */
+    @Volatile var fids: List<OffReportFid> = emptyList()
+
+    /** Takes what a status reply says about the last power-off and the listener. */
+    fun note(status: OffReportStatus) {
+        status.last?.let { last = it }
+        fids = status.fids
+    }
+
+    fun listenerLine(): String = fids.joinToString(" ") { "${it.fid}=${it.outcome}" }.ifEmpty { "-" }
 
     fun lastOffLine(): String {
         val o = last ?: return "-"
