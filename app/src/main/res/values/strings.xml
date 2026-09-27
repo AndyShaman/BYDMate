@@ -1035,7 +1035,7 @@
     <string name="settings_tg_backup_code_not_received">Код ещё не пришёл. Отправьте его боту и нажмите «Проверить» снова.</string>
     <string name="settings_tg_backup_connected_chip">Подключён</string>
     <string name="settings_tg_backup_chat_line">@%1$s, %2$s</string>
-    <string name="settings_tg_backup_connected_note">Копии уходят в этот чат при каждом сохранении.</string>
+    <string name="settings_tg_backup_connected_note">Сюда приходят копии и отчёты.</string>
     <string name="settings_tg_backup_back">Назад</string>
     <string name="settings_log_recording_help">Подробный журнал работы приложения. Нужен, только когда разработчик просит лог для разбора проблемы. Включите, повторите проблему, остановите запись и отправьте файл из папки Download.</string>
     <string name="settings_fid_recorder_help">Записывает все изменения датчиков машины в файл в Download. Нужен, чтобы найти сигнал для новой функции: включите, нажмите нужную кнопку в машине, выключите и отправьте файл разработчику.</string>
@@ -1937,4 +1937,22 @@
     <string name="dispatch_tg_report_no_bot">Подключите бота в Настройках</string>
     <string name="auto_msg_tg_report_empty">Действие #%1$d: выберите хотя бы один пункт отчёта или напишите свой текст</string>
     <string name="automation_action_tg_report">Отчёт в Telegram</string>
+    <!-- Telegram reports (3.19): settings and automation editor -->
+    <string name="tg_report_field_location_desc">Ссылка «Открыть на карте»</string>
+    <string name="tg_report_field_soc_desc">Процент батареи</string>
+    <string name="tg_report_field_range_desc">Километры, как на Главной</string>
+    <string name="tg_report_field_trip_desc">Километры, расход и время в пути</string>
+    <string name="tg_report_field_temps_desc">Снаружи и в салоне</string>
+    <string name="tg_report_field_openings_desc">Двери, окна, люк, багажник, капот</string>
+    <string name="tg_report_field_tires_desc">Все четыре колеса</string>
+    <string name="settings_tg_report_off_title">Отчёт при выключении машины</string>
+    <string name="settings_tg_report_off_hint">Отчёт уходит в первые секунды после выключения через мобильный интернет машины. Если связи нет, он придёт при следующем включении.</string>
+    <string name="settings_tg_report_off_no_bot">Сначала подключите Telegram-бот выше.</string>
+    <string name="settings_tg_report_off_connect">Подключить</string>
+    <string name="settings_tg_report_items_label">Что попадает в отчёт</string>
+    <string name="automation_action_tg_report_add">Отправить отчёт в Telegram</string>
+    <string name="automation_tg_report_text_label">Свой текст (опционально)</string>
+    <string name="automation_tg_report_text_hint">Появится под заголовком сообщения.</string>
+    <string name="automation_tg_report_own_text">свой текст</string>
+    <string name="automation_tg_report_no_bot">Telegram-бот не подключён. Подключите его в Настройках, раздел «Сервис и данные».</string>
 </resources>

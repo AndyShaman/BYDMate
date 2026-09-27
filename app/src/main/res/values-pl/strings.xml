@@ -1031,7 +1031,7 @@
     <string name="settings_tg_backup_code_not_received">Kod jeszcze nie dotarł. Wyślij go do bota i naciśnij „Sprawdź” ponownie.</string>
     <string name="settings_tg_backup_connected_chip">Połączono</string>
     <string name="settings_tg_backup_chat_line">@%1$s, %2$s</string>
-    <string name="settings_tg_backup_connected_note">Kopie trafiają do tego czatu przy każdym zapisie.</string>
+    <string name="settings_tg_backup_connected_note">Tutaj trafiają kopie i raporty.</string>
     <string name="settings_tg_backup_back">Wstecz</string>
     <string name="settings_log_recording_help">Szczegółowy dziennik pracy aplikacji. Potrzebny tylko wtedy, gdy deweloper prosi o log do analizy problemu. Włącz, powtórz problem, zatrzymaj zapis i wyślij plik z folderu Download.</string>
     <string name="settings_fid_recorder_help">Zapisuje wszystkie zmiany czujników auta do pliku w Download. Potrzebny, aby znaleźć sygnał dla nowej funkcji: włącz, naciśnij odpowiedni przycisk w aucie, wyłącz i wyślij plik deweloperowi.</string>
@@ -1922,4 +1922,22 @@
     <string name="dispatch_tg_report_no_bot">Połącz bota w Ustawieniach</string>
     <string name="auto_msg_tg_report_empty">Akcja #%1$d: wybierz co najmniej jeden element raportu lub wpisz własny tekst</string>
     <string name="automation_action_tg_report">Raport w Telegramie</string>
+    <!-- Telegram reports (3.19): settings and automation editor -->
+    <string name="tg_report_field_location_desc">Link «Otwórz na mapie»</string>
+    <string name="tg_report_field_soc_desc">Procent baterii</string>
+    <string name="tg_report_field_range_desc">Kilometry, jak na ekranie głównym</string>
+    <string name="tg_report_field_trip_desc">Kilometry, zużycie i czas jazdy</string>
+    <string name="tg_report_field_temps_desc">Na zewnątrz i w kabinie</string>
+    <string name="tg_report_field_openings_desc">Drzwi, okna, szyberdach, bagażnik, maska</string>
+    <string name="tg_report_field_tires_desc">Wszystkie cztery koła</string>
+    <string name="settings_tg_report_off_title">Raport po wyłączeniu samochodu</string>
+    <string name="settings_tg_report_off_hint">Raport jest wysyłany w pierwszych sekundach po wyłączeniu, przez mobilny internet samochodu. Jeśli nie ma połączenia, przyjdzie przy następnym włączeniu.</string>
+    <string name="settings_tg_report_off_no_bot">Najpierw połącz bota Telegram powyżej.</string>
+    <string name="settings_tg_report_off_connect">Połącz</string>
+    <string name="settings_tg_report_items_label">Co trafia do raportu</string>
+    <string name="automation_action_tg_report_add">Wyślij raport do Telegrama</string>
+    <string name="automation_tg_report_text_label">Własny tekst (opcjonalnie)</string>
+    <string name="automation_tg_report_text_hint">Pojawi się pod tytułem wiadomości.</string>
+    <string name="automation_tg_report_own_text">własny tekst</string>
+    <string name="automation_tg_report_no_bot">Bot Telegram nie jest połączony. Połącz go w Ustawieniach, sekcja «Serwis i dane».</string>
 </resources>

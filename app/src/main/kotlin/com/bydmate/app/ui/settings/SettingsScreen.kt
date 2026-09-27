@@ -118,6 +118,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.rememberCoroutineScope
+import com.bydmate.app.data.telegram.ReportField
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.window.Dialog
@@ -2417,11 +2424,16 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
     }
 }
 
-/** Automatic save (#237, #238): period and part chips with the last run, then the Telegram bot. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+/**
+ * Automatic save (#237, #238): period and part chips with the last run, then the Telegram bot and
+ * the power-off report it sends (3.19).
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun AutoBackupRows(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    val tokenFocus = remember { FocusRequester() }
+    val botBringer = remember { BringIntoViewRequester() }
     val periods = AutoBackupPeriod.entries
     val locale = LocalConfiguration.current.locales[0]
     val dateFormat = remember(locale) { SimpleDateFormat("d MMM HH:mm", locale) }
@@ -2495,13 +2507,88 @@ private fun AutoBackupRows(state: SettingsUiState, viewModel: SettingsViewModel)
         }
     }
     SettingDivider()
-    TelegramBotRows(state, viewModel)
+    TelegramBotRows(state, viewModel, tokenFocus, botBringer)
+    SettingDivider()
+    PowerOffReportRows(state, viewModel, tokenFocus, botBringer)
+}
+
+/**
+ * «Отчёт при выключении машины»: needs the bot above, so without it the switch is grey and a link
+ * takes the driver to the token field. The items show only while the report is on.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun PowerOffReportRows(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    tokenFocus: FocusRequester,
+    botBringer: BringIntoViewRequester,
+) {
+    val connected = state.tgBackupBinding != null
+    val scope = rememberCoroutineScope()
+    SettingToggleRow(
+        title = stringResource(R.string.settings_tg_report_off_title),
+        description = stringResource(R.string.settings_tg_report_off_hint),
+        checked = connected && state.tgReportOffEnabled,
+        onCheckedChange = { viewModel.setTgReportOffEnabled(it) },
+        enabled = connected,
+    )
+    if (!connected) {
+        FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable {
+                    scope.launch {
+                        botBringer.bringIntoView()
+                        // The token field exists only on the first step; on the code step the block is enough.
+                        if (state.tgBackupCode == null) tokenFocus.requestFocus()
+                    }
+                }
+                .padding(bottom = 4.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                stringResource(R.string.settings_tg_report_off_no_bot),
+                color = TextSecondary, fontSize = 12.5.sp, lineHeight = 17.sp,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+            Text(
+                stringResource(R.string.settings_tg_report_off_connect),
+                color = AccentBlue, fontSize = 12.5.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold,
+            )
+        }
+    } else if (state.tgReportOffEnabled) {
+        Text(
+            stringResource(R.string.settings_tg_report_items_label),
+            color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(bottom = 6.dp),
+        ) {
+            ReportField.entries.forEach { field ->
+                val label = stringResource(field.labelRes)
+                val selected = field in state.tgReportOffFields
+                UnitChip(
+                    label = if (selected) "✓ $label" else label,
+                    selected = selected,
+                    onClick = { viewModel.toggleTgReportOffField(field) },
+                )
+            }
+        }
+    }
 }
 
 /** Telegram bot as a three-step stepper: token, code sent to the bot, connected (#238). */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun TelegramBotRows(state: SettingsUiState, viewModel: SettingsViewModel) {
+private fun TelegramBotRows(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    tokenFocus: FocusRequester,
+    botBringer: BringIntoViewRequester,
+) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val copiedToast = stringResource(R.string.settings_tg_backup_code_copied)
@@ -2513,7 +2600,7 @@ private fun TelegramBotRows(state: SettingsUiState, viewModel: SettingsViewModel
         else -> 1
     }
     Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().bringIntoViewRequester(botBringer).padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
@@ -2585,6 +2672,7 @@ private fun TelegramBotRows(state: SettingsUiState, viewModel: SettingsViewModel
                             onValueChange = { viewModel.updateTgBackupToken(it) },
                             keyboardType = KeyboardType.Password,
                             secret = true,
+                            modifier = Modifier.focusRequester(tokenFocus),
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -3843,7 +3931,8 @@ private fun SettingsTextField(
     onValueChange: (String) -> Unit,
     keyboardType: KeyboardType,
     secret: Boolean = false,
-    singleLine: Boolean = true
+    singleLine: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     // Secret fields (API keys, tokens) are masked so screenshots and over-the-shoulder
     // looks do not leak them; the eye icon reveals the value while editing.
@@ -3869,7 +3958,7 @@ private fun SettingsTextField(
                 }
             }
         } else null,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = Color.White,

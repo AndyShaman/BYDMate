@@ -41,7 +41,10 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.toOffset
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.automirrored.outlined.ViewList
+import com.bydmate.app.data.telegram.ReportField
+import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -52,6 +55,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
@@ -314,6 +318,7 @@ fun AutomationScreen(
         EditorDialog(
             editing = state.editing,
             places = state.places,
+            tgBotConnected = state.tgBotConnected,
             editorError = state.editorError,
             onUpdate = { viewModel.updateEditing(it) },
             onSave = { viewModel.saveRule() },
@@ -1167,6 +1172,7 @@ private fun Modifier.liftedWhen(drag: RuleDragState, id: Long): Modifier =
 private fun EditorDialog(
     editing: EditingRule,
     places: List<PlaceEntity>,
+    tgBotConnected: Boolean,
     editorError: String?,
     onUpdate: (EditingRule.() -> EditingRule) -> Unit,
     onSave: () -> Unit,
@@ -1335,6 +1341,7 @@ private fun EditorDialog(
                                 index = idx,
                                 action = action,
                                 places = places,
+                                tgBotConnected = tgBotConnected,
                                 onUpdate = { newAction ->
                                     onUpdate {
                                         copy(actions = actions.toMutableList().apply { set(idx, newAction) })
@@ -1409,6 +1416,9 @@ private fun EditorDialog(
                                 },
                                 onAddSplitScreenToggle = {
                                     onUpdate { copy(actions = actions + newSplitScreenToggleAction(context)) }
+                                },
+                                onAddTelegramReport = {
+                                    onUpdate { copy(actions = actions + newTelegramReportAction(context)) }
                                 },
                             )
                         }
@@ -2282,6 +2292,7 @@ private fun ActionRow(
     index: Int,
     action: ActionDef,
     places: List<PlaceEntity>,
+    tgBotConnected: Boolean,
     onUpdate: (ActionDef) -> Unit,
     onTest: (ActionDef) -> Unit,
     onMoveUp: (() -> Unit)?,
@@ -2340,6 +2351,10 @@ private fun ActionRow(
                 SplitScreenActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "split_screen_close", "split_screen_toggle" ->
                 SplitScreenStateActionControls(kind = action.kind, modifier = Modifier.weight(1f))
+            TELEGRAM_REPORT_KIND ->
+                TelegramReportActionControls(
+                    action = action, tgBotConnected = tgBotConnected, onUpdate = onUpdate, modifier = Modifier.weight(1f),
+                )
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
@@ -2982,6 +2997,7 @@ private fun AddActionButton(
     onAddSplitScreen: () -> Unit,
     onAddSplitScreenClose: () -> Unit,
     onAddSplitScreenToggle: () -> Unit,
+    onAddTelegramReport: () -> Unit,
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -3073,6 +3089,10 @@ private fun AddActionButton(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.automation_action_split_screen_toggle), fontSize = 13.sp) },
                     onClick = { menuExpanded = false; onAddSplitScreenToggle() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_tg_report_add), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddTelegramReport() }
                 )
             }
         }
@@ -3433,6 +3453,174 @@ private fun AgentQueryEditDialog(
         }
     )
 }
+
+// --- Telegram Report Action Controls (3.19) ---
+
+/** Two lines, 48 dp: «Отчёт в Telegram» and what goes in; a tap opens [TelegramReportEditDialog]. */
+@Composable
+private fun TelegramReportActionControls(
+    action: ActionDef,
+    tgBotConnected: Boolean,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    val fields = action.reportFields()
+    val text = action.reportText()
+    val locale = LocalConfiguration.current.locales[0]
+    val items = ReportField.entries.filter { it in fields }.map { stringResource(it.labelRes).lowercase(locale) }
+    val ownText = stringResource(R.string.automation_tg_report_own_text)
+    val summary = when {
+        text.isBlank() -> items.joinToString(", ")
+        items.isEmpty() -> ownText
+        else -> items.joinToString(", ") + " + " + ownText
+    }.replaceFirstChar { it.titlecase(locale) }
+
+    Row(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { editing = true }
+            .padding(8.dp, 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.Send,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(
+                text = stringResource(R.string.automation_action_tg_report),
+                fontSize = 13.sp, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            if (summary.isNotEmpty()) {
+                Text(
+                    text = summary,
+                    fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+
+    if (editing) {
+        TelegramReportEditDialog(
+            initialFields = fields,
+            initialText = text,
+            tgBotConnected = tgBotConnected,
+            onDismiss = { editing = false },
+            onSave = { newFields, newText ->
+                onUpdate(action.withTelegramReport(newFields, newText))
+                editing = false
+            }
+        )
+    }
+}
+
+/** Check rows as in «Что сохранить», then the optional own text. Saves with an item or some text. */
+@Composable
+private fun TelegramReportEditDialog(
+    initialFields: Set<ReportField>,
+    initialText: String,
+    tgBotConnected: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (Set<ReportField>, String) -> Unit
+) {
+    var selected by remember { mutableStateOf(initialFields) }
+    var textValue by rememberSaveable { mutableStateOf(initialText) }
+    val canSave = selected.isNotEmpty() || textValue.isNotBlank()
+
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        title = {
+            Text(stringResource(R.string.automation_action_tg_report_add), color = TextPrimary, fontSize = 16.sp)
+        },
+        text = {
+            // Scrolls, so the buttons stay reachable at the largest text size.
+            Column(
+                modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ReportField.entries.forEach { field ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selected = if (field in selected) selected - field else selected + field }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = field in selected,
+                            onCheckedChange = null,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = AccentGreen,
+                                uncheckedColor = CardBorder,
+                                checkmarkColor = NavyDark,
+                            ),
+                        )
+                        Column(modifier = Modifier.padding(start = 10.dp)) {
+                            Text(
+                                stringResource(field.labelRes),
+                                color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                stringResource(field.descRes),
+                                color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = { if (it.length <= TG_REPORT_TEXT_MAX) textValue = it },
+                    label = { Text(stringResource(R.string.automation_tg_report_text_label)) },
+                    maxLines = 4,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = AccentGreen,
+                        unfocusedBorderColor = CardBorder,
+                        focusedLabelColor = AccentGreen,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = AccentGreen
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    stringResource(R.string.automation_tg_report_text_hint),
+                    color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp,
+                    modifier = Modifier.padding(start = 16.dp),
+                )
+                if (!tgBotConnected) {
+                    Text(
+                        stringResource(R.string.automation_tg_report_no_bot),
+                        color = AccentOrange, fontSize = 13.sp, lineHeight = 18.sp,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(selected, textValue.trim()) }, enabled = canSave) {
+                Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
+            }
+        }
+    )
+}
+
+/** Own text in a report: a short note, not a letter. */
+private const val TG_REPORT_TEXT_MAX = 500
 
 // --- Split Screen Action Controls ---
 

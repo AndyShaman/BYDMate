@@ -5,16 +5,16 @@ import org.json.JSONArray
 
 /**
  * One item a Telegram report can carry. [id] is what the `telegram_report` action payload and the
- * `tg_report_off_fields` setting store; the enum order is the order of the lines in the message.
+ * `tg_report_off_fields` setting store; the enum order is the order of the items in the pickers.
  */
-enum class ReportField(val id: String, val labelRes: Int) {
-    LOCATION("location", R.string.tg_report_field_location),
-    SOC("soc", R.string.tg_report_field_soc),
-    RANGE("range", R.string.tg_report_field_range),
-    TRIP("trip", R.string.tg_report_field_trip),
-    TEMPS("temps", R.string.tg_report_field_temps),
-    OPENINGS("openings", R.string.tg_report_field_openings),
-    TIRES("tires", R.string.tg_report_field_tires);
+enum class ReportField(val id: String, val labelRes: Int, val descRes: Int) {
+    LOCATION("location", R.string.tg_report_field_location, R.string.tg_report_field_location_desc),
+    SOC("soc", R.string.tg_report_field_soc, R.string.tg_report_field_soc_desc),
+    RANGE("range", R.string.tg_report_field_range, R.string.tg_report_field_range_desc),
+    TRIP("trip", R.string.tg_report_field_trip, R.string.tg_report_field_trip_desc),
+    TEMPS("temps", R.string.tg_report_field_temps, R.string.tg_report_field_temps_desc),
+    OPENINGS("openings", R.string.tg_report_field_openings, R.string.tg_report_field_openings_desc),
+    TIRES("tires", R.string.tg_report_field_tires, R.string.tg_report_field_tires_desc);
 
     companion object {
         /** What a new action and the power-off report start with. */
