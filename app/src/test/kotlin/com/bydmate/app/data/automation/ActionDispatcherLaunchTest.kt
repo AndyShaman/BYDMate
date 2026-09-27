@@ -50,7 +50,7 @@ class ActionDispatcherLaunchTest {
             mockk<ClusterVoiceControl>(relaxed = true),
             mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
             mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()))
+            com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()), dagger.Lazy { io.mockk.mockk(relaxed = true) })
     }
 
     private fun launchAction(pkg: String) = ActionDef(

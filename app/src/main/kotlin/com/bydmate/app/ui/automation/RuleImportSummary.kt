@@ -7,6 +7,7 @@ import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.SharedRule
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
 import com.bydmate.app.util.appLocalizedContext
 import org.json.JSONObject
 
@@ -47,6 +48,7 @@ internal object RuleImportSummary {
         "split_screen" to R.string.automation_action_split_screen,
         "split_screen_close" to R.string.automation_action_split_screen_close,
         "split_screen_toggle" to R.string.automation_action_split_screen_toggle,
+        TELEGRAM_REPORT_KIND to R.string.automation_action_tg_report,
     )
 
     /** Kinds whose decisive parameter is one text field of the payload. */
@@ -117,6 +119,8 @@ internal object RuleImportSummary {
             "delay", "media_volume" -> action.payload
             "sentry", "hotspot", "cluster_projection" ->
                 lc.getString(if (action.payload == "1") R.string.auto_enum_on else R.string.auto_enum_off)
+            TELEGRAM_REPORT_KIND -> (action.reportFields().map { lc.getString(it.labelRes) } + action.reportText())
+                .filter { it.isNotBlank() }.joinToString(", ")
             else -> launchDetail(action.kind, json, lc, autoGo) ?: ACTION_TEXT_FIELDS[action.kind]?.let { json.optString(it) }
         }
     }

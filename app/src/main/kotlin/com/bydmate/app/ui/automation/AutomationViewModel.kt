@@ -39,6 +39,9 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.loop.TimedSnapshot
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.telegram.ReportField
+import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
+import com.bydmate.app.data.telegram.withReportRuleName
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
@@ -671,6 +674,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             is ActionValidationError.SplitScreenWideEmpty -> ctx.getString(R.string.auto_msg_split_wide_empty, err.index)
             is ActionValidationError.SplitScreenSamePackage -> ctx.getString(R.string.auto_msg_split_same_package, err.index)
             is ActionValidationError.SplitScreenInvalidSide -> ctx.getString(R.string.auto_msg_split_invalid_side, err.index)
+            is ActionValidationError.TelegramReportEmpty -> ctx.getString(R.string.auto_msg_tg_report_empty, err.index)
             null -> null
         }
     }
@@ -837,7 +841,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         } else {
             liveSnapshot()
         }
-        val result = actionDispatcher.dispatch(action, snapshot)
+        val result = actionDispatcher.dispatch(action.withReportRuleName(_uiState.value.editing.name), snapshot)
         return if (result.success) null else result.reason ?: lc.getString(R.string.auto_msg_unavailable)
     }
 
@@ -1091,10 +1095,19 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
 
     private suspend fun insertStarterTemplatesIfNeeded() {
         val prefs = context.getSharedPreferences("automation", Context.MODE_PRIVATE)
-        if (prefs.getBoolean("templates_inserted", false)) return
-
-        starterTemplates(currentLang(context)).forEach { ruleDao.insert(it) }
-        prefs.edit().putBoolean("templates_inserted", true).apply()
+        if (!prefs.getBoolean("templates_inserted", false)) {
+            starterTemplates(currentLang(context)).forEach { ruleDao.insert(it) }
+            prefs.edit().putBoolean("templates_inserted", true).putBoolean(TG_TEMPLATES_KEY, true).apply()
+            return
+        }
+        // Installs from before 3.19 got their templates already: add only the Telegram report ones,
+        // once, and only where they fit under the rule limit.
+        if (prefs.getBoolean(TG_TEMPLATES_KEY, false)) return
+        val templates = telegramReportTemplates(currentLang(context))
+        val count = ruleDao.getCount()
+        if (count + templates.size <= MAX_RULES) templates.forEach { ruleDao.insert(it) }
+        Log.i("AutomationViewModel", "telegram report templates: rules=$count added=${count + templates.size <= MAX_RULES}")
+        prefs.edit().putBoolean(TG_TEMPLATES_KEY, true).apply()
     }
 }
 
@@ -1197,7 +1210,42 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
                     tName("主驾座椅加热1档", "Driver Heat 1", "Подогрев водителя 1"))
             )),
             cooldownSeconds = 600
-        )
+        ),
+    ) + telegramReportTemplates(lang)
+}
+
+/** The two Telegram report rules of 3.19, disabled: also added once to installs made before it. */
+internal fun telegramReportTemplates(lang: String): List<RuleEntity> {
+    fun tName(zh: String, en: String, ru: String): String = when (lang) { "zh" -> zh; "ru", "be" -> ru; else -> en }
+    val reportName = tName("Telegram 报告", "Telegram report", "Отчёт в Telegram")
+    fun report(vararg fields: ReportField) = ActionDef(
+        command = "",
+        displayName = reportName,
+        kind = TELEGRAM_REPORT_KIND,
+        payload = telegramReportPayload(fields.toSet(), ""),
+    )
+    return listOf(
+        RuleEntity(
+            name = tName("车在哪里", "Where the car is", "Где машина"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("Gear", "档位", "==", "1", tName("档位 = P", "Gear = P", "Передача = P"))
+            )),
+            actions = ActionDef.listToJson(listOf(report(ReportField.LOCATION, ReportField.SOC, ReportField.RANGE))),
+            cooldownSeconds = 60
+        ),
+        RuleEntity(
+            name = tName("启动时状态", "Status at start", "Статус при запуске"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("ServiceStart", "服务启动", "==", "true",
+                    tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"), kind = "service_start")
+            )),
+            actions = ActionDef.listToJson(listOf(report(ReportField.SOC, ReportField.RANGE, ReportField.TRIP))),
+            cooldownSeconds = 60
+        ),
     )
 }
 
@@ -1209,6 +1257,9 @@ private const val VALIDATION_URL = "https://localhost"
 
 /** Rules the user can have: the editor, the import and the voice agent stop at this many. */
 internal const val MAX_RULES = 50
+
+/** Set once the Telegram report templates were offered (3.19), on fresh and older installs alike. */
+private const val TG_TEMPLATES_KEY = "templates_tg_report_inserted"
 
 /** How old the telemetry snapshot may be for a test run to send a speed-gated action. */
 internal const val TEST_RUN_MAX_SNAPSHOT_AGE_MS = 10_000L
@@ -1512,6 +1563,29 @@ fun ActionDef.agentPrompt(): String = try {
 fun ActionDef.withAgentPrompt(prompt: String): ActionDef = copy(
     payload = org.json.JSONObject().apply { put("prompt", prompt) }.toString()
 )
+
+// --- Telegram report helpers (3.19) ---
+
+fun newTelegramReportAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.appLocalizedContext().getString(R.string.automation_action_tg_report),
+    kind = TELEGRAM_REPORT_KIND,
+    payload = telegramReportPayload(ReportField.DEFAULT, ""),
+)
+
+internal fun telegramReportPayload(fields: Set<ReportField>, text: String): String =
+    org.json.JSONObject().put("fields", ReportField.toJson(fields)).put("text", text).toString()
+
+fun ActionDef.reportFields(): Set<ReportField> = try {
+    ReportField.fromJson(org.json.JSONObject(payload ?: "{}").optJSONArray("fields"))
+} catch (e: Exception) { emptySet() }
+
+fun ActionDef.reportText(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("text")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withTelegramReport(fields: Set<ReportField>, text: String): ActionDef =
+    copy(payload = telegramReportPayload(fields, text))
 
 // --- Split screen helpers ---
 

@@ -25,6 +25,7 @@ import com.bydmate.app.data.backup.TelegramBackupSink
 import com.bydmate.app.data.backup.TelegramChat
 import com.bydmate.app.data.backup.TelegramError
 import com.bydmate.app.data.backup.TelegramSinkException
+import com.bydmate.app.data.telegram.ReportField
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
@@ -225,6 +226,9 @@ data class SettingsUiState(
     val tgBackupBotName: String = "",
     /** Non-null = a bot is connected, the stepper is on «Готово». */
     val tgBackupBinding: TgBackupBinding? = null,
+    /** Power-off Telegram report (3.19): the switch and its items. */
+    val tgReportOffEnabled: Boolean = false,
+    val tgReportOffFields: Set<ReportField> = ReportField.DEFAULT,
     /** Status of the last fid-catalog dump. Null = idle. Red if starts with error prefix. */
     val fidDumpStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
@@ -353,6 +357,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val telegramBackupSink: TelegramBackupSink,
     private val autoBackupScheduler: AutoBackupScheduler,
     private val appStrings: AppStrings,
+    private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter,
 ) : ViewModel() {
 
     /** ADB control-channel verdict for the line under the ADB-restore toggle. */
@@ -1619,6 +1624,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         /** Telegram bind code: six digits. */
         private const val BIND_CODE_MIN = 100_000
         private const val BIND_CODE_SPAN = 900_000
+        /** Same tag as TelegramReporter: the report's settings changes sit next to its sends. */
+        private const val TAG_TG_REPORT = "TgReport"
         /** Shared budget for the daemon-backed dump sections (liveness + seat and steering heat reads).
          *  The dump must not hang on a wedged daemon. */
         private const val HELPER_DIAG_BUDGET_MS = 3_000L
@@ -2298,6 +2305,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                         "bot=${settingsRepository.getTgBackupBotName().ifEmpty { null }?.let { "@$it" } ?: "-"} " +
                         "chat=${chatId?.let { "…" + it.toString().takeLast(4) } ?: "(none)"}"
                 )
+                telegramReporter.diagnosticsLines().forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             appendLine("--- fid push ---")
@@ -2606,6 +2614,31 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 }
             }.collect { apply -> _uiState.update(apply) }
         }
+        viewModelScope.launch {
+            combine(
+                settingsRepository.observeTgReportOffEnabled(),
+                settingsRepository.observeTgReportOffFields(),
+            ) { enabled, fields -> enabled to fields }
+                .collect { (enabled, fields) ->
+                    _uiState.update { it.copy(tgReportOffEnabled = enabled, tgReportOffFields = fields) }
+                }
+        }
+    }
+
+    /** «Отчёт при выключении машины»; phase B arms the helper daemon from these settings. */
+    fun setTgReportOffEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(tgReportOffEnabled = enabled) }
+        Log.i(TAG_TG_REPORT, "power-off report: enabled=$enabled")
+        viewModelScope.launch { settingsRepository.setTgReportOffEnabled(enabled) }
+    }
+
+    /** An item chip under the switch; the last checked item cannot be unchecked. */
+    fun toggleTgReportOffField(field: ReportField) {
+        val fields = _uiState.value.tgReportOffFields.let { if (field in it) it - field else it + field }
+        if (fields.isEmpty()) return
+        _uiState.update { it.copy(tgReportOffFields = fields) }
+        Log.i(TAG_TG_REPORT, "power-off report: fields=[${ReportField.toCsv(fields)}]")
+        viewModelScope.launch { settingsRepository.setTgReportOffFields(fields) }
     }
 
     fun setAutoBackupPeriod(period: AutoBackupPeriod) {

@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.InetSocketAddress
@@ -52,6 +54,10 @@ class NetworkAvailableMonitor @Inject constructor(
 
     val lastAvailableAt: Long get() = _lastAvailableAt
     val probePending: Boolean get() = _probePending
+
+    private val _edges = MutableStateFlow(0L)
+    /** [lastAvailableAt] as a flow, for work that waits for the internet (the Telegram report outbox). */
+    val edges: StateFlow<Long> = _edges
 
     private val cm: ConnectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -106,6 +112,7 @@ class NetworkAvailableMonitor @Inject constructor(
                     return@launch
                 }
                 _lastAvailableAt = System.currentTimeMillis()
+                _edges.value = _lastAvailableAt
                 Log.i(TAG, "validated+reachable network edge at $_lastAvailableAt (nid=$nid)")
             } finally {
                 _probePending = false

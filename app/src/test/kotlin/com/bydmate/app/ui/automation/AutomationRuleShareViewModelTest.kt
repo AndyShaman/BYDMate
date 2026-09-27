@@ -80,7 +80,7 @@ class AutomationRuleShareViewModelTest {
         Dispatchers.setMain(testDispatcher)
         LocalePreferences(ctx).setLanguage("ru")
         // No starter templates: they would show up as inserts.
-        ctx.getSharedPreferences("automation", Context.MODE_PRIVATE).edit().putBoolean("templates_inserted", true).commit()
+        ctx.getSharedPreferences("automation", Context.MODE_PRIVATE).edit().putBoolean("templates_inserted", true).putBoolean("templates_tg_report_inserted", true).commit()
         every { ruleDao.getAll() } returns rules
         every { ruleLogDao.getRecent(any()) } returns flowOf(emptyList())
         every { placeRepository.getAll() } returns places

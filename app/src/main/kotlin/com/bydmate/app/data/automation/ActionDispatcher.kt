@@ -20,6 +20,10 @@ import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.telegram.ReportField
+import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
+import com.bydmate.app.data.telegram.TELEGRAM_REPORT_RULE_KEY
+import com.bydmate.app.data.telegram.TelegramReporter
 import com.bydmate.app.data.vehicle.CommandTranslator
 import com.bydmate.app.data.vehicle.DriveMode
 import com.bydmate.app.data.vehicle.HelperClient
@@ -35,6 +39,7 @@ import com.bydmate.app.split.SplitSessionManager
 import com.bydmate.app.split.SplitSessionState
 import com.bydmate.app.split.SplitSide
 import com.bydmate.app.split.SplitStartResult
+import com.bydmate.app.ui.settings.telegramErrorText
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -58,6 +63,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private val audioCapture: com.bydmate.app.voice.AudioCapture,
     private val splitSessionManager: SplitSessionManager,
     private val appStrings: AppStrings,
+    private val telegramReporter: dagger.Lazy<TelegramReporter>,
 ) {
     companion object {
         private const val TAG = "ActionDispatcher"
@@ -559,6 +565,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             "split_screen" -> dispatchSplitScreen(action)
             "split_screen_close" -> dispatchSplitScreenClose()
             "split_screen_toggle" -> dispatchSplitScreenToggle()
+            TELEGRAM_REPORT_KIND -> dispatchTelegramReport(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
@@ -742,6 +749,27 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val prompt = parsePayload(action.payload)?.optString("prompt")?.trim().orEmpty()
         if (prompt.isEmpty()) return DispatchResult(false, appStrings.get(R.string.dispatch_agent_query_prompt_missing))
         return voiceActions.get().agentQuery(prompt)
+    }
+
+    /**
+     * "telegram_report": the chosen items to the backup bot's chat. A report that met no network
+     * waits in the outbox and the step counts as done; a bot that is gone fails the step with a
+     * reason the user can read.
+     */
+    private suspend fun dispatchTelegramReport(action: ActionDef): DispatchResult {
+        val payload = parsePayload(action.payload)
+        val fields = ReportField.fromJson(payload?.optJSONArray("fields"))
+        val text = payload?.optString("text").orEmpty()
+        val ruleName = payload?.optString(TELEGRAM_REPORT_RULE_KEY)
+        return when (val result = telegramReporter.get().sendRuleReport(ruleName, fields, text)) {
+            TelegramReporter.SendResult.Sent -> DispatchResult(true)
+            TelegramReporter.SendResult.Queued ->
+                DispatchResult(true, appStrings.get(R.string.dispatch_tg_report_queued))
+            TelegramReporter.SendResult.NotConnected ->
+                DispatchResult(false, appStrings.get(R.string.dispatch_tg_report_no_bot))
+            is TelegramReporter.SendResult.Failed ->
+                DispatchResult(false, telegramErrorText(appStrings.context, result.key))
+        }
     }
 
     /**

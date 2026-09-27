@@ -373,6 +373,7 @@ class SettingsViewModelTest {
             telegramBackupSink = telegramBackupSink,
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
+            telegramReporter = mockk(relaxed = true),
         )
     }
 

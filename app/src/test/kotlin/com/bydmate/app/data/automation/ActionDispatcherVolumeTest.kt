@@ -34,7 +34,7 @@ class ActionDispatcherVolumeTest {
             mockk<ClusterVoiceControl>(relaxed = true),
             audioCapture,
             mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true))
+            mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { io.mockk.mockk(relaxed = true) })
     }
 
     private fun volume(payload: String) =

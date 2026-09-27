@@ -36,7 +36,7 @@ class RuleViewModeTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        prefs.edit().clear().putBoolean("templates_inserted", true).commit()
+        prefs.edit().clear().putBoolean("templates_inserted", true).putBoolean("templates_tg_report_inserted", true).commit()
     }
 
     @After fun tearDown() { Dispatchers.resetMain() }

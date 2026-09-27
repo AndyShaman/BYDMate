@@ -3,6 +3,7 @@ package com.bydmate.app.data.repository
 import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.BackupPart
 import com.bydmate.app.data.backup.TgBackupConfig
+import com.bydmate.app.data.telegram.ReportField
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
@@ -110,6 +111,11 @@ open class SettingsRepository @Inject constructor(
         const val KEY_TG_BACKUP_CHAT_ID = "tg_backup_chat_id"
         const val KEY_TG_BACKUP_BOT_NAME = "tg_backup_bot_name"
         const val KEY_TG_BACKUP_CHAT_NAME = "tg_backup_chat_name"
+        /** Power-off Telegram report (3.19): "true" = on, and its ReportField ids, comma separated. */
+        const val KEY_TG_REPORT_OFF_ENABLED = "tg_report_off_enabled"
+        const val KEY_TG_REPORT_OFF_FIELDS = "tg_report_off_fields"
+        /** Telegram reports waiting for the network: a JSON array, see TelegramReporter. */
+        const val KEY_TG_REPORT_OUTBOX = "tg_report_outbox"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
@@ -534,6 +540,24 @@ open class SettingsRepository @Inject constructor(
 
     /** «Отключить»: forgets the bot in one transaction. */
     suspend fun clearTgBackup() = saveTgBackup("", "", null, "")
+
+    suspend fun isTgReportOffEnabled(): Boolean = getString(KEY_TG_REPORT_OFF_ENABLED, "false") == "true"
+
+    suspend fun setTgReportOffEnabled(enabled: Boolean) = setString(KEY_TG_REPORT_OFF_ENABLED, enabled.toString())
+
+    fun observeTgReportOffEnabled(): Flow<Boolean> = observeString(KEY_TG_REPORT_OFF_ENABLED).map { it == "true" }
+
+    suspend fun getTgReportOffFields(): Set<ReportField> = ReportField.parseCsv(settingsDao.get(KEY_TG_REPORT_OFF_FIELDS))
+
+    suspend fun setTgReportOffFields(fields: Set<ReportField>) =
+        setString(KEY_TG_REPORT_OFF_FIELDS, ReportField.toCsv(fields))
+
+    fun observeTgReportOffFields(): Flow<Set<ReportField>> =
+        observeString(KEY_TG_REPORT_OFF_FIELDS).map { ReportField.parseCsv(it) }
+
+    suspend fun getTgReportOutbox(): String = getString(KEY_TG_REPORT_OUTBOX, "")
+
+    suspend fun setTgReportOutbox(json: String) = setString(KEY_TG_REPORT_OUTBOX, json)
 
     suspend fun getTechCardOrder(): String =
         getString(KEY_TECH_CARD_ORDER, "")

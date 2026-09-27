@@ -31,4 +31,16 @@ class StarterTemplatesTest {
         assertTrue(starterTemplates("zh").any { it.name == "低电量ECO" })
         assertTrue(starterTemplates("be").any { it.name == "Эко при низком заряде" })
     }
+
+    @Test fun `two Telegram report templates ship disabled with a report action`() {
+        val rules = telegramReportTemplates("ru")
+        assertEquals(listOf("Где машина", "Статус при запуске"), rules.map { it.name })
+        rules.forEach { rule ->
+            assertFalse(rule.enabled)
+            val action = ActionDef.listFromJson(rule.actions).single()
+            assertEquals("telegram_report", action.kind)
+            assertTrue(action.payload!!.contains("\"soc\""))
+        }
+        assertTrue(starterTemplates("ru").map { it.name }.containsAll(listOf("Где машина", "Статус при запуске")))
+    }
 }

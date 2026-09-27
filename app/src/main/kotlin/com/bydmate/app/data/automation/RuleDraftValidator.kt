@@ -3,6 +3,7 @@ package com.bydmate.app.data.automation
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.data.telegram.ReportField
 import com.bydmate.app.voice.VoicePhrase
 import com.bydmate.app.voice.VoiceTriggerValidation
 import org.json.JSONObject
@@ -26,6 +27,8 @@ sealed class ActionValidationError {
     data class SplitScreenWideEmpty(val index: Int) : ActionValidationError()
     data class SplitScreenSamePackage(val index: Int) : ActionValidationError()
     data class SplitScreenInvalidSide(val index: Int) : ActionValidationError()
+    /** A Telegram report with no item checked and no text of its own. */
+    data class TelegramReportEmpty(val index: Int) : ActionValidationError()
 }
 
 /** Reason a trigger draft failed validation (currently: voice-phrase collisions only). */
@@ -122,6 +125,13 @@ object RuleDraftValidator {
                     if (narrow == wide) return ActionValidationError.SplitScreenSamePackage(n)
                     val side = json.optString("side")
                     if (side !in listOf("left", "right")) return ActionValidationError.SplitScreenInvalidSide(n)
+                }
+                "telegram_report" -> {
+                    val json = payloadJson(a.payload)
+                    val fields = ReportField.fromJson(json.optJSONArray("fields"))
+                    if (fields.isEmpty() && json.optString("text").isBlank()) {
+                        return ActionValidationError.TelegramReportEmpty(n)
+                    }
                 }
             }
         }

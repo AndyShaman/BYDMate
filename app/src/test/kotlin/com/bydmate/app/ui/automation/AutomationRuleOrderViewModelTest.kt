@@ -61,7 +61,7 @@ class AutomationRuleOrderViewModelTest {
     @Before fun setUp() {
         Dispatchers.setMain(testDispatcher)
         ctx.getSharedPreferences("automation", Context.MODE_PRIVATE).edit().clear()
-            .putBoolean("templates_inserted", true).commit()
+            .putBoolean("templates_inserted", true).putBoolean("templates_tg_report_inserted", true).commit()
     }
 
     @After fun tearDown() { Dispatchers.resetMain() }

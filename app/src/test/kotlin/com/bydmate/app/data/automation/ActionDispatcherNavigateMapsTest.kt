@@ -34,7 +34,7 @@ class ActionDispatcherNavigateMapsTest {
         mockk<ClusterVoiceControl>(relaxed = true),
         mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
         mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            com.bydmate.app.util.AppStrings(app))
+            com.bydmate.app.util.AppStrings(app), dagger.Lazy { io.mockk.mockk(relaxed = true) })
 
     private fun actionDef(payload: String) =
         ActionDef(command = "", displayName = "navi", kind = "navigate", payload = payload)

@@ -90,7 +90,7 @@ object RuleShare {
         "param", "notification", "notification_silent", "notification_sound", "app_launch", "call",
         "navigate", "url", "yandex_music", "youtube", "go_home", "delay", "media_volume", "sentry",
         "hotspot", "cluster_projection", "toggle", "speak", "agent_query", "split_screen",
-        "split_screen_close", "split_screen_toggle",
+        "split_screen_close", "split_screen_toggle", "telegram_report",
     )
 
     /** Marker left in a stripped call or tel/sms url payload: the importer has to ask for a number. */
@@ -114,7 +114,7 @@ object RuleShare {
      *   stripped address (the voice agent stores the original address there).
      * - every other kind (`param`, `notification*`, `app_launch`, `navigate`, `yandex_music`,
      *   `youtube`, `go_home`, `delay`, `media_volume`, `sentry`, `hotspot`, `cluster_projection`,
-     *   `toggle`, `speak`, `agent_query`, `split_screen*`): copied as is. Free texts (notification
+     *   `toggle`, `speak`, `agent_query`, `split_screen*`, `telegram_report`): copied as is. Free texts (notification
      *   and speak texts, agent prompts, navigation points, voice phrases, the rule name) stay: the
      *   user shares their own rule and the share note asks them to check those.
      * Rule id, enabled, lastTriggeredAt, triggerCount and createdAt are never written.

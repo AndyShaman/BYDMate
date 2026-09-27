@@ -33,7 +33,7 @@ class ActionDispatcherMusicPlayTest {
             mockk<ClusterVoiceControl>(relaxed = true),
             mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
             mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true))
+            mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { io.mockk.mockk(relaxed = true) })
     }
 
     @Test fun music_play_uses_media_session_when_available() = runBlocking {

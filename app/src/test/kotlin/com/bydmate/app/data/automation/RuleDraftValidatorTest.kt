@@ -13,6 +13,19 @@ class RuleDraftValidatorTest {
 
     // --- validateActions ---
 
+    @Test fun telegram_report_without_items_or_text_is_invalid() {
+        val err = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "telegram_report", displayName = "x", kind = "telegram_report",
+                payload = """{"fields":[],"text":"  "}""")))
+        assertEquals(ActionValidationError.TelegramReportEmpty(1), err)
+    }
+
+    @Test fun telegram_report_with_only_own_text_is_valid() {
+        assertNull(RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "telegram_report", displayName = "x", kind = "telegram_report",
+                payload = """{"fields":[],"text":"Я выехал"}"""))))
+    }
+
     @Test fun empty_actions_list_is_valid() {
         assertNull(RuleDraftValidator.validateActions(emptyList()))
     }

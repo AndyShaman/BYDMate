@@ -123,6 +123,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var autoBackupScheduler: com.bydmate.app.data.backup.AutoBackupScheduler
     @Inject lateinit var postRestoreCheck: com.bydmate.app.data.backup.PostRestoreCheck
     @Inject lateinit var appStrings: com.bydmate.app.util.AppStrings
+    @Inject lateinit var telegramReporter: com.bydmate.app.data.telegram.TelegramReporter
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -793,6 +794,12 @@ class TrackingService : Service(), LocationListener {
         // Start the network monitor BEFORE polling so the first evaluate() tick
         // already has access to the latest VALIDATED edge state.
         networkAvailableMonitor.start()
+        // Telegram reports that met no network go out now and whenever the internet comes back;
+        // the edge at 0 is the start value, drained by the first line already.
+        serviceScope.launch {
+            telegramReporter.drainOutbox("service_start")
+            networkAvailableMonitor.edges.collect { at -> if (at > 0L) telegramReporter.drainOutbox("network") }
+        }
         startPolling()
         startCameraMonitor()
         // Pushed fid values are laid into the live snapshot as they arrive; the poll above is

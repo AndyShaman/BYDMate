@@ -1,0 +1,287 @@
+package com.bydmate.app.data.telegram
+
+import android.content.Context
+import android.util.Log
+import com.bydmate.app.R
+import com.bydmate.app.data.backup.TelegramBackupSink
+import com.bydmate.app.data.backup.TelegramSinkException
+import com.bydmate.app.data.backup.TgBackupConfig
+import com.bydmate.app.data.local.dao.TripDao
+import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.service.TrackingService
+import com.bydmate.app.util.AppStrings
+import com.bydmate.app.util.appLanguageTag
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import java.util.Calendar
+import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * A report entry waiting for the network; [chatId] is the chat it was built for. [lateMark] = add
+ * «(записано в HH:MM)» when it goes out late; the power-off report carries its time in the header
+ * already, so phase B queues it with false.
+ */
+data class OutboxEntry(
+    val id: String,
+    val chatId: Long,
+    val createdMs: Long,
+    val text: String,
+    val lateMark: Boolean = true,
+)
+
+/**
+ * The ready power-off report phase B hands to the helper daemon: bot, chat and the text with
+ * [TelegramReportBuilder.TIME_PLACEHOLDER] in its header. toString never shows the secrets.
+ */
+data class PowerOffReport(val id: String, val token: String, val chatId: Long, val text: String) {
+    override fun toString(): String = "PowerOffReport(id=$id, len=${text.length})"
+}
+
+/**
+ * Telegram reports (3.19): builds them from the live state, sends them through the backup bot and
+ * keeps the ones that met no network in a small outbox on disk ([SettingsRepository.KEY_TG_REPORT_OUTBOX]).
+ * The log gets ids, field names, lengths and error keys only: never the token, the chat, the text
+ * or the coordinates, since users post their logs in public issues.
+ */
+@Singleton
+class TelegramReporter @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val sink: TelegramBackupSink,
+    private val settings: SettingsRepository,
+    private val tripDao: TripDao,
+    private val appStrings: AppStrings,
+) {
+    companion object {
+        private const val TAG = "TgReport"
+        const val OUTBOX_MAX = 10
+        /** A report sent later than this after it was built gets «(записано в HH:MM)». */
+        const val LATE_MARK_AFTER_MS = 2 * 60_000L
+        private const val PARSE_MODE = "HTML"
+        private const val RECENT_TRIPS = 5
+    }
+
+    sealed interface SendResult {
+        data object Sent : SendResult
+        /** No network or Telegram busy: the report waits in the outbox. */
+        data object Queued : SendResult
+        data object NotConnected : SendResult
+        /** A failure that will not heal by retrying: [key] as in [TelegramSinkException.key]. */
+        data class Failed(val key: String) : SendResult
+    }
+
+    /** Test seams: the live state, the clock and the interface language. */
+    internal var inputs: suspend () -> ReportInputs = { liveInputs() }
+    internal var clock: () -> Long = System::currentTimeMillis
+    internal var language: () -> String = { context.appLanguageTag() }
+
+    private val strings = ReportStrings { id, args -> appStrings.get(id, *args) }
+    private val outboxMutex = Mutex()
+
+    /** The `telegram_report` automation action: header «BYDMate: <rule name>». */
+    suspend fun sendRuleReport(ruleName: String?, fields: Set<ReportField>, customText: String): SendResult {
+        val config = settings.getTgBackupConfig()
+        val id = newId()
+        val chatId = config.chatId
+        if (!config.configured || chatId == null) {
+            Log.w(TAG, "rule report id=$id skipped: bot not connected")
+            return SendResult.NotConnected
+        }
+        val report = build(id, "rule", TelegramReportBuilder.ruleHeader(ruleName), customText, fields)
+        return deliver(id, config, chatId, report.text)
+    }
+
+    /**
+     * Phase B seam: the power-off report to arm the daemon with, or null when the report is off in
+     * the settings or no bot is connected (then the daemon is disarmed).
+     */
+    suspend fun powerOffReport(): PowerOffReport? {
+        if (!settings.isTgReportOffEnabled()) return null
+        val config = settings.getTgBackupConfig()
+        val chatId = config.chatId
+        if (!config.configured || chatId == null) return null
+        val id = newId()
+        val header = TelegramReportBuilder.powerOffHeader(strings)
+        val report = build(id, "power_off", header, "", settings.getTgReportOffFields())
+        return PowerOffReport(id, config.token, chatId, report.text)
+    }
+
+    /**
+     * Sends what the outbox holds, oldest first: at service start, when the internet comes back and
+     * after every report that went through. Stops at the first temporary failure; a report whose bot
+     * was disconnected or whose chat changed is dropped, so it never lands in someone else's chat.
+     */
+    suspend fun drainOutbox(reason: String) {
+        outboxMutex.withLock {
+            var queue = loadOutbox()
+            if (queue.isEmpty()) return
+            Log.i(TAG, "outbox drain reason=$reason size=${queue.size}")
+            val config = settings.getTgBackupConfig()
+            while (queue.isNotEmpty()) {
+                val entry = queue.first()
+                if (!config.configured || config.chatId != entry.chatId) {
+                    val why = if (config.configured) "chat_changed" else "not_connected"
+                    Log.w(TAG, "outbox drop id=${entry.id} reason=$why")
+                    queue = queue.drop(1)
+                    saveOutbox(queue)
+                    continue
+                }
+                val now = clock()
+                val late = entry.lateMark && now - entry.createdMs > LATE_MARK_AFTER_MS
+                val text = if (late) entry.text + "\n" + lateMark(entry.createdMs, now) else entry.text
+                val result = sink.sendMessage(config.token, entry.chatId, text, PARSE_MODE)
+                val failure = result.exceptionOrNull()
+                val ageS = (now - entry.createdMs) / 1000
+                when {
+                    failure == null -> {
+                        Log.i(TAG, "outbox sent id=${entry.id} age_s=$ageS late_mark=$late")
+                        queue = queue.drop(1)
+                    }
+                    isTransient(failure) -> {
+                        Log.w(TAG, "outbox keep id=${entry.id} rc=${errorKey(failure)} age_s=$ageS left=${queue.size}")
+                        return
+                    }
+                    else -> {
+                        Log.w(TAG, "outbox drop id=${entry.id} reason=${errorKey(failure)}")
+                        queue = queue.drop(1)
+                    }
+                }
+                saveOutbox(queue)
+            }
+        }
+    }
+
+    /**
+     * Puts a report in the outbox; past [OUTBOX_MAX] the oldest ones go. [createdMs] is when the report
+     * describes the car: phase B passes the power-off time of a report the daemon could not send.
+     */
+    suspend fun enqueue(entry: OutboxEntry) {
+        outboxMutex.withLock {
+            val queue = (loadOutbox() + entry).sortedBy { it.createdMs }
+            val kept = queue.takeLast(OUTBOX_MAX)
+            saveOutbox(kept)
+            Log.i(TAG, "outbox add id=${entry.id} size=${kept.size} evicted=${queue.size - kept.size}")
+        }
+    }
+
+    suspend fun outboxSize(): Int = loadOutbox().size
+
+    /** The dump header line; `armed` and `daemon` belong to the daemon side (phase B). */
+    suspend fun diagnosticsLines(): List<String> = listOf(
+        "telegram report: off=${if (settings.isTgReportOffEnabled()) "on" else "off"} " +
+            "fields=[${ReportField.toCsv(settings.getTgReportOffFields())}] armed=- daemon=- outbox=${outboxSize()}",
+        "telegram report last_off: -",
+    )
+
+    private suspend fun deliver(id: String, config: TgBackupConfig, chatId: Long, text: String): SendResult {
+        val failure = sink.sendMessage(config.token, chatId, text, PARSE_MODE).exceptionOrNull()
+        return when {
+            failure == null -> {
+                Log.i(TAG, "send id=$id rc=ok")
+                drainOutbox("after_send")
+                SendResult.Sent
+            }
+            isTransient(failure) -> {
+                Log.w(TAG, "send id=$id rc=${errorKey(failure)} -> outbox")
+                enqueue(OutboxEntry(id, chatId, clock(), text))
+                SendResult.Queued
+            }
+            else -> {
+                Log.w(TAG, "send id=$id rc=${errorKey(failure)} permanent")
+                SendResult.Failed(errorKey(failure))
+            }
+        }
+    }
+
+    private suspend fun build(
+        id: String,
+        source: String,
+        header: String,
+        customText: String,
+        fields: Set<ReportField>,
+    ): BuiltReport {
+        val report = TelegramReportBuilder.build(header, customText, fields, inputs(), language(), strings, clock())
+        Log.i(
+            TAG,
+            "build id=$id src=$source fields=[${ReportField.toCsv(fields)}] " +
+                "taken=[${report.taken.joinToString(",") { it.id }}] " +
+                "skipped=[${report.skipped.joinToString(",") { it.id }}] " +
+                "custom=${customText.isNotBlank()} len=${report.text.length}",
+        )
+        return report
+    }
+
+    /** «(записано в 18:42)», with the date when the report is from another day. */
+    private fun lateMark(createdMs: Long, nowMs: Long): String {
+        val stamp = if (sameDay(createdMs, nowMs)) TelegramReportBuilder.formatTime(createdMs)
+        else TelegramReportBuilder.formatDateTime(createdMs)
+        return "<i>${TelegramReportBuilder.escape(appStrings.get(R.string.tg_report_recorded_at, stamp))}</i>"
+    }
+
+    private fun sameDay(a: Long, b: Long): Boolean {
+        val ca = Calendar.getInstance().apply { timeInMillis = a }
+        val cb = Calendar.getInstance().apply { timeInMillis = b }
+        return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) && ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
+    }
+
+    private fun isTransient(e: Throwable): Boolean = (e as? TelegramSinkException)?.transient ?: true
+
+    private fun errorKey(e: Throwable): String = (e as? TelegramSinkException)?.key ?: e.javaClass.simpleName
+
+    private suspend fun loadOutbox(): List<OutboxEntry> {
+        val raw = settings.getTgReportOutbox()
+        if (raw.isBlank()) return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            (0 until array.length()).map { i ->
+                val o = array.getJSONObject(i)
+                OutboxEntry(
+                    o.getString("id"), o.getLong("chat"), o.getLong("created"), o.getString("text"),
+                    o.optBoolean("late", true),
+                )
+            }
+        } catch (e: JSONException) {
+            Log.w(TAG, "outbox unreadable, cleared: ${e.javaClass.simpleName}")
+            settings.setTgReportOutbox("")
+            emptyList()
+        }
+    }
+
+    private suspend fun saveOutbox(queue: List<OutboxEntry>) {
+        val array = JSONArray()
+        queue.forEach { e ->
+            array.put(
+                JSONObject().put("id", e.id).put("chat", e.chatId).put("created", e.createdMs)
+                    .put("text", e.text).put("late", e.lateMark)
+            )
+        }
+        settings.setTgReportOutbox(if (queue.isEmpty()) "" else array.toString())
+    }
+
+    private fun newId(): String = UUID.randomUUID().toString().take(8)
+
+    /** The trip under way only when its counters cover the whole session, else the last recorded trip. */
+    private suspend fun liveInputs(): ReportInputs {
+        val location = TrackingService.lastLocation.value
+        val startedAt = TrackingService.sessionStartedAt.value
+        val km = TrackingService.tripDistanceKm.value
+        val live = if (startedAt != null && km != null && TrackingService.liveWholeSession.value) {
+            LiveTrip(km, TrackingService.tripKwhConsumed.value, startedAt)
+        } else null
+        val lastTrip = tripDao.getRecent(RECENT_TRIPS).first().firstOrNull { (it.distanceKm ?: 0.0) > 0.0 }
+        return ReportInputs(
+            data = TrackingService.lastData.value,
+            rangeKm = TrackingService.lastRangeKm.value,
+            latitude = location?.latitude,
+            longitude = location?.longitude,
+            liveTrip = live,
+            lastTrip = lastTrip,
+        )
+    }
+}

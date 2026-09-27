@@ -111,10 +111,12 @@ class TelegramBackupSink internal constructor(
                 ?.let { TelegramChat(it.getLong("id"), chatName(it)) }
         }
 
-    suspend fun sendMessage(token: String, chatId: Long, text: String): Result<Unit> {
+    /** [parseMode] "HTML" makes Telegram render the markup in [text]; null sends it as plain text. */
+    suspend fun sendMessage(token: String, chatId: Long, text: String, parseMode: String? = null): Result<Unit> {
         val body = FormBody.Builder()
             .add("chat_id", chatId.toString())
             .add("text", text)
+            .apply { if (parseMode != null) add("parse_mode", parseMode) }
             .build()
         return call(token, "sendMessage", body) { }
     }
