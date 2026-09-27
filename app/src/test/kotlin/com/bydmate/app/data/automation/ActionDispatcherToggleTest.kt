@@ -44,6 +44,7 @@ class ActionDispatcherToggleTest {
         mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
         mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
             com.bydmate.app.util.AppStrings(app), dagger.Lazy { io.mockk.mockk(relaxed = true) })
+        .also { it.readSpeedNow = { 0 } } // a standing car unless a test says otherwise
 
     init {
         coEvery { vehicleApi.dispatch(any()) } returns Result.success(Unit)

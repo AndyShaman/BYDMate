@@ -46,7 +46,10 @@ class ActionDispatcherFailureLocaleTest {
         mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
         split,
         AppStrings(app), dagger.Lazy { io.mockk.mockk(relaxed = true) },
-    ).also { it.clusterPollIntervalMs = 1L }
+    ).also {
+        it.clusterPollIntervalMs = 1L
+        it.readSpeedNow = { 0 } // a standing car unless a test says otherwise
+    }
 
     init {
         every { split.state } returns MutableStateFlow(SplitSessionState.Idle)
