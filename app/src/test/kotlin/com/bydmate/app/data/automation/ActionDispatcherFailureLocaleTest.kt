@@ -128,6 +128,12 @@ class ActionDispatcherFailureLocaleTest {
                 ("Режим движения не сменился" to "The drive mode did not change"),
             VehicleWriteError.HelperUnreachable("drive_mode_eco", "unreachable") to
                 ("Не удалось сменить режим движения" to "Could not change the drive mode"),
+            VehicleWriteError.SpeedBlocked("drive_mode_eco", "too fast", 40) to
+                ("Этот режим движения включается только на скорости до 15 км/ч (сейчас 40 км/ч)" to
+                    "This drive mode switches on only up to 15 km/h (now 40 km/h)"),
+            VehicleWriteError.SpeedBlocked("drive_mode_eco", "speed unknown", null) to
+                ("Скорость неизвестна, этот режим движения не включаю" to
+                    "Speed unknown, this drive mode is not switched on"),
         )
         for ((err, texts) in cases) {
             coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)

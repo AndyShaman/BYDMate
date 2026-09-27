@@ -44,6 +44,8 @@ fun interface DriveModeReader {
  * Drive mode switch, verified by the car's own target mode (SETTING_TARGET_DRIVING_MODE). BYD's
  * voice assistant writes the same fid without a speed or gear check; like it, a change is refused
  * while the car holds the emergency flotation mode. In order:
+ *  - terrain mode, speed unknown or above [DriveMode.TERRAIN_MAX_SPEED_KMH]
+ *                                       → SPEED, nothing read or written beyond the speed
  *  - support flag unreadable            → UNREADABLE, nothing written
  *  - support flag != 0                  → NOT_SUPPORTED, nothing written
  *  - target unreadable / a sentinel     → UNREADABLE, nothing written
@@ -52,55 +54,77 @@ fun interface DriveModeReader {
  *  - write not accepted (daemon down)   → UNREACHABLE
  *  - target == requested within ~3 s    → OK
  *  - otherwise                          → NOT_CHANGED
- * The speed gate for terrain modes runs before this, in ActionDispatcher; [speed] only feeds
- * the log line. One command at a time under [mutex], so a queued one sees the settled mode.
+ * This is where the terrain speed limit is enforced for every path (Smart Home calls VehicleApi
+ * directly); ActionDispatcher checks the same limit first only to word the refusal. One command
+ * at a time under [mutex], so a queued one sees the settled mode.
  */
 class DriveModeChannel(
     private val writer: SeatWriter,
     private val reader: DriveModeReader,
     private val speed: suspend () -> Int?,
 ) {
-    enum class Result { OK, NOT_SUPPORTED, FLOTATION, UNREADABLE, UNREACHABLE, NOT_CHANGED }
+    enum class Result { OK, SPEED, NOT_SUPPORTED, FLOTATION, UNREADABLE, UNREACHABLE, NOT_CHANGED }
 
-    /** [target] is the last target mode read (null when unread or unreadable). */
-    data class Outcome(val result: Result, val verdict: String, val target: Int?)
+    /** [target] is the last target mode read (null when unread or unreadable); [speed] the speed
+     *  read before anything else (null = unknown). */
+    data class Outcome(val result: Result, val verdict: String, val target: Int?, val speed: Int? = null)
 
     private val mutex = Mutex()
 
     suspend fun actuate(mode: DriveMode): Outcome = mutex.withLock { run(mode) }
 
     private suspend fun run(mode: DriveMode): Outcome {
-        val flag = read(mode.supportFid)
-        val before = read(WriteAllowlist.DRIVE_MODE_TARGET_FID)
-        val after = mutableListOf<Int?>()
-        var status: WriteOutcome? = null
         val kmh = runCatching { speed() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
-        fun done(result: Result, verdict: String, target: Int?): Outcome {
-            Log.i(
-                TAG,
-                "DriveMode: want=${mode.name}(${mode.value}) flag=${render(flag)} before=${render(before)} " +
-                    "status=${status ?: "-"} after=[${after.joinToString(",") { render(it) }}] " +
-                    "speed=${kmh ?: "unknown"} -> $verdict",
-            )
-            return Outcome(result, verdict, target)
+        val attempt = Attempt(mode, kmh)
+        if (mode.terrain && (kmh == null || kmh > DriveMode.TERRAIN_MAX_SPEED_KMH)) {
+            return attempt.done(Result.SPEED, if (kmh == null) "speed unknown" else "too fast", null)
         }
+        return switchTo(attempt)
+    }
 
-        if (flag == null) return done(Result.UNREADABLE, "support flag unreadable", null)
-        if (flag != 0) return done(Result.NOT_SUPPORTED, "not supported", before)
+    /** Support flag, flotation and "already there" checks, then the write and its readback. */
+    private suspend fun switchTo(a: Attempt): Outcome {
+        val mode = a.mode
+        val flag = read(mode.supportFid).also { a.flag = it }
+        val before = read(WriteAllowlist.DRIVE_MODE_TARGET_FID).also { a.before = it }
+        a.probed = true
+        if (flag == null) return a.done(Result.UNREADABLE, "support flag unreadable", null)
+        if (flag != 0) return a.done(Result.NOT_SUPPORTED, "not supported", before)
         val current = before?.let { SentinelDecoder.decodeInt(it) }
-            ?: return done(Result.UNREADABLE, "target unreadable", null)
-        if (current == DriveMode.TARGET_FLOTATION) return done(Result.FLOTATION, "flotation", current)
-        if (current == mode.value) return done(Result.OK, "already", current)
+            ?: return a.done(Result.UNREADABLE, "target unreadable", null)
+        if (current == DriveMode.TARGET_FLOTATION) return a.done(Result.FLOTATION, "flotation", current)
+        if (current == mode.value) return a.done(Result.OK, "already", current)
 
-        status = writer.write(mode.actionName, mode.value)
-        if (status == WriteOutcome.TRANSIENT) return done(Result.UNREACHABLE, "unreachable", current)
+        val status = writer.write(mode.actionName, mode.value).also { a.status = it }
+        if (status == WriteOutcome.TRANSIENT) return a.done(Result.UNREACHABLE, "unreachable", current)
         repeat(READBACK_ATTEMPTS) {
             delay(READBACK_DELAY_MS)
             val value = read(WriteAllowlist.DRIVE_MODE_TARGET_FID)
-            after += value
-            if (value == mode.value) return done(Result.OK, "OK", value)
+            a.after += value
+            if (value == mode.value) return a.done(Result.OK, "OK", value)
         }
-        return done(Result.NOT_CHANGED, "not changed", after.lastOrNull())
+        return a.done(Result.NOT_CHANGED, "not changed", a.after.lastOrNull())
+    }
+
+    /** What one attempt has seen so far; [done] writes its single log line. */
+    private class Attempt(val mode: DriveMode, val kmh: Int?) {
+        var flag: Int? = null
+        var before: Int? = null
+        var probed = false
+        var status: WriteOutcome? = null
+        val after = mutableListOf<Int?>()
+
+        fun done(result: Result, verdict: String, target: Int?): Outcome {
+            val flagLog = if (probed) render(flag) else "-"
+            val beforeLog = if (probed) render(before) else "-"
+            Log.i(
+                TAG,
+                "DriveMode: want=${mode.name}(${mode.value}) speed=${kmh ?: "unknown"} flag=$flagLog " +
+                    "before=$beforeLog status=${status ?: "-"} after=[${after.joinToString(",") { render(it) }}] " +
+                    "-> $verdict",
+            )
+            return Outcome(result, verdict, target, kmh)
+        }
     }
 
     /** A throwing read is a failed read, not a verdict. */
@@ -111,10 +135,9 @@ class DriveModeChannel(
         }
         .getOrNull()
 
-    private fun render(value: Int?) = value?.toString() ?: "err"
-
     private companion object {
         const val TAG = "DriveModeChannel"
+        fun render(value: Int?) = value?.toString() ?: "err"
         /** 6 × 500 ms: the target followed within 2 s on the live test, 3 s leaves headroom. */
         const val READBACK_ATTEMPTS = 6
         const val READBACK_DELAY_MS = 500L

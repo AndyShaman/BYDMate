@@ -365,6 +365,8 @@ class VehicleApiImpl @Inject constructor(
         )
         return when (outcome.result) {
             DriveModeChannel.Result.OK -> Result.success(Unit)
+            DriveModeChannel.Result.SPEED ->
+                Result.failure(VehicleWriteError.SpeedBlocked(action, outcome.verdict, outcome.speed))
             DriveModeChannel.Result.NOT_SUPPORTED -> Result.failure(VehicleWriteError.NotEquipped(action))
             DriveModeChannel.Result.FLOTATION ->
                 Result.failure(VehicleWriteError.StateBlocked(action, "emergency flotation mode"))

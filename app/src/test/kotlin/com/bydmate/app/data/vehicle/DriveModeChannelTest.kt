@@ -13,14 +13,17 @@ class DriveModeChannelTest {
     private val targets = ArrayDeque<Int?>()
     private var lastTarget: Int? = null
     private var status = WriteOutcome.REAL
+    private var kmh: Int? = 0
+    private val reads = mutableListOf<Int>()
 
     private val channel = DriveModeChannel(
         SeatWriter { name, value -> writes += name to value; status },
         DriveModeReader { fid ->
+            reads += fid
             if (fid == target) (targets.removeFirstOrNull() ?: lastTarget).also { lastTarget = it }
             else flags.getOrDefault(fid, 0)
         },
-        speed = { 0 },
+        speed = { kmh },
     )
 
     private fun targets(vararg values: Int?) = targets.addAll(values.toList())
@@ -102,5 +105,44 @@ class DriveModeChannelTest {
         targets(1, 2)
         assertEquals(DriveModeChannel.Result.UNREACHABLE, channel.actuate(DriveMode.ECO).result)
         assertEquals(1, targets.size) // only the before-read happened
+    }
+
+    @Test fun `a terrain mode at 15 kmh proceeds`() = runTest {
+        kmh = 15
+        targets(1, 4)
+        assertEquals(DriveModeChannel.Result.OK, channel.actuate(DriveMode.SNOW).result)
+        assertEquals(listOf("drive_mode_snow" to 4), writes)
+    }
+
+    @Test fun `a terrain mode at 16 kmh is refused before any read or write`() = runTest {
+        kmh = 16
+        val out = channel.actuate(DriveMode.MUD)
+        assertEquals(DriveModeChannel.Result.SPEED, out.result)
+        assertEquals("too fast", out.verdict)
+        assertEquals(16, out.speed)
+        assertTrue(writes.isEmpty())
+        assertTrue(reads.isEmpty())
+    }
+
+    @Test fun `a terrain mode at unknown speed is refused before any read or write`() = runTest {
+        kmh = null
+        val out = channel.actuate(DriveMode.SMART)
+        assertEquals(DriveModeChannel.Result.SPEED, out.result)
+        assertEquals("speed unknown", out.verdict)
+        assertTrue(writes.isEmpty())
+        assertTrue(reads.isEmpty())
+    }
+
+    @Test fun `eco at 120 kmh proceeds`() = runTest {
+        kmh = 120
+        targets(1, 2)
+        assertEquals(DriveModeChannel.Result.OK, channel.actuate(DriveMode.ECO).result)
+        assertEquals(listOf("drive_mode_eco" to 2), writes)
+    }
+
+    @Test fun `eco at unknown speed proceeds`() = runTest {
+        kmh = null
+        targets(1, 2)
+        assertEquals(DriveModeChannel.Result.OK, channel.actuate(DriveMode.ECO).result)
     }
 }
