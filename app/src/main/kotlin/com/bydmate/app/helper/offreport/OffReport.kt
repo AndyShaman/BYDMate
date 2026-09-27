@@ -500,13 +500,17 @@ internal object OffReport {
         synchronized(lock) { remember(OffReportOutcome(report.id, state, report.powerOffMs, sentAt, 1, rc)) }
     }
 
-    /** «(записано в 18:42)» from the app's template, with the date when the power-off was another day. */
+    /**
+     * «(записано в 18:42)» from the app's template (Telegram HTML, italic), with the date when the
+     * power-off was another day; its own block above the map link.
+     */
     private fun withLateMark(report: PendingReport, template: String): String {
         if (template.isBlank()) return report.text
         val now = wallClock()
         val stamp = if (sameDay(report.powerOffMs, now)) TelegramReportBuilder.formatTime(report.powerOffMs)
         else TelegramReportBuilder.formatDateTime(report.powerOffMs)
-        return report.text + "\n" + template.replace(TelegramReportBuilder.TIME_PLACEHOLDER, stamp)
+        val mark = template.replace(TelegramReportBuilder.TIME_PLACEHOLDER, TelegramReportBuilder.escape(stamp))
+        return TelegramReportBuilder.withLateMark(report.text, mark)
     }
 
     private fun sameDay(a: Long, b: Long): Boolean {
@@ -651,8 +655,7 @@ internal object OffReport {
             return AttemptResult("err:${e.javaClass.simpleName}", AttemptResult.Verdict.RETRY)
         }
         if (resolved == null) return AttemptResult("io:dns_timeout", AttemptResult.Verdict.RETRY)
-        val body = ("chat_id=$chatId&parse_mode=HTML&text=" + URLEncoder.encode(text, "UTF-8"))
-            .toByteArray(Charsets.UTF_8)
+        val body = sendMessageBody(chatId, text).toByteArray(Charsets.UTF_8)
         var conn: HttpURLConnection? = null
         var cut: ScheduledFuture<*>? = null
         return try {
@@ -683,5 +686,12 @@ internal object OffReport {
         }
     }
 
+    /** The form body: Telegram HTML, no preview card for the map link (Bot API 7.0+). */
+    internal fun sendMessageBody(chatId: Long, text: String): String =
+        "chat_id=$chatId&parse_mode=HTML" +
+            "&link_preview_options=" + URLEncoder.encode(NO_LINK_PREVIEW, "UTF-8") +
+            "&text=" + URLEncoder.encode(text, "UTF-8")
+
+    private const val NO_LINK_PREVIEW = """{"is_disabled":true}"""
     private const val HTTP_FIRST_CODE = 100
 }
