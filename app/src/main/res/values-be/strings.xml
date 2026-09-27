@@ -1031,7 +1031,7 @@
     <string name="settings_tg_backup_code_not_received">Код яшчэ не прыйшоў. Адпраўце яго боту і націсніце «Праверыць» зноў.</string>
     <string name="settings_tg_backup_connected_chip">Падключаны</string>
     <string name="settings_tg_backup_chat_line">@%1$s, %2$s</string>
-    <string name="settings_tg_backup_connected_note">Копіі ідуць у гэты чат пры кожным захаванні.</string>
+    <string name="settings_tg_backup_connected_note">Сюды прыходзяць копіі і справаздачы.</string>
     <string name="settings_tg_backup_back">Назад</string>
     <string name="settings_log_recording_help">Падрабязны журнал працы праграмы. Патрэбны, толькі калі распрацоўшчык просіць лог для разбору праблемы. Уключыце, паўтарыце праблему, спыніце запіс і адпраўце файл з папкі Download.</string>
     <string name="settings_fid_recorder_help">Запісвае ўсе змены датчыкаў машыны ў файл у Download. Патрэбны, каб знайсці сігнал для новай функцыі: уключыце, націсніце патрэбную кнопку ў машыне, выключыце і адпраўце файл распрацоўшчыку.</string>
@@ -1922,4 +1922,22 @@
     <string name="dispatch_tg_report_no_bot">Падключыце бота ў Наладах</string>
     <string name="auto_msg_tg_report_empty">Дзеянне #%1$d: выберыце хоць бы адзін пункт справаздачы або напішыце свой тэкст</string>
     <string name="automation_action_tg_report">Справаздача ў Telegram</string>
+    <!-- Telegram reports (3.19): settings and automation editor -->
+    <string name="tg_report_field_location_desc">Спасылка «Адкрыць на карце»</string>
+    <string name="tg_report_field_soc_desc">Працэнт батарэі</string>
+    <string name="tg_report_field_range_desc">Кіламетры, як на Галоўнай</string>
+    <string name="tg_report_field_trip_desc">Кіламетры, расход і час у дарозе</string>
+    <string name="tg_report_field_temps_desc">Звонку і ў салоне</string>
+    <string name="tg_report_field_openings_desc">Дзверы, вокны, люк, багажнік, капот</string>
+    <string name="tg_report_field_tires_desc">Усе чатыры колы</string>
+    <string name="settings_tg_report_off_title">Справаздача пры выключэнні машыны</string>
+    <string name="settings_tg_report_off_hint">Справаздача ідзе ў першыя секунды пасля выключэння праз мабільны інтэрнэт машыны. Калі сувязі няма, яна прыйдзе пры наступным уключэнні.</string>
+    <string name="settings_tg_report_off_no_bot">Спачатку падключыце Telegram-бот вышэй.</string>
+    <string name="settings_tg_report_off_connect">Падключыць</string>
+    <string name="settings_tg_report_items_label">Што трапляе ў справаздачу</string>
+    <string name="automation_action_tg_report_add">Адправіць справаздачу ў Telegram</string>
+    <string name="automation_tg_report_text_label">Свой тэкст (неабавязкова)</string>
+    <string name="automation_tg_report_text_hint">З\'явіцца пад загалоўкам паведамлення.</string>
+    <string name="automation_tg_report_own_text">свой тэкст</string>
+    <string name="automation_tg_report_no_bot">Telegram-бот не падключаны. Падключыце яго ў Наладах, раздзел «Сэрвіс і даныя».</string>
 </resources>

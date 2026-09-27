@@ -949,7 +949,7 @@
     <string name="settings_tg_backup_code_not_received">尚未收到验证码。请把它发送给机器人，然后再次点击“检查”。</string>
     <string name="settings_tg_backup_connected_chip">已连接</string>
     <string name="settings_tg_backup_chat_line">@%1$s，%2$s</string>
-    <string name="settings_tg_backup_connected_note">每次保存时副本都会发送到此聊天。</string>
+    <string name="settings_tg_backup_connected_note">副本和报告会发送到这里。</string>
     <string name="settings_tg_backup_back">返回</string>
     <string name="settings_log_recording_help">应用运行的详细日志。仅在开发者要求提供日志排查问题时需要。开启后重现问题，停止录制，然后发送 Download 文件夹中的文件。</string>
     <string name="settings_fid_recorder_help">将车辆传感器的所有变化写入 Download 中的文件。用于为新功能寻找信号：开启后在车上按下相应按钮，关闭，然后把文件发送给开发者。</string>
@@ -1884,4 +1884,22 @@
     <string name="dispatch_tg_report_no_bot">请在设置中连接机器人</string>
     <string name="auto_msg_tg_report_empty">操作 #%1$d：请至少选择一项报告内容或填写自定义文字</string>
     <string name="automation_action_tg_report">Telegram 报告</string>
+    <!-- Telegram reports (3.19): settings and automation editor -->
+    <string name="tg_report_field_location_desc">「在地图上打开」链接</string>
+    <string name="tg_report_field_soc_desc">电池百分比</string>
+    <string name="tg_report_field_range_desc">公里数，与主页相同</string>
+    <string name="tg_report_field_trip_desc">公里数、能耗和行驶时间</string>
+    <string name="tg_report_field_temps_desc">车外和车内</string>
+    <string name="tg_report_field_openings_desc">车门、车窗、天窗、后备箱、引擎盖</string>
+    <string name="tg_report_field_tires_desc">全部四个车轮</string>
+    <string name="settings_tg_report_off_title">熄火时发送报告</string>
+    <string name="settings_tg_report_off_hint">熄火后的最初几秒内通过车辆的移动网络发送报告。如果没有网络，报告会在下次启动时送达。</string>
+    <string name="settings_tg_report_off_no_bot">请先在上方连接 Telegram 机器人。</string>
+    <string name="settings_tg_report_off_connect">连接</string>
+    <string name="settings_tg_report_items_label">报告包含的内容</string>
+    <string name="automation_action_tg_report_add">发送 Telegram 报告</string>
+    <string name="automation_tg_report_text_label">自定义文字（可选）</string>
+    <string name="automation_tg_report_text_hint">将显示在消息标题下方。</string>
+    <string name="automation_tg_report_own_text">自定义文字</string>
+    <string name="automation_tg_report_no_bot">Telegram 机器人未连接。请在设置的「服务与数据」中连接。</string>
 </resources>

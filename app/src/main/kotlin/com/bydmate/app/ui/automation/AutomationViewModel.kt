@@ -54,6 +54,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -426,6 +427,8 @@ data class AutomationUiState(
     val testRunning: Boolean = false,
     /** A share file is being written: the «Поделиться» buttons wait for it. */
     val shareInProgress: Boolean = false,
+    /** The Telegram bot is connected in Settings: the report dialog warns when it is not. */
+    val tgBotConnected: Boolean = false,
 )
 
 @HiltViewModel
@@ -477,6 +480,13 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             ruleDao.getAll().collect { rules ->
                 _uiState.update { it.copy(rules = RuleOrder.apply(ruleOrder, rules)) }
             }
+        }
+        viewModelScope.launch {
+            combine(
+                settingsRepository.observeString(SettingsRepository.KEY_TG_BACKUP_TOKEN),
+                settingsRepository.observeString(SettingsRepository.KEY_TG_BACKUP_CHAT_ID),
+            ) { token, chat -> !token.isNullOrBlank() && chat?.toLongOrNull() != null }
+                .collect { connected -> _uiState.update { it.copy(tgBotConnected = connected) } }
         }
         viewModelScope.launch {
             ruleLogDao.getRecent(100).collect { logs ->
