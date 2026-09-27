@@ -4,7 +4,6 @@ import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.local.entity.LastStateEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.remote.DiParsData
 import android.util.Log
@@ -70,22 +69,21 @@ class TripRecorder @Inject constructor(
             now = startTs,
         )
         if (updated == 0) {
-            // Very-first-ever tick before the loop has written a snapshot.
-            lastStateDao.upsert(
-                LastStateEntity(
-                    id = 1,
-                    ts = startTs,
-                    soc = data.soc,
-                    mileage = data.mileage,
-                    ignition = data.powerState,
-                    openTripId = startTs,
-                    tripStartTs = startTs,
-                    tripStartSoc = data.soc,
-                    tripStartMileage = data.mileage,
-                    tripStartTotalElec = data.totalElecConsumption,
-                    tripStartExteriorTemp = data.exteriorTemp,
-                    energydataAvailable = 0,
-                )
+            // Very-first-ever tick before the loop has written a snapshot: create the row
+            // (snapshot columns default/NULL -- the loop's own write for this same tick
+            // fills them in) then retry the trip-columns-only UPDATE, so this fallback
+            // cannot clobber a snapshot written concurrently by SharedAdaptiveLoop.
+            lastStateDao.insertSnapshotRowIfAbsent(
+                ts = startTs, soc = null, mileage = null, totalElec = null,
+                ignition = null, energydataAvailable = 0,
+            )
+            lastStateDao.openTrip(
+                startTs = startTs,
+                startSoc = data.soc,
+                startMileage = data.mileage,
+                startTotalElec = data.totalElecConsumption,
+                startExteriorTemp = data.exteriorTemp,
+                now = startTs,
             )
         }
     }

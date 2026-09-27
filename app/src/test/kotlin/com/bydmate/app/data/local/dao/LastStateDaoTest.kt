@@ -82,4 +82,57 @@ class LastStateDaoTest {
         )
         assertEquals(-7, dao.getCurrent()!!.tripStartExteriorTemp)
     }
+
+    @Test fun `writeSnapshot after openTrip leaves the trip columns untouched`() = runBlocking {
+        dao.upsert(LastStateEntity(id = 1, ts = 1000L, soc = 80, mileage = 100.0))
+        dao.openTrip(
+            startTs = 1500L, startSoc = 80, startMileage = 100.0, startTotalElec = 500.0,
+            startExteriorTemp = 10, now = 1500L,
+        )
+        dao.writeSnapshot(
+            ts = 2000L, soc = 78, mileage = 102.0, totalElec = 501.0, ignition = 2, energydataAvailable = 1,
+        )
+        val row = dao.getCurrent()!!
+        assertEquals(1500L, row.openTripId)
+        assertEquals(1500L, row.tripStartTs)
+        assertEquals(80, row.tripStartSoc)
+        assertEquals(100.0, row.tripStartMileage)
+        assertEquals(500.0, row.tripStartTotalElec)
+        assertEquals(10, row.tripStartExteriorTemp)
+        // the snapshot columns still got the new tick's values
+        assertEquals(78, row.soc)
+        assertEquals(102.0, row.mileage)
+        assertEquals(501.0, row.totalElec)
+        assertEquals(2, row.ignition)
+    }
+
+    @Test fun `writeSnapshot creates the row when it is missing`() = runBlocking {
+        assertNull(dao.getCurrent())
+        dao.writeSnapshot(
+            ts = 1000L, soc = 80, mileage = 100.0, totalElec = 500.0, ignition = 2, energydataAvailable = 1,
+        )
+        val row = dao.getCurrent()!!
+        assertEquals(80, row.soc)
+        assertEquals(100.0, row.mileage)
+        assertEquals(500.0, row.totalElec)
+        assertEquals(2, row.ignition)
+        assertNull(row.openTripId)
+    }
+
+    @Test fun `clearOpenTrip is not undone by a later snapshot write`() = runBlocking {
+        dao.upsert(LastStateEntity(id = 1, ts = 1000L, soc = 80, mileage = 100.0))
+        dao.openTrip(
+            startTs = 1500L, startSoc = 80, startMileage = 100.0, startTotalElec = 500.0,
+            startExteriorTemp = 10, now = 1500L,
+        )
+        dao.clearOpenTrip()
+        dao.writeSnapshot(
+            ts = 2000L, soc = 78, mileage = 102.0, totalElec = 501.0, ignition = 0, energydataAvailable = 1,
+        )
+        val row = dao.getCurrent()!!
+        assertNull(row.openTripId)
+        assertNull(row.tripStartTs)
+        assertNull(row.tripStartExteriorTemp)
+        assertEquals(78, row.soc) // the snapshot write still applied
+    }
 }
