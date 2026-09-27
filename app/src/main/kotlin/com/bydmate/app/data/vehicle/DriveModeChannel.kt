@@ -41,6 +41,17 @@ fun interface DriveModeReader {
 }
 
 /**
+ * Status-classified single write with a last-instant guard, supplied by
+ * VehicleApiImpl.doWriteOutcome. [beforeSend] runs after the write's (suspending) audit-row
+ * insert and immediately before the command reaches the helper; returning false aborts the
+ * send and the write reports TRANSIENT. Own interface rather than [SeatWriter] because the
+ * seat channel has no equivalent guard.
+ */
+fun interface DriveModeWriter {
+    suspend fun write(actionName: String, value: Int, beforeSend: suspend () -> Boolean): WriteOutcome
+}
+
+/**
  * Drive mode switch, verified by the car's own target mode (SETTING_TARGET_DRIVING_MODE). BYD's
  * voice assistant writes the same fid without a speed or gear check; like it, a change is refused
  * while the car holds the emergency flotation mode. In order:
@@ -51,7 +62,8 @@ fun interface DriveModeReader {
  *  - target unreadable / a sentinel     → UNREADABLE, nothing written
  *  - target == 10 (flotation)           → FLOTATION, nothing written
  *  - target == requested                → OK ("already"), nothing written
- *  - terrain mode, speed now unknown or above the limit (re-checked right before the write)
+ *  - terrain mode, speed now unknown or above the limit (re-checked in the beforeSend guard,
+ *    right before the command reaches the helper, after the write's audit-log insert)
  *                                       → SPEED, nothing written
  *  - write not accepted (daemon down)   → UNREACHABLE
  *  - target == requested within ~3 s    → OK
@@ -61,7 +73,7 @@ fun interface DriveModeReader {
  * at a time under [mutex], so a queued one sees the settled mode.
  */
 class DriveModeChannel(
-    private val writer: SeatWriter,
+    private val writer: DriveModeWriter,
     private val reader: DriveModeReader,
     private val speed: suspend () -> Int?,
 ) {
@@ -99,12 +111,10 @@ class DriveModeChannel(
         if (current == DriveMode.TARGET_FLOTATION) return a.done(Result.FLOTATION, "flotation", current)
         if (current == mode.value) return a.done(Result.OK, "already", current)
 
-        // The support flag and target reads above both suspend; re-check speed right before
-        // committing the write so a terrain mode can't slip through on a speed that was fine
-        // when [run] checked it but no longer is.
-        terrainSpeedRefusal(a)?.let { return it }
-
-        val status = writer.write(mode.actionName, mode.value).also { a.status = it }
+        // The guard runs inside writer.write, after its audit-log insert and right before the
+        // helper call — the actual last-instant re-check, see terrainSpeedGuard.
+        val status = writer.write(mode.actionName, mode.value) { terrainSpeedGuard(a) }.also { a.status = it }
+        a.speedVerdict?.let { return a.done(Result.SPEED, it, null) }
         if (status == WriteOutcome.TRANSIENT) return a.done(Result.UNREACHABLE, "unreachable", current)
         repeat(READBACK_ATTEMPTS) {
             delay(READBACK_DELAY_MS)
@@ -119,24 +129,31 @@ class DriveModeChannel(
     private suspend fun readSpeed(): Int? =
         runCatching { speed() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
 
-    /** SPEED refusal for a terrain mode whose speed, re-read right before the write, is now
-     *  unknown or above the limit; null (proceed) for a non-terrain mode or an OK speed. */
-    private suspend fun terrainSpeedRefusal(a: Attempt): Outcome? {
-        if (!a.mode.terrain) return null
+    /** [DriveModeWriter.beforeSend] guard: for a terrain mode, re-reads speed one last time —
+     *  this runs after doWriteOutcome's audit-row insert, right before the helper call, so a
+     *  speed that only rose during that suspend is still caught — and refuses when it is now
+     *  unknown or above the limit; a non-terrain mode is not gated (no read). Sets
+     *  [Attempt.speedVerdict] so [switchTo] can tell a guard refusal apart from a helper-down
+     *  TRANSIENT, since doWriteOutcome reports both the same way. */
+    private suspend fun terrainSpeedGuard(a: Attempt): Boolean {
+        if (!a.mode.terrain) return true
         a.kmh = readSpeed()
         val kmh = a.kmh
-        if (kmh != null && kmh <= DriveMode.TERRAIN_MAX_SPEED_KMH) return null
-        return a.done(Result.SPEED, if (kmh == null) "speed unknown" else "too fast", null)
+        if (kmh != null && kmh <= DriveMode.TERRAIN_MAX_SPEED_KMH) return true
+        a.speedVerdict = if (kmh == null) "speed unknown" else "too fast"
+        return false
     }
 
     /** What one attempt has seen so far; [done] writes its single log line. [kmh] is mutable:
-     *  the pre-write re-check overwrites it so the log and the Outcome report the speed that
-     *  actually decided the verdict, not the stale one from the first check. */
+     *  the guard's re-check overwrites it so the log and the Outcome report the speed that
+     *  actually decided the verdict, not the stale one from the first check. [speedVerdict] is
+     *  set only when the guard refuses. */
     private class Attempt(val mode: DriveMode, var kmh: Int?) {
         var flag: Int? = null
         var before: Int? = null
         var probed = false
         var status: WriteOutcome? = null
+        var speedVerdict: String? = null
         val after = mutableListOf<Int?>()
 
         fun done(result: Result, verdict: String, target: Int?): Outcome {

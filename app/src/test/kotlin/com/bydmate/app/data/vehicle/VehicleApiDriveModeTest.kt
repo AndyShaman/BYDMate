@@ -7,6 +7,8 @@ import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -114,5 +116,38 @@ class VehicleApiDriveModeTest {
         val err = impl.dispatch("雪地模式").exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
         assertEquals(16, (err as VehicleWriteError.SpeedBlocked).speed)
+    }
+
+    /**
+     * Reproduces the reviewer's race: doWriteOutcome inserts the "attempt" audit row (a
+     * suspending DB write) before calling the beforeSend guard. If the speed rises while that
+     * insert is in flight, the guard — which re-reads speed right after the insert, before the
+     * helper call — must still catch it: SpeedBlocked, helper.writeStatus never called.
+     */
+    @Test fun `speed rising while the attempt row insert is suspended still blocks the send`() = runTest {
+        kmh = 5f
+        supported(DriveMode.SNOW)
+        coEvery { helper.read(1023, target, any()) } returns 1L
+        val insertInProgress = CompletableDeferred<Unit>()
+        val releaseInsert = CompletableDeferred<Unit>()
+        coEvery { dao.insert(any()) } coAnswers {
+            val entity = firstArg<VehicleWriteLogEntity>()
+            audit += entity
+            if (entity.error == "attempt") {
+                insertInProgress.complete(Unit)
+                releaseInsert.await() // suspend here, like a busy DB
+            }
+        }
+
+        var result: Result<Unit>? = null
+        val job = launch { result = impl.dispatch("雪地模式") }
+        insertInProgress.await()
+        kmh = 20f // speed rises while the attempt row insert is still suspended
+        releaseInsert.complete(Unit)
+        job.join()
+
+        val err = result?.exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
     }
 }
