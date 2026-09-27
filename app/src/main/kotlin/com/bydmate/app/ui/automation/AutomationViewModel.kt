@@ -1121,18 +1121,6 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                 cooldownSeconds = 600
             ),
             RuleEntity(
-                name = tName("低电量ECO", "ECO at low SOC", "Эко при низком заряде"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("SOC", "电量百分比", "<", "15", "SOC < 15%")
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("ECO模式", tName("ECO 模式", "ECO Mode", "ECO режим"))
-                )),
-                cooldownSeconds = 300
-            ),
-            RuleEntity(
                 name = tName("夏季制冷", "Summer cooling", "Летнее охлаждение"),
                 enabled = false,
                 triggerLogic = "AND",

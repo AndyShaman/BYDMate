@@ -30,9 +30,9 @@ data class SeatCommand(val group: SeatGroup, val level: Int)
  * DROPPED: commands whose action_name either has no allowlist entry or targets
  * a banned dev namespace —
  *   ECO模式                                — drive mode write targets dev=1006 (BANNED).
- *                                            Default rule "Эко при низком заряде" is
- *                                            shipped disabled; if user enables it the
- *                                            dispatch fails-soft via AllowlistMiss.
+ *                                            The starter rule "Эко при низком заряде" is
+ *                                            no longer shipped (#253); a copy an older
+ *                                            install still has fails-soft via AllowlistMiss.
  *
  * Values for competitor-sourced entries verified against competitor-actions.json
  * (app/src/main/assets/competitor-actions.json). See value comments below.
