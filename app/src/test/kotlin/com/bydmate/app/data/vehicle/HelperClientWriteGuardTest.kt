@@ -240,6 +240,22 @@ class HelperClientWriteGuardTest {
         }
 
     @Test
+    fun `a single write's guard sees the transport mutex already held, no competing request needed`() =
+        runBlocking {
+            withTimeout(TEST_TIMEOUT_MS) {
+                val client = clientWith(liveFake(status = 1))
+                var lockedDuringGuard = false
+                val status = client.writeStatus(dev = 1023, fid = 1276260400, value = 4) {
+                    lockedDuringGuard = client.transportLockedForTest
+                    true
+                }
+                assertEquals(1, status)
+                assertTrue("the guard must run while the transport mutex is already held, with no " +
+                    "competing request required to observe it", lockedDuringGuard)
+            }
+        }
+
+    @Test
     fun `the guard runs again before the retry after a dead binder`() = runBlocking {
         withTimeout(TEST_TIMEOUT_MS) {
             val fake = DeadOnceFake()
