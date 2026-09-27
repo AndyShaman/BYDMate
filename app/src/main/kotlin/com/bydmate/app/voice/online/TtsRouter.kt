@@ -4,6 +4,7 @@ import android.util.Log
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -42,12 +43,22 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
 
     override val speaking: StateFlow<Boolean> = delegate.speaking
 
-    // Cancels whatever online work (a single speak() or a queue) is currently in flight, so
-    // stop() -- called on barge-in -- can never let a sentence still awaiting synthesis play
-    // out after the caller already considers speech stopped.
-    @Volatile private var cancelActive: (() -> Unit)? = null
-    // Whether cancelActive belongs to a queue (an agent reply) rather than a single speak().
-    @Volatile private var activeIsQueue = false
+    // Every online job still in flight (single speak() calls and agent reply queues), so stop()
+    // -- called on barge-in -- can never let a sentence still awaiting synthesis play out after
+    // the caller already considers speech stopped. Several speak() calls can overlap (an
+    // automation's consecutive "speak" actions), so one slot is not enough. Guarded by [inFlightLock];
+    // cancel handles run outside the lock (a job's completion handler removes itself under it).
+    private class InFlight(val isQueue: Boolean, val cancel: () -> Unit)
+    private val inFlightLock = Any()
+    private val inFlight = mutableListOf<InFlight>()
+
+    /** Removes the matching in-flight entries under the lock, then cancels them outside it. */
+    private fun cancelInFlight(which: (InFlight) -> Boolean) {
+        val dropped = synchronized(inFlightLock) {
+            inFlight.filter(which).also { inFlight.removeAll(it) }
+        }
+        dropped.forEach { it.cancel() }
+    }
 
     // Short phrases (persona confirmations) replay from memory instead of paying a network
     // round-trip every time. The key carries source + gender + voice identity + text, so a switch
@@ -75,10 +86,13 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         // A new reply supersedes an agent reply queue still awaiting synthesis: its sentences must
         // not play after (or between) the new audio. A previous single speak() is left alone, so
         // an automation's consecutive "speak" actions all still play.
-        if (activeIsQueue) cancelActive?.invoke()
-        val job = scope.launch { speakOnline(backend, text) }
-        cancelActive = { job.cancel() }
-        activeIsQueue = false
+        cancelInFlight { it.isQueue }
+        // Lazy: registered before it can run, so a stop() racing this call cancels it too.
+        val job = scope.launch(start = CoroutineStart.LAZY) { speakOnline(backend, text) }
+        val entry = InFlight(isQueue = false) { job.cancel() }
+        synchronized(inFlightLock) { inFlight += entry }
+        job.invokeOnCompletion { synchronized(inFlightLock) { inFlight.remove(entry) } }
+        job.start()
         return true
     }
 
@@ -97,8 +111,7 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     }
 
     override fun stop() {
-        cancelActive?.invoke()
-        cancelActive = null
+        cancelInFlight { true }
         delegate.stop()
     }
 
@@ -157,10 +170,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         val backend = onlineBackend()
         Log.i(TAG, "route: source=${backend?.id ?: OFFLINE}")
         if (backend == null) return delegate.startQueue()
-        cancelActive?.invoke() // a new agent reply drops whatever online speech is still pending
+        cancelInFlight { true } // a new agent reply drops whatever online speech is still pending
         val queue = OnlineSpeechQueue(backend)
-        cancelActive = { queue.cancel() }
-        activeIsQueue = true
+        synchronized(inFlightLock) { inFlight += InFlight(isQueue = true) { queue.cancel() } }
         return queue
     }
 
