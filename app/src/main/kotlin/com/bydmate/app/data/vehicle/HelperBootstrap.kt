@@ -15,19 +15,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Called by [HelperBootstrap] right before it kills a live daemon of another version, on every
- * path that ensures the daemon (service start, HUD, settings): the power-off report reads the old
- * daemon's last outcome here, which would otherwise die with it.
- */
-fun interface HelperReplaceHook {
-    suspend fun beforeReplace()
-
-    companion object {
-        val NONE = HelperReplaceHook { }
-    }
-}
-
-/**
  * Single owner of the helper daemon's lifecycle. Idempotent — ensureRunning()
  * converges to "one alive helper of THIS app version".
  *
@@ -47,7 +34,6 @@ class HelperBootstrap @Inject constructor(
     private val adb: AdbOnDeviceClient,
     private val helper: HelperClient,
     @ApplicationContext private val context: Context,
-    private val replaceHook: HelperReplaceHook = HelperReplaceHook.NONE,
 ) {
     private val prefs by lazy { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
 
@@ -121,7 +107,6 @@ class HelperBootstrap @Inject constructor(
         // (helperHeartbeat): a process holding the file lock must be killed before we spawn even
         // if its UID gate has gone mute (uid change after reinstall makes every transact fail).
         if (alive || heartbeat) {
-            if (alive) runReplaceHook()
             // If the kill could not even be dispatched (no ADB connection / exec threw), we have
             // no evidence the stale daemon is gone. Bail rather than spawn over a possibly-live
             // old daemon; the next call retries.
@@ -255,18 +240,6 @@ class HelperBootstrap @Inject constructor(
     }
 
     /** Spawn token: 32 hex characters from SecureRandom, matching AdbOnDeviceClient's shape gate. */
-    /** A failing hook costs its own data only, never the respawn. */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun runReplaceHook() {
-        try {
-            replaceHook.beforeReplace()
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "replace hook failed: ${e.javaClass.simpleName}")
-        }
-    }
-
     private fun newSpawnToken(): String {
         val bytes = ByteArray(SPAWN_TOKEN_BYTES)
         SecureRandom().nextBytes(bytes)

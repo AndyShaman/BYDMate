@@ -66,15 +66,6 @@ object TelegramReportBuilder {
     fun powerOffHeader(strings: ReportStrings): String =
         strings.get(R.string.tg_report_header_off, arrayOf(TIME_PLACEHOLDER))
 
-    /**
-     * Swaps the bold first line of a report built by [build] for [header]: a re-sent power-off
-     * report with no proof of the power-off must not say «выключена».
-     */
-    fun replaceHeader(text: String, header: String): String {
-        val rest = text.indexOf('\n').takeIf { it >= 0 }?.let { text.substring(it) }.orEmpty()
-        return "<b>${escape(header)}</b>$rest"
-    }
-
     /** Puts the send time into a power-off text built with [powerOffHeader]. */
     fun fillTime(text: String, timeMs: Long): String = text.replace(TIME_PLACEHOLDER, formatTime(timeMs))
 

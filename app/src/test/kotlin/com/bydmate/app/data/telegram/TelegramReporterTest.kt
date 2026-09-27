@@ -10,6 +10,11 @@ import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.helper.offreport.OffReportFid
+import com.bydmate.app.helper.offreport.OffReportOutcome
+import com.bydmate.app.helper.offreport.OffReportState
+import com.bydmate.app.helper.offreport.OffReportStatus
 import com.bydmate.app.util.AppStrings
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -52,7 +57,8 @@ class TelegramReporterTest {
     private lateinit var settings: SettingsRepository
     private val sink = mockk<TelegramBackupSink>()
     private lateinit var reporter: TelegramReporter
-    private val offState = PowerOffArmState()
+    private val helper = mockk<HelperClient>()
+    private val offState = PowerOffArmState(helper)
     private var now = 1_759_000_000_000L
     private val sent = mutableListOf<String>()
 
@@ -61,6 +67,7 @@ class TelegramReporterTest {
     @Before fun setUp() {
         LocalePreferences(ctx).setLanguage("ru")
         settings = SettingsRepository(dao, LocalePreferences(ctx))
+        coEvery { helper.offReportStatus(any()) } returns null
         reporter = TelegramReporter(ctx, sink, settings, mockk(relaxed = true), AppStrings(ctx), offState)
         reporter.inputs = { ReportInputs(diParsData(soc = 64), 312.0, null, null, null, null) }
         reporter.clock = { now }
@@ -205,6 +212,7 @@ class TelegramReporterTest {
         assertEquals("tok", report.token)
         assertEquals(chat, report.chatId)
         assertEquals("<b>BYDMate: машина выключена в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>\nЗаряд 64%", report.text)
+        assertEquals("<i>(записано в ${TelegramReportBuilder.TIME_PLACEHOLDER})</i>", report.lateMark)
         assertFalse(report.toString().contains("tok"))
     }
 
@@ -283,20 +291,21 @@ class TelegramReporterTest {
         settings.setTgReportOffEnabled(true)
         reporter.enqueue(entry("a", now))
         assertEquals(
-            "telegram report: off=on fields=[location,soc,range,trip] armed=- daemon=- outbox=1",
+            "telegram report: off=on fields=[location,soc,range,trip] armed=- daemon=- pending=- outbox=1",
             reporter.diagnosticsLines().first(),
         )
     }
 
-    @Test fun `the dump shows the armed age, the daemon and its last power-off`() = runBlocking {
+    @Test fun `the dump shows the armed age, the daemon and what the daemon says`() = runBlocking {
         offState.armedAtMs = now - 12_000L
         offState.daemon = PowerOffArmState.DAEMON_OK
-        offState.last = com.bydmate.app.helper.offreport.OffReportOutcome(
-            "a1", com.bydmate.app.helper.offreport.OffReportState.SENT, now, now + 1_400L, 2, "200",
-        )
+        val last = OffReportOutcome("a1", OffReportState.SENT, now, now + 1_400L, 2, "200")
+        val fids = listOf(OffReportFid(1001, 315621418, "OK"), OffReportFid(1023, 315621408, "pending"))
+        coEvery { helper.offReportStatus("") } returns
+            OffReportStatus(OffReportOutcome("", OffReportState.UNKNOWN), "a2", now, 1, last, fids, pending = 3)
         val lines = reporter.diagnosticsLines()
         assertEquals(
-            "telegram report: off=off fields=[location,soc,range,trip] armed=12s daemon=ok outbox=0",
+            "telegram report: off=off fields=[location,soc,range,trip] armed=12s daemon=ok pending=3 outbox=0",
             lines[0],
         )
         assertEquals(
@@ -304,11 +313,13 @@ class TelegramReporterTest {
                 "attempts=2 rc=200 sent_after=1400ms",
             lines[1],
         )
+        assertEquals("telegram report listener: 315621418=OK 315621408=pending", lines[2])
+    }
+
+    @Test fun `the dump says so when the daemon does not answer`() = runBlocking {
+        val lines = reporter.diagnosticsLines()
+        assertTrue(lines[0].endsWith("daemon=- pending=- outbox=0"))
+        assertEquals("telegram report last_off: -", lines[1])
         assertEquals("telegram report listener: -", lines[2])
-        offState.fids = listOf(
-            com.bydmate.app.helper.offreport.OffReportFid(1001, 315621418, "OK"),
-            com.bydmate.app.helper.offreport.OffReportFid(1023, 315621408, "pending"),
-        )
-        assertEquals("telegram report listener: 315621418=OK 315621408=pending", reporter.diagnosticsLines()[2])
     }
 }

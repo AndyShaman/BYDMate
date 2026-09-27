@@ -42,6 +42,7 @@ class HelperClientOffReportTest {
         var code = -1
         var id: String? = null
         var token: String? = null
+        var late: String? = null
         val fake = object : FakeIBinder() {
             override fun transact(c: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
                 code = c
@@ -50,21 +51,23 @@ class HelperClientOffReportTest {
                 val request = readOffReportArm(data)!!
                 id = request.id
                 token = request.token
+                late = request.lateMark
                 reply!!.writeInt(0)
                 reply.setDataPosition(0)
                 return true
             }
         }
-        assertTrue(clientWith(fake).offReportArm("a1", "tok", 42L, "text"))
+        assertTrue(clientWith(fake).offReportArm("a1", "tok", 42L, "text", "late {{time}}"))
         assertEquals(HelperBinderProtocol.TX_OFFREPORT_ARM, code)
         assertEquals("a1", id)
         assertEquals("tok", token)
+        assertEquals("late {{time}}", late)
     }
 
     @Test fun `status is read back whole`() = runBlocking {
         val expected = OffReportStatus(
             OffReportOutcome("a1", OffReportState.SENT, 10L, 900L, 2, "200"), "", 0L, 2,
-            OffReportOutcome("a1", OffReportState.SENT, 10L, 900L, 2, "200"),
+            OffReportOutcome("a1", OffReportState.SENT, 10L, 900L, 2, "200"), pending = 4,
         )
         val fake = object : FakeIBinder() {
             override fun transact(c: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
@@ -82,7 +85,7 @@ class HelperClientOffReportTest {
             override fun transact(c: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean = false
         }
         val client = clientWith(old)
-        assertFalse(client.offReportArm("a1", "tok", 42L, "text"))
+        assertFalse(client.offReportArm("a1", "tok", 42L, "text", ""))
         assertFalse(client.offReportDisarm())
         assertNull(client.offReportStatus("a1"))
     }

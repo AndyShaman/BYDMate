@@ -10,7 +10,8 @@ internal class AttemptResult(val rc: String, val verdict: Verdict) {
     enum class Verdict { SENT, RETRY, STOP }
 }
 
-internal class RetryResult(val sent: Boolean, val attempts: Int, val rc: String)
+/** [refused]: Telegram said no for good (a 4xx other than 429), retrying later will not help. */
+internal class RetryResult(val sent: Boolean, val attempts: Int, val rc: String, val refused: Boolean = false)
 
 /**
  * Sends until one attempt goes through, Telegram refuses for good, or [OffReportRetry.DEADLINE_MS]
@@ -18,15 +19,14 @@ internal class RetryResult(val sent: Boolean, val attempts: Int, val rc: String)
  * 3-4 s after (L3 measurement 2026-09-27), so attempts follow each other every
  * [OffReportRetry.INTERVAL_MS] with timeouts clamped to what is left of the window.
  *
- * [offAt] and [clock] are on the same monotonic clock; [attempt] gets the connect and read timeouts.
- * Attempts never overlap. An attempt spends at most [CONNECT_TIMEOUT_MS] resolving the host
- * ([callWithin]), [CONNECT_TIMEOUT_MS] connecting and [READ_TIMEOUT_MS] reading, each capped to
- * what was left when it started, so the whole send ends by [MAX_WALL_MS] after the power-off:
- * the deadline plus at most one attempt in flight.
+ * [offAt] and [clock] are on the same monotonic clock; [attempt] gets the connect and read timeouts,
+ * each capped to what is left of the window. No attempt starts after the deadline; one already in
+ * flight may overrun it (accepted: the daemon has a single sender thread, so nothing else sends the
+ * same report meanwhile, and a report that did not go out waits on disk).
  *
  * Not idempotent (accepted): when Telegram took the POST but the answer was lost with the network,
- * the next attempt or the app's re-send delivers the report a second time. The Bot API has no
- * dedup key for sendMessage.
+ * the next attempt or the later pending delivery sends the report a second time. The Bot API has
+ * no dedup key for sendMessage.
  */
 internal object OffReportRetry {
     const val DEADLINE_MS = 8_000L
@@ -36,9 +36,6 @@ internal object OffReportRetry {
 
     /** Below this much time left an attempt could not even connect, so the loop stops. */
     const val MIN_ATTEMPT_MS = 250L
-
-    /** Upper bound of one send from the power-off to its outcome. */
-    const val MAX_WALL_MS = DEADLINE_MS + 2 * CONNECT_TIMEOUT_MS + READ_TIMEOUT_MS
 
     @Suppress("LongParameterList") // the loop is exactly these seams
     fun run(
@@ -59,7 +56,7 @@ internal object OffReportRetry {
             onAttempt(n, rc, clock() - offAt)
             when (result.verdict) {
                 AttemptResult.Verdict.SENT -> return RetryResult(true, n, rc)
-                AttemptResult.Verdict.STOP -> return RetryResult(false, n, rc)
+                AttemptResult.Verdict.STOP -> return RetryResult(false, n, rc, refused = true)
                 AttemptResult.Verdict.RETRY -> Unit
             }
             val wait = minOf(INTERVAL_MS, offAt + DEADLINE_MS - clock())

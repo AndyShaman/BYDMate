@@ -9,51 +9,72 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The daemon's power-off report end to end, without the firmware: a fake listener registration
- * hands over the sink, a fake sender plays Telegram, the send runs on the calling thread and the
- * worker's tasks run when the test says so ([work]).
+ * hands over the sink, a fake sender plays Telegram, pending reports go to a temp folder, the sender
+ * jobs run on the calling thread and the worker's tasks run when the test says so ([work]).
  */
 class OffReportTest {
+
+    @get:Rule val tmp = TemporaryFolder()
 
     private val level = 315621418
     private val powerState = 315621408
 
+    private class Sent(val token: String, val chatId: Long, val text: String)
+
     private var sink: FidPushSink? = null
     private var wall = 1_790_000_000_000L
     private var mono = 50_000L
-    private val sentTexts = mutableListOf<String>()
-    private var answers: (Int) -> AttemptResult = { AttemptResult("200", AttemptResult.Verdict.SENT) }
+    private val sent = mutableListOf<Sent>()
+    private val sentTexts get() = sent.map { it.text }
+    private var answers: (Int) -> AttemptResult = { ok }
+    private var onSend: () -> Unit = {}
     private val reads = mutableMapOf<Int, Int?>()
     private val registered = mutableListOf<Int>()
     private var registerAnswer: (fid: Int) -> String = { FID_PUSH_OK }
     private val queued = ArrayDeque<Runnable>()
     private val delayed = mutableListOf<Pair<Long, Runnable>>()
+    private lateinit var pending: PendingReports
+
+    private val ok = AttemptResult("200", AttemptResult.Verdict.SENT)
+    private val noNet = AttemptResult("io:UnknownHostException", AttemptResult.Verdict.RETRY)
+    private val refused = AttemptResult("403", AttemptResult.Verdict.STOP)
 
     private val realRegistrar = OffReport.registrar
     private val realSender = OffReport.sender
     private val realWall = OffReport.wallClock
     private val realMono = OffReport.monoClock
     private val realSleep = OffReport.sleep
-    private val realThread = OffReport.startThread
+    private val realSend = OffReport.send
     private val realReader = OffReport.reader
     private val realSchedule = OffReport.schedule
+    private val realPending = OffReport.pending
 
     @Before fun setUp() {
         OffReport.resetForTest()
+        pending = PendingReports(tmp.newFolder("offreport"))
+        OffReport.pending = pending
         OffReport.registrar = { _, fid, s -> sink = s; registered += fid; registerAnswer(fid) }
         OffReport.schedule = { delayMs, task -> if (delayMs == 0L) queued.addLast(task) else delayed += delayMs to task }
-        OffReport.sender = { _, text, _, _ ->
-            sentTexts += text
+        OffReport.sender = { token, chatId, text, _, _ ->
+            onSend()
+            sent += Sent(token, chatId, text)
             mono += 100
-            answers(sentTexts.size)
+            answers(sent.size)
         }
         OffReport.wallClock = { wall }
         OffReport.monoClock = { mono }
         OffReport.sleep = { mono += it }
-        OffReport.startThread = { it.run() }
+        OffReport.send = { it.run() }
         OffReport.reader = { _, fid -> reads[fid] }
     }
 
@@ -64,9 +85,10 @@ class OffReportTest {
         OffReport.wallClock = realWall
         OffReport.monoClock = realMono
         OffReport.sleep = realSleep
-        OffReport.startThread = realThread
+        OffReport.send = realSend
         OffReport.reader = realReader
         OffReport.schedule = realSchedule
+        OffReport.pending = realPending
     }
 
     /** Runs the worker's queued tasks, as the worker thread would. */
@@ -74,33 +96,73 @@ class OffReportTest {
         while (queued.isNotEmpty()) queued.removeFirst().run()
     }
 
-    private fun arm(id: String, text: String = "<b>off at ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>") {
-        OffReport.arm(ArmRequest(id, "tok", 42L, text))
+    private fun arm(id: String, text: String = "<b>off at ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>", chatId: Long = 42L) {
+        OffReport.arm(ArmRequest(id, "tok-$id", chatId, text, "<i>(at ${TelegramReportBuilder.TIME_PLACEHOLDER})</i>"))
         work()
     }
 
     private fun push(fid: Int, value: Int) = sink!!.onEvent(fid, value, 0.0, mono)
+
+    /** A power cycle: on, armed with [id], off. */
+    private fun cycle(id: String) {
+        reads[level] = 2
+        arm(id, "<b>$id off at ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>")
+        push(level, 2)
+        push(level, 0)
+    }
+
+    // --- at the power-off ---
 
     @Test fun `the armed report goes out at the power-off with the time filled in`() {
         reads[level] = 2
         arm("a1")
         push(level, 0)
         assertEquals(listOf("<b>off at ${TelegramReportBuilder.formatTime(wall)}</b>"), sentTexts)
+        assertEquals("tok-a1", sent.single().token)
         val q = OffReport.status("a1").queried
         assertEquals(OffReportState.SENT, q.state)
         assertEquals(wall, q.powerOffMs)
         assertEquals(1, q.attempts)
         assertEquals("200", q.rc)
+        assertEquals(0, pending.count())
     }
 
-    @Test fun `the listener is registered once and the arm seeds it from a direct read`() {
+    @Test fun `the report is on disk before the first attempt, and gone once it was sent`() {
+        val onDiskAtSend = mutableListOf<Int>()
+        onSend = { onDiskAtSend += pending.count() }
         reads[level] = 2
         arm("a1")
-        arm("a2")
-        assertEquals(listOf(level, powerState), registered)
-        assertEquals(2, OffReport.status("a2").listening)
-        assertEquals(OffReportState.ARMED, OffReport.status("a2").queried.state)
-        assertEquals(OffReportState.UNKNOWN, OffReport.status("a1").queried.state)
+        push(level, 0)
+        assertEquals(listOf(1), onDiskAtSend)
+        assertEquals(0, OffReport.status("").pending)
+    }
+
+    @Test fun `every attempt failing until the deadline keeps the report on disk`() {
+        answers = { noNet }
+        reads[level] = 2
+        arm("a1")
+        push(level, 0)
+        val status = OffReport.status("a1")
+        assertEquals(OffReportState.FAILED, status.queried.state)
+        assertEquals(wall, status.queried.powerOffMs)
+        assertEquals("io:UnknownHostException", status.queried.rc)
+        assertTrue(status.queried.attempts > 1)
+        assertEquals(1, status.pending)
+        val kept = pending.list().single()
+        assertEquals("a1", kept.id)
+        assertEquals(42L, kept.chatId)
+        assertEquals(wall, kept.powerOffMs)
+        assertEquals("<b>off at ${TelegramReportBuilder.formatTime(wall)}</b>", kept.text)
+    }
+
+    @Test fun `a refusal for good at the power-off drops the report`() {
+        answers = { refused }
+        reads[level] = 2
+        arm("a1")
+        push(level, 0)
+        assertEquals(1, sent.size)
+        assertEquals(OffReportState.FAILED, OffReport.status("a1").queried.state)
+        assertEquals(0, pending.count())
     }
 
     @Test fun `a daemon armed on a car that reads off sends nothing on a 0`() {
@@ -109,7 +171,7 @@ class OffReportTest {
         arm("a1")
         push(level, 0)
         push(powerState, 0)
-        assertTrue(sentTexts.isEmpty())
+        assertTrue(sent.isEmpty())
         assertEquals(OffReportState.ARMED, OffReport.status("a1").queried.state)
     }
 
@@ -119,7 +181,7 @@ class OffReportTest {
         arm("a1")
         push(level, 0)
         push(powerState, 0)
-        assertEquals(1, sentTexts.size)
+        assertEquals(1, sent.size)
     }
 
     @Test fun `the report is used up by its power-off, a quick off-on-off sends nothing more`() {
@@ -128,7 +190,7 @@ class OffReportTest {
         push(level, 0)
         push(level, 2)
         push(level, 0)
-        assertEquals(1, sentTexts.size)
+        assertEquals(1, sent.size)
         assertNull(OffReport.status("a1").armedId.ifEmpty { null })
     }
 
@@ -139,41 +201,144 @@ class OffReportTest {
         push(level, 2)
         arm("a2")
         push(level, 0)
-        assertEquals(2, sentTexts.size)
+        assertEquals(2, sent.size)
         assertEquals(OffReportState.SENT, OffReport.status("a2").queried.state)
         assertEquals("a2", OffReport.status("").last?.id)
     }
 
-    @Test fun `every attempt failing until the deadline leaves a failed outcome with the power-off time`() {
-        answers = { AttemptResult("io:SocketTimeoutException", AttemptResult.Verdict.RETRY) }
-        reads[level] = 2
-        arm("a1")
-        push(level, 0)
-        val q = OffReport.status("a1").queried
-        assertEquals(OffReportState.FAILED, q.state)
-        assertEquals(wall, q.powerOffMs)
-        assertEquals(0L, q.sentAtMs)
-        assertEquals("io:SocketTimeoutException", q.rc)
-        assertTrue(q.attempts > 1)
-    }
-
-    @Test fun `a disarmed daemon sends nothing`() {
-        reads[level] = 2
-        arm("a1")
+    @Test fun `a disarmed daemon sends nothing and drops what was pending`() {
+        answers = { noNet }
+        cycle("a1")
+        assertEquals(1, pending.count())
+        val before = sent.size
+        arm("a2")
         OffReport.disarm()
         push(level, 0)
-        assertTrue(sentTexts.isEmpty())
-        assertEquals(OffReportState.UNKNOWN, OffReport.status("a1").queried.state)
+        assertEquals(0, pending.count())
+        assertEquals(OffReportState.UNKNOWN, OffReport.status("a2").queried.state)
+        assertEquals("only the pass a2's arm started, nothing after the disarm", 1, sent.size - before)
     }
 
     @Test fun `a crashing send is recorded as failed instead of killing the daemon`() {
-        OffReport.sender = { _, _, _, _ -> throw IllegalStateException("boom") }
+        OffReport.sender = { _, _, _, _, _ -> throw IllegalStateException("boom") }
         reads[level] = 2
         arm("a1")
         push(level, 0)
         val q = OffReport.status("a1").queried
         assertEquals(OffReportState.FAILED, q.state)
         assertEquals("crash", q.rc)
+    }
+
+    @Test fun `the send leaves the vendor thread for the sender, and the arm request never prints its secrets`() {
+        var started: Runnable? = null
+        OffReport.send = { started = it }
+        reads[level] = 2
+        OffReport.arm(ArmRequest("a1", "tok", 42L, "t", ""))
+        work()
+        started = null // the pending pass of the arm
+        push(level, 0)
+        assertTrue(sent.isEmpty())
+        assertEquals(OffReportState.SENDING, OffReport.status("a1").queried.state)
+        started!!.run()
+        assertEquals(OffReportState.SENT, OffReport.status("a1").queried.state)
+        assertFalse(ArmRequest("a1", "tok", 42L, "secret", "").toString().contains("tok"))
+        assertFalse(ArmRequest("a1", "tok", 42L, "secret", "").toString().contains("secret"))
+    }
+
+    // --- pending delivery ---
+
+    @Test fun `a pending report waits for an armed token, then goes out once with the late mark`() {
+        answers = { noNet }
+        cycle("a1")
+        val afterOff = sent.size
+        val offAt = wall
+        push(level, 2) // car on again, nothing armed yet
+        assertEquals(afterOff, sent.size)
+
+        answers = { ok }
+        arm("b1")
+        val delivered = sent.drop(afterOff).single()
+        assertEquals("tok-b1", delivered.token)
+        assertEquals(
+            "<b>a1 off at ${TelegramReportBuilder.formatTime(offAt)}</b>\n<i>(at ${TelegramReportBuilder.formatTime(offAt)})</i>",
+            delivered.text,
+        )
+        assertEquals(0, pending.count())
+        val outcome = OffReport.status("a1").queried
+        assertEquals(OffReportState.SENT, outcome.state)
+        assertEquals(offAt, outcome.powerOffMs)
+
+        arm("b2")
+        assertEquals(afterOff + 1, sent.size)
+    }
+
+    @Test fun `pending reports go oldest first`() {
+        answers = { noNet }
+        cycle("a1")
+        wall += 60_000L
+        cycle("a2")
+        val before = sent.size
+        answers = { ok }
+        mono += OffReport.PENDING_BACKOFF_MAX_MS // past the backoff of a2's arm, which met no network
+        arm("b1")
+        assertEquals(listOf("<b>a1", "<b>a2"), sent.drop(before).map { it.text.substringBefore(" off") })
+        assertEquals(0, pending.count())
+    }
+
+    @Test fun `a pending report refused for good is dropped and the next one still goes`() {
+        answers = { noNet }
+        cycle("a1")
+        wall += 60_000L
+        cycle("a2")
+        val before = sent.size
+        answers = { n -> if (n == before + 1) refused else ok }
+        mono += OffReport.PENDING_BACKOFF_MAX_MS
+        arm("b1")
+        assertEquals(2, sent.size - before)
+        assertEquals(0, pending.count())
+        assertEquals(OffReportState.FAILED, OffReport.status("a1").queried.state)
+        assertEquals("403", OffReport.status("a1").queried.rc)
+        assertEquals(OffReportState.SENT, OffReport.status("a2").queried.state)
+    }
+
+    @Test fun `no network on a pending pass keeps the report and backs off`() {
+        answers = { noNet }
+        cycle("a1")
+        val before = sent.size
+        arm("b1")
+        assertEquals(before + 1, sent.size)
+        assertEquals(1, pending.count())
+
+        arm("b2") // within the backoff: no pass
+        assertEquals(before + 1, sent.size)
+
+        mono += OffReport.PENDING_BACKOFF_FIRST_MS
+        answers = { ok }
+        arm("b3")
+        assertEquals(before + 2, sent.size)
+        assertEquals(0, pending.count())
+    }
+
+    @Test fun `a pending report built for another chat is dropped, never sent there`() {
+        answers = { noNet }
+        cycle("a1")
+        val before = sent.size
+        answers = { ok }
+        arm("b1", chatId = 777L)
+        assertEquals(before, sent.size)
+        assertEquals(0, pending.count())
+    }
+
+    // --- listener and priming ---
+
+    @Test fun `the listener is registered once and the arm seeds it from a direct read`() {
+        reads[level] = 2
+        arm("a1")
+        arm("a2")
+        assertEquals(listOf(level, powerState), registered)
+        assertEquals(2, OffReport.status("a2").listening)
+        assertEquals(OffReportState.ARMED, OffReport.status("a2").queried.state)
+        assertEquals(OffReportState.UNKNOWN, OffReport.status("a1").queried.state)
     }
 
     @Test fun `a failing registration leaves the report armed with no listener`() {
@@ -187,7 +352,7 @@ class OffReportTest {
 
     @Test fun `the arm only stores, registration and reads wait for the worker`() {
         reads[level] = 2
-        OffReport.arm(ArmRequest("a1", "tok", 42L, "t"))
+        OffReport.arm(ArmRequest("a1", "tok", 42L, "t", ""))
         assertTrue(registered.isEmpty())
         val before = OffReport.status("a1")
         assertEquals(OffReportState.ARMED, before.queried.state)
@@ -203,8 +368,32 @@ class OffReportTest {
         reads[level] = 0 // the car went off; its push is still queued behind this arm
         arm("a2")
         push(level, 0)
-        assertEquals(1, sentTexts.size)
+        assertEquals(1, sent.size)
         assertEquals(OffReportState.SENT, OffReport.status("a2").queried.state)
+    }
+
+    @Test fun `reads taken before a handled power-off cannot re-prime it for a second report`() {
+        reads[level] = 2
+        arm("a1")
+        // The worker reads for a2's arm: level=2, power=1. While it reads, the power-off's first 0
+        // push sends a2 and the app's next arm sets b1; the stale non-zero reads land after that.
+        var raced = false
+        OffReport.reader = { _, fid ->
+            if (!raced) {
+                raced = true
+                push(level, 0)
+                OffReport.arm(ArmRequest("b1", "tok-b1", 42L, "b1", ""))
+            }
+            if (fid == level) 2 else 1
+        }
+        OffReport.arm(ArmRequest("a2", "tok-a2", 42L, "a2", ""))
+        queued.removeFirst().run() // a2's prime, racing
+        assertEquals(listOf("a2"), sentTexts)
+        // The second fid's 0 of the same power-off, and a repeated 0: b1 must not go out.
+        push(powerState, 0)
+        push(level, 0)
+        assertEquals(listOf("a2"), sentTexts)
+        assertEquals(OffReportState.ARMED, OffReport.status("b1").queried.state)
     }
 
     @Test fun `a missing fid is retried every 30 s until it registers, one retry at a time`() {
@@ -228,17 +417,35 @@ class OffReportTest {
         assertEquals(listOf(level, powerState, powerState, powerState), registered)
     }
 
-    @Test fun `the send runs off the vendor thread, and the arm request never prints its secrets`() {
-        var started: Runnable? = null
-        OffReport.startThread = { started = it }
+    // --- one sender ---
+
+    @Test fun `every send runs on the one sender thread, never two at once`() {
+        OffReport.send = realSend
+        val inFlight = AtomicInteger(0)
+        val maxInFlight = AtomicInteger(0)
+        val calls = AtomicInteger(0)
+        val threads = Collections.synchronizedSet(HashSet<String>())
+        val burstStarted = CountDownLatch(1)
+        OffReport.sender = { _, _, _, _, _ ->
+            maxInFlight.accumulateAndGet(inFlight.incrementAndGet()) { a, b -> maxOf(a, b) }
+            threads += Thread.currentThread().name
+            burstStarted.countDown()
+            Thread.sleep(50)
+            inFlight.decrementAndGet()
+            if (calls.incrementAndGet() == 1) noNet else ok
+        }
+        OffReport.sleep = { mono += OffReportRetry.DEADLINE_MS } // one failed burst attempt, then the deadline
         reads[level] = 2
         arm("a1")
-        push(level, 0)
-        assertTrue(sentTexts.isEmpty())
-        assertEquals(OffReportState.SENDING, OffReport.status("a1").queried.state)
-        started!!.run()
+        push(level, 0) // the burst: on the sender thread, fails, a1 stays pending
+        assertTrue(burstStarted.await(5, TimeUnit.SECONDS))
+        arm("b1") // while the burst is in flight: the pending pass for a1 queues behind it
+        val deadline = System.currentTimeMillis() + 5_000
+        while ((calls.get() < 2 || pending.count() > 0) && System.currentTimeMillis() < deadline) Thread.sleep(10)
+        assertEquals(2, calls.get())
+        assertEquals(0, pending.count())
+        assertEquals(1, maxInFlight.get())
+        assertEquals(setOf("offreport-send"), threads.toSet())
         assertEquals(OffReportState.SENT, OffReport.status("a1").queried.state)
-        assertFalse(ArmRequest("a1", "tok", 42L, "secret").toString().contains("tok"))
-        assertFalse(ArmRequest("a1", "tok", 42L, "secret").toString().contains("secret"))
     }
 }
