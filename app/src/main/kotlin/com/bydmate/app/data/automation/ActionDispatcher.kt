@@ -1278,11 +1278,11 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
 
     /** [startNavigate] for the Maps dialect: no package pin, no 2GIS fallback reason. */
     private fun startMapsIntent(mode: String, uri: String, label: String): DispatchResult {
-        Log.i(TAG, "navigate app=maps kind=$mode uri=$uri")
+        Log.i(TAG, "navigate app=maps kind=$mode uri=${LinkRedaction.forLog(uri)}")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val result = tryStartActivity(intent, label)
-        Log.i(TAG, "navigate app=maps intent sent label=$label ok=${result.success}" +
+        Log.i(TAG, "navigate app=maps intent sent label=${LinkRedaction.forLog(label)} ok=${result.success}" +
             (result.reason?.let { " reason=$it" } ?: ""))
         return result
     }
@@ -1296,14 +1296,14 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private fun startNavigate(
         navigator: String, mode: String, uri: String, label: String, fallbackReason: String?,
     ): DispatchResult {
-        Log.i(TAG, "navigate: app=$navigator mode=$mode uri=$uri")
+        Log.i(TAG, "navigate: app=$navigator mode=$mode uri=${LinkRedaction.forLog(uri)}")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (navigator == RouteNavigatorUris.DGIS) {
             intent.setPackage(RouteNavigatorUris.DGIS_PACKAGE)
         }
         val result = tryStartActivity(intent, label)
-        Log.i(TAG, "navigate: intent sent label=$label ok=${result.success}")
+        Log.i(TAG, "navigate: intent sent label=${LinkRedaction.forLog(label)} ok=${result.success}")
         return if (result.success && fallbackReason != null) result.copy(reason = fallbackReason)
         else result
     }
@@ -1423,10 +1423,11 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         DispatchResult(true)
     } catch (e: ActivityNotFoundException) {
         // Class name only: the message spells out the whole intent, URI with its token included.
-        Log.w(TAG, "$label: ${e.javaClass.simpleName}")
+        // The label carries the link, number or coordinates too: only what LinkRedaction leaves.
+        Log.w(TAG, "${LinkRedaction.forLog(label)}: ${e.javaClass.simpleName}")
         DispatchResult(false, appStrings.get(R.string.dispatch_no_handler_app, e.javaClass.simpleName))
     } catch (e: SecurityException) {
-        Log.w(TAG, "$label (security): ${e.javaClass.simpleName}")
+        Log.w(TAG, "${LinkRedaction.forLog(label)} (security): ${e.javaClass.simpleName}")
         DispatchResult(false, appStrings.get(R.string.dispatch_no_permission, e.javaClass.simpleName))
     }
 

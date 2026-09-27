@@ -817,7 +817,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(notifId, notification)
-        Log.i(TAG, "Confirm requested: '${rule.name}' → $summary")
+        // A url or call step's name can carry the link or the number.
+        Log.i(TAG, "Confirm requested: '${rule.name}' → ${LinkRedaction.forLog(summary)}")
     }
 
     private fun cleanupExpired() {
