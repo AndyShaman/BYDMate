@@ -1,6 +1,7 @@
 package com.bydmate.app.agent
 
 import android.content.Context
+import android.location.Location
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
@@ -16,6 +17,7 @@ import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
@@ -28,7 +30,9 @@ import java.io.IOException
 /** where_am_i: on-car log 25.09 had the model web-search raw coordinates and name wrong villages. */
 class AgentToolsWhereAmITest {
 
-    private val settlements = mockk<SettlementSearchClient>()
+    // relaxed: whereAmI() now also reads lastEndpoint for the diagnostic log line, which most
+    // tests below have no reason to stub.
+    private val settlements = mockk<SettlementSearchClient>(relaxed = true)
 
     private val tools = AgentTools(
         mockk<VoiceGate>(relaxed = true), mockk<BatteryStateRepository>(relaxed = true),
@@ -128,8 +132,10 @@ class AgentToolsWhereAmITest {
         assertFalse(out.has("fix_note"))
     }
 
-    // Parked car: the 8 m GPS filter stops updates, the fix is old but still right.
-    @Test fun old_live_fix_answers_and_hedges_only_on_the_move() = runTest {
+    // Parked car: the 8 m GPS filter stops updates, the fix is old but still right. Review of
+    // 2c994429: the hedge must not depend on current speed - zero speed now does not prove the
+    // car has been parked since the fix (it could have moved after the signal dropped).
+    @Test fun old_live_fix_always_hedges_regardless_of_current_speed() = runTest {
         tools.gpsFixProvider = { AgentTools.GpsFix(54.0, 27.0, ageMs = 45 * 60_000L, live = true) }
         coEvery { settlements.search(any(), any(), any(), any()) } returns
             Result.success(listOf(s("Северная", "village", 54.01, 27.0)))
@@ -137,7 +143,7 @@ class AgentToolsWhereAmITest {
         assertEquals(45L, out.getLong("fix_age_min"))
         assertEquals("Северная", out.getJSONArray("settlements").getJSONObject(0).getString("name"))
         val fixNote = out.getString("fix_note")
-        assertTrue(fixNote, fixNote.contains("на стоянке это нормально"))
+        assertTrue(fixNote, fixNote.contains("отличить нельзя"))
         assertTrue(fixNote, fixNote.contains("по последним данным"))
     }
 
@@ -159,5 +165,30 @@ class AgentToolsWhereAmITest {
         assertTrue(fn.getString("description").contains("где я"))
         assertTrue(fn.getString("description").contains("не ищи координаты через web_search"))
         assertTrue(fn.getString("description").contains("а не в каком месте она"))
+    }
+
+    // Review: age used to be System.currentTimeMillis() - Location.time, so a wall-clock change
+    // (manual or NTP) turned a stale fix fresh or a fresh one stale. gpsFixAgeMs must depend only
+    // on the monotonic elapsedRealtimeNanos seam, never on nowMs (the wall clock).
+    @Test fun gps_fix_age_ignores_the_wall_clock() {
+        val loc = mockk<Location>()
+        every { loc.elapsedRealtimeNanos } returns 100_000_000_000L // 100 s since boot
+        tools.elapsedRealtimeNanos = { 130_000_000_000L } // 130 s since boot -> 30 s old
+        tools.nowMs = { 1_000L }
+        val ageBefore = tools.gpsFixAgeMs(loc)
+        tools.nowMs = { 999_999_999_999L } // wall clock jumps far forward
+        val ageAfter = tools.gpsFixAgeMs(loc)
+        assertEquals(30_000L, ageBefore)
+        assertEquals(ageBefore, ageAfter)
+    }
+
+    // A provider without the monotonic stamp must not make every fix look hours old.
+    @Test fun gps_fix_age_falls_back_to_wall_clock_without_monotonic_stamp() {
+        val loc = mockk<Location>()
+        every { loc.elapsedRealtimeNanos } returns 0L
+        every { loc.time } returns 1_000_000L
+        tools.elapsedRealtimeNanos = { 9_000_000_000_000L } // 2.5 h of uptime
+        tools.nowMs = { 1_060_000L }
+        assertEquals(60_000L, tools.gpsFixAgeMs(loc))
     }
 }

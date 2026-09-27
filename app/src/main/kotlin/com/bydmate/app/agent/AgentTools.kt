@@ -2,6 +2,8 @@ package com.bydmate.app.agent
 
 import android.content.Context
 import android.content.Intent
+import android.location.Location
+import android.os.SystemClock
 import android.util.Log
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
@@ -184,10 +186,25 @@ class AgentTools @Inject constructor(
      *  listener in this service run rather than the start-time last-known seed. */
     internal data class GpsFix(val lat: Double, val lon: Double, val ageMs: Long, val live: Boolean)
 
-    /** Test seam - [locationProvider] plus the age and origin of the fix, for where_am_i. */
+    /** Test seam - monotonic clock for [gpsFixAgeMs], default SystemClock.elapsedRealtimeNanos().
+     *  Not System.currentTimeMillis()/Location.time: a wall-clock change (manual or NTP) must not
+     *  turn a stale fix fresh, or a fresh one stale. */
+    internal var elapsedRealtimeNanos: () -> Long = { SystemClock.elapsedRealtimeNanos() }
+
+    /** GPS fix age from the monotonic clock in [elapsedRealtimeNanos], immune to the wall clock
+     *  ([nowMs]) changing underneath it. A provider that leaves the monotonic stamp unset (0)
+     *  would make every fix look as old as the uptime, so such a fix falls back to the wall clock. */
+    internal fun gpsFixAgeMs(location: Location): Long {
+        val stamp = location.elapsedRealtimeNanos
+        val ageMs = if (stamp > 0L) (elapsedRealtimeNanos() - stamp) / 1_000_000L else nowMs() - location.time
+        return ageMs.coerceAtLeast(0L)
+    }
+
+    /** Test seam - [locationProvider] plus the age and origin of the fix, for where_am_i. Reads
+     *  TrackingService's location+live snapshot once, so the two never come from different fixes. */
     internal var gpsFixProvider: () -> GpsFix? = {
-        TrackingService.lastLocation.value?.let {
-            GpsFix(it.latitude, it.longitude, (nowMs() - it.time).coerceAtLeast(0L), TrackingService.lastLocationIsLive)
+        TrackingService.lastLocationFix?.let { fix ->
+            GpsFix(fix.location.latitude, fix.location.longitude, gpsFixAgeMs(fix.location), fix.isLive)
         }
     }
 
@@ -1678,19 +1695,25 @@ class AgentTools @Inject constructor(
         val client = settlementSearchClient
             ?: return """{"error":"поиск населённых пунктов недоступен"}"""
         Log.i(TAG, "where_am_i: request, fix age=${fix.ageMs / 1000}s live=${fix.live}")
+        val searchStartMs = nowMs()
         val found = runCatchingCancellable {
             client.search(lat, lon, SETTLEMENT_RADIUS_M, TOWN_RADIUS_M)
         }.getOrNull()?.getOrElse {
             Log.w(TAG, "where_am_i: search failed: ${it.message}")
             null
         } ?: return """{"error":"сервис карт недоступен, не могу определить, где мы"}"""
+        val latencyMs = nowMs() - searchStartMs
         fun km(s: SettlementSearchClient.Settlement) = PlaceGeometry.distanceMeters(lat, lon, s.lat, s.lon) / 1000.0
         // A lone farmstead is a poor answer to "где я" while any real settlement is around.
         val regular = found.filter { it.place != "isolated_dwelling" }
         val nearest = (regular.ifEmpty { found }).sortedBy { km(it) }.take(MAX_SETTLEMENTS)
         val town = found.filter { it.place == "city" || it.place == "town" }.minByOrNull { km(it) }
-        Log.i(TAG, "where_am_i: ${found.size} found, nearest=" + settlementLabel(lat, lon, nearest.firstOrNull()) +
-            ", town=" + settlementLabel(lat, lon, town))
+        // No place names in this log: user logs land in public GitHub issues and a name+distance
+        // pair would localize the car. Counts, the rounded nearest distance, fix age/origin,
+        // latency and the answering endpoint are enough to diagnose a "wrong answer" report.
+        val nearestKm = nearest.firstOrNull()?.let { round1(km(it)) }?.toString() ?: "-"
+        Log.i(TAG, "where_am_i: found=${found.size} nearest_km=$nearestKm town=${town != null} " +
+            "fix_age=${fix.ageMs / 1000}s live=${fix.live} latency=${latencyMs}ms endpoint=${client.lastEndpoint ?: "-"}")
         val json = JSONObject().put("fix_age_min", fix.ageMs / 60_000L)
         staleFixNote(fix)?.let { json.put("fix_note", it) }
         if (nearest.isEmpty()) {
@@ -1707,14 +1730,16 @@ class AgentTools @Inject constructor(
             "в нём, говори «примерно N км от X, X к северу от нас». Называй только эти места").toString()
     }
 
-    /** Null for a fresh fix. A live fix that stopped updating is normal while parked (8 m GPS
-     *  filter) but means a lost signal on the move; a start-time seed may predate the drive. */
+    /** Null for a fresh fix. A stale fix always gets a hedge, live or seed: the 8 m GPS filter
+     *  explains why a live fix stops updating while genuinely parked, but the car's current
+     *  speed proves nothing about whether it moved after the signal was lost - so the hedge
+     *  cannot be made conditional on it. A start-time seed may predate the drive. */
     private fun staleFixNote(fix: GpsFix): String? {
         if (fix.ageMs <= FRESH_FIX_MS) return null
         val min = fix.ageMs / 60_000L
         return if (fix.live) {
-            "GPS-позиция не менялась $min мин: на стоянке это нормально, но если машина в движении, " +
-                "сигнал пропал - тогда говори «по последним данным»"
+            "GPS-позиция не менялась $min мин: сигнал либо держит машину на месте (фильтр 8 м), " +
+                "либо пропал в движении, отличить нельзя - всегда говори «по последним данным»"
         } else {
             "свежего GPS-сигнала после запуска не было, позиция сохранена $min мин назад - говори " +
                 "«по последним данным»"
@@ -1727,9 +1752,6 @@ class AgentTools @Inject constructor(
             .put("type", SETTLEMENT_TYPES[s.place] ?: s.place)
             .put("distance_km", round1(PlaceGeometry.distanceMeters(lat, lon, s.lat, s.lon) / 1000.0))
             .put("direction_from_car", compassRu(lat, lon, s.lat, s.lon))
-
-    private fun settlementLabel(lat: Double, lon: Double, s: SettlementSearchClient.Settlement?): String =
-        s?.let { "${it.name} ${round1(PlaceGeometry.distanceMeters(lat, lon, it.lat, it.lon) / 1000.0)} km" } ?: "none"
 
     /** Eight-point compass direction from the car to the point, in Russian. */
     private fun compassRu(fromLat: Double, fromLon: Double, toLat: Double, toLon: Double): String {

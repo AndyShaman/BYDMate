@@ -106,4 +106,24 @@ class AgentTraceTest {
         val clipped = AgentTrace.clip("x".repeat(500))
         assertTrue(clipped.length <= AgentTrace.TRACE_CHARS + 1)
     }
+
+    // Location in logs: where_am_i's result carries settlement names and distances close to
+    // the car, and logs get shared in public GitHub issues - only its length is traced.
+    @Test fun where_am_i_result_is_redacted_to_a_length_in_the_trace() = runTest {
+        val settlementResult = """{"settlements":[{"name":"Северная","distance_km":1.1}]}"""
+        coEvery { tools.execute(any(), any()) } returns settlementResult
+        val backend = FakeBackend(ArrayDeque(listOf(
+            Result.success(AgentReply(null, listOf(AgentToolCall("c1", "where_am_i", "{}")))),
+            Result.success(AgentReply("Рядом Северная", emptyList())),
+        )))
+        val lines = mutableListOf<String>()
+        orchestrator(backend, lines).ask("где мы")
+
+        // Model answers keep their own text (out of scope, AgentTrace.reply): only the tool
+        // line must not carry the raw settlement result.
+        val toolLine = lines.single { it.startsWith("tool where_am_i") }
+        assertTrue("result content leaked in tool line: $toolLine", !toolLine.contains("Северная"))
+        assertTrue("no redacted length in tool line: $toolLine",
+            toolLine.contains("<${settlementResult.length} chars, redacted>"))
+    }
 }
