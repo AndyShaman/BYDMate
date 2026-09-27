@@ -110,15 +110,8 @@ internal class RuleJournal(
         const val MAX_ROWS = 2000
         const val DUMP_ENTRIES = 50
 
-        // A link (scheme://…), a bare navigator or map URI (geo:, yandexnavi:…) or an intent's
-        // data (dat=…): older builds put the exception message, the whole intent, in the reason.
-        private val URI_LIKE = Regex(
-            """\bdat=\S+|[A-Za-z][A-Za-z0-9+.\-]*://\S+|""" +
-                """\b(?:geo|yandexnavi|yandexmaps|dgis|tel|sms|smsto|mailto|intent|content|file):\S+""",
-            RegexOption.IGNORE_CASE,
-        )
-
-        /** [text] with every URI-like run replaced by `<uri>`: tokens, numbers, coordinates. */
-        internal fun redactUris(text: String): String = URI_LIKE.replace(text, "<uri>")
+        /** [text] with every URI-like run replaced by `<uri>`: older builds put the exception
+         *  message, the whole intent with its token, number or coordinates, in the reason. */
+        internal fun redactUris(text: String): String = LinkRedaction.redactAll(text)
     }
 }
