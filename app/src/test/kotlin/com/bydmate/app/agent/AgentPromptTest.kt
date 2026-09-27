@@ -19,6 +19,13 @@ class AgentPromptTest {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("seat_heat_driver_3"))
     }
 
+    // #254: a Song Plus log showed the model picking seat level 3 for "включи подогрев водителя";
+    // that car only takes levels 1-2, so a level-less request must default to 1 like the offline voice.
+    @Test fun prompt_defaults_unnamed_seat_level_to_one() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("без названного уровня"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("ставь 1 уровень"))
+    }
+
     @Test fun prompt_explains_exact_time_trigger() {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("time_range"))
     }
