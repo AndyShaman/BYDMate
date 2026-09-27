@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.19.0] - 2026-09-27
+
 ### Новое
 - Помощник отвечает на вопросы «где я» и «что рядом»: называет ближайшие деревни и города по карте, с расстоянием и стороной света. Если определить место не удалось, он так и говорит, а не придумывает названия.
 - Помощника можно перебить, пока он говорит: назовите его по имени в начале фразы, он замолчит и будет слушать. Остальное, что прозвучит во время его ответа, он пропускает.
@@ -1262,7 +1264,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.18.2...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.19.0...HEAD
+[3.19.0]: https://github.com/AndyShaman/BYDMate/compare/v3.18.2...v3.19.0
 [3.18.2]: https://github.com/AndyShaman/BYDMate/compare/v3.18.1...v3.18.2
 [3.18.1]: https://github.com/AndyShaman/BYDMate/compare/v3.18.0...v3.18.1
 [3.18.0]: https://github.com/AndyShaman/BYDMate/compare/v3.17.5...v3.18.0
