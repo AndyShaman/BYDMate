@@ -33,7 +33,7 @@ data class DiParsData(
     val windowRL: Int?,
     val windowRR: Int?,
     val sunroof: Int?,            // 0-100%
-    val trunk: Int?,              // 0=closed, 1=open
+    val trunk: Int?,              // 2=closed, 1=open, 3=moving
     val hood: Int?,               // 0=closed, 1=open
     val seatbeltFL: Int?,         // 0=unbuckled, 1=buckled, 2=invalid
     val lockFL: Int?,             // 1=unlocked, 2=locked
@@ -102,4 +102,14 @@ data class DiParsData(
     val chargeConnectIndicator: Int? = null,  // instrument cluster charge-connect indicator
     // Energy left in the pack straight from the BMS, kWh (2026-09-20). Not derived from SOC.
     val batteryRemainKwh: Double? = null,
+    // Automation audit (2026-09-27). The drive mode the car runs, SETTING_TARGET_DRIVING_MODE
+    // encoding: 1=N, 2=E, 3=S, 4=SNOW, 5=SAND, 6=MUD, 7=MOUNTAIN, 21=SMART, 10=flotation.
+    val driveModeTarget: Int? = null,
+    val seatbeltRL: Int? = null,          // rear belts: 0=unbuckled, 1=buckled (by analogy with seatbeltFR)
+    val seatbeltRM: Int? = null,
+    val seatbeltRR: Int? = null,
+    // Second candidate set for the rear belts (dev 1023): the belt probe log line only.
+    val rearBeltSettingRL: Int? = null,
+    val rearBeltSettingRM: Int? = null,
+    val rearBeltSettingRR: Int? = null,
 )

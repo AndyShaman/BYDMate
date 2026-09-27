@@ -114,6 +114,10 @@ object FidMap {
         FidEntry("frontTrunk",           1001, 1156579344,   5, Decoder.INT_ENUM, symbol = "Bodywork.BODYWORK_FRONT_HATCH_CURRENT_POSITION"),
         FidEntry("lockFL",               1032, 1081081864,   5, Decoder.INT_ENUM, symbol = "Ota.OTA_LF_DOOR_LOCK"),
         FidEntry("driveMode",            1006, 555745294,    5, Decoder.INT_ENUM, symbol = "Energy.ENERGY_OPERATION_MODE"),
+        // The mode the car actually runs (1 N, 2 E, 3 S, 4 SNOW, 5 SAND, 6 MUD, 7 MOUNTAIN,
+        // 21 SMART, 10 flotation), the fid DriveModeChannel verifies its writes with. driveMode
+        // above reads 3 on every terrain mode (Leopard 3 2026-09-27), this one tells them apart.
+        FidEntry("driveModeTarget",      1023, 255852712,    5, Decoder.INT_ENUM, symbol = "Setting.SETTING_TARGET_DRIVING_MODE"),
         // Ambiguous on L3: ENERGY_MODE_INSTRUMENT and its _44 twin hold the same value.
         // The plain name is the one the SDK getter uses.
         FidEntry("workMode",             1006, 874512420,    5, Decoder.INT_ENUM, symbol = "Energy.ENERGY_MODE_INSTRUMENT"),
@@ -132,7 +136,17 @@ object FidMap {
         FidEntry("lightHigh",            1004, 950009868,    5, Decoder.INT_ENUM, symbol = "Light.LIGHT_HIGH_BEAM_LIGHT"),
         // Sensors wave (validated live on Leopard 3, 2026-07-07;
         // probe: .research/probe/sensors-probe-2026-07-07.sh)
-        FidEntry("seatbeltFR",       1042, 315621439,   5, Decoder.INT_ENUM, symbol = "Safety.SAFETY_BELT_COMMAND_AREA_DEPUTY"),  // 0=unbuckled, 1=buckled
+        // Passenger belt, the signal that lights the cluster lamp (Leopard 3 2026-09-27): 0=unbuckled,
+        // 1=buckled. The old dev 1042 fid 315621439 blinked 0/1 every ~1.2 s in any state.
+        FidEntry("seatbeltFR",       1007, 638582811,   5, Decoder.INT_ENUM, symbol = "Instrument.INSTRUMENT_DD_DEPUTY_SAFETYBELT_STATE"),
+        // Rear belts, same encoding as the passenger one by analogy; not yet seen changing on the
+        // car. The dev 1023 trio below is the second candidate set, read only for the belt probe line.
+        FidEntry("seatbeltRL",       1007, 638582812,   5, Decoder.INT_ENUM, symbol = "Instrument.INSTRUMENT_DD_REAR_LEFT_SAFETYBELT_STATE"),
+        FidEntry("seatbeltRM",       1007, 638582813,   5, Decoder.INT_ENUM, symbol = "Instrument.INSTRUMENT_DD_REAR_MID_SAFETYBELT_STATE"),
+        FidEntry("seatbeltRR",       1007, 638582814,   5, Decoder.INT_ENUM, symbol = "Instrument.INSTRUMENT_DD_REAR_RIGHT_SAFETYBELT_STATE"),
+        FidEntry("rearBeltSettingRL", 1023, 824180746,  5, Decoder.INT_RAW, symbol = "Setting.SETTING_LEFT_REAR_ROW_SAFETYBELT_STATUS"),
+        FidEntry("rearBeltSettingRM", 1023, 824180750,  5, Decoder.INT_RAW, symbol = "Setting.SETTING_CENTER_REAR_ROW_SAFETYBELT_STATUS"),
+        FidEntry("rearBeltSettingRR", 1023, 824180748,  5, Decoder.INT_RAW, symbol = "Setting.SETTING_RIGHT_REAR_ROW_SAFETYBELT_STATUS"),
         FidEntry("occupancyFL",      1042, 824180800,   5, Decoder.INT_ENUM, symbol = "Safety.SAFETY_BELT_PASSENGER_COMMAND_FRONT_ROW_SEAT_LEFT"),  // 1=free, 2=occupied (NOT 0/1!)
         FidEntry("occupancyFR",      1042, 824180758,   5, Decoder.INT_ENUM, symbol = "Safety.SAFETY_BELT_PASSENGER_COMMAND_FRONT_ROW_SEAT_RIGHT"),
         FidEntry("occupancyRL",      1042, 824180760,   5, Decoder.INT_ENUM, symbol = "Safety.SAFETY_BELT_PASSENGER_COMMAND_SECOND_ROW_SEAT_LEFT"),
