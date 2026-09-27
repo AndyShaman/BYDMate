@@ -532,12 +532,16 @@ interface HelperClient {
     suspend fun recStatus(): FidRecStatus?
 
     /**
-     * Arms the power-off Telegram report (TX_OFFREPORT_ARM). False when the daemon is unreachable
-     * or too old to know the verb; [isAlive] tells the two apart.
+     * Arms the power-off Telegram report (TX_OFFREPORT_ARM); [lateMark] is the line a report
+     * delivered later carries, with `{{time}}`. False when the daemon is unreachable or too old to
+     * know the verb; [isAlive] tells the two apart.
      */
-    suspend fun offReportArm(id: String, token: String, chatId: Long, text: String): Boolean
+    suspend fun offReportArm(id: String, token: String, chatId: Long, text: String, lateMark: String): Boolean
 
-    /** Drops the armed power-off report (TX_OFFREPORT_DISARM). False on any transport failure. */
+    /**
+     * Drops the armed power-off report and the pending ones (TX_OFFREPORT_DISARM). False on any
+     * transport failure.
+     */
     suspend fun offReportDisarm(): Boolean
 
     /** Where report [id] stands in the daemon (TX_OFFREPORT_STATUS); null when there is no answer. */
@@ -1126,10 +1130,10 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             readRecStatus(reply)
         }
 
-    override suspend fun offReportArm(id: String, token: String, chatId: Long, text: String): Boolean =
+    override suspend fun offReportArm(id: String, token: String, chatId: Long, text: String, lateMark: String): Boolean =
         transactParsed(
             HelperBinderProtocol.TX_OFFREPORT_ARM,
-            { p -> writeOffReportArm(p, id, token, chatId, text) },
+            { p -> writeOffReportArm(p, id, token, chatId, text, lateMark) },
             // The daemon only stores the report and answers; registration and reads run on its
             // worker, so the call holds the shared channel for a few ms, never a vendor call.
         ) { reply -> reply.dataAvail() >= 4 && reply.readInt() == 0 } ?: false

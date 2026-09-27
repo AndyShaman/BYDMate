@@ -73,4 +73,14 @@ class PowerOffAutomatonTest {
         assertTrue(a.primed)
         assertEquals(true, a.onEvent(level, 0))
     }
+
+    @Test fun `every pushed event moves the generation, a seed does not`() {
+        val a = PowerOffAutomaton()
+        val g0 = a.generation
+        a.seed(level, 2)
+        assertEquals(g0, a.generation)
+        a.onEvent(level, 2)
+        a.onEvent(level, -1)
+        assertEquals(g0 + 2, a.generation)
+    }
 }

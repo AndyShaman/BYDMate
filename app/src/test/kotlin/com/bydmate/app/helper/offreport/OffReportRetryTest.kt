@@ -51,6 +51,7 @@ class OffReportRetryTest {
         val result = run(100) { io }
         assertFalse(result.sent)
         assertEquals("io:UnknownHostException", result.rc)
+        assertFalse(result.refused)
         assertTrue(attemptsAt.all { it <= OffReportRetry.DEADLINE_MS - OffReportRetry.MIN_ATTEMPT_MS })
         assertTrue(now - offAt <= OffReportRetry.DEADLINE_MS)
         assertEquals(13, result.attempts)
@@ -69,6 +70,7 @@ class OffReportRetryTest {
         assertFalse(result.sent)
         assertEquals(1, result.attempts)
         assertEquals("400", result.rc)
+        assertTrue(result.refused)
     }
 
     @Test fun `busy and server errors retry, other codes stop`() {
@@ -77,24 +79,6 @@ class OffReportRetryTest {
         assertEquals(AttemptResult.Verdict.RETRY, OffReportRetry.verdictFor(502))
         assertEquals(AttemptResult.Verdict.STOP, OffReportRetry.verdictFor(401))
         assertEquals(AttemptResult.Verdict.STOP, OffReportRetry.verdictFor(403))
-    }
-
-    @Test fun `attempts that use every timeout in full still end within the wall bound`() {
-        var n = 0
-        val result = OffReportRetry.run(
-            offAt = offAt,
-            clock = { now },
-            sleep = { now += it },
-            attempt = { connectMs, readMs ->
-                n++
-                now += 2L * connectMs + readMs // DNS + connect + read, each to its cap
-                io
-            },
-            onAttempt = { _, _, _ -> },
-        )
-        assertFalse(result.sent)
-        assertEquals(n, result.attempts)
-        assertTrue(now - offAt <= OffReportRetry.MAX_WALL_MS)
     }
 
     @Test fun `a hanging lookup is given up after its bound`() {

@@ -452,22 +452,26 @@ object HelperBinderProtocol {
      * own listener on the power fids sees the car switched off (see helper/offreport). A repeated
      * call replaces the report. The handler only stores it and answers: the listener registration
      * (retried every 30 s while a fid is missing) and the priming reads run on the daemon's worker.
+     * An arm also lets the daemon deliver the reports still pending from earlier power-offs.
      *
-     * Request: [String id, String token, long chatId, String text with `{{time}}`]
+     * Request: [String id, String token, long chatId, String text with `{{time}}`,
+     *   String lateMark with `{{time}}` (the «(записано в HH:MM)» line of a pending delivery)]
      * Reply:   [int status (0 = armed, -1 = refused / failed)]
      * An old daemon without this handler makes transact return false → the client returns false,
      * and the app, finding the daemon alive, logs it as outdated.
      */
     val TX_OFFREPORT_ARM: Int = IBinder.FIRST_CALL_TRANSACTION + 52  // 53
 
-    /** Drops the armed report. (no args) -> [int status (0 = ok)]. Outcomes already kept stay. */
+    /**
+     * Drops the armed report and every pending one (the report was switched off or the bot
+     * disconnected). (no args) -> [int status (0 = ok)]. Outcomes already kept stay.
+     */
     val TX_OFFREPORT_DISARM: Int = IBinder.FIRST_CALL_TRANSACTION + 53  // 54
 
     /**
      * Where one report id stands (unknown / armed / sending / sent / failed, with the power-off
-     * time), plus what is armed now, the last power-off whatever its id, and each power fid's
-     * registration state — asked by the app on its next start, before a daemon replace and by the
-     * dump.
+     * time), plus what is armed now, the last delivery outcome whatever its id, each power fid's
+     * registration state and how many reports wait on disk — for the app's dump.
      *
      * Request: [String id] -> Reply: [int status (0 = ok), OffReportStatus (see OffReportWire)]
      */

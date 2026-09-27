@@ -624,9 +624,8 @@ object AppModule {
         adb: com.bydmate.app.data.autoservice.AdbOnDeviceClient,
         helper: com.bydmate.app.data.vehicle.HelperClient,
         @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
-        offReportCapture: com.bydmate.app.data.telegram.PowerOffOutcomeCapture,
     ): com.bydmate.app.data.vehicle.HelperBootstrap =
-        com.bydmate.app.data.vehicle.HelperBootstrap(adb, helper, context, offReportCapture)
+        com.bydmate.app.data.vehicle.HelperBootstrap(adb, helper, context)
 
     @Provides
     @Singleton

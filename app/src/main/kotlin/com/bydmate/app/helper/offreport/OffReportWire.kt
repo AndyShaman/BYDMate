@@ -4,8 +4,8 @@ import android.os.Parcel
 
 /**
  * Wire types of the power-off Telegram report (3.19, phase B), shared by the daemon (which holds
- * the armed report and sends it when the car is switched off) and the app (which arms it and asks
- * for the outcome on its next start). Kept out of both so the marshalling is tested on its own.
+ * the armed report and delivers it, at the power-off or later from disk) and the app (which arms it
+ * and shows the outcome in its dump). Kept out of both so the marshalling is tested on its own.
  *
  * Every reader checks what is left in the parcel and the length of each string: a truncated or
  * oversized parcel reads as null (refused), never as a half-filled value.
@@ -20,7 +20,10 @@ object OffReportState {
     /** The car was switched off and the send is still retrying. */
     const val SENDING = 2
     const val SENT = 3
-    /** Every attempt before the deadline failed, or Telegram refused the report for good. */
+    /**
+     * Every attempt before the deadline failed (the report waits on disk for the next arm), or
+     * Telegram refused it for good (dropped).
+     */
     const val FAILED = 4
 
     fun name(state: Int): String = when (state) {
@@ -52,8 +55,9 @@ data class OffReportFid(val dev: Int, val fid: Int, val outcome: String)
 /**
  * TX_OFFREPORT_STATUS reply. [queried] is the id the app asked about; [armedId] the report held
  * right now ("" = none) with its wall-clock arm time; [listening] how many power fids the daemon's
- * listener holds (-1 = not registered yet) and [fids] each one's state; [last] the latest power-off
- * the daemon handled, whatever its id.
+ * listener holds (-1 = not registered yet) and [fids] each one's state; [last] the latest delivery
+ * outcome (at a power-off or of a pending report), whatever its id; [pending] the reports waiting
+ * on disk.
  */
 data class OffReportStatus(
     val queried: OffReportOutcome,
@@ -62,6 +66,7 @@ data class OffReportStatus(
     val listening: Int,
     val last: OffReportOutcome?,
     val fids: List<OffReportFid> = emptyList(),
+    val pending: Int = 0,
 )
 
 const val OFF_REPORT_NO_RC = "-"
@@ -72,20 +77,35 @@ internal const val OFF_REPORT_MAX_TOKEN = 256
 internal const val OFF_REPORT_MAX_TEXT = 8192
 internal const val OFF_REPORT_MAX_RC = 128
 internal const val OFF_REPORT_MAX_FIDS = 8
+internal const val OFF_REPORT_MAX_LATE_MARK = 512
+
+/** More than the daemon ever keeps ([PendingReports.MAX]); a larger count is a broken reply. */
+internal const val OFF_REPORT_MAX_PENDING = 100
 
 private const val INT_BYTES = 4
 private const val LONG_BYTES = 8
 
-/** TX_OFFREPORT_ARM request: [String id, String token, long chatId, String text]. */
-internal fun writeOffReportArm(p: Parcel, id: String, token: String, chatId: Long, text: String) {
+/**
+ * TX_OFFREPORT_ARM request: [String id, String token, long chatId, String text, String lateMark].
+ * [text] and [lateMark] carry `{{time}}`: the power-off time, filled in by the daemon.
+ */
+@Suppress("LongParameterList") // exactly the wire fields
+internal fun writeOffReportArm(p: Parcel, id: String, token: String, chatId: Long, text: String, lateMark: String) {
     p.writeString(id)
     p.writeString(token)
     p.writeLong(chatId)
     p.writeString(text)
+    p.writeString(lateMark)
 }
 
 /** The daemon's view of an arm request; toString never shows the token, the chat or the text. */
-internal class ArmRequest(val id: String, val token: String, val chatId: Long, val text: String) {
+internal class ArmRequest(
+    val id: String,
+    val token: String,
+    val chatId: Long,
+    val text: String,
+    val lateMark: String = "",
+) {
     override fun toString(): String = "ArmRequest(id=$id, len=${text.length})"
 }
 
@@ -96,13 +116,14 @@ internal fun readOffReportArm(p: Parcel): ArmRequest? {
     if (p.dataAvail() < LONG_BYTES) return null
     val chatId = p.readLong()
     val text = p.boundedString(OFF_REPORT_MAX_TEXT)?.takeIf { it.isNotEmpty() } ?: return null
-    return ArmRequest(id, token, chatId, text)
+    val lateMark = p.boundedString(OFF_REPORT_MAX_LATE_MARK) ?: return null
+    return ArmRequest(id, token, chatId, text, lateMark)
 }
 
 /**
  * TX_OFFREPORT_STATUS reply after the leading status int:
  * [outcome queried, String armedId, long armedAtMs, int listening, int hasLast, (outcome last)?,
- *  int fidCount, fidCount × (int dev, int fid, String outcome)]
+ *  int fidCount, fidCount × (int dev, int fid, String outcome), int pending]
  * where an outcome is [String id, int state, long powerOffMs, long sentAtMs, int attempts, String rc].
  */
 internal fun writeOffReportStatus(p: Parcel, status: OffReportStatus) {
@@ -120,6 +141,7 @@ internal fun writeOffReportStatus(p: Parcel, status: OffReportStatus) {
         p.writeInt(it.fid)
         p.writeString(it.outcome.take(OFF_REPORT_MAX_RC))
     }
+    p.writeInt(status.pending)
 }
 
 /** Null on a truncated or oversized reply. */
@@ -145,7 +167,10 @@ internal fun readOffReportStatus(p: Parcel): OffReportStatus? {
         val outcome = p.boundedString(OFF_REPORT_MAX_RC) ?: return null
         fids += OffReportFid(dev, fid, outcome)
     }
-    return OffReportStatus(queried, armedId, armedAtMs, listening, last, fids)
+    if (p.dataAvail() < INT_BYTES) return null
+    val pending = p.readInt()
+    if (pending !in 0..OFF_REPORT_MAX_PENDING) return null
+    return OffReportStatus(queried, armedId, armedAtMs, listening, last, fids, pending)
 }
 
 private fun writeOutcome(p: Parcel, o: OffReportOutcome) {

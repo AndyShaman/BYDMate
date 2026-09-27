@@ -26,8 +26,8 @@ import javax.inject.Singleton
 
 /**
  * A report entry waiting for the network; [chatId] is the chat it was built for. [lateMark] = add
- * «(записано в HH:MM)» when it goes out late; the power-off report carries its time in the header
- * already, so phase B queues it with false.
+ * «(записано в HH:MM)» when it goes out late. The power-off report never comes here: the helper
+ * daemon delivers it, pending ones included.
  */
 data class OutboxEntry(
     val id: String,
@@ -39,9 +39,16 @@ data class OutboxEntry(
 
 /**
  * The ready power-off report phase B hands to the helper daemon: bot, chat and the text with
- * [TelegramReportBuilder.TIME_PLACEHOLDER] in its header. toString never shows the secrets.
+ * [TelegramReportBuilder.TIME_PLACEHOLDER] in its header, plus [lateMark], the «(записано в {{time}})»
+ * line the daemon adds when it delivers the report later. toString never shows the secrets.
  */
-data class PowerOffReport(val id: String, val token: String, val chatId: Long, val text: String) {
+data class PowerOffReport(
+    val id: String,
+    val token: String,
+    val chatId: Long,
+    val text: String,
+    val lateMark: String = "",
+) {
     override fun toString(): String = "PowerOffReport(id=$id, len=${text.length})"
 }
 
@@ -127,7 +134,7 @@ class TelegramReporter @Inject constructor(
             ?.let { return it }
         val id = newId()
         logBuild(id, "power_off", fields, "", report)
-        return PowerOffReport(id, config.token, chatId, report.text)
+        return PowerOffReport(id, config.token, chatId, report.text, lateMarkTemplate())
     }
 
     /**
@@ -176,14 +183,9 @@ class TelegramReporter @Inject constructor(
         }
     }
 
-    /** «BYDMate: последнее состояние машины на HH:MM», the header of a re-send without proof. */
-    fun lastStateHeader(atMs: Long): String =
-        appStrings.get(R.string.tg_report_header_last_state, TelegramReportBuilder.formatTime(atMs))
-
     /**
      * Puts a report in the outbox; past [OUTBOX_MAX] the oldest ones go. An id already queued is
-     * ignored, so a re-send repeated after a crash between two writes is still one message. [createdMs] is when the report
-     * describes the car: phase B passes the power-off time of a report the daemon could not send.
+     * ignored. [createdMs] is when the report describes the car.
      */
     suspend fun enqueue(entry: OutboxEntry) {
         outboxMutex.withLock {
@@ -203,18 +205,20 @@ class TelegramReporter @Inject constructor(
 
     /**
      * The dump header lines. `armed` is the age of the report the daemon holds, `daemon` whether it
-     * took the last arm (ok), is too old for it (outdated) or was not reached (-); `last_off` is the
-     * daemon's last power-off as the arming loop last read it.
+     * took the last arm (ok), is too old for it (outdated) or was not reached (-); `pending` (reports
+     * waiting on the daemon's disk), `last_off` (its last delivery outcome) and `listener` are asked
+     * from the daemon now, `-` when it does not answer.
      */
     suspend fun diagnosticsLines(): List<String> {
         val armedAt = offState.armedAtMs
         val armedAge = if (armedAt > 0L) "${(clock() - armedAt) / 1000}s" else "-"
+        val status = offState.daemonStatus()
         return listOf(
             "telegram report: off=${if (settings.isTgReportOffEnabled()) "on" else "off"} " +
                 "fields=[${ReportField.toCsv(settings.getTgReportOffFields())}] armed=$armedAge " +
-                "daemon=${offState.daemon} outbox=${outboxSize()}",
-            "telegram report last_off: ${offState.lastOffLine()}",
-            "telegram report listener: ${offState.listenerLine()}",
+                "daemon=${offState.daemon} pending=${status?.pending ?: "-"} outbox=${outboxSize()}",
+            "telegram report last_off: ${PowerOffArmState.lastOffLine(status?.last)}",
+            "telegram report listener: ${PowerOffArmState.listenerLine(status?.fids.orEmpty())}",
         )
     }
 
@@ -267,6 +271,11 @@ class TelegramReporter @Inject constructor(
                 "custom=${customText.isNotBlank()} len=${report.text.length}",
         )
     }
+
+    /** The late line with [TelegramReportBuilder.TIME_PLACEHOLDER] for the stamp, filled in by the daemon. */
+    private fun lateMarkTemplate(): String = "<i>${TelegramReportBuilder.escape(
+        appStrings.get(R.string.tg_report_recorded_at, TelegramReportBuilder.TIME_PLACEHOLDER),
+    )}</i>"
 
     /** «(записано в 18:42)», with the date when the report is from another day. */
     private fun lateMark(createdMs: Long, nowMs: Long): String {

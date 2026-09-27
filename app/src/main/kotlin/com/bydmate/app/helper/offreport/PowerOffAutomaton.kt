@@ -14,17 +14,28 @@ internal class PowerOffAutomaton {
 
     private val on = HashSet<Int>()
 
+    /**
+     * Bumped by every pushed event. A direct read races the pushes: the owner takes the generation
+     * before reading and applies the seed only when it has not moved, so a value read before a
+     * handled power-off cannot re-prime the automaton after it.
+     */
+    var generation = 0L
+        private set
+
     /** A pushed value; true = this is the power-off. Negative values (sentinels) are ignored. */
-    fun onEvent(fid: Int, value: Int): Boolean = when {
-        value > 0 -> {
-            on += fid
-            false
+    fun onEvent(fid: Int, value: Int): Boolean {
+        generation++
+        return when {
+            value > 0 -> {
+                on += fid
+                false
+            }
+            value == 0 && fid in on -> {
+                on.clear()
+                true
+            }
+            else -> false
         }
-        value == 0 && fid in on -> {
-            on.clear()
-            true
-        }
-        else -> false
     }
 
     /**

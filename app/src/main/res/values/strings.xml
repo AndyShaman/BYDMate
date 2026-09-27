@@ -1911,7 +1911,6 @@
     <string name="tg_report_field_openings">Что открыто</string>
     <string name="tg_report_field_tires">Давление в шинах</string>
     <string name="tg_report_header_off">BYDMate: машина выключена в %1$s</string>
-    <string name="tg_report_header_last_state">BYDMate: последнее состояние машины на %1$s</string>
     <string name="tg_report_map_link">Открыть на карте</string>
     <string name="tg_report_soc">заряд %1$d%%</string>
     <string name="tg_report_range">запас %1$d км</string>

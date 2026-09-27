@@ -1744,7 +1744,6 @@
     <string name="tg_report_field_openings">What is open</string>
     <string name="tg_report_field_tires">Tire pressure</string>
     <string name="tg_report_header_off">BYDMate: car turned off at %1$s</string>
-    <string name="tg_report_header_last_state">BYDMate: last car status at %1$s</string>
     <string name="tg_report_map_link">Open on the map</string>
     <string name="tg_report_soc">charge %1$d%%</string>
     <string name="tg_report_range">range %1$d km</string>
