@@ -18,11 +18,14 @@ import androidx.core.app.NotificationCompat
 import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
 import com.bydmate.app.data.telegram.TelegramReporter
 import com.bydmate.app.data.telegram.runReportAction
+import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.CommandTranslator
 import com.bydmate.app.data.vehicle.DriveMode
 import com.bydmate.app.data.vehicle.HelperClient
@@ -562,7 +565,20 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     /** Test seam -- the direct speed read a speed-gated step is decided on, rounded UP like
      *  the drive mode guard (15.1 km/h is 16, not 15). Null when the read fails or times out. */
     internal var readSpeedNow: suspend () -> Int? = {
-        withTimeoutOrNull(GATE_SPEED_READ_TIMEOUT_MS) { vehicleApi.readSpeed() }?.let { ceil(it).toInt() }
+        withTimeoutOrNull(GATE_SPEED_READ_TIMEOUT_MS) { readSpeedViaDaemon() }?.let { ceil(it).toInt() }
+    }
+
+    /**
+     * The speed through the helper daemon, not ADB: an ADB read waits on a JVM monitor a timeout
+     * cannot interrupt, the daemon's transport lock is a coroutine mutex it can (review
+     * 2026-09-27). Every step this gates writes through the daemon anyway. A single-item tx=7
+     * batch read, decoded like NativeParsReader decodes one: sentinel bits -> null.
+     */
+    private suspend fun readSpeedViaDaemon(): Float? {
+        val address = FidAddresses.of("speed")
+        val (status, word) = helper.readBatch(listOf(BatchReadItem(tx = 7, dev = address.device, fid = address.fid)))
+            ?.singleOrNull() ?: return null
+        return if (status != 0) null else SentinelDecoder.parseFloatFromShellInt(word)
     }
 
     /** Last seat step asked for per seat, so a «toggle» can bring the seat back to it. */
@@ -935,7 +951,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val direct = runCatching { readSpeedNow() }
             .onFailure { if (it is CancellationException) throw it }
             .getOrNull()
-        Log.i(TAG, "gate speed '$command': direct=$direct -> ${direct ?: "unknown"}")
+        Log.i(TAG, "gate speed '$command': source=daemon direct=$direct -> ${direct ?: "unknown"}")
         return direct
     }
 
