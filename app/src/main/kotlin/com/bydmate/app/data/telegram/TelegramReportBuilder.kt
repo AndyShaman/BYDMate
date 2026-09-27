@@ -183,35 +183,69 @@ object TelegramReportBuilder {
         else text(strings, R.string.common_duration_minutes, totalMin)
     }
 
-    /**
-     * «Открыто: …» with every panel reported open, «Всё закрыто» when none of the reported ones is;
-     * null when the car reports none of them. Doors, trunks and hood: 1 = open; windows and the
-     * sunroof: opening percent above 0.
-     */
-    private fun openingsLine(d: DiParsData, strings: ReportStrings): String? {
-        val flags = listOf(
-            R.string.tg_report_open_door_fl to panelOpen(d.doorFL),
-            R.string.tg_report_open_door_fr to panelOpen(d.doorFR),
-            R.string.tg_report_open_door_rl to panelOpen(d.doorRL),
-            R.string.tg_report_open_door_rr to panelOpen(d.doorRR),
-            R.string.window_pane_driver to paneOpen(d.windowFL),
-            R.string.window_pane_passenger to paneOpen(d.windowFR),
-            R.string.window_pane_rear_left to paneOpen(d.windowRL),
-            R.string.window_pane_rear_right to paneOpen(d.windowRR),
-            R.string.tg_report_open_sunroof to paneOpen(d.sunroof),
-            R.string.tg_report_open_trunk to panelOpen(d.trunk),
-            R.string.tg_report_open_front_trunk to panelOpen(d.frontTrunk),
-            R.string.tg_report_open_hood to panelOpen(d.hood),
-        ).filter { it.second != null }
-        if (flags.isEmpty()) return null
-        val open = flags.filter { it.second == true }.map { text(strings, it.first) }
-        return if (open.isEmpty()) text(strings, R.string.tg_report_all_closed)
-        else text(strings, R.string.tg_report_open_list, open.joinToString(", "))
+    /** Open, closed, or reported with a value that means neither (a sentinel, a stuck sensor). */
+    private enum class PanelState { OPEN, CLOSED, UNKNOWN }
+
+    /** Doors and the hood: 0 = closed, 1 = open, anything else the car sends is unreadable. */
+    private fun hingeState(value: Int?): PanelState? = value?.let {
+        when (it) {
+            0 -> PanelState.CLOSED
+            1 -> PanelState.OPEN
+            else -> PanelState.UNKNOWN
+        }
     }
 
-    private fun panelOpen(state: Int?): Boolean? = state?.let { it == 1 }
+    /** Trunk and front trunk position: 2 = closed, 1 = open, 3 = moving (not closed yet). */
+    private fun hatchState(value: Int?): PanelState? = value?.let {
+        when (it) {
+            2 -> PanelState.CLOSED
+            1, 3 -> PanelState.OPEN
+            else -> PanelState.UNKNOWN
+        }
+    }
 
-    private fun paneOpen(percent: Int?): Boolean? = percent?.let { it in 1..100 }
+    /** Windows and the sunroof: an opening percent, 0 = closed. */
+    private fun paneState(value: Int?): PanelState? = value?.let {
+        when (it) {
+            0 -> PanelState.CLOSED
+            in 1..100 -> PanelState.OPEN
+            else -> PanelState.UNKNOWN
+        }
+    }
+
+    /**
+     * «Открыто: …» with every panel reported open. «Всё закрыто» only when all four doors and all
+     * four windows are known closed (a sunroof, a trunk, a front trunk or a hood the car does not
+     * report is fine: many cars lack them). Otherwise, with nothing open but some panel unreadable
+     * or missing, the line is left out rather than guessed either way; null when the car reports
+     * none of the twelve panels at all.
+     */
+    private fun openingsLine(d: DiParsData, strings: ReportStrings): String? {
+        val doors = listOf(
+            R.string.tg_report_open_door_fl to hingeState(d.doorFL),
+            R.string.tg_report_open_door_fr to hingeState(d.doorFR),
+            R.string.tg_report_open_door_rl to hingeState(d.doorRL),
+            R.string.tg_report_open_door_rr to hingeState(d.doorRR),
+        )
+        val windows = listOf(
+            R.string.window_pane_driver to paneState(d.windowFL),
+            R.string.window_pane_passenger to paneState(d.windowFR),
+            R.string.window_pane_rear_left to paneState(d.windowRL),
+            R.string.window_pane_rear_right to paneState(d.windowRR),
+        )
+        val optional = listOf(
+            R.string.tg_report_open_sunroof to paneState(d.sunroof),
+            R.string.tg_report_open_trunk to hatchState(d.trunk),
+            R.string.tg_report_open_front_trunk to hatchState(d.frontTrunk),
+            R.string.tg_report_open_hood to hingeState(d.hood),
+        )
+        val open = (doors + windows + optional).filter { it.second == PanelState.OPEN }.map { text(strings, it.first) }
+        if (open.isNotEmpty()) return text(strings, R.string.tg_report_open_list, open.joinToString(", "))
+        val allClosed = doors.all { it.second == PanelState.CLOSED } &&
+            windows.all { it.second == PanelState.CLOSED } &&
+            optional.all { it.second == null || it.second == PanelState.CLOSED }
+        return if (allClosed) text(strings, R.string.tg_report_all_closed) else null
+    }
 
     /**
      * «Шины: 2,4 / 2,4 / 2,3 / 2,4 бар» in the order front left, front right, rear left, rear right,

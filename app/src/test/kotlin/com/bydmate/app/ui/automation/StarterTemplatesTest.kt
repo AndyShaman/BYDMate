@@ -43,4 +43,28 @@ class StarterTemplatesTest {
         }
         assertTrue(starterTemplates("ru").map { it.name }.containsAll(listOf("Где машина", "Статус при запуске")))
     }
+
+    @Test fun `the Telegram report templates have their own name in every interface language`() {
+        assertEquals(listOf("Дзе машына", "Стан пры запуску"), telegramReportTemplates("be").map { it.name })
+        assertEquals(listOf("Gdzie jest samochód", "Stan przy uruchomieniu"), telegramReportTemplates("pl").map { it.name })
+        assertEquals(listOf("Onde está o carro", "Status ao iniciar"), telegramReportTemplates("pt").map { it.name })
+    }
+
+    @Test fun `the Telegram report trigger and action names follow the language too`() {
+        for (lang in listOf("ru", "be", "en", "pl", "pt", "zh")) {
+            val rules = telegramReportTemplates(lang)
+            val gearTrigger = TriggerDef.listFromJson(rules[0].triggers).single()
+            val startupTrigger = TriggerDef.listFromJson(rules[1].triggers).single()
+            val actionName = ActionDef.listFromJson(rules[0].actions).single().displayName
+            assertFalse(lang, gearTrigger.displayName.isBlank())
+            assertFalse(lang, startupTrigger.displayName.isBlank())
+            assertFalse(lang, actionName.isBlank())
+        }
+        assertEquals("Перадача = P", TriggerDef.listFromJson(telegramReportTemplates("be").first().triggers).single().displayName)
+        assertEquals("Bieg = P", TriggerDef.listFromJson(telegramReportTemplates("pl").first().triggers).single().displayName)
+        assertEquals("Marcha = P", TriggerDef.listFromJson(telegramReportTemplates("pt").first().triggers).single().displayName)
+        assertEquals("Справаздача ў Telegram", ActionDef.listFromJson(telegramReportTemplates("be").first().actions).single().displayName)
+        assertEquals("Raport w Telegramie", ActionDef.listFromJson(telegramReportTemplates("pl").first().actions).single().displayName)
+        assertEquals("Relatório no Telegram", ActionDef.listFromJson(telegramReportTemplates("pt").first().actions).single().displayName)
+    }
 }
