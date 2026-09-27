@@ -43,9 +43,10 @@ fun interface DriveModeReader {
 /**
  * Status-classified single write with a last-instant guard, supplied by
  * VehicleApiImpl.doWriteOutcome. [beforeSend] runs after the write's (suspending) audit-row
- * insert and immediately before the command reaches the helper; returning false aborts the
- * send and the write reports TRANSIENT. Own interface rather than [SeatWriter] because the
- * seat channel has no equivalent guard.
+ * insert, then inside HelperClient's own transport lock immediately before the transact — no
+ * queue wait behind another helper request can separate the check from the send. Returning
+ * false aborts the send and the write reports TRANSIENT. Own interface rather than [SeatWriter]
+ * because the seat channel has no equivalent guard.
  */
 fun interface DriveModeWriter {
     suspend fun write(actionName: String, value: Int, beforeSend: suspend () -> Boolean): WriteOutcome
@@ -63,7 +64,8 @@ fun interface DriveModeWriter {
  *  - target == 10 (flotation)           → FLOTATION, nothing written
  *  - target == requested                → OK ("already"), nothing written
  *  - terrain mode, speed now unknown or above the limit (re-checked in the beforeSend guard,
- *    right before the command reaches the helper, after the write's audit-log insert)
+ *    after the write's audit-log insert, right before the transact inside HelperClient's own
+ *    transport lock)
  *                                       → SPEED, nothing written
  *  - write not accepted (daemon down)   → UNREACHABLE
  *  - target == requested within ~3 s    → OK
@@ -111,8 +113,9 @@ class DriveModeChannel(
         if (current == DriveMode.TARGET_FLOTATION) return a.done(Result.FLOTATION, "flotation", current)
         if (current == mode.value) return a.done(Result.OK, "already", current)
 
-        // The guard runs inside writer.write, after its audit-log insert and right before the
-        // helper call — the actual last-instant re-check, see terrainSpeedGuard.
+        // The guard runs inside writer.write, after its audit-log insert, then inside
+        // HelperClient's own transport lock right before the transact — the actual
+        // last-instant re-check, see terrainSpeedGuard.
         val status = writer.write(mode.actionName, mode.value) { terrainSpeedGuard(a) }.also { a.status = it }
         a.speedVerdict?.let { return a.done(Result.SPEED, it, null) }
         if (status == WriteOutcome.TRANSIENT) return a.done(Result.UNREACHABLE, "unreachable", current)
@@ -130,8 +133,9 @@ class DriveModeChannel(
         runCatching { speed() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
 
     /** [DriveModeWriter.beforeSend] guard: for a terrain mode, re-reads speed one last time —
-     *  this runs after doWriteOutcome's audit-row insert, right before the helper call, so a
-     *  speed that only rose during that suspend is still caught — and refuses when it is now
+     *  this runs after doWriteOutcome's audit-row insert, inside HelperClient's own transport
+     *  lock right before the transact, so a speed that only rose during that suspend OR while
+     *  queued behind another helper request is still caught — and refuses when it is now
      *  unknown or above the limit; a non-terrain mode is not gated (no read). Sets
      *  [Attempt.speedVerdict] so [switchTo] can tell a guard refusal apart from a helper-down
      *  TRANSIENT, since doWriteOutcome reports both the same way. */

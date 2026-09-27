@@ -51,10 +51,10 @@ class VehicleApiDriveModeTest {
     @Test fun `the old D+ string ECO模式 switches to eco on dev 1023`() = runTest {
         supported(DriveMode.ECO)
         coEvery { helper.read(1023, target, any()) } returnsMany listOf(1L, 2L)
-        coEvery { helper.writeStatus(1023, 1276260400, 2) } returns 1
+        coEvery { helper.writeStatus(1023, 1276260400, 2, any()) } returns 1
         assertTrue(impl.dispatch("ECO模式").isSuccess)
-        coVerify(exactly = 1) { helper.writeStatus(1023, 1276260400, 2) }
-        coVerify(exactly = 0) { helper.writeStatus(1006, any(), any()) }
+        coVerify(exactly = 1) { helper.writeStatus(1023, 1276260400, 2, any()) }
+        coVerify(exactly = 0) { helper.writeStatus(1006, any(), any(), any()) }
         assertEquals("verdict=OK", verdictRow().error)
         assertEquals(2, verdictRow().readback)
     }
@@ -62,7 +62,7 @@ class VehicleApiDriveModeTest {
     @Test fun `a mode that did not change fails with a readback mismatch`() = runTest {
         supported(DriveMode.SPORT)
         coEvery { helper.read(1023, target, any()) } returns 1L
-        coEvery { helper.writeStatus(1023, 1276260400, 3) } returns 1
+        coEvery { helper.writeStatus(1023, 1276260400, 3, any()) } returns 1
         val err = impl.dispatch("运动模式").exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.ReadbackMismatch)
         assertEquals("verdict=not changed", verdictRow().error)
@@ -73,7 +73,7 @@ class VehicleApiDriveModeTest {
         coEvery { helper.read(1023, target, any()) } returns 1L
         val err = impl.dispatch("岩石模式").exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.NotEquipped)
-        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any(), any()) }
     }
 
     @Test fun `flotation fails as state blocked and writes nothing`() = runTest {
@@ -81,7 +81,7 @@ class VehicleApiDriveModeTest {
         coEvery { helper.read(1023, target, any()) } returns 10L
         val err = impl.dispatch("雪地模式").exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.StateBlocked)
-        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any(), any()) }
         assertEquals("verdict=flotation", verdictRow().error)
     }
 
@@ -91,7 +91,7 @@ class VehicleApiDriveModeTest {
         assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
         assertEquals(40, (err as VehicleWriteError.SpeedBlocked).speed)
         coVerify(exactly = 0) { helper.read(any(), any(), any()) }
-        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any(), any()) }
         assertEquals("verdict=too fast", verdictRow().error)
     }
 
@@ -99,7 +99,7 @@ class VehicleApiDriveModeTest {
         kmh = 15.0f
         supported(DriveMode.SNOW)
         coEvery { helper.read(1023, target, any()) } returnsMany listOf(1L, 4L)
-        coEvery { helper.writeStatus(1023, 1276260400, 4) } returns 1
+        coEvery { helper.writeStatus(1023, 1276260400, 4, any()) } returns 1
         assertTrue(impl.dispatch("雪地模式").isSuccess)
     }
 
@@ -120,14 +120,20 @@ class VehicleApiDriveModeTest {
 
     /**
      * Reproduces the reviewer's race: doWriteOutcome inserts the "attempt" audit row (a
-     * suspending DB write) before calling the beforeSend guard. If the speed rises while that
-     * insert is in flight, the guard — which re-reads speed right after the insert, before the
-     * helper call — must still catch it: SpeedBlocked, helper.writeStatus never called.
+     * suspending DB write) before the write reaches helper.writeStatus. If the speed rises
+     * while that insert is in flight, the guard — which now runs inside HelperClient's own
+     * transport lock, right before the transact — must still catch it: SpeedBlocked, and the
+     * refusal is logged as "pre_send_refused" (never "helper unreachable"). The fake mirrors
+     * HelperClientImpl's own contract: call the guard, throw WriteGuardRefused when it refuses.
      */
     @Test fun `speed rising while the attempt row insert is suspended still blocks the send`() = runTest {
         kmh = 5f
         supported(DriveMode.SNOW)
         coEvery { helper.read(1023, target, any()) } returns 1L
+        coEvery { helper.writeStatus(1023, 1276260400, 4, any()) } coAnswers {
+            val guard = arg<suspend () -> Boolean>(3)
+            if (guard()) 1 else throw WriteGuardRefused()
+        }
         val insertInProgress = CompletableDeferred<Unit>()
         val releaseInsert = CompletableDeferred<Unit>()
         coEvery { dao.insert(any()) } coAnswers {
@@ -148,6 +154,16 @@ class VehicleApiDriveModeTest {
 
         val err = result?.exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
-        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+        assertEquals(20, (err as VehicleWriteError.SpeedBlocked).speed)
+        assertEquals("too fast", err.details)
+        assertEquals("verdict=too fast", verdictRow().error)
+
+        val refusalRow = audit.single { it.error == "pre_send_refused" }
+        assertEquals(-1, refusalRow.status)
+        assertEquals(null, refusalRow.readback)
+        assertEquals("drive_mode_snow", refusalRow.actionName)
+        assertEquals(1023, refusalRow.dev)
+        assertEquals(1276260400, refusalRow.fid)
+        assertEquals(4, refusalRow.requested)
     }
 }
