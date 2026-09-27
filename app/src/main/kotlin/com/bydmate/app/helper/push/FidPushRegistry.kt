@@ -370,7 +370,7 @@ internal object FidPushRegistry {
  * 14 fids, 3 "OK", 0 events). Gearbox and Bodywork additionally refuse a null Context outright.
  * The daemon installs its system Context into [FidPushRegistry.context] at startup.
  */
-private fun deviceInstance(className: String): Any {
+internal fun deviceInstance(className: String): Any {
     val ctx = FidPushRegistry.context ?: error("daemon has no system Context")
     val type = Class.forName(className)
     return type.getMethod("getInstance", Context::class.java).invoke(null, ctx)
@@ -392,7 +392,7 @@ internal class PermissiveContext(base: Context) : ContextWrapper(base) {
  * proves nothing. The device's own listener map does: containsId(fid) is true only after the fid
  * was really added, and only this process registers anything in the daemon.
  */
-private fun confirmRegistration(device: Any, fid: Int): String {
+internal fun confirmRegistration(device: Any, fid: Int): String {
     val map = listenerMapOf(device) ?: return FID_PUSH_SENT
     // The map is a private inner class of AbsBYDAutoDevice; containsId is public on its supertype.
     val contains = runCatching {
@@ -419,7 +419,7 @@ private fun listenerMapOf(device: Any): Any? {
     return null
 }
 
-private fun findListenerMethod(target: Any, listener: Any, name: String, withFeatureIds: Boolean): Method =
+internal fun findListenerMethod(target: Any, listener: Any, name: String, withFeatureIds: Boolean): Method =
     target.javaClass.methods.firstOrNull { matchesListenerMethod(it, listener, name, withFeatureIds) }
         ?: throw NoSuchMethodException(name)
 

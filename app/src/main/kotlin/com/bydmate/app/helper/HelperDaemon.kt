@@ -4,6 +4,9 @@ package com.bydmate.app.helper
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.helper.push.FidPushRegistry
 import com.bydmate.app.helper.push.FidRecorder
+import com.bydmate.app.helper.offreport.OffReport
+import com.bydmate.app.helper.offreport.readOffReportArm
+import com.bydmate.app.helper.offreport.writeOffReportStatus
 import com.bydmate.app.helper.push.PermissiveContext
 import com.bydmate.app.helper.push.readRecStartRequest
 import com.bydmate.app.helper.push.readSubscribeRequest
@@ -207,6 +210,11 @@ fun main(args: Array<String>) {
             exitProcess(3)
         }
     val autoIface: String = svc.interfaceDescriptor ?: ""
+    // The power-off report seeds its listener with a direct getInt of the power fids.
+    OffReport.reader = { dev, fid ->
+        autoserviceTransact(svc, autoIface, 5, dev, fid, 0, writeValue = false)
+            .takeIf { (status, _) -> status == 0 }?.second
+    }
 
     // Keeps created VirtualDisplays alive (their backing Surface comes from the app overlay).
     // Keyed by displayId so TX_RELEASE_VIRTUAL_DISPLAY can release the right one.
@@ -865,6 +873,10 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_REC_START,
                 HelperBinderProtocol.TX_REC_STOP,
                 HelperBinderProtocol.TX_REC_STATUS -> handleRecorderTransact(code, data, reply)
+
+                HelperBinderProtocol.TX_OFFREPORT_ARM,
+                HelperBinderProtocol.TX_OFFREPORT_DISARM,
+                HelperBinderProtocol.TX_OFFREPORT_STATUS -> handleOffReportTransact(code, data, reply)
 
                 else -> super.onTransact(code, data, reply, flags)
             }
@@ -2598,6 +2610,37 @@ private fun handleRecorderTransact(code: Int, data: Parcel, reply: Parcel?): Boo
             android.util.Log.w("FidRec", "TX_REC_STATUS failed", e)
             reply?.writeInt(-1)
         }
+    }
+    return true
+}
+
+/**
+ * The three power-off report verbs, out of line like the recorder's. Every reply starts with a
+ * status int; a failure here costs this call only, never the daemon.
+ */
+private fun handleOffReportTransact(code: Int, data: Parcel, reply: Parcel?): Boolean {
+    runCatching {
+        when (code) {
+            HelperBinderProtocol.TX_OFFREPORT_ARM -> {
+                val request = readOffReportArm(data)
+                if (request != null) OffReport.arm(request)
+                reply?.writeInt(if (request != null) 0 else -1)
+            }
+            HelperBinderProtocol.TX_OFFREPORT_DISARM -> {
+                OffReport.disarm()
+                reply?.writeInt(0)
+            }
+            else -> {
+                val status = OffReport.status(data.readString().orEmpty())
+                reply?.writeInt(0)
+                reply?.let { writeOffReportStatus(it, status) }
+            }
+        }
+    }.onFailure { e ->
+        // The class name only: a message could carry what the request held.
+        android.util.Log.w("OffReport", "offreport: tx=$code failed: ${e.javaClass.simpleName}")
+        reply?.setDataSize(0)
+        reply?.writeInt(-1)
     }
     return true
 }
