@@ -506,11 +506,40 @@ class RuleShareTest {
         assertEquals("2", parsed.triggers.single().value)
     }
 
+    private fun oneShotRule(moment: String) = SharedRule.fromEntity(
+        RuleEntity(
+            name = "Once",
+            triggers = TriggerDef.listToJson(listOf(TriggerDef(
+                OneShotTrigger.PARAM, "", "==", moment, "once", kind = OneShotTrigger.KIND,
+            ))),
+            actions = ActionDef.listToJson(listOf(ActionDef("c", "x"))),
+        )
+    )
+
+    private fun importCheck(rule: SharedRule) =
+        RuleDraftValidator.validateTriggers(rule.triggers, -1L, emptyList(), triggerLogic = rule.triggerLogic)
+
+    @Test fun `a one-shot rule survives an export and import round trip`() {
+        val parsed = RuleShare.parse(RuleShare.exportJson(oneShotRule("2026-10-01T08:30"), "3.19.0"), "Звонок")
+
+        val trigger = (parsed as RuleParseResult.Ok).rule.triggers.single()
+        assertEquals(OneShotTrigger.KIND, trigger.kind)
+        assertEquals("2026-10-01T08:30", trigger.value)
+        assertNull(importCheck(parsed.rule))
+    }
+
+    // The import runs the editor's validator on the parsed rule: the same strict date parser.
+    @Test fun `an imported one-shot moment that does not exist is refused`() {
+        val parsed = RuleShare.parse(RuleShare.exportJson(oneShotRule("2026-02-30T08:30"), "3.19.0"), "Звонок")
+
+        assertEquals(TriggerValidationError.OneShotInvalid, importCheck((parsed as RuleParseResult.Ok).rule))
+    }
+
     @Test fun `every kind the editor can create is known`() {
         val created = listOf(
             TriggerDef("Speed", "车速", ">", "0", "x").kind,
             "place_enter", "place_exit", "time_of_day", "time_range", "service_start",
-            "network_available", "button_press", "steering_key", "voice",
+            "network_available", "button_press", "steering_key", "voice", "once_at",
         )
         assertTrue(RuleShare.KNOWN_TRIGGER_KINDS.containsAll(created))
         assertTrue(ActionDef("c", "x").kind in RuleShare.KNOWN_ACTION_KINDS)

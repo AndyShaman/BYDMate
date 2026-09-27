@@ -39,7 +39,7 @@ class AgentToolsAutomationTest {
     private val tripDao = mockk<TripDao>()
     private val chargeDao = mockk<ChargeDao>()
     private val dispatcher = mockk<ActionDispatcher>()
-    private val ruleDao = mockk<RuleDao>()
+    private val ruleDao = mockk<RuleDao> { coEvery { getCount() } returns 0 }
     private val engine = mockk<AutomationEngine>()
     private val places = mockk<PlaceRepository>()
     private val weather = mockk<WeatherClient>()

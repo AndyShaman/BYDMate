@@ -13,6 +13,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.vehicle.DriveMode
+import com.bydmate.app.data.vehicle.VehicleApi
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -56,21 +57,24 @@ class AutomationEngineAuditTest {
     fun setUp() {
         LocalePreferences(ctx).setLanguage("ru")
         coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        engine = AutomationEngine(
-            ruleDao = ruleDao,
-            ruleLogDao = ruleLogDao,
-            actionDispatcher = dispatcher,
-            placeRepository = mockk<PlaceRepository> { coEvery { getAllSnapshot() } returns emptyList() },
-            networkAvailableMonitor = mockk<NetworkAvailableMonitor> {
-                every { lastAvailableAt } returns 0L
-                every { probePending } returns false
-            },
-            context = ctx,
-            appStrings = com.bydmate.app.util.AppStrings(ctx),
-        )
-        engine.interactiveProvider = { true }
-        engine.liveData = { null }
+        engine = engineWith(dispatcher)
         ShadowLog.clear()
+    }
+
+    private fun engineWith(actionDispatcher: ActionDispatcher) = AutomationEngine(
+        ruleDao = ruleDao,
+        ruleLogDao = ruleLogDao,
+        actionDispatcher = actionDispatcher,
+        placeRepository = mockk<PlaceRepository> { coEvery { getAllSnapshot() } returns emptyList() },
+        networkAvailableMonitor = mockk<NetworkAvailableMonitor> {
+            every { lastAvailableAt } returns 0L
+            every { probePending } returns false
+        },
+        context = ctx,
+        appStrings = com.bydmate.app.util.AppStrings(ctx),
+    ).apply {
+        interactiveProvider = { true }
+        liveData = { null }
     }
 
     @After
@@ -123,7 +127,17 @@ class AutomationEngineAuditTest {
         coVerify { dispatcher.dispatch(match { it.command == "主驾打开100" }, match<DiParsData> { it.speed == 130 }) }
     }
 
-    @Test fun `with no data at all an opening step is blocked and a closing one runs`() = runBlocking {
+    // The real gate behind the engine: the rule's own zero is never trusted for an opening step.
+    @Test fun `an opening step reads the speed itself, a closing one does not`() = runBlocking {
+        val vehicleApi = mockk<VehicleApi>(relaxed = true) { coEvery { dispatch(any()) } returns Result.success(Unit) }
+        val realDispatcher = ActionDispatcher(vehicleApi, mockk(relaxed = true), ctx,
+            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
+            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
+            com.bydmate.app.util.AppStrings(ctx), dagger.Lazy { mockk(relaxed = true) },
+        )
+        realDispatcher.readSpeedNow = { 130 }
+        engine = engineWith(realDispatcher)
+        engine.liveData = { diParsData(speed = 0) }
         rules = listOf(rule(1, listOf(button(1)), actions = listOf(
             ActionDef("主驾打开100", "open"), ActionDef("主驾打开0", "close"),
         )))
@@ -132,9 +146,9 @@ class AutomationEngineAuditTest {
 
         engine.onButtonPress(1)
 
-        coVerify(exactly = 0) { dispatcher.dispatch(match { it.command == "主驾打开100" }, any()) }
-        coVerify(exactly = 1) { dispatcher.dispatch(match { it.command == "主驾打开0" }, any()) }
-        assertEquals("Скорость неизвестна", reasonOf(entry.captured, 0))
+        coVerify(exactly = 0) { vehicleApi.dispatch("主驾打开100") }
+        coVerify(exactly = 1) { vehicleApi.dispatch("主驾打开0") }
+        assertTrue(reasonOf(entry.captured, 0), reasonOf(entry.captured, 0).contains("130"))
     }
 
     // --- Items 3, 4, 11, 13: condition values ---

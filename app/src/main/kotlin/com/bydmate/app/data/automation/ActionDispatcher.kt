@@ -12,6 +12,7 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -19,6 +20,7 @@ import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.loop.TimedSnapshot
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
 import com.bydmate.app.data.telegram.TelegramReporter
@@ -43,10 +45,12 @@ import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.ceil
 
 /** [daemonRestarting]: the cluster projection failed because its daemon is restarting (retriable, not broken). */
 data class DispatchResult(val success: Boolean, val reason: String? = null, val daemonRestarting: Boolean = false)
@@ -368,12 +372,31 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             else -> R.string.auto_err_failed
         }
 
-        /**
-         * The block of a rule step run with no data at all: a window or sunroof open needs a
-         * known speed. The other gated commands already fail closed inside [safetyBlockReason].
-         */
-        internal fun speedUnknownBlock(action: ActionDef): BlockReason? =
-            if (action.kind == "param") speedGateBlockReason(action.command, null) else null
+        /** True when [command] is allowed or refused by speed: frunk open, unlock, terrain
+         *  drive modes, window and sunroof opens. */
+        internal fun isSpeedGated(command: String): Boolean =
+            isFrontTrunkOpenCommand(command) || isDoorUnlockCommand(command) ||
+                driveModeOf(command)?.terrain == true ||
+                isSunroofOpenCommand(command) || isWindowOpenCommand(command)
+
+        /** The gate of a speed-gated [command] decided on [speed] alone; every gated command,
+         *  windows and sunroof included, fails closed when [speed] is null. Pure function. */
+        internal fun speedOnlyBlockReason(command: String, speed: Int?): BlockReason? {
+            if (BLOCKED_PATTERNS.any { command.contains(it) }) return BlockReason.Forbidden
+            if (isFrontTrunkOpenCommand(command)) {
+                val s = speed ?: return BlockReason.FrunkSpeedUnknown
+                if (s > 0) return BlockReason.FrunkMoving(s)
+            }
+            unlockGateBlockReason(command, speed)?.let { return it }
+            driveModeGateBlockReason(command, speed)?.let { return it }
+            return speedGateBlockReason(command, speed)
+        }
+
+        /** How long the direct speed read before a gated step may take. */
+        private const val GATE_SPEED_READ_TIMEOUT_MS = 1_000L
+
+        /** Oldest poll a gated step may fall back to when the direct read fails. */
+        internal const val GATE_SAMPLE_MAX_AGE_MS = 5_000L
 
         /** A failed drive mode switch: too fast, not on this car, flotation, no change, or no answer. */
         private fun driveModeFailureReason(err: VehicleWriteError, strings: AppStrings): String = when (err) {
@@ -541,6 +564,16 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     /** Test seam -- the freshest poll a "toggle" resolves its state against. */
     internal var liveSnapshot: () -> DiParsData? = { TrackingService.lastData.value }
 
+    /** Test seam -- the direct speed read a speed-gated step is decided on, rounded UP like
+     *  the drive mode guard (15.1 km/h is 16, not 15). Null when the read fails or times out. */
+    internal var readSpeedNow: suspend () -> Int? = {
+        withTimeoutOrNull(GATE_SPEED_READ_TIMEOUT_MS) { vehicleApi.readSpeed() }?.let { ceil(it).toInt() }
+    }
+
+    /** Test seams -- the last poll and the clock it is timed by, the fallback of [readSpeedNow]. */
+    internal var lastSample: () -> TimedSnapshot? = { TrackingService.lastSample }
+    internal var elapsedNow: () -> Long = { SystemClock.elapsedRealtime() }
+
     /** Last seat step asked for per seat, so a «toggle» can bring the seat back to it. */
     internal var seatLevelMemory = SeatLevelMemory(context)
 
@@ -588,8 +621,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         // CancellationException must propagate so the voice routing job can be
         // cancelled by the orb hard-stop without swallowing the signal as a failure.
         if (e is CancellationException) throw e
-        Log.e(TAG, "dispatch failed for kind=${action.kind}: ${e.message}")
-        DispatchResult(false, e.message ?: "Unknown error")
+        // Class name only: an exception message can carry the intent URI (tokens, coordinates).
+        Log.e(TAG, "dispatch failed for kind=${action.kind}: ${e.javaClass.simpleName}")
+        DispatchResult(false, e.javaClass.simpleName)
     }
 
     // --- sentry mode (Settings.Global via helper daemon) ---
@@ -881,7 +915,11 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     // --- param (native autoservice via VehicleApi) ---
 
     private suspend fun dispatchParam(action: ActionDef, data: DiParsData?): DispatchResult {
-        val blockReason = getBlockReason(action.command, data)
+        val blockReason = if (isSpeedGated(action.command)) {
+            speedOnlyBlockReason(action.command, gateSpeed(action.command))
+        } else {
+            getBlockReason(action.command, data)
+        }
         if (blockReason != null) {
             Log.w(TAG, "Blocked '${action.command}': $blockReason")
             return DispatchResult(false, blockReason.toText(context))
@@ -893,6 +931,24 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val reason = if (!success) paramFailureReason(result.exceptionOrNull(), appStrings) else null
         if (!success) Log.w(TAG, "param '${action.command}' failed: ${result.exceptionOrNull()?.message}")
         return DispatchResult(success, reason)
+    }
+
+    /**
+     * The speed a speed-gated step is decided on: a direct read, else a poll at most
+     * [GATE_SAMPLE_MAX_AGE_MS] old, else unknown (the gate then refuses). Never the snapshot
+     * the caller passed in: a rule hands every step the one taken when it fired, which after
+     * a delay or a confirm window can say 0 km/h while the car is already moving.
+     */
+    private suspend fun gateSpeed(command: String): Int? {
+        val direct = runCatching { readSpeedNow() }
+            .onFailure { if (it is CancellationException) throw it }
+            .getOrNull()
+        val sample = if (direct == null) lastSample() else null
+        val age = sample?.takeIf { it.measuredAtElapsedMs > 0 }?.let { elapsedNow() - it.measuredAtElapsedMs }
+        val fromSample = if (age != null && age in 0..GATE_SAMPLE_MAX_AGE_MS) sample.data.speed else null
+        val speed = direct ?: fromSample
+        Log.i(TAG, "gate speed '$command': direct=$direct sample=${sample?.data?.speed} age=${age}ms -> ${speed ?: "unknown"}")
+        return speed
     }
 
     /** A failed [VehicleApi] write in the app language, the same text a rule step reports. */
@@ -993,7 +1049,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             try {
                 context.sendBroadcast(press)
             } catch (e: Exception) {
-                Log.w(TAG, "autoDial broadcast failed: ${e.message}")
+                Log.w(TAG, "autoDial broadcast failed: ${e.javaClass.simpleName}")
             }
         }
         return result
@@ -1358,7 +1414,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         try {
             context.startActivity(home)
         } catch (e: Exception) {
-            Log.w(TAG, "home failed: ${e.message}")
+            Log.w(TAG, "home failed: ${e.javaClass.simpleName}")
         }
     }
 
@@ -1366,11 +1422,12 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         context.startActivity(intent)
         DispatchResult(true)
     } catch (e: ActivityNotFoundException) {
-        Log.w(TAG, "$label: ${e.message}")
-        DispatchResult(false, appStrings.get(R.string.dispatch_no_handler_app, e.message.toString()))
+        // Class name only: the message spells out the whole intent, URI with its token included.
+        Log.w(TAG, "$label: ${e.javaClass.simpleName}")
+        DispatchResult(false, appStrings.get(R.string.dispatch_no_handler_app, e.javaClass.simpleName))
     } catch (e: SecurityException) {
-        Log.w(TAG, "$label (security): ${e.message}")
-        DispatchResult(false, appStrings.get(R.string.dispatch_no_permission, e.message.toString()))
+        Log.w(TAG, "$label (security): ${e.javaClass.simpleName}")
+        DispatchResult(false, appStrings.get(R.string.dispatch_no_permission, e.javaClass.simpleName))
     }
 
     // --- helpers ---

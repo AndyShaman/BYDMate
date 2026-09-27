@@ -8,37 +8,37 @@ import com.bydmate.app.data.vehicle.DriveMode
  * 7 MOUNTAIN, 21 SMART in that same encoding.
  *
  * dev 1006 reads 3 on normal AND on every terrain mode (Leopard 3 2026-09-27), so «Режим = Норма»
- * fired on sand. SETTING_TARGET_DRIVING_MODE tells them apart, but only refines that 3: when the
- * legacy fid reads a mode of its own (ECO, SPORT, SNOW) it stays the answer, and a target value
- * that is not a known mode (flotation, a firmware answering garbage) never replaces it. A car
- * where the target fid does not read keeps the legacy value, exactly as before.
+ * fired on sand. SETTING_TARGET_DRIVING_MODE tells them apart, but it is only believed once it has
+ * proven itself on this car: the first sample where it maps to the same value the legacy fid
+ * reads (any mode) makes it trusted for the rest of the process. From then on a known target mode
+ * is the answer, so SAND -> ECO reads ECO at once instead of waiting on the legacy fid. Before
+ * that, and whenever the target reads no known mode (flotation, a sentinel, garbage), the legacy
+ * value stands. A car where the target fid never agrees keeps the legacy value, exactly as before.
  */
-internal object DriveModeCondition {
+internal class DriveModeCondition(private val log: (String) -> Unit) {
 
-    /** dev 1006 NORMAL: the one legacy value the target fid is allowed to refine. */
-    private const val LEGACY_NORMAL = 3
-
-    /** Target mode -> the condition encoding. ROCK is not offered on any car we know. */
-    private val TARGET_TO_CONDITION: Map<Int, Int> = mapOf(
-        DriveMode.NORMAL.value to LEGACY_NORMAL,
-        DriveMode.ECO.value to 1,
-        DriveMode.SPORT.value to 2,
-        DriveMode.SNOW.value to 4,
-        DriveMode.SAND.value to 5,
-        DriveMode.MUD.value to 6,
-        DriveMode.MOUNTAIN.value to 7,
-        DriveMode.SMART.value to 21,
-    )
-
-    /** Values that may stand in for a legacy 3: normal itself and the modes 3 hides. */
-    private val REFINES_NORMAL = setOf(LEGACY_NORMAL, 5, 6, 7, 21)
+    @Volatile private var trusted = false
 
     fun value(legacy: Int?, target: Int?): Int? {
-        val mapped = target?.let { TARGET_TO_CONDITION[it] } ?: return legacy
-        return when {
-            legacy == null -> mapped
-            legacy == LEGACY_NORMAL && mapped in REFINES_NORMAL -> mapped
-            else -> legacy
+        val mapped = target?.let { TARGET_TO_CONDITION[it] }
+        if (!trusted && mapped != null && mapped == legacy) {
+            trusted = true
+            log("DriveMode: target fid trusted (legacy=$legacy target=$target)")
         }
+        return if (trusted && mapped != null) mapped else legacy
+    }
+
+    private companion object {
+        /** Target mode -> the condition encoding. ROCK is not offered on any car we know. */
+        val TARGET_TO_CONDITION: Map<Int, Int> = mapOf(
+            DriveMode.NORMAL.value to 3,
+            DriveMode.ECO.value to 1,
+            DriveMode.SPORT.value to 2,
+            DriveMode.SNOW.value to 4,
+            DriveMode.SAND.value to 5,
+            DriveMode.MUD.value to 6,
+            DriveMode.MOUNTAIN.value to 7,
+            DriveMode.SMART.value to 21,
+        )
     }
 }

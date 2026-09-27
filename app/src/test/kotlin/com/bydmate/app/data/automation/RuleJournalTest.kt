@@ -21,6 +21,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 
 /** Audit 3.19 items 7-9: journal reasons, retention and the dump section, on a real Room DB. */
 @RunWith(RobolectricTestRunner::class)
@@ -108,6 +109,57 @@ class RuleJournalTest {
         repeat(60) { i -> journal.timeout(rule, "{}", i.toLong()) }
 
         assertEquals(RuleJournal.DUMP_ENTRIES, journal.dumpLines().size)
+    }
+
+    @Test fun `dump never prints a link a stored reason carries`() = runTest {
+        val reasons = listOf(
+            "Нет приложения для обработки: No Activity found to handle Intent { act=android.intent.action.VIEW " +
+                "dat=geo:53.9045,27.5615?q=53.9045,27.5615 flg=0x10000000 }",
+            "Нет разрешения: https://api.example.com/hook?token=SECRET123&chat=42",
+            "yandexnavi://build_route_on_map?lat_to=53.9&lon_to=27.5 и geo:53.9,27.5",
+        )
+        reasons.forEach { reason ->
+            dao.insert(
+                RuleLogEntity(
+                    ruleId = 7, ruleName = "Окна", triggeredAt = 5_000L, triggersSnapshot = "{}",
+                    actionsResult = JSONArray().put(
+                        org.json.JSONObject().put("kind", "url").put("success", false).put("reason", reason)
+                    ).toString(),
+                    success = false,
+                )
+            )
+        }
+
+        val dump = journal.dumpLines().joinToString("\n")
+
+        listOf("53.9", "27.5", "SECRET123", "token", "api.example.com", "chat=42").forEach {
+            assertFalse("$it leaked: $dump", dump.contains(it))
+        }
+        assertTrue(dump, dump.contains("url:fail(Нет приложения для обработки: No Activity found to handle Intent { act=android.intent.action.VIEW <uri> flg=0x10000000 })"))
+        assertTrue(dump, dump.contains("url:fail(Нет разрешения: <uri>)"))
+        assertTrue(dump, dump.contains("url:fail(<uri> и <uri>)"))
+    }
+
+    // Journal rows stay per attempt; the log line is once per rule and reason per minute.
+    @Test fun `refusal log lines are throttled per rule and reason, rows are not`() = runTest {
+        var now = 1_000_000L
+        journal = RuleJournal(dao, AppStrings(ctx), com.bydmate.app.data.autoservice.LogThrottle()) { now }
+        ShadowLog.clear()
+
+        repeat(3) {
+            journal.cancelled(rule, "{}", now)
+            journal.timeout(rule, "{}", now)
+            journal.parkRequired(rule, "{}", 4)
+            now += 1_000
+        }
+        now += 60_000
+        journal.cancelled(rule, "{}", now)
+
+        val lines = ShadowLog.getLogsForTag("AutomationEngine").map { it.msg }
+        assertEquals(10, dao.getAll().first().size)
+        assertEquals(2, lines.count { it == "rule 7 'Окна' skipped: confirm cancelled" })
+        assertEquals(1, lines.count { it == "rule 7 'Окна' skipped: confirm timed out" })
+        assertEquals(1, lines.count { it == "rule 7 'Окна' skipped: park only, gear=4" })
     }
 
     @Test fun `an empty journal says so`() = runTest {

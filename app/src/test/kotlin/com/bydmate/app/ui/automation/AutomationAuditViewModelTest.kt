@@ -17,6 +17,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -24,7 +25,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -142,5 +145,35 @@ class AutomationAuditViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 1) { ruleDao.insert(match { it.id == 0L && !it.enabled }) }
+    }
+
+    // Review fix 4: a count checked apart from its insert let two copies at 49 both in.
+    @Test fun `two copies made at once at 49 rules make one`() {
+        var count = MAX_RULES - 1
+        coEvery { ruleDao.getCount() } coAnswers { delay(1); count }
+        coEvery { ruleDao.insert(any()) } coAnswers { delay(1); count += 1; count.toLong() }
+        val vm = vm()
+
+        vm.duplicateRule(RuleEntity(id = 1, name = "r", triggers = "[]", actions = "[]"))
+        vm.duplicateRule(RuleEntity(id = 2, name = "s", triggers = "[]", actions = "[]"))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { ruleDao.insert(any()) }
+        assertEquals(MAX_RULES, count)
+    }
+
+    // The list said 49, but another path took the 50th slot before the insert: the editor
+    // stays open with the refusal, the draft is not lost.
+    @Test fun `a new rule that lost the last slot keeps the editor open`() {
+        stored.value = List(MAX_RULES - 1) { RuleEntity(id = it + 1L, name = "r$it", triggers = "[]", actions = "[]") }
+        coEvery { ruleDao.getCount() } returns MAX_RULES
+        val vm = vm()
+        vm.openNewRule()
+        vm.draft(TriggerDef("SOC", "电量百分比", "<", "20", "SOC"))
+
+        assertEquals(null, saved(vm))
+        assertTrue(vm.uiState.value.showEditor)
+        assertFalse(vm.uiState.value.editing.saving)
+        assertEquals("Можно создать не больше 50 автоматизаций", vm.uiState.value.editorError)
     }
 }

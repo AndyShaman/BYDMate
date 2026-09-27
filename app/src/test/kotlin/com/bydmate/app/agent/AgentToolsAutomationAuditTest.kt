@@ -26,7 +26,7 @@ import org.junit.Test
 /** Automation audit 3.19, create_automation: the 60 s pause and thresholds that are numbers. */
 class AgentToolsAutomationAuditTest {
 
-    private val ruleDao = mockk<RuleDao>()
+    private val ruleDao = mockk<RuleDao> { coEvery { getCount() } returns 0 }
 
     private fun tools() = AgentTools(
         mockk<VoiceGate>(), mockk<BatteryStateRepository>(), mockk<RangeCalculator>(), mockk<TripDao>(),
@@ -57,6 +57,17 @@ class AgentToolsAutomationAuditTest {
         assertTrue(ok.toString(), ok.getBoolean("ok"))
         assertEquals("не указана длительность паузы (мс, 0..60000)", over.getString("error"))
         coVerify(exactly = 1) { ruleDao.insert(any()) }
+    }
+
+    // Review fix 4: the list said 49, but the 50th slot went to another path before the insert.
+    @Test fun `a rule that lost the last slot is refused at the insert`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        coEvery { ruleDao.getCount() } returns 50
+
+        val out = create("Поздно", socTrigger, """[{"kind":"param","command_id":"windows_close_all"}]""")
+
+        assertEquals("достигнут предел в 50 автоматизаций", out.getString("error"))
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 
     // Item 3: a threshold that is not a number would make a rule that never fires.

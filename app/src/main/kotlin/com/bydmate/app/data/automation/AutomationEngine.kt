@@ -151,9 +151,11 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     internal var liveData: () -> DiParsData? = { TrackingService.lastData.value }
     // Test seam: the range the Dashboard shows, for the RangeKm condition.
     internal var rangeKm: () -> Double? = { TrackingService.lastRangeKm.value }
-    private val journal = RuleJournal(ruleLogDao, appStrings)
     // «Why was the rule skipped» lines: one per rule and reason per minute.
     private val skipLog = com.bydmate.app.data.autoservice.LogThrottle()
+    private val journal = RuleJournal(ruleLogDao, appStrings, skipLog) { nowMs() }
+    // The DriveMode condition value; trusts the target fid once it agreed with dev 1006.
+    private val driveModeCondition = DriveModeCondition { Log.i(TAG, it) }
     // Rules already logged as «true at the first check» in this process.
     private val firstCheckLogged: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
@@ -598,7 +600,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         "TirePressFR" -> data.tirePressFR?.toDouble()
         "TirePressRL" -> data.tirePressRL?.toDouble()
         "TirePressRR" -> data.tirePressRR?.toDouble()
-        "DriveMode" -> DriveModeCondition.value(data.driveMode, data.driveModeTarget)?.toDouble()
+        "DriveMode" -> driveModeCondition.value(data.driveMode, data.driveModeTarget)?.toDouble()
         "WorkMode" -> data.workMode?.toDouble()
         "AutoPark" -> data.autoPark?.toDouble()
         "Rain" -> data.rain?.toDouble()
@@ -634,14 +636,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         var allSuccess = true
 
         for ((i, action) in actions.withIndex()) {
-            // Fresh data per step: a pause may lie between the fire and this step.
+            // Fresh data per step: a pause may lie between the fire and this step. A speed-gated
+            // step does not trust it either: the dispatcher reads the speed itself right before.
             val stepData = liveData() ?: data
-            val blocked = if (stepData == null) ActionDispatcher.speedUnknownBlock(action) else null
-            val result = if (blocked != null) {
-                DispatchResult(false, blocked.toText(context))
-            } else {
-                actionDispatcher.dispatch(action.withReportRuleName(rule.name), stepData)
-            }
+            val result = actionDispatcher.dispatch(action.withReportRuleName(rule.name), stepData)
             Log.i(
                 TAG,
                 "rule ${rule.id} step ${i + 1}/${actions.size} ${action.kind} speed=${stepData?.speed} " +

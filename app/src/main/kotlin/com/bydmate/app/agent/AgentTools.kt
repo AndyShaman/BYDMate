@@ -15,6 +15,7 @@ import com.bydmate.app.data.automation.ConfirmOverlayManager
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.automation.PlaceGeometry
 import com.bydmate.app.data.automation.RuleDraftValidator
+import com.bydmate.app.data.automation.RuleInserts
 import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.VoiceFireResult
@@ -2278,8 +2279,9 @@ class AgentTools @Inject constructor(
             playSound = playSound,
             confirmBeforeExecute = actions.any { ActionDispatcher.isDangerousAction(it) },
         )
-        runCatchingCancellable { ruleDao.insert(rule) }
+        runCatchingCancellable { RuleInserts.insertWithinLimit(ruleDao, rule, MAX_AUTOMATIONS) }
             .getOrElse { return """{"error":"не удалось создать автоматизацию"}""" }
+            ?: return """{"error":"достигнут предел в 50 автоматизаций"}"""
         // One compact Russian line the model is told to read back: the driver hears exactly
         // what was created and catches a wrong threshold or action on the spot.
         return JSONObject()
