@@ -1583,6 +1583,8 @@
     <string name="settings_blindspot_position_drag">Перетащите окошко</string>
     <string name="settings_blindspot_both_main_title">Обе камеры на главный экран</string>
     <string name="settings_blindspot_both_main_desc">Левая камера показывается рядом с правой на планшете, приборка не используется</string>
+    <string name="settings_blindspot_both_cluster_title">Обе камеры на приборку</string>
+    <string name="settings_blindspot_both_cluster_desc">Левая и правая камеры показываются на приборке, главный экран свободен</string>
     <string name="settings_blindspot_left_position_title">Положение левой камеры</string>
     <string name="settings_blindspot_left_position_desc">По умолчанию левое окошко стоит зеркально правому. Перетащите, чтобы задать своё место</string>
     <string name="settings_blindspot_glow_title">Подсветка при объекте в слепой зоне</string>

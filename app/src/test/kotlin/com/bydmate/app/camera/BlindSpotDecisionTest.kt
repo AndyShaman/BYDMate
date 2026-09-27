@@ -243,33 +243,64 @@ class BlindSpotTelemetryGateTest {
     }
 }
 
-class BlindSpotMirrorRoutingTest {
+class BlindSpotScreenRoutingTest {
 
-    @Test fun `without a cluster display the left camera always mirrors`() {
-        assertTrue(blindSpotUsesMirror(bothOnMain = false, hasClusterDisplay = false))
-        assertTrue(blindSpotUsesMirror(bothOnMain = true, hasClusterDisplay = false))
+    private val main = BlindSpotScreen.MAIN
+    private val cluster = BlindSpotScreen.CLUSTER
+
+    private fun route(side: BlindSpotSide, bothOnMain: Boolean, bothOnCluster: Boolean, hasCluster: Boolean) =
+        blindSpotScreen(side, bothOnMain, bothOnCluster, hasCluster)
+
+    @Test fun `without a cluster display both cameras go to the main screen whatever the opt-ins`() {
+        for (onMain in listOf(false, true)) for (onCluster in listOf(false, true)) {
+            assertEquals(main, route(BlindSpotSide.LEFT, onMain, onCluster, hasCluster = false))
+            assertEquals(main, route(BlindSpotSide.RIGHT, onMain, onCluster, hasCluster = false))
+        }
     }
 
-    @Test fun `with a cluster display the opt-in decides`() {
-        assertFalse(blindSpotUsesMirror(bothOnMain = false, hasClusterDisplay = true))
-        assertTrue(blindSpotUsesMirror(bothOnMain = true, hasClusterDisplay = true))
+    @Test fun `default with a cluster display - left on the cluster, right on the main screen`() {
+        assertEquals(cluster, route(BlindSpotSide.LEFT, false, false, hasCluster = true))
+        assertEquals(main, route(BlindSpotSide.RIGHT, false, false, hasCluster = true))
+    }
+
+    @Test fun `both on main keeps both on the main screen`() {
+        assertEquals(main, route(BlindSpotSide.LEFT, true, false, hasCluster = true))
+        assertEquals(main, route(BlindSpotSide.RIGHT, true, false, hasCluster = true))
+    }
+
+    @Test fun `both on cluster puts both on the cluster`() {
+        assertEquals(cluster, route(BlindSpotSide.LEFT, false, true, hasCluster = true))
+        assertEquals(cluster, route(BlindSpotSide.RIGHT, false, true, hasCluster = true))
+    }
+
+    @Test fun `both opt-ins set at once - main wins, the cluster is not touched`() {
+        assertEquals(main, route(BlindSpotSide.LEFT, true, true, hasCluster = true))
+        assertEquals(main, route(BlindSpotSide.RIGHT, true, true, hasCluster = true))
+    }
+
+    @Test fun `the routing reason names the rule that decided`() {
+        assertEquals("no_cluster_display", blindSpotRoutingReason(false, true, hasClusterDisplay = false))
+        assertEquals("both_on_main", blindSpotRoutingReason(true, true, hasClusterDisplay = true))
+        assertEquals("both_on_cluster", blindSpotRoutingReason(false, true, hasClusterDisplay = true))
+        assertEquals("default", blindSpotRoutingReason(false, false, hasClusterDisplay = true))
     }
 }
 
 class BlindSpotMainScreenCoverageTest {
 
-    @Test fun `the right PiP always covers the main screen`() {
-        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.RIGHT, clusterOnMainScreen = false))
-        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.RIGHT, clusterOnMainScreen = true))
+    @Test fun `the right window covers the main screen only while it sits there`() {
+        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.RIGHT, leftOnMainScreen = false, rightOnMainScreen = true))
+        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.RIGHT, leftOnMainScreen = true, rightOnMainScreen = true))
+        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.RIGHT, leftOnMainScreen = false, rightOnMainScreen = false))
     }
 
     @Test fun `the left window covers it only as the mirrored fallback`() {
-        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.LEFT, clusterOnMainScreen = false))
-        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.LEFT, clusterOnMainScreen = true))
+        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.LEFT, leftOnMainScreen = false, rightOnMainScreen = true))
+        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.LEFT, leftOnMainScreen = true, rightOnMainScreen = true))
     }
 
     @Test fun `nothing shown covers nothing`() {
-        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.NONE, clusterOnMainScreen = false))
-        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.NONE, clusterOnMainScreen = true))
+        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.NONE, leftOnMainScreen = false, rightOnMainScreen = true))
+        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.NONE, leftOnMainScreen = true, rightOnMainScreen = true))
     }
 }

@@ -38,6 +38,9 @@ class BlindSpotPreferences @Inject constructor(
     /** Opt-in (#183): keep the left camera on the main screen even when a cluster panel exists. */
     val bothOnMain: Boolean get() = prefs.getBoolean(KEY_BOTH_ON_MAIN, false)
 
+    /** Opt-in (#240): both cameras on the cluster panel, the main screen stays free. */
+    val bothOnCluster: Boolean get() = prefs.getBoolean(KEY_BOTH_ON_CLUSTER, false)
+
     /** Opt-in (#207): portrait main-screen windows with the picture turned 90°, like a mirror. */
     val pipRotate90: Boolean get() = prefs.getBoolean(KEY_PIP_ROTATE_90, false)
 
@@ -54,6 +57,7 @@ class BlindSpotPreferences @Inject constructor(
         const val KEY_LEFT_PIP_Y_PX = "left_pip_y_px"
         const val KEY_BSD_GLOW = "bsd_glow"
         const val KEY_BOTH_ON_MAIN = "both_on_main"
+        const val KEY_BOTH_ON_CLUSTER = "both_on_cluster"
         const val KEY_PIP_ROTATE_90 = "pip_rotate_90"
 
         /** Position is stored in absolute pixels, so "never placed" needs its own value. */

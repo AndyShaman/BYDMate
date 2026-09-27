@@ -88,6 +88,20 @@ internal fun blindSpotBatchItems(withBsd: Boolean): List<BatchReadItem> =
         BatchReadItem(tx, address.device, address.fid)
     }
 
+private const val PROJECTION_DISPLAY_NAME = "XDJAScreenProjection"
+
+/**
+ * The cluster projection panel the blind-spot windows go to, or null when this car has none.
+ * The settings card asks the same question to decide whether the cluster opt-in is offered.
+ */
+fun blindSpotClusterDisplay(context: Context): Display? {
+    val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    val projection = dm.displays.filter {
+        it.name.contains(PROJECTION_DISPLAY_NAME, ignoreCase = true)
+    }
+    return projection.firstOrNull { it.name.endsWith("_1") } ?: projection.firstOrNull()
+}
+
 /**
  * Turn signal → blind-spot camera.
  *
@@ -101,8 +115,9 @@ internal fun blindSpotBatchItems(withBsd: Boolean): List<BatchReadItem> =
  * Left goes on the cluster (that is where the driver looks before a left lane change), in the
  * window geometry the navigation projection uses, right goes into a small window on the main
  * screen. Without a projection display the left view falls back to a second main-screen window,
- * mirrored across the right one. Reverse gear closes everything: the factory rear view owns the
- * screens there.
+ * mirrored across the right one. Two opt-ins move them: both on the main screen (#183), or both
+ * on the cluster (#240), where the right camera gets a second cluster window of the same geometry.
+ * Reverse gear closes everything: the factory rear view owns the screens there.
  *
  * Threading: window work runs on Main, every vendor-stack call runs on a private
  * single camera thread ([cameraDispatcher]) because open/close block for hundreds of
@@ -146,13 +161,20 @@ class BlindSpotController @Inject constructor(
     private var compositorJob: Job? = null
 
     private var clusterWindow: PreviewWindow? = null   // left camera, cluster display
-    private var pipWindow: PreviewWindow? = null       // right camera, main screen
+    private var pipWindow: PreviewWindow? = null       // right camera, main screen (or cluster, #240)
     /** True while [clusterWindow] is the mirrored PiP on the main screen (this car has no
      *  projection display) — the cluster compositor must stay untouched then. */
     private var clusterOnMainScreen = false
+    /** True while [pipWindow] carries the right camera on the cluster panel (#240) instead of
+     *  the main screen. */
+    private var pipOnCluster = false
 
     /** Whether the attached windows were built with the "both on the main screen" opt-in on. */
     private var mirrorByChoice = false
+    /** Same for the "both on the cluster" opt-in (#240). */
+    private var clusterByChoice = false
+    /** [blindSpotRoutingReason] of the attached windows, for the show log. */
+    private var routingReason = "none"
     /** Geometry the PiP window currently carries; a mismatch with the settings re-applies it. */
     private var appliedPipRect: Rect? = null
     /** Geometry the left main-screen window currently has; null when there is no such window. */
@@ -250,6 +272,7 @@ class BlindSpotController @Inject constructor(
         return listOf(
             "enabled=${prefs.enabled}",
             "threshold_kmh=${prefs.thresholdKmh}",
+            "both_on_main=${prefs.bothOnMain} both_on_cluster=${prefs.bothOnCluster}",
             "armed=$lastArmed",
             "reason=$lastArmedReason",
             if (turnSignal != null) {
@@ -318,17 +341,19 @@ class BlindSpotController @Inject constructor(
         // The screen preference can flip mid-drive too, and the routing is decided once, at
         // attach time. Comparing against the preference the attached windows were built from
         // keeps this off the display manager on every tick.
-        if ((clusterWindow != null || pipWindow != null) && mirrorByChoice != prefs.bothOnMain) {
+        val screenPrefsChanged =
+            mirrorByChoice != prefs.bothOnMain || clusterByChoice != prefs.bothOnCluster
+        if ((clusterWindow != null || pipWindow != null) && screenPrefsChanged) {
             awaitTeardown("blind-spot screen preference changed")
             return
         }
 
-        // Our cluster window and the navigation projection overlay share the display AND the
+        // Our cluster windows and the navigation projection overlay share the display AND the
         // window type, so z-order is attach order: an overlay added after us covers us. Only a
         // full teardown fixes it — the camera surfaces are bound to these windows' TextureViews,
         // so re-attaching means re-opening the camera anyway. The mirrored main-screen fallback
         // is on another display and never collides.
-        if (clusterWindow != null && !clusterOnMainScreen) {
+        if (anyWindowOnCluster()) {
             val epoch = ClusterProjectionManager.overlayEpoch()
             if (epoch != lastOverlayEpoch) {
                 awaitTeardown("projection overlay restacked above camera")
@@ -503,6 +528,25 @@ class BlindSpotController @Inject constructor(
     private fun anythingUp(): Boolean =
         clusterWindow != null || pipWindow != null || cameraOpen || compositorPowered || compositorTarget
 
+    /** True while a window of ours sits on the projection display, whichever side it carries. */
+    private fun anyWindowOnCluster(): Boolean =
+        (clusterWindow != null && !clusterOnMainScreen) || (pipWindow != null && pipOnCluster)
+
+    /** Where [side]'s window actually is right now, for the log: none when it never attached. */
+    private fun shownTarget(side: BlindSpotSide): String {
+        val window = when (side) {
+            BlindSpotSide.LEFT -> clusterWindow
+            BlindSpotSide.RIGHT -> pipWindow
+            BlindSpotSide.NONE -> null
+        }
+        val onMain = if (side == BlindSpotSide.LEFT) clusterOnMainScreen else !pipOnCluster
+        return when {
+            window == null -> "none"
+            onMain -> "main"
+            else -> "cluster"
+        }
+    }
+
     private fun attachWindows() {
         // Read BEFORE the addView below: an overlay added between this read and our attach shows
         // up as a mismatch on the next tick, which costs one redundant re-attach — the other
@@ -512,41 +556,60 @@ class BlindSpotController @Inject constructor(
         // driver asked for both cameras on the main screen (#183): the left camera falls back to a
         // mirrored window there, and setClusterContainerMode is never called — powering a
         // compositor that does not exist, or that the driver opted out of, would black the cluster
-        // out.
+        // out. The "both on the cluster" opt-in (#240) moves the right camera there as well.
         mirrorByChoice = prefs.bothOnMain
+        clusterByChoice = prefs.bothOnCluster
         val panel = clusterDisplay()
-        val display = if (blindSpotUsesMirror(mirrorByChoice, panel != null)) null else panel
-        if (display == null) {
+        routingReason = blindSpotRoutingReason(mirrorByChoice, clusterByChoice, panel != null)
+        fun screenOf(side: BlindSpotSide) =
+            blindSpotScreen(side, mirrorByChoice, clusterByChoice, panel != null)
+        if (panel == null || screenOf(BlindSpotSide.LEFT) == BlindSpotScreen.MAIN) {
             attachMirrorWindow()
         } else {
-            clusterGeometry(display)?.let { geo ->
-                val params = WindowManager.LayoutParams(
-                    geo.width, geo.height,
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    OVERLAY_FLAGS,
-                    // TRANSLUCENT let the navi underneath bleed through on-car; the window is
-                    // parked off screen instead, which works on an opaque format too.
-                    PixelFormat.OPAQUE,
-                ).apply {
-                    // Absolute position on the panel, and hiding the window means moving it
-                    // off screen — both need the corner gravity.
-                    gravity = Gravity.TOP or Gravity.START
-                    x = geo.xOffset
-                    y = geo.yOffset
-                }
-                val window = PreviewWindow("cluster", BlindSpotSide.LEFT, rotatable = false)
-                val displayContext = context.createDisplayContext(display)
-                if (window.attach(displayContext, params, offscreenX(geo.width))) {
-                    clusterWindow = window
-                }
+            clusterWindow = attachClusterWindow(panel, "cluster", BlindSpotSide.LEFT)
+        }
+        if (panel != null && screenOf(BlindSpotSide.RIGHT) == BlindSpotScreen.CLUSTER) {
+            pipWindow = attachClusterWindow(panel, "cluster-right", BlindSpotSide.RIGHT)
+            pipOnCluster = pipWindow != null
+        } else {
+            val rect = pipRect()
+            val pip = PreviewWindow("pip", BlindSpotSide.RIGHT, rotatable = true)
+            if (pip.attach(context, pipParams(rect), offscreenX(rect.width()))) {
+                pipWindow = pip
+                appliedPipRect = rect
             }
         }
-        val rect = pipRect()
-        val pip = PreviewWindow("pip", BlindSpotSide.RIGHT, rotatable = true)
-        if (pip.attach(context, pipParams(rect), offscreenX(rect.width()))) {
-            pipWindow = pip
-            appliedPipRect = rect
+        Log.i(
+            TAG,
+            "windows: left=${shownTarget(BlindSpotSide.LEFT)} " +
+                "right=${shownTarget(BlindSpotSide.RIGHT)} reason=$routingReason",
+        )
+    }
+
+    /**
+     * A camera window on the cluster panel, in [clusterGeometry]. Both sides get the same
+     * geometry when they share the panel (#240): only one is on screen at a time, the other is
+     * parked off screen like every hidden window.
+     */
+    private fun attachClusterWindow(display: Display, label: String, side: BlindSpotSide): PreviewWindow? {
+        val geo = clusterGeometry(display) ?: return null
+        val params = WindowManager.LayoutParams(
+            geo.width, geo.height,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            OVERLAY_FLAGS,
+            // TRANSLUCENT let the navi underneath bleed through on-car; the window is
+            // parked off screen instead, which works on an opaque format too.
+            PixelFormat.OPAQUE,
+        ).apply {
+            // Absolute position on the panel, and hiding the window means moving it
+            // off screen — both need the corner gravity.
+            gravity = Gravity.TOP or Gravity.START
+            x = geo.xOffset
+            y = geo.yOffset
         }
+        val window = PreviewWindow(label, side, rotatable = false)
+        val displayContext = context.createDisplayContext(display)
+        return if (window.attach(displayContext, params, offscreenX(geo.width))) window else null
     }
 
     /**
@@ -586,7 +649,8 @@ class BlindSpotController @Inject constructor(
 
     /** Re-applies the PiP geometry after the user changed the width or dragged a window. */
     private fun applyPipGeometry() {
-        if (pipWindow == null && !clusterOnMainScreen) return
+        // A right window on the cluster (#240) keeps the cluster geometry, not the PiP slider's.
+        if ((pipWindow == null || pipOnCluster) && !clusterOnMainScreen) return
         val rect = pipRect()
         // The left window has its own saved corner, so it can move while the right one stands still.
         val left = if (clusterOnMainScreen) leftPipRect() else null
@@ -637,11 +701,7 @@ class BlindSpotController @Inject constructor(
 
     /** Display of the cluster projection panel, or null when this car has none. */
     private fun clusterDisplay(): Display? {
-        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val projection = dm.displays.filter {
-            it.name.contains(PROJECTION_DISPLAY_NAME, ignoreCase = true)
-        }
-        val display = projection.firstOrNull { it.name.endsWith("_1") } ?: projection.firstOrNull()
+        val display = blindSpotClusterDisplay(context)
         if (display == null) Log.i(TAG, "no projection display; cluster window skipped")
         return display
     }
@@ -671,14 +731,21 @@ class BlindSpotController @Inject constructor(
         val previous = shownSide
         shownSide = side
         if (side != BlindSpotSide.NONE) shownAt = SystemClock.elapsedRealtime()
-        Log.i(TAG, "show $previous -> $side")
-        syncWidgetSuppression()
-        if (side == BlindSpotSide.LEFT) {
-            requestCompositor(true)
+        if (side == BlindSpotSide.NONE) {
+            Log.i(TAG, "show $previous -> $side")
         } else {
-            clusterWindow?.setGlow(false)
-            if (previous == BlindSpotSide.LEFT) requestCompositor(false)
+            Log.i(TAG, "show $previous -> $side target=${shownTarget(side)} reason=$routingReason")
         }
+        syncWidgetSuppression()
+        // The compositor follows whether the shown side sits on the cluster: a flip between two
+        // cluster windows (#240) keeps it up, so the panel never drops to the stock frame between
+        // them; the window going off screen is what hides the old side.
+        if (shownTarget(side) == "cluster") {
+            requestCompositor(true)
+        } else if (shownTarget(previous) == "cluster") {
+            requestCompositor(false)
+        }
+        if (side != BlindSpotSide.LEFT) clusterWindow?.setGlow(false)
         if (side != BlindSpotSide.RIGHT) pipWindow?.setGlow(false)
     }
 
@@ -690,21 +757,22 @@ class BlindSpotController @Inject constructor(
     private fun syncWidgetSuppression() {
         WidgetController.setSuppressed(
             WIDGET_SUPPRESS_REASON,
-            blindSpotCoversMainScreen(shownSide, clusterOnMainScreen),
+            blindSpotCoversMainScreen(shownSide, clusterOnMainScreen, !pipOnCluster),
         )
     }
 
     /** Fire-and-forget compositor switch for the show path; one job at a time. */
     private fun requestCompositor(on: Boolean) {
         if (on == compositorTarget) return
-        // Only the window that actually sits on the projection display needs the compositor, and
+        // Only a window that actually sits on the projection display needs the compositor, and
         // only when the user lets us drive it (auto-container on, same gate as the projection);
         // the mirrored main-screen fallback must never touch a cluster that has none. Skipped on
         // the way UP, the target never flips, so no power-down runs on the way back either.
+        // anyWindowOnCluster() already leaves the main-screen windows out.
         if (on && !cameraNeedsCompositor(
                 ClusterProjectionManager.autoContainerEnabled(context),
-                clusterWindow != null,
-                clusterOnMainScreen)) return
+                anyWindowOnCluster(),
+                clusterOnMainScreen = false)) return
         compositorTarget = on
         compositorJob?.cancel()
         compositorJob = ownScope.launch { applyCompositor(on) }
@@ -799,8 +867,10 @@ class BlindSpotController @Inject constructor(
             clusterWindow = null
             clusterOnMainScreen = false
             mirrorByChoice = false
+            clusterByChoice = false
             releaseWindow(pipWindow)
             pipWindow = null
+            pipOnCluster = false
             appliedPipRect = null
             appliedLeftRect = null
         } finally {
@@ -1081,7 +1151,6 @@ class BlindSpotController @Inject constructor(
         /** Extra px past the edge so a hidden window cannot show a seam. */
         const val OFFSCREEN_MARGIN_PX = 100
 
-        const val PROJECTION_DISPLAY_NAME = "XDJAScreenProjection"
         // Deliberately no FLAG_NOT_TOUCHABLE: stock AOSP (DisplayPolicy.adjustWindowParamsLw)
         // clamps a system-alert window that is NOT_TOUCHABLE and not a trusted overlay down to
         // the maximum obscuring opacity for touch (0.8), and re-applies it on every relayout, so

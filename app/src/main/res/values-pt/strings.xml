@@ -1423,6 +1423,8 @@
     <string name="settings_blindspot_position_drag">Arraste a janelinha</string>
     <string name="settings_blindspot_both_main_title">Ambas as câmeras na tela principal</string>
     <string name="settings_blindspot_both_main_desc">A câmera esquerda aparece ao lado da direita na tela, o painel de instrumentos não é usado</string>
+    <string name="settings_blindspot_both_cluster_title">Ambas as câmeras no painel de instrumentos</string>
+    <string name="settings_blindspot_both_cluster_desc">As câmeras esquerda e direita aparecem no painel de instrumentos, a tela principal fica livre</string>
     <string name="settings_blindspot_left_position_title">Posição da câmera esquerda</string>
     <string name="settings_blindspot_left_position_desc">Por padrão, a janelinha esquerda fica espelhada em relação à direita. Arraste para definir seu próprio lugar</string>
     <string name="settings_blindspot_glow_title">Destaque quando houver um objeto no ponto cego</string>

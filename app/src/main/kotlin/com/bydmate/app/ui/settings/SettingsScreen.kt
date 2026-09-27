@@ -7,6 +7,7 @@ import android.provider.Settings as AndroidSettings
 import android.widget.Toast
 import com.bydmate.app.camera.BlindSpotPositionOverlay
 import com.bydmate.app.camera.BlindSpotPreferences
+import com.bydmate.app.camera.blindSpotClusterDisplay
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.data.autoservice.AdbVerdict
@@ -1378,6 +1379,11 @@ private fun BlindSpotCard() {
     var bothOnMain by remember {
         mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, false))
     }
+    var bothOnCluster by remember {
+        mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BOTH_ON_CLUSTER, false))
+    }
+    // Same lookup the controller routes by: without a projection panel there is no cluster to offer.
+    val hasClusterDisplay = remember { blindSpotClusterDisplay(context) != null }
 
     // Drag-to-place preview: it lives in a WindowManager overlay, so leaving the screen has to
     // take it down explicitly. The state follows the window rather than the clicks — the overlay
@@ -1498,7 +1504,12 @@ private fun BlindSpotCard() {
             checked = bothOnMain,
             onCheckedChange = {
                 bothOnMain = it
-                prefs.edit().putBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, it).apply()
+                // The two screen opt-ins exclude each other (#240): one write, so the controller
+                // never sees both on.
+                if (it) bothOnCluster = false
+                val editor = prefs.edit().putBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, it)
+                if (it) editor.putBoolean(BlindSpotPreferences.KEY_BOTH_ON_CLUSTER, false)
+                editor.apply()
                 // The left window only exists on the main screen while this is on; its placement
                 // row goes away with it, and an open drag overlay would have nothing to dismiss it.
                 if (!it && placing == BlindSpotPositionOverlay.Side.LEFT) positionOverlay.hide()
@@ -1521,6 +1532,24 @@ private fun BlindSpotCard() {
                     val closing = placing == side
                     positionOverlay.hide()
                     if (!closing && positionOverlay.show(context, side)) placing = side
+                },
+                enabled = enabled,
+            )
+        }
+        if (hasClusterDisplay) {
+            SettingDivider()
+            SettingToggleRow(
+                title = stringResource(R.string.settings_blindspot_both_cluster_title),
+                description = stringResource(R.string.settings_blindspot_both_cluster_desc),
+                checked = bothOnCluster,
+                onCheckedChange = {
+                    bothOnCluster = it
+                    if (it) bothOnMain = false
+                    val editor = prefs.edit().putBoolean(BlindSpotPreferences.KEY_BOTH_ON_CLUSTER, it)
+                    if (it) editor.putBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, false)
+                    editor.apply()
+                    // Turning the main-screen opt-in off takes the left placement row with it.
+                    if (it && placing == BlindSpotPositionOverlay.Side.LEFT) positionOverlay.hide()
                 },
                 enabled = enabled,
             )

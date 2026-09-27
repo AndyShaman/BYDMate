@@ -172,18 +172,47 @@ class BlindSpotTelemetryGate {
     }
 }
 
-/**
- * Where the left camera goes: a mirrored window on the main screen next to the right PiP, or the
- * cluster panel. Cars without a projection display have no choice; [bothOnMain] is the user opt-in
- * (#183) for the drivers whose cluster is better left alone.
- */
-fun blindSpotUsesMirror(bothOnMain: Boolean, hasClusterDisplay: Boolean): Boolean =
-    bothOnMain || !hasClusterDisplay
+/** Screen a blind-spot camera window goes to. */
+enum class BlindSpotScreen { MAIN, CLUSTER }
 
 /**
- * Whether the shown window covers the main screen, where the floating widget lives: the right
- * camera always sits there as a PiP, the left one only when it is the mirrored fallback
- * ([blindSpotUsesMirror]) instead of a window on the cluster panel.
+ * Where [side]'s camera goes. With a cluster panel the default is left on the cluster (that is
+ * where the driver looks before a left lane change) and right on the main screen; [bothOnMain]
+ * (#183) keeps both on the main screen for the drivers whose cluster is better left alone,
+ * [bothOnCluster] (#240) puts both on the cluster and leaves the main screen free. The settings
+ * card keeps the two opt-ins exclusive; should both be set anyway, [bothOnMain] wins, since it
+ * never touches the cluster compositor. Cars without a projection display have no choice.
  */
-fun blindSpotCoversMainScreen(side: BlindSpotSide, clusterOnMainScreen: Boolean): Boolean =
-    side == BlindSpotSide.RIGHT || (side == BlindSpotSide.LEFT && clusterOnMainScreen)
+fun blindSpotScreen(
+    side: BlindSpotSide,
+    bothOnMain: Boolean,
+    bothOnCluster: Boolean,
+    hasClusterDisplay: Boolean,
+): BlindSpotScreen = when {
+    !hasClusterDisplay || bothOnMain -> BlindSpotScreen.MAIN
+    bothOnCluster || side == BlindSpotSide.LEFT -> BlindSpotScreen.CLUSTER
+    else -> BlindSpotScreen.MAIN
+}
+
+/** The rule [blindSpotScreen] routed by, for the log. */
+fun blindSpotRoutingReason(bothOnMain: Boolean, bothOnCluster: Boolean, hasClusterDisplay: Boolean): String =
+    when {
+        !hasClusterDisplay -> "no_cluster_display"
+        bothOnMain -> "both_on_main"
+        bothOnCluster -> "both_on_cluster"
+        else -> "default"
+    }
+
+/**
+ * Whether the shown window covers the main screen, where the floating widget lives: each side
+ * only while its window sits there ([blindSpotScreen]) rather than on the cluster panel.
+ */
+fun blindSpotCoversMainScreen(
+    side: BlindSpotSide,
+    leftOnMainScreen: Boolean,
+    rightOnMainScreen: Boolean,
+): Boolean = when (side) {
+    BlindSpotSide.LEFT -> leftOnMainScreen
+    BlindSpotSide.RIGHT -> rightOnMainScreen
+    BlindSpotSide.NONE -> false
+}
