@@ -20,6 +20,16 @@ class TrackingServicePushEvaluateTest {
         assertTrue("lightLevel" in TrackingService.PUSH_EVALUATE_FIELDS)
     }
 
+    // Audit 3.19 items 4, 10-12: belts, seats and the target drive mode act on the push.
+    @Test fun `belt, seat and drive mode conditions evaluate on the push`() {
+        val expected = listOf(
+            "seatbeltFL", "seatbeltFR", "seatbeltRL", "seatbeltRM", "seatbeltRR",
+            "occupancyFL", "occupancyFR", "occupancyRL", "occupancyRM", "occupancyRR",
+            "driveModeTarget",
+        )
+        for (field in expected) assertTrue(field, field in TrackingService.PUSH_EVALUATE_FIELDS)
+    }
+
     /** A field no trigger reads would only buy an evaluate no rule can act on. */
     @Test fun `a field without a trigger param stays out`() {
         assertFalse("frontTrunk" in TrackingService.PUSH_EVALUATE_FIELDS)

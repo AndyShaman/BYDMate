@@ -1784,4 +1784,26 @@
     <string name="automation_tg_report_text_hint">Aparece abaixo do título da mensagem.</string>
     <string name="automation_tg_report_own_text">texto próprio</string>
     <string name="automation_tg_report_no_bot">O bot do Telegram não está conectado. Conecte-o em Configurações, seção «Serviço e dados».</string>
+    <!-- Automation audit 3.19: journal reasons, write errors, new conditions -->
+    <string name="auto_log_confirm_cancelled">Cancelado na janela de confirmação</string>
+    <string name="auto_log_confirm_timeout">Sem resposta na janela de confirmação, não executado</string>
+    <string name="auto_log_park_required">Não executado: a regra é só com o carro estacionado e a marcha não é P</string>
+    <string name="auto_log_one_shot_expired">A regra única não disparou em um dia e foi desligada</string>
+    <string name="auto_err_not_confirmed">O carro não confirmou o comando</string>
+    <string name="auto_err_not_supported">Este comando não é suportado</string>
+    <string name="auto_err_out_of_range">Valor inválido para o comando</string>
+    <string name="auto_err_unreachable">O comando não chegou ao carro</string>
+    <string name="auto_err_not_done">O carro não executou o comando</string>
+    <string name="auto_err_unverified">O comando não foi verificado neste carro e não funcionou</string>
+    <string name="auto_err_failed">Não foi possível executar o comando</string>
+    <string name="auto_enum_moving_m">Em movimento</string>
+    <string name="auto_enum_code_sand">Areia</string>
+    <string name="auto_enum_code_mud">Lama</string>
+    <string name="auto_enum_code_mountain">Montanha</string>
+    <string name="auto_enum_code_smart">Inteligente</string>
+    <string name="auto_param_seatbeltrl">Cinto traseiro esquerdo</string>
+    <string name="auto_param_seatbeltrm">Cinto traseiro central</string>
+    <string name="auto_param_seatbeltrr">Cinto traseiro direito</string>
+    <string name="auto_param_rangekm">Autonomia</string>
+    <string name="auto_unit_km">km</string>
 </resources>

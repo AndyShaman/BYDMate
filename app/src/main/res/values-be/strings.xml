@@ -1940,4 +1940,26 @@
     <string name="automation_tg_report_text_hint">З\'явіцца пад загалоўкам паведамлення.</string>
     <string name="automation_tg_report_own_text">свой тэкст</string>
     <string name="automation_tg_report_no_bot">Telegram-бот не падключаны. Падключыце яго ў Наладах, раздзел «Сэрвіс і даныя».</string>
+    <!-- Automation audit 3.19: journal reasons, write errors, new conditions -->
+    <string name="auto_log_confirm_cancelled">Скасавана ў акне пацвярджэння</string>
+    <string name="auto_log_confirm_timeout">Няма адказу ў акне пацвярджэння, не выканана</string>
+    <string name="auto_log_park_required">Не выканана: правіла толькі на паркоўцы, а перадача не P</string>
+    <string name="auto_log_one_shot_expired">Аднаразовае правіла не спрацавала за суткі і выключана</string>
+    <string name="auto_err_not_confirmed">Машына не пацвердзіла каманду</string>
+    <string name="auto_err_not_supported">Гэтая каманда не падтрымліваецца</string>
+    <string name="auto_err_out_of_range">Недапушчальнае значэнне для каманды</string>
+    <string name="auto_err_unreachable">Каманда не дайшла да машыны</string>
+    <string name="auto_err_not_done">Машына не выканала каманду</string>
+    <string name="auto_err_unverified">Каманда не праверана на гэтай машыне і не спрацавала</string>
+    <string name="auto_err_failed">Не ўдалося выканаць каманду</string>
+    <string name="auto_enum_moving_m">У руху</string>
+    <string name="auto_enum_code_sand">Пясок</string>
+    <string name="auto_enum_code_mud">Гразь</string>
+    <string name="auto_enum_code_mountain">Горы</string>
+    <string name="auto_enum_code_smart">Разумны</string>
+    <string name="auto_param_seatbeltrl">Пас ззаду злева</string>
+    <string name="auto_param_seatbeltrm">Пас ззаду ў цэнтры</string>
+    <string name="auto_param_seatbeltrr">Пас ззаду справа</string>
+    <string name="auto_param_rangekm">Запас ходу</string>
+    <string name="auto_unit_km">км</string>
 </resources>

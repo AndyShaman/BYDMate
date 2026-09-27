@@ -369,11 +369,11 @@ class TrackingService : Service(), LocationListener {
          * that no rule can act on.
          */
         internal val PUSH_EVALUATE_FIELDS: Set<String> = setOf(
-            "gear", "turnSignal", "powerState", "workMode",
+            "gear", "turnSignal", "powerState", "workMode", "driveModeTarget",
             "doorFL", "doorFR", "doorRL", "doorRR",
             "windowFL", "windowFR", "windowRL", "windowRR",
             "sunroof", "trunk", "hood", "lockFL",
-            "seatbeltFL", "seatbeltFR",
+            "seatbeltFL", "seatbeltFR", "seatbeltRL", "seatbeltRM", "seatbeltRR",
             "occupancyFL", "occupancyFR", "occupancyRL", "occupancyRM", "occupancyRR",
             "acStatus", "acCirc", "lightLow", "drl", "lightLevel",
             "keyBatteryStatus",
@@ -556,6 +556,8 @@ class TrackingService : Service(), LocationListener {
         registerWifiRestoreCallback()
         // HUD output resumes with the service on cars where the user enabled it.
         hudController.startIfEnabled()
+        // Rule journal retention: 30 days, 2000 rows.
+        serviceScope.launch { automationEngine.pruneJournal() }
 
         // A daemon can be spawned by any ensureRunning() caller (GrantSelfHeal reassert, Settings,
         // cluster) after the startup resolve already failed with "daemon unreachable" — crazyhack's
@@ -917,6 +919,7 @@ class TrackingService : Service(), LocationListener {
         if (applied && pushLogThrottle.shouldLog(field)) {
             Log.i("FidPush", "push fid=${event.fid} $field=${event.intValue}/${event.doubleValue} applied")
         }
+        if (applied) _lastData.value?.let(beltProbeLog::onSnapshot)
         // A rule that watches this field must not wait for the next poll tick (up to 5 s
         // while parked). Same snapshot and same session id the poll subscriber passes, on
         // serviceScope so the binder callback thread is free the moment the patch lands.
@@ -945,6 +948,7 @@ class TrackingService : Service(), LocationListener {
      * the log. Only the logging is throttled — every event still patches the snapshot.
      */
     private val pushLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(1_000L)
+    private val beltProbeLog = BeltProbeLog()
 
     private fun resolveFidCatalog() {
         serviceScope.launch {
@@ -1472,6 +1476,7 @@ class TrackingService : Service(), LocationListener {
                     lastDataAtMs = System.currentTimeMillis()
                     lastSample = sample
                     blindSpotController.onPollSnapshot(data)
+                    beltProbeLog.onSnapshot(data)
                     alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.
                     autoserviceDetector.onSample(data)

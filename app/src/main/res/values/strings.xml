@@ -1955,4 +1955,26 @@
     <string name="automation_tg_report_text_hint">Появится под заголовком сообщения.</string>
     <string name="automation_tg_report_own_text">свой текст</string>
     <string name="automation_tg_report_no_bot">Telegram-бот не подключён. Подключите его в Настройках, раздел «Сервис и данные».</string>
+    <!-- Automation audit 3.19: journal reasons, write errors, new conditions -->
+    <string name="auto_log_confirm_cancelled">Отменено в окне подтверждения</string>
+    <string name="auto_log_confirm_timeout">Нет ответа в окне подтверждения, не выполнено</string>
+    <string name="auto_log_park_required">Не выполнено: правило только на парковке, а передача не P</string>
+    <string name="auto_log_one_shot_expired">Разовое правило не сработало за сутки и выключено</string>
+    <string name="auto_err_not_confirmed">Машина не подтвердила команду</string>
+    <string name="auto_err_not_supported">Эта команда не поддерживается</string>
+    <string name="auto_err_out_of_range">Недопустимое значение для команды</string>
+    <string name="auto_err_unreachable">Команда не дошла до машины</string>
+    <string name="auto_err_not_done">Машина не выполнила команду</string>
+    <string name="auto_err_unverified">Команда не проверена на этой машине и не сработала</string>
+    <string name="auto_err_failed">Не удалось выполнить команду</string>
+    <string name="auto_enum_moving_m">В движении</string>
+    <string name="auto_enum_code_sand">Песок</string>
+    <string name="auto_enum_code_mud">Грязь</string>
+    <string name="auto_enum_code_mountain">Горы</string>
+    <string name="auto_enum_code_smart">Умный</string>
+    <string name="auto_param_seatbeltrl">Ремень сзади слева</string>
+    <string name="auto_param_seatbeltrm">Ремень сзади в центре</string>
+    <string name="auto_param_seatbeltrr">Ремень сзади справа</string>
+    <string name="auto_param_rangekm">Запас хода</string>
+    <string name="auto_unit_km">км</string>
 </resources>

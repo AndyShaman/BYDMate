@@ -48,6 +48,14 @@ import com.bydmate.app.ui.theme.WithAppFontScale
 import com.bydmate.app.util.appLocalizedContext
 
 /**
+ * A show() onCancel that tells «Отмена» from «nobody answered»: the timeout runs [onTimeout]
+ * instead. Any other onCancel gets both, as before.
+ */
+class CancelOrTimeout(private val onCancel: () -> Unit, val onTimeout: () -> Unit) : () -> Unit {
+    override fun invoke() = onCancel()
+}
+
+/**
  * Shows a SYSTEM_ALERT_WINDOW overlay asking the user to confirm execution
  * of an automation rule. Replaces the legacy notification-based confirm flow
  * for rules that have `confirmBeforeExecute = true`.
@@ -141,6 +149,7 @@ object ConfirmOverlayManager {
                 }
                 when (outcome) {
                     "confirm" -> onConfirm()
+                    "timeout" -> if (onCancel is CancelOrTimeout) onCancel.onTimeout() else onCancel()
                     else -> onCancel()
                 }
             }
