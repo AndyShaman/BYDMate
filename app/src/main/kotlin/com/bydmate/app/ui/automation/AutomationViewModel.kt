@@ -725,13 +725,12 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         if (err != null) Log.i("AutomationViewModel", "rule not saved: $err")
         return when (err) {
             TriggerValidationError.SteeringKeyUnassigned -> ctx.getString(R.string.automation_trigger_steering_key_unassigned)
-            // The editor's own wording for these comes with the editor redesign; until then the
-            // general «fill in the conditions» line.
-            is TriggerValidationError.ValueNotNumber,
-            TriggerValidationError.OneShotInvalid,
-            TriggerValidationError.OneShotWithOr,
-            TriggerValidationError.OneShotWithEvent,
-            TriggerValidationError.OneShotTwice -> ctx.getString(R.string.auto_msg_name_cond_action_required)
+            is TriggerValidationError.ValueNotNumber ->
+                ctx.getString(R.string.auto_ui_miss_number, triggers.indexOfFirst { it.kind == "param" && it.param == err.param } + 1)
+            TriggerValidationError.OneShotInvalid -> ctx.getString(R.string.auto_ui_err_one_shot_invalid)
+            TriggerValidationError.OneShotWithOr -> ctx.getString(R.string.auto_ui_err_one_shot_or)
+            TriggerValidationError.OneShotWithEvent -> ctx.getString(R.string.auto_ui_err_one_shot_event)
+            TriggerValidationError.OneShotTwice -> ctx.getString(R.string.auto_ui_err_one_shot_twice)
             TriggerValidationError.VoicePhraseEmpty -> ctx.getString(R.string.automation_voice_phrase_empty)
             is TriggerValidationError.VoicePhraseBuiltin -> ctx.getString(R.string.automation_voice_phrase_taken, err.command)
             is TriggerValidationError.VoicePhraseTaken -> ctx.getString(R.string.automation_voice_phrase_taken, err.rule)
