@@ -110,6 +110,7 @@
     <string name="adb_enable_step_2">2. Wróć do BYDMate i naciśnij „Sprawdź”</string>
     <string name="adb_dialog_off_after_reboot_title">ADB wyłączyło się po restarcie</string>
     <string name="adb_dialog_off_after_reboot_body">W tym oprogramowaniu ADB wyłącza się przy każdym restarcie. BYDMate potrafi włączać je sam, potrzebne jest Wi-Fi.</string>
+    <string name="adb_dialog_off_after_reboot_body_unsupported">W tym oprogramowaniu ADB wyłącza się przy każdym restarcie. Włącz je ponownie według instrukcji na GitHubie, sekcja „Enable ADB”.</string>
     <string name="adb_dialog_no_access_title">Brak dostępu do ADB</string>
     <string name="adb_dialog_no_access_body">Potwierdź prośbę na ekranie lub połącz ADB ponownie, a potem naciśnij „Sprawdź”.</string>
     <string name="adb_dialog_helper_down_title">Pomocnik BYDMate się nie uruchomił</string>

@@ -839,6 +839,7 @@
     <string name="adb_enable_step_2">2. 返回 BYDMate 并点击“检查”</string>
     <string name="adb_dialog_off_after_reboot_title">重启后 ADB 已关闭</string>
     <string name="adb_dialog_off_after_reboot_body">在此固件上，ADB 每次重启都会关闭。BYDMate 可以自动重新开启，需要 Wi-Fi。</string>
+    <string name="adb_dialog_off_after_reboot_body_unsupported">在此固件上，ADB 每次重启都会关闭。请按照 GitHub 上的说明重新开启，见“激活 ADB”一节。</string>
     <string name="adb_dialog_no_access_title">无 ADB 访问权限</string>
     <string name="adb_dialog_no_access_body">请在屏幕上确认请求或重新连接 ADB，然后点击“检查”。</string>
     <string name="adb_dialog_helper_down_title">BYDMate 助手未启动</string>

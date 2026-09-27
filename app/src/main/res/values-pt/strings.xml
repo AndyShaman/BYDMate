@@ -107,6 +107,7 @@
     <string name="adb_enable_step_2">2. Volte ao BYDMate e toque em “Verificar”</string>
     <string name="adb_dialog_off_after_reboot_title">O ADB desligou após reiniciar</string>
     <string name="adb_dialog_off_after_reboot_body">Neste firmware o ADB desliga a cada reinício. O BYDMate consegue ligá-lo sozinho, é preciso Wi-Fi.</string>
+    <string name="adb_dialog_off_after_reboot_body_unsupported">Neste firmware o ADB desliga a cada reinício. Ative-o de novo seguindo o guia no GitHub, seção “Enable ADB”.</string>
     <string name="adb_dialog_no_access_title">Sem acesso ao ADB</string>
     <string name="adb_dialog_no_access_body">Confirme o pedido na tela ou conecte o ADB de novo e depois toque em “Verificar”.</string>
     <string name="adb_dialog_helper_down_title">O assistente do BYDMate não iniciou</string>

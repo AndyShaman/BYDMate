@@ -106,6 +106,7 @@
     <string name="adb_enable_step_2">2. Return to BYDMate and tap “Check”</string>
     <string name="adb_dialog_off_after_reboot_title">ADB turned off after reboot</string>
     <string name="adb_dialog_off_after_reboot_body">On this firmware ADB turns off at every reboot. BYDMate can turn it back on by itself, Wi-Fi is required.</string>
+    <string name="adb_dialog_off_after_reboot_body_unsupported">On this firmware ADB turns off at every reboot. Turn it on again following the guide on GitHub, section “Enable ADB”.</string>
     <string name="adb_dialog_no_access_title">No ADB access</string>
     <string name="adb_dialog_no_access_body">Confirm the prompt on the screen or reconnect ADB, then tap “Check”.</string>
     <string name="adb_dialog_helper_down_title">BYDMate helper did not start</string>

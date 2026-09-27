@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.components
 
+import com.bydmate.app.R
 import com.bydmate.app.data.autoservice.AdbVerdict
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -37,5 +38,17 @@ class AdbDialogPrimaryActionTest {
         assertEquals(AdbDialogAction.CHECK, adbDialogPrimaryAction(AdbVerdict.NO_ACCESS, false, true))
         assertEquals(AdbDialogAction.OPEN_DIAGNOSTICS, adbDialogPrimaryAction(AdbVerdict.HELPER_DOWN, false, true))
         assertNull(adbDialogPrimaryAction(AdbVerdict.OK, false, true))
+    }
+
+    @Test
+    fun `off after reboot body warns Android 10 users instead of promising an automatic restore`() {
+        assertEquals(
+            R.string.adb_dialog_off_after_reboot_body_unsupported,
+            adbDialogOffAfterRebootBody(restoreSupported = false),
+        )
+        assertEquals(
+            R.string.adb_dialog_off_after_reboot_body,
+            adbDialogOffAfterRebootBody(restoreSupported = true),
+        )
     }
 }
