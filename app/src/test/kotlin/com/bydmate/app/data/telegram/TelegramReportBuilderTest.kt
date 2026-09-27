@@ -83,6 +83,32 @@ class TelegramReportBuilderTest {
         assertEquals(listOf("<b>BYDMate: Где машина</b>", "Запас 312 км", "Всё закрыто"), report.text.lines())
     }
 
+    @Test fun `a trunk mid-motion counts as open, not closed`() {
+        val data = fullData.copy(windowFL = 0, trunk = 3)
+        val report = build(fields = setOf(ReportField.OPENINGS), inputs = inputs(data = data))
+        assertEquals("Открыто: багажник", report.text.lines()[1])
+    }
+
+    @Test fun `a panel with a value the car never explained is left out of both lists`() {
+        val data = fullData.copy(windowFL = 0, doorFL = 5)
+        val report = build(fields = setOf(ReportField.OPENINGS), inputs = inputs(data = data))
+        assertEquals(1, report.text.lines().size)
+        assertEquals(listOf(ReportField.OPENINGS), report.skipped)
+    }
+
+    @Test fun `a car without a sunroof still gets all closed once its doors and windows are`() {
+        val data = fullData.copy(windowFL = 0, sunroof = null)
+        val report = build(fields = setOf(ReportField.OPENINGS), inputs = inputs(data = data))
+        assertEquals("Всё закрыто", report.text.lines()[1])
+    }
+
+    @Test fun `a window the car does not report blocks all closed, but nothing is said to be open`() {
+        val data = fullData.copy(windowFL = null)
+        val report = build(fields = setOf(ReportField.OPENINGS), inputs = inputs(data = data))
+        assertEquals(1, report.text.lines().size)
+        assertEquals(listOf(ReportField.OPENINGS), report.skipped)
+    }
+
     @Test fun `a wheel without a reading keeps its place as a dash`() {
         val data = diParsData(tirePressFL = 250, tirePressRR = 0)
         val report = build(fields = setOf(ReportField.TIRES), inputs = inputs(data = data))

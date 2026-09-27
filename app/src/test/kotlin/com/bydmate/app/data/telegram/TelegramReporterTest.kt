@@ -14,8 +14,12 @@ import com.bydmate.app.util.AppStrings
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -191,6 +195,65 @@ class TelegramReporterTest {
         assertEquals(chat, report.chatId)
         assertEquals("<b>BYDMate: машина выключена в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>\nЗаряд 64%", report.text)
         assertFalse(report.toString().contains("tok"))
+    }
+
+    @Test fun `a drain that runs while a send is in flight still catches the report once it fails`() = runBlocking {
+        connect()
+        val proceed = CompletableDeferred<Unit>()
+        var callCount = 0
+        coEvery { sink.sendMessage("tok", any(), any(), "HTML") } coAnswers {
+            callCount++
+            sent += thirdArg<String>()
+            if (callCount == 1) {
+                proceed.await()
+                failure(TelegramError.NO_NETWORK)
+            } else {
+                Result.success(Unit)
+            }
+        }
+        var result: TelegramReporter.SendResult? = null
+        val job = launch(Dispatchers.Unconfined) {
+            result = reporter.sendRuleReport("R", setOf(ReportField.SOC), "")
+        }
+        // The send is parked on `proceed`; a network-regain drain runs concurrently and finds
+        // nothing queued yet, since the failing report is only enqueued once the send returns.
+        reporter.drainOutbox("network")
+        assertEquals(0, reporter.outboxSize())
+        proceed.complete(Unit)
+        job.join()
+        assertEquals(TelegramReporter.SendResult.Queued, result)
+        assertEquals(0, reporter.outboxSize())
+        assertEquals(2, sent.size)
+    }
+
+    @Test fun `a slow failing send is marked late from when it was built, not when it failed`() = runBlocking {
+        connect()
+        val buildMs = now
+        coEvery { sink.sendMessage("tok", any(), any(), "HTML") } coAnswers {
+            sent += thirdArg<String>()
+            now += 3 * 60_000L // the network attempt takes its time before failing
+            failure(TelegramError.NO_NETWORK)
+        }
+        assertEquals(TelegramReporter.SendResult.Queued, reporter.sendRuleReport("R", setOf(ReportField.SOC), ""))
+        answer(listOf(Result.success(Unit)))
+        reporter.drainOutbox("test")
+        val stamp = TelegramReportBuilder.formatTime(buildMs)
+        assertEquals(2, sent.size)
+        assertTrue(sent[1], sent[1].endsWith("<i>(записано в $stamp)</i>"))
+    }
+
+    @Test fun `a cancelled send propagates and leaves the outbox untouched`() = runBlocking {
+        connect()
+        reporter.enqueue(entry("existing", now))
+        coEvery { sink.sendMessage("tok", any(), any(), "HTML") } throws CancellationException("job cancelled")
+        var caught = false
+        try {
+            reporter.sendRuleReport("R", setOf(ReportField.SOC), "")
+        } catch (expected: CancellationException) {
+            caught = true
+        }
+        assertTrue(caught)
+        assertEquals(1, reporter.outboxSize())
     }
 
     @Test fun `the dump line shows the switch, the items and the outbox`() = runBlocking {

@@ -1230,8 +1230,20 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
 
 /** The two Telegram report rules of 3.19, disabled: also added once to installs made before it. */
 internal fun telegramReportTemplates(lang: String): List<RuleEntity> {
-    fun tName(zh: String, en: String, ru: String): String = when (lang) { "zh" -> zh; "ru", "be" -> ru; else -> en }
-    val reportName = tName("Telegram 报告", "Telegram report", "Отчёт в Telegram")
+    // A local six-language helper: the shared tName above only knows zh/en/ru and falls back to
+    // ru for be, en for pl/pt, which ends up in the sent report header (finding #4, 2026-09-27).
+    fun tName(zh: String, en: String, ru: String, be: String, pl: String, pt: String): String = when (lang) {
+        "zh" -> zh
+        "ru" -> ru
+        "be" -> be
+        "pl" -> pl
+        "pt" -> pt
+        else -> en
+    }
+    val reportName = tName(
+        "Telegram 报告", "Telegram report", "Отчёт в Telegram",
+        "Справаздача ў Telegram", "Raport w Telegramie", "Relatório no Telegram",
+    )
     fun report(vararg fields: ReportField) = ActionDef(
         command = "",
         displayName = reportName,
@@ -1240,22 +1252,32 @@ internal fun telegramReportTemplates(lang: String): List<RuleEntity> {
     )
     return listOf(
         RuleEntity(
-            name = tName("车在哪里", "Where the car is", "Где машина"),
+            name = tName(
+                "车在哪里", "Where the car is", "Где машина",
+                "Дзе машына", "Gdzie jest samochód", "Onde está o carro",
+            ),
             enabled = false,
             triggerLogic = "AND",
             triggers = TriggerDef.listToJson(listOf(
-                TriggerDef("Gear", "档位", "==", "1", tName("档位 = P", "Gear = P", "Передача = P"))
+                TriggerDef("Gear", "档位", "==", "1", tName(
+                    "档位 = P", "Gear = P", "Передача = P", "Перадача = P", "Bieg = P", "Marcha = P",
+                ))
             )),
             actions = ActionDef.listToJson(listOf(report(ReportField.LOCATION, ReportField.SOC, ReportField.RANGE))),
             cooldownSeconds = 60
         ),
         RuleEntity(
-            name = tName("启动时状态", "Status at start", "Статус при запуске"),
+            name = tName(
+                "启动时状态", "Status at start", "Статус при запуске",
+                "Стан пры запуску", "Stan przy uruchomieniu", "Status ao iniciar",
+            ),
             enabled = false,
             triggerLogic = "AND",
             triggers = TriggerDef.listToJson(listOf(
-                TriggerDef("ServiceStart", "服务启动", "==", "true",
-                    tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"), kind = "service_start")
+                TriggerDef("ServiceStart", "服务启动", "==", "true", tName(
+                    "BYDMate 启动", "BYDMate startup", "Запуск BYDMate",
+                    "Запуск BYDMate", "Uruchomienie BYDMate", "Inicialização do BYDMate",
+                ), kind = "service_start")
             )),
             actions = ActionDef.listToJson(listOf(report(ReportField.SOC, ReportField.RANGE, ReportField.TRIP))),
             cooldownSeconds = 60

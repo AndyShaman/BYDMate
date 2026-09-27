@@ -20,6 +20,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -86,6 +87,14 @@ class TelegramReporter @Inject constructor(
     private val strings = ReportStrings { id, args -> appStrings.get(id, *args) }
     private val outboxMutex = Mutex()
 
+    /**
+     * Bumped by every [drainOutbox] call. [deliver] reads it before sending: if it moved while the
+     * send was in flight, a network-regain or after-send drain ran and found the queue empty
+     * (the failed report was not enqueued yet), so it runs [drainOutbox] once more itself instead
+     * of leaving the report stuck until the next trigger.
+     */
+    private val drainGeneration = AtomicInteger(0)
+
     /** The `telegram_report` automation action: header «BYDMate: <rule name>». */
     suspend fun sendRuleReport(ruleName: String?, fields: Set<ReportField>, customText: String): SendResult {
         val config = settings.getTgBackupConfig()
@@ -95,8 +104,8 @@ class TelegramReporter @Inject constructor(
             Log.w(TAG, "rule report id=$id skipped: bot not connected")
             return SendResult.NotConnected
         }
-        val report = build(id, "rule", TelegramReportBuilder.ruleHeader(ruleName), customText, fields)
-        return deliver(id, config, chatId, report.text)
+        val built = build(id, "rule", TelegramReportBuilder.ruleHeader(ruleName), customText, fields)
+        return deliver(id, config, chatId, built.report.text, built.builtAtMs)
     }
 
     /**
@@ -110,8 +119,8 @@ class TelegramReporter @Inject constructor(
         if (!config.configured || chatId == null) return null
         val id = newId()
         val header = TelegramReportBuilder.powerOffHeader(strings)
-        val report = build(id, "power_off", header, "", settings.getTgReportOffFields())
-        return PowerOffReport(id, config.token, chatId, report.text)
+        val built = build(id, "power_off", header, "", settings.getTgReportOffFields())
+        return PowerOffReport(id, config.token, chatId, built.report.text)
     }
 
     /**
@@ -120,6 +129,7 @@ class TelegramReporter @Inject constructor(
      * was disconnected or whose chat changed is dropped, so it never lands in someone else's chat.
      */
     suspend fun drainOutbox(reason: String) {
+        drainGeneration.incrementAndGet()
         outboxMutex.withLock {
             var queue = loadOutbox()
             if (queue.isEmpty()) return
@@ -181,7 +191,8 @@ class TelegramReporter @Inject constructor(
         "telegram report last_off: -",
     )
 
-    private suspend fun deliver(id: String, config: TgBackupConfig, chatId: Long, text: String): SendResult {
+    private suspend fun deliver(id: String, config: TgBackupConfig, chatId: Long, text: String, builtAtMs: Long): SendResult {
+        val generationBeforeSend = drainGeneration.get()
         val failure = sink.sendMessage(config.token, chatId, text, PARSE_MODE).exceptionOrNull()
         return when {
             failure == null -> {
@@ -191,7 +202,10 @@ class TelegramReporter @Inject constructor(
             }
             isTransient(failure) -> {
                 Log.w(TAG, "send id=$id rc=${errorKey(failure)} -> outbox")
-                enqueue(OutboxEntry(id, chatId, clock(), text))
+                enqueue(OutboxEntry(id, chatId, builtAtMs, text))
+                // A drain that ran while the send was in flight found this report not queued yet
+                // (see drainGeneration doc): run it once more so it is not stuck until the next trigger.
+                if (drainGeneration.get() != generationBeforeSend) drainOutbox("late_edge")
                 SendResult.Queued
             }
             else -> {
@@ -201,14 +215,18 @@ class TelegramReporter @Inject constructor(
         }
     }
 
+    /** [BuiltReport] plus the moment it describes the car: what [deliver] stamps an outbox entry with. */
+    private data class Built(val report: BuiltReport, val builtAtMs: Long)
+
     private suspend fun build(
         id: String,
         source: String,
         header: String,
         customText: String,
         fields: Set<ReportField>,
-    ): BuiltReport {
-        val report = TelegramReportBuilder.build(header, customText, fields, inputs(), language(), strings, clock())
+    ): Built {
+        val builtAtMs = clock()
+        val report = TelegramReportBuilder.build(header, customText, fields, inputs(), language(), strings, builtAtMs)
         Log.i(
             TAG,
             "build id=$id src=$source fields=[${ReportField.toCsv(fields)}] " +
@@ -216,7 +234,7 @@ class TelegramReporter @Inject constructor(
                 "skipped=[${report.skipped.joinToString(",") { it.id }}] " +
                 "custom=${customText.isNotBlank()} len=${report.text.length}",
         )
-        return report
+        return Built(report, builtAtMs)
     }
 
     /** «(записано в 18:42)», with the date when the report is from another day. */
