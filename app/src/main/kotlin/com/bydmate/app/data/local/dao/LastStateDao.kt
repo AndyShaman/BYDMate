@@ -30,11 +30,20 @@ interface LastStateDao {
             trip_start_soc = :startSoc,
             trip_start_mileage = :startMileage,
             trip_start_total_elec = :startTotalElec,
+            trip_start_exterior_temp = :startExteriorTemp,
             ts = :now
         WHERE id = 1
         """
     )
-    suspend fun openTrip(startTs: Long, startSoc: Int?, startMileage: Double?, startTotalElec: Double?, now: Long): Int
+    @Suppress("LongParameterList") // one bound parameter per open-trip column
+    suspend fun openTrip(
+        startTs: Long,
+        startSoc: Int?,
+        startMileage: Double?,
+        startTotalElec: Double?,
+        startExteriorTemp: Int?,
+        now: Long,
+    ): Int
 
     @Query(
         """
@@ -43,7 +52,8 @@ interface LastStateDao {
             trip_start_ts = NULL,
             trip_start_soc = NULL,
             trip_start_mileage = NULL,
-            trip_start_total_elec = NULL
+            trip_start_total_elec = NULL,
+            trip_start_exterior_temp = NULL
         WHERE id = 1
         """
     )

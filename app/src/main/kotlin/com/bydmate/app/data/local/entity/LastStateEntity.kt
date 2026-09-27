@@ -24,5 +24,6 @@ data class LastStateEntity(
     @ColumnInfo(name = "trip_start_soc") val tripStartSoc: Int? = null,
     @ColumnInfo(name = "trip_start_mileage") val tripStartMileage: Double? = null,
     @ColumnInfo(name = "trip_start_total_elec") val tripStartTotalElec: Double? = null,
+    @ColumnInfo(name = "trip_start_exterior_temp") val tripStartExteriorTemp: Int? = null,
     @ColumnInfo(name = "energydata_available") val energydataAvailable: Int = 0
 )
