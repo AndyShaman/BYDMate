@@ -52,10 +52,12 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     private val inFlightLock = Any()
     private val inFlight = mutableListOf<InFlight>()
 
-    /** Removes the matching in-flight entries under the lock, then cancels them outside it. */
-    private fun cancelInFlight(which: (InFlight) -> Boolean) {
+    /** Removes the matching in-flight entries and registers [add] in ONE critical section (so two
+     *  racing calls behave as if sequential: the later one always cancels the earlier), then runs
+     *  the removed entries' cancel handles outside the lock. */
+    private fun replaceInFlight(add: InFlight?, which: (InFlight) -> Boolean) {
         val dropped = synchronized(inFlightLock) {
-            inFlight.filter(which).also { inFlight.removeAll(it) }
+            inFlight.filter(which).also { inFlight.removeAll(it); if (add != null) inFlight += add }
         }
         dropped.forEach { it.cancel() }
     }
@@ -86,11 +88,10 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         // A new reply supersedes an agent reply queue still awaiting synthesis: its sentences must
         // not play after (or between) the new audio. A previous single speak() is left alone, so
         // an automation's consecutive "speak" actions all still play.
-        cancelInFlight { it.isQueue }
         // Lazy: registered before it can run, so a stop() racing this call cancels it too.
         val job = scope.launch(start = CoroutineStart.LAZY) { speakOnline(backend, text) }
         val entry = InFlight(isQueue = false) { job.cancel() }
-        synchronized(inFlightLock) { inFlight += entry }
+        replaceInFlight(entry) { it.isQueue }
         job.invokeOnCompletion { synchronized(inFlightLock) { inFlight.remove(entry) } }
         job.start()
         return true
@@ -111,7 +112,7 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     }
 
     override fun stop() {
-        cancelInFlight { true }
+        replaceInFlight(add = null) { true }
         delegate.stop()
     }
 
@@ -170,9 +171,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         val backend = onlineBackend()
         Log.i(TAG, "route: source=${backend?.id ?: OFFLINE}")
         if (backend == null) return delegate.startQueue()
-        cancelInFlight { true } // a new agent reply drops whatever online speech is still pending
         val queue = OnlineSpeechQueue(backend)
-        synchronized(inFlightLock) { inFlight += InFlight(isQueue = true) { queue.cancel() } }
+        // A new agent reply drops whatever online speech is still pending.
+        replaceInFlight(InFlight(isQueue = true) { queue.cancel() }) { true }
         return queue
     }
 
