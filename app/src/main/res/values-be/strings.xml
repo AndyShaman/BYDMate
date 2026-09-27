@@ -2008,6 +2008,7 @@
     <string name="auto_ui_miss_conditions">Дадайце ўмову</string>
     <string name="auto_ui_miss_param">Выберыце, што правяраць ва ўмове %1$d</string>
     <string name="auto_ui_miss_value">Выберыце значэнне ва ўмове %1$d</string>
+    <string name="auto_ui_miss_operator">Выберыце «роўна» або «не роўна» ва ўмове %1$d</string>
     <string name="auto_ui_miss_number">Увядзіце лік ва ўмове %1$d</string>
     <string name="auto_ui_miss_key">Прызначце клавішу руля ва ўмове %1$d</string>
     <string name="auto_ui_miss_actions">Дадайце дзеянне</string>

@@ -12,6 +12,8 @@ import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -77,6 +79,7 @@ object ConfirmOverlayManager {
 
     private const val TAG = "ConfirmOverlay"
     private const val DEFAULT_TIMEOUT_MS = 15_000L
+    private val TEXT_MAX_HEIGHT = 300.dp
 
     fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
 
@@ -186,19 +189,28 @@ object ConfirmOverlayManager {
                         .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
                         .padding(24.dp),
                 ) {
-                    Text(
-                        text = lc.getString(R.string.auto_ui_confirm_rule, ruleName),
-                        fontSize = 16.sp,
-                        color = TextSecondary,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = actionsSummary.ifBlank { ruleName },
-                        fontSize = 26.sp,
-                        lineHeight = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                    )
+                    // The name and the actions scroll within a capped height and take only what the
+                    // countdown and the buttons leave: a long text never pushes them off the window.
+                    Column(
+                        Modifier
+                            .weight(1f, fill = false)
+                            .heightIn(max = TEXT_MAX_HEIGHT)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = lc.getString(R.string.auto_ui_confirm_rule, ruleName),
+                            fontSize = 16.sp,
+                            color = TextSecondary,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = actionsSummary.ifBlank { ruleName },
+                            fontSize = 26.sp,
+                            lineHeight = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                        )
+                    }
                     Spacer(Modifier.height(16.dp))
                     Box(
                         Modifier

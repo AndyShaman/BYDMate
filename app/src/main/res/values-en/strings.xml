@@ -1856,6 +1856,7 @@
     <string name="auto_ui_miss_conditions">Add a condition</string>
     <string name="auto_ui_miss_param">Choose what to check in condition %1$d</string>
     <string name="auto_ui_miss_value">Choose a value in condition %1$d</string>
+    <string name="auto_ui_miss_operator">Choose “equals” or “not equal to” in condition %1$d</string>
     <string name="auto_ui_miss_number">Enter a number in condition %1$d</string>
     <string name="auto_ui_miss_key">Assign a steering key in condition %1$d</string>
     <string name="auto_ui_miss_actions">Add an action</string>

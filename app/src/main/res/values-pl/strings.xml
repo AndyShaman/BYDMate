@@ -2008,6 +2008,7 @@
     <string name="auto_ui_miss_conditions">Dodaj warunek</string>
     <string name="auto_ui_miss_param">Wybierz, co sprawdzać w warunku %1$d</string>
     <string name="auto_ui_miss_value">Wybierz wartość w warunku %1$d</string>
+    <string name="auto_ui_miss_operator">Wybierz „równe” lub „różne od” w warunku %1$d</string>
     <string name="auto_ui_miss_number">Wpisz liczbę w warunku %1$d</string>
     <string name="auto_ui_miss_key">Przypisz przycisk kierownicy w warunku %1$d</string>
     <string name="auto_ui_miss_actions">Dodaj akcję</string>

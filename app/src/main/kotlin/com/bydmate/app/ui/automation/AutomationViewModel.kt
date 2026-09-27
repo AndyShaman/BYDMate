@@ -770,6 +770,15 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             _uiState.value = _uiState.value.copy(editorError = actionError)
             return
         }
+        // Every save path, «Сохранить изменения?» included: a list condition keeps no hidden operator.
+        val noOperator = e.triggers.indexOfFirst { hasListOperatorMissing(it) }
+        if (noOperator >= 0) {
+            Log.i("AutomationViewModel", "rule not saved: list condition ${noOperator + 1} has operator ${e.triggers[noOperator].operator}")
+            _uiState.value = _uiState.value.copy(
+                editorError = context.appLocalizedContext().getString(R.string.auto_ui_miss_operator, noOperator + 1)
+            )
+            return
+        }
         val triggerError = validateTriggers(e.triggers, if (e.isNew) -1L else e.id, e.triggerLogic)
         if (triggerError != null) {
             _uiState.value = _uiState.value.copy(editorError = triggerError)
@@ -904,7 +913,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
      * dispatcher lets a window or the sunroof open with no snapshot at all, and a stale speed 0
      * passes every gate. Without one the action is skipped and counted as not done; so is an
      * action the pre-check cannot classify. Closing the editor stops the run.
-     * «Только на парковке» holds as when the rule fires: off P the run is refused with a note,
+     * «Только на парковке» holds as when the rule fires: off P, or with no fresh P, the run is refused with a note,
      * and a saved rule gets the refusal in its journal. The trigger conditions, cooldown, «Раз за
      * поездку» and «Спрашивать подтверждение» are skipped: the button press is the confirmation.
      * Otherwise a run writes no lastTriggeredAt / triggerCount update and no journal entry.
@@ -918,8 +927,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             return
         }
         val gear = liveSnapshot()?.gear
-        if (e.requirePark && gear != 1) {
-            Log.i("AutomationViewModel", "test run refused: park only, gear=$gear")
+        if (e.requirePark && !inFreshPark(gear)) {
             _uiState.update { it.copy(message = context.appLocalizedContext().getString(R.string.auto_ui_test_park)) }
             if (!e.isNew) {
                 viewModelScope.launch {
@@ -957,6 +965,18 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                 _uiState.update { it.copy(testRunning = false) }
             }
         }
+    }
+
+    /**
+     * P from a polled snapshot younger than [TEST_RUN_MAX_SNAPSHOT_AGE_MS] of a running service,
+     * and still P in the live snapshot [gear]: the live snapshot outlives the service and never
+     * says how old it is.
+     */
+    private fun inFreshPark(gear: Int?): Boolean {
+        val freshGear = liveSample()?.takeIf { isSampleFresh(it, serviceRunning(), elapsedNow()) }?.data?.gear
+        if (freshGear == 1 && gear == 1) return true
+        Log.i("AutomationViewModel", "test run refused: park only, gear=$gear fresh=$freshGear")
+        return false
     }
 
     /**

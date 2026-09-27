@@ -191,6 +191,15 @@ internal fun whenText(ms: Long, lc: Context, now: Long, zone: ZoneId): String {
     }
 }
 
+/** The day of [now] in [zone], as a number: what the relative dates of [whenText] hang on. */
+internal fun epochDay(now: Long, zone: ZoneId): Long = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()
+
+/** Milliseconds from [now] to the next midnight in [zone]. */
+internal fun msUntilNextDay(now: Long, zone: ZoneId): Long {
+    val next = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    return next - now
+}
+
 // --- Actions ---
 
 private const val QUOTE_MAX = 40
@@ -311,10 +320,47 @@ internal data class JournalLine(
     val why: String?,
 )
 
-@Suppress("CyclomaticComplexMethod") // non-runs, runs and failures each read their own fields
+/** Parameter-free names of the kinds whose line reads the payload: an entry older than the recorded payload. */
+private val PAYLOAD_KIND_NAMES = mapOf(
+    "toggle" to R.string.automation_action_toggle,
+    "delay" to R.string.automation_action_delay,
+    "notification" to R.string.auto_act_notification,
+    "notification_silent" to R.string.auto_act_notification,
+    "notification_sound" to R.string.auto_act_notification,
+    "speak" to R.string.automation_action_speak,
+    "agent_query" to R.string.automation_action_agent_query,
+    "app_launch" to R.string.automation_action_app_launch,
+    "call" to R.string.automation_action_call,
+    "navigate" to R.string.automation_action_navigate,
+    "url" to R.string.automation_action_url,
+    "sentry" to R.string.automation_action_sentry,
+    "hotspot" to R.string.automation_action_hotspot,
+    "cluster_projection" to R.string.automation_action_cluster_projection,
+    "media_volume" to R.string.automation_action_media_volume,
+)
+
+/**
+ * An action as the journal recorded it. An entry written before the journal kept the payload
+ * shows the name it was recorded with, or the bare kind name: never a parameter it did not record.
+ */
+private fun recordedActionText(o: JSONObject, lc: Context): String {
+    val kind = o.optString("kind", "param")
+    val displayName = o.optString("displayName")
+    val bareName = PAYLOAD_KIND_NAMES[kind]
+    if (!o.has("payload") && bareName != null) return displayName.ifBlank { lc.getString(bareName) }
+    val payload = if (o.isNull("payload")) null else o.optString("payload")
+    return actionText(ActionDef(o.optString("command"), displayName, kind, payload), lc)
+}
+
+private fun recordedList(actions: List<JSONObject>, lc: Context): String =
+    listText(actions.mapIndexed { i, o -> recordedActionText(o, lc).let { if (i == 0) it else decapitalize(it, lc) } }, lc)
+
+/**
+ * One journal entry in words, only from what the entry itself recorded: the rule may have been
+ * edited or deleted since.
+ */
 internal fun journalLine(
     log: RuleLogEntity,
-    rule: RuleEntity?,
     context: Context,
     now: Long = System.currentTimeMillis(),
     zone: ZoneId = ZoneId.systemDefault(),
@@ -323,32 +369,32 @@ internal fun journalLine(
     val snapshot = try { JSONObject(log.triggersSnapshot) } catch (_: Exception) { JSONObject() }
     val steps = try { JSONArray(log.actionsResult) } catch (_: Exception) { JSONArray() }
     val oneShot = snapshot.has(OneShotTrigger.KIND)
-    val ruleActions = rule?.let { ActionDef.listFromJson(it.actions) }.orEmpty()
-        .map { actionText(it, lc) }.let { listText(it.mapIndexed { i, s -> if (i == 0) s else decapitalize(s, lc) }, lc) }
     val time = whenText(log.triggeredAt, lc, now, zone)
     val result = entryResult(log)
     if (result != null) {
-        val reason = steps.optJSONObject(0)?.optString("reason")?.ifEmpty { null }
+        val entry = steps.optJSONObject(0)
+        val reason = entry?.optString("reason")?.ifEmpty { null }
         val (kind, status) = when (result) {
             "cancelled", "timeout" -> RuleStatusKind.CANCELLED to R.string.auto_ui_journal_cancelled
             "expired" -> RuleStatusKind.SKIPPED to R.string.auto_ui_journal_expired
             else -> RuleStatusKind.SKIPPED to R.string.auto_ui_journal_skipped
         }
-        val what = if (snapshot.optBoolean(TEST_RUN_KEY)) lc.getString(R.string.automation_test_run_button) else ruleActions
+        // An entry written before the journal kept the actions shows none.
+        val recorded = entry?.optJSONArray("actions")
+        val what = if (snapshot.optBoolean(TEST_RUN_KEY)) lc.getString(R.string.automation_test_run_button)
+            else recordedList((0 until (recorded?.length() ?: 0)).mapNotNull { recorded?.optJSONObject(it) }, lc)
         return JournalLine(kind, lc.getString(status), time, what, reason)
     }
     val stepList = (0 until steps.length()).mapNotNull { steps.optJSONObject(it) }
-    fun stepName(o: JSONObject) = actionText(
-        ActionDef(o.optString("command"), o.optString("displayName"), o.optString("kind", "param")), lc,
-    )
     if (log.success) {
-        val what = listText(stepList.mapIndexed { i, o -> stepName(o).let { if (i == 0) it else decapitalize(it, lc) } }, lc)
+        val what = recordedList(stepList, lc)
         val why = if (oneShot) lc.getString(R.string.auto_ui_journal_one_shot) else snapshotText(snapshot, lc)
         val status = if (oneShot) R.string.auto_ui_journal_done_off else R.string.auto_ui_journal_done
         return JournalLine(RuleStatusKind.OK, lc.getString(status), time, what, why)
     }
     val failed = stepList.firstOrNull { !it.optBoolean("success", false) }
-    val what = failed?.let { lc.getString(R.string.auto_ui_journal_step_failed, stepName(it)) } ?: ruleActions
+    val what = failed?.let { lc.getString(R.string.auto_ui_journal_step_failed, recordedActionText(it, lc)) }
+        ?: recordedList(stepList, lc)
     val why = failed?.optString("reason")?.ifEmpty { null }
     return JournalLine(RuleStatusKind.ERROR, lc.getString(R.string.auto_ui_journal_error), time, capitalize(what, lc), why)
 }
@@ -384,6 +430,7 @@ internal sealed interface Missing {
     data object NoConditions : Missing
     data class Param(val condition: Int) : Missing
     data class Value(val condition: Int) : Missing
+    data class Operator(val condition: Int) : Missing
     data class Number(val condition: Int) : Missing
     data class Key(val condition: Int) : Missing
     data object NoActions : Missing
@@ -402,7 +449,10 @@ internal fun missingParts(e: EditingRule, context: Context): List<Missing> {
                 val option = TRIGGER_PARAMS.firstOrNull { it.param == t.param }
                 when {
                     option == null -> out += Missing.Param(n)
-                    option.enumValues != null -> if (t.value.isBlank()) out += Missing.Value(n)
+                    option.enumValues != null -> {
+                        if (hasListOperatorMissing(t)) out += Missing.Operator(n)
+                        if (t.value.isBlank()) out += Missing.Value(n)
+                    }
                     TriggerNumber.parse(t.value) == null -> out += Missing.Number(n)
                 }
             }
@@ -419,6 +469,7 @@ internal fun Missing.text(lc: Context): String = when (this) {
     Missing.NoConditions -> lc.getString(R.string.auto_ui_miss_conditions)
     is Missing.Param -> lc.getString(R.string.auto_ui_miss_param, condition)
     is Missing.Value -> lc.getString(R.string.auto_ui_miss_value, condition)
+    is Missing.Operator -> lc.getString(R.string.auto_ui_miss_operator, condition)
     is Missing.Number -> lc.getString(R.string.auto_ui_miss_number, condition)
     is Missing.Key -> lc.getString(R.string.auto_ui_miss_key, condition)
     Missing.NoActions -> lc.getString(R.string.auto_ui_miss_actions)
@@ -454,6 +505,16 @@ private val EVENT_KINDS = setOf("button_press", AutomationEngine.TRIGGER_KIND_ST
 /** The operators a parameter offers: «равно / не равно» for a list, all six for a number. */
 internal fun operatorsFor(option: TriggerParamOption?): List<String> =
     if (option?.enumValues != null) listOf("==", "!=") else OPERATORS
+
+/**
+ * True for a list condition saved with an operator the editor no longer offers (an older build
+ * allowed «Передача > P»): it opens with neither button chosen and must not be saved as it is.
+ */
+internal fun hasListOperatorMissing(t: TriggerDef): Boolean {
+    if (t.kind != "param") return false
+    val option = TRIGGER_PARAMS.firstOrNull { it.param == t.param } ?: return false
+    return option.enumValues != null && t.operator !in operatorsFor(option)
+}
 
 /** [t] switched to [option]: a new parameter starts with a fresh operator and an empty value. */
 internal fun withParam(t: TriggerDef, option: TriggerParamOption, context: Context): TriggerDef = t.copy(
