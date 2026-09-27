@@ -90,7 +90,7 @@ class SharedAdaptiveLoopPersistTest {
                 awaitItem()   // tick 1: prev == null -> write, openTripId still null
                 // Simulate TripRecorder opening a trip between loop ticks (raw
                 // UPDATE, not upsert()) -- persistSnapshot must re-read this.
-                box.value = box.value!!.copy(openTripId = 42L)
+                box.value = box.value!!.copy(openTripId = 42L, tripStartExteriorTemp = 10)
                 advanceTimeBy(30_000)
                 awaitItem()   // tick 2: soc changed -> write, must carry openTripId=42
             }
@@ -99,6 +99,7 @@ class SharedAdaptiveLoopPersistTest {
         }
         assertEquals(2, recorded.size)
         assertEquals(42L, recorded[1].openTripId)
+        assertEquals(10, recorded[1].tripStartExteriorTemp)  // issue #250
     }
 
     @Test fun `stale heartbeat forces a write even with identical data`() = runTest {

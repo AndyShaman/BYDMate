@@ -127,6 +127,7 @@ class SharedAdaptiveLoop constructor(
                 tripStartSoc = prev?.tripStartSoc,
                 tripStartMileage = prev?.tripStartMileage,
                 tripStartTotalElec = prev?.tripStartTotalElec,
+                tripStartExteriorTemp = prev?.tripStartExteriorTemp,
                 energydataAvailable = if (energyDataReader.isAvailable()) 1 else 0,
             )
         )

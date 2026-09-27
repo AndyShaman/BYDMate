@@ -28,7 +28,7 @@ class TripRecorder @Inject constructor(
         val startSoc: Int?,
         val startMileage: Double?,
         val startTotalElec: Double? = null,
-        /** Outside temperature when the trip opened, °C — kept in memory only. */
+        /** Outside temperature when the trip opened, °C. */
         val startExteriorTemp: Int? = null,
     )
     internal var open: Open? = null
@@ -66,6 +66,7 @@ class TripRecorder @Inject constructor(
             startSoc = data.soc,
             startMileage = data.mileage,
             startTotalElec = data.totalElecConsumption,
+            startExteriorTemp = data.exteriorTemp,
             now = startTs,
         )
         if (updated == 0) {
@@ -82,6 +83,7 @@ class TripRecorder @Inject constructor(
                     tripStartSoc = data.soc,
                     tripStartMileage = data.mileage,
                     tripStartTotalElec = data.totalElecConsumption,
+                    tripStartExteriorTemp = data.exteriorTemp,
                     energydataAvailable = 0,
                 )
             )
@@ -170,7 +172,11 @@ class TripRecorder @Inject constructor(
         val staleGap = 5 * 60 * 1_000L
         if (gap < staleGap) {
             if (active) {
-                open = Open(state.tripStartTs, state.tripStartSoc, state.tripStartMileage, state.tripStartTotalElec)
+                open = Open(
+                    state.tripStartTs, state.tripStartSoc, state.tripStartMileage,
+                    state.tripStartTotalElec, state.tripStartExteriorTemp,
+                )
+                Log.i(TAG, "trip resume (cold start): ts=${state.tripStartTs} ext_temp=${state.tripStartExteriorTemp}")
             }
             return
         }
@@ -188,12 +194,14 @@ class TripRecorder @Inject constructor(
                     kwhPer100km = per100,
                     socStart = state.tripStartSoc,
                     socEnd = state.soc,
+                    exteriorTemp = state.tripStartExteriorTemp,
                     odometerStartKm = odoStart,
                     odometerEndKm = odoEnd,
                     source = TripSource.NATIVE_POLLING,
                 )
             )
-            Log.i(TAG, "trip close (cold start): km=$distance odo=$odoStart/$odoEnd")
+            Log.i(TAG, "trip close (cold start): km=$distance " +
+                "ext_temp=${state.tripStartExteriorTemp} odo=$odoStart/$odoEnd")
         }
         lastStateDao.clearOpenTrip()
     }
