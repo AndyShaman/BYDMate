@@ -1859,6 +1859,9 @@ class TrackingService : Service(), LocationListener {
     }
 
     private fun startLocationUpdates() {
+        // Whatever this run manages below (no permission, GPS off, a throwing provider), a fix
+        // kept from a previous run of this service in the same process is not this run's data.
+        lastLocationFix = nextSnapshotOnRestart(lastLocationFix, lastKnown = null)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
         ) {
