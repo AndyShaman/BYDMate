@@ -70,6 +70,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         val backend = onlineBackend()
         Log.i(TAG, "route: source=${backend?.id ?: OFFLINE}")
         if (backend == null) return delegate.speak(text)
+        // A new reply supersedes the previous one: its sentence still awaiting synthesis must not
+        // play after (or between) the new reply's audio.
+        cancelActive?.invoke()
         val job = scope.launch { speakOnline(backend, text) }
         cancelActive = { job.cancel() }
         return true
@@ -150,6 +153,7 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         val backend = onlineBackend()
         Log.i(TAG, "route: source=${backend?.id ?: OFFLINE}")
         if (backend == null) return delegate.startQueue()
+        cancelActive?.invoke() // see speak(): the previous reply's pending sentences are dropped
         val queue = OnlineSpeechQueue(backend)
         cancelActive = { queue.cancel() }
         return queue
