@@ -1202,8 +1202,10 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         /** Budget for a [writeStatus] beforeSend guard (e.g. DriveModeChannel's terrain speed
          *  re-check): well under REQ_TIMEOUT_MS so a slow guard cannot hold the transport mutex
          *  for the whole shared write budget, or make a caller behind it wait the full 2 s just
-         *  to be told the helper looked "unreachable" (2026-09-27, review round 2). */
-        private const val GUARD_TIMEOUT_MS = 500L
+         *  to be told the helper looked "unreachable" (2026-09-27, review round 2). 1 s fits one
+         *  on-device `service call` speed read over ADB with room for load; a tighter budget would
+         *  refuse terrain switches whenever the read is merely slow. */
+        private const val GUARD_TIMEOUT_MS = 1_000L
         /** Budget for one daemon-side forcing op. For TX_LAUNCH_FREEFORM it is counted from the
          *  moment the channel is held, and the daemon spends it as: launch retry loop (~9.5s on a
          *  cold start) + pin loop + grace poll sleeps, capped by its GRACE_DEADLINE_MS = 11.5s, plus

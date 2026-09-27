@@ -177,7 +177,7 @@ class HelperClientWriteGuardTest {
                 val started = System.nanoTime()
                 val result = runCatching {
                     client.writeStatus(dev = 1023, fid = 1276260400, value = 4) {
-                        // Longer than HelperClient's own GUARD_TIMEOUT_MS (500 ms) but well
+                        // Longer than HelperClient's own GUARD_TIMEOUT_MS (1000 ms) but
                         // under the shared REQ_TIMEOUT_MS (2000 ms) budget.
                         delay(SLOW_GUARD_DELAY_MS)
                         true
@@ -218,10 +218,10 @@ class HelperClientWriteGuardTest {
         /** Short bounded window given to a (correctly implemented) queued second call to prove
          *  it has NOT run its guard yet while the mutex is still held by the first call. */
         const val GUARD_RACE_WINDOW_MS = 200L
-        /** Longer than HelperClientImpl's own GUARD_TIMEOUT_MS (500 ms). */
-        const val SLOW_GUARD_DELAY_MS = 800L
+        /** Longer than HelperClientImpl's own GUARD_TIMEOUT_MS (1000 ms). */
+        const val SLOW_GUARD_DELAY_MS = 1_500L
         /** Well under the shared REQ_TIMEOUT_MS (2000 ms): proves a slow guard was cut off by
          *  its own budget, not by the shared timeout. */
-        const val SHARED_BUDGET_MARGIN_MS = 1_500L
+        const val SHARED_BUDGET_MARGIN_MS = 1_800L
     }
 }
