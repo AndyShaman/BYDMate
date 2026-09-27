@@ -6,6 +6,7 @@ import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.remote.diParsData
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -22,6 +23,9 @@ class TripRecorderActiveTest {
     private fun setup(): Triple<TripRecorder, TripDao, LastStateDao> {
         val tripDao = mockk<TripDao>(relaxed = true)
         val lastState = mockk<LastStateDao>(relaxed = true)
+        // Row already exists (the loop wrote a snapshot before any trip opened), so
+        // openTrip()'s row-missing fallback does not engage -- matches real usage.
+        coEvery { lastState.openTrip(any(), any(), any(), any(), any(), any()) } returns 1
         val energy = mockk<EnergyDataReader> { every { isAvailable() } returns false }
         val clock = mutableListOf(1_000L, 2_000L, 3_000L, 4_000L)
         val recorder = TripRecorder(

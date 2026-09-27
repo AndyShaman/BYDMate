@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.bydmate.app.data.local.entity.LastStateEntity
 
 @Dao
@@ -13,6 +14,73 @@ interface LastStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(state: LastStateEntity)
+
+    /**
+     * Row id=1 with the open-trip columns left NULL. Used as the missing-row half of
+     * [writeSnapshot], and by TripRecorder before its own trip-columns-only retry when
+     * `openTrip()` finds no row yet; a no-op when the row already exists.
+     */
+    @Query(
+        """
+        INSERT OR IGNORE INTO last_state (id, ts, soc, mileage, total_elec, ignition, energydata_available)
+        VALUES (1, :ts, :soc, :mileage, :totalElec, :ignition, :energydataAvailable)
+        """
+    )
+    @Suppress("LongParameterList") // one bound parameter per snapshot column
+    suspend fun insertSnapshotRowIfAbsent(
+        ts: Long,
+        soc: Int?,
+        mileage: Double?,
+        totalElec: Double?,
+        ignition: Int?,
+        energydataAvailable: Int,
+    )
+
+    @Query(
+        """
+        UPDATE last_state
+        SET ts = :ts,
+            soc = :soc,
+            mileage = :mileage,
+            total_elec = :totalElec,
+            ignition = :ignition,
+            energydata_available = :energydataAvailable
+        WHERE id = 1
+        """
+    )
+    @Suppress("LongParameterList") // one bound parameter per snapshot column
+    suspend fun updateSnapshotColumns(
+        ts: Long,
+        soc: Int?,
+        mileage: Double?,
+        totalElec: Double?,
+        ignition: Int?,
+        energydataAvailable: Int,
+    )
+
+    /**
+     * SharedAdaptiveLoop's per-tick write: touches only the loop-owned columns (ts, soc,
+     * mileage, total_elec, ignition, energydata_available) and never open_trip_id /
+     * trip_start_*, which TripRecorder owns. A whole-row REPLACE (the old [upsert] path)
+     * raced with TripRecorder's openTrip()/clearOpenTrip() UPDATEs between this method's
+     * getCurrent() read and its write, and could wipe out a trip opened or closed
+     * concurrently with a snapshot tick.
+     *
+     * INSERT OR IGNORE first covers the row-does-not-exist-yet case (very first tick).
+     */
+    @Suppress("LongParameterList") // one bound parameter per snapshot column
+    @Transaction
+    suspend fun writeSnapshot(
+        ts: Long,
+        soc: Int?,
+        mileage: Double?,
+        totalElec: Double?,
+        ignition: Int?,
+        energydataAvailable: Int,
+    ) {
+        insertSnapshotRowIfAbsent(ts, soc, mileage, totalElec, ignition, energydataAvailable)
+        updateSnapshotColumns(ts, soc, mileage, totalElec, ignition, energydataAvailable)
+    }
 
     /**
      * Mark a new open trip in last_state. Writes to row id=1 (creating it if absent

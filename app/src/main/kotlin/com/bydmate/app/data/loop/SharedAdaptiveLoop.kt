@@ -4,7 +4,6 @@ import android.os.SystemClock
 import android.util.Log
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
-import com.bydmate.app.data.local.entity.LastStateEntity
 import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
 import kotlinx.coroutines.CoroutineDispatcher
@@ -114,22 +113,17 @@ class SharedAdaptiveLoop constructor(
             prev.ignition == ignition &&
             now - prev.ts < HEARTBEAT_MS
         ) return
-        lastStateDao.upsert(
-            LastStateEntity(
-                id = 1,
-                ts = now,
-                soc = data.soc,
-                mileage = data.mileage,
-                totalElec = data.totalElecConsumption,
-                ignition = ignition,
-                openTripId = prev?.openTripId,
-                tripStartTs = prev?.tripStartTs,
-                tripStartSoc = prev?.tripStartSoc,
-                tripStartMileage = prev?.tripStartMileage,
-                tripStartTotalElec = prev?.tripStartTotalElec,
-                tripStartExteriorTemp = prev?.tripStartExteriorTemp,
-                energydataAvailable = if (energyDataReader.isAvailable()) 1 else 0,
-            )
+        // Snapshot-only write: never touches open_trip_id / trip_start_*, which TripRecorder
+        // owns. A whole-row upsert() here raced with TripRecorder's openTrip()/clearOpenTrip()
+        // between getCurrent() above and the write, and could wipe a trip opened or closed
+        // concurrently with this tick.
+        lastStateDao.writeSnapshot(
+            ts = now,
+            soc = data.soc,
+            mileage = data.mileage,
+            totalElec = data.totalElecConsumption,
+            ignition = ignition,
+            energydataAvailable = if (energyDataReader.isAvailable()) 1 else 0,
         )
     }
 
