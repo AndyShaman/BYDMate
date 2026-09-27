@@ -74,7 +74,7 @@ class VehicleApiImpl @Inject constructor(
 
     // Individual readers — direct autoservice fid hits.
     override suspend fun readSoc(): Float? = autoservice.getFloat(1014, 1246777400)
-    override suspend fun readSpeed(): Float? = autoservice.getFloat(1013, -1807745016)
+    override suspend fun readSpeed(): Float? = FidAddresses.of("speed").let { autoservice.getFloat(it.device, it.fid) }
     override suspend fun readMileageKm(): Float? =
         autoservice.getInt(1014, 1246765072)?.let { it / 10f }
     override suspend fun readPowerKw(): Int? = autoservice.getInt(1012, 339738656)

@@ -91,22 +91,51 @@ class RuleDraftValidatorAuditTest {
         assertEquals(OneShotTrigger.State.EXPIRED, OneShotTrigger.state(moment, at + OneShotTrigger.WINDOW_MS))
     }
 
+    // Fix 5 of the review: the lenient parser rolled these over to March 2 and the next day.
+    @Test fun `a date that does not exist is refused`() {
+        assertEquals(TriggerValidationError.OneShotInvalid, validate(of(OneShotTrigger.KIND, "2026-02-30T08:30")))
+        assertEquals(TriggerValidationError.OneShotInvalid, validate(of(OneShotTrigger.KIND, "2026-10-01T24:00")))
+        assertNull(OneShotTrigger.momentMs("2026-02-30T08:30"))
+        assertNull(validate(of(OneShotTrigger.KIND, "2028-02-29T23:59")))
+    }
+
     // --- Item 4 ---
 
-    @Test fun `the target mode refines only a legacy normal`() {
-        // dev 1006 reads 3 on sand: the target says which
-        assertEquals(5, DriveModeCondition.value(3, DriveMode.SAND.value))
-        assertEquals(21, DriveModeCondition.value(3, DriveMode.SMART.value))
-        assertEquals(3, DriveModeCondition.value(3, DriveMode.NORMAL.value))
-        // a legacy mode of its own stays the answer
-        assertEquals(1, DriveModeCondition.value(1, DriveMode.SAND.value))
-        assertEquals(4, DriveModeCondition.value(4, DriveMode.SNOW.value))
+    private val logged = mutableListOf<String>()
+    private val driveMode = DriveModeCondition { logged += it }
+
+    @Test fun `an untrusted target never replaces the legacy value`() {
+        // legacy=1 (ECO) with target=5 (SAND) never agree: the legacy value stays, nothing logged
+        assertEquals(1, driveMode.value(1, DriveMode.SAND.value))
+        assertEquals(3, driveMode.value(3, DriveMode.SAND.value))
+        assertEquals(3, driveMode.value(3, DriveMode.MUD.value))
+        assertEquals(2, driveMode.value(2, DriveMode.SMART.value))
+        assertEquals(emptyList<String>(), logged)
+    }
+
+    @Test fun `one agreeing sample makes the target trusted, logged once`() {
+        assertEquals(3, driveMode.value(3, DriveMode.NORMAL.value))
+        assertEquals(listOf("DriveMode: target fid trusted (legacy=3 target=1)"), logged)
+        // dev 1006 reads 3 on sand: the trusted target says which
+        assertEquals(5, driveMode.value(3, DriveMode.SAND.value))
+        // SAND -> ECO: the target moved first, the legacy fid still lags on 3
+        assertEquals(1, driveMode.value(3, DriveMode.ECO.value))
+        assertEquals(1, driveMode.value(1, DriveMode.ECO.value))
+        assertEquals(1, logged.size)
+    }
+
+    @Test fun `a trusted target that reads no known mode gives the legacy value`() {
+        driveMode.value(1, DriveMode.ECO.value)
+        assertEquals(3, driveMode.value(3, DriveMode.TARGET_FLOTATION))
+        assertEquals(3, driveMode.value(3, null))
+        assertEquals(3, driveMode.value(3, 65535))
+        assertEquals(2, driveMode.value(null, DriveMode.SPORT.value))
     }
 
     @Test fun `without a known target the legacy value stays`() {
-        assertEquals(3, DriveModeCondition.value(3, null))
-        assertEquals(3, DriveModeCondition.value(3, DriveMode.TARGET_FLOTATION))
-        assertEquals(2, DriveModeCondition.value(null, DriveMode.SPORT.value))
-        assertNull(DriveModeCondition.value(null, null))
+        assertEquals(3, driveMode.value(3, null))
+        assertEquals(3, driveMode.value(3, DriveMode.TARGET_FLOTATION))
+        assertNull(driveMode.value(null, DriveMode.SPORT.value))
+        assertNull(driveMode.value(null, null))
     }
 }

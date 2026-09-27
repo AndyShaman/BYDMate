@@ -20,6 +20,7 @@ import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.RuleDraftValidator
+import com.bydmate.app.data.automation.RuleInserts
 import com.bydmate.app.data.automation.RuleParseResult
 import com.bydmate.app.data.automation.RuleShare
 import com.bydmate.app.data.automation.RuleShareFiles
@@ -630,6 +631,14 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         _uiState.update { it.copy(showEditor = false, editorError = null, editorRuleDeleted = false) }
     }
 
+    /** The editor says the rule limit is reached; [what] names the save path in the log. */
+    private fun refuseAtRuleLimit(what: String) {
+        Log.i("AutomationViewModel", "$what not saved: limit of $MAX_RULES rules reached")
+        _uiState.update {
+            it.copy(editorError = context.appLocalizedContext().getString(R.string.automation_rule_limit, MAX_RULES))
+        }
+    }
+
     /**
      * «Правило уже удалено» → «Сохранить как новое»: the draft becomes a new rule, switch as it
      * was. The editor and the draft stay open until the insert returns: it closes only on
@@ -649,8 +658,12 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         _uiState.update { it.copy(editorRuleDeleted = false, editing = it.editing.copy(saving = true)) }
         viewModelScope.launch {
             try {
-                ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)))
-                if (session == editorSession) closeEditor()
+                val id = RuleInserts.insertWithinLimit(
+                    ruleDao, e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)), MAX_RULES,
+                )
+                if (session == editorSession) {
+                    if (id != null) closeEditor() else refuseAtRuleLimit("saveDeletedRuleAsNew")
+                }
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (e: Exception) {
@@ -754,15 +767,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         )
 
         if (e.isNew) {
-            if (_uiState.value.rules.size >= MAX_RULES) {
-                Log.i("AutomationViewModel", "rule not saved: limit of $MAX_RULES rules reached")
-                _uiState.update {
-                    it.copy(editorError = context.appLocalizedContext().getString(R.string.automation_rule_limit, MAX_RULES))
-                }
-                return
-            }
-            viewModelScope.launch { ruleDao.insert(named.applyTo(RuleEntity(name = "", triggers = "", actions = ""))) }
-            closeEditor()
+            insertNewRule(named)
             return
         }
         val session = editorSession
@@ -780,25 +785,48 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         }
     }
 
+    /**
+     * The editor closes once the insert got in: a save racing another one at the limit stays
+     * open with the refusal instead of losing the draft, frozen while the insert runs.
+     */
+    private fun insertNewRule(named: EditingRule) {
+        if (named.saving) return
+        if (_uiState.value.rules.size >= MAX_RULES) {
+            refuseAtRuleLimit("new rule")
+            return
+        }
+        val session = editorSession
+        _uiState.update { it.copy(editing = it.editing.copy(saving = true)) }
+        viewModelScope.launch {
+            try {
+                val id = RuleInserts.insertWithinLimit(
+                    ruleDao, named.applyTo(RuleEntity(name = "", triggers = "", actions = "")), MAX_RULES,
+                )
+                if (session == editorSession) {
+                    if (id != null) closeEditor() else refuseAtRuleLimit("new rule")
+                }
+            } finally {
+                if (session == editorSession) _uiState.update { it.copy(editing = it.editing.copy(saving = false)) }
+            }
+        }
+    }
+
     // --- Duplicate / Delete ---
 
     fun duplicateRule(rule: RuleEntity) {
         viewModelScope.launch {
-            if (ruleDao.getCount() >= MAX_RULES) {
+            val copy = rule.copy(
+                id = 0,
+                name = "${rule.name} (${context.appLocalizedContext().getString(R.string.auto_rule_copy_suffix)})",
+                enabled = false,
+                lastTriggeredAt = null,
+                triggerCount = 0,
+                createdAt = System.currentTimeMillis()
+            )
+            if (RuleInserts.insertWithinLimit(ruleDao, copy, MAX_RULES) == null) {
                 // The refusal the driver sees comes with the card redesign; the copy is not made.
                 Log.i("AutomationViewModel", "copy of rule ${rule.id} refused: limit of $MAX_RULES rules reached")
-                return@launch
             }
-            ruleDao.insert(
-                rule.copy(
-                    id = 0,
-                    name = "${rule.name} (${context.appLocalizedContext().getString(R.string.auto_rule_copy_suffix)})",
-                    enabled = false,
-                    lastTriggeredAt = null,
-                    triggerCount = 0,
-                    createdAt = System.currentTimeMillis()
-                )
-            )
         }
     }
 
@@ -1128,10 +1156,10 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         _uiState.update { it.copy(importDraft = draft.copy(saving = true, error = null)) }
         viewModelScope.launch {
             val failure = try {
-                if (ruleDao.getCount() >= MAX_RULES) {
+                if (RuleInserts.insertWithinLimit(ruleDao, entity, MAX_RULES) == null) {
+                    Log.i("AutomationViewModel", "import refused: limit of $MAX_RULES rules reached")
                     lc.getString(R.string.automation_rule_limit, MAX_RULES)
                 } else {
-                    ruleDao.insert(entity)
                     null
                 }
             } catch (e: SQLiteException) {

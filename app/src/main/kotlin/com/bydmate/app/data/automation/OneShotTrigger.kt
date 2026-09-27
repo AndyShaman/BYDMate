@@ -4,6 +4,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.time.format.ResolverStyle
 
 /**
  * One-shot rule on a local date and time. The trigger value is `yyyy-MM-ddTHH:mm` in the head
@@ -19,7 +20,10 @@ object OneShotTrigger {
     /** How long after the moment a rule that has not fired yet may still fire. */
     const val WINDOW_MS = 24 * 60 * 60 * 1000L
 
-    private val FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
+    // STRICT: the default SMART style turns 2026-02-30 into 2026-02-28 instead of refusing it.
+    // STRICT needs uuuu (proleptic year); yyyy is year-of-era and would then need an era field.
+    private val FORMAT: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm").withResolverStyle(ResolverStyle.STRICT)
 
     enum class State { PENDING, DUE, EXPIRED, INVALID }
 

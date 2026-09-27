@@ -18,7 +18,8 @@ import org.junit.Test
 
 // Gate behavior for the front trunk (frunk). Frunk is a powered external panel:
 // opening must FAIL SAFE — blocked unless we can confirm speed == 0. Missing
-// telemetry (null DiParsData / null speed) must block, not allow. Close is ungated.
+// telemetry (no direct read, no fresh poll) must block, not allow. Close is ungated.
+// The open is decided on the speed read right before it, not on the data passed in.
 class ActionDispatcherFrunkGateTest {
     private val vehicleApi = mockk<VehicleApi>(relaxed = true)
     private val helper = mockk<HelperClient>(relaxed = true)
@@ -42,21 +43,25 @@ class ActionDispatcherFrunkGateTest {
     private fun dataAt(speed: Int?) = mockk<DiParsData> { every { this@mockk.speed } returns speed }
 
     @Test fun `frunk open with null telemetry is blocked (fail-safe)`() = runBlocking {
+        dispatcher.readSpeedNow = { null }
         assertFalse(dispatcher.dispatch(param("前备箱打开"), null).success)
         coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
     }
 
     @Test fun `frunk open with unknown speed is blocked`() = runBlocking {
+        dispatcher.readSpeedNow = { null }
         assertFalse(dispatcher.dispatch(param("前备箱打开"), dataAt(null)).success)
         coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
     }
 
     @Test fun `frunk open while moving is blocked`() = runBlocking {
+        dispatcher.readSpeedNow = { 50 }
         assertFalse(dispatcher.dispatch(param("前备箱打开"), dataAt(50)).success)
         coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
     }
 
     @Test fun `frunk open at standstill is allowed`() = runBlocking {
+        dispatcher.readSpeedNow = { 0 }
         coEvery { vehicleApi.dispatch("前备箱打开") } returns Result.success(Unit)
         assertTrue(dispatcher.dispatch(param("前备箱打开"), dataAt(0)).success)
         coVerify(exactly = 1) { vehicleApi.dispatch("前备箱打开") }

@@ -168,6 +168,7 @@ class ActionDispatcherFailureLocaleTest {
 
     @Test fun `a terrain mode at unknown speed is refused before the car is asked`() = runTest {
         lang("ru")
+        dispatcher.readSpeedNow = { null }
         val snow = ActionDef(command = "雪地模式", displayName = "x", kind = "param")
         assertEquals("Скорость неизвестна, этот режим движения не включаю", reason(snow))
         io.mockk.coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
