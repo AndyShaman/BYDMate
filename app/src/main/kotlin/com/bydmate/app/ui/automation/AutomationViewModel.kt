@@ -1178,17 +1178,17 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
     private suspend fun insertStarterTemplatesIfNeeded() {
         val prefs = context.getSharedPreferences("automation", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("templates_inserted", false)) {
-            starterTemplates(currentLang(context)).forEach { ruleDao.insert(it) }
+            if (RuleInserts.insertAllWithinLimit(ruleDao, starterTemplates(currentLang(context)), MAX_RULES) == null) {
+                Log.i("AutomationViewModel", "starter templates refused: limit of $MAX_RULES rules reached")
+            }
             prefs.edit().putBoolean("templates_inserted", true).putBoolean(TG_TEMPLATES_KEY, true).apply()
             return
         }
         // Installs from before 3.19 got their templates already: add only the Telegram report ones,
-        // once, and only where they fit under the rule limit.
+        // once, and only where both fit under the rule limit.
         if (prefs.getBoolean(TG_TEMPLATES_KEY, false)) return
-        val templates = telegramReportTemplates(currentLang(context))
-        val count = ruleDao.getCount()
-        if (count + templates.size <= MAX_RULES) templates.forEach { ruleDao.insert(it) }
-        Log.i("AutomationViewModel", "telegram report templates: rules=$count added=${count + templates.size <= MAX_RULES}")
+        val ids = RuleInserts.insertAllWithinLimit(ruleDao, telegramReportTemplates(currentLang(context)), MAX_RULES)
+        Log.i("AutomationViewModel", "telegram report templates: added=${ids != null} (limit $MAX_RULES rules)")
         prefs.edit().putBoolean(TG_TEMPLATES_KEY, true).apply()
     }
 }

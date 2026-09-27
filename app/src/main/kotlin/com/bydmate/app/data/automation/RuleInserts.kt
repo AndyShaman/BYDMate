@@ -32,17 +32,24 @@ object RuleInserts {
     }
 
     /** Inserts [rule] unless [limit] rules exist already. The new row id, or null when full. */
-    suspend fun insertWithinLimit(ruleDao: RuleDao, rule: RuleEntity, limit: Int): Long? {
+    suspend fun insertWithinLimit(ruleDao: RuleDao, rule: RuleEntity, limit: Int): Long? =
+        insertAllWithinLimit(ruleDao, listOf(rule), limit)?.single()
+
+    /**
+     * Inserts all of [rules] or none: none when they would take the table past [limit]. The new
+     * row ids in order, or null when they do not fit.
+     */
+    suspend fun insertAllWithinLimit(ruleDao: RuleDao, rules: List<RuleEntity>, limit: Int): List<Long>? {
         val binding = bindingOf(ruleDao)
         return binding.lock.withLock {
             val db = binding.db?.get()
-            if (db == null) countAndInsert(ruleDao, rule, limit)
-            else db.withTransaction { countAndInsert(ruleDao, rule, limit) }
+            if (db == null) countAndInsert(ruleDao, rules, limit)
+            else db.withTransaction { countAndInsert(ruleDao, rules, limit) }
         }
     }
 
-    private suspend fun countAndInsert(ruleDao: RuleDao, rule: RuleEntity, limit: Int): Long? =
-        if (ruleDao.getCount() >= limit) null else ruleDao.insert(rule)
+    private suspend fun countAndInsert(ruleDao: RuleDao, rules: List<RuleEntity>, limit: Int): List<Long>? =
+        if (ruleDao.getCount() + rules.size > limit) null else rules.map { ruleDao.insert(it) }
 
     private fun bindingOf(ruleDao: RuleDao): Binding = synchronized(bindings) { bindings.getOrPut(ruleDao) { Binding() } }
 }

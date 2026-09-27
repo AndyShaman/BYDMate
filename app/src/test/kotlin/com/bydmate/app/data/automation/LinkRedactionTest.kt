@@ -14,17 +14,34 @@ class LinkRedactionTest {
             log("url:https://api.example.com/hook?token=SECRET123&chat=42#frag"),
         )
         assertEquals("url:https://example.com/page", log("url:https://example.com/page#anchor"))
+        assertEquals("url:https://example.com:8443/page", log("url:https://example.com:8443/page"))
     }
 
-    @Test fun `dial label drops the number`() {
+    @Test fun `user info in a link is dropped`() {
+        assertEquals("https://example.com/path?<redacted>", log("https://alice:secret@example.com/path?token=abc"))
+        assertEquals("url:https://example.com/path?<redacted>", log("url:https://alice:secret@example.com/path?token=abc"))
+    }
+
+    @Test fun `dial label drops the number whatever its length`() {
         assertEquals("dial:<phone>", log("dial:+375291234567"))
-        assertEquals("dial:<phone>", log("dial:+375 (29) 123-45-67"))    }
+        assertEquals("dial:<phone>", log("dial:+375 (29) 123-45-67"))
+        assertEquals("dial:<phone>", log("dial:123456"))
+    }
 
     @Test fun `navigate labels drop the coordinates`() {
         assertEquals("navigate:<coords>", log("navigate:53.9045,27.5615"))
         assertEquals("navigate_show:<coords>", log("navigate_show:-33.86, 151.2"))
         assertEquals("navigate_maps:<coords>", log("navigate_maps:53.9045,27.5615"))
         assertEquals("navigate_maps_show:<coords> (Дача)", log("navigate_maps_show:53.9045,27.5615 (Дача)"))
+    }
+
+    @Test fun `navigate labels drop coordinates in exponent form`() {
+        assertEquals("navigate:<coords>", log("navigate:1.0E-4,27.5615"))
+        assertEquals("navigate_maps_show:<coords> (Дом)", log("navigate_maps_show:53.9,-1.0E-5 (Дом)"))
+    }
+
+    @Test fun `search labels keep their text`() {
+        assertEquals("navigate_search:Минск вокзал", log("navigate_search:Минск вокзал"))
     }
 
     @Test fun `navigator deep links keep scheme and host or path only`() {
@@ -41,15 +58,30 @@ class LinkRedactionTest {
             "dgis://2gis.ru/routeSearch/rsType/car/to/<coords>",
             log("dgis://2gis.ru/routeSearch/rsType/car/to/27.5615,53.9045"),
         )
+        assertEquals("dgis://2gis.ru/geo/<coords>", log("dgis://2gis.ru/geo/1.0E-4,53.9045"))
+    }
+
+    @Test fun `a numeric id in a link path survives`() {
+        assertEquals("dgis://2gis.ru/firm/70000001033556712", log("dgis://2gis.ru/firm/70000001033556712"))
     }
 
     @Test fun `geo and tel links and intent data are covered too`() {
         assertEquals("geo:<coords>?<redacted>", log("geo:53.9045,27.5615?q=home"))
+        assertEquals("geo:<coords>", log("geo:1.0E-4,27.5615"))
         assertEquals("tel:<phone>", log("tel:+375291234567"))
+        assertEquals("tel:<phone>", log("tel:123456"))
         assertEquals(
             "Intent { act=VIEW dat=https://api.example.com/x?<redacted> }",
             log("Intent { act=VIEW dat=https://api.example.com/x?token=SECRET }"),
         )
+    }
+
+    @Test fun `a link that does not parse is hidden whole`() {
+        assertEquals("open <uri> failed", log("open https://example.com/a|b?token=SECRET failed"))
+    }
+
+    @Test fun `a phone number in free text is masked`() {
+        assertEquals("Позвонить <phone>", log("Позвонить +375 29 123-45-67"))
     }
 
     @Test fun `text without a link, number or coordinates is unchanged`() {

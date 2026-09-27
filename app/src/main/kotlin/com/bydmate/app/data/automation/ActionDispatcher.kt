@@ -12,7 +12,6 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -20,7 +19,6 @@ import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
-import com.bydmate.app.data.loop.TimedSnapshot
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
 import com.bydmate.app.data.telegram.TelegramReporter
@@ -395,9 +393,6 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         /** How long the direct speed read before a gated step may take. */
         private const val GATE_SPEED_READ_TIMEOUT_MS = 1_000L
 
-        /** Oldest poll a gated step may fall back to when the direct read fails. */
-        internal const val GATE_SAMPLE_MAX_AGE_MS = 5_000L
-
         /** A failed drive mode switch: too fast, not on this car, flotation, no change, or no answer. */
         private fun driveModeFailureReason(err: VehicleWriteError, strings: AppStrings): String = when (err) {
             is VehicleWriteError.SpeedBlocked -> err.speed
@@ -569,10 +564,6 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     internal var readSpeedNow: suspend () -> Int? = {
         withTimeoutOrNull(GATE_SPEED_READ_TIMEOUT_MS) { vehicleApi.readSpeed() }?.let { ceil(it).toInt() }
     }
-
-    /** Test seams -- the last poll and the clock it is timed by, the fallback of [readSpeedNow]. */
-    internal var lastSample: () -> TimedSnapshot? = { TrackingService.lastSample }
-    internal var elapsedNow: () -> Long = { SystemClock.elapsedRealtime() }
 
     /** Last seat step asked for per seat, so a «toggle» can bring the seat back to it. */
     internal var seatLevelMemory = SeatLevelMemory(context)
@@ -934,21 +925,18 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     }
 
     /**
-     * The speed a speed-gated step is decided on: a direct read, else a poll at most
-     * [GATE_SAMPLE_MAX_AGE_MS] old, else unknown (the gate then refuses). Never the snapshot
-     * the caller passed in: a rule hands every step the one taken when it fired, which after
-     * a delay or a confirm window can say 0 km/h while the car is already moving.
+     * The speed a speed-gated step is decided on: a direct read, else unknown (the gate then
+     * refuses). No poll fallback: the poll truncates the speed (0.8 km/h reads 0) and a zero a
+     * few seconds old does not prove the car is standing now (review 2026-09-27). Never the
+     * snapshot the caller passed in: a rule hands every step the one taken when it fired, which
+     * after a delay or a confirm window can say 0 km/h while the car is already moving.
      */
     private suspend fun gateSpeed(command: String): Int? {
         val direct = runCatching { readSpeedNow() }
             .onFailure { if (it is CancellationException) throw it }
             .getOrNull()
-        val sample = if (direct == null) lastSample() else null
-        val age = sample?.takeIf { it.measuredAtElapsedMs > 0 }?.let { elapsedNow() - it.measuredAtElapsedMs }
-        val fromSample = if (age != null && age in 0..GATE_SAMPLE_MAX_AGE_MS) sample.data.speed else null
-        val speed = direct ?: fromSample
-        Log.i(TAG, "gate speed '$command': direct=$direct sample=${sample?.data?.speed} age=${age}ms -> ${speed ?: "unknown"}")
-        return speed
+        Log.i(TAG, "gate speed '$command': direct=$direct -> ${direct ?: "unknown"}")
+        return direct
     }
 
     /** A failed [VehicleApi] write in the app language, the same text a rule step reports. */
