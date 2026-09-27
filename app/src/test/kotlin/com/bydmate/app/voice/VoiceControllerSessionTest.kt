@@ -1678,10 +1678,12 @@ class VoiceControllerSessionTest {
         awaitSubscribed(fakeAsr.events)
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("включи музыку"))
         // The deferred close is now parked on speaking.first { !it }. End the first session via
-        // silence auto-stop; ticks arriving while the utterance is still routing are dropped by
-        // the busy guard, so keep re-emitting until the session actually stops.
+        // silence auto-stop; silence while the utterance is still routing does not count, so
+        // keep re-emitting growing ticks until the session actually stops.
+        var silentMs = 0L
         awaitTrue {
-            fakeAsr.events.tryEmit(ContinuousAsrEvent.SilenceTick(30_000L))
+            silentMs += 30_000L
+            fakeAsr.events.tryEmit(ContinuousAsrEvent.SilenceTick(silentMs))
             !controller.listening.value
         }
 

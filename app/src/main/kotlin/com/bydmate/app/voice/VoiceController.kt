@@ -335,12 +335,14 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             runCatching { showListeningOverlay(appStrings.get(R.string.voice_listening)) }
             var lastEventMs = System.currentTimeMillis()
             var wasAudible = false   // capture thread only
-            // Silence for the auto-stop, counted the way it was while playback muted the mic: a
-            // frame captured in the playback window does not count, so a long answer never eats
-            // the driver's waiting time after it. Derived from GigaAM's cumulative SilenceTick,
-            // which restarts at every SpeechStart.
+            // Silence for the auto-stop, counted the way it was while playback muted the mic:
+            // the agent's turn (routing, then a frame captured in the playback window) does not
+            // count, and the countdown starts over once the turn is over, so neither a long
+            // thinking phase nor a long answer eats the driver's waiting time after it. Derived
+            // from GigaAM's cumulative SilenceTick, which restarts at every SpeechStart.
             var silentMs = 0L
             var lastTickSilentMs = 0L
+            var inAgentTurn = false
             try {
                 // Wave P: no session cap; silence auto-stop below is the only auto-exit.
                 // The mark runs on the capture thread when the frame is read, not when it is
@@ -402,10 +404,20 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                             lastEventMs = System.currentTimeMillis()
                             val tickMs = if (ev.silentMs >= lastTickSilentMs) ev.silentMs - lastTickSilentMs else ev.silentMs
                             lastTickSilentMs = ev.silentMs
-                            if (!frameInPlayback) silentMs += tickMs
                             // Frames flow during playback, so a quiet reply counts as silence
                             // for the VAD: never auto-stop while the agent is still talking.
-                            if (silentMs >= SILENCE_AUTOSTOP_MS && !processingUtterance && !frameInPlayback) throw StopSession
+                            val agentTurn = processingUtterance || frameInPlayback
+                            if (agentTurn) {
+                                inAgentTurn = true
+                            } else {
+                                if (inAgentTurn) {
+                                    inAgentTurn = false
+                                    silentMs = 0L
+                                    Log.i(TAG, "Silence auto-stop countdown restarted: the agent's turn is over")
+                                }
+                                silentMs += tickMs
+                            }
+                            if (silentMs >= SILENCE_AUTOSTOP_MS && !agentTurn) throw StopSession
                         }
                         is ContinuousAsrEvent.Utterance -> {
                             val decodeMs = System.currentTimeMillis() - lastEventMs
@@ -509,10 +521,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             selfName -> "dropped (self-name guard: the reply being played names the agent)"
             else -> "barge-in"
         }
-        // segmentMs and nameAt (word index, -1 = none) measure on the car how often the agent's
-        // own voice opens the segment and pushes a real name past the first word.
-        Log.i(TAG, logDetail("Playback-overlapped utterance: heard=\"$transcript\" nameMatch=$named nameAt=$nameAt " +
-            "segmentMs=${ev.audioMs} decision=$decision decodeMs=$decodeMs"))
+        Log.i(TAG, playbackOverlapLine(transcript, nameAt, ev.audioMs, decision, decodeMs))
         if (!named || selfName) {
             droppedDuringPlayback++
             return false
@@ -538,6 +547,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             Log.i(TAG, "play_music auto-close cancelled by barge-in: the driver stays in the dialog")
         }
         runCatching { ttsEngine.stop() }
+        // The interrupted reply is over: the next one arms the guard only if it names the agent.
+        if (selfNameGuardUntilMs.getAndSet(0L) != 0L) Log.i(TAG, "Self-name guard released by barge-in")
         earcon.ok()
         _state.value = VoiceUiState.Listening
         runCatching { updateListeningOverlay(appStrings.get(R.string.voice_listening)) }
@@ -1045,6 +1056,14 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
         /** An utterance heard while another one is routed: its transcript is capped like any detail. */
         internal fun busyDropLine(transcript: String): String = logDetail("Utterance dropped while busy: $transcript")
+
+        /** An utterance that overlapped our playback. The measurements go before the transcript
+         *  so the detail cap can only cut the transcript: segmentMs and nameAt (word index,
+         *  -1 = none) measure on the car how often the agent's own voice opens the segment and
+         *  pushes a real name past the first word. */
+        internal fun playbackOverlapLine(transcript: String, nameAt: Int, segmentMs: Long, decision: String, decodeMs: Long): String =
+            logDetail("Playback-overlapped utterance: nameMatch=${nameAt == 0} nameAt=$nameAt segmentMs=$segmentMs " +
+                "decodeMs=$decodeMs decision=$decision heard=\"$transcript\"")
 
         // Dwell on a terminal state before auto-returning to Idle. Short on purpose —
         // long enough to read "не распознал", short enough to feel instant.
