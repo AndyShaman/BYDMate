@@ -14,24 +14,32 @@ import com.bydmate.app.helper.push.pushListenerFor
 import java.io.File
 import java.io.IOException
 import java.lang.reflect.Method
+import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Calendar
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.HttpsURLConnection
 
 /**
  * Daemon side of the power-off Telegram report (3.19, phase B). The daemon alone delivers it: the
  * app is killed within about a second of the car being switched off (quickboot force-stops it), the
  * daemon is not. The app keeps a ready report here ([arm]); when the daemon's own listener on the
  * power fids sees the power-off ([PowerOffAutomaton]), the report gets its time, is written to disk
- * ([PendingReports]) and sent within the 8 s before the networks go ([OffReportRetry]). Sent or
- * refused for good, the file goes; otherwise it waits, and every later [arm] (the app's next start
- * on the next drive, with a token again) delivers what waits, oldest first, with the
- * «(записано в HH:MM)» line, backing off after a failed pass. [disarm] drops the pending files too.
+ * ([PendingReports]) right there on the listener thread (disk only, never behind the network) and
+ * sent within the 8 s before the networks go ([OffReportRetry]). Sent or refused for good, the file
+ * goes; otherwise it waits, and every later [arm] (the app's next start on the next drive, with a
+ * token again) delivers what waits, oldest first, with the «(записано в HH:MM)» line, backing off
+ * after a failed pass. [disarm] deletes the pending files before it answers.
+ *
+ * The arm epoch ([epoch]) moves on every [disarm] and every [arm] to another chat: a power-off
+ * report taken under an older epoch is not saved, and not attempted once more, it is dropped. A
+ * pending pass reads the armed bot and chat again before every report, so nothing goes out with a
+ * recipient the app has since replaced.
  *
  * Every send runs on ONE sender thread ([send]), so the same report is never in flight twice.
  * [arm] only stores the report and returns: the listener registration, its retries and the priming
@@ -74,6 +82,10 @@ internal object OffReport {
     private const val PENDING_DIR = "/data/local/tmp/bydmate_offreport"
     private const val TELEGRAM_HOST = "api.telegram.org"
 
+    /** Drop reasons in the log when the epoch moved. */
+    private const val DROP_DISARM = "disarm"
+    private const val DROP_CHAT = "chat_changed"
+
     private class Armed(val request: ArmRequest, val armedAtMs: Long)
 
     /** Internal rather than private so a test can assert it is free during a vendor call. */
@@ -87,7 +99,14 @@ internal object OffReport {
     private val registrations = LinkedHashMap<Int, String>()
     private var retryScheduled = false
 
-    /** Pending delivery gate, guarded by [lock]: one pass queued at a time, backoff on [monoClock]. */
+    /** Arm epoch, guarded by [lock]: see the class comment. [epochReason] names its last move. */
+    private var epoch = 0L
+    private var epochReason = DROP_DISARM
+
+    /** The chat of the last [arm], kept after the power-off takes the report; null once disarmed. */
+    private var recipient: Long? = null
+
+    /** Pending delivery gate, guarded by [lock]: one pass queued or running at a time, backoff on [monoClock]. */
     private var passQueued = false
     private var passNotBefore = 0L
     private var passBackoffMs = 0L
@@ -99,6 +118,7 @@ internal object OffReport {
     internal var registrar: (dev: Int, fid: Int, sink: FidPushSink) -> String = ::registerPowerFid
     internal var sender: (token: String, chatId: Long, text: String, connectMs: Int, readMs: Int) -> AttemptResult =
         ::postSendMessage
+    internal var endpoint: (token: String) -> URL = { token -> URL("https://$TELEGRAM_HOST/bot$token/sendMessage") }
     internal var wallClock: () -> Long = System::currentTimeMillis
     internal var monoClock: () -> Long = SystemClock::elapsedRealtime
     internal var sleep: (Long) -> Unit = Thread::sleep
@@ -120,6 +140,12 @@ internal object OffReport {
         Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "offreport-worker").apply { isDaemon = true } }
     }
 
+    /** Cuts a send attempt's connection at its deadline ([postSendMessage]). */
+    private val watchdog: ScheduledThreadPoolExecutor by lazy {
+        ScheduledThreadPoolExecutor(1) { r -> Thread(r, "offreport-watchdog").apply { isDaemon = true } }
+            .apply { removeOnCancelPolicy = true }
+    }
+
     private val sink = FidPushSink { fid, intValue, _, ts -> onPower(fid, intValue, ts) }
 
     /**
@@ -128,6 +154,8 @@ internal object OffReport {
      */
     fun arm(request: ArmRequest) {
         val first = synchronized(lock) {
+            if (recipient != null && recipient != request.chatId) bumpEpoch(DROP_CHAT)
+            recipient = request.chatId
             armed = Armed(request, wallClock())
             val fresh = registrations.isEmpty()
             if (fresh) POWER_FIDS.forEach { (_, fid) -> registrations[fid] = FID_PENDING }
@@ -138,20 +166,39 @@ internal object OffReport {
         requestPendingPass()
     }
 
-    /** The report was switched off or the bot disconnected: nothing armed, nothing pending. */
-    fun disarm() {
+    /**
+     * The report was switched off or the bot disconnected: nothing armed, nothing pending. The files
+     * go here, before the binder call answers; false when any of them could not be deleted, so the
+     * app asks again.
+     */
+    fun disarm(): Boolean {
         val had = synchronized(lock) {
+            bumpEpoch(DROP_DISARM)
+            recipient = null
             passNotBefore = 0L
             passBackoffMs = 0L
             armed?.request?.id.also { armed = null }
         }
         Log.i(TAG, "offreport: disarmed id=${had ?: "-"}")
-        send(Runnable {
-            guardedWork {
-                pending.deleteAll().forEach { Log.i(TAG, "offreport: pending dropped id=$it reason=disarm") }
-            }
-        })
+        val cleared = try {
+            pending.deleteAll()
+        } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
+            Log.w(TAG, "offreport: pending delete failed: ${e.javaClass.simpleName}")
+            return false
+        }
+        cleared.ids.forEach { Log.i(TAG, "offreport: pending dropped id=$it reason=$DROP_DISARM") }
+        if (!cleared.complete) Log.w(TAG, "offreport: pending delete incomplete, disarm not confirmed")
+        return cleared.complete
     }
+
+    /** Caller holds [lock]. */
+    private fun bumpEpoch(reason: String) {
+        epoch++
+        epochReason = reason
+    }
+
+    /** Why a report taken under [taken] must go, or null while its epoch still holds. */
+    private fun dropReason(taken: Long): String? = synchronized(lock) { if (epoch == taken) null else epochReason }
 
     /** Where [id] stands, plus what is armed now, the last outcome and the pending count, for the dump. */
     fun status(id: String): OffReportStatus {
@@ -169,8 +216,9 @@ internal object OffReport {
 
     /**
      * Vendor binder thread: a power fid moved. On the power-off the armed report is taken (one
-     * report per arm: a quick off-on-off before the app re-arms must not send stale text twice) and
-     * handed to the sender — this thread belongs to the firmware and must return at once.
+     * report per arm: a quick off-on-off before the app re-arms must not send stale text twice),
+     * written to disk here (a few KB and an fsync, never waiting on the network) and handed to the
+     * sender. This thread belongs to the firmware: nothing on it waits for more than local disk.
      */
     fun onPower(fid: Int, value: Int, atElapsed: Long) {
         if (POWER_FIDS.none { it.second == fid }) return
@@ -184,36 +232,51 @@ internal object OffReport {
             armed = null
             val offAt = wallClock()
             remember(OffReportOutcome(report.request.id, OffReportState.SENDING, powerOffMs = offAt))
-            report to offAt
+            Taken(report.request, offAt, epoch)
         }
         when {
-            fired -> Log.i(TAG, "offreport: power off fid=$fid value=$value armed=${taken?.first?.request?.id ?: "-"}")
+            fired -> Log.i(TAG, "offreport: power off fid=$fid value=$value armed=${taken?.request?.id ?: "-"}")
             !wasPrimed && value > 0 -> Log.i(TAG, "offreport: power on fid=$fid value=$value")
         }
         if (taken == null) return
-        val (report, offAt) = taken
+        val request = taken.request
+        val text = TelegramReportBuilder.fillTime(request.text, taken.offAt)
+        try {
+            // A disarm or another chat since the take: not written; the send below drops it.
+            val saved = pending.save(PendingReport(request.id, request.chatId, taken.offAt, text)) {
+                dropReason(taken.epoch) == null
+            }
+            if (saved) Log.i(TAG, "offreport: pending saved id=${request.id}")
+        } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
+            Log.w(TAG, "offreport: pending save failed id=${request.id}: ${e.javaClass.simpleName}")
+        }
         send(Runnable {
-            runCatching { sendAtPowerOff(report.request, offAt, atElapsed) }.onFailure { t ->
-                Log.w(TAG, "offreport: send crashed id=${report.request.id}: ${t.javaClass.simpleName}")
+            runCatching { sendAtPowerOff(taken, text, atElapsed) }.onFailure { t ->
+                Log.w(TAG, "offreport: send crashed id=${request.id}: ${t.javaClass.simpleName}")
                 synchronized(lock) {
-                    remember(OffReportOutcome(report.request.id, OffReportState.FAILED, powerOffMs = offAt, rc = "crash"))
+                    remember(OffReportOutcome(request.id, OffReportState.FAILED, powerOffMs = taken.offAt, rc = "crash"))
                 }
             }
         })
     }
 
-    /** Sender thread: to disk first, then the burst; the file goes once it was sent or refused. */
-    private fun sendAtPowerOff(request: ArmRequest, offAt: Long, offElapsed: Long) {
-        val text = TelegramReportBuilder.fillTime(request.text, offAt)
-        if (pending.save(PendingReport(request.id, request.chatId, offAt, text))) {
-            Log.i(TAG, "offreport: pending saved id=${request.id}")
-        }
+    /** A report the power-off took: what it was armed with, when, and under which epoch. */
+    private class Taken(val request: ArmRequest, val offAt: Long, val epoch: Long)
+
+    /**
+     * Sender thread: the burst, each attempt only while the epoch the report was taken under holds;
+     * the file goes once it was sent, refused, or its epoch moved on.
+     */
+    private fun sendAtPowerOff(taken: Taken, text: String, offElapsed: Long) {
+        val request = taken.request
+        val offAt = taken.offAt
         val result = OffReportRetry.run(
             offAt = offElapsed,
             clock = monoClock,
             sleep = sleep,
             attempt = { connectMs, readMs -> sender(request.token, request.chatId, text, connectMs, readMs) },
             onAttempt = { n, rc, sinceOff -> Log.i(TAG, "offreport: attempt $n rc=$rc ms=$sinceOff") },
+            cancelled = { dropReason(taken.epoch) },
         )
         val outcome = OffReportOutcome(
             id = request.id,
@@ -234,31 +297,41 @@ internal object OffReport {
         Log.i(TAG, "offreport: ${if (result.sent) "sent" else "failed"} id=${request.id} attempts=${result.attempts}")
     }
 
-    /** Queues one pending pass on the sender, unless one is queued, nothing is armed or it backs off. */
+    /**
+     * Queues one pending pass on the sender, unless one is queued or running, nothing is armed or it
+     * backs off.
+     */
     private fun requestPendingPass() {
         val go = synchronized(lock) {
             val ok = armed != null && !passQueued && monoClock() >= passNotBefore
             if (ok) passQueued = true
             ok
         }
-        if (go) send(Runnable { guardedWork { deliverPending() } })
+        if (go) {
+            send(Runnable {
+                try {
+                    guardedWork { deliverPending() }
+                } finally {
+                    synchronized(lock) { passQueued = false }
+                }
+            })
+        }
     }
 
     /**
-     * Sender thread: the reports on disk, oldest first, with the bot and chat armed now. Stops at the
-     * first failure that may heal (no network yet) and backs off; a refusal drops that report.
+     * Sender thread: the reports on disk, oldest first, each with the bot and chat armed at that
+     * moment. Stops at the first failure that may heal (no network yet) and backs off; a refusal
+     * drops that report. The backoff is checked again here: it may have been set after this pass was
+     * queued.
      */
     private fun deliverPending() {
-        val target = synchronized(lock) {
-            passQueued = false
-            armed?.request
-        } ?: return
+        if (synchronized(lock) { monoClock() < passNotBefore }) return
         for (report in pending.list()) {
-            // A disarm since the pass started: its own job drops the files, nothing more goes out.
-            if (synchronized(lock) { armed == null }) return
+            // Nothing armed (a disarm, or the power-off took the report): nothing more goes out.
+            val target = synchronized(lock) { armed?.request } ?: return
             if (report.chatId != target.chatId) {
                 pending.delete(report.id)
-                Log.i(TAG, "offreport: pending dropped id=${report.id} reason=chat_changed")
+                Log.i(TAG, "offreport: pending dropped id=${report.id} reason=$DROP_CHAT")
                 continue
             }
             val text = withLateMark(report, target.lateMark)
@@ -388,6 +461,9 @@ internal object OffReport {
         synchronized(lock) {
             automaton = PowerOffAutomaton()
             armed = null
+            epoch = 0L
+            epochReason = DROP_DISARM
+            recipient = null
             outcomes.clear()
             last = null
             registrations.clear()
@@ -423,14 +499,23 @@ internal object OffReport {
     }
 
     /**
-     * One Bot API `sendMessage` over plain HttpsURLConnection (no OkHttp in the daemon), Telegram
-     * HTML like the app's backup sink. The host is resolved first under its own bound
-     * ([OffReportRetry.callWithin]); connect and read have their own timeouts. rc is the HTTP code
-     * or `io:<exception>`; never the URL, which carries the token.
+     * One Bot API `sendMessage` over plain HttpURLConnection (no OkHttp in the daemon), Telegram
+     * HTML like the app's backup sink. rc is the HTTP code or `io:<exception>`; never the URL, which
+     * carries the token.
+     *
+     * Bounded as a whole to [connectMs] + [readMs] from its start: the host is resolved first under
+     * its own bound ([OffReportRetry.callWithin]), then a watchdog disconnects the connection at the
+     * deadline, which aborts a hung connect, write or read (a server trickling bytes defeats the read
+     * timeout alone). The verdict comes from the status line; the body is never read (a trickling
+     * body would hold the read, and on some stacks the disconnect waits for it). Residual: connect
+     * resolves the host again; the resolver cache normally answers at once after the pre-check, but
+     * a lookup that does hang there is the one part the disconnect cannot abort.
      */
-    private fun postSendMessage(token: String, chatId: Long, text: String, connectMs: Int, readMs: Int): AttemptResult {
+    internal fun postSendMessage(token: String, chatId: Long, text: String, connectMs: Int, readMs: Int): AttemptResult {
+        val startNs = System.nanoTime()
+        val url = endpoint(token)
         val resolved = try {
-            OffReportRetry.callWithin(connectMs.toLong()) { InetAddress.getAllByName(TELEGRAM_HOST) }
+            OffReportRetry.callWithin(connectMs.toLong()) { InetAddress.getAllByName(url.host) }
         } catch (e: IOException) {
             return AttemptResult("io:${e.javaClass.simpleName}", AttemptResult.Verdict.RETRY)
         } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
@@ -439,9 +524,13 @@ internal object OffReport {
         if (resolved == null) return AttemptResult("io:dns_timeout", AttemptResult.Verdict.RETRY)
         val body = ("chat_id=$chatId&parse_mode=HTML&text=" + URLEncoder.encode(text, "UTF-8"))
             .toByteArray(Charsets.UTF_8)
-        var conn: HttpsURLConnection? = null
+        var conn: HttpURLConnection? = null
+        var cut: ScheduledFuture<*>? = null
         return try {
-            conn = URL("https://$TELEGRAM_HOST/bot$token/sendMessage").openConnection() as HttpsURLConnection
+            conn = url.openConnection() as HttpURLConnection
+            val left = connectMs + readMs - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs)
+            val watched = conn
+            cut = watchdog.schedule({ watched.disconnect() }, left.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
             conn.connectTimeout = connectMs
             conn.readTimeout = readMs
             conn.requestMethod = "POST"
@@ -452,16 +541,18 @@ internal object OffReport {
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
             conn.outputStream.use { it.write(body) }
             val code = conn.responseCode
-            runCatching { (if (code < HTTP_ERROR) conn.inputStream else conn.errorStream)?.use { it.readBytes() } }
-            AttemptResult(code.toString(), OffReportRetry.verdictFor(code))
+            // -1: no valid status line (cut by the watchdog or the network), not a refusal.
+            if (code < HTTP_FIRST_CODE) AttemptResult("io:no_status", AttemptResult.Verdict.RETRY)
+            else AttemptResult(code.toString(), OffReportRetry.verdictFor(code))
         } catch (e: IOException) {
             AttemptResult("io:${e.javaClass.simpleName}", AttemptResult.Verdict.RETRY)
         } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
             AttemptResult("err:${e.javaClass.simpleName}", AttemptResult.Verdict.RETRY)
         } finally {
+            cut?.cancel(false)
             conn?.disconnect()
         }
     }
 
-    private const val HTTP_ERROR = 400
+    private const val HTTP_FIRST_CODE = 100
 }

@@ -1,5 +1,7 @@
 package com.bydmate.app.helper.offreport
 
+import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -17,15 +19,28 @@ internal class PendingReport(val id: String, val chatId: Long, val powerOffMs: L
     override fun toString(): String = "PendingReport(id=$id, len=${text.length})"
 }
 
+/** What [PendingReports.deleteAll] removed; [complete] false when any file could not be deleted. */
+internal class Cleared(val ids: List<String>, val complete: Boolean)
+
 /**
  * The daemon's pending power-off reports on disk, one file each in [dir] (under /data/local/tmp,
- * shell-owned, so they survive a daemon restart and a reboot). Written to a temp file and renamed,
- * owner-only (600, the directory 700). File: [int version, UTF id, long chatId, long powerOffMs,
+ * shell-owned, so they survive a daemon restart and a reboot). Written to a temp file, synced and
+ * renamed, owner-only (600, the directory 700); the directory is synced after every rename and
+ * delete ([syncDir], best effort). File: [int version, UTF id, long chatId, long powerOffMs,
  * int textBytes, UTF-8 text]. At most [MAX] kept, the oldest go first.
  *
- * Only the daemon's sender thread writes and deletes; [count] may run on any thread.
+ * A temp file left by a daemon that died mid-save is recovered on the next scan when it reads back
+ * whole, and deleted otherwise: a death before the temp file was fully written loses that report.
+ *
+ * Every method holds this store's monitor: a save on the vendor thread, a scan or delete on the
+ * sender and the disarm's delete on a binder thread never see each other's half-done files. Disk
+ * only, never the network, runs under it.
  */
-internal class PendingReports(private val dir: File) {
+@Suppress("TooManyFunctions") // save, scan, recovery, deletes, sync and the codec of one file format
+internal class PendingReports(
+    private val dir: File,
+    private val syncDir: (File) -> Unit = ::fsyncDir,
+) {
 
     companion object {
         const val MAX = 10
@@ -36,8 +51,15 @@ internal class PendingReports(private val dir: File) {
         private const val TAG = "OffReport"
     }
 
-    /** Writes [report]; true once it is on disk. Past [MAX] the oldest files are dropped. */
-    fun save(report: PendingReport): Boolean {
+    private var syncFailLogged = false
+
+    /**
+     * Writes [report] unless [wanted], asked under this store's monitor right before the write, says
+     * no; true once it is on disk. Past [MAX] the oldest files are dropped.
+     */
+    @Synchronized
+    fun save(report: PendingReport, wanted: () -> Boolean = { true }): Boolean {
+        if (!wanted()) return false
         return try {
             if (!dir.isDirectory && !dir.mkdirs()) throw IOException("mkdirs")
             ownerOnly(dir, directory = true)
@@ -49,6 +71,7 @@ internal class PendingReports(private val dir: File) {
                 out.fd.sync()
             }
             if (!tmp.renameTo(File(dir, name + SUFFIX))) throw IOException("rename")
+            syncDirQuietly()
             trim()
             true
         } catch (e: IOException) {
@@ -58,29 +81,62 @@ internal class PendingReports(private val dir: File) {
     }
 
     /** Oldest power-off first. An unreadable file is dropped (logged) instead of blocking the rest. */
-    fun list(): List<PendingReport> = files().mapNotNull { file ->
-        read(file) ?: run {
-            file.delete()
-            Log.w(TAG, "offreport: pending dropped id=? reason=unreadable")
-            null
+    @Synchronized
+    fun list(): List<PendingReport> {
+        recover()
+        var dropped = false
+        val reports = files().mapNotNull { file ->
+            read(file) ?: run {
+                file.delete()
+                dropped = true
+                Log.w(TAG, "offreport: pending dropped id=? reason=unreadable")
+                null
+            }
         }
-    }.sortedBy { it.powerOffMs }
+        if (dropped) syncDirQuietly()
+        return reports.sortedBy { it.powerOffMs }
+    }
 
+    @Synchronized
     fun delete(id: String) {
-        files().filter { it.name.endsWith("-${safe(id)}$SUFFIX") }.forEach { it.delete() }
+        val gone = files().filter { it.name.endsWith("-${safe(id)}$SUFFIX") }
+        gone.forEach { it.delete() }
+        if (gone.isNotEmpty()) syncDirQuietly()
     }
 
-    /** Every pending report; returns their ids for the log. */
-    fun deleteAll(): List<String> {
+    /** Every pending report and temp file, each delete checked; the ids go to the log. */
+    @Synchronized
+    fun deleteAll(): Cleared {
         val ids = list().map { it.id }
-        dir.listFiles()?.forEach { it.delete() }
-        return ids
+        val entries = if (dir.exists()) dir.listFiles() ?: return Cleared(ids, complete = false) else emptyArray()
+        var complete = true
+        entries.forEach { if (!it.delete()) complete = false }
+        if (entries.isNotEmpty()) syncDirQuietly()
+        return Cleared(ids, complete)
     }
 
+    @Synchronized
     fun count(): Int = files().size
 
-    private fun files(): List<File> =
-        dir.listFiles()?.filter { it.isFile && it.name.endsWith(SUFFIX) }?.sortedBy { it.name }.orEmpty()
+    private fun files(suffix: String = SUFFIX): List<File> =
+        dir.listFiles()?.filter { it.isFile && it.name.endsWith(suffix) }?.sortedBy { it.name }.orEmpty()
+
+    /** Temp files a dead daemon left: whole ones become reports again, the rest go. */
+    private fun recover() {
+        val temps = files(TMP_SUFFIX)
+        if (temps.isEmpty()) return
+        for (tmp in temps) {
+            val name = tmp.name.removeSuffix(TMP_SUFFIX)
+            val id = name.substringAfter('-')
+            if (read(tmp) == null) {
+                tmp.delete()
+                Log.i(TAG, "offreport: pending dropped id=$id reason=partial")
+            } else if (tmp.renameTo(File(dir, name + SUFFIX))) {
+                Log.i(TAG, "offreport: pending recovered id=$id")
+            }
+        }
+        syncDirQuietly()
+    }
 
     /** Past [MAX], the oldest power-offs go. */
     private fun trim() {
@@ -88,6 +144,19 @@ internal class PendingReports(private val dir: File) {
         all.take((all.size - MAX).coerceAtLeast(0)).forEach {
             delete(it.id)
             Log.i(TAG, "offreport: pending dropped id=${it.id} reason=cap")
+        }
+    }
+
+    /** A rename or delete survives a power cut only once the directory itself is synced. */
+    @Suppress("TooGenericExceptionCaught") // ErrnoException or whatever the platform throws: best effort
+    private fun syncDirQuietly() {
+        try {
+            syncDir(dir)
+        } catch (e: Exception) {
+            if (!syncFailLogged) {
+                syncFailLogged = true
+                Log.w(TAG, "offreport: pending dir sync failed: ${e.javaClass.simpleName}")
+            }
         }
     }
 
@@ -105,6 +174,7 @@ internal class PendingReports(private val dir: File) {
         return bytes.toByteArray()
     }
 
+    /** Null unless the whole file is one report: version, lengths and no trailing bytes. */
     private fun read(file: File): PendingReport? = try {
         DataInputStream(file.inputStream().buffered()).use { input ->
             if (input.readInt() != VERSION) return null
@@ -114,10 +184,21 @@ internal class PendingReports(private val dir: File) {
             val size = input.readInt()
             if (size !in 1..MAX_TEXT_BYTES) return null
             val text = ByteArray(size).also { input.readFully(it) }
+            if (input.read() != -1) return null
             PendingReport(id, chatId, powerOffMs, String(text, Charsets.UTF_8))
         }
     } catch (@Suppress("SwallowedException") e: IOException) { // cut short or unreadable: the caller drops it
         null
+    }
+}
+
+/** fsync of the directory itself (the daemon runs under app_process, android.system.Os is there). */
+private fun fsyncDir(dir: File) {
+    val fd = Os.open(dir.path, OsConstants.O_RDONLY, 0)
+    try {
+        Os.fsync(fd)
+    } finally {
+        Os.close(fd)
     }
 }
 

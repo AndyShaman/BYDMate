@@ -540,7 +540,7 @@ interface HelperClient {
 
     /**
      * Drops the armed power-off report and the pending ones (TX_OFFREPORT_DISARM). False on any
-     * transport failure.
+     * transport failure, and while the daemon could not delete every pending file.
      */
     suspend fun offReportDisarm(): Boolean
 
