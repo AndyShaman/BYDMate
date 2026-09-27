@@ -2108,7 +2108,8 @@ private fun ServiceSection(
                     adbRestore.setEnabled(enabled)
                 },
                 enabled = adbRestoreSupported,
-                onHelp = { adbRestoreHelpOpen = true },
+                // The help explains a working restore; on Android 10 the status line says why there is none.
+                onHelp = if (adbRestoreSupported) ({ adbRestoreHelpOpen = true }) else null,
             )
             adbRestoreStatusText(adbRestoreState)?.let { SettingHint(text = it) }
             val verdict = adbVerdict
