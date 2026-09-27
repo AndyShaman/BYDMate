@@ -61,6 +61,14 @@ internal fun adbDialogPrimaryAction(
 }
 
 /**
+ * Body string for [AdbVerdict.OFF_AFTER_REBOOT]: on Android 10 restore is not possible at all,
+ * so the body must not claim BYDMate can turn ADB back on by itself.
+ */
+internal fun adbDialogOffAfterRebootBody(restoreSupported: Boolean): Int =
+    if (restoreSupported) R.string.adb_dialog_off_after_reboot_body
+    else R.string.adb_dialog_off_after_reboot_body_unsupported
+
+/**
  * Explanation + one action for a verdict, opened by a tap on the verdict line.
  * [onOpenDiagnostics] null hides the primary button of [AdbVerdict.HELPER_DOWN] (already in Settings).
  */
@@ -78,7 +86,7 @@ internal fun AdbVerdictDialog(
     val (titleRes, bodyRes) = when (verdict) {
         AdbVerdict.NOT_ENABLED -> R.string.adb_dialog_not_enabled_title to R.string.adb_dialog_not_enabled_body
         AdbVerdict.OFF_AFTER_REBOOT ->
-            R.string.adb_dialog_off_after_reboot_title to R.string.adb_dialog_off_after_reboot_body
+            R.string.adb_dialog_off_after_reboot_title to adbDialogOffAfterRebootBody(restoreSupported)
         AdbVerdict.NO_ACCESS -> R.string.adb_dialog_no_access_title to R.string.adb_dialog_no_access_body
         else -> R.string.adb_dialog_helper_down_title to R.string.adb_dialog_helper_down_body
     }

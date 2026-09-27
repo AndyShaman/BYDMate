@@ -110,6 +110,7 @@
     <string name="adb_enable_step_2">2. Вярніцеся ў BYDMate і націсніце «Праверыць»</string>
     <string name="adb_dialog_off_after_reboot_title">ADB адключыўся пасля перазагрузкі</string>
     <string name="adb_dialog_off_after_reboot_body">На гэтай прашыўцы ADB выключаецца пры кожнай перазагрузцы. BYDMate умее ўключаць яго сам, патрэбны Wi-Fi.</string>
+    <string name="adb_dialog_off_after_reboot_body_unsupported">На гэтай прашыўцы ADB выключаецца пры кожнай перазагрузцы. Уключыце яго зноў па інструкцыі на GitHub, раздзел «Активация ADB».</string>
     <string name="adb_dialog_no_access_title">Няма доступу да ADB</string>
     <string name="adb_dialog_no_access_body">Пацвердзіце запыт на экране або падключыце ADB нанава, потым націсніце «Праверыць».</string>
     <string name="adb_dialog_helper_down_title">Памочнік BYDMate не запусціўся</string>
