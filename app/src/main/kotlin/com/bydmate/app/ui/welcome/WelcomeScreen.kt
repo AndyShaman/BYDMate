@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.data.autoservice.AdbRestoreManager
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.components.AdbEnableSteps
 import com.bydmate.app.ui.theme.*
@@ -297,13 +299,16 @@ private fun AdbStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 }
             }
 
-            SectionCard(stringResource(R.string.welcome_adb_instruction_title)) {
-                OutlinedButton(
-                    onClick = { helpOpen = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(stringResource(R.string.welcome_adb_instruction_button), color = TextSecondary, fontSize = 14.sp)
+            // Restore runs on wireless debugging, which Android 10 does not have: nothing to explain there.
+            if (AdbRestoreManager.isSupportedOn(Build.VERSION.SDK_INT)) {
+                SectionCard(stringResource(R.string.welcome_adb_instruction_title)) {
+                    OutlinedButton(
+                        onClick = { helpOpen = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(stringResource(R.string.welcome_adb_instruction_button), color = TextSecondary, fontSize = 14.sp)
+                    }
                 }
             }
 

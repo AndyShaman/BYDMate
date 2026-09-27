@@ -40,6 +40,26 @@ internal fun adbVerdictText(v: AdbVerdict): String = when (v) {
 /** «ADB не включён» is red; the other verdicts are yellow like the other header lines. */
 internal fun adbVerdictColor(v: AdbVerdict): Color = if (v == AdbVerdict.NOT_ENABLED) SocRed else SocYellow
 
+/** The primary button of [AdbVerdictDialog]. */
+internal enum class AdbDialogAction { CHECK, ENABLE_RESTORE, OPEN_DIAGNOSTICS }
+
+/**
+ * Which primary button a verdict gets; null for [AdbVerdict.OK]. Restore is only offered where it
+ * is off and can actually run: on Android 10 there is no wireless debugging behind it.
+ */
+internal fun adbDialogPrimaryAction(
+    verdict: AdbVerdict,
+    restoreEnabled: Boolean,
+    restoreSupported: Boolean,
+): AdbDialogAction? = when (verdict) {
+    AdbVerdict.NOT_ENABLED, AdbVerdict.NO_ACCESS -> AdbDialogAction.CHECK
+    AdbVerdict.OFF_AFTER_REBOOT ->
+        if (restoreEnabled || !restoreSupported) AdbDialogAction.CHECK
+        else AdbDialogAction.ENABLE_RESTORE
+    AdbVerdict.HELPER_DOWN -> AdbDialogAction.OPEN_DIAGNOSTICS
+    AdbVerdict.OK -> null
+}
+
 /**
  * Explanation + one action for a verdict, opened by a tap on the verdict line.
  * [onOpenDiagnostics] null hides the primary button of [AdbVerdict.HELPER_DOWN] (already in Settings).
@@ -48,6 +68,7 @@ internal fun adbVerdictColor(v: AdbVerdict): Color = if (v == AdbVerdict.NOT_ENA
 internal fun AdbVerdictDialog(
     verdict: AdbVerdict,
     restoreEnabled: Boolean,
+    restoreSupported: Boolean,
     onCheck: () -> Unit,
     onEnableRestore: () -> Unit,
     onOpenDiagnostics: (() -> Unit)?,
@@ -62,12 +83,11 @@ internal fun AdbVerdictDialog(
         else -> R.string.adb_dialog_helper_down_title to R.string.adb_dialog_helper_down_body
     }
     // Primary button: label + action, or null when there is nothing to offer.
-    val primary: Pair<Int, () -> Unit>? = when (verdict) {
-        AdbVerdict.NOT_ENABLED, AdbVerdict.NO_ACCESS -> R.string.adb_dialog_check to onCheck
-        AdbVerdict.OFF_AFTER_REBOOT ->
-            if (restoreEnabled) R.string.adb_dialog_check to onCheck
-            else R.string.adb_dialog_enable_restore to onEnableRestore
-        else -> onOpenDiagnostics?.let { R.string.adb_dialog_open_diagnostics to it }
+    val primary: Pair<Int, () -> Unit>? = when (adbDialogPrimaryAction(verdict, restoreEnabled, restoreSupported)) {
+        AdbDialogAction.CHECK -> R.string.adb_dialog_check to onCheck
+        AdbDialogAction.ENABLE_RESTORE -> R.string.adb_dialog_enable_restore to onEnableRestore
+        AdbDialogAction.OPEN_DIAGNOSTICS -> onOpenDiagnostics?.let { R.string.adb_dialog_open_diagnostics to it }
+        null -> null
     }
     CardDetailDialog(
         title = null,

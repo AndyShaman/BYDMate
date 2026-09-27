@@ -92,6 +92,7 @@
     <string name="settings_adb_restore_status_connecting">A restaurar…</string>
     <string name="settings_adb_restore_status_restored">Restaurado às %1$s</string>
     <string name="settings_adb_restore_status_failed">Erro: %1$s</string>
+    <string name="settings_adb_restore_status_unsupported">Indisponível no Android 10. Se o ADB sumiu após reiniciar, ative-o de novo seguindo o guia no GitHub, seção “Enable ADB”.</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB desligado: o controle não funciona</string>
     <string name="adb_verdict_off_after_reboot">O ADB desligou após reiniciar</string>

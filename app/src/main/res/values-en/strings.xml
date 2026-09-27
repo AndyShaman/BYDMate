@@ -91,6 +91,7 @@
     <string name="settings_adb_restore_status_connecting">Restoring…</string>
     <string name="settings_adb_restore_status_restored">Restored at %1$s</string>
     <string name="settings_adb_restore_status_failed">Error: %1$s</string>
+    <string name="settings_adb_restore_status_unsupported">Not available on Android 10. If ADB is gone after a reboot, turn it on again following the guide on GitHub, section “Enable ADB”.</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB is off: car control does not work</string>
     <string name="adb_verdict_off_after_reboot">ADB turned off after reboot</string>

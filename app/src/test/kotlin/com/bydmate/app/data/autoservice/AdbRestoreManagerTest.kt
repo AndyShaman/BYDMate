@@ -80,6 +80,7 @@ class AdbRestoreManagerTest {
         /** Same as [helperGate], for enableAccessibilityService. */
         var a11yGate: CompletableDeferred<Unit>? = null
         var now = 1_000_000L
+        var sdk = 30
         var slept = 0L
         val sleeps = mutableListOf<Long>()
         var onAttemptStart: (suspend () -> Unit)? = null
@@ -172,6 +173,7 @@ class AdbRestoreManagerTest {
             onSleep?.let { it(); onSleep = null }
         }
         override fun nowMs(): Long = now
+        override fun sdkInt(): Int = sdk
     }
 
     private fun manager(
@@ -206,6 +208,41 @@ class AdbRestoreManagerTest {
         assertEquals(AdbRestoreState.Disabled, m.state.value)
         assertEquals(0, system.classicCalls)
         assertTrue(system.settingsWrites.isEmpty())
+    }
+
+    @Test
+    fun `Android 10 with the toggle stored on never attempts and reports Unsupported`() = runTest {
+        val system = FakeSystem().apply { sdk = 29 }
+        val prefs = FakePrefs(enabled = true)
+        val m = manager(prefs, system)
+
+        assertEquals(AdbRestoreState.Unsupported, m.state.value)
+        m.attemptIfNeeded("service_start")
+        m.attemptIfNeeded("wifi")
+
+        assertEquals(AdbRestoreState.Unsupported, m.state.value)
+        assertFalse(m.isSupported())
+        assertEquals(0, system.classicCalls)
+        assertEquals(0, system.discoverCalls)
+        assertEquals(0L, system.slept)
+        assertTrue(system.settingsWrites.isEmpty())
+        assertEquals("none", m.lastTrigger)
+        // The stored setting is left as the user set it.
+        assertTrue(prefs.isEnabled())
+    }
+
+    @Test
+    fun `Android 11 with the toggle on attempts as before`() = runTest {
+        val system = FakeSystem().apply { sdk = 30 }
+        val m = manager(FakePrefs(), system)
+
+        assertEquals(AdbRestoreState.Disabled, m.state.value)
+        assertTrue(m.isSupported())
+        m.attemptIfNeeded("service_start")
+
+        assertTrue(system.classicCalls > 0)
+        assertEquals("service_start", m.lastTrigger)
+        assertTrue(m.state.value is AdbRestoreState.Restored)
     }
 
     @Test

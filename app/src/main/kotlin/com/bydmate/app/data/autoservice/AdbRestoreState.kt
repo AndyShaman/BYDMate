@@ -11,6 +11,9 @@ sealed class AdbRestoreState {
     /** Toggle is off — nothing is attempted and no status line is shown. */
     data object Disabled : AdbRestoreState()
 
+    /** Android older than 11: there is no wireless debugging to restore through, nothing is attempted. */
+    data object Unsupported : AdbRestoreState()
+
     /** The classic port answers on its own: this firmware does not need the feature. */
     data object NotNeeded : AdbRestoreState()
 

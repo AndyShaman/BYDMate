@@ -46,6 +46,8 @@ class AdbVerdictMonitor @Inject constructor(
 
     fun isRestoreEnabled(): Boolean = adbRestoreManager.isEnabled()
 
+    fun isRestoreSupported(): Boolean = adbRestoreManager.isSupported()
+
     @Synchronized
     fun onServiceStarted() {
         // A repeated start replaces the jobs of the previous one instead of stacking them.
