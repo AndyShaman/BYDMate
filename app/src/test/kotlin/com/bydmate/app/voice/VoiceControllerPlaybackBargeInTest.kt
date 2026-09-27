@@ -367,6 +367,45 @@ class VoiceControllerPlaybackBargeInTest {
         assertEquals(0, r.controller.droppedDuringPlaybackForTest())
     }
 
+    @Test fun `after a name barge-in the next reply without the name is interruptible by the name`() {
+        val askStarted = CompletableDeferred<Unit>()
+        val orchestrator = orchestrator()
+        var asks = 0
+        coEvery { orchestrator.ask(any(), any(), any()) } coAnswers {
+            val onSentence = thirdArg<((String) -> Unit)?>()!!
+            if (++asks == 1) {
+                onSentence("Лео на связи.") // arms the guard, then a slow tool round
+                askStarted.complete(Unit)
+                CompletableDeferred<Unit>().await()
+            }
+            onSentence("Пять градусов.")
+            AgentResult.Answer("Пять градусов.")
+        }
+        val r = rig(orchestrator, ttsEnabled = true)
+        every { r.tts.startQueue() } returns mockk<TtsEngine.SpeechQueue>(relaxed = true).also {
+            every { it.enqueue(any()) } returns true
+        }
+
+        r.utter("как тебя зовут")
+        runBlocking { withTimeout(WAIT_MS) { askStarted.await() } }
+        val firstTurn = r.controller.routingJobForTest()!!
+        r.silence(10) // the named sentence is still synthesizing: nothing audible
+        r.utter("Лео") // barges in during the tool round
+        r.sync()
+        runBlocking { withTimeout(WAIT_MS) { firstTurn.join() } }
+        assertEquals(1, r.journal.bargeIns().count { it.outcome == VoiceJournalEntry.Outcome.OK })
+
+        r.utter("а на улице") // a new question, its reply does not name the agent
+        await(r.journal.entries) { list -> list.any { it.answer == "Пять градусов." } }
+        speaking.value = true
+        audible = true
+        r.utter("Лео")
+        r.sync()
+
+        assertEquals(0, r.controller.droppedDuringPlaybackForTest())
+        assertEquals(2, r.journal.bargeIns().count { it.outcome == VoiceJournalEntry.Outcome.OK })
+    }
+
     // --- Review finding 3: a long answer does not eat the driver's waiting time ---
 
     @Test fun `after an answer longer than the silence timeout the driver gets the full wait`() {
@@ -374,6 +413,36 @@ class VoiceControllerPlaybackBargeInTest {
 
         audible = true
         r.silence(400) // 40 s of the agent talking quietly: the VAD hears silence
+        audible = false
+        r.silence(4) // inside the 500 ms echo grace
+        r.silence(299) // 29.9 s of real silence after the answer
+        r.sync()
+        assertTrue(r.controller.listening.value)
+
+        r.silence()
+        await(r.controller.listening) { !it }
+    }
+
+    @Test fun `neither a long thinking phase nor a long answer eats the driver's wait after the turn`() {
+        val askStarted = CompletableDeferred<Unit>()
+        val answer = CompletableDeferred<AgentResult>()
+        val orchestrator = orchestrator()
+        coEvery { orchestrator.ask(any(), any(), any()) } coAnswers {
+            askStarted.complete(Unit)
+            answer.await()
+        }
+        val r = rig(orchestrator)
+
+        r.utter("расскажи про заряд")
+        runBlocking { withTimeout(WAIT_MS) { askStarted.await() } }
+        val turn = r.controller.routingJobForTest()!!
+        r.silence(250) // 25 s of the agent thinking
+        r.sync()
+        answer.complete(AgentResult.Answer("Заряд восемьдесят процентов."))
+        runBlocking { withTimeout(WAIT_MS) { turn.join() } }
+
+        audible = true
+        r.silence(310) // 31 s of the agent talking quietly: the VAD hears silence
         audible = false
         r.silence(4) // inside the 500 ms echo grace
         r.silence(299) // 29.9 s of real silence after the answer
