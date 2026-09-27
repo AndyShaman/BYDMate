@@ -52,6 +52,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ENERGY_KWH_SANITY_DONE = "energydata_kwh_sanity_v1_done"
         /** DriveMode trigger value "0" (old "NORMAL") rewritten to the real NORMAL code "3". */
         const val KEY_DRIVEMODE_RULE_MIGRATION = "drivemode_rule_migration_v2"
+        /** Trunk trigger value "0" (old "closed") rewritten to the real closed code "2". */
+        const val KEY_TRUNK_RULE_MIGRATION = "trunk_rule_migration_v1"
         const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
         const val KEY_OPENROUTER_MODEL = "openrouter_model"
         /** Exa (api.exa.ai) BYOK for the web_search tool. Blank = openrouter:web_search server tool
@@ -395,6 +397,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setDriveModeRuleMigrationDone() =
         setString(KEY_DRIVEMODE_RULE_MIGRATION, "true")
+
+    suspend fun isTrunkRuleMigrationDone(): Boolean =
+        getString(KEY_TRUNK_RULE_MIGRATION, "false") == "true"
+
+    suspend fun setTrunkRuleMigrationDone() =
+        setString(KEY_TRUNK_RULE_MIGRATION, "true")
 
     suspend fun getDataSource(): DataSource = DataSource.ENERGYDATA
 

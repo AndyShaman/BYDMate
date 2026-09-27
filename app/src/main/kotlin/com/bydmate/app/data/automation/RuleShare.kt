@@ -194,7 +194,7 @@ object RuleShare {
         val triggers = (0 until triggersJson.length()).map {
             // Only a name travels: the id always comes from the importing device.
             TriggerDef.fromJson(triggersJson.getJSONObject(it)).let { t -> if (t.kind in PLACE_KINDS) t.copy(placeId = null) else t }
-        }
+        }.let(TrunkRuleMigration::fix)  // a file from before 3.19 may still say Trunk "0" for closed
         val actions = (0 until actionsJson.length()).map {
             ActionDef.fromJson(actionsJson.getJSONObject(it)).let { a ->
                 if (a.kind == "call" && a.displayName.isBlank()) a.copy(displayName = callLabel) else a
