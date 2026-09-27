@@ -1,6 +1,7 @@
 package com.bydmate.app.data.automation
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Log lines keep the scheme, host and path of a link; tokens, numbers and coordinates go. */
@@ -32,12 +33,21 @@ class LinkRedactionTest {
         assertEquals("navigate:<coords>", log("navigate:53.9045,27.5615"))
         assertEquals("navigate_show:<coords>", log("navigate_show:-33.86, 151.2"))
         assertEquals("navigate_maps:<coords>", log("navigate_maps:53.9045,27.5615"))
-        assertEquals("navigate_maps_show:<coords> (Дача)", log("navigate_maps_show:53.9045,27.5615 (Дача)"))
+        assertEquals("navigate_maps_show:<coords> (name len=4)", log("navigate_maps_show:53.9045,27.5615 (Дача)"))
     }
 
     @Test fun `navigate labels drop coordinates in exponent form`() {
         assertEquals("navigate:<coords>", log("navigate:1.0E-4,27.5615"))
-        assertEquals("navigate_maps_show:<coords> (Дом)", log("navigate_maps_show:53.9,-1.0E-5 (Дом)"))
+        assertEquals("navigate_maps_show:<coords> (name len=3)", log("navigate_maps_show:53.9,-1.0E-5 (Дом)"))
+    }
+
+    @Test fun `a point name is never logged, whatever it carries`() {
+        val name = "https://host/p?token=SECRET и тел +375291234567, дом 53.9,27.5"
+        val out = log("navigate_maps_show:53.9,27.5 ($name)")
+        assertEquals("navigate_maps_show:<coords> (name len=${name.length})", out)
+        assertTrue(out, "SECRET" !in out)
+        assertTrue(out, "375291234567" !in out)
+        assertTrue(out, "53.9" !in out)
     }
 
     @Test fun `search labels keep their text`() {
@@ -55,14 +65,26 @@ class LinkRedactionTest {
         )
         assertEquals("yandexmaps://maps.yandex.ru/?<redacted>", log("yandexmaps://maps.yandex.ru/?rtext=~53.9045,27.5615&rtt=auto"))
         assertEquals(
-            "dgis://2gis.ru/routeSearch/rsType/car/to/<coords>",
+            "dgis://2gis.ru/routeSearch/rsType/car/to/<n>",
             log("dgis://2gis.ru/routeSearch/rsType/car/to/27.5615,53.9045"),
         )
-        assertEquals("dgis://2gis.ru/geo/<coords>", log("dgis://2gis.ru/geo/1.0E-4,53.9045"))
+        assertEquals("dgis://2gis.ru/geo/<n>", log("dgis://2gis.ru/geo/1.0E-4,53.9045"))
     }
 
-    @Test fun `a numeric id in a link path survives`() {
-        assertEquals("dgis://2gis.ru/firm/70000001033556712", log("dgis://2gis.ru/firm/70000001033556712"))
+    // Privacy over debug detail: an id is indistinguishable from a coordinate by shape alone, so
+    // both are masked. Was "a numeric id in a link path survives" before 3.20.
+    @Test fun `a numeric id in a link path is masked too`() {
+        assertEquals("dgis://2gis.ru/firm/<n>", log("dgis://2gis.ru/firm/70000001033556712"))
+    }
+
+    @Test fun `a percent-encoded coordinate in a link path is masked too`() {
+        val out = log("dgis://2gis.ru/geo/27.5615%2C53.9045")
+        assertEquals("dgis://2gis.ru/geo/<n>", out)
+        assertTrue(out, out.substringAfter("2gis.ru").none { it.isDigit() })
+    }
+
+    @Test fun `a plain-word path segment is left alone`() {
+        assertEquals("dgis://2gis.ru/routeSearch/rsType", log("dgis://2gis.ru/routeSearch/rsType"))
     }
 
     @Test fun `geo and tel links and intent data are covered too`() {

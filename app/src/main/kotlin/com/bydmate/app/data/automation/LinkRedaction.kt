@@ -23,10 +23,10 @@ internal object LinkRedaction {
     private const val NUMBER = """-?\d{1,3}\.\d+(?:[eE][+-]?\d+)?"""
     private val COORDS = Regex("""$NUMBER\s*,\s*$NUMBER""")
 
-    // A phone number in free text (a call step's name): seven or more digits, up to two spaces,
+    // A phone number in free text (a call step's name): five or more digits, up to two spaces,
     // dashes or brackets between them (« (29) »), optional leading +. Never applied inside a
     // link, where a long number is an object id, not a phone.
-    private val PHONE = Regex("""\+?\d(?:[\s()\-]{0,2}\d){6,}""")
+    private val PHONE = Regex("""\+?\d(?:[\s()\-]{0,2}\d){4,}""")
 
     // The dispatcher's own labels whose whole value is a number or a place.
     private val PHONE_LABELS = setOf("dial")
@@ -40,8 +40,10 @@ internal object LinkRedaction {
 
     /**
      * [text] for a log line, by structure: a `dial:` label's value is `<phone>`, a coordinate
-     * label's (`navigate:` and the like) is `<coords>` with a trailing ` (name)` kept. A link
-     * keeps its scheme, host, port and path (coordinates in the path become `<coords>`), loses
+     * label's (`navigate:` and the like) is `<coords>`, with a trailing ` (name)` reduced to its
+     * length only — the name itself can be a place, a phone or even a link, so none of it is
+     * logged. A link keeps its scheme, host and port; each path segment survives only if it has
+     * no digit and no `%` (an id, a coordinate or a percent-encoded one all become `<n>`), loses
      * its user info and fragment, and its query becomes `?<redacted>`; a `geo:` or `tel:` link
      * keeps only its scheme, a link that does not parse becomes `<uri>`. Outside links,
      * coordinates and phone numbers are masked.
@@ -51,8 +53,9 @@ internal object LinkRedaction {
             val (kind, value) = m.destructured
             if (kind in PHONE_LABELS) return "$kind:<phone>"
             if (kind in COORD_LABELS) {
-                val name = value.indexOf(" (").takeIf { it >= 0 }?.let { value.substring(it) } ?: ""
-                return "$kind:<coords>$name"
+                val nameAt = value.indexOf(" (")
+                val suffix = if (nameAt >= 0) " (name len=${value.length - nameAt - 3})" else ""
+                return "$kind:<coords>$suffix"
             }
         }
         val out = StringBuilder()
@@ -85,7 +88,12 @@ internal object LinkRedaction {
             return "$scheme:$body" + if ('?' in uri.rawSchemeSpecificPart) "?<redacted>" else ""
         }
         val authority = uri.rawAuthority?.substringAfterLast('@')?.let { "//$it" } ?: ""
-        val path = COORDS.replace(uri.rawPath ?: "", "<coords>")
+        val path = maskPath(uri.rawPath ?: "")
         return "$scheme:$authority$path" + if (uri.rawQuery != null) "?<redacted>" else ""
     }
+
+    // A path segment with a digit or a `%` can hide an id, a coordinate or a percent-encoded
+    // one (e.g. a comma as `%2C`); a plain word like `routeSearch` or `car` has neither.
+    private fun maskPath(path: String): String =
+        path.split('/').joinToString("/") { seg -> if (seg.any { c -> c.isDigit() || c == '%' }) "<n>" else seg }
 }

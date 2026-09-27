@@ -333,4 +333,33 @@ class AutomationEngineAuditTest {
         assertEquals("Speed=12.0 SeatbeltRL=1.0 RangeKm=210.0 Hood=-",
             engine.paramSnapshotLine(listOf("Speed", "SeatbeltRL", "RangeKm", "Hood")))
     }
+
+    // --- Log redaction (3.20): the Confirm requested line names step kinds, never user text.
+    // No overlay permission in the test process, so confirmBeforeExecute falls back to the
+    // notification path (ConfirmOverlayManager.canShow -> false) on its own. ---
+
+    @Test fun `the confirm notification never logs a call step's number or its name`() = runBlocking {
+        rules = listOf(rule(1, listOf(button(1)), actions = listOf(
+            ActionDef(command = "123456", displayName = "Позвонить: 123456", kind = "call"),
+        )).copy(confirmBeforeExecute = true))
+
+        engine.onButtonPress(1)
+
+        val line = engineLines().first { it.startsWith("Confirm requested") }
+        assertEquals("Confirm requested: 'r1' → call", line)
+        assertTrue(line, "123456" !in line)
+        assertTrue(line, "Позвонить" !in line)
+    }
+
+    @Test fun `the confirm notification names a param step by its fixed vehicle code`() = runBlocking {
+        rules = listOf(rule(1, listOf(button(1)), actions = listOf(
+            ActionDef(command = "主驾通风1档", displayName = "Вентиляция сиденья водителя", kind = "param"),
+            ActionDef(command = "", displayName = "Домой", kind = "navigate"),
+        )).copy(confirmBeforeExecute = true))
+
+        engine.onButtonPress(1)
+
+        val line = engineLines().first { it.startsWith("Confirm requested") }
+        assertEquals("Confirm requested: 'r1' → param 主驾通风1档, navigate", line)
+    }
 }
