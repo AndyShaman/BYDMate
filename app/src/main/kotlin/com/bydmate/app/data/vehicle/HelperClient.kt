@@ -10,6 +10,9 @@ import java.io.ByteArrayOutputStream
 import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.helper.offreport.OffReportStatus
+import com.bydmate.app.helper.offreport.readOffReportStatus
+import com.bydmate.app.helper.offreport.writeOffReportArm
 import com.bydmate.app.helper.push.FID_REC_NO_ERROR
 import com.bydmate.app.helper.push.FidPushResult
 import com.bydmate.app.helper.push.FidPushStatus
@@ -508,6 +511,18 @@ interface HelperClient {
 
     /** Live recorder counters (TX_REC_STATUS); null when the daemon is unreachable. */
     suspend fun recStatus(): FidRecStatus?
+
+    /**
+     * Arms the power-off Telegram report (TX_OFFREPORT_ARM). False when the daemon is unreachable
+     * or too old to know the verb; [isAlive] tells the two apart.
+     */
+    suspend fun offReportArm(id: String, token: String, chatId: Long, text: String): Boolean
+
+    /** Drops the armed power-off report (TX_OFFREPORT_DISARM). False on any transport failure. */
+    suspend fun offReportDisarm(): Boolean
+
+    /** Where report [id] stands in the daemon (TX_OFFREPORT_STATUS); null when there is no answer. */
+    suspend fun offReportStatus(id: String): OffReportStatus?
 }
 
 @Singleton
@@ -1077,6 +1092,26 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             readRecStatus(reply)
         }
 
+    override suspend fun offReportArm(id: String, token: String, chatId: Long, text: String): Boolean =
+        transactParsed(
+            HelperBinderProtocol.TX_OFFREPORT_ARM,
+            { p -> writeOffReportArm(p, id, token, chatId, text) },
+            // The first arm registers the daemon's power listener (vendor calls) and reads the
+            // power fids, past the 2 s default on a cold head unit.
+            timeoutMs = OFF_REPORT_ARM_TIMEOUT_MS,
+        ) { reply -> reply.dataAvail() >= 4 && reply.readInt() == 0 } ?: false
+
+    override suspend fun offReportDisarm(): Boolean =
+        transactParsed(HelperBinderProtocol.TX_OFFREPORT_DISARM, { }) { reply ->
+            reply.dataAvail() >= 4 && reply.readInt() == 0
+        } ?: false
+
+    override suspend fun offReportStatus(id: String): OffReportStatus? =
+        transactParsed(HelperBinderProtocol.TX_OFFREPORT_STATUS, { it.writeString(id) }) { reply ->
+            if (reply.dataAvail() < 4 || reply.readInt() != 0) return@transactParsed null
+            readOffReportStatus(reply)
+        }
+
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =
         transact(code, writeArgs)?.let { (status, _) -> readAccepted(status) } ?: false
@@ -1241,5 +1276,8 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         /** Safety cap on the number of TX_DUMP_FIDS loop iterations (chunks). 64 × 64 KiB = 4 MiB,
          *  far above any realistic SDK catalog size; guards against a misbehaving daemon. */
         private const val MAX_DUMP_CHUNKS = 64
+
+        /** TX_OFFREPORT_ARM budget: the first arm registers two vendor listeners and reads two fids. */
+        private const val OFF_REPORT_ARM_TIMEOUT_MS = 5_000L
     }
 }

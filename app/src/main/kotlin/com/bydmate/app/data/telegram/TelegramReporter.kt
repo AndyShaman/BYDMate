@@ -59,6 +59,7 @@ class TelegramReporter @Inject constructor(
     private val settings: SettingsRepository,
     private val tripDao: TripDao,
     private val appStrings: AppStrings,
+    private val offState: PowerOffArmState,
 ) {
     companion object {
         private const val TAG = "TgReport"
@@ -110,17 +111,23 @@ class TelegramReporter @Inject constructor(
 
     /**
      * Phase B seam: the power-off report to arm the daemon with, or null when the report is off in
-     * the settings or no bot is connected (then the daemon is disarmed).
+     * the settings or no bot is connected (then the daemon is disarmed). Rebuilt every ~10 s while
+     * the car is on: when bot, chat and text are those of [previous], [previous] itself comes back
+     * (same id, no build line in the log), so the caller re-arms only on a real change.
      */
-    suspend fun powerOffReport(): PowerOffReport? {
+    suspend fun powerOffReport(previous: PowerOffReport? = null): PowerOffReport? {
         if (!settings.isTgReportOffEnabled()) return null
         val config = settings.getTgBackupConfig()
         val chatId = config.chatId
         if (!config.configured || chatId == null) return null
-        val id = newId()
         val header = TelegramReportBuilder.powerOffHeader(strings)
-        val built = build(id, "power_off", header, "", settings.getTgReportOffFields())
-        return PowerOffReport(id, config.token, chatId, built.report.text)
+        val fields = settings.getTgReportOffFields()
+        val report = TelegramReportBuilder.build(header, "", fields, inputs(), language(), strings, clock())
+        previous?.takeIf { it.token == config.token && it.chatId == chatId && it.text == report.text }
+            ?.let { return it }
+        val id = newId()
+        logBuild(id, "power_off", fields, "", report)
+        return PowerOffReport(id, config.token, chatId, report.text)
     }
 
     /**
@@ -184,12 +191,21 @@ class TelegramReporter @Inject constructor(
 
     suspend fun outboxSize(): Int = loadOutbox().size
 
-    /** The dump header line; `armed` and `daemon` belong to the daemon side (phase B). */
-    suspend fun diagnosticsLines(): List<String> = listOf(
-        "telegram report: off=${if (settings.isTgReportOffEnabled()) "on" else "off"} " +
-            "fields=[${ReportField.toCsv(settings.getTgReportOffFields())}] armed=- daemon=- outbox=${outboxSize()}",
-        "telegram report last_off: -",
-    )
+    /**
+     * The dump header lines. `armed` is the age of the report the daemon holds, `daemon` whether it
+     * took the last arm (ok), is too old for it (outdated) or was not reached (-); `last_off` is the
+     * daemon's last power-off as the arming loop last read it.
+     */
+    suspend fun diagnosticsLines(): List<String> {
+        val armedAt = offState.armedAtMs
+        val armedAge = if (armedAt > 0L) "${(clock() - armedAt) / 1000}s" else "-"
+        return listOf(
+            "telegram report: off=${if (settings.isTgReportOffEnabled()) "on" else "off"} " +
+                "fields=[${ReportField.toCsv(settings.getTgReportOffFields())}] armed=$armedAge " +
+                "daemon=${offState.daemon} outbox=${outboxSize()}",
+            "telegram report last_off: ${offState.lastOffLine()}",
+        )
+    }
 
     private suspend fun deliver(id: String, config: TgBackupConfig, chatId: Long, text: String, builtAtMs: Long): SendResult {
         val generationBeforeSend = drainGeneration.get()
@@ -227,6 +243,11 @@ class TelegramReporter @Inject constructor(
     ): Built {
         val builtAtMs = clock()
         val report = TelegramReportBuilder.build(header, customText, fields, inputs(), language(), strings, builtAtMs)
+        logBuild(id, source, fields, customText, report)
+        return Built(report, builtAtMs)
+    }
+
+    private fun logBuild(id: String, source: String, fields: Set<ReportField>, customText: String, report: BuiltReport) {
         Log.i(
             TAG,
             "build id=$id src=$source fields=[${ReportField.toCsv(fields)}] " +
@@ -234,7 +255,6 @@ class TelegramReporter @Inject constructor(
                 "skipped=[${report.skipped.joinToString(",") { it.id }}] " +
                 "custom=${customText.isNotBlank()} len=${report.text.length}",
         )
-        return Built(report, builtAtMs)
     }
 
     /** «(записано в 18:42)», with the date when the report is from another day. */
