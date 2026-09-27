@@ -6,6 +6,9 @@ import android.os.Parcel
  * Wire types of the power-off Telegram report (3.19, phase B), shared by the daemon (which holds
  * the armed report and sends it when the car is switched off) and the app (which arms it and asks
  * for the outcome on its next start). Kept out of both so the marshalling is tested on its own.
+ *
+ * Every reader checks what is left in the parcel and the length of each string: a truncated or
+ * oversized parcel reads as null (refused), never as a half-filled value.
  */
 
 /** Where a report id stands in the daemon. */
@@ -43,10 +46,14 @@ data class OffReportOutcome(
     val rc: String = OFF_REPORT_NO_RC,
 )
 
+/** Registration state of one power fid in the daemon: `OK`, `sent`, `pending` or the error. */
+data class OffReportFid(val dev: Int, val fid: Int, val outcome: String)
+
 /**
  * TX_OFFREPORT_STATUS reply. [queried] is the id the app asked about; [armedId] the report held
  * right now ("" = none) with its wall-clock arm time; [listening] how many power fids the daemon's
- * listener holds (-1 = not registered yet); [last] the latest power-off the daemon handled.
+ * listener holds (-1 = not registered yet) and [fids] each one's state; [last] the latest power-off
+ * the daemon handled, whatever its id.
  */
 data class OffReportStatus(
     val queried: OffReportOutcome,
@@ -54,9 +61,20 @@ data class OffReportStatus(
     val armedAtMs: Long,
     val listening: Int,
     val last: OffReportOutcome?,
+    val fids: List<OffReportFid> = emptyList(),
 )
 
 const val OFF_REPORT_NO_RC = "-"
+
+/** Wire bounds: a report id is 8 chars, a bot token under 50, a Telegram message at most 4096. */
+internal const val OFF_REPORT_MAX_ID = 64
+internal const val OFF_REPORT_MAX_TOKEN = 256
+internal const val OFF_REPORT_MAX_TEXT = 8192
+internal const val OFF_REPORT_MAX_RC = 128
+internal const val OFF_REPORT_MAX_FIDS = 8
+
+private const val INT_BYTES = 4
+private const val LONG_BYTES = 8
 
 /** TX_OFFREPORT_ARM request: [String id, String token, long chatId, String text]. */
 internal fun writeOffReportArm(p: Parcel, id: String, token: String, chatId: Long, text: String) {
@@ -71,18 +89,20 @@ internal class ArmRequest(val id: String, val token: String, val chatId: Long, v
     override fun toString(): String = "ArmRequest(id=$id, len=${text.length})"
 }
 
-/** Null when a field is missing: an arm without a token, an id or a text is refused. */
+/** Null when a field is missing, empty, oversized or the parcel ends early. */
 internal fun readOffReportArm(p: Parcel): ArmRequest? {
-    val id = p.readString()?.takeIf { it.isNotEmpty() } ?: return null
-    val token = p.readString()?.takeIf { it.isNotEmpty() } ?: return null
+    val id = p.boundedString(OFF_REPORT_MAX_ID)?.takeIf { it.isNotEmpty() } ?: return null
+    val token = p.boundedString(OFF_REPORT_MAX_TOKEN)?.takeIf { it.isNotEmpty() } ?: return null
+    if (p.dataAvail() < LONG_BYTES) return null
     val chatId = p.readLong()
-    val text = p.readString()?.takeIf { it.isNotEmpty() } ?: return null
+    val text = p.boundedString(OFF_REPORT_MAX_TEXT)?.takeIf { it.isNotEmpty() } ?: return null
     return ArmRequest(id, token, chatId, text)
 }
 
 /**
  * TX_OFFREPORT_STATUS reply after the leading status int:
- * [outcome queried, String armedId, long armedAtMs, int listening, int hasLast, (outcome last)?]
+ * [outcome queried, String armedId, long armedAtMs, int listening, int hasLast, (outcome last)?,
+ *  int fidCount, fidCount × (int dev, int fid, String outcome)]
  * where an outcome is [String id, int state, long powerOffMs, long sentAtMs, int attempts, String rc].
  */
 internal fun writeOffReportStatus(p: Parcel, status: OffReportStatus) {
@@ -93,15 +113,39 @@ internal fun writeOffReportStatus(p: Parcel, status: OffReportStatus) {
     val last = status.last
     p.writeInt(if (last != null) 1 else 0)
     if (last != null) writeOutcome(p, last)
+    val fids = status.fids.take(OFF_REPORT_MAX_FIDS)
+    p.writeInt(fids.size)
+    fids.forEach {
+        p.writeInt(it.dev)
+        p.writeInt(it.fid)
+        p.writeString(it.outcome.take(OFF_REPORT_MAX_RC))
+    }
 }
 
-internal fun readOffReportStatus(p: Parcel): OffReportStatus {
-    val queried = readOutcome(p)
-    val armedId = p.readString().orEmpty()
+/** Null on a truncated or oversized reply. */
+internal fun readOffReportStatus(p: Parcel): OffReportStatus? {
+    val queried = readOutcome(p) ?: return null
+    val armedId = p.boundedString(OFF_REPORT_MAX_ID) ?: return null
+    if (p.dataAvail() < LONG_BYTES + 2 * INT_BYTES) return null
     val armedAtMs = p.readLong()
     val listening = p.readInt()
-    val last = if (p.readInt() == 1) readOutcome(p) else null
-    return OffReportStatus(queried, armedId, armedAtMs, listening, last)
+    val last = when (p.readInt()) {
+        0 -> null
+        1 -> readOutcome(p) ?: return null
+        else -> return null
+    }
+    if (p.dataAvail() < INT_BYTES) return null
+    val count = p.readInt()
+    if (count !in 0..OFF_REPORT_MAX_FIDS) return null
+    val fids = ArrayList<OffReportFid>(count)
+    repeat(count) {
+        if (p.dataAvail() < 2 * INT_BYTES) return null
+        val dev = p.readInt()
+        val fid = p.readInt()
+        val outcome = p.boundedString(OFF_REPORT_MAX_RC) ?: return null
+        fids += OffReportFid(dev, fid, outcome)
+    }
+    return OffReportStatus(queried, armedId, armedAtMs, listening, last, fids)
 }
 
 private fun writeOutcome(p: Parcel, o: OffReportOutcome) {
@@ -110,14 +154,22 @@ private fun writeOutcome(p: Parcel, o: OffReportOutcome) {
     p.writeLong(o.powerOffMs)
     p.writeLong(o.sentAtMs)
     p.writeInt(o.attempts)
-    p.writeString(o.rc)
+    p.writeString(o.rc.take(OFF_REPORT_MAX_RC))
 }
 
-private fun readOutcome(p: Parcel): OffReportOutcome = OffReportOutcome(
-    id = p.readString().orEmpty(),
-    state = p.readInt(),
-    powerOffMs = p.readLong(),
-    sentAtMs = p.readLong(),
-    attempts = p.readInt(),
-    rc = p.readString() ?: OFF_REPORT_NO_RC,
-)
+private fun readOutcome(p: Parcel): OffReportOutcome? {
+    val id = p.boundedString(OFF_REPORT_MAX_ID) ?: return null
+    if (p.dataAvail() < 2 * INT_BYTES + 2 * LONG_BYTES) return null
+    val state = p.readInt()
+    val powerOffMs = p.readLong()
+    val sentAtMs = p.readLong()
+    val attempts = p.readInt()
+    val rc = p.boundedString(OFF_REPORT_MAX_RC) ?: return null
+    return OffReportOutcome(id, state, powerOffMs, sentAtMs, attempts, rc)
+}
+
+/** A string of at most [max] chars; null when the parcel ends early, holds null or a longer one. */
+private fun Parcel.boundedString(max: Int): String? {
+    if (dataAvail() < INT_BYTES) return null
+    return readString()?.takeIf { it.length <= max }
+}

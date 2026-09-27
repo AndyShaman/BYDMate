@@ -180,6 +180,34 @@ class HelperBootstrapTest {
     }
 
     @Test
+    fun `the replace hook reads the old daemon before it is killed, on every caller`() = runTest {
+        prefs().edit().putLong(KEY, baselineVersion() xor 1L).apply()
+        val adb = FakeAdb()
+        adb.processAlive = true
+        val helper = FakeHelper(alive = true)
+        adb.onSpawn = { helper.alive = true; helper.version = baselineVersion(); true }
+        val killsAtHook = mutableListOf<Int>()
+        val boot = HelperBootstrap(adb, helper, ctx(), HelperReplaceHook { killsAtHook += adb.killCalls })
+
+        assertTrue(boot.ensureRunning())
+        assertEquals("the hook runs once, before the kill", listOf(0), killsAtHook)
+        assertEquals(1, adb.killCalls)
+    }
+
+    @Test
+    fun `a failing replace hook does not stop the respawn`() = runTest {
+        prefs().edit().putLong(KEY, baselineVersion() xor 1L).apply()
+        val adb = FakeAdb()
+        adb.processAlive = true
+        val helper = FakeHelper(alive = true)
+        adb.onSpawn = { helper.alive = true; helper.version = baselineVersion(); true }
+        val boot = HelperBootstrap(adb, helper, ctx(), HelperReplaceHook { error("boom") })
+
+        assertTrue(boot.ensureRunning())
+        assertEquals(1, adb.spawnCalls)
+    }
+
+    @Test
     fun `same version but dead daemon respawns without a needless kill`() = runTest {
         prefs().edit().putLong(KEY, baselineVersion()).apply()
         val adb = FakeAdb()

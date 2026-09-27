@@ -670,9 +670,6 @@ class TrackingService : Service(), LocationListener {
         // a slow / failed bootstrap must not block trip recording or dashboard.
         // Writes that race the bootstrap fail-soft via VehicleApi.HelperUnreachable.
         serviceScope.launch {
-            // How the last power-off report fared, asked of the daemon that is up now: the
-            // bootstrap below replaces a daemon of another version, and its answer with it.
-            powerOffArmer.checkBeforeBootstrap()
             try {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")

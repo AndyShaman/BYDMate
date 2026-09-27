@@ -2,8 +2,12 @@ package com.bydmate.app.helper.offreport
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.UnknownHostException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** The send loop on a fake clock: every attempt and every pause moves the time by hand. */
 class OffReportRetryTest {
@@ -73,5 +77,39 @@ class OffReportRetryTest {
         assertEquals(AttemptResult.Verdict.RETRY, OffReportRetry.verdictFor(502))
         assertEquals(AttemptResult.Verdict.STOP, OffReportRetry.verdictFor(401))
         assertEquals(AttemptResult.Verdict.STOP, OffReportRetry.verdictFor(403))
+    }
+
+    @Test fun `attempts that use every timeout in full still end within the wall bound`() {
+        var n = 0
+        val result = OffReportRetry.run(
+            offAt = offAt,
+            clock = { now },
+            sleep = { now += it },
+            attempt = { connectMs, readMs ->
+                n++
+                now += 2L * connectMs + readMs // DNS + connect + read, each to its cap
+                io
+            },
+            onAttempt = { _, _, _ -> },
+        )
+        assertFalse(result.sent)
+        assertEquals(n, result.attempts)
+        assertTrue(now - offAt <= OffReportRetry.MAX_WALL_MS)
+    }
+
+    @Test fun `a hanging lookup is given up after its bound`() {
+        val release = CountDownLatch(1)
+        val started = System.nanoTime()
+        val answer = OffReportRetry.callWithin(200L) { release.await(10, TimeUnit.SECONDS); "late" }
+        val tookMs = (System.nanoTime() - started) / 1_000_000
+        release.countDown()
+        assertNull(answer)
+        assertTrue("took $tookMs ms", tookMs < 2_000)
+    }
+
+    @Test fun `a quick lookup returns its value and its own exception comes through`() {
+        assertEquals("ok", OffReportRetry.callWithin(2_000L) { "ok" })
+        val thrown = runCatching { OffReportRetry.callWithin(2_000L) { throw UnknownHostException("x") } }
+        assertTrue(thrown.exceptionOrNull() is UnknownHostException)
     }
 }

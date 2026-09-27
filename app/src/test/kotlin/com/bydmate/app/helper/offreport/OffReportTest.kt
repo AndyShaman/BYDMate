@@ -1,6 +1,7 @@
 package com.bydmate.app.helper.offreport
 
 import com.bydmate.app.data.telegram.TelegramReportBuilder
+import com.bydmate.app.helper.push.FID_PUSH_OK
 import com.bydmate.app.helper.push.FidPushSink
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -12,7 +13,8 @@ import org.junit.Test
 
 /**
  * The daemon's power-off report end to end, without the firmware: a fake listener registration
- * hands over the sink, a fake sender plays Telegram, the send runs on the calling thread.
+ * hands over the sink, a fake sender plays Telegram, the send runs on the calling thread and the
+ * worker's tasks run when the test says so ([work]).
  */
 class OffReportTest {
 
@@ -25,6 +27,10 @@ class OffReportTest {
     private val sentTexts = mutableListOf<String>()
     private var answers: (Int) -> AttemptResult = { AttemptResult("200", AttemptResult.Verdict.SENT) }
     private val reads = mutableMapOf<Int, Int?>()
+    private val registered = mutableListOf<Int>()
+    private var registerAnswer: (fid: Int) -> String = { FID_PUSH_OK }
+    private val queued = ArrayDeque<Runnable>()
+    private val delayed = mutableListOf<Pair<Long, Runnable>>()
 
     private val realRegistrar = OffReport.registrar
     private val realSender = OffReport.sender
@@ -33,10 +39,12 @@ class OffReportTest {
     private val realSleep = OffReport.sleep
     private val realThread = OffReport.startThread
     private val realReader = OffReport.reader
+    private val realSchedule = OffReport.schedule
 
     @Before fun setUp() {
         OffReport.resetForTest()
-        OffReport.registrar = { s -> sink = s; 2 }
+        OffReport.registrar = { _, fid, s -> sink = s; registered += fid; registerAnswer(fid) }
+        OffReport.schedule = { delayMs, task -> if (delayMs == 0L) queued.addLast(task) else delayed += delayMs to task }
         OffReport.sender = { _, text, _, _ ->
             sentTexts += text
             mono += 100
@@ -58,10 +66,18 @@ class OffReportTest {
         OffReport.sleep = realSleep
         OffReport.startThread = realThread
         OffReport.reader = realReader
+        OffReport.schedule = realSchedule
     }
 
-    private fun arm(id: String, text: String = "<b>off at ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>") =
+    /** Runs the worker's queued tasks, as the worker thread would. */
+    private fun work() {
+        while (queued.isNotEmpty()) queued.removeFirst().run()
+    }
+
+    private fun arm(id: String, text: String = "<b>off at ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>") {
         OffReport.arm(ArmRequest(id, "tok", 42L, text))
+        work()
+    }
 
     private fun push(fid: Int, value: Int) = sink!!.onEvent(fid, value, 0.0, mono)
 
@@ -78,12 +94,10 @@ class OffReportTest {
     }
 
     @Test fun `the listener is registered once and the arm seeds it from a direct read`() {
-        var registrations = 0
-        OffReport.registrar = { s -> sink = s; registrations++; 2 }
         reads[level] = 2
         arm("a1")
         arm("a2")
-        assertEquals(1, registrations)
+        assertEquals(listOf(level, powerState), registered)
         assertEquals(2, OffReport.status("a2").listening)
         assertEquals(OffReportState.ARMED, OffReport.status("a2").queried.state)
         assertEquals(OffReportState.UNKNOWN, OffReport.status("a1").queried.state)
@@ -163,11 +177,55 @@ class OffReportTest {
     }
 
     @Test fun `a failing registration leaves the report armed with no listener`() {
-        OffReport.registrar = { throw NoClassDefFoundError("AbsBYDAutoBodyworkListener") }
+        OffReport.registrar = { _, _, _ -> throw NoClassDefFoundError("AbsBYDAutoBodyworkListener") }
         arm("a1")
         val status = OffReport.status("a1")
         assertEquals(0, status.listening)
         assertEquals(OffReportState.ARMED, status.queried.state)
+        assertTrue(status.fids.all { it.outcome.startsWith("NoClassDefFoundError") })
+    }
+
+    @Test fun `the arm only stores, registration and reads wait for the worker`() {
+        reads[level] = 2
+        OffReport.arm(ArmRequest("a1", "tok", 42L, "t"))
+        assertTrue(registered.isEmpty())
+        val before = OffReport.status("a1")
+        assertEquals(OffReportState.ARMED, before.queried.state)
+        assertEquals(listOf(OffReport.FID_PENDING, OffReport.FID_PENDING), before.fids.map { it.outcome })
+        assertEquals(0, before.listening)
+        work()
+        assertEquals(listOf(FID_PUSH_OK, FID_PUSH_OK), OffReport.status("a1").fids.map { it.outcome })
+    }
+
+    @Test fun `a re-arm while the car reads 0 does not swallow the pending power-off push`() {
+        reads[level] = 2
+        arm("a1")
+        reads[level] = 0 // the car went off; its push is still queued behind this arm
+        arm("a2")
+        push(level, 0)
+        assertEquals(1, sentTexts.size)
+        assertEquals(OffReportState.SENT, OffReport.status("a2").queried.state)
+    }
+
+    @Test fun `a missing fid is retried every 30 s until it registers, one retry at a time`() {
+        var fail = true
+        registerAnswer = { fid -> if (fid == powerState && fail) "-10011" else FID_PUSH_OK }
+        arm("a1")
+        arm("a2")
+        assertEquals(1, delayed.size)
+        assertEquals(OffReport.REGISTER_RETRY_MS, delayed.single().first)
+        assertEquals(listOf(level, powerState), registered)
+        assertEquals(1, OffReport.status("a2").listening)
+
+        delayed.removeAt(0).second.run()
+        assertEquals(listOf(level, powerState, powerState), registered)
+        assertEquals(1, delayed.size)
+
+        fail = false
+        delayed.removeAt(0).second.run()
+        assertTrue(delayed.isEmpty())
+        assertEquals(2, OffReport.status("a2").listening)
+        assertEquals(listOf(level, powerState, powerState, powerState), registered)
     }
 
     @Test fun `the send runs off the vendor thread, and the arm request never prints its secrets`() {

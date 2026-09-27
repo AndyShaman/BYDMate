@@ -29,13 +29,12 @@ internal class PowerOffAutomaton {
 
     /**
      * A value read directly (the listener only reports changes, so a daemon started on a running
-     * car needs this to know the car is on). Never fires: a 0 read here is only forgotten.
+     * car needs this to know the car is on). It only ever marks a fid as seen on: a 0 read here
+     * may be the power-off whose push is still on its way, and forgetting the fid would swallow it.
+     * Only a fire (or a new daemon) ends the cycle.
      */
     fun seed(fid: Int, value: Int) {
-        when {
-            value > 0 -> on += fid
-            value == 0 -> on -= fid
-        }
+        if (value > 0) on += fid
     }
 
     /** True while some fid says the car is on; the next drop to 0 fires. */

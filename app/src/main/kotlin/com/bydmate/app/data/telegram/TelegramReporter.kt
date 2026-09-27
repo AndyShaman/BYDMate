@@ -176,13 +176,23 @@ class TelegramReporter @Inject constructor(
         }
     }
 
+    /** «BYDMate: последнее состояние машины на HH:MM», the header of a re-send without proof. */
+    fun lastStateHeader(atMs: Long): String =
+        appStrings.get(R.string.tg_report_header_last_state, TelegramReportBuilder.formatTime(atMs))
+
     /**
-     * Puts a report in the outbox; past [OUTBOX_MAX] the oldest ones go. [createdMs] is when the report
+     * Puts a report in the outbox; past [OUTBOX_MAX] the oldest ones go. An id already queued is
+     * ignored, so a re-send repeated after a crash between two writes is still one message. [createdMs] is when the report
      * describes the car: phase B passes the power-off time of a report the daemon could not send.
      */
     suspend fun enqueue(entry: OutboxEntry) {
         outboxMutex.withLock {
-            val queue = (loadOutbox() + entry).sortedBy { it.createdMs }
+            val current = loadOutbox()
+            if (current.any { it.id == entry.id }) {
+                Log.i(TAG, "outbox add id=${entry.id} skipped: already queued")
+                return
+            }
+            val queue = (current + entry).sortedBy { it.createdMs }
             val kept = queue.takeLast(OUTBOX_MAX)
             saveOutbox(kept)
             Log.i(TAG, "outbox add id=${entry.id} size=${kept.size} evicted=${queue.size - kept.size}")
@@ -204,6 +214,7 @@ class TelegramReporter @Inject constructor(
                 "fields=[${ReportField.toCsv(settings.getTgReportOffFields())}] armed=$armedAge " +
                 "daemon=${offState.daemon} outbox=${outboxSize()}",
             "telegram report last_off: ${offState.lastOffLine()}",
+            "telegram report listener: ${offState.listenerLine()}",
         )
     }
 

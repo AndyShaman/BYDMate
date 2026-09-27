@@ -1,5 +1,10 @@
 package com.bydmate.app.helper.offreport
 
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+
 /** What one send attempt came to: [rc] for the log, [verdict] for the loop. */
 internal class AttemptResult(val rc: String, val verdict: Verdict) {
     enum class Verdict { SENT, RETRY, STOP }
@@ -14,6 +19,14 @@ internal class RetryResult(val sent: Boolean, val attempts: Int, val rc: String)
  * [OffReportRetry.INTERVAL_MS] with timeouts clamped to what is left of the window.
  *
  * [offAt] and [clock] are on the same monotonic clock; [attempt] gets the connect and read timeouts.
+ * Attempts never overlap. An attempt spends at most [CONNECT_TIMEOUT_MS] resolving the host
+ * ([callWithin]), [CONNECT_TIMEOUT_MS] connecting and [READ_TIMEOUT_MS] reading, each capped to
+ * what was left when it started, so the whole send ends by [MAX_WALL_MS] after the power-off:
+ * the deadline plus at most one attempt in flight.
+ *
+ * Not idempotent (accepted): when Telegram took the POST but the answer was lost with the network,
+ * the next attempt or the app's re-send delivers the report a second time. The Bot API has no
+ * dedup key for sendMessage.
  */
 internal object OffReportRetry {
     const val DEADLINE_MS = 8_000L
@@ -23,6 +36,9 @@ internal object OffReportRetry {
 
     /** Below this much time left an attempt could not even connect, so the loop stops. */
     const val MIN_ATTEMPT_MS = 250L
+
+    /** Upper bound of one send from the power-off to its outcome. */
+    const val MAX_WALL_MS = DEADLINE_MS + 2 * CONNECT_TIMEOUT_MS + READ_TIMEOUT_MS
 
     @Suppress("LongParameterList") // the loop is exactly these seams
     fun run(
@@ -57,6 +73,25 @@ internal object OffReportRetry {
         httpCode in HTTP_OK_FIRST..HTTP_OK_LAST -> AttemptResult.Verdict.SENT
         httpCode == HTTP_TOO_MANY_REQUESTS || httpCode >= HTTP_SERVER_ERROR -> AttemptResult.Verdict.RETRY
         else -> AttemptResult.Verdict.STOP
+    }
+
+    /**
+     * Runs [block] on a throwaway daemon thread and waits at most [timeoutMs]: DNS lookups ignore
+     * the connect timeout and can hang for seconds while the networks go down. Null on timeout (the
+     * thread is interrupted and left behind; it cannot send anything by itself); the block's own
+     * exception is rethrown.
+     */
+    fun <T> callWithin(timeoutMs: Long, block: () -> T): T? {
+        val task = FutureTask(block)
+        Thread(task, "offreport-dns").apply { isDaemon = true }.start()
+        return try {
+            task.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (@Suppress("SwallowedException") e: TimeoutException) { // the timeout is the answer: null
+            task.cancel(true)
+            null
+        } catch (e: ExecutionException) {
+            throw e.cause ?: e
+        }
     }
 
     private const val HTTP_OK_FIRST = 200
