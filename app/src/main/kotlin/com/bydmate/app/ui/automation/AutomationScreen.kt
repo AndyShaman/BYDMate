@@ -858,7 +858,7 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.appendTriggerSummar
             withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
             append(" ")
             withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
-                append(t.value)
+                append(triggerValueLabel(t, summaryCtx))
             }
         }
     }

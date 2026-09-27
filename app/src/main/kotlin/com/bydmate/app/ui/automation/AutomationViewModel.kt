@@ -102,6 +102,10 @@ fun TriggerParamOption.localizedEnumLabel(value: String, context: Context): Stri
     enumValues?.firstOrNull { it.first == value }
         ?.let { context.appLocalizedContext().getString(it.second) } ?: value
 
+/** A trigger value as the rule card shows it: an enum code by its localized name, anything else as stored. */
+fun triggerValueLabel(trigger: TriggerDef, context: Context): String =
+    TRIGGER_PARAMS.firstOrNull { it.param == trigger.param }?.localizedEnumLabel(trigger.value, context) ?: trigger.value
+
 fun ActionOption.localizedName(context: Context): String {
     val lc = context.appLocalizedContext()
     // A toggle entry reuses the target's own name and reads as «Багажник: переключить».
