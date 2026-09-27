@@ -16,11 +16,13 @@ import com.bydmate.app.data.local.LocalePreferences
 import androidx.annotation.StringRes
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.R
+import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.RuleDraftValidator
 import com.bydmate.app.data.automation.RuleInserts
+import com.bydmate.app.data.automation.RuleJournal
 import com.bydmate.app.data.automation.RuleParseResult
 import com.bydmate.app.data.automation.RuleShare
 import com.bydmate.app.data.automation.RuleShareFiles
@@ -61,6 +63,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import javax.inject.Inject
@@ -440,6 +443,13 @@ data class AutomationUiState(
     val shareInProgress: Boolean = false,
     /** The Telegram bot is connected in Settings: the report dialog warns when it is not. */
     val tgBotConnected: Boolean = false,
+    /** The newest journal entry of each rule, by rule id: the status line on its card. */
+    val lastLogs: Map<Long, RuleLogEntity> = emptyMap(),
+    /** The journal shows only this rule's entries: opened from the rule's status line. */
+    val journalRuleId: Long? = null,
+    val ruleLogs: List<RuleLogEntity> = emptyList(),
+    /** A short note at the bottom of the tab (rule limit, test run refused); the screen hides it. */
+    val message: String? = null,
 )
 
 @HiltViewModel
@@ -474,6 +484,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
     internal var shareSheet: (File) -> Unit = { startShareSheet(it) }
 
     private var testRunJob: Job? = null
+    private var ruleJournalJob: Job? = null
     private var importJob: Job? = null
     private var draftToken = 0L
 
@@ -502,6 +513,11 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         viewModelScope.launch {
             ruleLogDao.getRecent(100).collect { logs ->
                 _uiState.update { it.copy(logs = logs) }
+            }
+        }
+        viewModelScope.launch {
+            ruleLogDao.getLastPerRule().collect { last ->
+                _uiState.update { it.copy(lastLogs = last.associateBy { l -> l.ruleId }) }
             }
         }
         viewModelScope.launch {
@@ -588,7 +604,10 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
     // --- Editor ---
 
     fun openNewRule() {
-        if (_uiState.value.rules.size >= MAX_RULES) return
+        if (_uiState.value.rules.size >= MAX_RULES) {
+            showLimitMessage()
+            return
+        }
         editorSession++
         _uiState.update {
             it.copy(
@@ -823,8 +842,8 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                 createdAt = System.currentTimeMillis()
             )
             if (RuleInserts.insertWithinLimit(ruleDao, copy, MAX_RULES) == null) {
-                // The refusal the driver sees comes with the card redesign; the copy is not made.
                 Log.i("AutomationViewModel", "copy of rule ${rule.id} refused: limit of $MAX_RULES rules reached")
+                showLimitMessage()
             }
         }
     }
@@ -847,8 +866,32 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
 
     // --- Journal ---
 
-    fun showJournal() { _uiState.update { it.copy(showJournal = true) } }
-    fun hideJournal() { _uiState.update { it.copy(showJournal = false) } }
+    fun showJournal() {
+        ruleJournalJob?.cancel()
+        _uiState.update { it.copy(showJournal = true, journalRuleId = null, ruleLogs = emptyList()) }
+    }
+
+    /** The status line on a card: the journal of this rule only, all its entries. */
+    fun showRuleJournal(ruleId: Long) {
+        ruleJournalJob?.cancel()
+        _uiState.update { it.copy(showJournal = true, journalRuleId = ruleId, ruleLogs = emptyList()) }
+        ruleJournalJob = viewModelScope.launch {
+            ruleLogDao.getByRule(ruleId).collect { logs -> _uiState.update { it.copy(ruleLogs = logs) } }
+        }
+    }
+
+    fun hideJournal() {
+        ruleJournalJob?.cancel()
+        _uiState.update { it.copy(showJournal = false, journalRuleId = null, ruleLogs = emptyList()) }
+    }
+
+    // --- Note at the bottom of the tab ---
+
+    fun dismissMessage() { _uiState.update { it.copy(message = null) } }
+
+    private fun showLimitMessage() {
+        _uiState.update { it.copy(message = context.appLocalizedContext().getString(R.string.auto_ui_limit, MAX_RULES)) }
+    }
 
     // --- Test run ---
 
@@ -861,9 +904,10 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
      * dispatcher lets a window or the sunroof open with no snapshot at all, and a stale speed 0
      * passes every gate. Without one the action is skipped and counted as not done; so is an
      * action the pre-check cannot classify. Closing the editor stops the run.
-     * The trigger conditions, «Только на паркинге», cooldown, «Раз за поездку» and «Спрашивать
-     * подтверждение» are skipped: the button press is the confirmation. Nothing is written:
-     * no lastTriggeredAt / triggerCount update and no journal entry.
+     * «Только на парковке» holds as when the rule fires: off P the run is refused with a note,
+     * and a saved rule gets the refusal in its journal. The trigger conditions, cooldown, «Раз за
+     * поездку» and «Спрашивать подтверждение» are skipped: the button press is the confirmation.
+     * Otherwise a run writes no lastTriggeredAt / triggerCount update and no journal entry.
      */
     fun testRun() {
         val e = _uiState.value.editing
@@ -871,6 +915,19 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         val actionError = validateActions(e.actions)
         if (actionError != null) {
             _uiState.update { it.copy(editorError = actionError) }
+            return
+        }
+        val gear = liveSnapshot()?.gear
+        if (e.requirePark && gear != 1) {
+            Log.i("AutomationViewModel", "test run refused: park only, gear=$gear")
+            _uiState.update { it.copy(message = context.appLocalizedContext().getString(R.string.auto_ui_test_park)) }
+            if (!e.isNew) {
+                viewModelScope.launch {
+                    val rule = ruleDao.getById(e.id) ?: return@launch
+                    RuleJournal(ruleLogDao, AppStrings(context))
+                        .parkRequired(rule, JSONObject().put(TEST_RUN_KEY, true).toString(), gear)
+                }
+            }
             return
         }
         _uiState.update { it.copy(testRunning = true, editorError = null) }
