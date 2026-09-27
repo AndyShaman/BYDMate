@@ -47,18 +47,53 @@ class HelperClientWriteGuardTest {
         override fun unlinkToDeath(recipient: IBinder.DeathRecipient, flags: Int): Boolean = true
     }
 
-    /** Blocks inside transact() until [release] opens, simulating another helper call holding
-     *  the mutex for a while; counts how many times the transact actually ran. [release]'s own
-     *  await is bounded too: withTimeout on the test coroutine cannot interrupt a raw blocked
-     *  thread, so a latch that is never opened must fail the test instead of hanging it. */
-    private class BlockingFake(private val release: CountDownLatch, private val status: Int = 1) : FakeIBinder() {
+    /** Blocks its very first transact() call (regardless of code) until [release] opens, standing
+     *  in for another slow helper call holding the mutex; every transact after that answers
+     *  TX_READ_BATCH/TX_WRITE immediately. Used by the queue test so the second write's guard goes
+     *  through a REAL TX_READ_BATCH round-trip on this same binder — [readSawFirstReturned] and
+     *  [readSawMutexLocked] are recorded AT THE MOMENT that read runs, proving the ordering a guard
+     *  moved before the mutex would break, instead of inferring it from a wall-clock wait (2026-09-27,
+     *  review round 5). [release]'s own await is bounded too: withTimeout on the test coroutine
+     *  cannot interrupt a raw blocked thread, so a latch that is never opened must fail the test
+     *  instead of hanging it. */
+    private class QueueGuardFake(
+        private val release: CountDownLatch,
+        private val speedNowHigh: AtomicBoolean,
+        private val guardReadHappened: CountDownLatch,
+        private val writeStatus: Int = 1,
+    ) : FakeIBinder() {
         val transactCount = AtomicInteger(0)
         val started = CountDownLatch(1)
+        /** Set right as the first (blocked) call's transact returns. */
+        val firstReturned = AtomicBoolean(false)
+        /** Bound to [HelperClientImpl.transportLockedForTest] once the client under test exists. */
+        lateinit var mutexLockedNow: () -> Boolean
+        val readSawFirstReturned = AtomicBoolean(false)
+        val readSawMutexLocked = AtomicBoolean(false)
+
         override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-            transactCount.incrementAndGet()
-            started.countDown()
-            assertTrue("release latch never opened", release.await(LATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS))
-            reply!!.writeInt(status); reply.writeInt(0)
+            if (transactCount.incrementAndGet() == 1) {
+                started.countDown()
+                assertTrue("release latch never opened", release.await(LATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+                reply!!.writeInt(writeStatus); reply.writeInt(0)
+                reply.setDataPosition(0)
+                firstReturned.set(true)
+                return true
+            }
+            when (code) {
+                HelperBinderProtocol.TX_READ_BATCH -> {
+                    readSawFirstReturned.set(firstReturned.get())
+                    readSawMutexLocked.set(mutexLockedNow())
+                    guardReadHappened.countDown()
+                    reply!!.writeInt(1)          // one item
+                    reply.writeInt(0)            // status ok
+                    reply.writeInt(java.lang.Float.floatToRawIntBits(if (speedNowHigh.get()) 200f else 0f))
+                }
+                HelperBinderProtocol.TX_WRITE -> {
+                    reply!!.writeInt(writeStatus); reply.writeInt(0)
+                }
+                else -> return false
+            }
             reply.setDataPosition(0)
             return true
         }
@@ -121,14 +156,16 @@ class HelperClientWriteGuardTest {
         runBlocking {
             withTimeout(TEST_TIMEOUT_MS) {
                 val holdLatch = CountDownLatch(1)
-                val fake = BlockingFake(holdLatch)
-                val client = clientWith(fake)
                 val speedNowHigh = AtomicBoolean(false)
+                val guardReadHappened = CountDownLatch(1)
+                val fake = QueueGuardFake(holdLatch, speedNowHigh, guardReadHappened)
+                val client = clientWith(fake)
+                fake.mutexLockedNow = { client.transportLockedForTest }
                 val guardCalls = AtomicInteger(0)
                 val secondCallEntered = CountDownLatch(1)
 
                 // Dispatchers.IO, not the bare default: runBlocking's own dispatcher is a single
-                // cooperative event loop on THIS thread, and BlockingFake.transact blocks that
+                // cooperative event loop on THIS thread, and QueueGuardFake.transact blocks that
                 // thread with a raw (non-suspending) CountDownLatch.await() — without a real
                 // dispatcher here, the loop would never get a turn to start this coroutine's
                 // body, and fake.started.await() would hang forever waiting for a transact()
@@ -150,27 +187,40 @@ class HelperClientWriteGuardTest {
                     // the second call's firing reaches this latch.
                     client.onBeforeLock = { secondCallEntered.countDown() }
 
+                    // Set before the second call is even dispatched, so whichever moment its guard's
+                    // batch read actually runs — correctly queued behind the first call, or (a
+                    // regression) racing ahead of it — that read sees a high speed and must refuse.
+                    speedNowHigh.set(true)
+
                     val secondCall = async(Dispatchers.IO) {
                         runCatching {
-                            client.writeStatus(dev = 1023, fid = 1276260400, value = 4) {
+                            client.writeStatus(dev = 1023, fid = 1276260400, value = 4) { reader ->
                                 guardCalls.incrementAndGet()
-                                !speedNowHigh.get()
+                                val speed = reader.readFloat(1013, -1807745016)
+                                speed != null && speed < 100f // 100 well below the 200f "sped past" reply
                             }
                         }
                     }
                     secondCallEntered.awaitOrFail("the second call never reached the lock")
 
-                    // The mutex is still held by the (blocked) first call: a short bounded wait
-                    // gives a regression — the guard running BEFORE the mutex is acquired — a
-                    // real chance to show up as a non-zero guardCalls count here.
-                    delay(GUARD_RACE_WINDOW_MS)
-                    assertEquals("the guard must not run before the mutex is acquired", 0, guardCalls.get())
-
-                    // The car speeds past the limit while the drive-mode write is still queued
-                    // behind the first call; only then do we let the first call finish and free
-                    // the mutex.
-                    speedNowHigh.set(true)
+                    // A guard moved before the mutex needs no queue wait at all to run — give it a
+                    // short bounded window to already have read here, then release the first call
+                    // regardless of whether it did. The proof is what QueueGuardFake recorded AT THE
+                    // MOMENT of that read (below), not whether this wait timed out or not: a wall-clock
+                    // race here is exactly what let a misplaced guard slip through undetected before
+                    // (2026-09-27, review round 5).
+                    guardReadHappened.await(GUARD_RACE_WINDOW_MS, TimeUnit.MILLISECONDS)
                     holdLatch.countDown()
+                    guardReadHappened.awaitOrFail("the guard's batch read never happened")
+
+                    assertTrue(
+                        "the guard read must run only after the first (blocked) request's transact returned",
+                        fake.readSawFirstReturned.get(),
+                    )
+                    assertTrue(
+                        "the guard read must run while the transport mutex is held",
+                        fake.readSawMutexLocked.get(),
+                    )
 
                     val result = secondCall.await()
                     firstCall.await()
@@ -178,8 +228,11 @@ class HelperClientWriteGuardTest {
                     assertEquals("guard must run exactly once, after the queue wait", 1, guardCalls.get())
                     assertTrue("a refused guard must surface as WriteGuardRefused",
                         result.exceptionOrNull() is WriteGuardRefused)
-                    assertEquals("the refused write must never reach the binder",
-                        1, fake.transactCount.get())
+                    assertEquals(
+                        "the refused write must never reach the binder: only the first request's " +
+                            "transact and the guard's own read may happen",
+                        2, fake.transactCount.get(),
+                    )
                 } finally {
                     holdLatch.countDown() // idempotent: unblocks the first call if an assertion above failed
                 }
@@ -297,8 +350,9 @@ class HelperClientWriteGuardTest {
          *  coroutine cannot interrupt a raw blocked thread, so a latch that is never opened must
          *  fail fast with a clear assertion instead of hanging the suite. */
         const val LATCH_TIMEOUT_MS = 5_000L
-        /** Short bounded window given to a (correctly implemented) queued second call to prove
-         *  it has NOT run its guard yet while the mutex is still held by the first call. */
+        /** Short bounded window given to a misplaced guard to already have read before the first
+         *  call is released — not the proof itself (see [QueueGuardFake.readSawFirstReturned] /
+         *  [QueueGuardFake.readSawMutexLocked]), only how long the mutant gets a head start. */
         const val GUARD_RACE_WINDOW_MS = 200L
         /** Longer than HelperClientImpl's own GUARD_TIMEOUT_MS (1000 ms). */
         const val SLOW_GUARD_DELAY_MS = 1_500L

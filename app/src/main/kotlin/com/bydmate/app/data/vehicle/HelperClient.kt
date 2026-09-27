@@ -557,6 +557,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
      *  (2026-09-27, review round 3). No-op in production. */
     @Volatile internal var onBeforeLock: (() -> Unit)? = null
 
+    /** Test seam: read-only view of whether [mutex] is currently held, so a test can prove a
+     *  guard read ran WHILE the transport lock was held, by ordering rather than by a wall-clock
+     *  wait (2026-09-27, review round 5). No production behaviour depends on this. */
+    internal val transportLockedForTest: Boolean get() = mutex.isLocked
+
     /** Bound to [transactBodyUnlocked] (never [readBatch]) so a guard's beforeSend can read a
      *  live value through the daemon without re-taking the mutex it is already running inside. */
     private val lockedReader = LockedReader { dev, fid -> readFloatLocked(dev, fid) }
@@ -1213,6 +1218,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
      * [transactParsed], which would try to re-take [mutex] and deadlock, since this only ever
      * runs from inside a beforeSend guard that is already holding it. Decoded exactly like
      * NativeParsReader decodes a tx=7 batch reply: sentinel bits -> null.
+     *
+     * This read is a synchronous binder transact exactly like every other helper call made under
+     * this mutex, including the write that follows it; [withTimeoutOrNull] cannot interrupt a
+     * blocked `binder.transact`, so a hung daemon/autoservice holds the mutex here the same way it
+     * would during the write itself. Accepted (2026-09-27, review round 5), not a new failure class.
      */
     private suspend fun readFloatLocked(dev: Int, fid: Int): Float? {
         val item = BatchReadItem(tx = 7, dev = dev, fid = fid) // 7 = getFloat bits
