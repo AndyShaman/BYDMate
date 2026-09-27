@@ -265,7 +265,7 @@ class OffReportTest {
         val delivered = sent.drop(afterOff).single()
         assertEquals("tok-b1", delivered.token)
         assertEquals(
-            "<b>a1 off at ${TelegramReportBuilder.formatTime(offAt)}</b>\n<i>(at ${TelegramReportBuilder.formatTime(offAt)})</i>",
+            "<b>a1 off at ${TelegramReportBuilder.formatTime(offAt)}</b>\n\n<i>(at ${TelegramReportBuilder.formatTime(offAt)})</i>",
             delivered.text,
         )
         assertEquals(0, pending.count())
@@ -275,6 +275,44 @@ class OffReportTest {
 
         arm("b2")
         assertEquals(afterOff + 1, sent.size)
+    }
+
+    @Test fun `a late pending report keeps the map link last, the mark goes right above it`() {
+        answers = { noNet }
+        reads[level] = 2
+        val map = "📍 <a href=\"https://yandex.ru/maps/?pt=1&amp;z=16\">Открыть на карте</a>"
+        arm("a1", "<b>off at ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>\n\n🔋 Заряд <b>64%</b>\n\n$map")
+        push(level, 2)
+        push(level, 0)
+        val offAt = wall
+        push(level, 2)
+
+        answers = { ok }
+        arm("b1")
+        val stamp = TelegramReportBuilder.formatTime(offAt)
+        assertEquals("<b>off at $stamp</b>\n\n🔋 Заряд <b>64%</b>\n\n<i>(at $stamp)</i>\n\n$map", sent.last().text)
+    }
+
+    @Test fun `a pending file written by 3_19_0 is still delivered, its HTML text as it was`() {
+        val offAt = wall - 60_000L
+        val text = "<b>BYDMate: машина выключена в 18:54</b>\nЗаряд 64%\n<a href=\"https://x/?a=1&amp;b=2\">Открыть на карте</a>"
+        val bytes = java.io.ByteArrayOutputStream().also { out ->
+            java.io.DataOutputStream(out).use {
+                it.writeInt(1)
+                it.writeUTF("old1")
+                it.writeLong(42L)
+                it.writeLong(offAt)
+                val raw = text.toByteArray(Charsets.UTF_8)
+                it.writeInt(raw.size)
+                it.write(raw)
+            }
+        }.toByteArray()
+        File(dir, "$offAt-old1.rep").writeBytes(bytes)
+
+        arm("b1")
+        val stamp = TelegramReportBuilder.formatTime(offAt)
+        assertEquals("$text\n\n<i>(at $stamp)</i>", sent.single().text)
+        assertEquals(0, pending.count())
     }
 
     @Test fun `pending reports go oldest first`() {

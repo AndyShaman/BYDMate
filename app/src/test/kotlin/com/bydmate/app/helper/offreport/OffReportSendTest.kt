@@ -8,6 +8,7 @@ import org.junit.Test
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URL
+import java.net.URLDecoder
 import kotlin.concurrent.thread
 
 /**
@@ -53,6 +54,15 @@ class OffReportSendTest {
         val start = System.nanoTime()
         val result = block()
         return result to (System.nanoTime() - start) / 1_000_000
+    }
+
+    @Test fun `the body asks for Telegram HTML with no link preview`() {
+        val body = OffReport.sendMessageBody(42L, "<b>a & b</b>")
+        val fields = body.split('&').associate { it.substringBefore('=') to URLDecoder.decode(it.substringAfter('='), "UTF-8") }
+        assertEquals("42", fields["chat_id"])
+        assertEquals("HTML", fields["parse_mode"])
+        assertEquals("""{"is_disabled":true}""", fields["link_preview_options"])
+        assertEquals("<b>a & b</b>", fields["text"])
     }
 
     @Test fun `a status line that never ends is cut at the attempt deadline and retried`() {

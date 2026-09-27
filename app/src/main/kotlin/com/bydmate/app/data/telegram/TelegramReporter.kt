@@ -160,8 +160,8 @@ class TelegramReporter @Inject constructor(
                 }
                 val now = clock()
                 val late = entry.lateMark && now - entry.createdMs > LATE_MARK_AFTER_MS
-                val text = if (late) entry.text + "\n" + lateMark(entry.createdMs, now) else entry.text
-                val result = sink.sendMessage(config.token, entry.chatId, text, PARSE_MODE)
+                val text = if (late) TelegramReportBuilder.withLateMark(entry.text, lateMark(entry.createdMs, now)) else entry.text
+                val result = sink.sendMessage(config.token, entry.chatId, text, PARSE_MODE, linkPreview = false)
                 val failure = result.exceptionOrNull()
                 val ageS = (now - entry.createdMs) / 1000
                 when {
@@ -224,7 +224,7 @@ class TelegramReporter @Inject constructor(
 
     private suspend fun deliver(id: String, config: TgBackupConfig, chatId: Long, text: String, builtAtMs: Long): SendResult {
         val generationBeforeSend = drainGeneration.get()
-        val failure = sink.sendMessage(config.token, chatId, text, PARSE_MODE).exceptionOrNull()
+        val failure = sink.sendMessage(config.token, chatId, text, PARSE_MODE, linkPreview = false).exceptionOrNull()
         return when {
             failure == null -> {
                 Log.i(TAG, "send id=$id rc=ok")

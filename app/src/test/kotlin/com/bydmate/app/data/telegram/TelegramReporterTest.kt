@@ -78,7 +78,7 @@ class TelegramReporterTest {
 
     private fun answer(results: List<Result<Unit>> = emptyList()) {
         val queue = ArrayDeque(results)
-        coEvery { sink.sendMessage("tok", any(), any(), "HTML") } answers {
+        coEvery { sink.sendMessage("tok", any(), any(), "HTML", false) } answers {
             sent += thirdArg<String>()
             queue.removeFirstOrNull() ?: Result.success(Unit)
         }
@@ -92,14 +92,15 @@ class TelegramReporterTest {
     @Test fun `no bot connected sends nothing`() = runBlocking {
         answer()
         assertEquals(TelegramReporter.SendResult.NotConnected, reporter.sendRuleReport("Где машина", ReportField.DEFAULT, ""))
-        coVerify(exactly = 0) { sink.sendMessage(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { sink.sendMessage(any(), any(), any(), any(), any()) }
     }
 
-    @Test fun `a sent report goes out as Telegram HTML with the rule name`() = runBlocking {
+    @Test fun `a sent report goes out as Telegram HTML without a link preview, with the rule name`() = runBlocking {
         connect()
         answer(listOf(Result.success(Unit)))
         assertEquals(TelegramReporter.SendResult.Sent, reporter.sendRuleReport("Где машина", setOf(ReportField.SOC), ""))
-        assertEquals(listOf("<b>BYDMate: Где машина</b>\nЗаряд 64%"), sent)
+        assertEquals(listOf("<b>BYDMate: Где машина</b>\n\n🔋 Заряд <b>64%</b>"), sent)
+        coVerify(exactly = 1) { sink.sendMessage("tok", chat, any(), "HTML", false) }
         assertEquals(0, reporter.outboxSize())
     }
 
@@ -151,8 +152,27 @@ class TelegramReporterTest {
         reporter.enqueue(entry("fresh", now - 60_000L))
         reporter.drainOutbox("test")
         val stamp = TelegramReportBuilder.formatTime(now - 3 * 60_000L)
-        assertEquals("text old\n<i>(записано в $stamp)</i>", sent[0])
+        assertEquals("text old\n\n<i>(записано в $stamp)</i>", sent[0])
         assertEquals("text fresh", sent[1])
+    }
+
+    @Test fun `a late report keeps the map link last, the mark goes right above it`() = runBlocking {
+        connect()
+        answer()
+        val map = "📍 <a href=\"https://yandex.ru/maps/?pt=1&amp;z=16\">Открыть на карте</a>"
+        reporter.enqueue(OutboxEntry("m", chat, now - 3 * 60_000L, "<b>h</b>\n\n🔋 Заряд <b>64%</b>\n\n$map"))
+        reporter.drainOutbox("test")
+        val stamp = TelegramReportBuilder.formatTime(now - 3 * 60_000L)
+        assertEquals("<b>h</b>\n\n🔋 Заряд <b>64%</b>\n\n<i>(записано в $stamp)</i>\n\n$map", sent.single())
+    }
+
+    @Test fun `an outbox entry saved by 3_19_0 still goes out as Telegram HTML`() = runBlocking {
+        settings.setTgReportOutbox("""[{"id":"old1","chat":$chat,"created":$now,"text":"<b>BYDMate: A</b>\nЗаряд 64%","late":true}]""")
+        connect()
+        answer()
+        reporter.drainOutbox("test")
+        assertEquals(listOf("<b>BYDMate: A</b>\nЗаряд 64%"), sent)
+        coVerify(exactly = 1) { sink.sendMessage("tok", chat, any(), "HTML", false) }
     }
 
     @Test fun `a power-off report is never marked late, its header has the time`() = runBlocking {
@@ -211,7 +231,7 @@ class TelegramReporterTest {
         val report = reporter.powerOffReport()!!
         assertEquals("tok", report.token)
         assertEquals(chat, report.chatId)
-        assertEquals("<b>BYDMate: машина выключена в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>\nЗаряд 64%", report.text)
+        assertEquals("<b>BYDMate: машина выключена в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>\n\n🔋 Заряд <b>64%</b>", report.text)
         assertEquals("<i>(записано в ${TelegramReportBuilder.TIME_PLACEHOLDER})</i>", report.lateMark)
         assertFalse(report.toString().contains("tok"))
     }
@@ -225,14 +245,14 @@ class TelegramReporterTest {
         reporter.inputs = { ReportInputs(diParsData(soc = 63), 312.0, null, null, null, null) }
         val second = reporter.powerOffReport(first)!!
         assertFalse(second.id == first.id)
-        assertTrue(second.text.endsWith("63%"))
+        assertTrue(second.text.endsWith("<b>63%</b>"))
     }
 
     @Test fun `a drain that runs while a send is in flight still catches the report once it fails`() = runBlocking {
         connect()
         val proceed = CompletableDeferred<Unit>()
         var callCount = 0
-        coEvery { sink.sendMessage("tok", any(), any(), "HTML") } coAnswers {
+        coEvery { sink.sendMessage("tok", any(), any(), "HTML", false) } coAnswers {
             callCount++
             sent += thirdArg<String>()
             if (callCount == 1) {
@@ -260,7 +280,7 @@ class TelegramReporterTest {
     @Test fun `a slow failing send is marked late from when it was built, not when it failed`() = runBlocking {
         connect()
         val buildMs = now
-        coEvery { sink.sendMessage("tok", any(), any(), "HTML") } coAnswers {
+        coEvery { sink.sendMessage("tok", any(), any(), "HTML", false) } coAnswers {
             sent += thirdArg<String>()
             now += 3 * 60_000L // the network attempt takes its time before failing
             failure(TelegramError.NO_NETWORK)
@@ -276,7 +296,7 @@ class TelegramReporterTest {
     @Test fun `a cancelled send propagates and leaves the outbox untouched`() = runBlocking {
         connect()
         reporter.enqueue(entry("existing", now))
-        coEvery { sink.sendMessage("tok", any(), any(), "HTML") } throws CancellationException("job cancelled")
+        coEvery { sink.sendMessage("tok", any(), any(), "HTML", false) } throws CancellationException("job cancelled")
         var caught = false
         try {
             reporter.sendRuleReport("R", setOf(ReportField.SOC), "")
