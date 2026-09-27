@@ -46,6 +46,8 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     // stop() -- called on barge-in -- can never let a sentence still awaiting synthesis play
     // out after the caller already considers speech stopped.
     @Volatile private var cancelActive: (() -> Unit)? = null
+    // Whether cancelActive belongs to a queue (an agent reply) rather than a single speak().
+    @Volatile private var activeIsQueue = false
 
     // Short phrases (persona confirmations) replay from memory instead of paying a network
     // round-trip every time. The key carries source + gender + voice identity + text, so a switch
@@ -70,11 +72,13 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         val backend = onlineBackend()
         Log.i(TAG, "route: source=${backend?.id ?: OFFLINE}")
         if (backend == null) return delegate.speak(text)
-        // A new reply supersedes the previous one: its sentence still awaiting synthesis must not
-        // play after (or between) the new reply's audio.
-        cancelActive?.invoke()
+        // A new reply supersedes an agent reply queue still awaiting synthesis: its sentences must
+        // not play after (or between) the new audio. A previous single speak() is left alone, so
+        // an automation's consecutive "speak" actions all still play.
+        if (activeIsQueue) cancelActive?.invoke()
         val job = scope.launch { speakOnline(backend, text) }
         cancelActive = { job.cancel() }
+        activeIsQueue = false
         return true
     }
 
@@ -153,9 +157,10 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         val backend = onlineBackend()
         Log.i(TAG, "route: source=${backend?.id ?: OFFLINE}")
         if (backend == null) return delegate.startQueue()
-        cancelActive?.invoke() // see speak(): the previous reply's pending sentences are dropped
+        cancelActive?.invoke() // a new agent reply drops whatever online speech is still pending
         val queue = OnlineSpeechQueue(backend)
         cancelActive = { queue.cancel() }
+        activeIsQueue = true
         return queue
     }
 
