@@ -196,10 +196,12 @@ interface HelperClient {
     suspend fun write(dev: Int, fid: Int, value: Int): Boolean
     /**
      * Raw autoservice setInt status (1 real, 0 no-op, <0 error, null daemon unreachable).
-     * [beforeSend], when given, runs inside the transport mutex, immediately before the
-     * transact — no queue wait behind another request can separate the check from the actual
-     * send. A false return skips the transact entirely and [writeStatus] throws
-     * [WriteGuardRefused].
+     * [beforeSend], when given, runs inside the transport mutex, immediately before EACH
+     * transact attempt — a dead-binder retry re-checks it too, so no queue wait and no stale
+     * verdict from before a retry can separate the check from the actual send. The guard gets
+     * its own bounded budget (GUARD_TIMEOUT_MS, well under the shared timeout) so it cannot
+     * hold the mutex for long either. A false return, or a guard that does not finish in time,
+     * skips the transact entirely and [writeStatus] throws [WriteGuardRefused].
      */
     suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend () -> Boolean)? = null): Int?
     suspend fun isAlive(): Boolean
@@ -540,19 +542,9 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     }
 
     override suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend () -> Boolean)?): Int? {
-        val status = withContext(Dispatchers.IO) {
-            withTimeoutOrNull(REQ_TIMEOUT_MS) {
-                mutex.withLock {
-                    // Runs inside the lock, right before the transact: no queue wait behind
-                    // another queued request can separate this check from the actual send
-                    // (terrain drive-mode speed limit, 2026-09-27).
-                    if (beforeSend != null && !beforeSend()) throw WriteGuardRefused()
-                    transactBodyUnlocked(HelperBinderProtocol.TX_WRITE, {
-                        it.writeInt(dev); it.writeInt(fid); it.writeInt(value)
-                    }) { reply -> if (reply.dataAvail() >= 4) reply.readInt() else null }
-                }
-            }
-        }
+        val status = transactParsed(HelperBinderProtocol.TX_WRITE, {
+            it.writeInt(dev); it.writeInt(fid); it.writeInt(value)
+        }, beforeSend = beforeSend) { reply -> if (reply.dataAvail() >= 4) reply.readInt() else null }
         // status forwarded from the autoservice setInt return code: 1 = real action,
         // 0 = accepted no-op (fid ineffective on this trim), <0 = error, null =
         // daemon unreachable. INFO so a "green" automation that physically did
@@ -1094,25 +1086,31 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         code: Int,
         writeArgs: (Parcel) -> Unit,
         timeoutMs: Long = REQ_TIMEOUT_MS,
+        beforeSend: (suspend () -> Boolean)? = null,
         parse: (Parcel) -> T?,
     ): T? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(timeoutMs) {
-                mutex.withLock { transactBodyUnlocked(code, writeArgs, parse) }
+                mutex.withLock { transactBodyUnlocked(code, writeArgs, beforeSend, parse) }
             }
         }
 
     /**
      * Shared transact body. Assumes [mutex] is already held by the caller.
      * Returns the parsed reply or null on any failure; retries ONCE on a dead cached binder.
+     * [beforeSend], when given, is checked right after the binder is resolved and immediately
+     * before EACH transact attempt below — the retry on a dead binder re-checks it too, so a
+     * verdict from before the retry never reaches the second send (2026-09-27, review round 2).
      */
-    private fun <T> transactBodyUnlocked(
+    private suspend fun <T> transactBodyUnlocked(
         code: Int,
         writeArgs: (Parcel) -> Unit,
+        beforeSend: (suspend () -> Boolean)? = null,
         parse: (Parcel) -> T?,
     ): T? {
         repeat(2) { attempt ->
             val binder = ensureBinder() ?: return null
+            if (beforeSend != null && !runGuard(beforeSend)) throw WriteGuardRefused()
             val data = Parcel.obtain()
             val reply = Parcel.obtain()
             try {
@@ -1132,6 +1130,16 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         }
         return null
     }
+
+    /**
+     * Runs [beforeSend] under its own [GUARD_TIMEOUT_MS] budget, well under the shared
+     * [REQ_TIMEOUT_MS]: a guard slow to decide (e.g. a laggy speed read) must not hold this
+     * mutex for the whole shared write budget, and a caller waiting behind it must not see that
+     * slowness surface as a generic "helper unreachable" — a guard that does not finish in time
+     * is refused exactly like a plain false return (2026-09-27, review round 2).
+     */
+    private suspend fun runGuard(beforeSend: suspend () -> Boolean): Boolean =
+        withTimeoutOrNull(GUARD_TIMEOUT_MS) { beforeSend() } ?: false
 
     /** (status, value) wrapper used by read/write/ping. */
     private suspend fun transact(code: Int, writeArgs: (Parcel) -> Unit): Pair<Int, Int>? =
@@ -1191,6 +1199,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
         private const val TAG = "HelperClient"
         private const val REQ_TIMEOUT_MS = 2000L
+        /** Budget for a [writeStatus] beforeSend guard (e.g. DriveModeChannel's terrain speed
+         *  re-check): well under REQ_TIMEOUT_MS so a slow guard cannot hold the transport mutex
+         *  for the whole shared write budget, or make a caller behind it wait the full 2 s just
+         *  to be told the helper looked "unreachable" (2026-09-27, review round 2). */
+        private const val GUARD_TIMEOUT_MS = 500L
         /** Budget for one daemon-side forcing op. For TX_LAUNCH_FREEFORM it is counted from the
          *  moment the channel is held, and the daemon spends it as: launch retry loop (~9.5s on a
          *  cold start) + pin loop + grace poll sleeps, capped by its GRACE_DEADLINE_MS = 11.5s, plus
