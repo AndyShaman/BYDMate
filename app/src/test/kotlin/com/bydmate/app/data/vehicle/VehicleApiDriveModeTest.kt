@@ -92,4 +92,27 @@ class VehicleApiDriveModeTest {
         coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
         assertEquals("verdict=too fast", verdictRow().error)
     }
+
+    @Test fun `a terrain mode at exactly 15point0 kmh proceeds`() = runTest {
+        kmh = 15.0f
+        supported(DriveMode.SNOW)
+        coEvery { helper.read(1023, target, any()) } returnsMany listOf(1L, 4L)
+        coEvery { helper.writeStatus(1023, 1276260400, 4) } returns 1
+        assertTrue(impl.dispatch("雪地模式").isSuccess)
+    }
+
+    @Test fun `a terrain mode at 15point1 kmh is refused, the fraction is not truncated away`() = runTest {
+        kmh = 15.1f
+        val err = impl.dispatch("雪地模式").exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
+        assertEquals(16, (err as VehicleWriteError.SpeedBlocked).speed)
+        coVerify(exactly = 0) { helper.read(any(), any(), any()) }
+    }
+
+    @Test fun `a terrain mode at 15point9 kmh is refused`() = runTest {
+        kmh = 15.9f
+        val err = impl.dispatch("雪地模式").exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
+        assertEquals(16, (err as VehicleWriteError.SpeedBlocked).speed)
+    }
 }

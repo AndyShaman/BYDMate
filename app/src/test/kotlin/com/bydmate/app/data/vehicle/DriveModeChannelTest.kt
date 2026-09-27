@@ -65,10 +65,10 @@ class DriveModeChannelTest {
         assertTrue(writes.isEmpty())
     }
 
-    @Test fun `a sentinel support flag counts as unsupported`() = runTest {
+    @Test fun `a sentinel support flag is unreadable, not unsupported`() = runTest {
         flags[DriveMode.SNOW.supportFid] = -10011
         targets(1)
-        assertEquals(DriveModeChannel.Result.NOT_SUPPORTED, channel.actuate(DriveMode.SNOW).result)
+        assertEquals(DriveModeChannel.Result.UNREADABLE, channel.actuate(DriveMode.SNOW).result)
         assertTrue(writes.isEmpty())
     }
 
@@ -144,5 +144,24 @@ class DriveModeChannelTest {
         kmh = null
         targets(1, 2)
         assertEquals(DriveModeChannel.Result.OK, channel.actuate(DriveMode.ECO).result)
+    }
+
+    @Test fun `speed rising between the first check and the write is refused with no write`() = runTest {
+        // 10 kmh passes the early check in run(); the target read below (one of the two
+        // suspending reads before the write) simulates the car speeding up while they run.
+        var currentKmh: Int? = 10
+        val localWrites = mutableListOf<Pair<String, Int>>()
+        val localChannel = DriveModeChannel(
+            SeatWriter { name, value -> localWrites += name to value; WriteOutcome.REAL },
+            DriveModeReader { fid ->
+                if (fid == target) { currentKmh = 20; 1 } else 0
+            },
+            speed = { currentKmh },
+        )
+        val out = localChannel.actuate(DriveMode.SNOW)
+        assertEquals(DriveModeChannel.Result.SPEED, out.result)
+        assertEquals("too fast", out.verdict)
+        assertEquals(20, out.speed)
+        assertTrue(localWrites.isEmpty())
     }
 }

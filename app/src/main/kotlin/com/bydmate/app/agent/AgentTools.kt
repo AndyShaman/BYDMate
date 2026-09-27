@@ -27,6 +27,7 @@ import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.remote.InsightStatsAggregator
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
@@ -35,6 +36,9 @@ import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.CommandTranslator
+import com.bydmate.app.data.vehicle.DriveMode
+import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.data.vehicle.WriteAllowlist
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.domain.calculator.RangeEstimate
@@ -146,6 +150,17 @@ class AgentTools @Inject constructor(
     @Inject
     internal fun injectUserPhrases(phrases: VoiceUserPhrases) {
         userPhrases = phrases
+    }
+
+    // Same method-injection reason as splitPrefs above. Null until Hilt injects it; get_vehicle_state
+    // then falls back to the old dev=1006 drive_mode mapping (see driveModeName below).
+    private var helperClient: HelperClient? = null
+
+    /** Called by Hilt after construction; call manually in unit tests of get_vehicle_state's
+     *  drive_mode field. */
+    @Inject
+    internal fun injectHelperClient(client: HelperClient) {
+        helperClient = client
     }
 
     // Same method-injection reason as splitPrefs above. Null until Hilt injects it; where_am_i
@@ -985,8 +1000,9 @@ class AgentTools @Inject constructor(
         }
         // Gun fid: 1=NONE, 2=AC, 3=DC, 4=AC_DC, 5=VTOL -- NONE is 1, not 0.
         putIf("charging_gun_connected", d.chargeGunState?.let { it >= 2 })
-        // 4 = SNOW (ENERGY_OPERATION_SNOW); sand/mud/mountain/smart leave this fid at 3 (live L3 2026-09-27).
-        putIf("drive_mode", when (d.driveMode) { 1 -> "ECO"; 2 -> "SPORT"; 3 -> "NORMAL"; 4 -> "SNOW"; else -> null })
+        // The old dev=1006 fid (d.driveMode) stays 3/NORMAL for sand/mud/mountain/smart (live L3
+        // 2026-09-27); driveModeName reads the real target mode and falls back to it on failure.
+        putIf("drive_mode", driveModeName(d.driveMode))
         putIf("power_state", when (d.powerState) { 0 -> "OFF"; 1 -> "ON"; 2 -> "DRIVE"; else -> null })
         putIf("work_mode", when (d.workMode) { 0 -> "STOP"; 1 -> "EV"; 2 -> "FORCED_EV"; 3 -> "HEV"; else -> null })
         putIf("light_low_beam_on", d.lightLow?.let { it == 1 })
@@ -1049,6 +1065,25 @@ class AgentTools @Inject constructor(
                 }
             }
         return o.toString()
+    }
+
+    /**
+     * Real drive mode name from SETTING_TARGET_DRIVING_MODE (dev=1023, the fid DriveModeChannel
+     * writes and verifies), through the same HelperClient read DriveModeChannel uses -- unlike
+     * the dev=1006 fid in [fallback], it also reflects sand/mud/mountain/rock/smart. Falls back
+     * to the dev=1006 mapping when [helperClient] is unset, the read fails, or it is a sentinel.
+     */
+    private suspend fun driveModeName(fallback: Int?): String? {
+        val target = helperClient?.let { hc ->
+            runCatchingCancellable { hc.read(WriteAllowlist.DRIVE_MODE_DEV, WriteAllowlist.DRIVE_MODE_TARGET_FID)?.toInt() }
+                .getOrNull()
+        }?.let { SentinelDecoder.decodeInt(it) }
+        val name = when (target) {
+            null -> null
+            DriveMode.TARGET_FLOTATION -> "FLOTATION"
+            else -> DriveMode.entries.firstOrNull { it.value == target }?.name
+        }
+        return name ?: when (fallback) { 1 -> "ECO"; 2 -> "SPORT"; 3 -> "NORMAL"; 4 -> "SNOW"; else -> null }
     }
 
     // --- get_weather ---
