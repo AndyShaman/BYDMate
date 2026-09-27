@@ -569,3 +569,24 @@ utterance	expected	category	danger
 выключи фары	UNRECOGNIZED	misc
 выключи подогрев руля и подогрев сидений	UNRECOGNIZED	seats
 выключи подогрев сиденья водителя и подогрев сиденья пассажира	UNRECOGNIZED	seats
+режим эко	ECO模式	drive mode
+эко режим	ECO模式	drive mode
+включи эко режим	ECO模式	drive mode
+включи экорежим	ECO模式	drive mode
+поставь экономичный режим	ECO模式	drive mode
+нормальный режим	普通模式	drive mode
+режим норма	普通模式	drive mode
+включи обычный режим	普通模式	drive mode
+спортивный режим	运动模式	drive mode
+режим спорт	运动模式	drive mode
+включи спортивный режим	运动模式	drive mode
+поставь спорт режим	运动模式	drive mode
+режим снег	雪地模式	drive mode
+включи снежный режим	雪地模式	drive mode
+режим песок	沙地模式	drive mode
+режим грязь	泥地模式	drive mode
+горный режим	山地模式	drive mode
+включи режим горы	山地模式	drive mode
+умный режим	智能模式	drive mode
+выключи спортивный режим	UNRECOGNIZED	drive mode
+закрой окна и спортивный режим	UNRECOGNIZED	drive mode

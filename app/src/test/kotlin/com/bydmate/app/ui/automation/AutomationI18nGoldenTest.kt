@@ -106,6 +106,15 @@ class AutomationI18nGoldenTest {
         "关闭后视镜加热" to Triple("Подогрев зеркал выкл", "Mirror Heat Off", "后视镜加热关"),
         "方向盘加热" to Triple("Подогрев руля вкл", "Steering Wheel Heat On", "方向盘加热开"),
         "关闭方向盘加热" to Triple("Подогрев руля выкл", "Steering Wheel Heat Off", "方向盘加热关"),
+        "ECO模式" to Triple("Режим ЭКО", "ECO mode", "ECO模式"),
+        "普通模式" to Triple("Режим Норма", "Normal mode", "普通模式"),
+        "运动模式" to Triple("Режим Спорт", "Sport mode", "运动模式"),
+        "雪地模式" to Triple("Режим Снег", "Snow mode", "雪地模式"),
+        "沙地模式" to Triple("Режим Песок", "Sand mode", "沙地模式"),
+        "泥地模式" to Triple("Режим Грязь", "Mud mode", "泥地模式"),
+        "山地模式" to Triple("Режим Горы", "Mountain mode", "山地模式"),
+        "岩石模式" to Triple("Режим Камни", "Rock mode", "岩石模式"),
+        "智能模式" to Triple("Умный режим", "Smart mode", "智能模式"),
         "氛围灯打开" to Triple("Амбиент вкл", "Ambient Light On", "氛围灯开"),
         "氛围灯关闭" to Triple("Амбиент выкл", "Ambient Light Off", "氛围灯关"),
         "打开日行灯" to Triple("ДХО вкл", "DRL On", "日行灯开"),
@@ -223,6 +232,15 @@ class AutomationI18nGoldenTest {
         "关闭后视镜加热" to Triple("Зеркала", "Mirrors", "后视镜"),
         "方向盘加热" to Triple("Климат", "Climate", "空调"),
         "关闭方向盘加热" to Triple("Климат", "Climate", "空调"),
+        "ECO模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
+        "普通模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
+        "运动模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
+        "雪地模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
+        "沙地模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
+        "泥地模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
+        "山地模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
+        "岩石模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
+        "智能模式" to Triple("Режим движения", "Drive mode", "驾驶模式"),
         "氛围灯打开" to Triple("Свет", "Light", "灯光"),
         "氛围灯关闭" to Triple("Свет", "Light", "灯光"),
         "打开日行灯" to Triple("Свет", "Light", "灯光"),
@@ -402,9 +420,10 @@ class AutomationI18nGoldenTest {
     // param -> list of (value, ru-label)
     private val parEnumRu = mapOf<String, List<Pair<String, String>>>(
         "Gear" to listOf("1" to "P", "2" to "R", "3" to "N", "4" to "D"),
-        // Live codes (Leopard 3 2026-07-30): 1=ECO, 2=SPORT, 3=NORMAL, 4=any off-road
-        // submode; 0 is the transient switching state and is not offered as a choice.
-        "DriveMode" to listOf("1" to "ECO", "2" to "SPORT", "3" to "NORMAL", "4" to "Внедорожный"),
+        // Live codes (Leopard 3 2026-07-30): 1=ECO, 2=SPORT, 3=NORMAL, 4=SNOW (ENERGY_OPERATION_SNOW,
+        // live 2026-09-27; sand/mud/mountain leave it at 3); 0 is the transient switching state
+        // and is not offered as a choice.
+        "DriveMode" to listOf("1" to "ECO", "2" to "SPORT", "3" to "NORMAL", "4" to "Снег"),
         // Live mask (Leopard 3 2026-07-31): 1=off, 2=left, 4=right, 6=hazard
         "TurnSignal" to listOf("1" to "Выключен", "2" to "Левый", "4" to "Правый", "6" to "Аварийка"),
         "ChargingStatus" to listOf("0" to "Нет", "1" to "Подключён", "2" to "Заряжается"),

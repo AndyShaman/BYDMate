@@ -43,12 +43,18 @@ sealed class VehicleWriteError(
         : VehicleWriteError(action, details)
 
     /**
-     * The car reports the function as absent (state 0; 65535 = no CAN link is not). Raised today
-     * only by SteeringHeatChannel; ActionDispatcher maps it to the steering-heat text, so a
-     * new producer must extend that mapping.
+     * The car reports the function as absent (state 0; 65535 = no CAN link is not). Raised by
+     * SteeringHeatChannel and DriveModeChannel (support flag != 0); ActionDispatcher words it
+     * per action, so a new producer must extend that mapping.
      */
     class NotEquipped(action: String, details: String = "function absent on this car")
         : VehicleWriteError(action, details)
+
+    /**
+     * The car's own state forbids the command right now. Raised only by DriveModeChannel: no
+     * drive mode change while the car holds the emergency flotation mode.
+     */
+    class StateBlocked(action: String, details: String) : VehicleWriteError(action, details)
 
     /**
      * HelperClient returned false for a non-validated entry. The action is in

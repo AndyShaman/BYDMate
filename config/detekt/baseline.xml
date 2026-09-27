@@ -222,7 +222,6 @@
     <ID>LongMethod:AgentTools.kt$AgentTools$private suspend fun vehicleState(): String</ID>
     <ID>LongMethod:AgentTools.kt$AgentTools$suspend fun schemas(includeAutomationTools: Boolean = true): JSONArray</ID>
     <ID>LongMethod:AutomationEngine.kt$AutomationEngine$suspend fun evaluate(data: DiParsData, tripStartedAt: Long?)</ID>
-    <ID>LongMethod:AutomationViewModel.kt$AutomationViewModel$private suspend fun insertStarterTemplatesIfNeeded()</ID>
     <ID>LongMethod:AutoserviceChargingDetector.kt$AutoserviceChargingDetector$suspend fun runCatchUp( now: Long = System.currentTimeMillis(), observedKwAbs: Double? = null ): CatchUpResult</ID>
     <ID>LongMethod:AvmCameraProbe.kt$AvmCameraProbe$@Synchronized private fun openBound(surfaces: Map&lt;Int, Surface&gt;): Boolean</ID>
     <ID>LongMethod:BackupRestoreLimitsTest.kt$BackupRestoreLimitsTest$private fun zipOf(vararg entries: Pair&lt;String, ByteArray&gt;): ByteArray</ID>

@@ -127,7 +127,7 @@ fun ActionOption.localizedCategory(context: Context): String =
 val TRIGGER_PARAMS = listOf(
         TriggerParamOption("Speed", "车速", R.string.auto_param_speed, R.string.auto_cat_driving, R.string.auto_unit_kmh),
         TriggerParamOption("Gear", "档位", R.string.auto_param_gear, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_p, "2" to R.string.auto_enum_code_r, "3" to R.string.auto_enum_code_n, "4" to R.string.auto_enum_code_d)),
-        TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "3" to R.string.auto_enum_code_normal, "4" to R.string.auto_enum_code_offroad)),
+        TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "3" to R.string.auto_enum_code_normal, "4" to R.string.auto_enum_code_snow)),
         // Live codes (Leopard 3 2026-07-31): mask of the blinker lines, holds steady while blinking
         TriggerParamOption("TurnSignal", "转向灯", R.string.auto_param_turnsignal, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_turn_off, "2" to R.string.auto_enum_turn_left, "4" to R.string.auto_enum_turn_right, "6" to R.string.auto_enum_turn_hazard)),
         TriggerParamOption("SOC", "电量百分比", R.string.auto_param_soc, R.string.auto_cat_energy, R.string.auto_unit_percent),
@@ -262,6 +262,15 @@ val ACTION_COMMANDS = listOf(
         ActionOption("方向盘加热", R.string.auto_act_steering_heat_on, R.string.auto_cat_climate),
         ActionOption("关闭方向盘加热", R.string.auto_act_steering_heat_off, R.string.auto_cat_climate),
         ActionOption("", R.string.toggle_target_steering_heat, R.string.auto_cat_climate, toggleTarget = ActionDispatcher.TOGGLE_STEERING_HEAT),
+        ActionOption("ECO模式", R.string.auto_act_drive_mode_eco, R.string.auto_cat_drive_mode),
+        ActionOption("普通模式", R.string.auto_act_drive_mode_normal, R.string.auto_cat_drive_mode),
+        ActionOption("运动模式", R.string.auto_act_drive_mode_sport, R.string.auto_cat_drive_mode),
+        ActionOption("雪地模式", R.string.auto_act_drive_mode_snow, R.string.auto_cat_drive_mode),
+        ActionOption("沙地模式", R.string.auto_act_drive_mode_sand, R.string.auto_cat_drive_mode),
+        ActionOption("泥地模式", R.string.auto_act_drive_mode_mud, R.string.auto_cat_drive_mode),
+        ActionOption("山地模式", R.string.auto_act_drive_mode_mountain, R.string.auto_cat_drive_mode),
+        ActionOption("岩石模式", R.string.auto_act_drive_mode_rock, R.string.auto_cat_drive_mode),
+        ActionOption("智能模式", R.string.auto_act_drive_mode_smart, R.string.auto_cat_drive_mode),
         ActionOption("氛围灯打开", R.string.auto_act_ambient_light_on, R.string.auto_cat_light),
         ActionOption("氛围灯关闭", R.string.auto_act_ambient_light_off, R.string.auto_cat_light),
         ActionOption("打开日行灯", R.string.auto_act_drl_on, R.string.auto_cat_light),
@@ -1084,97 +1093,112 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         val prefs = context.getSharedPreferences("automation", Context.MODE_PRIVATE)
         if (prefs.getBoolean("templates_inserted", false)) return
 
-        val lang = currentLang(context)
-        fun tName(zh: String, en: String, ru: String): String = when (lang) { "zh" -> zh; "ru", "be" -> ru; else -> en }
-
-        val templates = listOf(
-            RuleEntity(
-                name = tName("高速关窗", "Close windows on highway", "Закрыть окна на трассе"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("Speed", "车速", ">", "100",
-                        tName("车速 > 100 km/h", "Speed > 100 km/h", "Скорость > 100 км/ч"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("车窗关闭",
-                        tName("关闭所有车窗", "Close All Windows", "Закрыть все окна"))
-                )),
-                cooldownSeconds = 60
-            ),
-            RuleEntity(
-                name = tName("冬季启动", "Winter start", "Зимний старт"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("ExtTemp", "车外温度", "<", "0",
-                        tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
-                    TriggerDef("PowerState", "电源状态", "==", "2",
-                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("主驾座椅加热2档",
-                        tName("主驾座椅加热2档", "Driver Heat 2", "Подогрев водителя 2")),
-                    ActionDef("后视镜加热",
-                        tName("后视镜加热开", "Mirror Heat On", "Подогрев зеркал вкл"))
-                )),
-                cooldownSeconds = 600
-            ),
-            RuleEntity(
-                name = tName("夏季制冷", "Summer cooling", "Летнее охлаждение"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("InsideTemp", "车内温度", ">", "30",
-                        tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
-                    TriggerDef("PowerState", "电源状态", "==", "2",
-                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("主驾座椅通风1档",
-                        tName("主驾座椅通风1档", "Driver Vent 1", "Вентиляция водителя 1")),
-                    ActionDef("自动空调",
-                        tName("自动空调", "Auto AC", "Авто AC"))
-                )),
-                cooldownSeconds = 600
-            ),
-            RuleEntity(
-                name = tName("行驶开遮阳帘", "Sunshade while driving", "Шторка при движении"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("PowerState", "电源状态", "==", "2",
-                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("遮阳帘打开",
-                        tName("遮阳帘打开", "Sunshade Open", "Открыть шторку"))
-                )),
-                cooldownSeconds = 600
-            ),
-            RuleEntity(
-                name = tName("充电时空调", "Climate while charging", "Климат при зарядке"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("ChargingStatus", "充电状态", "==", "2",
-                        tName("充电状态 = 充电中", "Charging Status = Charging", "Зарядка = Начата")),
-                    TriggerDef("ExtTemp", "车外温度", "<", "5",
-                        tName("车外温度 < 5°C", "Outside Temp < 5°C", "Темп. снаружи < 5°C"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("自动空调",
-                        tName("自动空调", "Auto AC", "Авто AC")),
-                    ActionDef("主驾座椅加热1档",
-                        tName("主驾座椅加热1档", "Driver Heat 1", "Подогрев водителя 1"))
-                )),
-                cooldownSeconds = 600
-            )
-        )
-
-        templates.forEach { ruleDao.insert(it) }
+        starterTemplates(currentLang(context)).forEach { ruleDao.insert(it) }
         prefs.edit().putBoolean("templates_inserted", true).apply()
     }
+}
+
+/** Disabled starter rules a fresh install gets once, named in [lang]. */
+@Suppress("LongMethod") // a data table: one entry per template
+internal fun starterTemplates(lang: String): List<RuleEntity> {
+    fun tName(zh: String, en: String, ru: String): String = when (lang) { "zh" -> zh; "ru", "be" -> ru; else -> en }
+
+    return listOf(
+        RuleEntity(
+            name = tName("高速关窗", "Close windows on highway", "Закрыть окна на трассе"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("Speed", "车速", ">", "100",
+                    tName("车速 > 100 km/h", "Speed > 100 km/h", "Скорость > 100 км/ч"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("车窗关闭",
+                    tName("关闭所有车窗", "Close All Windows", "Закрыть все окна"))
+            )),
+            cooldownSeconds = 60
+        ),
+        RuleEntity(
+            name = tName("冬季启动", "Winter start", "Зимний старт"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("ExtTemp", "车外温度", "<", "0",
+                    tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
+                TriggerDef("PowerState", "电源状态", "==", "2",
+                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("主驾座椅加热2档",
+                    tName("主驾座椅加热2档", "Driver Heat 2", "Подогрев водителя 2")),
+                ActionDef("后视镜加热",
+                    tName("后视镜加热开", "Mirror Heat On", "Подогрев зеркал вкл"))
+            )),
+            cooldownSeconds = 600
+        ),
+        RuleEntity(
+            name = tName("低电量ECO", "ECO at low SOC", "Эко при низком заряде"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("SOC", "电量百分比", "<", "15", "SOC < 15%")
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("ECO模式", tName("ECO 模式", "ECO Mode", "ECO режим"))
+            )),
+            cooldownSeconds = 300
+        ),
+        RuleEntity(
+            name = tName("夏季制冷", "Summer cooling", "Летнее охлаждение"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("InsideTemp", "车内温度", ">", "30",
+                    tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
+                TriggerDef("PowerState", "电源状态", "==", "2",
+                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("主驾座椅通风1档",
+                    tName("主驾座椅通风1档", "Driver Vent 1", "Вентиляция водителя 1")),
+                ActionDef("自动空调",
+                    tName("自动空调", "Auto AC", "Авто AC"))
+            )),
+            cooldownSeconds = 600
+        ),
+        RuleEntity(
+            name = tName("行驶开遮阳帘", "Sunshade while driving", "Шторка при движении"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("PowerState", "电源状态", "==", "2",
+                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("遮阳帘打开",
+                    tName("遮阳帘打开", "Sunshade Open", "Открыть шторку"))
+            )),
+            cooldownSeconds = 600
+        ),
+        RuleEntity(
+            name = tName("充电时空调", "Climate while charging", "Климат при зарядке"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("ChargingStatus", "充电状态", "==", "2",
+                    tName("充电状态 = 充电中", "Charging Status = Charging", "Зарядка = Начата")),
+                TriggerDef("ExtTemp", "车外温度", "<", "5",
+                    tName("车外温度 < 5°C", "Outside Temp < 5°C", "Темп. снаружи < 5°C"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("自动空调",
+                    tName("自动空调", "Auto AC", "Авто AC")),
+                ActionDef("主驾座椅加热1档",
+                    tName("主驾座椅加热1档", "Driver Heat 1", "Подогрев водителя 1"))
+            )),
+            cooldownSeconds = 600
+        )
+    )
 }
 
 /** Stand-in phone for validating an imported rule whose call contact is not picked yet. */

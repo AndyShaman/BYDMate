@@ -71,6 +71,29 @@ class CommandTranslatorTest {
         assertEquals(CommandTranslator.Resolved("steering_heat_off", 1), one("关闭方向盘加热"))
     }
 
+    @Test fun `drive mode commands map to their dev 1023 values`() {
+        val expected = mapOf(
+            "ECO模式" to ("drive_mode_eco" to 2),
+            "普通模式" to ("drive_mode_normal" to 1),
+            "运动模式" to ("drive_mode_sport" to 3),
+            "雪地模式" to ("drive_mode_snow" to 4),
+            "沙地模式" to ("drive_mode_sand" to 5),
+            "泥地模式" to ("drive_mode_mud" to 6),
+            "山地模式" to ("drive_mode_mountain" to 7),
+            "岩石模式" to ("drive_mode_rock" to 8),
+            "智能模式" to ("drive_mode_smart" to 21),
+        )
+        for ((cmd, pair) in expected) {
+            assertEquals(cmd, CommandTranslator.Resolved(pair.first, pair.second), one(cmd))
+            assertEquals(cmd, pair.second, DriveMode.ofAction(pair.first)?.value)
+        }
+    }
+
+    @Test fun `the old D+ ECO string still resolves, with or without its prefix`() {
+        assertEquals(CommandTranslator.Resolved("drive_mode_eco", 2), one("ECO模式"))
+        assertEquals(CommandTranslator.Resolved("drive_mode_eco", 2), one("迪加ECO模式"))
+    }
+
     // ── Test 4: set temperature 22 maps to ac_temp_main val 22 ───────────────
     @Test fun `set temperature 22 maps to ac_temp_main val 22`() {
         val r = one("设置温度22")

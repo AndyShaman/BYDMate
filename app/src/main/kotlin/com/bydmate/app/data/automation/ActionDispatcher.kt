@@ -20,6 +20,8 @@ import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.vehicle.CommandTranslator
+import com.bydmate.app.data.vehicle.DriveMode
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.vehicle.VehicleWriteError
@@ -184,6 +186,23 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             return null
         }
 
+        /** The drive mode [command] selects, or null when it is not a drive mode command. */
+        internal fun driveModeOf(command: String): DriveMode? =
+            CommandTranslator.resolve(command).singleOrNull()?.let { DriveMode.ofAction(it.actionName) }
+
+        /**
+         * Returns a block reason if [command] selects a terrain drive mode (snow, sand, mud,
+         * mountain, rock, smart) above [DriveMode.TERRAIN_MAX_SPEED_KMH] or at unknown speed
+         * (fail-closed). ECO, normal and sport switch at any speed, like BYD's own voice
+         * assistant. Pure function.
+         */
+        internal fun driveModeGateBlockReason(command: String, speed: Int?): BlockReason? {
+            if (driveModeOf(command)?.terrain != true) return null
+            val s = speed ?: return BlockReason.DriveModeSpeedUnknown
+            if (s > DriveMode.TERRAIN_MAX_SPEED_KMH) return BlockReason.DriveModeSpeed(s)
+            return null
+        }
+
         /**
          * True if [command] would OPEN the front trunk — a powered external panel
          * gated to standstill (speed 0). Close is not gated. Pure predicate, kept in
@@ -327,11 +346,22 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
          *  reports NotEquipped (see VehicleWriteError); it and the windows that never moved get
          *  a readable, localized text. */
         internal fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when {
+            err is VehicleWriteError && DriveMode.ofAction(err.action) != null -> driveModeFailureReason(err, strings)
             err is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
             err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
                 stuckWindowsReason(err.stuckPanes, strings)
             else -> err?.message ?: "dispatch failed"
         }
+
+        /** A failed drive mode switch: not on this car, flotation, no change, or no answer. */
+        private fun driveModeFailureReason(err: VehicleWriteError, strings: AppStrings): String = strings.get(
+            when (err) {
+                is VehicleWriteError.NotEquipped -> R.string.drive_mode_not_supported
+                is VehicleWriteError.StateBlocked -> R.string.drive_mode_flotation
+                is VehicleWriteError.ReadbackMismatch -> R.string.drive_mode_not_changed
+                else -> R.string.drive_mode_failed
+            },
+        )
 
         /** «окно водителя не сдвинулось…» for one pane, «не сдвинулись с места: …» for several. */
         private fun stuckWindowsReason(panes: List<WindowPane>, strings: AppStrings): String {
@@ -400,8 +430,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
 
         /**
          * Full safety gate for a raw vehicle command: blocked patterns, frunk
-         * parked-only, door unlock above 30 km/h, window/sunroof speed limits.
-         * Frunk and unlock fail closed on missing telemetry; window/sunroof
+         * parked-only, door unlock above 30 km/h, terrain drive modes above 15 km/h,
+         * window/sunroof speed limits. Frunk, unlock and terrain modes fail closed on missing telemetry; window/sunroof
          * checks are skipped when [data] is null (existing semantics -- callers
          * that need fail-closed window behavior check the snapshot themselves).
          * Pure function -- unit-testable and reusable by manual dispatch paths.
@@ -418,6 +448,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             // Door unlock is a safety gate like the frunk: checked BEFORE the
             // data==null guard so unknown speed blocks the unlock.
             unlockGateBlockReason(command, data?.speed)?.let { return it }
+            // Terrain drive modes fail closed on unknown speed too.
+            driveModeGateBlockReason(command, data?.speed)?.let { return it }
             if (data == null) return null
             return speedGateBlockReason(command, data.speed)
         }
@@ -453,6 +485,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         data object Forbidden : BlockReason()
         data object FrunkSpeedUnknown : BlockReason()
         data class FrunkMoving(val speed: Int) : BlockReason()
+        data object DriveModeSpeedUnknown : BlockReason()
+        data class DriveModeSpeed(val speed: Int) : BlockReason()
 
         fun toText(context: Context): String {
             val lc = context.appLocalizedContext()
@@ -465,6 +499,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
                 is Forbidden -> lc.getString(R.string.gate_forbidden_command)
                 is FrunkSpeedUnknown -> lc.getString(R.string.gate_frunk_speed_unknown)
                 is FrunkMoving -> lc.getString(R.string.gate_frunk_moving, speed)
+                is DriveModeSpeedUnknown -> lc.getString(R.string.gate_drive_mode_speed_unknown)
+                is DriveModeSpeed -> lc.getString(R.string.gate_drive_mode_speed, speed)
             }
         }
     }

@@ -52,6 +52,12 @@ class VehicleApiImpl @Inject constructor(
         SteeringHeatReadback { readSteeringHeatState() },
     )
 
+    private val driveModeChannel = DriveModeChannel(
+        SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
+        DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
+        speed = { FidAddresses.of("speed").let { autoservice.getFloat(it.device, it.fid) }?.toInt() },
+    )
+
     // Owns the window position samples taken around a write. A write that fails before the
     // verdict cancels its sample (see doWrite), so no read outlives its dispatch.
     // internal var (not a constructor param — Hilt's @Inject constructor can't carry a
@@ -110,10 +116,7 @@ class VehicleApiImpl @Inject constructor(
         }
         if (resolved.size == 1) {
             val r = resolved[0]
-            if (r.actionName in STEERING_HEAT_ACTIONS) {
-                // Write + readback (+ fallback write): one unit, like the seat sequence.
-                return withContext(NonCancellable) { steeringHeat(r.actionName) }
-            }
+            channelWrite(r.actionName)?.let { return it }
             // doWrite protects its own window verdict from cancellation, so no wrapper here.
             return doWrite(r.actionName, r.value)
         }
@@ -314,6 +317,15 @@ class VehicleApiImpl @Inject constructor(
     }
 
     /**
+     * Actions that go through a verification channel instead of a bare write, or null. Write +
+     * readback (+ fallback write) run as one unit, like the seat sequence.
+     */
+    private suspend fun channelWrite(action: String): Result<Unit>? = when {
+        action in STEERING_HEAT_ACTIONS -> withContext(NonCancellable) { steeringHeat(action) }
+        else -> DriveMode.ofAction(action)?.let { mode -> withContext(NonCancellable) { driveMode(mode) } }
+    }
+
+    /**
      * Steering wheel heat through its verification channel, as the Result dispatch returns.
      * The per-write audit rows only say the daemon accepted a write; one more row records the
      * channel's verdict: dev = the device of the last write (0 = none), readback = the last
@@ -334,6 +346,33 @@ class VehicleApiImpl @Inject constructor(
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "helper write not accepted"))
             SteeringHeatChannel.Result.UNCONFIRMED ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+        }
+    }
+
+    /**
+     * Drive mode through its verification channel, as the Result dispatch returns. Like the
+     * steering heat verdict row: dev = 1023, readback = the last target mode read, error =
+     * "verdict=<label>" (also on success).
+     */
+    private suspend fun driveMode(mode: DriveMode): Result<Unit> {
+        val outcome = driveModeChannel.actuate(mode)
+        val action = mode.actionName
+        val entry = allowlist.find(action)
+        val ok = outcome.result == DriveModeChannel.Result.OK
+        logWrite(
+            action, WriteAllowlist.DRIVE_MODE_DEV, WriteAllowlist.DRIVE_MODE_WRITE_FID, mode.value,
+            outcome.target, ok, "verdict=${outcome.verdict}", entry?.validated ?: false,
+        )
+        return when (outcome.result) {
+            DriveModeChannel.Result.OK -> Result.success(Unit)
+            DriveModeChannel.Result.NOT_SUPPORTED -> Result.failure(VehicleWriteError.NotEquipped(action))
+            DriveModeChannel.Result.FLOTATION ->
+                Result.failure(VehicleWriteError.StateBlocked(action, "emergency flotation mode"))
+            DriveModeChannel.Result.NOT_CHANGED -> Result.failure(
+                VehicleWriteError.ReadbackMismatch(action, "mode did not change: expected=${mode.value} got=${outcome.target}"),
+            )
+            DriveModeChannel.Result.UNREADABLE, DriveModeChannel.Result.UNREACHABLE ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
         }
     }
 

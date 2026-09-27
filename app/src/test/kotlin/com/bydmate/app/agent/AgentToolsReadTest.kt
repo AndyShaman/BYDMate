@@ -458,6 +458,11 @@ class AgentToolsReadTest {
         assertEquals("EV", out.getString("work_mode"))
     }
 
+    @Test fun `drive mode 4 is snow`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot().copy(driveMode = 4)
+        assertEquals("SNOW", JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).getString("drive_mode"))
+    }
+
     @Test fun `drl 1 is on 2 is off 0 omitted`() = runTest {
         every { gate.vehicleSnapshot() } returns snapshot(drl = 1)
         assertTrue(JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).getBoolean("light_drl_on"))
