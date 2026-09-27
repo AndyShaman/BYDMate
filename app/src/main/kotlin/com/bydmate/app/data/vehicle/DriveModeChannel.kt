@@ -134,24 +134,35 @@ class DriveModeChannel(
 
     /** [DriveModeWriter.beforeSend] guard: for a terrain mode, re-reads speed one last time —
      *  this runs after doWriteOutcome's audit-row insert, inside HelperClient's own transport
-     *  lock right before the transact, so a speed that only rose during that suspend OR while
-     *  queued behind another helper request is still caught — and refuses when it is now
-     *  unknown or above the limit; a non-terrain mode is not gated (no read). Sets
-     *  [Attempt.speedVerdict] so [switchTo] can tell a guard refusal apart from a helper-down
-     *  TRANSIENT, since doWriteOutcome reports both the same way. */
+     *  lock right before EACH transact attempt (retry included), so a speed that only rose
+     *  during that suspend, while queued behind another helper request, or between a dead-binder
+     *  retry, is still caught — and refuses when it is now unknown or above the limit; a
+     *  non-terrain mode is not gated (no read). [Attempt.speedVerdict] is set to "speed unknown"
+     *  BEFORE the read, not after: HelperClient bounds this guard to its own GUARD_TIMEOUT_MS,
+     *  well under the shared write timeout, and a cut-off read must still leave switchTo seeing
+     *  "speed unknown" instead of falling through to a bare "unreachable" — a timeout here is a
+     *  refusal, not a crashed read (2026-09-27, review round 2). */
     private suspend fun terrainSpeedGuard(a: Attempt): Boolean {
         if (!a.mode.terrain) return true
-        a.kmh = readSpeed()
+        a.speedVerdict = "speed unknown"
+        var readFinished = false
+        try {
+            a.kmh = readSpeed()
+            readFinished = true
+        } finally {
+            if (!readFinished) Log.w(TAG, "DriveMode: guard speed read cut off, refusing as speed unknown")
+        }
         val kmh = a.kmh
-        if (kmh != null && kmh <= DriveMode.TERRAIN_MAX_SPEED_KMH) return true
-        a.speedVerdict = if (kmh == null) "speed unknown" else "too fast"
+        if (kmh != null && kmh <= DriveMode.TERRAIN_MAX_SPEED_KMH) { a.speedVerdict = null; return true }
+        if (kmh != null) a.speedVerdict = "too fast"
         return false
     }
 
     /** What one attempt has seen so far; [done] writes its single log line. [kmh] is mutable:
      *  the guard's re-check overwrites it so the log and the Outcome report the speed that
      *  actually decided the verdict, not the stale one from the first check. [speedVerdict] is
-     *  set only when the guard refuses. */
+     *  set only while a terrain guard is pending or has refused; cleared back to null once the
+     *  guard passes. */
     private class Attempt(val mode: DriveMode, var kmh: Int?) {
         var flag: Int? = null
         var before: Int? = null
