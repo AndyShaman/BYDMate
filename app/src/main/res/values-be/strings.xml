@@ -423,7 +423,6 @@
 
     <!-- Rule card context menu -->
     <string name="automation_menu_edit">Змяніць</string>
-    <string name="automation_menu_duplicate">Дубляваць</string>
     <string name="automation_menu_delete">Выдаліць</string>
 
     <!-- Delete confirmation dialog -->
@@ -433,11 +432,7 @@
     <string name="automation_cancel_button">Скасаваць</string>
 
     <!-- Rule card stats -->
-    <string name="automation_rule_triggered_count">Спрацавала: %1$d</string>
-    <string name="automation_rule_last_trigger">Апошні: %1$s</string>
     <string name="automation_rule_cooldown">Паўза: %1$d сек</string>
-    <string name="automation_rule_logic_and"> І </string>
-    <string name="automation_rule_logic_or"> АБО </string>
 
     <!-- Editor dialog -->
     <string name="automation_editor_new_rule_title">Новае правіла</string>
@@ -445,12 +440,8 @@
     <string name="automation_section_when">КАЛІ (умовы)</string>
     <string name="automation_section_then">ТАДЫ (дзеянні)</string>
     <string name="automation_section_settings">НАЛАДЫ</string>
-    <string name="automation_logic_and">І (AND)</string>
-    <string name="automation_logic_or">АБО (OR)</string>
 
     <!-- Settings section in editor -->
-    <string name="automation_setting_cooldown">Паўза паміж спрацоўваннямі</string>
-    <string name="automation_setting_unit_sec">сек</string>
     <string name="automation_setting_park_only">Толькі на паркоўцы (P)</string>
     <string name="automation_setting_confirm_before">Пытацца перад выкананнем</string>
     <string name="automation_setting_once_per_trip">Выканаць адзін раз за паездку</string>
@@ -465,7 +456,6 @@
     <string name="automation_trigger_place_enter_prefix">Уезд у</string>
     <string name="automation_trigger_place_exit_prefix">Выезд з</string>
     <string name="automation_trigger_place_deleted_placeholder">&lt;выдалена&gt;</string>
-    <string name="automation_trigger_time_of_day_label">Час сутак:</string>
     <string name="automation_trigger_day">Дзень</string>
     <string name="automation_trigger_night">Ноч</string>
     <string name="automation_trigger_dawn">Світанак</string>
@@ -484,9 +474,7 @@
     <string name="automation_trigger_type_internet">Даступны інтэрнэт</string>
     <string name="automation_trigger_type_button_press">Націсканне кнопкі</string>
     <string name="automation_trigger_button_label">Кнопка %1$d</string>
-    <string name="automation_trigger_button_picker_label">Кнопка</string>
     <string name="automation_trigger_type_steering_key">Клавіша руля</string>
-    <string name="automation_trigger_steering_key_picker_label">Клавіша руля</string>
     <string name="automation_trigger_steering_key_unassigned">Клавіша не прызначана</string>
     <string name="automation_trigger_steering_key_assign">прызначыць</string>
     <string name="automation_steering_key_occupied_projection">Гэтая клавіша ўключае навігацыю на прыборнай панэлі. Вызваліце яе ў Наладах, раздзел Дысплей, або выберыце іншую.</string>
@@ -513,16 +501,6 @@
     <string name="automation_day_sun">Нд</string>
 
     <!-- Action row: delay -->
-    <string name="automation_action_delay_label">Паўза</string>
-    <string name="automation_delay_0_5s">0,5 сек</string>
-    <string name="automation_delay_1s">1 сек</string>
-    <string name="automation_delay_2s">2 сек</string>
-    <string name="automation_delay_3s">3 сек</string>
-    <string name="automation_delay_5s">5 сек</string>
-    <string name="automation_delay_10s">10 сек</string>
-    <string name="automation_delay_30s">30 сек</string>
-    <string name="automation_delay_60s">1 хв</string>
-    <string name="automation_delay_display_name">Паўза %1$s</string>
 
     <!-- Add action button -->
     <string name="automation_add_action_button">+ Дадаць дзеянне</string>
@@ -617,7 +595,6 @@
     <string name="automation_journal_empty">Журнал пусты</string>
 
     <!-- Journal relative time -->
-    <string name="automation_time_yesterday">учора %1$s</string>
 
     <!-- Places screen -->
     <string name="places_tab_title">Месцы</string>
@@ -1305,7 +1282,6 @@
     <string name="auto_trig_place_enter">Уезд у «%1$s»</string>
     <string name="auto_trig_service_start">Запуск BYDMate</string>
     <string name="auto_trig_network_available">Даступны інтэрнэт</string>
-    <string name="auto_act_delay_1s">Паўза 1 сек</string>
     <string name="auto_act_media_volume">Гучнасць медыя: 2</string>
     <string name="auto_trig_time_of_day_night">Ноч</string>
     <!-- automation: executeNow toast + a11y -->

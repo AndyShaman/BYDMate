@@ -339,7 +339,6 @@
 
     <!-- Rule card context menu -->
     <string name="automation_menu_edit">编辑</string>
-    <string name="automation_menu_duplicate">复制</string>
     <string name="automation_menu_delete">删除</string>
 
     <!-- Delete confirmation dialog -->
@@ -349,11 +348,7 @@
     <string name="automation_cancel_button">取消</string>
 
     <!-- Rule card stats -->
-    <string name="automation_rule_triggered_count">已触发：%1$d</string>
-    <string name="automation_rule_last_trigger">最近：%1$s</string>
     <string name="automation_rule_cooldown">冷却：%1$d 秒</string>
-    <string name="automation_rule_logic_and"> 且 </string>
-    <string name="automation_rule_logic_or"> 或 </string>
 
     <!-- Editor dialog -->
     <string name="automation_editor_new_rule_title">新建规则</string>
@@ -361,12 +356,8 @@
     <string name="automation_section_when">当（条件）</string>
     <string name="automation_section_then">则（动作）</string>
     <string name="automation_section_settings">设置</string>
-    <string name="automation_logic_and">且（AND）</string>
-    <string name="automation_logic_or">或（OR）</string>
 
     <!-- Settings section in editor -->
-    <string name="automation_setting_cooldown">触发间隔</string>
-    <string name="automation_setting_unit_sec">秒</string>
     <string name="automation_setting_park_only">仅在 P 挡时</string>
     <string name="automation_setting_confirm_before">执行前询问</string>
     <string name="automation_setting_once_per_trip">每次行程仅执行一次</string>
@@ -381,7 +372,6 @@
     <string name="automation_trigger_place_enter_prefix">进入</string>
     <string name="automation_trigger_place_exit_prefix">离开</string>
     <string name="automation_trigger_place_deleted_placeholder">&lt;已删除&gt;</string>
-    <string name="automation_trigger_time_of_day_label">时段：</string>
     <string name="automation_trigger_day">白天</string>
     <string name="automation_trigger_night">夜晚</string>
     <string name="automation_trigger_dawn">黎明</string>
@@ -399,9 +389,7 @@
     <string name="automation_trigger_type_internet">网络可用</string>
     <string name="automation_trigger_type_button_press">按钮按下</string>
     <string name="automation_trigger_button_label">按钮 %1$d</string>
-    <string name="automation_trigger_button_picker_label">按钮</string>
     <string name="automation_trigger_type_steering_key">方向盘按键</string>
-    <string name="automation_trigger_steering_key_picker_label">方向盘按键</string>
     <string name="automation_trigger_steering_key_unassigned">未分配按键</string>
     <string name="automation_trigger_steering_key_assign">分配</string>
     <string name="automation_steering_key_occupied_projection">该按键用于开启仪表盘导航。请在设置的显示部分释放该按键，或选择其他按键。</string>
@@ -429,16 +417,6 @@
     <string name="automation_day_sun">日</string>
 
     <!-- Action row: delay -->
-    <string name="automation_action_delay_label">延迟</string>
-    <string name="automation_delay_0_5s">0.5 秒</string>
-    <string name="automation_delay_1s">1 秒</string>
-    <string name="automation_delay_2s">2 秒</string>
-    <string name="automation_delay_3s">3 秒</string>
-    <string name="automation_delay_5s">5 秒</string>
-    <string name="automation_delay_10s">10 秒</string>
-    <string name="automation_delay_30s">30 秒</string>
-    <string name="automation_delay_60s">1 分钟</string>
-    <string name="automation_delay_display_name">延迟 %1$s</string>
 
     <!-- Add action button -->
     <string name="automation_add_action_button">+ 添加动作</string>
@@ -496,7 +474,6 @@
     <string name="automation_journal_empty">日志为空</string>
 
     <!-- Journal relative time -->
-    <string name="automation_time_yesterday">昨天 %1$s</string>
 
     <!-- Places screen -->
     <string name="places_tab_title">地点</string>
@@ -1268,7 +1245,6 @@
     <string name="auto_trig_place_enter">进入「%1$s」</string>
     <string name="auto_trig_service_start">BYDMate 启动</string>
     <string name="auto_trig_network_available">网络可用</string>
-    <string name="auto_act_delay_1s">延迟 1 秒</string>
     <string name="auto_act_media_volume">媒体音量: 2</string>
     <string name="auto_trig_time_of_day_night">夜晚</string>
     <!-- automation: executeNow toast + a11y -->

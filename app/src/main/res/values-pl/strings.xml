@@ -423,7 +423,6 @@
 
     <!-- Rule card context menu -->
     <string name="automation_menu_edit">Edytuj</string>
-    <string name="automation_menu_duplicate">Duplikuj</string>
     <string name="automation_menu_delete">Usuń</string>
 
     <!-- Delete confirmation dialog -->
@@ -433,11 +432,7 @@
     <string name="automation_cancel_button">Anuluj</string>
 
     <!-- Rule card stats -->
-    <string name="automation_rule_triggered_count">Uruchomień: %1$d</string>
-    <string name="automation_rule_last_trigger">Ostatnie: %1$s</string>
     <string name="automation_rule_cooldown">Pauza: %1$d s</string>
-    <string name="automation_rule_logic_and"> I </string>
-    <string name="automation_rule_logic_or"> LUB </string>
 
     <!-- Editor dialog -->
     <string name="automation_editor_new_rule_title">Nowa reguła</string>
@@ -445,12 +440,8 @@
     <string name="automation_section_when">KIEDY (warunki)</string>
     <string name="automation_section_then">WTEDY (akcje)</string>
     <string name="automation_section_settings">USTAWIENIA</string>
-    <string name="automation_logic_and">I (AND)</string>
-    <string name="automation_logic_or">LUB (OR)</string>
 
     <!-- Settings section in editor -->
-    <string name="automation_setting_cooldown">Pauza między uruchomieniami</string>
-    <string name="automation_setting_unit_sec">s</string>
     <string name="automation_setting_park_only">Tylko na postoju (P)</string>
     <string name="automation_setting_confirm_before">Pytaj przed wykonaniem</string>
     <string name="automation_setting_once_per_trip">Wykonaj raz na przejazd</string>
@@ -465,7 +456,6 @@
     <string name="automation_trigger_place_enter_prefix">Wjazd do</string>
     <string name="automation_trigger_place_exit_prefix">Wyjazd z</string>
     <string name="automation_trigger_place_deleted_placeholder">&lt;usunięte&gt;</string>
-    <string name="automation_trigger_time_of_day_label">Pora dnia:</string>
     <string name="automation_trigger_day">Dzień</string>
     <string name="automation_trigger_night">Noc</string>
     <string name="automation_trigger_dawn">Świt</string>
@@ -484,9 +474,7 @@
     <string name="automation_trigger_type_internet">Dostępny internet</string>
     <string name="automation_trigger_type_button_press">Naciśnięcie przycisku</string>
     <string name="automation_trigger_button_label">Przycisk %1$d</string>
-    <string name="automation_trigger_button_picker_label">Przycisk</string>
     <string name="automation_trigger_type_steering_key">Klawisz kierownicy</string>
-    <string name="automation_trigger_steering_key_picker_label">Klawisz kierownicy</string>
     <string name="automation_trigger_steering_key_unassigned">Klawisz nieprzypisany</string>
     <string name="automation_trigger_steering_key_assign">przypisz</string>
     <string name="automation_steering_key_occupied_projection">Ten klawisz włącza nawigację na zestawie wskaźników. Zwolnij go w Ustawieniach, sekcja Ekran, albo wybierz inny.</string>
@@ -513,16 +501,6 @@
     <string name="automation_day_sun">Nd</string>
 
     <!-- Action row: delay -->
-    <string name="automation_action_delay_label">Pauza</string>
-    <string name="automation_delay_0_5s">0,5 s</string>
-    <string name="automation_delay_1s">1 s</string>
-    <string name="automation_delay_2s">2 s</string>
-    <string name="automation_delay_3s">3 s</string>
-    <string name="automation_delay_5s">5 s</string>
-    <string name="automation_delay_10s">10 s</string>
-    <string name="automation_delay_30s">30 s</string>
-    <string name="automation_delay_60s">1 min</string>
-    <string name="automation_delay_display_name">Pauza %1$s</string>
 
     <!-- Add action button -->
     <string name="automation_add_action_button">+ Dodaj akcję</string>
@@ -617,7 +595,6 @@
     <string name="automation_journal_empty">Dziennik jest pusty</string>
 
     <!-- Journal relative time -->
-    <string name="automation_time_yesterday">wczoraj %1$s</string>
 
     <!-- Places screen -->
     <string name="places_tab_title">Miejsca</string>
@@ -1305,7 +1282,6 @@
     <string name="auto_trig_place_enter">Wjazd do „%1$s”</string>
     <string name="auto_trig_service_start">Uruchomienie BYDMate</string>
     <string name="auto_trig_network_available">Dostępny internet</string>
-    <string name="auto_act_delay_1s">Pauza 1 s</string>
     <string name="auto_act_media_volume">Głośność multimediów: 2</string>
     <string name="auto_trig_time_of_day_night">Noc</string>
     <!-- automation: executeNow toast + a11y -->
