@@ -1579,6 +1579,8 @@
     <string name="settings_blindspot_position_drag">Перацягніце акенца</string>
     <string name="settings_blindspot_both_main_title">Абедзве камеры на галоўны экран</string>
     <string name="settings_blindspot_both_main_desc">Левая камера паказваецца побач з правай на планшэце, прыборка не выкарыстоўваецца</string>
+    <string name="settings_blindspot_both_cluster_title">Абедзве камеры на прыборку</string>
+    <string name="settings_blindspot_both_cluster_desc">Левая і правая камеры паказваюцца на прыборцы, галоўны экран вольны</string>
     <string name="settings_blindspot_left_position_title">Становішча левай камеры</string>
     <string name="settings_blindspot_left_position_desc">Па змаўчанні левае акенца стаіць люстрана правому. Перацягніце, каб задаць сваё месца</string>
     <string name="settings_blindspot_glow_title">Падсветка пры аб\'екце ў сляпой зоне</string>

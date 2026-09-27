@@ -1579,6 +1579,8 @@
     <string name="settings_blindspot_position_drag">Przeciągnij okienko</string>
     <string name="settings_blindspot_both_main_title">Obie kamery na ekranie głównym</string>
     <string name="settings_blindspot_both_main_desc">Lewa kamera jest pokazywana obok prawej na tablecie, zestaw wskaźników nie jest używany</string>
+    <string name="settings_blindspot_both_cluster_title">Obie kamery na zestawie wskaźników</string>
+    <string name="settings_blindspot_both_cluster_desc">Lewa i prawa kamera są pokazywane na zestawie wskaźników, ekran główny pozostaje wolny</string>
     <string name="settings_blindspot_left_position_title">Położenie lewej kamery</string>
     <string name="settings_blindspot_left_position_desc">Domyślnie lewe okienko jest lustrzanym odbiciem prawego. Przeciągnij, aby ustawić własne miejsce</string>
     <string name="settings_blindspot_glow_title">Podświetlenie, gdy obiekt jest w martwym polu</string>

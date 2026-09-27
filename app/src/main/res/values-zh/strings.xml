@@ -1541,6 +1541,8 @@
     <string name="settings_blindspot_position_drag">拖动小窗</string>
     <string name="settings_blindspot_both_main_title">两侧摄像头都显示在主屏</string>
     <string name="settings_blindspot_both_main_desc">左侧摄像头与右侧一起显示在中控屏上，不使用仪表盘</string>
+    <string name="settings_blindspot_both_cluster_title">两侧摄像头都显示在仪表盘</string>
+    <string name="settings_blindspot_both_cluster_desc">左右两侧摄像头都显示在仪表盘上，主屏保持空闲</string>
     <string name="settings_blindspot_left_position_title">左侧摄像头位置</string>
     <string name="settings_blindspot_left_position_desc">默认情况下左侧小窗与右侧镜像对称。拖动即可自定义位置</string>
     <string name="settings_blindspot_glow_title">盲区有车时高亮</string>
