@@ -24,6 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,7 +42,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -103,6 +108,7 @@ fun TripsScreen(
                     Text(stringResource(R.string.trips_empty), color = TextSecondary, fontSize = 16.sp)
                 }
             } else {
+                val timeColWidth = rememberTimeColumnWidth()
                 LazyColumn(
                     modifier = Modifier.weight(0.65f).fillMaxHeight(),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -128,13 +134,14 @@ fun TripsScreen(
                                 }
                                 if (day.date in state.expandedDays) {
                                     item(key = "header_${month.yearMonth}_${day.date}") {
-                                        ColumnHeaders(currencySymbol = state.currencySymbol)
+                                        ColumnHeaders(currencySymbol = state.currencySymbol, timeColWidth = timeColWidth)
                                     }
                                     for (trip in day.trips) {
                                         item(key = "trip_${trip.id}") {
                                             TripRow(
                                                 trip = trip,
                                                 currencySymbol = state.currencySymbol,
+                                                timeColWidth = timeColWidth,
                                                 onClick = { viewModel.selectTrip(trip) },
                                                 onLongClick = { viewModel.onLongPressTrip(trip) },
                                             )
@@ -301,8 +308,23 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
     }
 }
 
+private val TimeColumnStyle = TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+
+// The time cell must hold "HH:mm – HH:mm" on one line at every text size and font: a fixed
+// dp width let the end time wrap onto a second line that maxLines = 1 dropped.
 @Composable
-private fun ColumnHeaders(currencySymbol: String) {
+private fun rememberTimeColumnWidth(): Dp {
+    val measurer = rememberTextMeasurer()
+    val style = LocalTextStyle.current.merge(TimeColumnStyle)
+    val density = LocalDensity.current
+    return remember(measurer, style, density) {
+        val px = measurer.measure("00:00 – 00:00", style, softWrap = false).size.width
+        with(density) { px.toDp() }.coerceAtLeast(96.dp)
+    }
+}
+
+@Composable
+private fun ColumnHeaders(currencySymbol: String, timeColWidth: Dp) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -310,7 +332,7 @@ private fun ColumnHeaders(currencySymbol: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(stringResource(R.string.trips_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(96.dp))
+        Text(stringResource(R.string.trips_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(timeColWidth))
         Text(stringResource(R.string.trips_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text(stringResource(R.string.trips_col_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
         Text(stringResource(R.string.trips_col_soc), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(58.dp))
@@ -324,7 +346,13 @@ private fun ColumnHeaders(currencySymbol: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun TripRow(
+    trip: TripEntity,
+    currencySymbol: String,
+    timeColWidth: Dp,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     val isStop = (trip.distanceKm ?: 0.0) == 0.0
     val time = formatTime(trip.startTs)
     val endTime = trip.endTs?.let { formatTime(it) } ?: ""
@@ -350,9 +378,9 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
             Text(
                 "$time – $endTime",
                 color = if (isStop) TextMuted else TextSecondary,
-                fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                fontSize = TimeColumnStyle.fontSize, fontFamily = TimeColumnStyle.fontFamily,
                 maxLines = 1,
-                modifier = Modifier.width(96.dp)
+                modifier = Modifier.width(timeColWidth)
             )
             // Duration (compact H:MM, language-neutral so it never wraps the cell)
             Text(dur, color = if (isStop) TextMuted else TextSecondary,
