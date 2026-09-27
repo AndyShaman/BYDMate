@@ -692,7 +692,7 @@ class VehicleApiImpl @Inject constructor(
         actionName: String,
         value: Int,
         journaled: Boolean = true,
-        beforeSend: (suspend () -> Boolean)? = null,
+        beforeSend: (suspend (LockedReader) -> Boolean)? = null,
     ): WriteOutcome {
         val entry = allowlist.find(actionName) ?: run {
             Log.w(TAG, "doWriteOutcome: action=$actionName not in allowlist")

@@ -7,6 +7,7 @@ import android.os.Parcel
 import android.util.Log
 import android.view.Surface
 import java.io.ByteArrayOutputStream
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
@@ -174,6 +175,22 @@ sealed class DumpFidsResult {
 class WriteGuardRefused : Exception()
 
 /**
+ * Reader handed to [HelperClient.writeStatus]'s beforeSend guard: a live speed re-check must go
+ * through the daemon, not ADB — ADB's AutoserviceClient shares a `@Synchronized` monitor with
+ * every other in-flight ADB call, and a guard blocked on THAT monitor cannot be interrupted by its
+ * own [runInterruptible]/timeout, holding the write's transport mutex past its budget while every
+ * unrelated helper call queues behind it (2026-09-27, review round 3). [HelperClientImpl] binds
+ * this straight to its already-held transport lock (via `transactBodyUnlocked`), never to
+ * [HelperClient.readBatch] — that would try to re-take the (non-reentrant) mutex the guard is
+ * already running inside and deadlock.
+ */
+fun interface LockedReader {
+    /** tx=7 (getFloat bits) read of [dev]/[fid]; null on any failure or sentinel bits — decoded
+     *  exactly like NativeParsReader decodes a tx=7 batch reply. */
+    suspend fun readFloat(dev: Int, fid: Int): Float?
+}
+
+/**
  * Client for the in-vehicle helper daemon registered as the `bydmate_helper`
  * binder service (ServiceManager.getService + IBinder.transact).
  *
@@ -201,12 +218,14 @@ interface HelperClient {
      * Raw autoservice setInt status (1 real, 0 no-op, <0 error, null daemon unreachable).
      * [beforeSend], when given, runs inside the transport mutex, immediately before EACH
      * transact attempt — a dead-binder retry re-checks it too, so no queue wait and no stale
-     * verdict from before a retry can separate the check from the actual send. The guard gets
-     * its own bounded budget (GUARD_TIMEOUT_MS, well under the shared timeout) so it cannot
-     * hold the mutex for long either. A false return, or a guard that does not finish in time,
-     * skips the transact entirely and [writeStatus] throws [WriteGuardRefused].
+     * verdict from before a retry can separate the check from the actual send. It is handed a
+     * [LockedReader] bound to this same already-held lock, so a last-instant re-check reads a
+     * live value through the daemon instead of a separate (and separately blockable) ADB call.
+     * The guard gets its own bounded budget (GUARD_TIMEOUT_MS, well under the shared timeout) so
+     * it cannot hold the mutex for long either. A false return, or a guard that does not finish
+     * in time, skips the transact entirely and [writeStatus] throws [WriteGuardRefused].
      */
-    suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend () -> Boolean)? = null): Int?
+    suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend (LockedReader) -> Boolean)? = null): Int?
     suspend fun isAlive(): Boolean
 
     /** Creates a VirtualDisplay backed by [surface]; returns its displayId (>0) or null. */
@@ -532,6 +551,16 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     /** Last transport reported by [noteSource] — kept so the log line is printed only on change. */
     @Volatile private var lastSource: String? = null
 
+    /** Test seam: invoked right before every attempt to acquire [mutex] in [transactParsed],
+     *  i.e. right before the write path takes the lock — lets a test observe "about to enter the
+     *  queue" deterministically instead of racing a countdown placed before the whole call
+     *  (2026-09-27, review round 3). No-op in production. */
+    @Volatile internal var onBeforeLock: (() -> Unit)? = null
+
+    /** Bound to [transactBodyUnlocked] (never [readBatch]) so a guard's beforeSend can read a
+     *  live value through the daemon without re-taking the mutex it is already running inside. */
+    private val lockedReader = LockedReader { dev, fid -> readFloatLocked(dev, fid) }
+
     /** Intermediate holder for one TX_DUMP_FIDS chunk reply (chunked transport, Q4). */
     private data class DumpChunkReply(val status: Int, val totalLength: Int, val bytes: ByteArray?)
 
@@ -556,7 +585,7 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         }
     }
 
-    override suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend () -> Boolean)?): Int? {
+    override suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend (LockedReader) -> Boolean)?): Int? {
         val status = transactParsed(HelperBinderProtocol.TX_WRITE, {
             it.writeInt(dev); it.writeInt(fid); it.writeInt(value)
         }, beforeSend = beforeSend) { reply -> if (reply.dataAvail() >= 4) reply.readInt() else null }
@@ -1120,11 +1149,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         code: Int,
         writeArgs: (Parcel) -> Unit,
         timeoutMs: Long = REQ_TIMEOUT_MS,
-        beforeSend: (suspend () -> Boolean)? = null,
+        beforeSend: (suspend (LockedReader) -> Boolean)? = null,
         parse: (Parcel) -> T?,
     ): T? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(timeoutMs) {
+                onBeforeLock?.invoke()
                 mutex.withLock { transactBodyUnlocked(code, writeArgs, beforeSend, parse) }
             }
         }
@@ -1135,16 +1165,18 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
      * [beforeSend], when given, is checked right after the binder is resolved and immediately
      * before EACH transact attempt below — the retry on a dead binder re-checks it too, so a
      * verdict from before the retry never reaches the second send (2026-09-27, review round 2).
+     * It is handed [lockedReader], bound to THIS already-held lock via a direct
+     * [transactBodyUnlocked] call, never [readBatch] (which would re-take the mutex and deadlock).
      */
     private suspend fun <T> transactBodyUnlocked(
         code: Int,
         writeArgs: (Parcel) -> Unit,
-        beforeSend: (suspend () -> Boolean)? = null,
+        beforeSend: (suspend (LockedReader) -> Boolean)? = null,
         parse: (Parcel) -> T?,
     ): T? {
         repeat(2) { attempt ->
             val binder = ensureBinder() ?: return null
-            if (beforeSend != null && !runGuard(beforeSend)) throw WriteGuardRefused()
+            if (beforeSend != null && !runGuard { beforeSend(lockedReader) }) throw WriteGuardRefused()
             val data = Parcel.obtain()
             val reply = Parcel.obtain()
             try {
@@ -1174,6 +1206,28 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
      */
     private suspend fun runGuard(beforeSend: suspend () -> Boolean): Boolean =
         withTimeoutOrNull(GUARD_TIMEOUT_MS) { beforeSend() } ?: false
+
+    /**
+     * [LockedReader]'s implementation: a single-item TX_READ_BATCH round-trip, same wire format
+     * [readBatch] uses, but through [transactBodyUnlocked] directly — [readBatch] goes through
+     * [transactParsed], which would try to re-take [mutex] and deadlock, since this only ever
+     * runs from inside a beforeSend guard that is already holding it. Decoded exactly like
+     * NativeParsReader decodes a tx=7 batch reply: sentinel bits -> null.
+     */
+    private suspend fun readFloatLocked(dev: Int, fid: Int): Float? {
+        val item = BatchReadItem(tx = 7, dev = dev, fid = fid) // 7 = getFloat bits
+        return transactBodyUnlocked(HelperBinderProtocol.TX_READ_BATCH, { p ->
+            p.writeInt(1)
+            p.writeInt(item.tx); p.writeInt(item.dev); p.writeInt(item.fid)
+        }) { reply ->
+            if (reply.dataAvail() < 4 || reply.readInt() != 1 || reply.dataAvail() < 8) {
+                return@transactBodyUnlocked null
+            }
+            val status = reply.readInt()
+            val word = reply.readInt()
+            if (status != 0) null else SentinelDecoder.parseFloatFromShellInt(word)
+        }
+    }
 
     /** (status, value) wrapper used by read/write/ping. */
     private suspend fun transact(code: Int, writeArgs: (Parcel) -> Unit): Pair<Int, Int>? =

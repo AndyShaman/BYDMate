@@ -130,9 +130,13 @@ class VehicleApiDriveModeTest {
         kmh = 5f
         supported(DriveMode.SNOW)
         coEvery { helper.read(1023, target, any()) } returns 1L
+        // The real HelperClientImpl hands the guard a LockedReader bound to its own transport
+        // lock; helper is a bare mock here, so the fake stands in for that reader too, reading
+        // the SAME `kmh` the pre-write check uses (the fid is the same speed fid on both paths).
+        val fakeLockedReader = LockedReader { dev, _ -> if (dev == 1013) kmh else null }
         coEvery { helper.writeStatus(1023, 1276260400, 4, any()) } coAnswers {
-            val guard = arg<suspend () -> Boolean>(3)
-            if (guard()) 1 else throw WriteGuardRefused()
+            val guard = arg<suspend (LockedReader) -> Boolean>(3)
+            if (guard(fakeLockedReader)) 1 else throw WriteGuardRefused()
         }
         val insertInProgress = CompletableDeferred<Unit>()
         val releaseInsert = CompletableDeferred<Unit>()

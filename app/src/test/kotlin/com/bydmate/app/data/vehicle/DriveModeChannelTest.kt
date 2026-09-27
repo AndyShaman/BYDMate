@@ -17,11 +17,16 @@ class DriveModeChannelTest {
     private var speedCalls = 0
     private val reads = mutableListOf<Int>()
 
+    // The guard's LockedReader, separate from the `speed` closure below (real code no longer
+    // shares them, see terrainSpeedGuard/readGuardSpeed): mirrors the same `kmh`, since both
+    // paths read the same physical speed fid, just through different channels.
+    private val guardReader = LockedReader { _, _ -> kmh?.toFloat() }
+
     // beforeSend is called the way VehicleApiImpl.doWriteOutcome calls it: right before the
     // "helper" write, so a false return skips the write and reports TRANSIENT.
     private val channel = DriveModeChannel(
         DriveModeWriter { name, value, beforeSend ->
-            if (!beforeSend()) WriteOutcome.TRANSIENT else { writes += name to value; status }
+            if (!beforeSend(guardReader)) WriteOutcome.TRANSIENT else { writes += name to value; status }
         },
         DriveModeReader { fid ->
             reads += fid
@@ -152,20 +157,25 @@ class DriveModeChannelTest {
     }
 
     @Test fun `speed rising between the first check and the guard is refused with no write and no poll`() = runTest {
-        // 10 kmh passes the early check in run(); the target read below (one of the two
-        // suspending reads before the guard) simulates the car speeding up while they run.
-        var currentKmh: Int? = 10
+        // 10 kmh passes the early check in run(). The guard reads speed through its OWN
+        // LockedReader, separate from the `speed` closure below (real code no longer shares
+        // them): bumping ONLY the reader's value, not the closure, proves the guard actually
+        // uses the locked reader and not a value cached from the pre-write check.
+        var guardKmh: Float? = 10f
         val localWrites = mutableListOf<Pair<String, Int>>()
         val localReads = mutableListOf<Int>()
         val localChannel = DriveModeChannel(
             DriveModeWriter { name, value, beforeSend ->
-                if (!beforeSend()) WriteOutcome.TRANSIENT else { localWrites += name to value; WriteOutcome.REAL }
+                if (!beforeSend(LockedReader { _, _ -> guardKmh })) WriteOutcome.TRANSIENT
+                else { localWrites += name to value; WriteOutcome.REAL }
             },
             DriveModeReader { fid ->
                 localReads += fid
-                if (fid == target) { currentKmh = 20; 1 } else 0
+                // The target read below (one of the two suspending reads before the guard)
+                // simulates the car speeding up while they run.
+                if (fid == target) { guardKmh = 20f; 1 } else 0
             },
-            speed = { currentKmh },
+            speed = { 10 },
         )
         val out = localChannel.actuate(DriveMode.SNOW)
         assertEquals(DriveModeChannel.Result.SPEED, out.result)
