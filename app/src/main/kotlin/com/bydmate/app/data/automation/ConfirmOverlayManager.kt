@@ -19,7 +19,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,7 +52,7 @@ import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.NavyDark
 import com.bydmate.app.ui.theme.SocRed
-import com.bydmate.app.ui.theme.TextMuted
+import com.bydmate.app.ui.theme.TextSecondary
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.WithAppFontScale
 import com.bydmate.app.util.appLocalizedContext
@@ -157,56 +167,86 @@ object ConfirmOverlayManager {
 
         val fontScale = LocalePreferences(context).getFontScale()
         val (cancelLabel, runLabel) = buttonLabels(context)
+        val lc = context.appLocalizedContext()
+        val seconds = ((timeoutMs + 999) / 1000).toInt().coerceAtLeast(1)
         composeView.setContent {
             WithAppFontScale(fontScale) {
+                // Seconds left: the bar and the line count down together, once a second.
+                var left by remember { mutableIntStateOf(seconds) }
+                LaunchedEffect(Unit) {
+                    while (left > 0) {
+                        delay(1000)
+                        left--
+                    }
+                }
                 Column(
                     modifier = Modifier
-                        .widthIn(min = 340.dp, max = 420.dp)
-                        .background(CardSurface, RoundedCornerShape(12.dp))
-                        .border(1.5.dp, CardBorder, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                        .width(640.dp)
+                        .background(CardSurface, RoundedCornerShape(16.dp))
+                        .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
+                        .padding(24.dp),
                 ) {
                     Text(
-                        text = ruleName,
+                        text = lc.getString(R.string.auto_ui_confirm_rule, ruleName),
                         fontSize = 16.sp,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = actionsSummary.ifBlank { ruleName },
+                        fontSize = 26.sp,
+                        lineHeight = 32.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
                     )
-                    if (actionsSummary.isNotBlank()) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = actionsSummary,
-                            fontSize = 13.sp,
-                            color = TextMuted,
+                    Spacer(Modifier.height(16.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(CardBorder)
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(left.toFloat() / seconds)
+                                .fillMaxHeight()
+                                .background(AccentGreen)
                         )
                     }
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = lc.getString(R.string.auto_ui_confirm_countdown, left),
+                        fontSize = 18.sp,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(20.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Button(
                             onClick = { dismiss("cancel") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                            shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = SocRed,
                                 contentColor = NavyDark,
                             ),
                         ) {
-                            Text(cancelLabel, fontSize = 14.sp)
+                            Text(cancelLabel, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         }
                         Button(
                             onClick = { dismiss("confirm") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                            shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = AccentGreen,
                                 contentColor = NavyDark,
                             ),
                         ) {
-                            Text(runLabel, fontSize = 14.sp)
+                            Text(runLabel, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
