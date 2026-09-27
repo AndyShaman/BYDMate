@@ -50,6 +50,38 @@ class FidMapTest {
         assertTrue("Missing FidMap entries: ${required - mapped}", mapped.containsAll(required))
     }
 
+    // Audit 3.19 items 10, 11: the passenger belt reads the Instrument fid (Setting 1004 answered
+    // a constant), the rear belts sit next to it; the Setting rear fids ride along for the probe.
+    @Test fun `belt fids read the Instrument belt states`() {
+        val expected = mapOf(
+            "seatbeltFR" to 638582811, "seatbeltRL" to 638582812,
+            "seatbeltRM" to 638582813, "seatbeltRR" to 638582814,
+        )
+        for ((field, fid) in expected) {
+            val entry = FidMap.entries.single { it.field == field }
+            assertEquals(field, 1007, entry.device)
+            assertEquals(field, fid, entry.fid)
+        }
+        val probe = FidMap.entries.filter { it.field.startsWith("rearBeltSetting") }
+            .associate { it.field to (it.device to it.fid) }
+        assertEquals(
+            mapOf(
+                "rearBeltSettingRL" to (1023 to 824180746),
+                "rearBeltSettingRM" to (1023 to 824180750),
+                "rearBeltSettingRR" to (1023 to 824180748),
+            ),
+            probe,
+        )
+    }
+
+    // Audit 3.19 item 4: dev 1006 reads 3 on normal and on every terrain mode.
+    @Test fun `the target drive mode fid is mapped`() {
+        val entry = FidMap.entries.single { it.field == "driveModeTarget" }
+        assertEquals(1023, entry.device)
+        assertEquals(255852712, entry.fid)
+        assertEquals("Setting.SETTING_TARGET_DRIVING_MODE", entry.symbol)
+    }
+
     @Test fun `front trunk position fid is mapped for the toggle action`() {
         val entry = FidMap.entries.single { it.field == "frontTrunk" }
         assertEquals(1001, entry.device)

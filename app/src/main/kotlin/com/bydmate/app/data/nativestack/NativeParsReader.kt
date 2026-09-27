@@ -404,6 +404,13 @@ class NativeParsReader @Inject constructor(
             pedalBrake          = ranged("pedalBrake"),
             chargerConnectState = field<Int>("chargerConnectState"),
             chargeConnectIndicator = field<Int>("chargeConnectIndicator"),
+            driveModeTarget     = field<Int>("driveModeTarget"),
+            seatbeltRL          = field<Int>("seatbeltRL"),
+            seatbeltRM          = field<Int>("seatbeltRM"),
+            seatbeltRR          = field<Int>("seatbeltRR"),
+            rearBeltSettingRL   = field<Int>("rearBeltSettingRL"),
+            rearBeltSettingRM   = field<Int>("rearBeltSettingRM"),
+            rearBeltSettingRR   = field<Int>("rearBeltSettingRR"),
         )
     }
 
