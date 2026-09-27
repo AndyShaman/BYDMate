@@ -824,6 +824,7 @@
     <string name="settings_adb_restore_status_connecting">正在恢复…</string>
     <string name="settings_adb_restore_status_restored">已于 %1$s 恢复</string>
     <string name="settings_adb_restore_status_failed">错误：%1$s</string>
+    <string name="settings_adb_restore_status_unsupported">Android 10 上不可用。如果重启后 ADB 消失，请按照 GitHub 上的说明重新开启，见“激活 ADB”一节。</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB 未开启：无法控制车辆</string>
     <string name="adb_verdict_off_after_reboot">重启后 ADB 已关闭</string>

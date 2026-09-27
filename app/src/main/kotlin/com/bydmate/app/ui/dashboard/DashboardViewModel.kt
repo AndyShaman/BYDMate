@@ -381,6 +381,8 @@ class DashboardViewModel @Inject constructor(
 
     val adbRestoreEnabled: Boolean get() = adbVerdictMonitor.isRestoreEnabled()
 
+    val adbRestoreSupported: Boolean get() = adbVerdictMonitor.isRestoreSupported()
+
     fun recheckAdb() = adbVerdictMonitor.recheck("dashboard")
 
     fun enableAdbRestore() = adbVerdictMonitor.enableRestoreAndRecheck()

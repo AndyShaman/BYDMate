@@ -35,6 +35,9 @@ annotation class AdbRestoreScope
  * Two facts the user cannot be spared: Android refuses to enable wireless debugging without a
  * Wi-Fi connection, and the first enable on each network raises a system dialog that only the
  * user can confirm. Both are surfaced as states, never worked around.
+ *
+ * Wireless debugging only exists from Android 11: on older head units the feature is
+ * [AdbRestoreState.Unsupported] and never attempts anything, whatever the stored toggle says.
  */
 @Singleton
 class AdbRestoreManager @Inject constructor(
@@ -43,7 +46,9 @@ class AdbRestoreManager @Inject constructor(
     @AdbRestoreScope private val scope: CoroutineScope,
 ) {
 
-    private val _state = MutableStateFlow<AdbRestoreState>(AdbRestoreState.Disabled)
+    private val _state = MutableStateFlow(
+        if (isSupported()) AdbRestoreState.Disabled else AdbRestoreState.Unsupported
+    )
     val state: StateFlow<AdbRestoreState> = _state.asStateFlow()
 
     /** Label of the last trigger that ran an attempt, and how many retries it has cost — for the dump. */
@@ -87,12 +92,18 @@ class AdbRestoreManager @Inject constructor(
     // it — that is what let the dialog keep nagging for the rest of the trip.
     private var exhaustedNetwork: String? = null
 
+    // The "unsupported" reason is logged once per process, not on every trigger.
+    private val unsupportedLogged = AtomicBoolean(false)
+
     // One enable attempt per process for the dialog auto-allow (see ensureAccessibilityForDialog).
     @Volatile
     private var a11yEnableAttempted = false
 
     /** True while the toggle is on. */
     fun isEnabled(): Boolean = prefs.isEnabled()
+
+    /** False on Android 10 and older, which have no wireless debugging to restore through. */
+    fun isSupported(): Boolean = isSupportedOn(system.sdkInt())
 
     /**
      * Persists the toggle. Turning it off also switches wireless debugging back off, so the
@@ -122,6 +133,14 @@ class AdbRestoreManager @Inject constructor(
      * event set the restore going.
      */
     suspend fun attemptIfNeeded(trigger: String = TRIGGER_UNKNOWN) {
+        // A toggle switched on by an earlier version stays stored, but must not cost a 45 s mDNS
+        // wait on every trigger for a service that cannot exist here.
+        if (!isSupported()) {
+            if (unsupportedLogged.compareAndSet(false, true)) {
+                Log.i(TAG, "unsupported on API ${system.sdkInt()} (needs Wireless debugging, API $MIN_SDK+)")
+            }
+            return
+        }
         // afterAttempt runs inside runAttempt now, while the lock from the attempt it is judging
         // is still held — see the comment on that call for why.
         runAttempt(trigger)
@@ -516,6 +535,11 @@ class AdbRestoreManager @Inject constructor(
 
         /** Fallback trigger label — production call sites all pass their own. */
         const val TRIGGER_UNKNOWN = "unknown"
+
+        /** Android 11: the first release with wireless debugging (`adb_wifi_enabled`, adb-tls mDNS). */
+        const val MIN_SDK = 30
+
+        fun isSupportedOn(sdkInt: Int): Boolean = sdkInt >= MIN_SDK
 
         /** How long the system takes to revert an unconfirmed enable, with margin. */
         const val SETTINGS_SETTLE_MS = 1_500L

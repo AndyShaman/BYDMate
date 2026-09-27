@@ -10,6 +10,7 @@ import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
@@ -78,6 +79,9 @@ interface AdbRestoreSystem {
     suspend fun sleep(ms: Long)
 
     fun nowMs(): Long
+
+    /** Android API level of the head unit. */
+    fun sdkInt(): Int
 }
 
 /** Production wiring of [AdbRestoreSystem] against the head unit. */
@@ -276,6 +280,8 @@ class AndroidAdbRestoreSystem @Inject constructor(
     override suspend fun sleep(ms: Long) = delay(ms)
 
     override fun nowMs(): Long = System.currentTimeMillis()
+
+    override fun sdkInt(): Int = Build.VERSION.SDK_INT
 
     companion object {
         const val CLASSIC_PORT = 5555

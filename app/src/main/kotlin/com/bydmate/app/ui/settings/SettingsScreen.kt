@@ -2074,6 +2074,8 @@ private fun ServiceSection(
     // every car: where the port survives a reboot the status line simply says so.
     val adbRestore = remember { clusterEntryPoint.adbRestoreManager() }
     var adbRestoreEnabled by remember { mutableStateOf(adbRestore.isEnabled()) }
+    // Android 10: the toggle stays visible but locked off, the status line says why.
+    val adbRestoreSupported = remember { adbRestore.isSupported() }
     var adbRestoreHelpOpen by remember { mutableStateOf(false) }
     val adbRestoreState by adbRestore.state.collectAsStateWithLifecycle()
     val adbVerdict by viewModel.adbVerdict.collectAsStateWithLifecycle()
@@ -2100,11 +2102,12 @@ private fun ServiceSection(
             SettingToggleRow(
                 title = stringResource(R.string.settings_adb_restore_title),
                 description = stringResource(R.string.settings_adb_restore_desc),
-                checked = adbRestoreEnabled,
+                checked = adbRestoreEnabled && adbRestoreSupported,
                 onCheckedChange = { enabled ->
                     adbRestoreEnabled = enabled
                     adbRestore.setEnabled(enabled)
                 },
+                enabled = adbRestoreSupported,
                 onHelp = { adbRestoreHelpOpen = true },
             )
             adbRestoreStatusText(adbRestoreState)?.let { SettingHint(text = it) }
@@ -2140,6 +2143,7 @@ private fun ServiceSection(
         AdbVerdictDialog(
             verdict = dialogVerdict,
             restoreEnabled = adbRestoreEnabled,
+            restoreSupported = adbRestoreSupported,
             onCheck = { viewModel.recheckAdb() },
             onEnableRestore = {
                 // Keep the toggle above in step with the dialog's switch-on.
@@ -4044,6 +4048,7 @@ private fun ModelPickerDialog(
 @Composable
 private fun adbRestoreStatusText(state: AdbRestoreState): String? = when (state) {
     AdbRestoreState.Disabled -> null
+    AdbRestoreState.Unsupported -> stringResource(R.string.settings_adb_restore_status_unsupported)
     AdbRestoreState.NotNeeded -> stringResource(R.string.settings_adb_restore_status_not_needed)
     AdbRestoreState.NeedsActivation -> stringResource(R.string.settings_adb_restore_status_needs_activation)
     AdbRestoreState.WaitingWifi -> stringResource(R.string.settings_adb_restore_status_waiting_wifi)

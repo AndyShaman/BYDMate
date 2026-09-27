@@ -95,6 +95,7 @@
     <string name="settings_adb_restore_status_connecting">Восстанавливаем…</string>
     <string name="settings_adb_restore_status_restored">Восстановлено в %1$s</string>
     <string name="settings_adb_restore_status_failed">Ошибка: %1$s</string>
+    <string name="settings_adb_restore_status_unsupported">Недоступно на Android 10. Если ADB пропал после перезагрузки, включите его снова по инструкции на GitHub, раздел «Активация ADB».</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB не включён: управление не работает</string>
     <string name="adb_verdict_off_after_reboot">ADB отключился после перезагрузки</string>
