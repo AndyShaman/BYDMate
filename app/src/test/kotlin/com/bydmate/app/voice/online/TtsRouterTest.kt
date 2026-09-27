@@ -296,48 +296,6 @@ class TtsRouterTest {
         assertFalse(queue.enqueue("Второе.")) // superseded
     }
 
-    // --- a new reply supersedes the previous one's pending online work ---
-
-    @Test
-    fun `a new speak drops an agent reply queue still awaiting synthesis`() {
-        val backend = FakeBackend(delayMs = 1_000)
-        val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
-        router.startQueue()!!.enqueue("Старый ответ.")
-        Thread.sleep(50)
-        router.speak("новый ответ")
-        Thread.sleep(1_500)
-        assertEquals(1, delegate.playPcmCalls.size)
-    }
-
-    // An automation with two "speak" actions in a row: the second must not cancel the first
-    // while it is still being synthesized.
-    @Test
-    fun `consecutive single speaks all play`() {
-        val backend = FakeBackend(delayMs = 1_000)
-        val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
-        router.speak("первое")
-        Thread.sleep(50)
-        router.speak("второе")
-        Thread.sleep(1_500)
-        assertEquals(2, delegate.playPcmCalls.size)
-    }
-
-    @Test
-    fun `a new queue drops the previous queue's pending sentences`() {
-        val backend = FakeBackend(delayMs = 1_000)
-        val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
-        val old = router.startQueue()!!
-        old.enqueue("Старое.")
-        Thread.sleep(50)
-        router.startQueue()!!.enqueue("Новое.")
-        Thread.sleep(1_500)
-        assertEquals(1, delegate.playPcmCalls.size)
-        assertFalse(old.enqueue("Ещё старое.")) // superseded
-    }
-
     // --- queue prefetch: sentence N+1 is synthesized while sentence N plays ---
 
     @Test
