@@ -347,16 +347,33 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             else -> resolveLocksToggle(value)   // TOGGLE_LOCKS -- the only target left
         }
 
-        /** Why a param dispatch failed, as the step reason. Only the steering heat channel
-         *  reports NotEquipped (see VehicleWriteError); it and the windows that never moved get
-         *  a readable, localized text. */
+        /** Why a param dispatch failed, as the step reason, always in the app language. Only the
+         *  steering heat channel reports NotEquipped (see VehicleWriteError). The raw error
+         *  (`value=-10011 sentinel returned` and the like) stays in the log only. */
         internal fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when {
             err is VehicleWriteError && DriveMode.ofAction(err.action) != null -> driveModeFailureReason(err, strings)
             err is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
             err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
                 stuckWindowsReason(err.stuckPanes, strings)
-            else -> err?.message ?: "dispatch failed"
+            else -> strings.get(writeErrorText(err))
         }
+
+        private fun writeErrorText(err: Throwable?): Int = when (err) {
+            is VehicleWriteError.Sentinel -> R.string.auto_err_not_confirmed
+            is VehicleWriteError.AllowlistMiss -> R.string.auto_err_not_supported
+            is VehicleWriteError.OutOfRange -> R.string.auto_err_out_of_range
+            is VehicleWriteError.HelperUnreachable -> R.string.auto_err_unreachable
+            is VehicleWriteError.ReadbackMismatch -> R.string.auto_err_not_done
+            is VehicleWriteError.Unsupported -> R.string.auto_err_unverified
+            else -> R.string.auto_err_failed
+        }
+
+        /**
+         * The block of a rule step run with no data at all: a window or sunroof open needs a
+         * known speed. The other gated commands already fail closed inside [safetyBlockReason].
+         */
+        internal fun speedUnknownBlock(action: ActionDef): BlockReason? =
+            if (action.kind == "param") speedGateBlockReason(action.command, null) else null
 
         /** A failed drive mode switch: too fast, not on this car, flotation, no change, or no answer. */
         private fun driveModeFailureReason(err: VehicleWriteError, strings: AppStrings): String = when (err) {
@@ -874,6 +891,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         // A seat step the driver asked for is the one a later «toggle» brings back.
         if (success) seatLevelMemory.remember(action.command)
         val reason = if (!success) paramFailureReason(result.exceptionOrNull(), appStrings) else null
+        if (!success) Log.w(TAG, "param '${action.command}' failed: ${result.exceptionOrNull()?.message}")
         return DispatchResult(success, reason)
     }
 

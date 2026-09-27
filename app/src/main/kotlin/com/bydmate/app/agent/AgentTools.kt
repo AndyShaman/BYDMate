@@ -792,7 +792,7 @@ class AgentTools @Inject constructor(
                                 .put("value", JSONObject().put("type", "integer")
                                     .put("description", "Только для kind=param: значение, если команда его требует"))
                                 .put("ms", JSONObject().put("type", "integer")
-                                    .put("description", "Только для kind=delay: пауза в мс, 0..30000"))
+                                    .put("description", "Только для kind=delay: пауза в мс, 0..60000"))
                                 .put("op", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=media_volume: число / \"+N\" / \"-N\" / mute / unmute"))
                                 .put("title", JSONObject().put("type", "string")
@@ -2254,15 +2254,7 @@ class AgentTools @Inject constructor(
         // across rules). editingId=0L because this is a new rule with no persisted id yet.
         RuleDraftValidator.validateTriggers(
             listOf(trigger), editingId = 0L, existingRules = existing, userCommandPhrases = userPhrases.owners(),
-        )?.let {
-            val msg = when (it) {
-                TriggerValidationError.VoicePhraseEmpty -> "не указана голосовая фраза"
-                is TriggerValidationError.VoicePhraseBuiltin ->
-                    "эта фраза уже используется встроенной командой «${it.command}», выбери другую"
-                is TriggerValidationError.VoicePhraseTaken -> "эта фраза уже используется автоматизацией «${it.rule}»"
-            }
-            return JSONObject().put("error", msg).toString()
-        }
+        )?.let { return JSONObject().put("error", triggerErrorText(it)).toString() }
 
         val actions = mutableListOf<ActionDef>()
         for (i in 0 until actionsArg.length()) {
@@ -2459,8 +2451,8 @@ class AgentTools @Inject constructor(
             "delay" -> {
                 val hasMs = a.has("ms") && !a.isNull("ms")
                 val ms = if (hasMs) a.optInt("ms", -1) else -1
-                if (!hasMs || ms !in 0..30000) {
-                    return Built.Error("не указана длительность паузы (мс, 0..30000)")
+                if (!hasMs || ms !in 0..MAX_DELAY_MS) {
+                    return Built.Error("не указана длительность паузы (мс, 0..$MAX_DELAY_MS)")
                 }
                 Built.Value(ActionDef(command = "delay", displayName = "Пауза $ms мс",
                     kind = "delay", payload = ms.toString()))
@@ -2595,6 +2587,19 @@ class AgentTools @Inject constructor(
         }
     }
 
+    private fun triggerErrorText(err: TriggerValidationError): String = when (err) {
+        is TriggerValidationError.ValueNotNumber -> "значение для «${err.param}» должно быть числом"
+        TriggerValidationError.SteeringKeyUnassigned -> "не назначена клавиша руля"
+        TriggerValidationError.OneShotInvalid,
+        TriggerValidationError.OneShotWithOr,
+        TriggerValidationError.OneShotWithEvent,
+        TriggerValidationError.OneShotTwice -> "разовое правило по дате этим инструментом не создаётся"
+        TriggerValidationError.VoicePhraseEmpty -> "не указана голосовая фраза"
+        is TriggerValidationError.VoicePhraseBuiltin ->
+            "эта фраза уже используется встроенной командой «${err.command}», выбери другую"
+        is TriggerValidationError.VoicePhraseTaken -> "эта фраза уже используется автоматизацией «${err.rule}»"
+    }
+
     private fun actionErrorJson(err: ActionValidationError): String {
         val msg = when (err) {
             is ActionValidationError.CommandMissing -> "не указана команда (действие ${err.index})"
@@ -2682,6 +2687,7 @@ class AgentTools @Inject constructor(
         private const val OK = """{"ok":true}"""
         private const val SEARCH_ERROR = """{"error":"поиск недоступен"}"""
         private const val MAX_AUTOMATIONS = 50
+        private const val MAX_DELAY_MS = 60_000
         private const val MAX_PLACES = 50
         private const val BAD_ARGS_ERROR = """{"error":"некорректные аргументы"}"""
         private const val CALL_CONTACT_FAILED = """{"error":"не удалось позвонить"}"""

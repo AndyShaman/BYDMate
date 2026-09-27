@@ -98,12 +98,34 @@ class ActionDispatcherFailureLocaleTest {
         assertEquals("не сдвинулись с места: заднее левое окно, заднее правое окно", reason(driverWindowOpen))
     }
 
-    @Test fun `a readback mismatch that names no window keeps its raw message`() = runTest {
-        lang("en")
+    // Audit 3.19 item 7: the journal shows a phrase in the app language, never the raw error.
+    @Test fun `a readback mismatch that names no window is worded in the app language`() = runTest {
         coEvery { vehicleApi.dispatch(any()) } returns
             Result.failure(VehicleWriteError.ReadbackMismatch("doors_lock", "expected=2 got=1"))
 
-        assertEquals("doors_lock: expected=2 got=1", reason(driverWindowOpen))
+        lang("en")
+        assertEquals("The car did not carry out the command", reason(driverWindowOpen))
+        lang("ru")
+        assertEquals("Машина не выполнила команду", reason(driverWindowOpen))
+    }
+
+    @Test fun `write errors are worded per cause in the app language`() = runTest {
+        val cases = listOf(
+            VehicleWriteError.Sentinel("doors_lock") to "Машина не подтвердила команду",
+            VehicleWriteError.AllowlistMiss("doors_lock") to "Эта команда не поддерживается",
+            VehicleWriteError.OutOfRange("doors_lock", "value=7") to "Недопустимое значение для команды",
+            VehicleWriteError.HelperUnreachable("doors_lock", "binder dead") to "Команда не дошла до машины",
+            VehicleWriteError.Unsupported("doors_lock") to "Команда не проверена на этой машине и не сработала",
+            IllegalStateException("boom") to "Не удалось выполнить команду",
+        )
+        lang("ru")
+        for ((err, text) in cases) {
+            coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)
+            assertEquals(err.toString(), text, reason(driverWindowOpen))
+        }
+        lang("en")
+        coEvery { vehicleApi.dispatch(any()) } returns Result.failure(VehicleWriteError.Sentinel("doors_lock"))
+        assertEquals("The car did not confirm the command", reason(driverWindowOpen))
     }
 
     // The per-action run button writes through VehicleApi directly and words the error here.

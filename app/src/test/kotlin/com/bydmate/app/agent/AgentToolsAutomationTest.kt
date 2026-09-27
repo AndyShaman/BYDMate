@@ -407,7 +407,7 @@ class AgentToolsAutomationTest {
         val out = JSONObject(tools().execute(call("create_automation", createArgs(
             actions = """[{"kind":"delay"}]"""))))
 
-        assertEquals("не указана длительность паузы (мс, 0..30000)", out.getString("error"))
+        assertEquals("не указана длительность паузы (мс, 0..60000)", out.getString("error"))
         coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 

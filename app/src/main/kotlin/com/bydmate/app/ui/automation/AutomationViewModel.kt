@@ -135,7 +135,7 @@ fun ActionOption.localizedCategory(context: Context): String =
 val TRIGGER_PARAMS = listOf(
         TriggerParamOption("Speed", "车速", R.string.auto_param_speed, R.string.auto_cat_driving, R.string.auto_unit_kmh),
         TriggerParamOption("Gear", "档位", R.string.auto_param_gear, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_p, "2" to R.string.auto_enum_code_r, "3" to R.string.auto_enum_code_n, "4" to R.string.auto_enum_code_d)),
-        TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "3" to R.string.auto_enum_code_normal, "4" to R.string.auto_enum_code_snow)),
+        TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "3" to R.string.auto_enum_code_normal, "4" to R.string.auto_enum_code_snow, "5" to R.string.auto_enum_code_sand, "6" to R.string.auto_enum_code_mud, "7" to R.string.auto_enum_code_mountain, "21" to R.string.auto_enum_code_smart)),
         // Live codes (Leopard 3 2026-07-31): mask of the blinker lines, holds steady while blinking
         TriggerParamOption("TurnSignal", "转向灯", R.string.auto_param_turnsignal, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_turn_off, "2" to R.string.auto_enum_turn_left, "4" to R.string.auto_enum_turn_right, "6" to R.string.auto_enum_turn_hazard)),
         TriggerParamOption("SOC", "电量百分比", R.string.auto_param_soc, R.string.auto_cat_energy, R.string.auto_unit_percent),
@@ -144,6 +144,8 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("Voltage12V", "蓄电池电压", R.string.auto_param_voltage12v, R.string.auto_cat_energy, R.string.auto_unit_volt),
         TriggerParamOption("MinCellVoltage", "单体最低电压", R.string.auto_param_mincellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
         TriggerParamOption("MaxCellVoltage", "单体最高电压", R.string.auto_param_maxcellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
+        // The range the Dashboard shows (TrackingService), not a fid of its own
+        TriggerParamOption("RangeKm", "续航里程", R.string.auto_param_rangekm, R.string.auto_cat_energy, R.string.auto_unit_km),
         TriggerParamOption("ExtTemp", "车外温度", R.string.auto_param_exttemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
         TriggerParamOption("InsideTemp", "车内温度", R.string.auto_param_insidetemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
         TriggerParamOption("AvgBatTemp", "平均电池温度", R.string.auto_param_avgbattemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
@@ -158,13 +160,17 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("DoorRR", "右后车门", R.string.auto_param_doorrr, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_f, "1" to R.string.auto_enum_open_f)),
         TriggerParamOption("Hood", "引擎盖", R.string.auto_param_hood, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m)),
         TriggerParamOption("LockFL", "主驾车门锁", R.string.auto_param_lockfl, R.string.auto_cat_body, enumValues = listOf("1" to R.string.auto_enum_unlocked, "2" to R.string.auto_enum_locked)),  // codes match DiParsData.lockFL runtime: 1=unlocked, 2=locked
-        TriggerParamOption("Trunk", "后备箱门", R.string.auto_param_trunk, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m)),
+        // Live codes: 2=closed, 1=open, 3=moving (0 is not a trunk state; old rules migrated)
+        TriggerParamOption("Trunk", "后备箱门", R.string.auto_param_trunk, R.string.auto_cat_body, enumValues = listOf("2" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m, "3" to R.string.auto_enum_moving_m)),
         TriggerParamOption("ACStatus", "空调状态", R.string.auto_param_acstatus, R.string.auto_cat_climate),
         TriggerParamOption("ACCirc", "空调循环方式", R.string.auto_param_accirc, R.string.auto_cat_climate, enumValues = listOf("0" to R.string.auto_enum_fresh_air, "1" to R.string.auto_enum_recirc)),
         TriggerParamOption("ACTemp", "主驾驶空调温度", R.string.auto_param_actemp, R.string.auto_cat_climate, R.string.auto_unit_celsius),
         TriggerParamOption("FanLevel", "风量档位", R.string.auto_param_fanlevel, R.string.auto_cat_climate),
         TriggerParamOption("SeatbeltFL", "主驾驶安全带状态", R.string.auto_param_seatbeltfl, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
         TriggerParamOption("SeatbeltFR", "副驾安全带状态", R.string.auto_param_seatbeltfr, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        TriggerParamOption("SeatbeltRL", "左后安全带状态", R.string.auto_param_seatbeltrl, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        TriggerParamOption("SeatbeltRM", "后中安全带状态", R.string.auto_param_seatbeltrm, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        TriggerParamOption("SeatbeltRR", "右后安全带状态", R.string.auto_param_seatbeltrr, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
         // Occupancy codes: 1=free, 2=occupied (validated on-car; NOT 0/1 as the BYD manual claims)
         TriggerParamOption("OccupancyFL", "主驾座椅占用状态", R.string.auto_param_occupancyfl, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
         TriggerParamOption("OccupancyFR", "副驾座椅占用状态", R.string.auto_param_occupancyfr, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
@@ -693,10 +699,26 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         }
     }
 
-    private fun validateTriggers(triggers: List<TriggerDef>, editingId: Long): String? {
+    private fun validateTriggers(
+        triggers: List<TriggerDef>,
+        editingId: Long,
+        triggerLogic: String,
+        keyPickedLater: Boolean = false,
+    ): String? {
         val ctx = context.appLocalizedContext()
         val userPhrases = runCatching { userCommandPhrases() }.getOrDefault(emptyMap())
-        return when (val err = RuleDraftValidator.validateTriggers(triggers, editingId, _uiState.value.rules, userPhrases)) {
+        val err = RuleDraftValidator.validateTriggers(triggers, editingId, _uiState.value.rules, userPhrases, triggerLogic)
+            ?.takeUnless { keyPickedLater && it == TriggerValidationError.SteeringKeyUnassigned }
+        if (err != null) Log.i("AutomationViewModel", "rule not saved: $err")
+        return when (err) {
+            TriggerValidationError.SteeringKeyUnassigned -> ctx.getString(R.string.automation_trigger_steering_key_unassigned)
+            // The editor's own wording for these comes with the editor redesign; until then the
+            // general «fill in the conditions» line.
+            is TriggerValidationError.ValueNotNumber,
+            TriggerValidationError.OneShotInvalid,
+            TriggerValidationError.OneShotWithOr,
+            TriggerValidationError.OneShotWithEvent,
+            TriggerValidationError.OneShotTwice -> ctx.getString(R.string.auto_msg_name_cond_action_required)
             TriggerValidationError.VoicePhraseEmpty -> ctx.getString(R.string.automation_voice_phrase_empty)
             is TriggerValidationError.VoicePhraseBuiltin -> ctx.getString(R.string.automation_voice_phrase_taken, err.command)
             is TriggerValidationError.VoicePhraseTaken -> ctx.getString(R.string.automation_voice_phrase_taken, err.rule)
@@ -717,16 +739,29 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             _uiState.value = _uiState.value.copy(editorError = actionError)
             return
         }
-        val triggerError = validateTriggers(e.triggers, if (e.isNew) -1L else e.id)
+        val triggerError = validateTriggers(e.triggers, if (e.isNew) -1L else e.id, e.triggerLogic)
         if (triggerError != null) {
             _uiState.value = _uiState.value.copy(editorError = triggerError)
             return
         }
         // Clear previous error on success path
         _uiState.value = _uiState.value.copy(editorError = null)
+        // Names follow the catalog as saved: a value or param changed after the pick keeps no
+        // stale text in the card, the confirm window or the journal.
+        val named = e.copy(
+            triggers = e.triggers.map { withCatalogName(it, context) },
+            actions = e.actions.map { withCatalogName(it, context) },
+        )
 
         if (e.isNew) {
-            viewModelScope.launch { ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = ""))) }
+            if (_uiState.value.rules.size >= MAX_RULES) {
+                Log.i("AutomationViewModel", "rule not saved: limit of $MAX_RULES rules reached")
+                _uiState.update {
+                    it.copy(editorError = context.appLocalizedContext().getString(R.string.automation_rule_limit, MAX_RULES))
+                }
+                return
+            }
+            viewModelScope.launch { ruleDao.insert(named.applyTo(RuleEntity(name = "", triggers = "", actions = ""))) }
             closeEditor()
             return
         }
@@ -739,7 +774,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             if (stored == null) {
                 if (session == editorSession) _uiState.update { it.copy(editorRuleDeleted = true) }
             } else {
-                ruleDao.update(e.applyTo(stored))
+                ruleDao.update(named.applyTo(stored))
                 if (session == editorSession) closeEditor()
             }
         }
@@ -749,6 +784,11 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
 
     fun duplicateRule(rule: RuleEntity) {
         viewModelScope.launch {
+            if (ruleDao.getCount() >= MAX_RULES) {
+                // The refusal the driver sees comes with the card redesign; the copy is not made.
+                Log.i("AutomationViewModel", "copy of rule ${rule.id} refused: limit of $MAX_RULES rules reached")
+                return@launch
+            }
             ruleDao.insert(
                 rule.copy(
                     id = 0,
@@ -1073,7 +1113,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                 else -> a.withCall(VALIDATION_PHONE, "", false)
             }
         }
-        val error = validateActions(forValidation) ?: validateTriggers(rule.triggers, -1L)
+        val error = validateActions(forValidation) ?: validateTriggers(rule.triggers, -1L, rule.triggerLogic, keyPickedLater = true)
         if (error != null) {
             _uiState.update { it.copy(importDraft = draft.copy(error = error)) }
             return
@@ -1560,6 +1600,22 @@ fun newToggleAction(context: Context): ActionDef = ActionDef(
 )
 
 /** "Переключить: <цель>" — the saved display name for a toggle action. */
+/** [trigger] with the catalog's name of its param and value; anything off the catalog as it is. */
+internal fun withCatalogName(trigger: TriggerDef, context: Context): TriggerDef {
+    if (trigger.kind != "param") return trigger
+    val option = TRIGGER_PARAMS.firstOrNull { it.param == trigger.param } ?: return trigger
+    val value = option.localizedEnumLabel(trigger.value, context)
+    return trigger.copy(displayName = "${option.localizedName(context)} ${trigger.operator} $value")
+}
+
+/** [action] with the catalog's name of its command or toggle target; anything else as it is. */
+internal fun withCatalogName(action: ActionDef, context: Context): ActionDef = when (action.kind) {
+    "toggle" -> action.payload?.let { action.copy(displayName = toggleDisplayName(context, it)) } ?: action
+    "param" -> ACTION_COMMANDS.firstOrNull { it.toggleTarget == null && it.command == action.command }
+        ?.let { action.copy(displayName = it.localizedName(context)) } ?: action
+    else -> action
+}
+
 fun toggleDisplayName(context: Context, target: String): String {
     val lc = context.appLocalizedContext()
     val nameRes = ActionDispatcher.toggleTargetNameRes(target) ?: return lc.getString(R.string.automation_action_toggle)

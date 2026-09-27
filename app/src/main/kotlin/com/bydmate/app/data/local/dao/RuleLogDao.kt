@@ -22,4 +22,14 @@ interface RuleLogDao {
 
     @Query("DELETE FROM automation_log WHERE triggered_at < :before")
     suspend fun deleteOlderThan(before: Long): Int
+
+    @Query("SELECT * FROM automation_log ORDER BY triggered_at DESC LIMIT :limit")
+    suspend fun getRecentList(limit: Int): List<RuleLogEntity>
+
+    /** Keeps the [keep] newest rows, deletes the rest; returns how many went. */
+    @Query(
+        "DELETE FROM automation_log WHERE id NOT IN " +
+            "(SELECT id FROM automation_log ORDER BY triggered_at DESC, id DESC LIMIT :keep)"
+    )
+    suspend fun trimToNewest(keep: Int): Int
 }

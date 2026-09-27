@@ -1940,4 +1940,26 @@
     <string name="automation_tg_report_text_hint">Pojawi się pod tytułem wiadomości.</string>
     <string name="automation_tg_report_own_text">własny tekst</string>
     <string name="automation_tg_report_no_bot">Bot Telegram nie jest połączony. Połącz go w Ustawieniach, sekcja «Serwis i dane».</string>
+    <!-- Automation audit 3.19: journal reasons, write errors, new conditions -->
+    <string name="auto_log_confirm_cancelled">Anulowano w oknie potwierdzenia</string>
+    <string name="auto_log_confirm_timeout">Brak odpowiedzi w oknie potwierdzenia, nie wykonano</string>
+    <string name="auto_log_park_required">Nie wykonano: reguła tylko na postoju, a bieg to nie P</string>
+    <string name="auto_log_one_shot_expired">Jednorazowa reguła nie zadziałała w ciągu doby i została wyłączona</string>
+    <string name="auto_err_not_confirmed">Samochód nie potwierdził polecenia</string>
+    <string name="auto_err_not_supported">To polecenie nie jest obsługiwane</string>
+    <string name="auto_err_out_of_range">Niedozwolona wartość polecenia</string>
+    <string name="auto_err_unreachable">Polecenie nie dotarło do samochodu</string>
+    <string name="auto_err_not_done">Samochód nie wykonał polecenia</string>
+    <string name="auto_err_unverified">Polecenie nie jest sprawdzone w tym samochodzie i nie zadziałało</string>
+    <string name="auto_err_failed">Nie udało się wykonać polecenia</string>
+    <string name="auto_enum_moving_m">W ruchu</string>
+    <string name="auto_enum_code_sand">Piasek</string>
+    <string name="auto_enum_code_mud">Błoto</string>
+    <string name="auto_enum_code_mountain">Góry</string>
+    <string name="auto_enum_code_smart">Inteligentny</string>
+    <string name="auto_param_seatbeltrl">Pas z tyłu po lewej</string>
+    <string name="auto_param_seatbeltrm">Pas z tyłu na środku</string>
+    <string name="auto_param_seatbeltrr">Pas z tyłu po prawej</string>
+    <string name="auto_param_rangekm">Zasięg</string>
+    <string name="auto_unit_km">km</string>
 </resources>

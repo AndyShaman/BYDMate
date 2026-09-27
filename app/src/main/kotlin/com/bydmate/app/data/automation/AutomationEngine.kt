@@ -146,6 +146,16 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     @Volatile private var powerManagerWarned = false
     // Test seam: wall clock of evaluate().
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
+    // Test seam: the freshest poll, read before every step so a speed gate after a pause sees
+    // the car as it is then, not as it was when the rule fired.
+    internal var liveData: () -> DiParsData? = { TrackingService.lastData.value }
+    // Test seam: the range the Dashboard shows, for the RangeKm condition.
+    internal var rangeKm: () -> Double? = { TrackingService.lastRangeKm.value }
+    private val journal = RuleJournal(ruleLogDao, appStrings)
+    // «Why was the rule skipped» lines: one per rule and reason per minute.
+    private val skipLog = com.bydmate.app.data.autoservice.LogThrottle()
+    // Rules already logged as «true at the first check» in this process.
+    private val firstCheckLogged: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
     // live cache so the a11y key filter can answer "is this key mine?" on the
     // key event itself — a DB read there would run on the input path.
@@ -237,6 +247,12 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             try {
                 val triggers = TriggerDef.listFromJson(rule.triggers)
                 if (triggers.isEmpty()) continue
+                val oneShot = triggers.firstOrNull { it.kind == OneShotTrigger.KIND }
+                if (oneShot != null && OneShotTrigger.state(oneShot.value, now) == OneShotTrigger.State.EXPIRED) {
+                    ruleDao.setEnabled(rule.id, false)
+                    journal.oneShotExpired(rule, oneShot.value, now)
+                    continue
+                }
 
                 // network_available is an event trigger (like service_start) — fire when
                 // VALIDATED internet edge happened that this rule has not consumed yet.
@@ -273,6 +289,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 val serviceStartActive = serviceStartWindow && rule.id !in serviceStartConsumed
                 val perTrigger = evaluateEachTrigger(triggers, data, location, placesById, serviceStartActive, networkEdge)
                 val matched = combineByLogic(perTrigger, rule.triggerLogic)
+                if (!matched) logMissingData(rule, triggers, data)
 
                 // Event-style triggers (service_start, network_available) bypass edge
                 // detection ONLY when the matched=true was driven by the event itself.
@@ -294,6 +311,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                     matched
                 } else {
                     val previous = lastEvalResults.put(rule.id, state)
+                    // Audit point 1: a condition already true when first seen is only remembered.
+                    if (previous == null && matched && firstCheckLogged.add(rule.id)) {
+                        Log.i(TAG, "rule ${rule.id} '${rule.name}': already true at first check, remembered without firing")
+                    }
                     // null = first observation, hash mismatch = rule just edited —
                     // either way seed only, do not fire on a synthetic transition.
                     previous != null && previous.triggersHash == triggersHash &&
@@ -303,14 +324,23 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
                 // Cooldown (the front above is already consumed, never deferred)
                 val lastFired = rule.lastTriggeredAt ?: 0L
-                if (now - lastFired < rule.cooldownSeconds * 1000L) continue
+                if (now - lastFired < rule.cooldownSeconds * 1000L) {
+                    logSkip(rule, "cooldown", "${rule.cooldownSeconds}s, last ${(now - lastFired) / 1000}s ago")
+                    continue
+                }
 
                 // Park-only rule
-                if (rule.requirePark && data.gear != 1) continue
+                if (rule.requirePark && data.gear != 1) {
+                    logSkip(rule, "park only", "gear=${data.gear}")
+                    continue
+                }
 
                 // Once-per-trip gate: skip if already fired in the current trip
                 if (rule.fireOncePerTrip && tripStartedAt != null &&
-                    lastFiredTripByRule[rule.id] == tripStartedAt) continue
+                    lastFiredTripByRule[rule.id] == tripStartedAt) {
+                    logSkip(rule, "once per trip", "trip=$tripStartedAt")
+                    continue
+                }
 
                 val actions = ActionDef.listFromJson(rule.actions)
                 if (actions.isEmpty()) continue
@@ -323,39 +353,16 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 if (rule.fireOncePerTrip && tripStartedAt != null) {
                     lastFiredTripByRule[rule.id] = tripStartedAt
                 }
+                // A one-shot rule is spent by this fire, even if its confirmation is cancelled.
+                if (oneShot != null) {
+                    ruleDao.setEnabled(rule.id, false)
+                    Log.i(TAG, "one-shot rule ${rule.id} '${rule.name}' fired (at=${oneShot.value}), switched off")
+                }
 
                 val snapshot = buildSnapshot(triggers, data)
 
                 if (rule.confirmBeforeExecute) {
-                    val shown = ConfirmOverlayManager.show(
-                        context = context,
-                        ruleName = rule.name,
-                        actionsSummary = actions.joinToString(", ") { it.displayName },
-                        onConfirm = {
-                            scope.launch {
-                                executeAndLog(rule, actions, snapshot, TrackingService.lastData.value)
-                            }
-                        },
-                        onCancel = {
-                            scope.launch {
-                                ruleLogDao.insert(
-                                    RuleLogEntity(
-                                        ruleId = rule.id,
-                                        ruleName = rule.name,
-                                        triggeredAt = now,
-                                        triggersSnapshot = snapshot,
-                                        actionsResult = """[{"result":"cancelled"}]""",
-                                        success = false,
-                                    )
-                                )
-                                Log.i(TAG, "Cancelled via overlay: '${rule.name}'")
-                            }
-                        },
-                    )
-                    if (!shown) {
-                        // Fallback: user hasn't granted SYSTEM_ALERT_WINDOW.
-                        showConfirmNotification(rule, actions, snapshot)
-                    }
+                    confirmThenRun(rule, actions, snapshot, now)
                 } else {
                     scope.launch { executeAndLog(rule, actions, snapshot, data) }
                 }
@@ -415,7 +422,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 // Honor requirePark even on the manual path. Reuse the engine's
                 // existing parked-check semantics: parked = gear == 1. When data
                 // is null the park gate is closed (null?.gear != 1 → true).
-                if (rule.requirePark && data?.gear != 1) continue
+                if (rule.requirePark && data?.gear != 1) {
+                    journal.parkRequired(rule, JSONObject().put(kind, value).toString(), data?.gear)
+                    continue
+                }
 
                 val actions = ActionDef.listFromJson(rule.actions)
                 if (actions.isEmpty()) continue
@@ -427,31 +437,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 ruleDao.updateLastTriggered(rule.id, now)
 
                 if (rule.confirmBeforeExecute) {
-                    val shown = ConfirmOverlayManager.show(
-                        context = context,
-                        ruleName = rule.name,
-                        actionsSummary = actions.joinToString(", ") { it.displayName },
-                        onConfirm = {
-                            scope.launch {
-                                executeAndLog(rule, actions, snapshot, TrackingService.lastData.value)
-                            }
-                        },
-                        onCancel = {
-                            scope.launch {
-                                ruleLogDao.insert(
-                                    RuleLogEntity(
-                                        ruleId = rule.id,
-                                        ruleName = rule.name,
-                                        triggeredAt = now,
-                                        triggersSnapshot = snapshot,
-                                        actionsResult = """[{"result":"cancelled"}]""",
-                                        success = false,
-                                    )
-                                )
-                            }
-                        },
-                    )
-                    if (!shown) showConfirmNotification(rule, actions, snapshot)
+                    confirmThenRun(rule, actions, snapshot, now)
                 } else {
                     // Awaited directly (not scope.launch) so the caller's
                     // coroutine observes dispatch completion deterministically.
@@ -484,14 +470,15 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             // Button-press triggers never match during the 3-second poll. They
             // fire only through the explicit onButtonPress() entry point, so a
             // rule built around a widget button can't be triggered by polling.
-            "button_press" -> false
             // Same for steering-wheel keys: only the a11y filter fires them,
-            // through onSteeringKey().
-            TRIGGER_KIND_STEERING_KEY -> false
-            "voice" -> false   // event trigger; fired on demand via fireVoiceRule, never polled
+            // through onSteeringKey(). Voice is fired on demand via fireVoiceRule.
+            "button_press", TRIGGER_KIND_STEERING_KEY, "voice" -> false
+            // One-shot: from its moment for a day, screen on. The rule is switched off once it fires.
+            OneShotTrigger.KIND ->
+                OneShotTrigger.state(trigger.value, nowMs()) == OneShotTrigger.State.DUE && interactiveProvider()
             else -> { // "param" (default)
                 val actual = getParamValue(data, trigger.param) ?: return@map false
-                val expected = trigger.value.toDoubleOrNull() ?: return@map false
+                val expected = TriggerNumber.parse(trigger.value) ?: return@map false
                 compare(actual, trigger.operator, expected)
             }
         }
@@ -515,7 +502,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         perTrigger: List<Boolean>,
         logic: String
     ): Boolean {
-        val eventKinds = setOf("service_start", "network_available")
+        // A one-shot rule fires at its first check at or after the moment, not on a false->true
+        // front: a rule first seen after the moment would otherwise only be remembered.
+        val eventKinds = setOf("service_start", "network_available", OneShotTrigger.KIND)
         return when (logic) {
             // OR: at least one event-trigger must be true on its own.
             "OR" -> triggers.zip(perTrigger).any { (t, r) -> r && t.kind in eventKinds }
@@ -594,6 +583,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         "Hood" -> data.hood?.toDouble()
         "SeatbeltFL" -> data.seatbeltFL?.toDouble()
         "SeatbeltFR" -> data.seatbeltFR?.toDouble()
+        "SeatbeltRL" -> data.seatbeltRL?.toDouble()
+        "SeatbeltRM" -> data.seatbeltRM?.toDouble()
+        "SeatbeltRR" -> data.seatbeltRR?.toDouble()
         "OccupancyFL" -> data.occupancyFL?.toDouble()
         "OccupancyFR" -> data.occupancyFR?.toDouble()
         "OccupancyRL" -> data.occupancyRL?.toDouble()
@@ -606,7 +598,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         "TirePressFR" -> data.tirePressFR?.toDouble()
         "TirePressRL" -> data.tirePressRL?.toDouble()
         "TirePressRR" -> data.tirePressRR?.toDouble()
-        "DriveMode" -> data.driveMode?.toDouble()
+        "DriveMode" -> DriveModeCondition.value(data.driveMode, data.driveModeTarget)?.toDouble()
         "WorkMode" -> data.workMode?.toDouble()
         "AutoPark" -> data.autoPark?.toDouble()
         "Rain" -> data.rain?.toDouble()
@@ -621,6 +613,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         "Voltage12V" -> data.voltage12v
         "MinCellVoltage" -> data.minCellVoltage
         "MaxCellVoltage" -> data.maxCellVoltage
+        "RangeKm" -> rangeKm()
         else -> null
     }
 
@@ -640,8 +633,20 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val results = JSONArray()
         var allSuccess = true
 
-        for (action in actions) {
-            val result = actionDispatcher.dispatch(action.withReportRuleName(rule.name), data)
+        for ((i, action) in actions.withIndex()) {
+            // Fresh data per step: a pause may lie between the fire and this step.
+            val stepData = liveData() ?: data
+            val blocked = if (stepData == null) ActionDispatcher.speedUnknownBlock(action) else null
+            val result = if (blocked != null) {
+                DispatchResult(false, blocked.toText(context))
+            } else {
+                actionDispatcher.dispatch(action.withReportRuleName(rule.name), stepData)
+            }
+            Log.i(
+                TAG,
+                "rule ${rule.id} step ${i + 1}/${actions.size} ${action.kind} speed=${stepData?.speed} " +
+                    "-> ${if (result.success) "ok" else "failed: ${result.reason}"}",
+            )
             results.put(JSONObject().apply {
                 put("command", action.command)
                 put("displayName", action.displayName)
@@ -681,7 +686,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         if (actions.isEmpty()) return VoiceFireResult.NotFound
 
         // requirePark: gear 1 = P.
-        if (rule.requirePark && data?.gear != 1) return VoiceFireResult.ParkRequired
+        if (rule.requirePark && data?.gear != 1) {
+            journal.parkRequired(rule, JSONObject().put("voice", true).toString(), data?.gear)
+            return VoiceFireResult.ParkRequired
+        }
 
         // Fail-closed: getBlockReason() allows window/sunroof-open when the whole snapshot
         // is missing. Guard here so voice automations can't open either at unknown speed
@@ -697,29 +705,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val snapshot = JSONObject().put("voice", true).toString()
 
         if (rule.confirmBeforeExecute) {
-            val shown = ConfirmOverlayManager.show(
-                context = context,
-                ruleName = rule.name,
-                actionsSummary = actions.joinToString(", ") { it.displayName },
-                // Re-read live vehicle data at confirm time (the overlay can sit
-                // open while the car accelerates); mirrors the polling confirm path
-                // so the >80km/h window gate runs against current speed, not speak-time.
-                onConfirm = { scope.launch { executeAndLog(rule, actions, snapshot, TrackingService.lastData.value) } },
-                onCancel = {
-                    scope.launch {
-                        ruleLogDao.insert(
-                            RuleLogEntity(
-                                ruleId = rule.id, ruleName = rule.name,
-                                triggeredAt = System.currentTimeMillis(),
-                                triggersSnapshot = snapshot,
-                                actionsResult = """[{"result":"cancelled"}]""",
-                                success = false,
-                            )
-                        )
-                    }
-                },
-            )
-            if (!shown) showConfirmNotification(rule, actions, snapshot)
+            confirmThenRun(rule, actions, snapshot, System.currentTimeMillis())
             return VoiceFireResult.Confirming
         }
 
@@ -738,16 +724,58 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             when (t.kind) {
                 "place_enter" -> json.put("place_enter", t.placeName ?: "?")
                 "place_exit" -> json.put("place_exit", t.placeName ?: "?")
-                "time_of_day" -> json.put("time_of_day", t.value)
-                "time_range" -> json.put("time_range", t.value)
+                "time_of_day", "time_range", "button_press", TRIGGER_KIND_STEERING_KEY, OneShotTrigger.KIND ->
+                    json.put(t.kind, t.value)
                 "service_start" -> json.put("service_start", true)
                 "network_available" -> json.put("network_available", true)
-                "button_press" -> json.put("button_press", t.value)
-                TRIGGER_KIND_STEERING_KEY -> json.put(TRIGGER_KIND_STEERING_KEY, t.value)
                 else -> json.put(t.param, getParamValue(data, t.param) ?: JSONObject.NULL)
             }
         }
         return json.toString()
+    }
+
+    /**
+     * Asks before running [actions]: the overlay, or the notification when overlays are not
+     * allowed. The steps run against the data at confirm time; a cancel or no answer goes to the
+     * journal with its reason.
+     */
+    private fun confirmThenRun(rule: RuleEntity, actions: List<ActionDef>, snapshot: String, at: Long) {
+        val shown = ConfirmOverlayManager.show(
+            context = context,
+            ruleName = rule.name,
+            actionsSummary = actions.joinToString(", ") { it.displayName },
+            onConfirm = { scope.launch { executeAndLog(rule, actions, snapshot, TrackingService.lastData.value) } },
+            onCancel = CancelOrTimeout(
+                onCancel = { scope.launch { journal.cancelled(rule, snapshot, at) } },
+                onTimeout = { scope.launch { journal.timeout(rule, snapshot, at) } },
+            ),
+        )
+        // Fallback: user hasn't granted SYSTEM_ALERT_WINDOW.
+        if (!shown) showConfirmNotification(rule, actions, snapshot)
+    }
+
+    private fun logSkip(rule: RuleEntity, reason: String, detail: String) {
+        if (skipLog.shouldLog("${rule.id}:$reason", nowMs())) {
+            Log.i(TAG, "rule ${rule.id} '${rule.name}' skipped: $reason ($detail)")
+        }
+    }
+
+    /** A param condition the car gave no value for is false, whatever it compares: say which. */
+    private fun logMissingData(rule: RuleEntity, triggers: List<TriggerDef>, data: DiParsData) {
+        val missing = triggers.filter { it.kind == "param" && getParamValue(data, it.param) == null }
+        if (missing.isNotEmpty()) logSkip(rule, "no data", missing.joinToString(",") { it.param })
+    }
+
+    /** Journal retention, run at service start: 30 days, 2000 rows. */
+    suspend fun pruneJournal() = journal.prune(nowMs())
+
+    /** The `--- automation journal ---` dump section: the newest entries with their reasons. */
+    suspend fun journalDumpLines(): List<String> = journal.dumpLines()
+
+    /** Every one of [params] as a condition reads it now, for the dump. */
+    fun paramSnapshotLine(params: List<String>): String {
+        val data = liveData() ?: return "(no data yet)"
+        return params.joinToString(" ") { "$it=${getParamValue(data, it) ?: "-"}" }
     }
 
     // --- Confirmation notifications ---
@@ -803,19 +831,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             pendingConfirmations.remove(notifId)
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.cancel(notifId)
-            scope.launch {
-                ruleLogDao.insert(
-                    RuleLogEntity(
-                        ruleId = pending.rule.id,
-                        ruleName = pending.rule.name,
-                        triggeredAt = pending.createdAt,
-                        triggersSnapshot = pending.snapshot,
-                        actionsResult = """[{"result":"timeout"}]""",
-                        success = false
-                    )
-                )
-            }
-            Log.i(TAG, "Confirm timeout: '${pending.rule.name}'")
+            scope.launch { journal.timeout(pending.rule, pending.snapshot, pending.createdAt) }
         }
     }
 
@@ -833,20 +849,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                         val currentData = TrackingService.lastData.value
                         executeAndLog(pending.rule, pending.actions, pending.snapshot, currentData)
                     }
-                    ACTION_CANCEL -> {
-                        scope.launch {
-                            ruleLogDao.insert(
-                                RuleLogEntity(
-                                    ruleId = pending.rule.id,
-                                    ruleName = pending.rule.name,
-                                    triggeredAt = pending.createdAt,
-                                    triggersSnapshot = pending.snapshot,
-                                    actionsResult = """[{"result":"cancelled"}]""",
-                                    success = false
-                                )
-                            )
-                        }
-                        Log.i(TAG, "Cancelled by user: '${pending.rule.name}'")
+                    ACTION_CANCEL -> scope.launch {
+                        journal.cancelled(pending.rule, pending.snapshot, pending.createdAt)
                     }
                 }
             }

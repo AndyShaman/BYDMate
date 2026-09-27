@@ -1861,6 +1861,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             } catch (e: Exception) {
                 appendLine("(failed to gather rules: ${e.message})")
             }
+            // What the rules did and why not, and every condition as the engine reads it now.
+            appendLine("--- automation journal ---")
+            try {
+                automationEngine.journalDumpLines().forEach { appendLine(it) }
+            } catch (e: Exception) {
+                appendLine("(failed to gather journal: ${e.message})")
+            }
+            appendLine("--- automation params ---")
+            appendLine(automationEngine.paramSnapshotLine(com.bydmate.app.ui.automation.TRIGGER_PARAMS.map { it.param }))
 
             // Voice agent: which connection/model answered.
             appendLine("--- agent ---")

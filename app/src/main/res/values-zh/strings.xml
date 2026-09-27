@@ -1902,4 +1902,26 @@
     <string name="automation_tg_report_text_hint">将显示在消息标题下方。</string>
     <string name="automation_tg_report_own_text">自定义文字</string>
     <string name="automation_tg_report_no_bot">Telegram 机器人未连接。请在设置的「服务与数据」中连接。</string>
+    <!-- Automation audit 3.19: journal reasons, write errors, new conditions -->
+    <string name="auto_log_confirm_cancelled">已在确认窗口中取消</string>
+    <string name="auto_log_confirm_timeout">确认窗口无响应，未执行</string>
+    <string name="auto_log_park_required">未执行：该规则仅限驻车，当前挡位不是 P</string>
+    <string name="auto_log_one_shot_expired">单次规则一天内未触发，已关闭</string>
+    <string name="auto_err_not_confirmed">车辆未确认该指令</string>
+    <string name="auto_err_not_supported">不支持此指令</string>
+    <string name="auto_err_out_of_range">指令的值无效</string>
+    <string name="auto_err_unreachable">指令未送达车辆</string>
+    <string name="auto_err_not_done">车辆未执行该指令</string>
+    <string name="auto_err_unverified">此指令未在本车验证，未生效</string>
+    <string name="auto_err_failed">无法执行指令</string>
+    <string name="auto_enum_moving_m">移动中</string>
+    <string name="auto_enum_code_sand">沙地</string>
+    <string name="auto_enum_code_mud">泥地</string>
+    <string name="auto_enum_code_mountain">山地</string>
+    <string name="auto_enum_code_smart">智能</string>
+    <string name="auto_param_seatbeltrl">左后安全带</string>
+    <string name="auto_param_seatbeltrm">后中安全带</string>
+    <string name="auto_param_seatbeltrr">右后安全带</string>
+    <string name="auto_param_rangekm">续航里程</string>
+    <string name="auto_unit_km">km</string>
 </resources>

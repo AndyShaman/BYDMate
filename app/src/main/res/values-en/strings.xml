@@ -1788,4 +1788,26 @@
     <string name="automation_tg_report_text_hint">Shown under the message title.</string>
     <string name="automation_tg_report_own_text">own text</string>
     <string name="automation_tg_report_no_bot">The Telegram bot is not connected. Connect it in Settings, «Service &amp; Data».</string>
+    <!-- Automation audit 3.19: journal reasons, write errors, new conditions -->
+    <string name="auto_log_confirm_cancelled">Cancelled in the confirmation window</string>
+    <string name="auto_log_confirm_timeout">No answer in the confirmation window, not run</string>
+    <string name="auto_log_park_required">Not run: the rule is for park only and the gear is not P</string>
+    <string name="auto_log_one_shot_expired">One-time rule did not fire within a day and was switched off</string>
+    <string name="auto_err_not_confirmed">The car did not confirm the command</string>
+    <string name="auto_err_not_supported">This command is not supported</string>
+    <string name="auto_err_out_of_range">Invalid value for the command</string>
+    <string name="auto_err_unreachable">The command did not reach the car</string>
+    <string name="auto_err_not_done">The car did not carry out the command</string>
+    <string name="auto_err_unverified">The command is not verified on this car and did not work</string>
+    <string name="auto_err_failed">Could not run the command</string>
+    <string name="auto_enum_moving_m">Moving</string>
+    <string name="auto_enum_code_sand">SAND</string>
+    <string name="auto_enum_code_mud">MUD</string>
+    <string name="auto_enum_code_mountain">MOUNTAIN</string>
+    <string name="auto_enum_code_smart">SMART</string>
+    <string name="auto_param_seatbeltrl">Rear Left Seatbelt</string>
+    <string name="auto_param_seatbeltrm">Rear Middle Seatbelt</string>
+    <string name="auto_param_seatbeltrr">Rear Right Seatbelt</string>
+    <string name="auto_param_rangekm">Range</string>
+    <string name="auto_unit_km">km</string>
 </resources>
