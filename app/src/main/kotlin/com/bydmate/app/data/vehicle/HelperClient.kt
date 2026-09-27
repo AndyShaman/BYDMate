@@ -163,6 +163,14 @@ sealed class DumpFidsResult {
 }
 
 /**
+ * Thrown by [HelperClient.writeStatus] when its [beforeSend][HelperClient.writeStatus] guard
+ * refuses the send from inside the transport lock, right before the transact. Lets
+ * [VehicleApiImpl.doWriteOutcome] tell a guard refusal apart from every other write failure
+ * (daemon unreachable, exception) without overloading the raw status int.
+ */
+class WriteGuardRefused : Exception()
+
+/**
  * Client for the in-vehicle helper daemon registered as the `bydmate_helper`
  * binder service (ServiceManager.getService + IBinder.transact).
  *
@@ -186,8 +194,14 @@ interface HelperClient {
      */
     suspend fun readBatch(items: List<BatchReadItem>): List<Pair<Int, Int>>?
     suspend fun write(dev: Int, fid: Int, value: Int): Boolean
-    /** Raw autoservice setInt status (1 real, 0 no-op, <0 error, null daemon unreachable). */
-    suspend fun writeStatus(dev: Int, fid: Int, value: Int): Int?
+    /**
+     * Raw autoservice setInt status (1 real, 0 no-op, <0 error, null daemon unreachable).
+     * [beforeSend], when given, runs inside the transport mutex, immediately before the
+     * transact — no queue wait behind another request can separate the check from the actual
+     * send. A false return skips the transact entirely and [writeStatus] throws
+     * [WriteGuardRefused].
+     */
+    suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend () -> Boolean)? = null): Int?
     suspend fun isAlive(): Boolean
 
     /** Creates a VirtualDisplay backed by [surface]; returns its displayId (>0) or null. */
@@ -525,10 +539,20 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         }
     }
 
-    override suspend fun writeStatus(dev: Int, fid: Int, value: Int): Int? {
-        val status = transact(HelperBinderProtocol.TX_WRITE) {
-            it.writeInt(dev); it.writeInt(fid); it.writeInt(value)
-        }?.first
+    override suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend () -> Boolean)?): Int? {
+        val status = withContext(Dispatchers.IO) {
+            withTimeoutOrNull(REQ_TIMEOUT_MS) {
+                mutex.withLock {
+                    // Runs inside the lock, right before the transact: no queue wait behind
+                    // another queued request can separate this check from the actual send
+                    // (terrain drive-mode speed limit, 2026-09-27).
+                    if (beforeSend != null && !beforeSend()) throw WriteGuardRefused()
+                    transactBodyUnlocked(HelperBinderProtocol.TX_WRITE, {
+                        it.writeInt(dev); it.writeInt(fid); it.writeInt(value)
+                    }) { reply -> if (reply.dataAvail() >= 4) reply.readInt() else null }
+                }
+            }
+        }
         // status forwarded from the autoservice setInt return code: 1 = real action,
         // 0 = accepted no-op (fid ineffective on this trim), <0 = error, null =
         // daemon unreachable. INFO so a "green" automation that physically did

@@ -162,6 +162,7 @@
     <ID>EmptyFunctionBlock:HelperClientProjectionTest.kt$HelperClientProjectionTest.FakeIBinder${}</ID>
     <ID>EmptyFunctionBlock:HelperClientSplit37Test.kt$HelperClientSplit37Test.FakeIBinder${}</ID>
     <ID>EmptyFunctionBlock:HelperClientTaskStateTest.kt$HelperClientTaskStateTest.FakeIBinder${}</ID>
+    <ID>EmptyFunctionBlock:HelperClientWriteGuardTest.kt$HelperClientWriteGuardTest.FakeIBinder${}</ID>
     <ID>EmptyFunctionBlock:MediaKeyRerouterTest.kt$MediaKeyRerouterIntegrationTest.FakeSplitPreferences${}</ID>
     <ID>EmptyFunctionBlock:MediaSessionListenerServiceTest.kt$MediaSessionListenerServiceTest.RecordingExecutor${}</ID>
     <ID>EmptyFunctionBlock:NativeSplitLauncherTest.kt$SplitSessionManagerNativeModeTest.NativeModeFakeBackdrop${}</ID>

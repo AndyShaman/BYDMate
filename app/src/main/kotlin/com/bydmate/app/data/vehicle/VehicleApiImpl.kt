@@ -682,9 +682,11 @@ class VehicleApiImpl @Inject constructor(
      * range) maps to TRANSIENT so the adaptive channel never switches channels because
      * of a code bug. seat entries have no readbackFid, so no read-back verification.
      * [journaled] = false keeps non-seat writes (steering heat) out of the seat journal.
-     * [beforeSend], when given, runs after [logAttempt]'s (suspending) audit-row insert and
-     * immediately before the helper call — a last-instant guard nothing after it can delay
-     * past. Returning false skips the helper entirely and reports "pre_send_refused".
+     * [beforeSend], when given, is handed to [HelperClient.writeStatus], which runs it inside
+     * its own transport mutex, immediately before the transact — the actual last-instant guard,
+     * with no queue wait behind another helper request able to separate the check from the send.
+     * A false return skips the transact entirely and surfaces here as [WriteGuardRefused],
+     * reported as "pre_send_refused".
      */
     internal suspend fun doWriteOutcome(
         actionName: String,
@@ -703,17 +705,17 @@ class VehicleApiImpl @Inject constructor(
             return WriteOutcome.TRANSIENT
         }
         logAttempt(actionName, entry, value)
-        if (beforeSend != null && !beforeSend()) {
-            Log.w(TAG, "doWriteOutcome: action=$actionName refused by beforeSend guard")
+        val status: Int? = try {
+            helper.writeStatus(entry.dev, entry.writeFid, value, beforeSend)
+        } catch (e: CancellationException) {
+            // Rethrow so callers outside the NonCancellable write unit (channel resolution,
+            // probe logic) can still be cancelled normally.
+            throw e
+        } catch (e: WriteGuardRefused) {
+            Log.w(TAG, "doWriteOutcome: action=$actionName refused by beforeSend guard: ${e.message}")
             logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "pre_send_refused", entry.validated)
             return WriteOutcome.TRANSIENT
-        }
-        val status: Int? = try {
-            helper.writeStatus(entry.dev, entry.writeFid, value)
         } catch (e: Exception) {
-            // Rethrow cancellation so callers outside the NonCancellable write unit
-            // (channel resolution, probe logic) can still be cancelled normally.
-            if (e is CancellationException) throw e
             Log.w(TAG, "doWriteOutcome: action=$actionName helper threw: ${e.message}")
             logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
             return WriteOutcome.TRANSIENT
