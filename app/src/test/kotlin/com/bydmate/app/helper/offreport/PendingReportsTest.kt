@@ -44,10 +44,29 @@ class PendingReportsTest {
         store.save(report("a1", 1_000L))
         store.save(report("a2", 2_000L))
         store.save(report("a3", 3_000L))
-        store.delete("a2")
+        store.delete("2000-a2")
         assertEquals(listOf("a1", "a3"), store.list().map { it.id })
         assertEquals(listOf("a1", "a3"), store.deleteAll().ids)
         assertEquals(0, store.count())
+    }
+
+    @Test fun `an event is its key, two power-offs under one report id are two events`() {
+        val store = PendingReports(tmp.newFolder(), syncDir = {})
+        store.save(report("x1", 1_000L))
+        store.save(report("x1", 2_000L))
+        assertEquals(listOf("1000-x1", "2000-x1"), store.list().map { it.key })
+        store.delete("1000-x1")
+        assertEquals(listOf(2_000L), store.list().map { it.powerOffMs })
+    }
+
+    @Test fun `delete takes a temp file a failed save left too, so nothing is recovered later`() {
+        val dir = tmp.newFolder()
+        val store = PendingReports(dir, syncDir = {})
+        store.save(report("a1", 1_000L))
+        File(dir, "1000-a1.tmp").writeBytes(File(dir, "1000-a1.rep").readBytes())
+        store.delete("1000-a1")
+        assertTrue(dir.list()!!.isEmpty())
+        assertTrue(store.list().isEmpty())
     }
 
     @Test fun `an unreadable file is dropped and does not block the others`() {
@@ -114,14 +133,14 @@ class PendingReportsTest {
         val store = PendingReports(dir, syncDir = { seen += it.list()!!.sorted() })
         store.save(report("a1", 1_000L))
         assertEquals(listOf(listOf("1000-a1.rep")), seen)
-        store.delete("a1")
+        store.delete("1000-a1")
         assertEquals(listOf(emptyList<String>()), seen.drop(1))
     }
 
     @Test fun `a failing folder sync costs nothing`() {
         val store = PendingReports(tmp.newFolder(), syncDir = { throw IllegalStateException("errno") })
         assertTrue(store.save(report("a1", 1_000L)))
-        store.delete("a1")
+        store.delete("1000-a1")
         assertEquals(0, store.count())
     }
 }

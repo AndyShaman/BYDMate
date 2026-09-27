@@ -23,8 +23,8 @@ internal class RetryResult(val sent: Boolean, val attempts: Int, val rc: String,
  * each capped to what is left of the window. No attempt starts after the deadline; one already in
  * flight may overrun it by at most its own bound (the sender's watchdog cuts the connection at
  * connect + read timeout; the daemon has a single sender thread, so nothing else sends the same
- * report meanwhile, and a report that did not go out waits on disk). [cancelled] is asked before
- * every attempt: a reason instead of null ends the loop as refused, with that reason as rc.
+ * report meanwhile, and a report that did not go out waits on disk). An [attempt] that may not send
+ * any more (disarmed, another chat) answers STOP with its reason as rc, ending the loop as refused.
  *
  * Not idempotent (accepted): when Telegram took the POST but the answer was lost with the network,
  * the next attempt or the later pending delivery sends the report a second time. The Bot API has
@@ -46,12 +46,10 @@ internal object OffReportRetry {
         sleep: (Long) -> Unit,
         attempt: (connectMs: Int, readMs: Int) -> AttemptResult,
         onAttempt: (n: Int, rc: String, sinceOffMs: Long) -> Unit,
-        cancelled: () -> String? = { null },
     ): RetryResult {
         var n = 0
         var rc = OFF_REPORT_NO_RC
         while (true) {
-            cancelled()?.let { reason -> return RetryResult(false, n, reason, refused = true) }
             val left = offAt + DEADLINE_MS - clock()
             if (left < MIN_ATTEMPT_MS) break
             n++

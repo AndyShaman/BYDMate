@@ -73,26 +73,12 @@ class OffReportRetryTest {
         assertTrue(result.refused)
     }
 
-    @Test fun `a cancel seen before an attempt ends the loop as refused with its reason`() {
-        var cancel: String? = null
-        val result = OffReportRetry.run(
-            offAt = offAt,
-            clock = { now },
-            sleep = { now += it },
-            attempt = { _, _ ->
-                attemptsAt += now - offAt
-                now += 100
-                cancel = "disarm"
-                io
-            },
-            onAttempt = { _, _, _ -> },
-            cancelled = { cancel },
-        )
+    @Test fun `an attempt that may not send any more ends the loop as refused with its reason`() {
+        val result = run(100) { n -> if (n < 2) io else AttemptResult("disarm", AttemptResult.Verdict.STOP) }
         assertFalse(result.sent)
         assertTrue(result.refused)
         assertEquals("disarm", result.rc)
-        assertEquals(1, result.attempts)
-        assertEquals(1, attemptsAt.size)
+        assertEquals(2, result.attempts)
     }
 
     @Test fun `busy and server errors retry, other codes stop`() {

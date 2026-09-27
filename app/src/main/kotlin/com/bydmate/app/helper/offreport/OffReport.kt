@@ -30,20 +30,28 @@ import java.util.concurrent.TimeUnit
  * app is killed within about a second of the car being switched off (quickboot force-stops it), the
  * daemon is not. The app keeps a ready report here ([arm]); when the daemon's own listener on the
  * power fids sees the power-off ([PowerOffAutomaton]), the report gets its time, is written to disk
- * ([PendingReports]) right there on the listener thread (disk only, never behind the network) and
- * sent within the 8 s before the networks go ([OffReportRetry]). Sent or refused for good, the file
- * goes; otherwise it waits, and every later [arm] (the app's next start on the next drive, with a
- * token again) delivers what waits, oldest first, with the «(записано в HH:MM)» line, backing off
- * after a failed pass. [disarm] deletes the pending files before it answers.
+ * ([PendingReports]) right there on the listener thread (disk only, never behind the network), put
+ * into the pending set ([events]; there even when the disk write failed) and sent within the 8 s
+ * before the networks go ([OffReportRetry]). Sent or refused for good, that event goes; otherwise
+ * it waits, and every later [arm] (the app's next start on the next drive, with a token again)
+ * delivers what waits, oldest first, with the «(записано в HH:MM)» line, backing off after a failed
+ * pass. [disarm] deletes the pending files before it answers.
+ *
+ * An event is its key ([PendingReport.key], power-off time and report id), never the report id
+ * alone: the app re-arms an unchanged report under the same id, so two power-offs can share it.
  *
  * The arm epoch ([epoch]) moves on every [disarm] and every [arm] to another chat: a power-off
- * report taken under an older epoch is not saved, and not attempted once more, it is dropped. A
- * pending pass reads the armed bot and chat again before every report, so nothing goes out with a
- * recipient the app has since replaced.
+ * report taken under an older epoch is not saved, and not attempted once more, it is dropped. Right
+ * before every send, under [lock], the event must still be pending and its chat still the armed
+ * one, so nothing goes out with a recipient the app has since replaced. Accepted: an arm or disarm
+ * landing between that check and the request, or during it, does not stop that one request (to a
+ * chat the user armed moments before).
  *
- * Every send runs on ONE sender thread ([send]), so the same report is never in flight twice.
- * [arm] only stores the report and returns: the listener registration, its retries and the priming
- * reads run on the daemon's worker thread. A power fid whose registration failed is retried every
+ * ONE loop on ONE sender thread ([send], [drain]) sends everything: the burst of a fresh power-off
+ * first, then a pending pass when an arm asked for one. So an event is never sent twice by two
+ * actors, and a fresh power-off never waits for an older report's backoff. [arm] only stores the
+ * report and returns: the listener registration, its retries and the priming reads run on the
+ * daemon's worker thread. A power fid whose registration failed is retried every
  * [REGISTER_RETRY_MS] for the daemon's life.
  *
  * Separate from the push registry and the recorder: their listeners come and go with the app and
@@ -86,6 +94,11 @@ internal object OffReport {
     private const val DROP_DISARM = "disarm"
     private const val DROP_CHAT = "chat_changed"
 
+    /** Why [gate] let a pending pass stop or skip: delivered already, nothing armed, a power-off first. */
+    private const val DROP_GONE = "gone"
+    private const val DROP_UNARMED = "unarmed"
+    private const val DROP_YIELD = "yield"
+
     private class Armed(val request: ArmRequest, val armedAtMs: Long)
 
     /** Internal rather than private so a test can assert it is free during a vendor call. */
@@ -106,10 +119,22 @@ internal object OffReport {
     /** The chat of the last [arm], kept after the power-off takes the report; null once disarmed. */
     private var recipient: Long? = null
 
-    /** Pending delivery gate, guarded by [lock]: one pass queued or running at a time, backoff on [monoClock]. */
-    private var passQueued = false
+    /** Pending delivery backoff on [monoClock], guarded by [lock]. */
     private var passNotBefore = 0L
     private var passBackoffMs = 0L
+
+    /**
+     * The pending set, guarded by [lock]: every event not delivered yet that this daemon knows of,
+     * by key (power-offs of this run, files found on disk), at most [PendingReports.MAX], newest kept.
+     */
+    private val events = LinkedHashMap<String, PendingReport>()
+
+    /** Power-offs whose burst has not run yet, oldest first; guarded by [lock]. */
+    private val fresh = ArrayDeque<Burst>()
+
+    /** [drain] is queued or running; [passWanted]: an arm asked for a pending pass. Guarded by [lock]. */
+    private var drainQueued = false
+    private var passWanted = false
 
     /** Direct read of a power fid (autoservice getInt), installed by the daemon; null = unreadable. */
     @Volatile internal var reader: (dev: Int, fid: Int) -> Int? = { _, _ -> null }
@@ -157,13 +182,14 @@ internal object OffReport {
             if (recipient != null && recipient != request.chatId) bumpEpoch(DROP_CHAT)
             recipient = request.chatId
             armed = Armed(request, wallClock())
-            val fresh = registrations.isEmpty()
-            if (fresh) POWER_FIDS.forEach { (_, fid) -> registrations[fid] = FID_PENDING }
-            fresh
+            if (monoClock() >= passNotBefore) passWanted = true
+            val unregistered = registrations.isEmpty()
+            if (unregistered) POWER_FIDS.forEach { (_, fid) -> registrations[fid] = FID_PENDING }
+            unregistered
         }
         Log.i(TAG, "offreport: armed id=${request.id} len=${request.text.length}")
         schedule(0L, Runnable { guardedWork { if (first) registerPending() else prime() } })
-        requestPendingPass()
+        requestDrain()
     }
 
     /**
@@ -177,6 +203,7 @@ internal object OffReport {
             recipient = null
             passNotBefore = 0L
             passBackoffMs = 0L
+            events.clear()
             armed?.request?.id.also { armed = null }
         }
         Log.i(TAG, "offreport: disarmed id=${had ?: "-"}")
@@ -217,8 +244,8 @@ internal object OffReport {
     /**
      * Vendor binder thread: a power fid moved. On the power-off the armed report is taken (one
      * report per arm: a quick off-on-off before the app re-arms must not send stale text twice),
-     * written to disk here (a few KB and an fsync, never waiting on the network) and handed to the
-     * sender. This thread belongs to the firmware: nothing on it waits for more than local disk.
+     * written to disk here (a few KB and an fsync, never waiting on the network), put into the
+     * pending set and handed to the sender loop. This thread belongs to the firmware: nothing on it waits for more than local disk.
      */
     fun onPower(fid: Int, value: Int, atElapsed: Long) {
         if (POWER_FIDS.none { it.second == fid }) return
@@ -240,134 +267,232 @@ internal object OffReport {
         }
         if (taken == null) return
         val request = taken.request
-        val text = TelegramReportBuilder.fillTime(request.text, taken.offAt)
+        val report = PendingReport(request.id, request.chatId, taken.offAt, TelegramReportBuilder.fillTime(request.text, taken.offAt))
         try {
-            // A disarm or another chat since the take: not written; the send below drops it.
-            val saved = pending.save(PendingReport(request.id, request.chatId, taken.offAt, text)) {
-                dropReason(taken.epoch) == null
-            }
+            // A disarm or another chat since the take: not written, and not held below.
+            val saved = pending.save(report) { dropReason(taken.epoch) == null }
             if (saved) Log.i(TAG, "offreport: pending saved id=${request.id}")
         } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
             Log.w(TAG, "offreport: pending save failed id=${request.id}: ${e.javaClass.simpleName}")
         }
-        send(Runnable {
-            runCatching { sendAtPowerOff(taken, text, atElapsed) }.onFailure { t ->
-                Log.w(TAG, "offreport: send crashed id=${request.id}: ${t.javaClass.simpleName}")
-                synchronized(lock) {
-                    remember(OffReportOutcome(request.id, OffReportState.FAILED, powerOffMs = taken.offAt, rc = "crash"))
-                }
+        // Held whether or not the disk took it: a failed write must not lose it while the daemon lives.
+        val dropped = synchronized(lock) {
+            if (epoch != taken.epoch) {
+                remember(OffReportOutcome(request.id, OffReportState.FAILED, powerOffMs = taken.offAt, rc = epochReason))
+                epochReason
+            } else {
+                hold(report)
+                fresh.addLast(Burst(report, request.token, atElapsed, taken.epoch))
+                null
             }
-        })
+        }
+        if (dropped != null) {
+            Log.i(TAG, "offreport: pending dropped id=${request.id} reason=$dropped")
+            return
+        }
+        requestDrain()
     }
 
     /** A report the power-off took: what it was armed with, when, and under which epoch. */
     private class Taken(val request: ArmRequest, val offAt: Long, val epoch: Long)
 
+    /** A power-off's own burst: its event, the bot armed at the take, the power-off on [monoClock]. */
+    private class Burst(val report: PendingReport, val token: String, val offElapsed: Long, val epoch: Long)
+
+    /** Caller holds [lock]: into the pending set unless there already, the oldest past the cap out. */
+    private fun hold(report: PendingReport) {
+        events.putIfAbsent(report.key, report)
+        val over = events.size - PendingReports.MAX
+        if (over > 0) events.values.sortedBy { it.powerOffMs }.take(over).forEach { events.remove(it.key) }
+    }
+
+    /** Delivered or refused for good: exactly this event goes, from the set and from disk. */
+    private fun forget(report: PendingReport) {
+        synchronized(lock) { events.remove(report.key) }
+        pending.delete(report.key)
+    }
+
+    /** Queues [drain] on the sender unless it is queued or running already, or has nothing to do. */
+    private fun requestDrain() {
+        val go = synchronized(lock) {
+            val ok = !drainQueued && (fresh.isNotEmpty() || passWanted)
+            if (ok) drainQueued = true
+            ok
+        }
+        if (go) send(Runnable { drain() })
+    }
+
     /**
-     * Sender thread: the burst, each attempt only while the epoch the report was taken under holds;
-     * the file goes once it was sent, refused, or its epoch moved on.
+     * Sender thread, THE delivery loop: every fresh power-off's burst first, then the pending pass an
+     * arm asked for. It only ends under [lock] with nothing left, so work added meanwhile is never
+     * stranded.
      */
-    private fun sendAtPowerOff(taken: Taken, text: String, offElapsed: Long) {
-        val request = taken.request
-        val offAt = taken.offAt
+    private fun drain() {
+        while (true) {
+            val burst = synchronized(lock) {
+                val next = fresh.removeFirstOrNull()
+                when {
+                    next != null -> next
+                    passWanted -> null.also { passWanted = false }
+                    else -> {
+                        drainQueued = false
+                        return
+                    }
+                }
+            }
+            if (burst != null) runBurst(burst) else guardedWork { deliverPending() }
+        }
+    }
+
+    private fun runBurst(burst: Burst) {
+        val report = burst.report
+        runCatching { sendAtPowerOff(burst) }.onFailure { t ->
+            Log.w(TAG, "offreport: send crashed id=${report.id}: ${t.javaClass.simpleName}")
+            synchronized(lock) {
+                remember(OffReportOutcome(report.id, OffReportState.FAILED, powerOffMs = report.powerOffMs, rc = "crash"))
+            }
+        }
+    }
+
+    /** What [gate] decided right before a send. */
+    private sealed class Gate {
+        class Go(val token: String, val lateMark: String) : Gate()
+
+        /** [drop]: the event goes for good; otherwise it stays for a later pass. */
+        class Skip(val reason: String, val drop: Boolean) : Gate()
+    }
+
+    /**
+     * Under [lock], immediately before the sender is called: the epoch [taken] still holds, the
+     * event is still pending (not delivered by the other path meanwhile) and its chat is the armed
+     * one. [burstToken] is the power-off's own bot; null = a pending pass, which sends with the bot
+     * armed now and gives way to a fresh power-off.
+     */
+    private fun gate(report: PendingReport, taken: Long, burstToken: String?): Gate = synchronized(lock) {
+        val burst = burstToken != null
+        when {
+            !burst && fresh.isNotEmpty() -> Gate.Skip(DROP_YIELD, drop = false).also { passWanted = true }
+            epoch != taken -> Gate.Skip(epochReason, drop = burst)
+            !events.containsKey(report.key) -> Gate.Skip(DROP_GONE, drop = false)
+            report.chatId != recipient -> Gate.Skip(DROP_CHAT, drop = true)
+            burstToken != null -> Gate.Go(burstToken, "")
+            else -> armed?.request?.let { Gate.Go(it.token, it.lateMark) } ?: Gate.Skip(DROP_UNARMED, drop = false)
+        }
+    }
+
+    /**
+     * Sender thread: the burst, each attempt only past [gate]; the event goes once it was sent,
+     * refused, or its epoch moved on, and is left alone when the pending pass delivered it first.
+     */
+    private fun sendAtPowerOff(burst: Burst) {
+        val report = burst.report
+        var gone = false
         val result = OffReportRetry.run(
-            offAt = offElapsed,
+            offAt = burst.offElapsed,
             clock = monoClock,
             sleep = sleep,
-            attempt = { connectMs, readMs -> sender(request.token, request.chatId, text, connectMs, readMs) },
+            attempt = { connectMs, readMs ->
+                when (val go = gate(report, burst.epoch, burst.token)) {
+                    is Gate.Go -> sender(go.token, report.chatId, report.text, connectMs, readMs)
+                    is Gate.Skip -> {
+                        gone = go.reason == DROP_GONE
+                        AttemptResult(go.reason, AttemptResult.Verdict.STOP)
+                    }
+                }
+            },
             onAttempt = { n, rc, sinceOff -> Log.i(TAG, "offreport: attempt $n rc=$rc ms=$sinceOff") },
-            cancelled = { dropReason(taken.epoch) },
         )
+        if (gone) {
+            Log.i(TAG, "offreport: burst skipped id=${report.id} reason=$DROP_GONE")
+            return
+        }
         val outcome = OffReportOutcome(
-            id = request.id,
+            id = report.id,
             state = if (result.sent) OffReportState.SENT else OffReportState.FAILED,
-            powerOffMs = offAt,
+            powerOffMs = report.powerOffMs,
             sentAtMs = if (result.sent) wallClock() else 0L,
             attempts = result.attempts,
             rc = result.rc,
         )
         synchronized(lock) { remember(outcome) }
         when {
-            result.sent -> pending.delete(request.id)
+            result.sent -> forget(report)
             result.refused -> {
-                pending.delete(request.id)
-                Log.i(TAG, "offreport: pending dropped id=${request.id} reason=${result.rc}")
+                forget(report)
+                Log.i(TAG, "offreport: pending dropped id=${report.id} reason=${result.rc}")
             }
         }
-        Log.i(TAG, "offreport: ${if (result.sent) "sent" else "failed"} id=${request.id} attempts=${result.attempts}")
+        Log.i(TAG, "offreport: ${if (result.sent) "sent" else "failed"} id=${report.id} attempts=${result.attempts}")
     }
 
     /**
-     * Queues one pending pass on the sender, unless one is queued or running, nothing is armed or it
-     * backs off.
-     */
-    private fun requestPendingPass() {
-        val go = synchronized(lock) {
-            val ok = armed != null && !passQueued && monoClock() >= passNotBefore
-            if (ok) passQueued = true
-            ok
-        }
-        if (go) {
-            send(Runnable {
-                try {
-                    guardedWork { deliverPending() }
-                } finally {
-                    synchronized(lock) { passQueued = false }
-                }
-            })
-        }
-    }
-
-    /**
-     * Sender thread: the reports on disk, oldest first, each with the bot and chat armed at that
-     * moment. Stops at the first failure that may heal (no network yet) and backs off; a refusal
-     * drops that report. The backoff is checked again here: it may have been set after this pass was
-     * queued.
+     * Sender thread: the pending set (this run's events plus the files on disk), oldest first, each
+     * with the bot armed at that moment. Stops at the first failure that may heal (no network yet)
+     * and backs off; a refusal drops that event. The backoff is checked here: it may have been set
+     * after this pass was asked for.
      */
     private fun deliverPending() {
-        if (synchronized(lock) { monoClock() < passNotBefore }) return
-        for (report in pending.list()) {
-            // Nothing armed (a disarm, or the power-off took the report): nothing more goes out.
-            val target = synchronized(lock) { armed?.request } ?: return
-            if (report.chatId != target.chatId) {
-                pending.delete(report.id)
-                Log.i(TAG, "offreport: pending dropped id=${report.id} reason=$DROP_CHAT")
-                continue
-            }
-            val text = withLateMark(report, target.lateMark)
-            val result = try {
-                sender(target.token, target.chatId, text, PENDING_CONNECT_MS, PENDING_READ_MS)
-            } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
-                AttemptResult("err:${e.javaClass.simpleName}", AttemptResult.Verdict.RETRY)
-            }
-            val ageS = (wallClock() - report.powerOffMs) / 1000
-            when (result.verdict) {
-                AttemptResult.Verdict.SENT -> {
-                    pending.delete(report.id)
-                    rememberPending(report, OffReportState.SENT, result.rc)
-                    Log.i(TAG, "offreport: pending sent id=${report.id} age_s=$ageS")
-                }
-                AttemptResult.Verdict.STOP -> {
-                    pending.delete(report.id)
-                    rememberPending(report, OffReportState.FAILED, result.rc)
-                    Log.i(TAG, "offreport: pending dropped id=${report.id} reason=${result.rc}")
-                }
-                AttemptResult.Verdict.RETRY -> {
-                    val backoff = synchronized(lock) {
-                        passBackoffMs = if (passBackoffMs == 0L) PENDING_BACKOFF_FIRST_MS
-                        else minOf(passBackoffMs * 2, PENDING_BACKOFF_MAX_MS)
-                        passNotBefore = monoClock() + passBackoffMs
-                        passBackoffMs
-                    }
-                    Log.i(TAG, "offreport: pending keep id=${report.id} rc=${result.rc} age_s=$ageS retry_in_s=${backoff / 1000}")
-                    return
-                }
-            }
+        val taken = synchronized(lock) {
+            if (armed == null || monoClock() < passNotBefore) return
+            epoch
         }
+        val onDisk = pending.list()
+        val queue = synchronized(lock) {
+            if (epoch != taken) return
+            onDisk.forEach(::hold)
+            events.values.sortedBy { it.powerOffMs }
+        }
+        for (report in queue) if (!deliverOne(report, taken)) return
         synchronized(lock) {
             passBackoffMs = 0L
             passNotBefore = 0L
         }
+    }
+
+    /** One event of a pending pass taken under epoch [taken]; false ends the pass. */
+    private fun deliverOne(report: PendingReport, taken: Long): Boolean {
+        val go = when (val gate = gate(report, taken, burstToken = null)) {
+            is Gate.Go -> gate
+            is Gate.Skip -> {
+                if (gate.drop) {
+                    forget(report)
+                    Log.i(TAG, "offreport: pending dropped id=${report.id} reason=${gate.reason}")
+                }
+                // Dropped or delivered already: the next one. Disarmed, another chat, nothing armed,
+                // or a fresh power-off first: a later pass.
+                return gate.drop || gate.reason == DROP_GONE
+            }
+        }
+        val text = withLateMark(report, go.lateMark)
+        val result = try {
+            sender(go.token, report.chatId, text, PENDING_CONNECT_MS, PENDING_READ_MS)
+        } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
+            AttemptResult("err:${e.javaClass.simpleName}", AttemptResult.Verdict.RETRY)
+        }
+        val ageS = (wallClock() - report.powerOffMs) / 1000
+        when (result.verdict) {
+            AttemptResult.Verdict.SENT -> {
+                forget(report)
+                rememberPending(report, OffReportState.SENT, result.rc)
+                Log.i(TAG, "offreport: pending sent id=${report.id} age_s=$ageS")
+            }
+            AttemptResult.Verdict.STOP -> {
+                forget(report)
+                rememberPending(report, OffReportState.FAILED, result.rc)
+                Log.i(TAG, "offreport: pending dropped id=${report.id} reason=${result.rc}")
+            }
+            AttemptResult.Verdict.RETRY -> {
+                val backoff = synchronized(lock) {
+                    passBackoffMs = if (passBackoffMs == 0L) PENDING_BACKOFF_FIRST_MS
+                    else minOf(passBackoffMs * 2, PENDING_BACKOFF_MAX_MS)
+                    passNotBefore = monoClock() + passBackoffMs
+                    passBackoffMs
+                }
+                Log.i(TAG, "offreport: pending keep id=${report.id} rc=${result.rc} age_s=$ageS retry_in_s=${backoff / 1000}")
+                return false
+            }
+        }
+        return true
     }
 
     private fun rememberPending(report: PendingReport, state: Int, rc: String) {
@@ -468,7 +593,10 @@ internal object OffReport {
             last = null
             registrations.clear()
             retryScheduled = false
-            passQueued = false
+            events.clear()
+            fresh.clear()
+            drainQueued = false
+            passWanted = false
             passNotBefore = 0L
             passBackoffMs = 0L
         }
@@ -507,9 +635,10 @@ internal object OffReport {
      * its own bound ([OffReportRetry.callWithin]), then a watchdog disconnects the connection at the
      * deadline, which aborts a hung connect, write or read (a server trickling bytes defeats the read
      * timeout alone). The verdict comes from the status line; the body is never read (a trickling
-     * body would hold the read, and on some stacks the disconnect waits for it). Residual: connect
-     * resolves the host again; the resolver cache normally answers at once after the pre-check, but
-     * a lookup that does hang there is the one part the disconnect cannot abort.
+     * body would hold the read, and on some stacks the disconnect waits for it). Accepted residual:
+     * the connection resolves the host again; right after the pre-check that lookup hits Android's
+     * InetAddress positive cache, and the watchdog bounds everything after it. Connecting to the
+     * pre-resolved address instead would break TLS hostname verification and SNI.
      */
     internal fun postSendMessage(token: String, chatId: Long, text: String, connectMs: Int, readMs: Int): AttemptResult {
         val startNs = System.nanoTime()
