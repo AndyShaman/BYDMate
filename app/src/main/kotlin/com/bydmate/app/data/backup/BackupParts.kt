@@ -95,6 +95,7 @@ object BackupParts {
         "auto_backup_last_ts",
         "auto_backup_last_result",
         "auto_backup_pending_upload",
+        "tg_report_outbox",
     )
 
     fun tablesOf(part: BackupPart): List<String> = when (part) {

@@ -45,7 +45,7 @@ class ActionDispatcherFailureLocaleTest {
         cluster,
         mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
         split,
-        AppStrings(app),
+        AppStrings(app), dagger.Lazy { io.mockk.mockk(relaxed = true) },
     ).also { it.clusterPollIntervalMs = 1L }
 
     init {

@@ -33,7 +33,7 @@ class ActionDispatcherFrunkGateTest {
             mockk<ClusterVoiceControl>(relaxed = true),
             mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
             mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true))
+            mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { io.mockk.mockk(relaxed = true) })
     }
 
     private fun param(command: String) =

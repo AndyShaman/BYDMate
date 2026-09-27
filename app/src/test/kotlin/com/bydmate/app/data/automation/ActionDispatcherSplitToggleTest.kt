@@ -45,7 +45,7 @@ class ActionDispatcherSplitToggleTest {
             mockk<ClusterVoiceControl>(relaxed = true),
             mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
             splitManager,
-            strings,
+            strings, dagger.Lazy { io.mockk.mockk(relaxed = true) },
         )
     }
 

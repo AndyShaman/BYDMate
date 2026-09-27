@@ -402,7 +402,9 @@ class LogRecorder internal constructor(
             // the push-to-talk connection prewarm.
             "TtsRouter:*", "LlmAgentBackend:*", "OpenRouterClient:*", "HttpPrewarm:*",
             // Drive mode switch: one line per attempt (flag, target before/after, speed, verdict).
-            "DriveModeChannel:*"
+            "DriveModeChannel:*",
+            // Telegram reports: build (items taken / skipped, length), send, outbox add/drain/drop.
+            "TgReport:*"
         )
     }
 }

@@ -2623,6 +2623,8 @@ class AgentTools @Inject constructor(
                 "оба приложения должны быть разными (действие ${err.index})"
             is ActionValidationError.SplitScreenInvalidSide ->
                 "неверная сторона split_screen (действие ${err.index})"
+            is ActionValidationError.TelegramReportEmpty ->
+                "в отчёте в Telegram не выбран ни один пункт (действие ${err.index})"
         }
         return JSONObject().put("error", msg).toString()
     }

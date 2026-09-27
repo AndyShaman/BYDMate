@@ -80,7 +80,7 @@ class RuleImportSummaryTest {
         mockk(relaxed = true), mockk(relaxed = true), ctx,
         dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-        com.bydmate.app.util.AppStrings(ctx),
+        com.bydmate.app.util.AppStrings(ctx), dagger.Lazy { io.mockk.mockk(relaxed = true) },
     )
 
     private object SharedRuleFixture {
