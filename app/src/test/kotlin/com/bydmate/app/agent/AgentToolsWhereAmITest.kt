@@ -143,7 +143,7 @@ class AgentToolsWhereAmITest {
         assertEquals(45L, out.getLong("fix_age_min"))
         assertEquals("Северная", out.getJSONArray("settlements").getJSONObject(0).getString("name"))
         val fixNote = out.getString("fix_note")
-        assertTrue(fixNote, fixNote.contains("отличить нельзя"))
+        assertTrue(fixNote, fixNote.contains("машина могла стоять"))
         assertTrue(fixNote, fixNote.contains("по последним данным"))
     }
 
