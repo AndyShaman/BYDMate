@@ -14,16 +14,21 @@ class DriveModeChannelTest {
     private var lastTarget: Int? = null
     private var status = WriteOutcome.REAL
     private var kmh: Int? = 0
+    private var speedCalls = 0
     private val reads = mutableListOf<Int>()
 
+    // beforeSend is called the way VehicleApiImpl.doWriteOutcome calls it: right before the
+    // "helper" write, so a false return skips the write and reports TRANSIENT.
     private val channel = DriveModeChannel(
-        SeatWriter { name, value -> writes += name to value; status },
+        DriveModeWriter { name, value, beforeSend ->
+            if (!beforeSend()) WriteOutcome.TRANSIENT else { writes += name to value; status }
+        },
         DriveModeReader { fid ->
             reads += fid
             if (fid == target) (targets.removeFirstOrNull() ?: lastTarget).also { lastTarget = it }
             else flags.getOrDefault(fid, 0)
         },
-        speed = { kmh },
+        speed = { speedCalls++; kmh },
     )
 
     private fun targets(vararg values: Int?) = targets.addAll(values.toList())
@@ -146,14 +151,18 @@ class DriveModeChannelTest {
         assertEquals(DriveModeChannel.Result.OK, channel.actuate(DriveMode.ECO).result)
     }
 
-    @Test fun `speed rising between the first check and the write is refused with no write`() = runTest {
+    @Test fun `speed rising between the first check and the guard is refused with no write and no poll`() = runTest {
         // 10 kmh passes the early check in run(); the target read below (one of the two
-        // suspending reads before the write) simulates the car speeding up while they run.
+        // suspending reads before the guard) simulates the car speeding up while they run.
         var currentKmh: Int? = 10
         val localWrites = mutableListOf<Pair<String, Int>>()
+        val localReads = mutableListOf<Int>()
         val localChannel = DriveModeChannel(
-            SeatWriter { name, value -> localWrites += name to value; WriteOutcome.REAL },
+            DriveModeWriter { name, value, beforeSend ->
+                if (!beforeSend()) WriteOutcome.TRANSIENT else { localWrites += name to value; WriteOutcome.REAL }
+            },
             DriveModeReader { fid ->
+                localReads += fid
                 if (fid == target) { currentKmh = 20; 1 } else 0
             },
             speed = { currentKmh },
@@ -163,5 +172,16 @@ class DriveModeChannelTest {
         assertEquals("too fast", out.verdict)
         assertEquals(20, out.speed)
         assertTrue(localWrites.isEmpty())
+        // support flag + before-target reads only: the guard's refusal skips the target poll.
+        assertEquals(2, localReads.size)
+    }
+
+    @Test fun `eco does not read speed again inside the guard`() = runTest {
+        kmh = 5
+        targets(1, 2)
+        speedCalls = 0
+        channel.actuate(DriveMode.ECO)
+        // one read: the early check in run(). The guard skips non-terrain modes without reading.
+        assertEquals(1, speedCalls)
     }
 }

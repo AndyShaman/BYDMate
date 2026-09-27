@@ -53,7 +53,7 @@ class VehicleApiImpl @Inject constructor(
     )
 
     private val driveModeChannel = DriveModeChannel(
-        SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
+        DriveModeWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
         DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
         // Rounded UP, not truncated: a plain toInt() turns 15.9 km/h into 15 and lets a
         // terrain mode through above the owner's 15 km/h limit (finding 2026-09-27).
@@ -682,8 +682,16 @@ class VehicleApiImpl @Inject constructor(
      * range) maps to TRANSIENT so the adaptive channel never switches channels because
      * of a code bug. seat entries have no readbackFid, so no read-back verification.
      * [journaled] = false keeps non-seat writes (steering heat) out of the seat journal.
+     * [beforeSend], when given, runs after [logAttempt]'s (suspending) audit-row insert and
+     * immediately before the helper call — a last-instant guard nothing after it can delay
+     * past. Returning false skips the helper entirely and reports "pre_send_refused".
      */
-    internal suspend fun doWriteOutcome(actionName: String, value: Int, journaled: Boolean = true): WriteOutcome {
+    internal suspend fun doWriteOutcome(
+        actionName: String,
+        value: Int,
+        journaled: Boolean = true,
+        beforeSend: (suspend () -> Boolean)? = null,
+    ): WriteOutcome {
         val entry = allowlist.find(actionName) ?: run {
             Log.w(TAG, "doWriteOutcome: action=$actionName not in allowlist")
             logWrite(actionName, -1, -1, value, null, false, "allowlist_miss", validated = false)
@@ -695,6 +703,11 @@ class VehicleApiImpl @Inject constructor(
             return WriteOutcome.TRANSIENT
         }
         logAttempt(actionName, entry, value)
+        if (beforeSend != null && !beforeSend()) {
+            Log.w(TAG, "doWriteOutcome: action=$actionName refused by beforeSend guard")
+            logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "pre_send_refused", entry.validated)
+            return WriteOutcome.TRANSIENT
+        }
         val status: Int? = try {
             helper.writeStatus(entry.dev, entry.writeFid, value)
         } catch (e: Exception) {
