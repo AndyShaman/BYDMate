@@ -464,7 +464,8 @@ object HelperBinderProtocol {
 
     /**
      * Drops the armed report and every pending one (the report was switched off or the bot
-     * disconnected). (no args) -> [int status (0 = ok)]. Outcomes already kept stay.
+     * disconnected). (no args) -> [int status (0 = ok, the pending files are gone; 1 = a file could
+     * not be deleted, ask again)]. Outcomes already kept stay.
      */
     val TX_OFFREPORT_DISARM: Int = IBinder.FIRST_CALL_TRANSACTION + 53  // 54
 

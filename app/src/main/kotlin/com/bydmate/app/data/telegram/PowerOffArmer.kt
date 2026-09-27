@@ -134,7 +134,7 @@ class PowerOffArmer @Inject constructor(
             Log.i(TAG, "offreport disarm id=${had?.id ?: "-"} rc=ok")
         } else if (had != null && !disarmFailLogged) {
             disarmFailLogged = true
-            Log.w(TAG, "offreport disarm id=${had.id} rc=no_daemon, retrying every tick")
+            Log.w(TAG, "offreport disarm id=${had.id} rc=not_confirmed, retrying every tick")
         }
     }
 

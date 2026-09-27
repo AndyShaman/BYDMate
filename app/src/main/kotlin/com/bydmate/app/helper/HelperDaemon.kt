@@ -2627,8 +2627,8 @@ private fun handleOffReportTransact(code: Int, data: Parcel, reply: Parcel?): Bo
                 reply?.writeInt(if (request != null) 0 else -1)
             }
             HelperBinderProtocol.TX_OFFREPORT_DISARM -> {
-                OffReport.disarm()
-                reply?.writeInt(0)
+                // Non-zero while a pending file survived the delete: the app keeps asking.
+                reply?.writeInt(if (OffReport.disarm()) 0 else 1)
             }
             else -> {
                 val status = OffReport.status(data.readString().orEmpty())

@@ -12,6 +12,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -20,7 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * The daemon's power-off report end to end, without the firmware: a fake listener registration
  * hands over the sink, a fake sender plays Telegram, pending reports go to a temp folder, the sender
- * jobs run on the calling thread and the worker's tasks run when the test says so ([work]).
+ * jobs run on the calling thread (the real `offreport-send` thread where a test is about
+ * interleaving) and the worker's tasks run when the test says so ([work]).
  */
 class OffReportTest {
 
@@ -44,6 +46,7 @@ class OffReportTest {
     private val queued = ArrayDeque<Runnable>()
     private val delayed = mutableListOf<Pair<Long, Runnable>>()
     private lateinit var pending: PendingReports
+    private lateinit var dir: File
 
     private val ok = AttemptResult("200", AttemptResult.Verdict.SENT)
     private val noNet = AttemptResult("io:UnknownHostException", AttemptResult.Verdict.RETRY)
@@ -61,7 +64,8 @@ class OffReportTest {
 
     @Before fun setUp() {
         OffReport.resetForTest()
-        pending = PendingReports(tmp.newFolder("offreport"))
+        dir = tmp.newFolder("offreport")
+        pending = PendingReports(dir, syncDir = {})
         OffReport.pending = pending
         OffReport.registrar = { _, fid, s -> sink = s; registered += fid; registerAnswer(fid) }
         OffReport.schedule = { delayMs, task -> if (delayMs == 0L) queued.addLast(task) else delayed += delayMs to task }
@@ -447,5 +451,122 @@ class OffReportTest {
         assertEquals(1, maxInFlight.get())
         assertEquals(setOf("offreport-send"), threads.toSet())
         assertEquals(OffReportState.SENT, OffReport.status("a1").queried.state)
+    }
+
+    // --- on the real sender thread: disarm, chat change and backoff against a send in flight ---
+
+    /** Waits until everything queued on the sender so far has run. */
+    private fun drainSender() {
+        val done = CountDownLatch(1)
+        OffReport.send(Runnable { done.countDown() })
+        assertTrue("sender idle", done.await(5, TimeUnit.SECONDS))
+    }
+
+    /** A sender whose first call tells [started], then waits for [release] (bounded). */
+    private fun blockingSender(started: CountDownLatch, release: CountDownLatch, answer: AttemptResult) {
+        val calls = AtomicInteger(0)
+        OffReport.sender = { token, chatId, text, _, _ ->
+            synchronized(sent) { sent += Sent(token, chatId, text) }
+            if (calls.incrementAndGet() == 1) {
+                started.countDown()
+                release.await(5, TimeUnit.SECONDS)
+            }
+            answer
+        }
+    }
+
+    @Test fun `a disarm between the power-off and its send cancels the send and the file`() {
+        OffReport.send = realSend
+        reads[level] = 2
+        arm("a1")
+        drainSender() // a1's pending pass, nothing on disk
+        val busy = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        OffReport.send(Runnable { busy.countDown(); release.await(5, TimeUnit.SECONDS) })
+        assertTrue(busy.await(5, TimeUnit.SECONDS))
+        push(level, 0) // taken and saved here; its send waits behind the busy sender
+        assertEquals(1, pending.count())
+        assertTrue(OffReport.disarm())
+        assertEquals(0, pending.count())
+        release.countDown()
+        drainSender()
+        assertTrue(sent.isEmpty())
+        assertEquals(0, pending.count())
+        val q = OffReport.status("a1").queried
+        assertEquals(OffReportState.FAILED, q.state)
+        assertEquals("disarm", q.rc)
+    }
+
+    @Test fun `an arm to another chat during a pass drops the old chat's remaining reports`() {
+        answers = { noNet }
+        cycle("a1")
+        wall += 60_000L
+        cycle("a2")
+        assertEquals(2, pending.count())
+        val before = sent.size
+        mono += OffReport.PENDING_BACKOFF_MAX_MS
+        OffReport.send = realSend
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        blockingSender(started, release, ok)
+        arm("b1") // same chat 42: the pass starts with a1 and hangs in its send
+        assertTrue(started.await(5, TimeUnit.SECONDS))
+        arm("c1", chatId = 777L)
+        release.countDown()
+        drainSender()
+        val delivered = synchronized(sent) { sent.drop(before) }
+        assertEquals("a1 was in flight before the new chat, a2 never goes", listOf("<b>a1"), delivered.map { it.text.substringBefore(" off") })
+        assertEquals(0, pending.count())
+        assertEquals(OffReportState.SENT, OffReport.status("a1").queried.state)
+    }
+
+    @Test fun `a power-off during a slow pending send is on disk before that send ends`() {
+        answers = { noNet }
+        cycle("a1")
+        mono += OffReport.PENDING_BACKOFF_MAX_MS
+        OffReport.send = realSend
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        blockingSender(started, release, noNet)
+        reads[level] = 2
+        arm("b1") // the pass for a1 hangs in its send
+        assertTrue(started.await(5, TimeUnit.SECONDS))
+        push(level, 0)
+        assertEquals("the pending send is still in flight", 1L, release.count)
+        assertEquals(listOf("a1", "b1"), pending.list().map { it.id })
+        release.countDown()
+        drainSender()
+        assertEquals(listOf("a1", "b1"), pending.list().map { it.id })
+    }
+
+    @Test fun `an arm during a pass starts no second pass inside the backoff`() {
+        answers = { noNet }
+        cycle("a1")
+        mono += OffReport.PENDING_BACKOFF_MAX_MS
+        val before = sent.size
+        OffReport.send = realSend
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        blockingSender(started, release, noNet)
+        arm("b1")
+        assertTrue(started.await(5, TimeUnit.SECONDS))
+        arm("b2") // the pass is still running: nothing more is queued
+        release.countDown()
+        drainSender()
+        arm("b3") // inside the backoff the failed pass set
+        drainSender()
+        assertEquals(1, synchronized(sent) { sent.size } - before)
+        assertEquals(1, pending.count())
+    }
+
+    @Test fun `a disarm that cannot delete a pending file is not confirmed`() {
+        answers = { noNet }
+        cycle("a1")
+        val stuck = File(dir, "5-stuck.rep").apply { mkdirs() } // a non-empty directory: delete() fails
+        File(stuck, "x").writeText("x")
+        assertFalse(OffReport.disarm())
+        assertEquals(0, pending.count())
+        stuck.deleteRecursively()
+        assertTrue(OffReport.disarm())
     }
 }
