@@ -130,6 +130,16 @@ object AgentCommandCatalog {
         Cmd("fridge_cool", "холодильник: охлаждение до N градусов", { n -> "冰箱制冷${n}度" }, -6..6),
         Cmd("fridge_heat", "холодильник: подогрев до N градусов", { n -> "冰箱制热${n}度" }, 35..50),
         Cmd("fridge_off", "выключить холодильник", { "冰箱关闭" }),
+        // Drive mode (the car checks it has the mode; all but eco/normal/sport only up to 15 km/h)
+        Cmd("drive_mode_eco", "режим движения ЭКО", { "ECO模式" }),
+        Cmd("drive_mode_normal", "режим движения Норма (обычный)", { "普通模式" }),
+        Cmd("drive_mode_sport", "режим движения Спорт", { "运动模式" }),
+        Cmd("drive_mode_snow", "режим движения Снег (до 15 км/ч)", { "雪地模式" }),
+        Cmd("drive_mode_sand", "режим движения Песок (до 15 км/ч)", { "沙地模式" }),
+        Cmd("drive_mode_mud", "режим движения Грязь (до 15 км/ч)", { "泥地模式" }),
+        Cmd("drive_mode_mountain", "режим движения Горы (до 15 км/ч)", { "山地模式" }),
+        Cmd("drive_mode_rock", "режим движения Камни (до 15 км/ч)", { "岩石模式" }),
+        Cmd("drive_mode_smart", "умный режим движения (до 15 км/ч)", { "智能模式" }),
     )
 
     private val byId = ALL.associateBy { it.id }

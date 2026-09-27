@@ -1019,11 +1019,10 @@
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
     <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_offroad">OFF-ROAD</string>
     <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
-    <string name="auto_enum_code_snow">SNOW</string>
+    <string name="auto_enum_code_snow">雪地</string>
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">已连接</string>
     <string name="auto_enum_fastened">已系</string>
@@ -1288,6 +1287,22 @@
     <string name="gate_forbidden_command">禁止的命令</string>
     <string name="gate_frunk_speed_unknown">车速未知，无法打开前备箱</string>
     <string name="gate_frunk_moving">前备箱仅在停车时可打开（车速 %1$d 公里/小时）</string>
+    <string name="auto_cat_drive_mode">驾驶模式</string>
+    <string name="auto_act_drive_mode_eco">ECO模式</string>
+    <string name="auto_act_drive_mode_normal">普通模式</string>
+    <string name="auto_act_drive_mode_sport">运动模式</string>
+    <string name="auto_act_drive_mode_snow">雪地模式</string>
+    <string name="auto_act_drive_mode_sand">沙地模式</string>
+    <string name="auto_act_drive_mode_mud">泥地模式</string>
+    <string name="auto_act_drive_mode_mountain">山地模式</string>
+    <string name="auto_act_drive_mode_rock">岩石模式</string>
+    <string name="auto_act_drive_mode_smart">智能模式</string>
+    <string name="gate_drive_mode_speed_unknown">车速未知，不切换此驾驶模式</string>
+    <string name="gate_drive_mode_speed">此驾驶模式仅在车速不超过 15 公里/小时时切换（当前 %1$d 公里/小时）</string>
+    <string name="drive_mode_not_supported">本车不支持此驾驶模式</string>
+    <string name="drive_mode_flotation">车辆处于应急浮水模式，暂不切换驾驶模式</string>
+    <string name="drive_mode_not_changed">驾驶模式未切换</string>
+    <string name="drive_mode_failed">无法切换驾驶模式</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">语音智能体</string>

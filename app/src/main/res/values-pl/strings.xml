@@ -1092,11 +1092,10 @@
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
     <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_offroad">Terenowy</string>
     <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
-    <string name="auto_enum_code_snow">SNOW</string>
+    <string name="auto_enum_code_snow">Śnieg</string>
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">Podłączony</string>
     <string name="auto_enum_fastened">Zapięty</string>
@@ -1325,6 +1324,22 @@
     <string name="gate_forbidden_command">Zabroniona komenda</string>
     <string name="gate_frunk_speed_unknown">Prędkość nieznana, nie otworzę przedniego bagażnika</string>
     <string name="gate_frunk_moving">Przedni bagażnik otwiera się tylko na postoju (prędkość %1$d km/h)</string>
+    <string name="auto_cat_drive_mode">Tryb jazdy</string>
+    <string name="auto_act_drive_mode_eco">Tryb ECO</string>
+    <string name="auto_act_drive_mode_normal">Tryb normalny</string>
+    <string name="auto_act_drive_mode_sport">Tryb sportowy</string>
+    <string name="auto_act_drive_mode_snow">Tryb śnieg</string>
+    <string name="auto_act_drive_mode_sand">Tryb piasek</string>
+    <string name="auto_act_drive_mode_mud">Tryb błoto</string>
+    <string name="auto_act_drive_mode_mountain">Tryb górski</string>
+    <string name="auto_act_drive_mode_rock">Tryb skały</string>
+    <string name="auto_act_drive_mode_smart">Tryb inteligentny</string>
+    <string name="gate_drive_mode_speed_unknown">Prędkość nieznana, ten tryb jazdy nie zostanie włączony</string>
+    <string name="gate_drive_mode_speed">Ten tryb jazdy włącza się tylko do 15 km/h (teraz %1$d km/h)</string>
+    <string name="drive_mode_not_supported">Ten samochód nie obsługuje tego trybu jazdy</string>
+    <string name="drive_mode_flotation">Samochód jest w awaryjnym trybie wysokiej wody, tryb jazdy pozostaje bez zmian</string>
+    <string name="drive_mode_not_changed">Tryb jazdy się nie zmienił</string>
+    <string name="drive_mode_failed">Nie udało się zmienić trybu jazdy</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">Asystent głosowy</string>

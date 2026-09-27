@@ -401,6 +401,56 @@ class WriteAllowlistTest {
         }
     }
 
+    // ── Drive mode: dev 1023 carve-out for one fid and nine single values ─────
+    @Test fun `drive mode write fid is the only drive mode carve-out on dev 1023`() {
+        assertFalse(WriteAllowlist.isBanned(1023, 1276260400))
+        // The readback, flag and dev=1006 fids stay banned.
+        assertTrue(WriteAllowlist.isBanned(1023, WriteAllowlist.DRIVE_MODE_TARGET_FID))
+        assertTrue(WriteAllowlist.isBanned(1023, 1219518496))
+        assertTrue(WriteAllowlist.isBanned(1006, 734003229))
+        assertTrue(WriteAllowlist.isBanned(1006, 555745294))
+        val dev1023 = WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS.filter { it.first == 1023 }.map { it.second }.toSet()
+        assertEquals(setOf(1330643002, 1069547536, 850427920, 850427928, 944767029, 1276260400), dev1023)
+    }
+
+    @Test fun `drive mode entries are single allowed values, rock unvalidated`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val entries = al.allEntries().filter { it.dev == 1023 && it.writeFid == 1276260400 }
+        assertEquals(setOf(1, 2, 3, 4, 5, 6, 7, 8, 21), entries.map { it.valueMin }.toSet())
+        for (e in entries) {
+            assertEquals(e.actionName, e.valueMin, e.valueMax)
+            assertEquals(e.actionName, "drive_mode", e.category)
+            assertEquals(e.actionName, e.actionName != "drive_mode_rock", e.validated)
+        }
+        assertEquals("live-leopard3-2026-09-27", al.find("drive_mode_eco")!!.source)
+    }
+
+    @Test fun `no other drive mode value opens up, whatever the source`() {
+        // Competitor JSON cannot add 19 CUSTOM, 23 TRACTION, 255 EXIT or a value-less range.
+        val fixture = """
+            {
+              "drive_custom":   { "featureId": 1276260400, "deviceType": 1023, "value": 19 },
+              "drive_traction": { "featureId": 1276260400, "deviceType": 1023, "value": 23 },
+              "drive_exit":     { "featureId": 1276260400, "deviceType": 1023, "value": 255 },
+              "drive_any":      { "featureId": 1276260400, "deviceType": 1023 },
+              "drive_eco_dup":  { "featureId": 1276260400, "deviceType": 1023, "value": 2 }
+            }
+        """.trimIndent()
+        val al = WriteAllowlist.loadProduction { fixture }
+        assertNull(al.find("drive_custom"))
+        assertNull(al.find("drive_traction"))
+        assertNull(al.find("drive_exit"))
+        assertNull(al.find("drive_any"))
+        assertNotNull(al.find("drive_eco_dup"))
+        val allowed = setOf(1, 2, 3, 4, 5, 6, 7, 8, 21)
+        for (e in al.allEntries().filter { it.dev == 1023 && it.writeFid == 1276260400 }) {
+            assertTrue(e.actionName, e.valueMin == e.valueMax && e.valueMin in allowed)
+        }
+        // A ranged entry is refused too, even when its bounds are allowed values.
+        assertFalse(WriteAllowlist.valuesAllowed(
+            WriteEntry("x", 1023, 1276260400, null, 1, 3, "drive_mode", false, "test")))
+    }
+
     // ── Dim 6, Test 6: LIVE_VALIDATED has no duplicate actionName ────────────
     @Test fun `LIVE_VALIDATED has no duplicate actionName case-insensitive`() {
         val liveKeys = WriteAllowlist.LIVE_VALIDATED.map { it.actionName.lowercase() }

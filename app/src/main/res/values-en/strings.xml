@@ -940,7 +940,6 @@
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
     <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_offroad">OFF-ROAD</string>
     <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
@@ -1173,6 +1172,22 @@
     <string name="gate_forbidden_command">Forbidden command</string>
     <string name="gate_frunk_speed_unknown">Speed unknown, cannot open the front trunk</string>
     <string name="gate_frunk_moving">The front trunk opens only when parked (speed %1$d km/h)</string>
+    <string name="auto_cat_drive_mode">Drive mode</string>
+    <string name="auto_act_drive_mode_eco">ECO mode</string>
+    <string name="auto_act_drive_mode_normal">Normal mode</string>
+    <string name="auto_act_drive_mode_sport">Sport mode</string>
+    <string name="auto_act_drive_mode_snow">Snow mode</string>
+    <string name="auto_act_drive_mode_sand">Sand mode</string>
+    <string name="auto_act_drive_mode_mud">Mud mode</string>
+    <string name="auto_act_drive_mode_mountain">Mountain mode</string>
+    <string name="auto_act_drive_mode_rock">Rock mode</string>
+    <string name="auto_act_drive_mode_smart">Smart mode</string>
+    <string name="gate_drive_mode_speed_unknown">Speed unknown, this drive mode is not switched on</string>
+    <string name="gate_drive_mode_speed">This drive mode switches on only up to 15 km/h (now %1$d km/h)</string>
+    <string name="drive_mode_not_supported">This car does not support this drive mode</string>
+    <string name="drive_mode_flotation">The car is in the emergency high-water mode, the drive mode stays as it is</string>
+    <string name="drive_mode_not_changed">The drive mode did not change</string>
+    <string name="drive_mode_failed">Could not change the drive mode</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">Voice agent</string>

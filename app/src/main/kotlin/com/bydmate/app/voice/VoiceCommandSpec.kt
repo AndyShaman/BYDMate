@@ -109,6 +109,15 @@ object VoiceCatalog {
         // Trunk
         VoiceCommandSpec(OPEN, TRUNK) { "开后备箱" },
         VoiceCommandSpec(CLOSE, TRUNK) { "关后备箱" },
+        // Drive mode (terrain modes speed-gated to 15 km/h by the dispatcher)
+        VoiceCommandSpec(SET, DRIVE_ECO) { "ECO模式" },
+        VoiceCommandSpec(SET, DRIVE_NORMAL) { "普通模式" },
+        VoiceCommandSpec(SET, DRIVE_SPORT) { "运动模式" },
+        VoiceCommandSpec(SET, DRIVE_SNOW) { "雪地模式" },
+        VoiceCommandSpec(SET, DRIVE_SAND) { "沙地模式" },
+        VoiceCommandSpec(SET, DRIVE_MUD) { "泥地模式" },
+        VoiceCommandSpec(SET, DRIVE_MOUNTAIN) { "山地模式" },
+        VoiceCommandSpec(SET, DRIVE_SMART) { "智能模式" },
     )
 
 }

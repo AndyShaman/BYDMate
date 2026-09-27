@@ -1096,11 +1096,10 @@
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
     <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_offroad">Внедорожный</string>
     <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
-    <string name="auto_enum_code_snow">SNOW</string>
+    <string name="auto_enum_code_snow">Снег</string>
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">Подключён</string>
     <string name="auto_enum_fastened">Пристёгнут</string>
@@ -1329,6 +1328,22 @@
     <string name="gate_forbidden_command">Запрещённая команда</string>
     <string name="gate_frunk_speed_unknown">Скорость неизвестна, передний багажник не открыть</string>
     <string name="gate_frunk_moving">Передний багажник открывается только на стоянке (скорость %1$d км/ч)</string>
+    <string name="auto_cat_drive_mode">Режим движения</string>
+    <string name="auto_act_drive_mode_eco">Режим ЭКО</string>
+    <string name="auto_act_drive_mode_normal">Режим Норма</string>
+    <string name="auto_act_drive_mode_sport">Режим Спорт</string>
+    <string name="auto_act_drive_mode_snow">Режим Снег</string>
+    <string name="auto_act_drive_mode_sand">Режим Песок</string>
+    <string name="auto_act_drive_mode_mud">Режим Грязь</string>
+    <string name="auto_act_drive_mode_mountain">Режим Горы</string>
+    <string name="auto_act_drive_mode_rock">Режим Камни</string>
+    <string name="auto_act_drive_mode_smart">Умный режим</string>
+    <string name="gate_drive_mode_speed_unknown">Скорость неизвестна, этот режим движения не включаю</string>
+    <string name="gate_drive_mode_speed">Этот режим движения включается только на скорости до 15 км/ч (сейчас %1$d км/ч)</string>
+    <string name="drive_mode_not_supported">Машина не поддерживает этот режим движения</string>
+    <string name="drive_mode_flotation">Машина в аварийном режиме «высокая вода», режим движения не меняю</string>
+    <string name="drive_mode_not_changed">Режим движения не сменился</string>
+    <string name="drive_mode_failed">Не удалось сменить режим движения</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">Голос-агент</string>

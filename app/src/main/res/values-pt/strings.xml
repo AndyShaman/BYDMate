@@ -933,11 +933,10 @@
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
     <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_offroad">OFF-ROAD</string>
     <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
-    <string name="auto_enum_code_snow">SNOW</string>
+    <string name="auto_enum_code_snow">Neve</string>
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">Conectado</string>
     <string name="auto_enum_fastened">Afivelado</string>
@@ -1166,6 +1165,22 @@
     <string name="gate_forbidden_command">Comando proibido</string>
     <string name="gate_frunk_speed_unknown">Velocidade desconhecida, não é possível abrir o porta-malas dianteiro</string>
     <string name="gate_frunk_moving">O porta-malas dianteiro abre apenas parado (velocidade %1$d km/h)</string>
+    <string name="auto_cat_drive_mode">Modo de condução</string>
+    <string name="auto_act_drive_mode_eco">Modo ECO</string>
+    <string name="auto_act_drive_mode_normal">Modo normal</string>
+    <string name="auto_act_drive_mode_sport">Modo esporte</string>
+    <string name="auto_act_drive_mode_snow">Modo neve</string>
+    <string name="auto_act_drive_mode_sand">Modo areia</string>
+    <string name="auto_act_drive_mode_mud">Modo lama</string>
+    <string name="auto_act_drive_mode_mountain">Modo montanha</string>
+    <string name="auto_act_drive_mode_rock">Modo rocha</string>
+    <string name="auto_act_drive_mode_smart">Modo inteligente</string>
+    <string name="gate_drive_mode_speed_unknown">Velocidade desconhecida, este modo de condução não é ativado</string>
+    <string name="gate_drive_mode_speed">Este modo de condução só é ativado até 15 km/h (agora %1$d km/h)</string>
+    <string name="drive_mode_not_supported">Este carro não suporta este modo de condução</string>
+    <string name="drive_mode_flotation">O carro está no modo de emergência de água alta, o modo de condução não muda</string>
+    <string name="drive_mode_not_changed">O modo de condução não mudou</string>
+    <string name="drive_mode_failed">Não foi possível mudar o modo de condução</string>
 
     <!-- Voice agent (Wave J): multi-provider LLM connections -->
     <string name="settings_conn_not_configured">Conexão não configurada</string>

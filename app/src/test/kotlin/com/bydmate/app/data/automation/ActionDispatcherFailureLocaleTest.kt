@@ -114,6 +114,37 @@ class ActionDispatcherFailureLocaleTest {
         assertEquals("driver window did not move, the command did not work", dispatcher.vehicleFailureReason(err))
     }
 
+    // ── drive mode (#253) ──────────────────────────────────────────────────────
+
+    @Test fun `drive mode failures are worded per cause in the app language`() = runTest {
+        val eco = ActionDef(command = "ECO模式", displayName = "x", kind = "param")
+        val cases = listOf(
+            VehicleWriteError.NotEquipped("drive_mode_eco") to
+                ("Машина не поддерживает этот режим движения" to "This car does not support this drive mode"),
+            VehicleWriteError.StateBlocked("drive_mode_eco", "emergency flotation mode") to
+                ("Машина в аварийном режиме «высокая вода», режим движения не меняю" to
+                    "The car is in the emergency high-water mode, the drive mode stays as it is"),
+            VehicleWriteError.ReadbackMismatch("drive_mode_eco", "mode did not change") to
+                ("Режим движения не сменился" to "The drive mode did not change"),
+            VehicleWriteError.HelperUnreachable("drive_mode_eco", "unreachable") to
+                ("Не удалось сменить режим движения" to "Could not change the drive mode"),
+        )
+        for ((err, texts) in cases) {
+            coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)
+            lang("ru")
+            assertEquals(texts.first, reason(eco))
+            lang("en")
+            assertEquals(texts.second, reason(eco))
+        }
+    }
+
+    @Test fun `a terrain mode at unknown speed is refused before the car is asked`() = runTest {
+        lang("ru")
+        val snow = ActionDef(command = "雪地模式", displayName = "x", kind = "param")
+        assertEquals("Скорость неизвестна, этот режим движения не включаю", reason(snow))
+        io.mockk.coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
+    }
+
     // ── every other step reason ────────────────────────────────────────────────
 
     private fun action(kind: String, payload: String?) =

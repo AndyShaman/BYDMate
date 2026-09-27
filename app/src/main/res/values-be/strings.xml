@@ -1092,11 +1092,10 @@
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
     <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_offroad">Пазадарожны</string>
     <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
-    <string name="auto_enum_code_snow">SNOW</string>
+    <string name="auto_enum_code_snow">Снег</string>
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">Падключаны</string>
     <string name="auto_enum_fastened">Прышпілены</string>
@@ -1325,6 +1324,22 @@
     <string name="gate_forbidden_command">Забароненая каманда</string>
     <string name="gate_frunk_speed_unknown">Хуткасць невядомая, пярэдні багажнік не адкрыць</string>
     <string name="gate_frunk_moving">Пярэдні багажнік адкрываецца толькі на стаянцы (хуткасць %1$d км/г)</string>
+    <string name="auto_cat_drive_mode">Рэжым руху</string>
+    <string name="auto_act_drive_mode_eco">Рэжым ECO</string>
+    <string name="auto_act_drive_mode_normal">Рэжым Норма</string>
+    <string name="auto_act_drive_mode_sport">Рэжым Спорт</string>
+    <string name="auto_act_drive_mode_snow">Рэжым Снег</string>
+    <string name="auto_act_drive_mode_sand">Рэжым Пясок</string>
+    <string name="auto_act_drive_mode_mud">Рэжым Гразь</string>
+    <string name="auto_act_drive_mode_mountain">Рэжым Горы</string>
+    <string name="auto_act_drive_mode_rock">Рэжым Камяні</string>
+    <string name="auto_act_drive_mode_smart">Разумны рэжым</string>
+    <string name="gate_drive_mode_speed_unknown">Хуткасць невядомая, гэты рэжым руху не ўключаю</string>
+    <string name="gate_drive_mode_speed">Гэты рэжым руху ўключаецца толькі на хуткасці да 15 км/г (зараз %1$d км/г)</string>
+    <string name="drive_mode_not_supported">Машына не падтрымлівае гэты рэжым руху</string>
+    <string name="drive_mode_flotation">Машына ў аварыйным рэжыме «высокая вада», рэжым руху не мяняю</string>
+    <string name="drive_mode_not_changed">Рэжым руху не змяніўся</string>
+    <string name="drive_mode_failed">Не ўдалося змяніць рэжым руху</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">Голас-агент</string>

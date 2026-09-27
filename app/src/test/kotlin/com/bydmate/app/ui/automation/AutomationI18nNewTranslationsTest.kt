@@ -48,7 +48,7 @@ class AutomationI18nNewTranslationsTest {
         assertEquals("ON", get("ru", R.string.auto_enum_code_on)); assertEquals("ON", get("en", R.string.auto_enum_code_on)); assertEquals("ON", get("zh", R.string.auto_enum_code_on))
         assertEquals("P", get("ru", R.string.auto_enum_code_p)); assertEquals("P", get("en", R.string.auto_enum_code_p)); assertEquals("P", get("zh", R.string.auto_enum_code_p))
         assertEquals("R", get("ru", R.string.auto_enum_code_r)); assertEquals("R", get("en", R.string.auto_enum_code_r)); assertEquals("R", get("zh", R.string.auto_enum_code_r))
-        assertEquals("SNOW", get("ru", R.string.auto_enum_code_snow)); assertEquals("SNOW", get("en", R.string.auto_enum_code_snow)); assertEquals("SNOW", get("zh", R.string.auto_enum_code_snow))
+        assertEquals("Снег", get("ru", R.string.auto_enum_code_snow)); assertEquals("SNOW", get("en", R.string.auto_enum_code_snow)); assertEquals("雪地", get("zh", R.string.auto_enum_code_snow))
         assertEquals("SPORT", get("ru", R.string.auto_enum_code_sport)); assertEquals("SPORT", get("en", R.string.auto_enum_code_sport)); assertEquals("SPORT", get("zh", R.string.auto_enum_code_sport))
         assertEquals("Подключён", get("ru", R.string.auto_enum_connected)); assertEquals("Connected", get("en", R.string.auto_enum_connected)); assertEquals("已连接", get("zh", R.string.auto_enum_connected))
         assertEquals("Пристёгнут", get("ru", R.string.auto_enum_fastened)); assertEquals("Fastened", get("en", R.string.auto_enum_fastened)); assertEquals("已系", get("zh", R.string.auto_enum_fastened))
