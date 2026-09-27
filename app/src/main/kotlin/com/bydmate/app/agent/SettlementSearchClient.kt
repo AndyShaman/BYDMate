@@ -37,6 +37,11 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
         "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
     )
 
+    /** Endpoint that answered the most recent [search] call, for diagnostics; carries no place
+     *  or coordinate data, safe for a user-shared log. */
+    @Volatile var lastEndpoint: String? = null
+        private set
+
     /** Test seams. One endpoint may take [callTimeoutMs] (body included); the whole search,
      *  fallback included, never takes longer than [totalTimeoutMs], so a voice turn waits at
      *  most that long for where_am_i. */
@@ -78,6 +83,7 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
                 val body = await(overpassHttp.newCall(request))
                 val result = parse(ep, body)
                 Log.i(TAG, "overpass $ep: ${result.size} settlements")
+                lastEndpoint = ep
                 return result
             } catch (e: IOException) {
                 // A cancel that raced the failure: stop here instead of trying the next server.

@@ -266,6 +266,13 @@ class TrackingService : Service(), LocationListener {
         )
     }
 
+    /** [location] paired with whether the GPS listener delivered it in this service run (true)
+     *  or it is only the getLastKnownLocation() seed from start, which may predate the whole
+     *  drive (false). A live fix then stays put while parked (8 m filter), so its age alone does
+     *  not mean the position is wrong. Bundled into one snapshot, written whole at both call
+     *  sites below, so a reader can never pair a stale point with a live flag read separately. */
+    internal data class LocationFix(val location: Location, val isLive: Boolean)
+
     companion object {
         private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
@@ -401,11 +408,7 @@ class TrackingService : Service(), LocationListener {
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
 
-        /** True once [lastLocation] holds a fix the GPS listener delivered in this service run;
-         *  false while it is only the getLastKnownLocation() seed from start, which may predate
-         *  the whole drive. A live fix then stays put while parked (8 m filter), so its age alone
-         *  does not mean the position is wrong. */
-        @Volatile var lastLocationIsLive: Boolean = false
+        @Volatile internal var lastLocationFix: LocationFix? = null
             private set
 
         // GPS fix older than this is not forwarded to ABRP: a stale coordinate would
@@ -1411,7 +1414,7 @@ class TrackingService : Service(), LocationListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onLocationChanged(location: Location) {
-        lastLocationIsLive = true
+        lastLocationFix = LocationFix(location, isLive = true)
         _lastLocation.value = location
         // AC-06: never log raw coordinates in release — logcat is readable on DiLink
         // and ends up in user-shared diagnostic dumps.
@@ -1890,8 +1893,11 @@ class TrackingService : Service(), LocationListener {
         // Immediate fix from GPS last-known only (like TripInfo).
         try {
             val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
+            // A seed is never live; with no fresh seed (GPS off, no fix yet), any snapshot kept
+            // from a previous run of this service is demoted too, so a restart never keeps
+            // serving a stale point as if the listener just delivered it.
+            lastLocationFix = nextSnapshotOnRestart(lastLocationFix, lastKnown)
             if (lastKnown != null) {
-                lastLocationIsLive = false
                 _lastLocation.value = lastKnown
                 Log.i(TAG, "lastKnownLocation: provider=${lastKnown.provider} " +
                     "age=${(System.currentTimeMillis() - lastKnown.time) / 1000}s")
@@ -2130,3 +2136,14 @@ class TrackingService : Service(), LocationListener {
         nm.notify(NOTIFICATION_ID, buildNotification(text))
     }
 }
+
+/** [TrackingService.lastLocationFix] at service (re)start: a fresh [lastKnown] seed replaces it,
+ *  never live; with no fresh seed (GPS off, or no fix yet), [previous] is kept but demoted to
+ *  not-live, since a seed from a prior run of the same process is not this run's data either.
+ *  Pure top-level function (not a Companion member, to stay under detekt's function-count
+ *  threshold there) so a restart never leaves a stale point wrongly marked live. */
+internal fun nextSnapshotOnRestart(
+    previous: TrackingService.LocationFix?,
+    lastKnown: Location?,
+): TrackingService.LocationFix? =
+    lastKnown?.let { TrackingService.LocationFix(it, isLive = false) } ?: previous?.copy(isLive = false)

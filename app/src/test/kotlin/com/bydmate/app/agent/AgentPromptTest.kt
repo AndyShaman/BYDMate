@@ -50,6 +50,13 @@ class AgentPromptTest {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("не говори, что мы в населённом пункте"))
     }
 
+    // Review of 2c994429: a live fix's hedge must not depend on current speed - zero speed does
+    // not prove the car has been parked since the fix.
+    @Test fun prompt_hedges_stale_fix_regardless_of_current_speed() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("fix_note"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("даже если машина сейчас стоит"))
+    }
+
     @Test fun prompt_admits_forgetting_instead_of_denying() {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("скажи, что не помню"))
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("не утверждай, что такого не было"))

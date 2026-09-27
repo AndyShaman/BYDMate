@@ -31,6 +31,15 @@ class SettlementSearchClientTest {
 
     @After fun tearDown() { server.shutdown() }
 
+    // Review: timing tests below override callTimeoutMs/totalTimeoutMs, so a change to the
+    // production defaults (12 s total, 8 s per call - the budget a voice turn actually waits)
+    // would pass them unnoticed. Pin the defaults on a client nobody has touched.
+    @Test fun production_timeout_defaults_are_8s_per_call_and_12s_total() {
+        val fresh = SettlementSearchClient(OkHttpClient())
+        assertEquals(8_000L, fresh.callTimeoutMs)
+        assertEquals(12_000L, fresh.totalTimeoutMs)
+    }
+
     // Trimmed Overpass reply near Воложин: name:ru wins over the Belarusian name, a node
     // without any name and one without coordinates are skipped.
     private val fixture = """
@@ -49,6 +58,14 @@ class SettlementSearchClientTest {
         assertEquals("town", found[0].place)
         assertEquals(54.087, found[0].lat, 0.0001)
         assertEquals(26.523, found[0].lon, 0.0001)
+    }
+
+    // lastEndpoint backs the where_am_i diagnostic log (no place names, just which server
+    // answered), so it must reflect the endpoint that actually returned the result.
+    @Test fun last_endpoint_reflects_the_endpoint_that_answered() = runTest {
+        server.enqueue(MockResponse().setBody(fixture))
+        client.search(54.03, 27.97, 15_000, 50_000)
+        assertEquals(client.endpoints.single(), client.lastEndpoint)
     }
 
     @Test fun query_asks_for_place_nodes_in_both_radii() = runTest {
