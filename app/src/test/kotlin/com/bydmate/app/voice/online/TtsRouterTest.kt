@@ -299,15 +299,29 @@ class TtsRouterTest {
     // --- a new reply supersedes the previous one's pending online work ---
 
     @Test
-    fun `a new speak drops the previous reply still awaiting synthesis`() {
+    fun `a new speak drops an agent reply queue still awaiting synthesis`() {
         val backend = FakeBackend(delayMs = 1_000)
         val delegate = FakeTtsEngine()
         val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
-        router.speak("старый ответ")
+        router.startQueue()!!.enqueue("Старый ответ.")
         Thread.sleep(50)
         router.speak("новый ответ")
         Thread.sleep(1_500)
         assertEquals(1, delegate.playPcmCalls.size)
+    }
+
+    // An automation with two "speak" actions in a row: the second must not cancel the first
+    // while it is still being synthesized.
+    @Test
+    fun `consecutive single speaks all play`() {
+        val backend = FakeBackend(delayMs = 1_000)
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        router.speak("первое")
+        Thread.sleep(50)
+        router.speak("второе")
+        Thread.sleep(1_500)
+        assertEquals(2, delegate.playPcmCalls.size)
     }
 
     @Test
