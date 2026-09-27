@@ -447,6 +447,30 @@ object HelperBinderProtocol {
      */
     val TX_GET_GLOBAL_SETTING: Int = IBinder.FIRST_CALL_TRANSACTION + 51  // 52
 
+    /**
+     * Arms the power-off Telegram report (3.19): the daemon keeps it and sends it itself when its
+     * own listener on the power fids sees the car switched off (see helper/offreport). A repeated
+     * call replaces the report; the first one registers the listener.
+     *
+     * Request: [String id, String token, long chatId, String text with `{{time}}`]
+     * Reply:   [int status (0 = armed, -1 = refused / failed)]
+     * An old daemon without this handler makes transact return false → the client returns false,
+     * and the app, finding the daemon alive, logs it as outdated.
+     */
+    val TX_OFFREPORT_ARM: Int = IBinder.FIRST_CALL_TRANSACTION + 52  // 53
+
+    /** Drops the armed report. (no args) -> [int status (0 = ok)]. Outcomes already kept stay. */
+    val TX_OFFREPORT_DISARM: Int = IBinder.FIRST_CALL_TRANSACTION + 53  // 54
+
+    /**
+     * Where one report id stands (unknown / armed / sending / sent / failed, with the power-off
+     * time), plus what is armed now and the last power-off — asked by the app on its next start and
+     * by the dump.
+     *
+     * Request: [String id] -> Reply: [int status (0 = ok), OffReportStatus (see OffReportWire)]
+     */
+    val TX_OFFREPORT_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 54  // 55
+
     /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
      *  convention: 2 says the firmware has no native split surface at all (methods absent on the
      *  IActivityTaskManager proxy), which is a verdict, unlike 1 = the call threw. The split is

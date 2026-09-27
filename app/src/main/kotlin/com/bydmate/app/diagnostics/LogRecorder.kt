@@ -404,7 +404,9 @@ class LogRecorder internal constructor(
             // Drive mode switch: one line per attempt (flag, target before/after, speed, verdict).
             "DriveModeChannel:*",
             // Telegram reports: build (items taken / skipped, length), send, outbox add/drain/drop.
-            "TgReport:*"
+            "TgReport:*",
+            // Power-off report in the helper daemon: arm, power off/on, send attempts, outcome.
+            "OffReport:*"
         )
     }
 }
