@@ -7,6 +7,7 @@ import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.R
 import com.bydmate.app.util.CalendarPeriods
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +55,8 @@ data class TripsUiState(
     val period: TripPeriod = TripPeriod.WEEK,
     val filter: TripFilter = TripFilter.ALL,
     val months: List<MonthGroup> = emptyList(),
+    // True while the period itself has trips but the active type filter hides all of them.
+    val hasTripsBeforeFilter: Boolean = false,
     val expandedMonths: Set<String> = emptySet(),
     val expandedDays: Set<String> = emptySet(),
     val selectedTrip: TripEntity? = null,
@@ -213,6 +216,7 @@ class TripsViewModel @Inject constructor(
                 _uiState.update { s ->
                     s.copy(
                         months = months,
+                        hasTripsBeforeFilter = allTrips.isNotEmpty(),
                         trips = filtered,
                         totalKm = totalKm,
                         totalKwh = totalKwh,
@@ -363,6 +367,21 @@ class TripsViewModel @Inject constructor(
             TripPeriod.YEAR -> CalendarPeriods.startOfYear(now) to now
             TripPeriod.ALL -> 0L to now
         }
+    }
+}
+
+/**
+ * Empty-list text for the trip list. TODAY/WEEK are calendar based, so right after midnight
+ * or Monday there are genuinely no finished trips yet, even if the current one is running.
+ * Only applies when the period itself is empty; if a type filter hides an otherwise
+ * non-empty period, the generic "no data" text stays.
+ */
+fun emptyTripsStringRes(period: TripPeriod, hasTripsBeforeFilter: Boolean): Int {
+    if (hasTripsBeforeFilter) return R.string.trips_empty
+    return when (period) {
+        TripPeriod.TODAY -> R.string.trips_empty_today
+        TripPeriod.WEEK -> R.string.trips_empty_week
+        TripPeriod.MONTH, TripPeriod.YEAR, TripPeriod.ALL -> R.string.trips_empty
     }
 }
 

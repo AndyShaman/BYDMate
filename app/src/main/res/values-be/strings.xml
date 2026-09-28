@@ -326,6 +326,8 @@
     <string name="trips_filter_trips_only">Паездкі</string>
     <string name="trips_filter_stops_only">Стаянкі</string>
     <string name="trips_empty">Няма даных за выбраны перыяд</string>
+    <string name="trips_empty_today">За сёння паездак пакуль няма. Бягучая з\'явіцца пасля завяршэння.</string>
+    <string name="trips_empty_week">За гэты тыдзень паездак пакуль няма. Бягучая з\'явіцца пасля завяршэння.</string>
     <string name="trips_col_time">час</string>
     <string name="trips_col_duration">працяг.</string>
     <string name="trips_col_km">км</string>
