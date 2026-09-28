@@ -1,0 +1,25 @@
+{
+  "place_id": 100001,
+  "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+  "osm_type": "way",
+  "osm_id": 200002,
+  "lat": "53.8945",
+  "lon": "27.5471",
+  "category": "highway",
+  "type": "primary",
+  "place_rank": 26,
+  "importance": 0.1,
+  "addresstype": "road",
+  "name": "проспект Независимости",
+  "display_name": "проспект Независимости, Ленинский район, Минск, 220030, Беларусь",
+  "address": {
+    "road": "проспект Независимости",
+    "city_district": "Ленинский район",
+    "city": "Минск",
+    "ISO3166-2-lvl4": "BY-HM",
+    "postcode": "220030",
+    "country": "Беларусь",
+    "country_code": "by"
+  },
+  "boundingbox": ["53.8930", "53.8960", "27.5450", "27.5500"]
+}

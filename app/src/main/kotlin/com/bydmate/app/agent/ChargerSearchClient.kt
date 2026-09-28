@@ -38,7 +38,7 @@ class ChargerSearchClient @Inject constructor(private val http: OkHttpClient) {
                 var lastError: IOException? = null
                 for (ep in endpoints) {
                     try {
-                        val request = Request.Builder().url(ep).header("User-Agent", OVERPASS_USER_AGENT).post(formBody).build()
+                        val request = Request.Builder().url(ep).header("User-Agent", MAP_USER_AGENT).post(formBody).build()
                         val result = overpassHttp.newCall(request).execute().use { resp ->
                             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
                             val body = resp.body?.string().takeUnless { it.isNullOrBlank() }
@@ -72,5 +72,6 @@ class ChargerSearchClient @Inject constructor(private val http: OkHttpClient) {
 }
 
 /** overpass-api.de answers 406 to OkHttp's default User-Agent (`okhttp/x.y.z`) and serves a
- *  client that names itself. Shared by [ChargerSearchClient] and [SettlementSearchClient]. */
-internal const val OVERPASS_USER_AGENT = "BYDMate/${BuildConfig.VERSION_NAME} (+https://github.com/AndyShaman/BYDMate)"
+ *  client that names itself; Nominatim's usage policy asks for the same. Shared by
+ *  [ChargerSearchClient] and [SettlementSearchClient]. */
+internal const val MAP_USER_AGENT = "BYDMate/${BuildConfig.VERSION_NAME} (+https://github.com/AndyShaman/BYDMate)"

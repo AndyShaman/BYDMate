@@ -1742,13 +1742,28 @@ class AgentTools @Inject constructor(
             ?: return """{"error":"поиск населённых пунктов недоступен"}"""
         Log.i(TAG, "where_am_i: request, fix age=${fix.ageMs / 1000}s live=${fix.live}")
         val searchStartMs = nowMs()
-        val found = runCatchingCancellable {
+        val answer = runCatchingCancellable {
             client.search(lat, lon, SETTLEMENT_RADIUS_M, TOWN_RADIUS_M)
         }.getOrNull()?.getOrElse {
             Log.w(TAG, "where_am_i: search failed: ${it.message}")
             null
         } ?: return """{"error":"сервис карт недоступен, не могу определить, где мы"}"""
         val latencyMs = nowMs() - searchStartMs
+        return when (answer) {
+            is SettlementSearchClient.Surroundings.Nearby -> nearbyJson(fix, answer.settlements, latencyMs, client.lastEndpoint)
+            is SettlementSearchClient.Surroundings.Address -> addressJson(fix, answer, latencyMs, client.lastEndpoint)
+        }
+    }
+
+    /** where_am_i from Overpass: settlement centres around the car, nearest first. */
+    private fun nearbyJson(
+        fix: GpsFix,
+        found: List<SettlementSearchClient.Settlement>,
+        latencyMs: Long,
+        endpoint: String?,
+    ): String {
+        val lat = fix.lat
+        val lon = fix.lon
         fun km(s: SettlementSearchClient.Settlement) = PlaceGeometry.distanceMeters(lat, lon, s.lat, s.lon) / 1000.0
         // A lone farmstead is a poor answer to "где я" while any real settlement is around.
         val regular = found.filter { it.place != "isolated_dwelling" }
@@ -1759,7 +1774,7 @@ class AgentTools @Inject constructor(
         // latency and the answering endpoint are enough to diagnose a "wrong answer" report.
         val nearestKm = nearest.firstOrNull()?.let { round1(km(it)) }?.toString() ?: "-"
         Log.i(TAG, "where_am_i: found=${found.size} nearest_km=$nearestKm town=${town != null} " +
-            "fix_age=${fix.ageMs / 1000}s live=${fix.live} latency=${latencyMs}ms endpoint=${client.lastEndpoint ?: "-"}")
+            "fix_age=${fix.ageMs / 1000}s live=${fix.live} latency=${latencyMs}ms endpoint=${endpoint ?: "-"}")
         val json = JSONObject().put("fix_age_min", fix.ageMs / 60_000L)
         staleFixNote(fix)?.let { json.put("fix_note", it) }
         if (nearest.isEmpty()) {
@@ -1774,6 +1789,34 @@ class AgentTools @Inject constructor(
         return json.put("note", "distance_km - по прямой до центра населённого пункта, direction_from_car - " +
             "в какой стороне он от машины. Границ в данных нет: даже при малом расстоянии не говори, что машина " +
             "в нём, говори «примерно N км от X, X к северу от нас». Называй только эти места").toString()
+    }
+
+    /** where_am_i when only Nominatim answered: the address of the point itself, no centres, so
+     *  no distance or direction. The same no-place-names rule for the log line as above. */
+    private fun addressJson(
+        fix: GpsFix,
+        address: SettlementSearchClient.Surroundings.Address,
+        latencyMs: Long,
+        endpoint: String?,
+    ): String {
+        Log.i(TAG, "where_am_i: address settlement=${address.settlement != null} street=${address.road != null} " +
+            "fix_age=${fix.ageMs / 1000}s live=${fix.live} latency=${latencyMs}ms endpoint=${endpoint ?: "-"}")
+        val json = JSONObject().put("fix_age_min", fix.ageMs / 60_000L)
+        staleFixNote(fix)?.let { json.put("fix_note", it) }
+        address.settlement?.let { name ->
+            json.put("settlements", JSONArray().put(JSONObject().put("name", name)
+                .putOpt("type", address.place?.let { SETTLEMENT_TYPES[it] ?: it })))
+        }
+        JSONObject()
+            .putOpt("street", address.road)
+            .putOpt("district", address.district)
+            .putOpt("region", address.region)
+            .putOpt("country", address.country)
+            .takeIf { it.length() > 0 }
+            ?.let { json.put("address", it) }
+        return json.put("note", "в этом ответе нет расстояний: это адрес точки машины по OpenStreetMap. " +
+            "settlements - населённый пункт из адреса, машина в нём или рядом с ним; address - улица, район, " +
+            "область, страна. Говори «мы в X или рядом, улица Y». Называй только эти места").toString()
     }
 
     /** Null for a fresh fix. A stale fix always gets a hedge, live or seed: the 8 m GPS filter
