@@ -1885,6 +1885,7 @@
     <string name="tg_report_field_location">Месца на карце</string>
     <string name="tg_report_field_soc">Зарад</string>
     <string name="tg_report_field_range">Запас ходу</string>
+    <string name="tg_report_field_odometer">Прабег</string>
     <string name="tg_report_field_trip">Паездка</string>
     <string name="tg_report_field_temps">Тэмпература</string>
     <string name="tg_report_field_openings">Што адчынена</string>
@@ -1900,6 +1901,7 @@
     <string name="tg_report_trip_distance_time">%1$s за %2$s</string>
     <string name="tg_report_trip_km">%1$.1f км</string>
     <string name="tg_report_trip_km_whole">%1$d км</string>
+    <string name="tg_report_odometer">Прабег %1$,d км</string>
     <string name="tg_report_trip_consumption">Расход %1$.1f кВт·г/100 км</string>
     <string name="tg_report_temp_outside">звонку %1$+d°</string>
     <string name="tg_report_temp_inside">у салоне %1$+d°</string>
@@ -1927,6 +1929,7 @@
     <string name="tg_report_field_location_desc">Спасылка «Адкрыць на карце»</string>
     <string name="tg_report_field_soc_desc">Працэнт батарэі</string>
     <string name="tg_report_field_range_desc">Кіламетры, як на Галоўнай</string>
+    <string name="tg_report_field_odometer_desc">Агульны прабег машыны</string>
     <string name="tg_report_field_trip_desc">Кіламетры, расход і час у дарозе</string>
     <string name="tg_report_field_temps_desc">Звонку і ў салоне</string>
     <string name="tg_report_field_openings_desc">Дзверы, вокны, люк, багажнік, капот</string>

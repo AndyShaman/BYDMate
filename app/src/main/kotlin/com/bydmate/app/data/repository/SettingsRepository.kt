@@ -119,6 +119,8 @@ open class SettingsRepository @Inject constructor(
         /** Power-off Telegram report (3.19): "true" = on, and its ReportField ids, comma separated. */
         const val KEY_TG_REPORT_OFF_ENABLED = "tg_report_off_enabled"
         const val KEY_TG_REPORT_OFF_FIELDS = "tg_report_off_fields"
+        /** One-shot flag: the odometer was added to a power-off choice saved before it existed. */
+        const val KEY_TG_REPORT_ODOMETER_ADDED = "tg_report_odometer_added"
         /** Telegram reports waiting for the network: a JSON array, see TelegramReporter. */
         const val KEY_TG_REPORT_OUTBOX = "tg_report_outbox"
         const val KEY_DATA_SOURCE = "data_source"
@@ -572,6 +574,16 @@ open class SettingsRepository @Inject constructor(
 
     fun observeTgReportOffFields(): Flow<Set<ReportField>> =
         observeString(KEY_TG_REPORT_OFF_FIELDS).map { ReportField.parseCsv(it) }
+
+    /**
+     * One-shot (3.19.1): a power-off choice saved before the odometer existed gets it once; an
+     * install with no saved choice already has it through [ReportField.DEFAULT]. Rules keep theirs.
+     */
+    suspend fun addTgReportOdometerOnce() {
+        if (getString(KEY_TG_REPORT_ODOMETER_ADDED, "false") == "true") return
+        settingsDao.get(KEY_TG_REPORT_OFF_FIELDS)?.let { setTgReportOffFields(ReportField.parseCsv(it) + ReportField.ODOMETER) }
+        setString(KEY_TG_REPORT_ODOMETER_ADDED, "true")
+    }
 
     suspend fun getTgReportOutbox(): String = getString(KEY_TG_REPORT_OUTBOX, "")
 

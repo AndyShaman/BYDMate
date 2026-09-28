@@ -16,6 +16,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -131,6 +132,17 @@ class TelegramBackupSink internal constructor(
             .apply { if (!linkPreview) add("link_preview_options", NO_LINK_PREVIEW) }
             .build()
         return call(token, "sendMessage", body) { }
+    }
+
+    /** A native location pin, silent (`disable_notification`): it follows a message already announced. */
+    suspend fun sendLocation(token: String, chatId: Long, latitude: Double, longitude: Double): Result<Unit> {
+        val body = FormBody.Builder()
+            .add("chat_id", chatId.toString())
+            .add("latitude", String.format(Locale.US, "%.6f", latitude))
+            .add("longitude", String.format(Locale.US, "%.6f", longitude))
+            .add("disable_notification", "true")
+            .build()
+        return call(token, "sendLocation", body) { }
     }
 
     suspend fun sendDocument(token: String, chatId: Long, file: File, caption: String): Result<Unit> {

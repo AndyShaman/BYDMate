@@ -248,6 +248,18 @@ class TelegramReporterTest {
         assertTrue(second.text.endsWith("<b>63%</b>"))
     }
 
+    @Test fun `the power-off report carries the odometer by the same rules`() = runBlocking {
+        settings.setTgReportOffEnabled(true)
+        connect()
+        assertTrue("a fresh install has it on", "odometer" in settings.getTgReportOffFields().map { it.id })
+        val header = "<b>BYDMate: машина выключена в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>"
+        reporter.inputs = { ReportInputs(diParsData(soc = 64, mileage = 23_456.7), 312.0, null, null, null, null) }
+        settings.setTgReportOffFields(setOf(ReportField.SOC, ReportField.fromId("odometer")!!))
+        assertEquals("$header\n\n🔋 Заряд <b>64%</b>\n🧭 Пробег 23\u00A0456 км", reporter.powerOffReport()!!.text)
+        reporter.inputs = { ReportInputs(diParsData(soc = 64, mileage = null), 312.0, null, null, null, null) }
+        assertEquals("$header\n\n🔋 Заряд <b>64%</b>", reporter.powerOffReport()!!.text)
+    }
+
     @Test fun `a drain that runs while a send is in flight still catches the report once it fails`() = runBlocking {
         connect()
         val proceed = CompletableDeferred<Unit>()
@@ -311,7 +323,7 @@ class TelegramReporterTest {
         settings.setTgReportOffEnabled(true)
         reporter.enqueue(entry("a", now))
         assertEquals(
-            "telegram report: off=on fields=[location,soc,range,trip] armed=- daemon=- pending=- outbox=1",
+            "telegram report: off=on fields=[location,soc,range,odometer,trip] armed=- daemon=- pending=- outbox=1",
             reporter.diagnosticsLines().first(),
         )
     }
@@ -325,7 +337,7 @@ class TelegramReporterTest {
             OffReportStatus(OffReportOutcome("", OffReportState.UNKNOWN), "a2", now, 1, last, fids, pending = 3)
         val lines = reporter.diagnosticsLines()
         assertEquals(
-            "telegram report: off=off fields=[location,soc,range,trip] armed=12s daemon=ok pending=3 outbox=0",
+            "telegram report: off=off fields=[location,soc,range,odometer,trip] armed=12s daemon=ok pending=3 outbox=0",
             lines[0],
         )
         assertEquals(

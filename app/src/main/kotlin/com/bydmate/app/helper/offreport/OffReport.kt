@@ -19,6 +19,7 @@ import java.net.InetAddress
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
@@ -35,7 +36,9 @@ import java.util.concurrent.TimeUnit
  * before the networks go ([OffReportRetry]). Sent or refused for good, that event goes; otherwise
  * it waits, and every later [arm] (the app's next start on the next drive, with a token again)
  * delivers what waits, oldest first, with the «(записано в HH:MM)» line, backing off after a failed
- * pass. [disarm] deletes the pending files before it answers.
+ * pass. [disarm] deletes the pending files before it answers. A report Telegram took, with a map
+ * link in it, is followed by the native location of that link ([sendPoint]): once its event is
+ * gone, one attempt, never retried.
  *
  * An event is its key ([PendingReport.key], power-off time and report id), never the report id
  * alone: the app re-arms an unchanged report under the same id, so two power-offs can share it.
@@ -143,6 +146,8 @@ internal object OffReport {
     internal var registrar: (dev: Int, fid: Int, sink: FidPushSink) -> String = ::registerPowerFid
     internal var sender: (token: String, chatId: Long, text: String, connectMs: Int, readMs: Int) -> AttemptResult =
         ::postSendMessage
+    internal var locator: (token: String, chatId: Long, lat: Double, lon: Double, connectMs: Int, readMs: Int) -> AttemptResult =
+        ::postSendLocation
     internal var endpoint: (token: String) -> URL = { token -> URL("https://$TELEGRAM_HOST/bot$token/sendMessage") }
     internal var wallClock: () -> Long = System::currentTimeMillis
     internal var monoClock: () -> Long = SystemClock::elapsedRealtime
@@ -423,6 +428,9 @@ internal object OffReport {
             }
         }
         Log.i(TAG, "offreport: ${if (result.sent) "sent" else "failed"} id=${report.id} attempts=${result.attempts}")
+        if (result.sent) {
+            sendPoint(report, burst.token, burst.epoch, OffReportRetry.CONNECT_TIMEOUT_MS.toInt(), OffReportRetry.READ_TIMEOUT_MS.toInt())
+        }
     }
 
     /**
@@ -475,6 +483,7 @@ internal object OffReport {
                 forget(report)
                 rememberPending(report, OffReportState.SENT, result.rc)
                 Log.i(TAG, "offreport: pending sent id=${report.id} age_s=$ageS")
+                sendPoint(report, go.token, taken, PENDING_CONNECT_MS, PENDING_READ_MS)
             }
             AttemptResult.Verdict.STOP -> {
                 forget(report)
@@ -493,6 +502,26 @@ internal object OffReport {
             }
         }
         return true
+    }
+
+    /**
+     * Sender thread: the native location under a report Telegram just took, from the report's own
+     * map link. One attempt, never retried, and none once the epoch [taken] moved on (a disarm or
+     * another chat since the text went); a failure is one log line, the report stays delivered.
+     */
+    private fun sendPoint(report: PendingReport, token: String, taken: Long, connectMs: Int, readMs: Int) {
+        val point = TelegramReportBuilder.mapPoint(report.text) ?: return
+        dropReason(taken)?.let {
+            Log.i(TAG, "offreport: location skipped id=${report.id} reason=$it")
+            return
+        }
+        val result = try {
+            locator(token, report.chatId, point.latitude, point.longitude, connectMs, readMs)
+        } catch (@Suppress("TooGenericExceptionCaught") e: RuntimeException) {
+            AttemptResult("err:${e.javaClass.simpleName}", AttemptResult.Verdict.RETRY)
+        }
+        if (result.verdict == AttemptResult.Verdict.SENT) Log.i(TAG, "offreport: location sent id=${report.id}")
+        else Log.w(TAG, "offreport: location failed id=${report.id} rc=${result.rc}")
     }
 
     private fun rememberPending(report: PendingReport, state: Int, rc: String) {
@@ -644,9 +673,17 @@ internal object OffReport {
      * InetAddress positive cache, and the watchdog bounds everything after it. Connecting to the
      * pre-resolved address instead would break TLS hostname verification and SNI.
      */
-    internal fun postSendMessage(token: String, chatId: Long, text: String, connectMs: Int, readMs: Int): AttemptResult {
+    internal fun postSendMessage(token: String, chatId: Long, text: String, connectMs: Int, readMs: Int): AttemptResult =
+        post(endpoint(token), sendMessageBody(chatId, text), connectMs, readMs)
+
+    /** One Bot API `sendLocation` of the same bot, next to [endpoint]'s sendMessage; bounded like [postSendMessage]. */
+    @Suppress("LongParameterList") // exactly the request fields and its two bounds
+    internal fun postSendLocation(token: String, chatId: Long, lat: Double, lon: Double, connectMs: Int, readMs: Int): AttemptResult =
+        post(URL(endpoint(token), "sendLocation"), sendLocationBody(chatId, lat, lon), connectMs, readMs)
+
+    /** The bounded form POST behind both, see [postSendMessage]. */
+    private fun post(url: URL, form: String, connectMs: Int, readMs: Int): AttemptResult {
         val startNs = System.nanoTime()
-        val url = endpoint(token)
         val resolved = try {
             OffReportRetry.callWithin(connectMs.toLong()) { InetAddress.getAllByName(url.host) }
         } catch (e: IOException) {
@@ -655,7 +692,7 @@ internal object OffReport {
             return AttemptResult("err:${e.javaClass.simpleName}", AttemptResult.Verdict.RETRY)
         }
         if (resolved == null) return AttemptResult("io:dns_timeout", AttemptResult.Verdict.RETRY)
-        val body = sendMessageBody(chatId, text).toByteArray(Charsets.UTF_8)
+        val body = form.toByteArray(Charsets.UTF_8)
         var conn: HttpURLConnection? = null
         var cut: ScheduledFuture<*>? = null
         return try {
@@ -691,6 +728,13 @@ internal object OffReport {
         "chat_id=$chatId&parse_mode=HTML" +
             "&link_preview_options=" + URLEncoder.encode(NO_LINK_PREVIEW, "UTF-8") +
             "&text=" + URLEncoder.encode(text, "UTF-8")
+
+    /** The point's form body: silent, the report above it already rang. */
+    internal fun sendLocationBody(chatId: Long, lat: Double, lon: Double): String =
+        "chat_id=$chatId" +
+            "&latitude=" + String.format(Locale.US, "%.6f", lat) +
+            "&longitude=" + String.format(Locale.US, "%.6f", lon) +
+            "&disable_notification=true"
 
     private const val NO_LINK_PREVIEW = """{"is_disabled":true}"""
     private const val HTTP_FIRST_CODE = 100
