@@ -706,7 +706,14 @@ class TrackingService : Service(), LocationListener {
                         com.bydmate.app.data.repository.SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT,
                         "")
                     if (pref.isNotEmpty()) {
-                        helperClient.setAppHidden("com.byd.autovoice", pref == "true")
+                        val disabled = pref == "true"
+                        getSharedPreferences("voice", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("alice_native_takeover", disabled)
+                            .apply()
+                        helperClient.setAppHidden("com.byd.autovoice", disabled)
+                        val vrBlocked = helperClient.setAppHidden("com.byd.vrassistant", disabled)
+                        Log.i(TAG, "ALICE4_5_VRASSISTANT_BLOCK startup=$vrBlocked disabled=$disabled")
                     }
                 }
                 // Power down a cluster compositor left "on" by a car shutdown mid-projection —

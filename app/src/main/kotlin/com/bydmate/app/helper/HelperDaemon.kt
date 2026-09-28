@@ -540,7 +540,13 @@ fun main(args: Array<String>) {
                     // the caller may only name the launcher package.
                     // Validate the flag daemon-side too — a privileged shell-uid op must not
                     // trust the caller. Only 0/1 are a defined state; reject anything else.
-                    val ok = if (pkg == "com.byd.autovoice" && hidden in 0..1) {
+                    val ok = if (pkg == "com.byd.vrassistant" && hidden in 0..1) {
+                        // DiLink 3 ships the real native voice UI as com.byd.vrassistant.
+                        // Keep the privileged surface exact and reversible: this is NOT a generic
+                        // package-disable passthrough.
+                        val cmd = if (hidden == 1) "pm disable-user --user 0" else "pm enable"
+                        shExec("$cmd \"\$1\"", pkg).code == 0
+                    } else if (pkg == "com.byd.autovoice" && hidden in 0..1) {
                         // `pm disable-user --user 0` force-stops the package and disables its
                         // components so the framework stops routing the steering voice button to it.
                         // `pm hide` left the already-running system assistant alive — the wheel

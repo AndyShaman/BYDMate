@@ -27,6 +27,7 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
             MediaRecorder.AudioSource.DEFAULT,              // 0
         )
         internal const val DUCK_VOLUME_INDEX = 1
+        internal const val EXTERNAL_ASSISTANT_DUCK_VOLUME_INDEX = 4
         private const val TAG = "AudioCapture"
         // Pre-duck media volume survives process death here; restoreStuckDuck() reads it
         // at service start (stuck-quiet media after a crash / APK update mid session).
@@ -146,6 +147,25 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
         return saved
     }
 
+    /** Milder, reversible duck used while the external Yandex Alice route owns the mic button. */
+    internal fun duckMusicForExternalAssistant(): Int? = synchronized(duckLock) {
+        if (!audioManager.isMusicActive) return null
+        val saved = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        if (saved <= EXTERNAL_ASSISTANT_DUCK_VOLUME_INDEX) return null
+        if (!runCatching {
+                audioManager.setStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    EXTERNAL_ASSISTANT_DUCK_VOLUME_INDEX,
+                    0,
+                )
+            }.isSuccess) return null
+        duckDepth++
+        pendingRestore = saved
+        prefs.edit().putInt(KEY_PRE_DUCK_VOLUME, saved).apply()
+        Log.i(TAG, "duckExternalAlice: $saved -> $EXTERNAL_ASSISTANT_DUCK_VOLUME_INDEX")
+        saved
+    }
+
     /** Restore the media volume captured by duckMusic(), or the explicit mid-session override. No-op if nothing was ducked. */
     // internal for direct unit tests
     internal fun restoreMusic(saved: Int?): Unit = synchronized(duckLock) {
@@ -208,7 +228,7 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
         val saved = prefs.getInt(KEY_PRE_DUCK_VOLUME, -1)
         if (saved < 0) return
         val cur = runCatching { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrNull()
-        if (cur != null && cur <= DUCK_VOLUME_INDEX) {
+        if (cur != null && cur <= maxOf(DUCK_VOLUME_INDEX, EXTERNAL_ASSISTANT_DUCK_VOLUME_INDEX)) {
             runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, saved, 0) }
             Log.i(TAG, "restoreStuckDuck: volume stuck at $cur, restored to $saved")
         } else {

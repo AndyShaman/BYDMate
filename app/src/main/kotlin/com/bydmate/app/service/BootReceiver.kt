@@ -35,6 +35,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val validActions = setOf(
             Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
             "android.intent.action.QUICKBOOT_POWERON",
             "android.intent.action.LOCKED_BOOT_COMPLETED",
             Intent.ACTION_USER_PRESENT,

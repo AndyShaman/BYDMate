@@ -650,9 +650,19 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
      */
     fun setDisableNativeAssistant(disabled: Boolean) {
         _uiState.update { it.copy(disableNativeAssistant = disabled) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("alice_native_takeover", disabled)
+            .apply()
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, disabled.toString())
             helperClient.setAppHidden("com.byd.autovoice", disabled)
+            helperClient.setAppHidden("com.byd.vrassistant", disabled)
+            // DiLink 3 can leave the steering-wheel accessibility binding stale after package
+            // state changes. Re-assert our key filter immediately when takeover is enabled.
+            if (disabled && _uiState.value.voiceEnabled) {
+                ensureVoiceKeyService("native-assistant-disabled")
+            }
         }
     }
 
@@ -1259,16 +1269,30 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             // FIRST — HelperClient only resolves an existing binder, so without ensureRunning()
             // the call silently no-ops when the daemon is not up. Only needed on enable.
             if (enabled) {
-                if (helperBootstrap.ensureRunning()) {
-                    helperClient.enableAccessibilityService()
-                } else {
-                    Log.e(TAG, "helper daemon not running; cannot self-enable a11y for voice PTT")
-                }
+                ensureVoiceKeyService("voice-enabled")
                 // Pre-warm the recognizer so the first PTT after enabling voice doesn't pay the
                 // cold model-load cost (Task 5). No-op if the model isn't downloaded yet.
                 viewModelScope.launch(Dispatchers.IO) { runCatching { continuousAsr.warmUp() } }
             }
         }
+    }
+
+    private suspend fun ensureVoiceKeyService(reason: String) {
+        if (!helperBootstrap.ensureRunning()) {
+            Log.e(TAG, "$reason: helper daemon not running; cannot self-enable a11y for voice PTT")
+            return
+        }
+        if (!helperClient.enableAccessibilityService()) {
+            Log.e(TAG, "$reason: accessibility re-assert failed")
+            return
+        }
+        if (Build.VERSION.SDK_INT > 29) return
+        repeat(10) {
+            if (com.bydmate.app.cluster.SteeringWheelKeyService.isConnected) return
+            delay(250L)
+        }
+        Log.w(TAG, "$reason: a11y still unbound; invoking Android 10 self-recovery")
+        helperClient.recoverAccessibilityService()
     }
 
     /**
@@ -2178,7 +2202,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("disable_native_assistant pref: \"$pref\"")
                 // Same package family the helper daemon disables via TX_SET_APP_HIDDEN.
                 val pm = appContext.packageManager
-                for (pkg in listOf("com.byd.autovoice", "com.byd.autovoice.engine", "com.byd.autovoice.tts")) {
+                for (pkg in listOf("com.byd.autovoice", "com.byd.autovoice.engine", "com.byd.autovoice.tts", "com.byd.vrassistant")) {
                     val state = runCatching { enabledSettingName(pm.getApplicationEnabledSetting(pkg)) }
                         .getOrElse { "not installed" }
                     appendLine("$pkg: $state")

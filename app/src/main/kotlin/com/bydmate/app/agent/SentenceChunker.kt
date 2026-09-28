@@ -30,6 +30,15 @@ class SentenceChunker {
                     start = j + 1
                 }
                 i = j
+            } else if (isSoftBoundary(c, i, start)) {
+                emit(out, start, i + 1)
+                start = i + 1
+            } else if (isMaxLengthBoundary(c, i, start)) {
+                // Some models return long list-like answers with no sentence-ending dot until
+                // the very end. Do not make offline TTS synthesize the entire answer before
+                // playback starts: cut at a safe whitespace boundary.
+                emit(out, start, i)
+                start = i + 1
             }
             i++
         }
@@ -48,7 +57,19 @@ class SentenceChunker {
         if (s.isNotEmpty()) out += s
     }
 
+    private fun isSoftBoundary(c: Char, index: Int, start: Int): Boolean {
+        if (c !in SOFT_TERMINATORS) return false
+        if (index - start + 1 < MIN_SOFT_CHUNK) return false
+        return index + 1 < buf.length && buf[index + 1].isWhitespace()
+    }
+
+    private fun isMaxLengthBoundary(c: Char, index: Int, start: Int): Boolean =
+        index - start + 1 >= MAX_CHUNK && c.isWhitespace()
+
     private companion object {
         private val TERMINATORS = setOf('.', '!', '?', '…')
+        private val SOFT_TERMINATORS = setOf(';', ':')
+        private const val MIN_SOFT_CHUNK = 24
+        private const val MAX_CHUNK = 80
     }
 }

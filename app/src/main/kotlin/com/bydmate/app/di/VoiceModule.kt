@@ -2,6 +2,7 @@ package com.bydmate.app.di
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.Build
 import android.util.Log
 import com.bydmate.app.agent.LlmConnectionResolver
 import com.bydmate.app.data.remote.DiParsData
@@ -55,7 +56,12 @@ object VoiceModule {
 
     @Provides @Singleton
     fun provideContinuousAsr(mm: GigaAmModelManager, guard: AsrLoadGuard): ContinuousAsr =
-        GigaAmAsrEngine(mm, loadGuard = guard)
+        GigaAmAsrEngine(
+            mm,
+            loadGuard = guard,
+            dilink3Optimizations = Build.FINGERPRINT.orEmpty()
+                .contains("DiLink3", ignoreCase = true),
+        )
 
     @Provides @Singleton
     fun provideRuStressMarker(mm: TtsModelManager): RuStressMarker =
