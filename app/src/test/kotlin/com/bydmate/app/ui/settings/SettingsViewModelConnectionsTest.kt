@@ -500,6 +500,16 @@ class SettingsViewModelConnectionsTest {
         assertEquals("my-chosen-model", settingsDao.map[SettingsRepository.KEY_OPENROUTER_MODEL])
     }
 
+    @Test fun `saveOpenRouterApiKey persists the key trimmed`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.saveOpenRouterApiKey(" sk-or-v1-abc \n")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("sk-or-v1-abc", settingsDao.map[SettingsRepository.KEY_OPENROUTER_API_KEY])
+    }
+
     // --- Wave O T11: custom connection model list + Russian network errors ---
 
     @Test fun `loadCustomModels fetches and stores model list`() = runTest {

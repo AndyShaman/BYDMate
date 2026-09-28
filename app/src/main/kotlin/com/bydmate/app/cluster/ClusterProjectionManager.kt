@@ -829,6 +829,8 @@ object ClusterProjectionManager {
         if (orphan != -1) {
             Log.i(TAG, "releasing orphaned VirtualDisplay id=$orphan from a prior session")
             helper.releaseVirtualDisplay(orphan)
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().remove(KEY_LAST_VD_ID).apply()
         }
     }
 
