@@ -41,7 +41,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * stopped. The restore runs whatever happened before it, cancellation included.
  *
  * Refuses to start while a real route is guided, while the car moves faster than
- * [MAX_SPEED_KMH], or without the helper daemon (the speed cannot be known then). A route that
+ * [MAX_SPEED_KMH], or without the helper daemon (the speed cannot be known then). The speed is
+ * looked at about once a second through the steps: moving off, or a speed that cannot be read,
+ * ends the check with the full restore and [Refusal.MOVING]. A route that
  * starts during the steps ends the check at once: it stops drawing, blanks its CAN fields and,
  * when the projection's arming runs, leaves the status and the layout (with the as-found kept in
  * prefs) to it instead of closing them under the route.
@@ -68,6 +70,9 @@ class HudCheck @Inject constructor(
     /** Thrown out of the steps when a route starts; [step] is where it was seen. */
     private class RouteStartedException(val step: Int) : Exception()
 
+    /** Thrown out of the steps when the car moves off or its speed is unknown; [step] as above. */
+    private class MovingException(val step: Int) : Exception()
+
     enum class Refusal { GUIDANCE, MOVING, NO_LINK }
 
     private val _state = MutableStateFlow<State>(State.Idle)
@@ -93,6 +98,7 @@ class HudCheck @Inject constructor(
         var ownBridge: HudSomeIpBridge? = null
         var startRc = "none"
         var canShown = false
+        var sinceSpeedMs = 0L
     }
 
     /** Starts a check unless one runs; the outcome lands in [state]. */
@@ -112,22 +118,35 @@ class HudCheck @Inject constructor(
         hudController.armingPaused = true
         val run = Run()
         var routeStep: Int? = null
+        var movingStep: Int? = null
         try {
             runCatching { steps(run) }.onFailure {
                 when (it) {
                     is CancellationException -> throw it
                     is RouteStartedException -> routeStep = it.step
+                    is MovingException -> movingStep = it.step
                     else -> log("hudprobe: aborted ${it.javaClass.simpleName}")
                 }
             }
         } finally {
-            withContext(NonCancellable) { restore(run, routeStep) }
+            withContext(NonCancellable) { restore(run, routeStep, movingStep) }
         }
     }
 
     /** Looked at before anything goes out, at least once a second through the steps. */
     private fun watchGuidance(step: Int) {
         if (guidanceActive()) throw RouteStartedException(step)
+    }
+
+    /** The speed about once a second through the steps, [passedMs] after the last call. A route
+     *  seen in the same look wins over the speed. */
+    private suspend fun watchSpeed(run: Run, step: Int, passedMs: Long) {
+        run.sinceSpeedMs += passedMs
+        if (run.sinceSpeedMs < SPEED_LOOK_MS) return
+        run.sinceSpeedMs = 0L
+        val kmh = speedKmh()
+        watchGuidance(step)
+        if (kmh == null || kmh > MAX_SPEED_KMH) throw MovingException(step)
     }
 
     private suspend fun refusal(): Refusal? {
@@ -173,6 +192,7 @@ class HudCheck @Inject constructor(
             delay(GUIDANCE_LOOK_MS.coerceAtMost(stepMs - heldMs))
             heldMs += GUIDANCE_LOOK_MS
             watchGuidance(3)
+            watchSpeed(run, 3, GUIDANCE_LOOK_MS)
             if (heldMs < stepMs && heldMs % HudArming.CHECK_PERIOD_MS == 0L) {
                 recheck(run)
                 run.can.show(HudCanChannel.TURN_LEFT, MARKER_3, "BYDMATE 3")
@@ -231,6 +251,7 @@ class HudCheck @Inject constructor(
             delay(HudPushLoop.PERIOD_MS)
             elapsedMs += HudPushLoop.PERIOD_MS
             sinceCheckMs += HudPushLoop.PERIOD_MS
+            watchSpeed(run, step, HudPushLoop.PERIOD_MS)
             if (recheck && sinceCheckMs >= HudArming.CHECK_PERIOD_MS) {
                 recheck(run)
                 sinceCheckMs = 0L
@@ -247,13 +268,12 @@ class HudCheck @Inject constructor(
         run.arming.traceArm("probe-rearm", rearm)
     }
 
-    /** [routeStep]: the step a route started in, null when the check ran out or failed. */
-    private suspend fun restore(run: Run, routeStep: Int?) {
+    /** [routeStep]: the step a route started in, null when the check ran out or failed.
+     *  [movingStep]: the step the car moved off in; it gets the full restore. */
+    private suspend fun restore(run: Run, routeStep: Int?, movingStep: Int?) {
         _state.value = State.Restoring
-        routeStep?.let { step ->
-            log("hudprobe: aborted reason=guidance step=$step")
-            Trace.event(TraceArea.HUD, "probe-aborted", "reason" to "guidance", "step" to step)
-        }
+        logAborted("guidance", routeStep)
+        logAborted("moving", movingStep)
         if (run.canShown) {
             val cleared = runCatching { run.can.clear().describe() }.getOrElse { "failed ${it.javaClass.simpleName}" }
             log("hudprobe: can clear $cleared")
@@ -290,7 +310,18 @@ class HudCheck @Inject constructor(
             runCatching { bridge.unbind() }
         }
         hudController.armingPaused = false
-        _state.value = if (routeStep != null) State.RouteStarted else State.Done
+        _state.value = when {
+            routeStep != null -> State.RouteStarted
+            movingStep != null -> State.Refused(Refusal.MOVING)
+            else -> State.Done
+        }
+    }
+
+    /** The line and trace event of a check that a route or the speed ended in [step]. */
+    private fun logAborted(reason: String, step: Int?) {
+        step ?: return
+        log("hudprobe: aborted reason=$reason step=$step")
+        Trace.event(TraceArea.HUD, "probe-aborted", "reason" to reason, "step" to step)
     }
 
     private fun logSomeIpStep(step: Int, armed: Boolean, startRc: String, rcs: Map<Int, Int>, marker: Int) {
@@ -331,6 +362,8 @@ class HudCheck @Inject constructor(
         private const val BIND_TIMEOUT_MS = 15_000L
         /** How often the CAN step looks for a route between its 5 s re-sends. */
         private const val GUIDANCE_LOOK_MS = 1_000L
+        /** How often the steps read the speed. */
+        private const val SPEED_LOOK_MS = 1_000L
         /** SET_HUD_CONFIG: 1 = W-HUD, 2 = AR-HUD (carsetting HudFuncVisibleUtils). */
         val HUD_TYPE = 1023 to 951058453
     }
