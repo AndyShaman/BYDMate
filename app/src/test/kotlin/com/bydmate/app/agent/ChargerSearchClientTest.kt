@@ -2,8 +2,10 @@ package com.bydmate.app.agent
 
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,4 +107,19 @@ class ChargerSearchClientTest {
         assertFalse(body.contains("\""))
         assertTrue(body.contains("%22"))
     }
+
+    // Field log 28.09: overpass-api.de answers 406 to OkHttp's default User-Agent.
+    @Test fun request_names_the_app_so_overpass_does_not_answer_406() = runTest {
+        server.dispatcher = overpassUserAgentDispatcher(
+            """{"elements":[{"type":"node","lat":54.5,"lon":30.4,"tags":{"name":"ЭЗС Орша"}}]}""")
+        assertEquals(1, client.search(54.5, 30.4, 5000).getOrThrow().size)
+        assertTrue(server.takeRequest().getHeader("User-Agent")!!.startsWith("BYDMate/"))
+    }
+}
+
+/** Overpass as seen on 28.09: 406 for an `okhttp/x.y.z` User-Agent, [body] for any other. */
+internal fun overpassUserAgentDispatcher(body: String) = object : Dispatcher() {
+    override fun dispatch(request: RecordedRequest): MockResponse =
+        if (request.getHeader("User-Agent").orEmpty().startsWith("okhttp")) MockResponse().setResponseCode(406)
+        else MockResponse().setBody(body)
 }

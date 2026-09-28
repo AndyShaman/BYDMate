@@ -129,6 +129,13 @@ class SettlementSearchClientTest {
         assertTrue(client.search(54.0, 27.0, 15_000, 50_000).isFailure)
     }
 
+    // Field log 28.09: overpass-api.de answers 406 to OkHttp's default User-Agent.
+    @Test fun request_names_the_app_so_overpass_does_not_answer_406() = runTest {
+        server.dispatcher = overpassUserAgentDispatcher(fixture)
+        assertEquals(2, client.search(54.03, 27.97, 15_000, 50_000).getOrThrow().size)
+        assertTrue(server.takeRequest().getHeader("User-Agent")!!.startsWith("BYDMate/"))
+    }
+
     @Test fun missing_elements_is_a_failure_not_an_empty_list() = runTest {
         server.enqueue(MockResponse().setBody("""{"version":0.6}"""))
         assertTrue(client.search(54.0, 27.0, 15_000, 50_000).isFailure)
