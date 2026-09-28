@@ -10,6 +10,8 @@ import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.VoiceFireResult
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
@@ -79,9 +81,14 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
     /** The utterance being routed: when routing started (dispatch latency in the journal) and,
      *  once no local resolver claimed it, why it went to the agent. Routing is sequential (one
-     *  routingJob at a time), so a single slot is enough. */
-    private data class Turn(val startedAtMs: Long = 0L, val agentReason: String? = null)
+     *  routingJob at a time), so a single slot is enough. [heardId] is its trace event, the
+     *  cause of everything the turn does. */
+    private data class Turn(val startedAtMs: Long = 0L, val agentReason: String? = null, val heardId: Long = 0L)
     @Volatile private var turn = Turn()
+
+    // Trace event of the running continuous session, and why it is being stopped.
+    @Volatile private var sessionTraceId = 0L
+    @Volatile private var stopReason: String? = null
 
     /**
      * Returns true when any voice session is active: the continuous GigaAM session (sets both
@@ -206,6 +213,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         journal.add(e)
         Log.i(TAG, logLine(e))
         Log.i(TAG, logDetail(logMsg))
+        Trace.event(TraceArea.VOICE, "result", "route" to e.route.code, "outcome" to e.outcome, "reason" to e.refusal,
+            by = if (e.asrMs != null) turn.heardId else null)
     }
 
     /** Supertonic voices need a side-loaded dictionary for uppercase stress marking. This runs
@@ -224,13 +233,17 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  missing model without starting a session (#87); a continuous session already listening
      *  -> stop it immediately (barge-in stops TTS too). */
     fun onPttPressed() {
-        if (!gate.isEnabled()) return
+        val ptt = Trace.event(TraceArea.USER, "ptt", "listening" to _listening.value)
+        if (!gate.isEnabled()) {
+            Trace.event(TraceArea.VOICE, "ptt-ignored", "reason" to "voice-off", by = ptt)
+            return
+        }
         if (_listening.value) {
-            stopContinuousSession()
+            stopContinuousSession("ptt")
             return
         }
         if (continuousAsr.isReady()) {
-            startContinuousSession()
+            startContinuousSession(ptt)
         } else {
             // GigaAM model missing: preserve the degraded UX the legacy path produced —
             // overlay + journal ERROR.
@@ -257,8 +270,14 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  utterances into the shared NLU/agent router (routeUtterance), so a follow-up question from
      *  the agent keeps listening for free — the loop just collects again. Auto-stops after
      *  SILENCE_AUTOSTOP_MS of continuous silence (Wave P: no session cap). */
-    private fun startContinuousSession() {
-        if (!busy.compareAndSet(false, true)) return
+    private fun startContinuousSession(cause: Long) {
+        if (!busy.compareAndSet(false, true)) {
+            Trace.event(TraceArea.VOICE, "ptt-ignored", "reason" to "busy", by = cause)
+            return
+        }
+        val traceId = Trace.event(TraceArea.VOICE, "session-start", by = cause)
+        sessionTraceId = traceId
+        stopReason = null
         ensureSupertonicStressDict()
         // Barge-in: kill any ongoing TTS so it neither talks over the user nor bleeds into capture.
         runCatching { ttsEngine.stop() }
@@ -312,13 +331,19 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                         // Transition from audible to silent: notify echo filter
                         echoFilter.onPlaybackEnd()
                     }
+                    if (audible != wasAudible) Trace.event(TraceArea.VOICE, if (audible) "tts-start" else "tts-end")
                     wasAudible = audible
                     val gated = inPlaybackWindow(now, lastSpeakingSeenMs + TTS_ECHO_GRACE_MS, audible)
                     if (gated != micGated) {
                         micGated = gated
                         Log.i(TAG, if (gated) "mic gated: playback" else "mic open: playback ended +${now - lastSpeakingSeenMs}ms")
+                        if (gated) Trace.event(TraceArea.VOICE, "mic-gated")
+                        else Trace.event(TraceArea.VOICE, "mic-open", "after_ms" to now - lastSpeakingSeenMs)
                     }
-                    echoTail.onFrame(now, audible, samples)?.let { Log.i(TAG, it) }
+                    echoTail.onFrame(now, audible, samples)?.let {
+                        Log.i(TAG, it)
+                        Trace.event(TraceArea.VOICE, "echo-tail", "result" to it.removePrefix("echo tail: "))
+                    }
                     gated
                 }
                     .filter { frame ->
@@ -364,12 +389,17 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                                 if (AgentNameMatcher.matches(ev.text, agentIdentity().name)) {
                                     cancellableAskJob?.takeIf { it.isActive }?.let { ask ->
                                         Log.i(TAG, "Barge-in by name")
+                                        Trace.event(TraceArea.USER, "barge-in", by = turn.heardId)
                                         ask.cancel()
                                         bargeIn(ev.text, "Barge-in by name")
-                                    } ?: Log.i(TAG, "Barge-in by name ignored: no cancellable ask")
+                                    } ?: run {
+                                        Log.i(TAG, "Barge-in by name ignored: no cancellable ask")
+                                        Trace.event(TraceArea.VOICE, "dropped", "reason" to "name-no-ask", by = turn.heardId)
+                                    }
                                     return@collect
                                 }
                                 Log.i(TAG, busyDropLine(ev.text))
+                                Trace.event(TraceArea.VOICE, "dropped", "reason" to "busy", by = turn.heardId)
                                 droppedWhileBusy++
                                 return@collect
                             }
@@ -406,12 +436,14 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             } catch (e: StopSession) {
                 // Expected silence auto-stop. Deferred PTT-stop after an in-flight utterance uses
                 // session cancellation from the routing child so the session finally still runs.
+                stopReason = "silence"
             } catch (t: Throwable) {
                 // A real coroutine cancellation (e.g. stopContinuousSession() cancelling sessionJob
                 // while idle) must propagate. Anything else is a genuine capture/ASR failure (e.g.
                 // GigaAM's transcribe() throwing) -- unlike a single utterance's routing crash
                 // (caught above, session stays open), this tears the whole session down.
                 if (t is CancellationException) throw t
+                stopReason = "error:${t.javaClass.simpleName}"
                 Log.w(TAG, "Continuous session failed: ${t.message}")
                 record(VoiceJournalEntry(transcript = "", route = VoiceJournalEntry.Route.REFUSED, detail = "",
                     outcome = VoiceJournalEntry.Outcome.ERROR, reason = t.message, refusal = VoiceRefusal.ASR_FAILED),
@@ -429,6 +461,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 earcon.off()
                 runCatching { hideListeningOverlay() }
                 sessionJob = null
+                // Before busy is released: a new session resets the reason.
+                Trace.event(TraceArea.VOICE, "session-stop", "reason" to (stopReason ?: "cancel"), by = traceId)
                 busy.set(false)
             }
         }
@@ -462,7 +496,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  command's write unit in withContext(NonCancellable), so a started sequence always runs to
      *  completion and cancellation lands between commands; dispatch wrappers rethrow
      *  CancellationException so a cancelled turn is never announced as a failure. */
-    private fun stopContinuousSession() {
+    private fun stopContinuousSession(reason: String) {
+        stopReason = reason
         stopRequested.set(true)   // (1) gate every continuation before cancelling anything
         runCatching { ttsEngine.stop() }
         Log.i(TAG, "stopContinuousSession: hard stop; askActive=${cancellableAskJob?.isActive} routingActive=${routingJob?.isActive}")
@@ -491,6 +526,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // A silent drop: no earcon, no state change, no spoken "Не понял" -- speaking that phrase
         // would itself be noteSpoken'd and risk being echo-caught again, looping the agent's own voice.
         if (transcript == command && echoFilter.isEcho(transcript)) {
+            heard(decodeMs, "echo")
             record(VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.REFUSED,
                 detail = withDecodeMs(transcript, decodeMs), outcome = VoiceJournalEntry.Outcome.NOT_UNDERSTOOD,
                 reason = "Эхо своей речи", refusal = VoiceRefusal.ECHO, asrMs = decodeMs),
@@ -504,6 +540,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // AgentOrchestrator.expectsFollowUp.
         val followUp = runCatching { agentOrchestrator.expectsFollowUp() }.getOrDefault(false)
         val res = if (followUp) Resolution.None(VoiceRefusal.AGENT_FOLLOWUP_WINDOW) else resolve(command)
+        heard(decodeMs, res.route, (res as? Resolution.None)?.reason)
         _state.value = VoiceUiState.Thinking
         if (res is Resolution.None) {
             turn = turn.copy(agentReason = res.reason)
@@ -511,6 +548,13 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         } else {
             apply(res, command, decodeMs)
         }
+    }
+
+    /** Trace event of the phrase: where it went (never what was said); the cause of the turn. */
+    private fun heard(decodeMs: Long, route: String, why: String? = null) {
+        val id = Trace.event(TraceArea.VOICE, "heard", "route" to route, "why" to why, "asr_ms" to decodeMs,
+            by = sessionTraceId)
+        turn = turn.copy(heardId = id)
     }
 
     /** Appends the continuous-session decode latency to a journal detail string; a no-op
@@ -783,7 +827,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             // flag alone is not enough: a following session (continuous or legacy) resets it,
             // which would un-mute late callbacks from this already-hard-stopped turn.
             lateinit var askJob: Job
-            askJob = launch(start = CoroutineStart.LAZY) {
+            askJob = launch(Trace.causedBy(turn.heardId), start = CoroutineStart.LAZY) {
                 r = agentOrchestrator.ask(
                     transcript,
                     // The filler is speech only: queued for TTS, never shown in the orb's answer
@@ -889,7 +933,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                         // PTT restarting a session stops TTS -- the very signal this coroutine
                         // waits for -- so only close the session this reply belongs to, never a
                         // newer one the user has already started.
-                        if (sessionJob === closingJob) stopContinuousSession()
+                        if (sessionJob === closingJob) stopContinuousSession("play_music")
                     }
                 }
             }
@@ -921,6 +965,14 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         data class Auto(val match: VoiceAutomationMatch) : Resolution
         /** Nothing local claimed the phrase: it goes to the agent; [reason] is a VoiceRefusal code. */
         data class None(val reason: String) : Resolution
+
+        /** The route code of the trace. */
+        val route: String get() = when (this) {
+            is Cmd -> if (label.startsWith("phrase:")) "phrase" else "nlu"
+            is RelTemp, is Vol -> "nlu"
+            is Auto -> "automation"
+            is None -> "agent"
+        }
     }
 
     /** Journal entry of a built-in command (parser or user phrase) outcome. */

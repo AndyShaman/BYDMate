@@ -546,6 +546,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         ) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_abrp_telemetry_label),
+                traceId = "abrp_telemetry",
                 description = stringResource(R.string.settings_abrp_telemetry_description),
                 checked = state.abrpTelemetryEnabled,
                 onCheckedChange = { viewModel.toggleAbrpTelemetry(it) },
@@ -581,6 +582,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         ) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_webhook_label),
+                traceId = "webhook",
                 description = stringResource(R.string.settings_webhook_description),
                 checked = state.webhookEnabled,
                 onCheckedChange = { viewModel.toggleWebhook(it) },
@@ -600,6 +602,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             )
             SettingToggleRow(
                 title = stringResource(R.string.settings_webhook_location_label),
+                traceId = "webhook_location",
                 description = stringResource(R.string.settings_webhook_location_description),
                 checked = state.webhookSendLocation,
                 onCheckedChange = { viewModel.toggleWebhookSendLocation(it) },
@@ -826,6 +829,7 @@ private fun WidgetSection() {
         ) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_widget_show_soc_label),
+                traceId = "widget_show_soc",
                 description = stringResource(R.string.settings_widget_show_desc),
                 checked = enabled,
                 onCheckedChange = { requested ->
@@ -849,6 +853,7 @@ private fun WidgetSection() {
             SettingHint(text = stringResource(R.string.settings_widget_hints))
             SettingToggleRow(
                 title = stringResource(R.string.settings_widget_hide_youtube_label),
+                traceId = "widget_hide_youtube",
                 description = stringResource(R.string.settings_widget_hide_youtube_description),
                 checked = hideOnYoutube,
                 onCheckedChange = { prefs.setHideOnYoutube(it) },
@@ -914,6 +919,7 @@ private fun WidgetSection() {
         ) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_widget_left_tap_zoning_label),
+                traceId = "widget_left_tap_zoning",
                 description = stringResource(R.string.settings_widget_left_tap_zoning_description),
                 checked = leftTapApp.enabled,
                 onCheckedChange = { prefs.setLeftTapZoningEnabled(it) },
@@ -939,6 +945,7 @@ private fun WidgetSection() {
             }
             SettingToggleRow(
                 title = stringResource(R.string.settings_widget_buttons_label),
+                traceId = "widget_buttons",
                 description = stringResource(R.string.settings_widget_buttons_description),
                 checked = buttonsEnabled,
                 onCheckedChange = { prefs.setButtonsEnabled(it) },
@@ -1103,6 +1110,7 @@ private fun DisplaySection() {
         // before sending the projection window.
         SettingToggleRow(
             title = stringResource(R.string.settings_cluster_auto_container_title),
+            traceId = "cluster_auto_container",
             description = stringResource(R.string.settings_cluster_auto_container_desc),
             checked = autoContainer,
             onCheckedChange = {
@@ -1147,6 +1155,7 @@ private fun DisplaySection() {
         // applies at the next projection start, never to a live projection.
         SettingToggleRow(
             title = stringResource(R.string.settings_cluster_full_display_title),
+            traceId = "cluster_full_display",
             description = stringResource(R.string.settings_cluster_full_display_desc),
             checked = preferFullDisplay,
             onCheckedChange = {
@@ -1307,6 +1316,7 @@ private fun DisplaySection() {
         if (hudEnabled) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_hud_speed_sign_title),
+                traceId = "hud_speed_sign",
                 description = stringResource(R.string.settings_hud_speed_sign_desc),
                 checked = hudSpeedSign,
                 onCheckedChange = {
@@ -1475,6 +1485,7 @@ private fun BlindSpotCard() {
         SettingDivider()
         SettingToggleRow(
             title = stringResource(R.string.settings_blindspot_rotate_title),
+            traceId = "blindspot_rotate",
             description = stringResource(R.string.settings_blindspot_rotate_desc),
             checked = rotate90,
             onCheckedChange = {
@@ -1507,6 +1518,7 @@ private fun BlindSpotCard() {
         SettingDivider()
         SettingToggleRow(
             title = stringResource(R.string.settings_blindspot_both_main_title),
+            traceId = "blindspot_both_main",
             description = stringResource(R.string.settings_blindspot_both_main_desc),
             checked = bothOnMain,
             onCheckedChange = {
@@ -1547,6 +1559,7 @@ private fun BlindSpotCard() {
             SettingDivider()
             SettingToggleRow(
                 title = stringResource(R.string.settings_blindspot_both_cluster_title),
+                traceId = "blindspot_both_cluster",
                 description = stringResource(R.string.settings_blindspot_both_cluster_desc),
                 checked = bothOnCluster,
                 onCheckedChange = {
@@ -1564,6 +1577,7 @@ private fun BlindSpotCard() {
         SettingDivider()
         SettingToggleRow(
             title = stringResource(R.string.settings_blindspot_glow_title),
+            traceId = "blindspot_glow",
             description = stringResource(R.string.settings_blindspot_glow_desc),
             checked = bsdGlow,
             onCheckedChange = {
@@ -1657,6 +1671,7 @@ private fun SplitSection() {
             }
             SettingToggleRow(
                 title = stringResource(R.string.settings_split_enable_title),
+                traceId = "split_enable",
                 description = stringResource(R.string.settings_split_enable_desc),
                 checked = splitEnabled,
                 onCheckedChange = { enabled ->
@@ -2092,6 +2107,7 @@ private fun ServiceSection(
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_knob_play_pause_title),
+                traceId = "knob_play_pause",
                 description = stringResource(R.string.settings_knob_play_pause_desc),
                 checked = knobPlayPause,
                 onCheckedChange = {
@@ -2137,6 +2153,7 @@ private fun ServiceSection(
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_adb_restore_title),
+                traceId = "adb_restore",
                 description = stringResource(R.string.settings_adb_restore_desc),
                 checked = adbRestoreEnabled && adbRestoreSupported,
                 onCheckedChange = { enabled ->
@@ -2281,6 +2298,7 @@ private fun ServiceSection(
             }
             SettingToggleRow(
                 title = stringResource(R.string.settings_quiet_notification_title),
+                traceId = "quiet_notification",
                 description = stringResource(R.string.settings_quiet_notification_desc),
                 checked = quietNotification,
                 onCheckedChange = {
@@ -2393,6 +2411,7 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
         SettingDivider()
         SettingToggleRow(
             title = stringResource(R.string.settings_fid_recorder_title),
+            traceId = "fid_recorder",
             description = stringResource(R.string.settings_fid_recorder_desc),
             checked = state.fidRecorderRunning,
             onCheckedChange = { viewModel.setFidRecorder(it) },
@@ -2528,6 +2547,7 @@ private fun PowerOffReportRows(
     val scope = rememberCoroutineScope()
     SettingToggleRow(
         title = stringResource(R.string.settings_tg_report_off_title),
+        traceId = "tg_report_off",
         description = stringResource(R.string.settings_tg_report_off_hint),
         checked = connected && state.tgReportOffEnabled,
         onCheckedChange = { viewModel.setTgReportOffEnabled(it) },
@@ -2929,6 +2949,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
         ) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_update_check_toggle_label),
+                traceId = "update_check",
                 description = stringResource(R.string.settings_update_check_toggle_description),
                 checked = state.autoCheckUpdates,
                 onCheckedChange = { viewModel.setAutoCheckUpdates(it) },
@@ -3047,6 +3068,7 @@ private fun VoiceSettingsContent(
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             SettingToggleRow(
                 title = stringResource(R.string.agent_enable_title),
+                traceId = "agent_enable",
                 description = stringResource(R.string.agent_enable_desc),
                 checked = state.agentEnabled,
                 onCheckedChange = { viewModel.setAgentEnabled(it) },
@@ -3193,6 +3215,7 @@ private fun VoiceSettingsContent(
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_tts_toggle),
+                traceId = "tts_toggle",
                 description = stringResource(R.string.settings_tts_subtitle),
                 checked = state.ttsEnabled,
                 onCheckedChange = { viewModel.setTtsEnabled(it) },
@@ -3383,6 +3406,7 @@ private fun VoiceSettingsContent(
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_voice_enable_label),
+                traceId = "voice_enable",
                 description = stringResource(R.string.settings_voice_enable_description),
                 checked = state.voiceEnabled,
                 onCheckedChange = { on ->
@@ -3483,6 +3507,7 @@ private fun VoiceSettingsContent(
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             SettingToggleRow(
                 title = stringResource(R.string.settings_voice_disable_native_label),
+                traceId = "voice_disable_native",
                 description = stringResource(R.string.settings_voice_disable_native_description),
                 checked = state.disableNativeAssistant,
                 onCheckedChange = { viewModel.setDisableNativeAssistant(it) },
@@ -3646,6 +3671,7 @@ private fun SmartHomeSection(state: SettingsUiState, viewModel: SettingsViewMode
         ) {
             SettingToggleRow(
                 title = "Polling",
+                traceId = "alice_polling",
                 checked = state.aliceEnabled,
                 onCheckedChange = { viewModel.toggleAlice(it) },
             )

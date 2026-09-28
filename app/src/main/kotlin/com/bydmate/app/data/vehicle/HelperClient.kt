@@ -8,6 +8,8 @@ import android.util.Log
 import android.view.Surface
 import java.io.ByteArrayOutputStream
 import com.bydmate.app.data.autoservice.SentinelDecoder
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
@@ -554,6 +556,8 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     @Volatile private var cached: IBinder? = null
     /** Last transport reported by [noteSource] — kept so the log line is printed only on change. */
     @Volatile private var lastSource: String? = null
+    /** The daemon binder the trace last reported, so it records a change, not every lookup. */
+    @Volatile private var tracedBinder: IBinder? = null
 
     /** Test seam: invoked right before every attempt to acquire [mutex] in [transactParsed],
      *  i.e. right before the write path takes the lock — lets a test observe "about to enter the
@@ -1253,7 +1257,16 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     private fun ensureBinder(): IBinder? {
         cached?.takeIf { it.isBinderAlive }?.let { return it }
-        return resolveBinder()?.also { cached = it }
+        return resolveBinder()?.also { cached = it }.also(::traceBinder)
+    }
+
+    /** Trace: the daemon went away, came up, or both (it restarted between two lookups). */
+    private fun traceBinder(binder: IBinder?) {
+        val was = tracedBinder
+        if (binder === was) return
+        tracedBinder = binder
+        if (was != null) Trace.event(TraceArea.APP, "helper-lost")
+        if (binder != null) Trace.event(TraceArea.APP, "helper-connected", "via" to lastSource)
     }
 
     /**

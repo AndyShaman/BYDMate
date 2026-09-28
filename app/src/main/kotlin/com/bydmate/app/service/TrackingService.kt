@@ -42,6 +42,8 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.remote.IternioTelemetryClient
 import com.bydmate.app.data.remote.WebhookTelemetryClient
 import com.bydmate.app.data.repository.ChargeRepository
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.TripTracker
@@ -547,6 +549,7 @@ class TrackingService : Service(), LocationListener {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "onCreate: starting TrackingService")
+        Trace.event(TraceArea.APP, "service-start")
         ChainLog.append(this, "TrackingService onCreate")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification(appStrings.get(R.string.service_foreground_content_starting)))
@@ -1341,6 +1344,7 @@ class TrackingService : Service(), LocationListener {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
+        Trace.event(TraceArea.APP, "service-stop")
         com.bydmate.app.ui.widget.WidgetController.detach("service_destroy")
         ChainLog.append(this, "TrackingService onDestroy")
         pollingJob?.cancel()
@@ -1409,6 +1413,7 @@ class TrackingService : Service(), LocationListener {
             Log.w(TAG, "Failed to schedule restart: ${e.message}")
         }
 
+        Trace.flush()
         super.onDestroy()
     }
 

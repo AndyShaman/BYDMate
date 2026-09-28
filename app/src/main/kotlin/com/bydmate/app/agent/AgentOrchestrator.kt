@@ -2,11 +2,13 @@ package com.bydmate.app.agent
 
 import android.util.Log
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.voice.AgentIdentity
 import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.AgentPersonaPrompt
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -192,7 +194,8 @@ class AgentOrchestrator @Inject constructor(
     ): AgentResult {
         val startedAt = nowMs()
         val rounds = intArrayOf(0)
-        val tracer = AgentTrace({ nowMs() }, { line -> trace(line) })
+        val tracer = AgentTrace({ nowMs() }, toolNames(toolSchemas), { line -> trace(line) })
+        tracer.started(Trace.cause(), detached = !allowAutomationTools)
         var outcome = "cancelled"
         try {
             val result = runLoopTraced(
@@ -209,6 +212,13 @@ class AgentOrchestrator @Inject constructor(
             tracer.turn(nowMs() - startedAt, rounds[0], outcome)
         }
     }
+
+    /** The names offered to the model this turn (OpenAI tool schema: `function.name`), so the
+     *  trace can tell a real tool call from a name the model invented. */
+    private fun toolNames(schemas: JSONArray): Set<String> =
+        (0 until schemas.length()).mapNotNullTo(mutableSetOf()) {
+            schemas.optJSONObject(it)?.optJSONObject("function")?.optString("name")?.takeIf(String::isNotEmpty)
+        }
 
     /** The answer as the driver gets it: trimmed, and marked with [TRUNCATED_MARK] when
      *  max_tokens cut it, so a reply that stops mid-sentence is visibly a cut and not a bug. */
@@ -304,7 +314,8 @@ class AgentOrchestrator @Inject constructor(
                 }
                 callCounts[key] = seen + 1
                 val toolStart = nowMs()
-                val res = tools.execute(call, allowAutomationTools)
+                val toolEvent = tracer.toolStarted(call)
+                val res = withContext(Trace.causedBy(toolEvent)) { tools.execute(call, allowAutomationTools) }
                 // ok = the tool JSON has no "error" key; unparseable output counts as ok
                 // (free-form success payloads like web_search results are not errors).
                 val ok = runCatching { !JSONObject(res).has("error") }.getOrDefault(true)

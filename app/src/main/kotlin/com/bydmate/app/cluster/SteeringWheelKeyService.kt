@@ -10,6 +10,8 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl
 import com.bydmate.app.data.autoservice.WifiDebuggingDialogAutoAllow
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.media.KnobPlayPause
 import com.bydmate.app.navdata.NavA11yFeed
 import com.bydmate.app.service.TrackingService
@@ -106,7 +108,7 @@ class SteeringWheelKeyService : AccessibilityService() {
         when (knobDecision(event.keyCode, isDown, knobEnabled)) {
             KnobDecision.CONSUME_AND_PLAY_PAUSE -> {
                 KnobPlayPause.dispatch(applicationContext)
-                return true
+                return traced(event, "play_pause")
             }
             KnobDecision.CONSUME -> return true
             KnobDecision.PASS_THROUGH -> {}
@@ -117,7 +119,7 @@ class SteeringWheelKeyService : AccessibilityService() {
             StarDecision.CONSUME_AND_TOGGLE -> {
                 val ep = entryPoint()
                 ClusterProjectionManager.toggle(applicationContext, ep.helperClient(), ep.helperBootstrap())
-                true
+                traced(event, "cluster_toggle")
             }
             StarDecision.CONSUME -> true
             // Automation rules bound to a key run LAST: projection, voice and the knob keep
@@ -129,12 +131,18 @@ class SteeringWheelKeyService : AccessibilityService() {
                     TrackingService.fireSteeringKey(event.keyCode) { matched ->
                         Log.d(TAG, "steering key ${event.keyCode}: $matched rule(s)")
                     }
-                    true
+                    traced(event, "automation")
                 }
                 SteeringKeyDecision.CONSUME -> true
                 SteeringKeyDecision.PASS_THROUGH -> false
             }
         }
+    }
+
+    /** Trace of a key we consumed and what it did; true, the consumed verdict. */
+    private fun traced(event: KeyEvent, action: String): Boolean {
+        Trace.event(TraceArea.USER, "key", "code" to event.keyCode, "action" to action)
+        return true
     }
 
     private fun entryPoint(): ClusterEntryPoint =

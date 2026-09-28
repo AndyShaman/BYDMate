@@ -8,6 +8,7 @@ import com.bydmate.app.agent.AgentToolOutcome
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.util.appStringsOver
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -26,6 +27,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -124,6 +126,8 @@ class VoiceControllerPlaybackGateTest {
             mic.close()
         }
     }
+
+    @get:Rule val trace = TraceRecorder()
 
     private val phrases = mutableListOf<String>()
     private val rigs = mutableListOf<Rig>()
@@ -356,6 +360,37 @@ class VoiceControllerPlaybackGateTest {
 
         r.silence()
         await(r.controller.listening) { !it }
+    }
+
+    // --- Trace: the playback gate and the route of a phrase, never its text ---
+
+    @Test fun `the trace shows the ptt, the mic gate around playback and where the phrase went`() {
+        val r = rig()
+
+        audible = true
+        r.silence() // the last audible frame
+        audible = false
+        r.silence(2) // +100 ms: playback over, still inside the echo grace; +200 ms: the mic opens
+        r.utter("закрой окна")
+        r.sync()
+        runBlocking { withTimeout(WAIT_MS) { r.controller.routingJobForTest()?.join() } }
+
+        val events = trace.events().map { it.replace(Regex(""" asr_ms=\d+"""), "") }
+        assertEquals(
+            listOf(
+                "user   ptt listening=false #1",
+                "voice  session-start #2 by=#1",
+                "voice  tts-start #3",
+                "voice  mic-gated #4",
+                "voice  tts-end #5",
+                "voice  mic-open after_ms=200 #6",
+                "voice  heard route=nlu #7 by=#2",
+            ),
+            events.take(7),
+        )
+        assertTrue(events[7], events[7].startsWith("voice  result route=nlu outcome="))
+        assertTrue(events[7], events[7].endsWith(" #8 by=#7"))
+        assertTrue(events.none { it.contains("закрой") })
     }
 
     // --- Review finding 4: a barge-in cancels the play_music auto-close ---

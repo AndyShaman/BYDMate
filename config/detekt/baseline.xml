@@ -130,7 +130,7 @@
     <ID>CyclomaticComplexMethod:TripsViewModel.kt$TripsViewModel$private fun buildChartBars( trips: List&lt;TripEntity&gt;, period: TripPeriod, metric: ChartMetric, filter: TripFilter ): List&lt;ChartBar&gt;</ID>
     <ID>CyclomaticComplexMethod:TtsModelManager.kt$TtsModelManager$suspend fun ensureStressDict(voice: TtsVoice): Boolean</ID>
     <ID>CyclomaticComplexMethod:VehicleApiImpl.kt$VehicleApiImpl$internal suspend fun doWrite( requestedAction: String, requestedValue: Int, verifyInto: MutableList&lt;WindowVerify&gt;? = null, ): Result&lt;Unit&gt;</ID>
-    <ID>CyclomaticComplexMethod:VoiceController.kt$VoiceController$private fun startContinuousSession()</ID>
+    <ID>CyclomaticComplexMethod:VoiceController.kt$VoiceController$private fun startContinuousSession(cause: Long)</ID>
     <ID>CyclomaticComplexMethod:VoiceController.kt$VoiceController$private suspend fun agentFallback(transcript: String, decodeMs: Long? = null)</ID>
     <ID>CyclomaticComplexMethod:WidgetController.kt$WidgetController.WidgetTouchListener$override fun onTouch(v: android.view.View, event: MotionEvent): Boolean</ID>
     <ID>CyclomaticComplexMethod:WriteAllowlist.kt$WriteAllowlist.Companion$private fun inferCategory(name: String): String</ID>
@@ -269,7 +269,7 @@
     <ID>LongMethod:TrackingService.kt$TrackingService$private fun startPolling()</ID>
     <ID>LongMethod:UpdateChecker.kt$UpdateChecker$suspend fun downloadAndInstall( context: Context, update: UpdateInfo, onProgress: (String) -&gt; Unit = {} )</ID>
     <ID>LongMethod:VehicleApiImpl.kt$VehicleApiImpl$internal suspend fun doWrite( requestedAction: String, requestedValue: Int, verifyInto: MutableList&lt;WindowVerify&gt;? = null, ): Result&lt;Unit&gt;</ID>
-    <ID>LongMethod:VoiceController.kt$VoiceController$private fun startContinuousSession()</ID>
+    <ID>LongMethod:VoiceController.kt$VoiceController$private fun startContinuousSession(cause: Long)</ID>
     <ID>LongMethod:VoiceController.kt$VoiceController$private suspend fun agentFallback(transcript: String, decodeMs: Long? = null)</ID>
     <ID>LongMethod:WidgetController.kt$WidgetController$@Synchronized fun attach(context: Context, reason: String = "unspecified")</ID>
     <ID>LongMethod:WidgetController.kt$WidgetController$private fun startDataSubscription(appCtx: Context)</ID>
@@ -441,7 +441,7 @@
     <ID>ThrowsCount:MiniMaxTtsBackend.kt$MiniMaxTtsBackend$private fun synthesizeOfficial(key: String, text: String, voice: String): TtsPcm</ID>
     <ID>ThrowsCount:SplitSessionManager.kt$SplitSessionManager$private suspend fun handlePaneLocked( taskState: SplitTaskState, taskId: Int, pane: Pane, pkg: String, expectedBounds: SplitBounds, otherTaskId: Int, ): Boolean</ID>
     <ID>ThrowsCount:SplitSessionManager.kt$SplitSessionManager$private suspend fun tearDownLocked(current: SplitSessionState.Active, emitExit: Boolean)</ID>
-    <ID>ThrowsCount:VoiceController.kt$VoiceController$private fun startContinuousSession()</ID>
+    <ID>ThrowsCount:VoiceController.kt$VoiceController$private fun startContinuousSession(cause: Long)</ID>
     <ID>TooGenericExceptionCaught:ActionDispatcher.kt$ActionDispatcher$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AdaptiveSeatChannel.kt$AdaptiveSeatChannel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AdbKeyStore.kt$AdbKeyStore$e: Exception</ID>

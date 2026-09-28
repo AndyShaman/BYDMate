@@ -409,7 +409,9 @@ class LogRecorder internal constructor(
             "OffReport:*",
             // Agent tools (where_am_i steps, failed weather requests) and the two Overpass
             // clients behind where_am_i and find_chargers (per-server failures and answers).
-            "AgentTools:*", "SettlementSearch:*", "ChargerSearchClient:*"
+            "AgentTools:*", "SettlementSearch:*", "ChargerSearchClient:*",
+            // The event journal: one line per user action, decision and failure, by=#id links.
+            "Trace:*"
         )
     }
 }
