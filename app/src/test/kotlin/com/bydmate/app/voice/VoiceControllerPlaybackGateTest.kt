@@ -88,7 +88,7 @@ class VoiceControllerPlaybackGateTest {
         val journal: VoiceJournal,
         val orchestrator: AgentOrchestrator,
         private val mic: Channel<MicFrame<Any?>>,
-        private val mark: () -> Any?,
+        private val mark: (ShortArray) -> Any?,
     ) {
         // Frames the controller forwards to the recognizer: its mark is true for a frame the
         // playback gate drops.
@@ -96,7 +96,7 @@ class VoiceControllerPlaybackGateTest {
 
         fun capture(pcm: ShortArray) {
             now += FRAME_MS
-            val m = mark()
+            val m = mark(pcm)
             mic.trySend(MicFrame(pcm, m))
             if (m != true) forwarded++
         }
@@ -156,9 +156,9 @@ class VoiceControllerPlaybackGateTest {
             vadFactory = { vad },
         )
         val mic = Channel<MicFrame<Any?>>(Channel.UNLIMITED)
-        val mark = CompletableDeferred<() -> Any?>()
+        val mark = CompletableDeferred<(ShortArray) -> Any?>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any(), any<() -> Any?>()) } answers {
+        every { audioCapture.captureSession(any(), any<(ShortArray) -> Any?>()) } answers {
             mark.complete(secondArg())
             mic.consumeAsFlow()
         }
@@ -220,7 +220,7 @@ class VoiceControllerPlaybackGateTest {
         audible = true
         r.speech("сейчас пять градусов", frames = 3) // the reply's echo, no silent frame after it
         audible = false
-        r.speech("закрой окна", frames = 8) // the first frames still fall inside the echo grace
+        r.speech("закрой окна", frames = 8) // the first frame still falls inside the echo grace
         r.silence()
         r.sync()
         runBlocking { withTimeout(WAIT_MS) { r.controller.routingJobForTest()?.join() } }
@@ -230,6 +230,25 @@ class VoiceControllerPlaybackGateTest {
         assertEquals(VoiceJournalEntry.Route.NLU, entries.single().route)
         coVerify(exactly = 1) { r.dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) }
         coVerify(exactly = 0) { r.orchestrator.ask(any(), any(), any()) }
+    }
+
+    // --- 28.09: the echo grace is 200 ms after the last audible frame ---
+
+    @Test fun `speech 150 ms after the last audible frame is dropped, speech from 250 ms is heard`() {
+        val r = rig()
+
+        audible = true
+        r.silence() // the last audible frame
+        audible = false
+        now += 50 // off the 100 ms frame grid
+        r.speech("открой окна", frames = 1) // +150 ms: inside the echo grace
+        r.speech("закрой окна", frames = 3) // +250 ms on: past it
+        r.silence()
+        r.sync()
+        runBlocking { withTimeout(WAIT_MS) { r.controller.routingJobForTest()?.join() } }
+
+        // A forwarded +150 ms frame would open the segment and decode as "открой окна".
+        assertEquals(listOf("закрой окна"), r.journal.entries.value.map { it.transcript })
     }
 
     // --- Review finding 1: the playback window is judged at capture time ---
@@ -244,7 +263,7 @@ class VoiceControllerPlaybackGateTest {
         audible = true
         r.utter("закрой окна") // the agent's voice, captured while it is audible
         audible = false
-        r.silence(10) // a second past the end of playback: well outside the 500 ms echo grace
+        r.silence(10) // a second past the end of playback: well outside the 200 ms echo grace
         release.countDown()
         r.sync()
 
@@ -264,7 +283,7 @@ class VoiceControllerPlaybackGateTest {
         audible = true
         r.silence() // the last audible frame
         audible = false
-        r.utter("закрой окна") // starts 100 ms after the audio, inside TTS_ECHO_GRACE_MS
+        r.speech("закрой окна", frames = 1) // 100 ms after the audio, inside TTS_ECHO_GRACE_MS
         r.silence(10)
         release.countDown()
         r.sync()
@@ -300,7 +319,7 @@ class VoiceControllerPlaybackGateTest {
         audible = true
         r.silence(400) // 40 s of the agent talking quietly: the VAD hears silence
         audible = false
-        r.silence(4) // inside the 500 ms echo grace
+        r.silence(1) // inside the 200 ms echo grace
         r.silence(299) // 29.9 s of real silence after the answer
         r.sync()
         assertTrue(r.controller.listening.value)
@@ -330,7 +349,7 @@ class VoiceControllerPlaybackGateTest {
         audible = true
         r.silence(310) // 31 s of the agent talking quietly: the VAD hears silence
         audible = false
-        r.silence(4) // inside the 500 ms echo grace
+        r.silence(1) // inside the 200 ms echo grace
         r.silence(299) // 29.9 s of real silence after the answer
         r.sync()
         assertTrue(r.controller.listening.value)

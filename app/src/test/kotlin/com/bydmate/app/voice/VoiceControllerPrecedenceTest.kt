@@ -66,7 +66,7 @@ class VoiceControllerPrecedenceTest {
             every { ttsEnabled() } returns false
         }
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { }
+        every { audioCapture.captureSession(any(), any<(ShortArray) -> Any?>()) } returns flow { }
         val rules = listOfNotNull(automationPhrase?.let { voiceRule(it) })
         val resolver = VoiceAutomationResolver(mockk<RuleDao> { coEvery { getEnabled() } returns rules })
         val engine = mockk<AutomationEngine>(relaxed = true)

@@ -82,7 +82,7 @@ class VoiceControllerAgentFallbackTest {
         every { gate.ttsEnabled() } returns ttsEnabled
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { /* empty — completes immediately */ }
+        every { audioCapture.captureSession(any(), any<(ShortArray) -> Any?>()) } returns flow { /* empty — completes immediately */ }
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 

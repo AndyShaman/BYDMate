@@ -150,7 +150,7 @@ class VoiceControllerSessionTest {
         },
         ttsEngine: TtsEngine = quietTtsEngine(),
         audioCapture: AudioCapture = mockk<AudioCapture>(relaxed = true).also {
-            every { it.captureSession(any(), any<() -> Any?>()) } returns flow { /* fake ignores pcm content */ }
+            every { it.captureSession(any(), any<(ShortArray) -> Any?>()) } returns flow { /* fake ignores pcm content */ }
         },
         journal: VoiceJournal = VoiceJournal(),
         earcon: VoiceEarcon = mockk(relaxed = true),
@@ -561,7 +561,7 @@ class VoiceControllerSessionTest {
         every { gate.ttsEnabled() } returns false
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { }
+        every { audioCapture.captureSession(any(), any<(ShortArray) -> Any?>()) } returns flow { }
 
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
@@ -596,7 +596,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any(), any<() -> Any?>()) } returns flow { }
+        every { audioCapture.captureSession(any(), any<(ShortArray) -> Any?>()) } returns flow { }
         val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
 
         controller.onPttPressed()
@@ -604,7 +604,7 @@ class VoiceControllerSessionTest {
         // session coroutine has necessarily reached captureSession() -- poll the verify itself
         // (like awaitVerify elsewhere) instead of asserting once right after the flag.
         // Wave P: no hard session cap; Long.MAX_VALUE means "run until silence or user stops".
-        awaitVerify { verify(exactly = 1) { audioCapture.captureSession(Long.MAX_VALUE, any<() -> Any?>()) } }
+        awaitVerify { verify(exactly = 1) { audioCapture.captureSession(Long.MAX_VALUE, any<(ShortArray) -> Any?>()) } }
         assertTrue(controller.listening.value)
     }
 
@@ -644,7 +644,7 @@ class VoiceControllerSessionTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
-        controller.clock = frameClock(1_000L, 1_500L) // the second frame is past the 500 ms grace
+        controller.clock = frameClock(1_000L, 1_500L) // the second frame is past the 200 ms grace
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -668,15 +668,15 @@ class VoiceControllerSessionTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
-        controller.clock = frameClock(1_000L, 1_499L, 1_500L)
+        controller.clock = frameClock(1_000L, 1_199L, 1_200L)
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
         awaitSubscribed(rawFrames)
 
         rawFrames.tryEmit(shortArrayOf(0)) // the last audible frame stamps the grace window
-        rawFrames.tryEmit(shortArrayOf(1)) // 499 ms after it: still inside
-        rawFrames.tryEmit(shortArrayOf(2)) // 500 ms after it: past the window
+        rawFrames.tryEmit(shortArrayOf(1)) // 199 ms after it: still inside
+        rawFrames.tryEmit(shortArrayOf(2)) // 200 ms after it: past the window
         awaitTrue { fakeAsr.recordedFrames.isNotEmpty() }
         assertTrue(fakeAsr.recordedFrames.single().contentEquals(shortArrayOf(2)))
     }
@@ -789,7 +789,7 @@ class VoiceControllerSessionTest {
         awaitTrue { controller.lastSpeakingSeenMs == 1_000L }
         assertFalse(speaking.value)
 
-        rawFrames.tryEmit(shortArrayOf(7)) // well within TTS_ECHO_GRACE_MS(500ms) of the stamp
+        rawFrames.tryEmit(shortArrayOf(7)) // well within TTS_ECHO_GRACE_MS(200ms) of the stamp
         rawFrames.tryEmit(shortArrayOf(8)) // past it
         awaitTrue { fakeAsr.recordedFrames.isNotEmpty() }
         assertTrue(fakeAsr.recordedFrames.single().contentEquals(shortArrayOf(8)))
@@ -858,7 +858,7 @@ class VoiceControllerSessionTest {
     // --- Fix wave 2, finding 3: inPlaybackWindow pins the exact grace-window boundary ---
 
     @Test fun `inPlaybackWindow pins the grace-window boundary precisely`() {
-        // lastSpeakingSeenMs + TTS_ECHO_GRACE_MS(500) = windowEndMs, computed at the call site.
+        // lastSpeakingSeenMs + TTS_ECHO_GRACE_MS(200) = windowEndMs, computed at the call site.
         assertTrue(VoiceController.inPlaybackWindow(nowMs = 999L, windowEndMs = 1000L, audible = false))
         assertFalse(VoiceController.inPlaybackWindow(nowMs = 1000L, windowEndMs = 1000L, audible = false))
     }
@@ -1298,7 +1298,7 @@ class VoiceControllerSessionTest {
 
         verifyOrder {
             audioCapture.duckMusic()       // early duck, before captureSession() is even called
-            audioCapture.captureSession(any(), any<() -> Any?>())
+            audioCapture.captureSession(any(), any<(ShortArray) -> Any?>())
         }
         verify { audioCapture.restoreMusic(20) }   // finally restored the early-duck volume
     }
