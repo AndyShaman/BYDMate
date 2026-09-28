@@ -4,6 +4,8 @@ package com.bydmate.app.voice
  *  voice journal, the dump and logcat, so issue reports can be grepped by them. */
 object VoiceRefusal {
     const val UNRECOGNIZED = "unrecognized"
+    /** A dictionary question whose value the car does not report: the phrase goes to the agent. */
+    const val VALUE_UNKNOWN = "value_unknown"
     const val ASR_EMPTY = "asr_empty"
     const val ASR_FAILED = "asr_failed"
     const val MODEL_MISSING = "asr_model_missing"

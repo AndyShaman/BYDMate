@@ -24,6 +24,9 @@
 # symbols "a,b" repeats the command once per symbol, in that order. Built-ins:
 #   TEMP +1, TEMP -1    cabin temperature one step up or down
 #   VOL PAYLOAD         media volume: +1, -1, mute, unmute or a level
+#   ASK QUESTION        a question answered from the car's readings, nothing runs: outside_temp,
+#                       cabin_temp, soc, range, ac_temp; a value the car does not report sends
+#                       the phrase to the agent
 # Every template phrase has a row in app/src/test/resources/voice/ru_commands_golden.tsv.
 
 # ---- Verbs ---------------------------------------------------------------------------------
@@ -309,3 +312,20 @@ list drive: режим эко|эко режим|экорежим|экономи�
     умный режим => 智能模式
 (<on>|<set>) {drive} => {drive}
 solo {drive} => {drive}
+
+# ---- Questions -----------------------------------------------------------------------------
+# Answered from the car's own readings. Weather, charging stations and anything longer stay
+# with the agent; a question never takes part in "A и B". "сколько осталось километров" stays
+# with the agent too: on a route it asks for the distance left, not for the range.
+
+rule outside: снаружи|на улице|за бортом
+rule cabin: в салоне|в машине
+solo [какая] температура <outside> => ASK outside_temp
+solo сколько градусов <outside> => ASK outside_temp
+solo [какая] температура <cabin> => ASK cabin_temp
+solo сколько градусов <cabin> => ASK cabin_temp
+solo какой заряд [батареи]|заряд батареи => ASK soc
+solo сколько заряда осталось => ASK soc
+solo [какой] запас хода => ASK range
+solo на сколько [градусов] стоит <ac> => ASK ac_temp
+solo какая температура [стоит] на климате => ASK ac_temp

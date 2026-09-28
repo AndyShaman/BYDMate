@@ -14,6 +14,9 @@ interface VoiceGate {
      *  Default null keeps plain fakes honest: "unknown" rather than "fresh". */
     fun snapshotAgeMs(): Long? = null
 
+    /** The range estimate the dashboard and the widget show, km; null when there is none. */
+    fun rangeKm(): Double? = null
+
     /** True when the user enabled spoken agent answers (Settings mirror). */
     fun ttsEnabled(): Boolean
 }
