@@ -302,6 +302,8 @@
     <string name="trips_filter_trips_only">Trips</string>
     <string name="trips_filter_stops_only">Stops</string>
     <string name="trips_empty">No data for the selected period</string>
+    <string name="trips_empty_today">No trips today yet. The current one will show up once it ends.</string>
+    <string name="trips_empty_week">No trips this week yet. The current one will show up once it ends.</string>
     <string name="trips_col_time">time</string>
     <string name="trips_col_duration">dur.</string>
     <string name="trips_col_km">km</string>

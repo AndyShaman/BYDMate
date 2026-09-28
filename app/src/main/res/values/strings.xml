@@ -326,6 +326,8 @@
     <string name="trips_filter_trips_only">Поездки</string>
     <string name="trips_filter_stops_only">Стоянки</string>
     <string name="trips_empty">Нет данных за выбранный период</string>
+    <string name="trips_empty_today">За сегодня поездок пока нет. Текущая появится после завершения.</string>
+    <string name="trips_empty_week">За эту неделю поездок пока нет. Текущая появится после завершения.</string>
     <string name="trips_col_time">время</string>
     <string name="trips_col_duration">длит.</string>
     <string name="trips_col_km">км</string>

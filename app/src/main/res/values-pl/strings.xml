@@ -326,6 +326,8 @@
     <string name="trips_filter_trips_only">Przejazdy</string>
     <string name="trips_filter_stops_only">Postoje</string>
     <string name="trips_empty">Brak danych za wybrany okres</string>
+    <string name="trips_empty_today">Dzisiaj nie ma jeszcze przejazdów. Bieżący pojawi się po zakończeniu.</string>
+    <string name="trips_empty_week">W tym tygodniu nie ma jeszcze przejazdów. Bieżący pojawi się po zakończeniu.</string>
     <string name="trips_col_time">czas</string>
     <string name="trips_col_duration">dług.</string>
     <string name="trips_col_km">km</string>

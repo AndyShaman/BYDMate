@@ -299,6 +299,8 @@
     <string name="trips_filter_trips_only">Viagens</string>
     <string name="trips_filter_stops_only">Paradas</string>
     <string name="trips_empty">Sem dados para o período selecionado</string>
+    <string name="trips_empty_today">Ainda não há viagens hoje. A atual vai aparecer quando terminar.</string>
+    <string name="trips_empty_week">Ainda não há viagens esta semana. A atual vai aparecer quando terminar.</string>
     <string name="trips_col_time">tempo</string>
     <string name="trips_col_duration">dur.</string>
     <string name="trips_col_km">km</string>

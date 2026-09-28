@@ -243,6 +243,8 @@
     <string name="trips_filter_trips_only">行程</string>
     <string name="trips_filter_stops_only">停留</string>
     <string name="trips_empty">所选时间段内没有数据</string>
+    <string name="trips_empty_today">今天还没有行程。当前行程将在结束后显示。</string>
+    <string name="trips_empty_week">本周还没有行程。当前行程将在结束后显示。</string>
     <string name="trips_col_time">时间</string>
     <string name="trips_col_duration">时长</string>
     <string name="trips_col_km">公里</string>

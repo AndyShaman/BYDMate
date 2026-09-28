@@ -105,7 +105,12 @@ fun TripsScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(stringResource(R.string.trips_empty), color = TextSecondary, fontSize = 16.sp)
+                    Text(
+                        stringResource(emptyTripsStringRes(state.period, state.hasTripsBeforeFilter)),
+                        color = TextSecondary,
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center
+                    )
                 }
             } else {
                 val timeColWidth = rememberTimeColumnWidth()
