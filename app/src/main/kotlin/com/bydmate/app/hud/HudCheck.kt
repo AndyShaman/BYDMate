@@ -38,7 +38,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  *  2. the status raised the product's way ([HudArming]), same frame: 222 m, «BYDMATE 2»;
  *  3. the instrument's own CAN fields ([HudCanChannel]) while raised: 333 m, «BYDMATE 3».
  * Then the restore: CAN fields blanked, NAVI_STATUS = 4, the layout as found, our gateway service
- * stopped. The restore runs whatever happened before it, cancellation included.
+ * stopped. The restore runs whatever happened before it, cancellation included. A layout the
+ * fullscreen cluster holds back is retried every 5 s for up to a minute.
  *
  * Refuses to start while a real route is guided, while the car moves faster than
  * [MAX_SPEED_KMH], or without the helper daemon (the speed cannot be known then). The speed is
@@ -285,12 +286,14 @@ class HudCheck @Inject constructor(
         if (!handOver) {
             run.sink?.let { sink -> runCatching { sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, HudProtobufBuilder.buildClearFrame(0)) } }
         }
+        var deferred = false
         val restored = if (handOver) {
             Trace.event(TraceArea.HUD, "probe-restore", "handover" to true, "armed" to run.arming.armed)
             "handover armed=${run.arming.armed} asfound=${run.arming.asFound ?: "na"}"
         } else if (run.arming.armed) {
             runCatching { run.arming.disarm() }.fold(
                 onSuccess = { r ->
+                    deferred = r.screenDeferred
                     run.arming.traceDisarm("probe-restore", r)
                     r.describe()
                 },
@@ -309,12 +312,26 @@ class HudCheck @Inject constructor(
             if (hudController.boundBridge == null) runCatching { bridge.stopService(HudSomeIpBridge.SERVICE_ID_NAVI) }
             runCatching { bridge.unbind() }
         }
+        // Still the check's layout: the product's loop keeps off it until the retry is over.
+        if (deferred) retryDeferredLayout(run)
         hudController.armingPaused = false
         _state.value = when {
             routeStep != null -> State.RouteStarted
             movingStep != null -> State.Refused(Refusal.MOVING)
             else -> State.Done
         }
+    }
+
+    /** A layout the restore left at a fullscreen cluster: looked at every 5 s for up to
+     *  [DEFERRED_RETRY_MS]. Still fullscreen then, the kept as-found goes back at the next start. */
+    private suspend fun retryDeferredLayout(run: Run) {
+        var waitedMs = 0L
+        while (waitedMs < DEFERRED_RETRY_MS) {
+            delay(HudArming.CHECK_PERIOD_MS)
+            waitedMs += HudArming.CHECK_PERIOD_MS
+            if (runCatching { run.arming.retryDeferred() }.getOrDefault(false)) return
+        }
+        log("hudprobe: layout still deferred after ${DEFERRED_RETRY_MS / 1_000} s, kept for the next start")
     }
 
     /** The line and trace event of a check that a route or the speed ended in [step]. */
@@ -364,6 +381,8 @@ class HudCheck @Inject constructor(
         private const val GUIDANCE_LOOK_MS = 1_000L
         /** How often the steps read the speed. */
         private const val SPEED_LOOK_MS = 1_000L
+        /** How long the restore waits for a fullscreen cluster to let the layout back. */
+        private const val DEFERRED_RETRY_MS = 60_000L
         /** SET_HUD_CONFIG: 1 = W-HUD, 2 = AR-HUD (carsetting HudFuncVisibleUtils). */
         val HUD_TYPE = 1023 to 951058453
     }

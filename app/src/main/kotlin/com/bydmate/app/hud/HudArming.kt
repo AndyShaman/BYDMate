@@ -224,10 +224,12 @@ class HudArming(
 
     /** Loop side of a layout deferred at a fullscreen cluster: looked at every [CHECK_PERIOD_MS]
      *  while no route is guided, silent (one cluster read) while the cluster stays fullscreen,
-     *  then the disarm once. A retry that fails otherwise is not repeated until the next arm. */
-    private suspend fun retryDeferred() {
-        if (read(CLUSTER)[0].value == CLUSTER_FULLSCREEN) return
+     *  then the disarm once. A retry that fails otherwise is not repeated until the next arm.
+     *  The HUD check retries its own restore the same way; false = the layout still waits. */
+    internal suspend fun retryDeferred(): Boolean {
+        if (read(CLUSTER)[0].value == CLUSTER_FULLSCREEN) return false
         if (!disarmKept(REASON_DEFERRED).screenDeferred) deferredDone = true
+        return deferredDone
     }
 
     private fun layoutWaits(): Boolean = !deferredDone && prefs?.contains(KEY_AS_FOUND) == true

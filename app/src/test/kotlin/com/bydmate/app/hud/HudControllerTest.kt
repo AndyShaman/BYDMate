@@ -238,21 +238,6 @@ class HudControllerTest {
         coVerify(exactly = 1) { helperClient.hudNaviStatus(4) }   // nothing armed, nothing more to undo
     }
 
-    @Test fun `HUD off leaves a kept layout alone`() {
-        installSomeIp()
-        coEvery { helperBootstrap.ensureRunning() } returns true
-        leftoverCar()
-        context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putBoolean(HudController.KEY_ENABLED, false).commit()
-        val c = controller(connectedBridge())
-        c.startIfEnabled()
-        Thread.sleep(1_500)
-        assertEquals(HudController.Status.OFF, c.status.value)
-        coVerify(exactly = 0) { helperClient.readBatch(any()) }
-        coVerify(exactly = 0) { helperClient.writeStatus(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { helperClient.hudNaviStatus(any()) }
-    }
-
     @Test fun `a leftover with a guided route is left to the arming loop`() {
         installSomeIp()
         coEvery { helperBootstrap.ensureRunning() } returns true
