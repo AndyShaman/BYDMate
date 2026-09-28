@@ -66,6 +66,21 @@ fun learnDecision(keyCode: Int, isDown: Boolean): LearnAction {
     return if (isAssignable(keyCode)) LearnAction.CAPTURE else LearnAction.REJECT
 }
 
+/**
+ * How long after a learned key's DOWN another key still counts as the same press. Some buttons
+ * send two keycodes per press (Atto 3 mic button: 304, plus 327 that the stock assistant reacts to).
+ */
+const val LEARN_COMPANION_WINDOW_MS = 300L
+
+/**
+ * Pure gate for the key right after a learn CAPTURE: true when [keyCode] is a companion of the
+ * learned [primaryKeyCode] press — a DOWN of a different, assignable key within
+ * [LEARN_COMPANION_WINDOW_MS] of the capture. Times are the events' uptime millis.
+ */
+fun isLearnCompanion(keyCode: Int, isDown: Boolean, primaryKeyCode: Int, primaryAtMs: Long, nowMs: Long): Boolean =
+    isDown && keyCode != primaryKeyCode && isAssignable(keyCode) &&
+        nowMs - primaryAtMs in 0..LEARN_COMPANION_WINDOW_MS
+
 const val DEFAULT_VOICE_KEYCODE = 320  // steering "voice" button on Leopard 3 (learnable)
 
 enum class VoiceKeyDecision { TRIGGER, CONSUME, IGNORE }
@@ -73,11 +88,32 @@ enum class VoiceKeyDecision { TRIGGER, CONSUME, IGNORE }
 /** Pure gate for the voice push-to-talk button. Independent of star/projection
  *  handling: TRIGGER on key-DOWN of the configured voice keycode while voice is enabled;
  *  CONSUME on that same key's UP edge — swallowed so it never falls through to the native
- *  BYD assistant, which owns the same hardware keycode. Any other key, or voice disabled,
- *  is IGNORE (pass through untouched). */
-fun voiceDecision(keyCode: Int, isDown: Boolean, voiceEnabled: Boolean, voiceKeyCode: Int): VoiceKeyDecision {
-    if (!voiceEnabled || keyCode != voiceKeyCode) return VoiceKeyDecision.IGNORE
+ *  BYD assistant, which owns the same hardware keycode. A [companions] code (sent by the same
+ *  press, learned with the button) is CONSUME on both edges, never TRIGGER. Any other key, or
+ *  voice disabled, is IGNORE (pass through untouched). */
+fun voiceDecision(
+    keyCode: Int,
+    isDown: Boolean,
+    voiceEnabled: Boolean,
+    voiceKeyCode: Int,
+    companions: Set<Int> = emptySet(),
+): VoiceKeyDecision {
+    if (!voiceEnabled) return VoiceKeyDecision.IGNORE
+    if (keyCode != voiceKeyCode) {
+        return if (keyCode in companions) VoiceKeyDecision.CONSUME else VoiceKeyDecision.IGNORE
+    }
     return if (isDown) VoiceKeyDecision.TRIGGER else VoiceKeyDecision.CONSUME
+}
+
+/** Stored form of the voice button's companion codes: "304,327", "" when there are none. */
+fun voiceCompanionsToCsv(companions: Set<Int>): String = companions.sorted().joinToString(",")
+
+/** Reverse of [voiceCompanionsToCsv]. Anything unreadable is no companions at all, so a damaged
+ *  value can only fall back to the single-code behaviour, never swallow a random key. */
+fun voiceCompanionsFromCsv(csv: String?): Set<Int> {
+    if (csv.isNullOrEmpty()) return emptySet()
+    val codes = csv.split(',').map { it.toIntOrNull()?.takeIf { code -> code > 0 } }
+    return if (codes.any { it == null }) emptySet() else codes.filterNotNull().toSet()
 }
 
 /**

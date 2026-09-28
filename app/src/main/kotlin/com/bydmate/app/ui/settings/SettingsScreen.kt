@@ -1860,7 +1860,7 @@ internal sealed interface LearnUiState {
     data class Rejected(val keyCode: Int) : LearnUiState
     /** Assignable key, but already taken by another feature; [reason] explains which one. */
     data class Occupied(val keyCode: Int, val reason: String) : LearnUiState
-    data class Captured(val keyCode: Int) : LearnUiState
+    data class Captured(val keyCode: Int, val companions: Set<Int> = emptySet()) : LearnUiState
     data object TimedOut : LearnUiState
 }
 
@@ -1871,12 +1871,16 @@ internal sealed interface LearnUiState {
  *
  * [occupiedReason] lets a caller veto an otherwise assignable key: a non-null text means "this key
  * already does something else" and is shown while the dialog keeps waiting for another key.
+ *
+ * [onSaveWithCompanions], when set, replaces [onSave]: the caller also takes the other keycodes the
+ * same press sent (shown as "label (304 + 327)"). Without it companions are neither shown nor saved.
  */
 @Composable
 internal fun LearnButtonDialog(
-    onSave: (Int) -> Unit,
+    onSave: (Int) -> Unit = {},
     onDismiss: () -> Unit,
     occupiedReason: (Int) -> String? = { null },
+    onSaveWithCompanions: ((Int, Set<Int>) -> Unit)? = null,
 ) {
     var state by remember { mutableStateOf<LearnUiState>(LearnUiState.Waiting) }
 
@@ -1907,7 +1911,8 @@ internal fun LearnButtonDialog(
                     }
                     else -> {
                         SteeringWheelKeyService.learnMode = false
-                        LearnUiState.Captured(r.keyCode)
+                        LearnUiState.Captured(
+                            r.keyCode, if (onSaveWithCompanions != null) r.companions else emptySet())
                     }
                 }
             }
@@ -1957,7 +1962,8 @@ internal fun LearnButtonDialog(
                 is LearnUiState.Captured -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.learn_button_captured))
                     Text(
-                        "${steeringButtonLabel(s.keyCode)} (${s.keyCode})",
+                        "${steeringButtonLabel(s.keyCode)} " +
+                            "(${(listOf(s.keyCode) + s.companions.sorted()).joinToString(" + ")})",
                         color = TextPrimary, fontWeight = FontWeight.Medium,
                     )
                 }
@@ -1966,7 +1972,10 @@ internal fun LearnButtonDialog(
         },
         confirmButton = {
             when (val s = state) {
-                is LearnUiState.Captured -> TextButton(onClick = { onSave(s.keyCode) }) {
+                is LearnUiState.Captured -> TextButton(onClick = {
+                    if (onSaveWithCompanions != null) onSaveWithCompanions(s.keyCode, s.companions)
+                    else onSave(s.keyCode)
+                }) {
                     Text(stringResource(R.string.learn_button_save))
                 }
                 is LearnUiState.TimedOut -> TextButton(onClick = restart) {
@@ -3490,8 +3499,8 @@ private fun VoiceSettingsContent(
 
     if (learningVoiceKey) {
         LearnButtonDialog(
-            onSave = { code ->
-                viewModel.saveVoiceKeycode(code)
+            onSaveWithCompanions = { code, companions ->
+                viewModel.saveVoiceKeycode(code, companions)
                 learningVoiceKey = false
             },
             onDismiss = { learningVoiceKey = false },

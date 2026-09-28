@@ -192,6 +192,8 @@ import com.bydmate.app.cluster.DEFAULT_TRIGGER_KEYCODE
 import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
 import com.bydmate.app.cluster.VOLUME_KNOB_PRESS_KEYCODE
 import com.bydmate.app.cluster.knownButtonNameRes
+import com.bydmate.app.cluster.voiceCompanionsFromCsv
+import com.bydmate.app.data.repository.SettingsRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableLongStateOf
@@ -2470,8 +2472,12 @@ private fun steeringKeyOccupiedReason(context: Context): (Int) -> String? {
                 keyCode == clusterPrefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE) ->
                 context.getString(R.string.automation_steering_key_occupied_projection)
 
-            voicePrefs.getBoolean("voice_enabled", false) &&
-                keyCode == voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE) ->
+            // The companion codes of the voice button's press are swallowed by voice as well.
+            voicePrefs.getBoolean("voice_enabled", false) && (
+                keyCode == voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE) ||
+                    keyCode in voiceCompanionsFromCsv(
+                        voicePrefs.getString(SettingsRepository.KEY_VOICE_COMPANIONS, null))
+                ) ->
                 context.getString(R.string.automation_steering_key_occupied_voice)
 
             clusterPrefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false) &&
