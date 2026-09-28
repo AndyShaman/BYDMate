@@ -3,6 +3,9 @@ package com.bydmate.app.ui.settings
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.automation.RouteNavigatorUris
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.data.autoservice.AdbConnectFailure
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
@@ -54,6 +57,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.SeatChannel
@@ -81,6 +85,8 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class SettingsViewModelTest {
+
+    @get:Rule val trace = TraceRecorder()
 
     private val testDispatcher = StandardTestDispatcher()
     private val seatChannelStore: SeatChannelStore = mockk(relaxed = true)
@@ -1331,8 +1337,26 @@ class SettingsViewModelTest {
         assertTrue(header, header.contains("parts: auto=tables,keys manual=tables,settings"))
     }
 
-    /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance. */
-    private fun awaitDiagnosticHeader(timeoutMs: Long = 10_000): String {
+    /** The trace closes the header: what the app did before the recording, newest event last. */
+    @Test fun `the diagnostic header ends with the trace, newest event last`() = runTest {
+        val ptt = Trace.event(TraceArea.USER, "ptt", "listening" to false)
+        Trace.event(TraceArea.VOICE, "session-start", by = ptt)
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.startLogRecording()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val header = awaitDiagnosticHeader(until = "voice  session-start #2 by=#1")
+
+        val section = header.substringAfter("--- trace ---\n").substringBefore("===============================")
+        val events = section.lines().filter { it.isNotBlank() && !it.startsWith("-- ") }.map { it.substringAfter(' ') }
+        assertEquals(listOf("user   ptt listening=false #1", "voice  session-start #2 by=#1"), events)
+        assertTrue(header, header.indexOf("--- last crash ---") < header.indexOf("--- trace ---"))
+    }
+
+    /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance.
+     *  [until] is a text the finished header contains. */
+    private fun awaitDiagnosticHeader(timeoutMs: Long = 10_000, until: String = "--- settings ---"): String {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             val file = listOf(publicDumpDir(), fallbackDumpDir())
@@ -1340,7 +1364,7 @@ class SettingsViewModelTest {
                 .filter { it.name.startsWith("bydmate_logs_") }
                 .maxByOrNull { it.lastModified() }
             val text = file?.readText().orEmpty()
-            if (text.contains("--- settings ---")) return text
+            if (text.contains(until)) return text
             Thread.sleep(10)
         }
         throw AssertionError("no diagnostic header was written within $timeoutMs ms")

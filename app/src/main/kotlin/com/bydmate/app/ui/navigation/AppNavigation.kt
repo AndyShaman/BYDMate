@@ -62,6 +62,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.automation.AutomationScreen
@@ -238,6 +240,7 @@ fun AppNavigation(
                             },
                             selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                             onClick = {
+                                Trace.event(TraceArea.USER, "tab", "to" to screen.route)
                                 navController.navigate(screen.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
                                         saveState = true

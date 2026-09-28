@@ -31,6 +31,7 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.diagnostics.LogRecorder
+import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.data.push.fidRecorderEnabled
 import com.bydmate.app.helper.push.FID_REC_NO_ERROR
@@ -2344,6 +2345,13 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     }
                 }
             } catch (e: Exception) { appendLine("(failed to gather crash log: ${e.message})") }
+
+            // What the app did before this recording: logcat was cleared when it started.
+            appendLine("--- trace ---")
+            try {
+                val events = Trace.lines()
+                if (events.isEmpty()) appendLine("(none)") else events.forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             appendLine("===============================")
             appendLine()

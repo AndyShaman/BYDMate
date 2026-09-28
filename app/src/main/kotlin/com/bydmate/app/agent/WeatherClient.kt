@@ -1,5 +1,6 @@
 package com.bydmate.app.agent
 
+import com.bydmate.app.diagnostics.Trace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,6 +31,7 @@ class WeatherClient @Inject constructor(private val http: OkHttpClient) {
 
     /** Current conditions + 3-day forecast, compacted into the JSON the LLM tool returns. */
     suspend fun forecast(lat: Double, lon: Double): Result<String> = withContext(Dispatchers.IO) {
+        val startMs = System.nanoTime() / NANOS_PER_MS
         runCatching {
             val url = FORECAST_URL.toHttpUrl().newBuilder()
                 .addQueryParameter("latitude", lat.toString())
@@ -75,11 +77,12 @@ class WeatherClient @Inject constructor(private val http: OkHttpClient) {
                 }
                 JSONObject().put("now", now).put("days", days).toString()
             }
-        }
+        }.also { traced(FORECAST_URL, startMs, it) }
     }
 
     /** Open-Meteo geocoding: first match for a free-text city name. */
     suspend fun geocode(city: String): Result<GeoPoint> = withContext(Dispatchers.IO) {
+        val startMs = System.nanoTime() / NANOS_PER_MS
         runCatching {
             val url = GEOCODE_URL.toHttpUrl().newBuilder()
                 .addQueryParameter("name", city)
@@ -96,10 +99,17 @@ class WeatherClient @Inject constructor(private val http: OkHttpClient) {
                 // admin1 is intentionally dropped: the short name reads best over TTS.
                 GeoPoint(r.getDouble("latitude"), r.getDouble("longitude"), r.optString("name"))
             }
-        }
+        }.also { traced(GEOCODE_URL, startMs, it) }
+    }
+
+    /** The trace event of one call; "город не найден" is an answer, not a server failure. */
+    private suspend fun traced(url: String, startMs: Long, result: Result<*>) {
+        val error = result.exceptionOrNull()?.takeUnless { it is UserError }
+        Trace.call("weather", url.toHttpUrl().host, System.nanoTime() / NANOS_PER_MS - startMs, error)
     }
 
     companion object {
+        private const val NANOS_PER_MS = 1_000_000L
         private const val FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
         private const val GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 

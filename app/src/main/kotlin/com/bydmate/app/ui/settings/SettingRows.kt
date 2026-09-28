@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
 import com.bydmate.app.R
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.AccentOrange
@@ -105,19 +107,25 @@ fun SettingToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true,
     onHelp: (() -> Unit)? = null,
+    // Names the toggle in the trace; the title is translated text and never goes there.
+    traceId: String? = null,
 ) {
+    val onChange: (Boolean) -> Unit = { on ->
+        if (traceId != null) Trace.event(TraceArea.USER, "toggle", "id" to traceId, "on" to on)
+        onCheckedChange(on)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .clickable(enabled = enabled) { onChange(!checked) }
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RowLabel(title, description, enabled, Modifier.weight(1f), onHelp)
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = onChange,
             enabled = enabled,
             colors = bydSwitchColors(),
         )

@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import com.bydmate.app.data.automation.AutomationEngine
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.data.automation.OneShotTrigger
 import com.bydmate.app.util.appLocalizedContext
 import kotlinx.coroutines.launch
@@ -645,9 +647,12 @@ private fun RuleDot(enabled: Boolean) {
 
 /** The rule's switch centred in a 64x48dp slot; the M3 switch itself is 52x48dp to touch. */
 @Composable
-private fun RuleSwitch(enabled: Boolean, onToggle: () -> Unit) {
+private fun RuleSwitch(enabled: Boolean, onToggle: () -> Unit, ruleId: Long) {
     Box(Modifier.size(SWITCH_SLOT, 48.dp), contentAlignment = Alignment.Center) {
-        Switch(checked = enabled, onCheckedChange = { onToggle() }, colors = bydSwitchColors())
+        Switch(checked = enabled, onCheckedChange = {
+            Trace.event(TraceArea.USER, "rule-toggle", "rule" to ruleId, "on" to !enabled)
+            onToggle()
+        }, colors = bydSwitchColors())
     }
 }
 
@@ -722,7 +727,7 @@ private fun RuleListRow(
                 actions.forEachIndexed { i, action ->
                     ActionCell(action, labeled, Modifier.width(if (labeled) cellWidths[i] else MIN_TOUCH))
                 }
-                RuleSwitch(rule.enabled, onToggle)
+                RuleSwitch(rule.enabled, onToggle, rule.id)
             }
             ListActionMode.BELOW_LABELED, ListActionMode.BELOW_ICONS -> Column(
                 modifier = padding,
@@ -730,7 +735,7 @@ private fun RuleListRow(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RuleRowText(rule, last, onStatus, Modifier.weight(1f).padding(end = 8.dp))
-                    RuleSwitch(rule.enabled, onToggle)
+                    RuleSwitch(rule.enabled, onToggle, rule.id)
                 }
                 HorizontalDivider(color = CardBorder, modifier = Modifier.padding(end = 12.dp))
                 Row(Modifier.fillMaxWidth()) {
@@ -791,7 +796,7 @@ private fun RuleGridCard(
                     RuleDot(rule.enabled)
                     Spacer(Modifier.width(8.dp))
                     RuleName(rule, Modifier.weight(1f))
-                    RuleSwitch(rule.enabled, onToggle)
+                    RuleSwitch(rule.enabled, onToggle, rule.id)
                 }
                 RulePhraseLine(rule, Modifier.padding(end = 10.dp))
                 RuleStatusChip(rule, last, onStatus)

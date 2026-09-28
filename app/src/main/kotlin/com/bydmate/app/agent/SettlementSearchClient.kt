@@ -1,6 +1,7 @@
 package com.bydmate.app.agent
 
 import android.util.Log
+import com.bydmate.app.diagnostics.Trace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -128,12 +129,14 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
                 val body = await(overpassHttp.newCall(request))
                 val result = parse(host, body)
                 Log.i(TAG, "overpass $host: ok, ${result.size} settlements, ${monotonicMs() - startMs}ms")
+                Trace.call("overpass", host, monotonicMs() - startMs)
                 lastEndpoint = ep
                 return result
             } catch (e: IOException) {
                 // A cancel that raced the failure: stop here instead of trying the next server.
                 currentCoroutineContext().ensureActive()
                 Log.w(TAG, "overpass $host: ${outcome(e)}, ${monotonicMs() - startMs}ms")
+                Trace.call("overpass", host, monotonicMs() - startMs, e, outcome(e))
                 lastError = e
             } catch (e: CancellationException) {
                 Log.i(TAG, "overpass $host: cancelled or out of time after ${monotonicMs() - startMs}ms, in-flight call dropped")
@@ -165,11 +168,13 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
             val address = parseAddress(await(nominatimHttp.newCall(request)))
             Log.i(TAG, "nominatim ${url.host}: ok, settlement=${address.settlement != null} " +
                 "street=${address.road != null}, ${monotonicMs() - startMs}ms")
+            Trace.call("nominatim", url.host, monotonicMs() - startMs)
             lastEndpoint = nominatimUrl
             return address
         } catch (e: IOException) {
             currentCoroutineContext().ensureActive()
             Log.w(TAG, "nominatim ${url.host}: ${outcome(e)}, ${monotonicMs() - startMs}ms")
+            Trace.call("nominatim", url.host, monotonicMs() - startMs, e, outcome(e))
             throw e
         } catch (e: CancellationException) {
             Log.i(TAG, "nominatim ${url.host}: cancelled or out of time after ${monotonicMs() - startMs}ms, in-flight call dropped")

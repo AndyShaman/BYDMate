@@ -1,6 +1,8 @@
 package com.bydmate.app.voice.online
 
 import android.util.Log
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
 import kotlinx.coroutines.CancellationException
@@ -193,7 +195,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         }
         val startNs = System.nanoTime()
         val pcm = synthesizeCatching(backend, text, gender)
-        Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} ms=${elapsedMs(startNs)} ok=${pcm != null}")
+        val tookMs = elapsedMs(startNs)
+        Log.i(TAG, "online synth: backend=${backend.id} chars=${text.length} ms=$tookMs ok=${pcm != null}")
+        traceTts(backend, "synth", pcm != null, tookMs, tookMs)
         if (pcm != null) cacheIfKeyStable(backend, gender, text, key, pcm)
         return pcm
     }
@@ -292,11 +296,13 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
                 Log.w(TAG, "online tts stream failed for '${backend.id}'", e)
                 false
             }
+            val totalMs = elapsedMs(startNs)
             Log.i(
                 TAG,
                 "online stream: backend=${backend.id} chars=${text.length} first_chunk_ms=$firstChunkMs " +
-                    "total_ms=${elapsedMs(startNs)} chunks=$count ok=$ok",
+                    "total_ms=$totalMs chunks=$count ok=$ok",
             )
+            traceTts(backend, "stream", ok, firstChunkMs, totalMs)
             if (ok && kept != null && keyBefore != null) {
                 cacheIfKeyStable(backend, gender, text, keyBefore, TtsPcm(mergeChunks(kept), sampleRate))
             }
@@ -308,6 +314,15 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         } finally {
             chunks.put(END_OF_STREAM)
         }
+    }
+
+    /** Trace: a synthesis that failed, or kept the driver waiting for its first audio longer
+     *  than [Trace.SLOW_CALL_MS]. A long sentence streams for long by design, so a stream is
+     *  judged by its first chunk. */
+    private fun traceTts(backend: OnlineTtsBackend, mode: String, ok: Boolean, firstAudioMs: Long, totalMs: Long) {
+        if (ok && firstAudioMs <= Trace.SLOW_CALL_MS) return
+        Trace.event(TraceArea.NET, "tts", "src" to backend.id, "mode" to mode, "ok" to ok,
+            "first_audio_ms" to firstAudioMs, "ms" to totalMs)
     }
 
     private suspend fun wholeFallback(

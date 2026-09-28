@@ -20,8 +20,11 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.bydmate.app.MainActivity
 import com.bydmate.app.cluster.ClusterEntryPoint
+import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.vehicle.HelperBootstrap
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.split.SplitOverlayController
 import com.bydmate.app.split.SplitSessionManager
@@ -82,6 +85,7 @@ object WidgetController {
     private const val DOUBLE_TAP_MS = 250L
     private const val BUTTON_DP = WidgetButtonLayout.BUTTON_DP
     private const val GAP_DP = WidgetButtonLayout.GAP_DP
+    private const val SUPPRESSED_PREFIX = "suppressed:"
 
     @Volatile private var appForegrounded: Boolean = false
     @Volatile private var previewMode: Boolean = false
@@ -273,6 +277,7 @@ object WidgetController {
         }
 
         Log.i(TAG, "widget: attached ($reason)")
+        Trace.event(TraceArea.WIDGET, "attach", "reason" to reason)
         startDataSubscription(appCtx)
     }
 
@@ -349,7 +354,10 @@ object WidgetController {
         expandedState.value = false
         listeningState.value = false
         wm = null
-        if (wasAttached) Log.i(TAG, "widget: detached ($reason)")
+        if (wasAttached) {
+            Log.i(TAG, "widget: detached ($reason)")
+            Trace.event(TraceArea.WIDGET, "detach", "reason" to reason)
+        }
     }
 
     private fun startDataSubscription(appCtx: Context) {
@@ -369,7 +377,7 @@ object WidgetController {
             ) { cam, yt, hideYt, fgPkg, hideApps -> hideReason(cam, yt, hideYt, fgPkg, hideApps) },
             suppressReasons,
         ) { reason, reasons ->
-            reason ?: reasons.takeIf { it.isNotEmpty() }?.let { "suppressed:${it.joinToString(",")}" }
+            reason ?: reasons.takeIf { it.isNotEmpty() }?.let { SUPPRESSED_PREFIX + it.joinToString(",") }
         }
         // Stock combine(...) is typed only up to 5 flows — bundle consumption +
         // alpha + scale + hideOverlay into one UiBundle so we stay under the limit.
@@ -421,6 +429,7 @@ object WidgetController {
                 if (reason != lastHideReason) {
                     if (reason != null) Log.i(TAG, "widget: hidden ($reason)")
                     else Log.i(TAG, "widget: shown (was $lastHideReason)")
+                    traceVisibility(reason, lastHideReason)
                     lastHideReason = reason
                 }
                 // Hide the entire root (panel + button layer) so the buttons
@@ -741,6 +750,16 @@ object WidgetController {
         youtubeForeground && hideOnYoutube -> "youtube"
         foregroundPkg != null && foregroundPkg in hideInApps -> "app:$foregroundPkg"
         else -> null
+    }
+
+    /** Trace event of a hide ([reason]) or show (was [previous]). Every reason but our own
+     *  overlays ("suppressed:...") follows from what took the screen, so the last screen change
+     *  is its cause. */
+    internal fun traceVisibility(reason: String?, previous: String?): Long {
+        val fromScreen = (reason ?: previous)?.startsWith(SUPPRESSED_PREFIX) == false
+        val cause = CameraStateMonitor.lastForegroundTraceId.takeIf { fromScreen }
+        return if (reason != null) Trace.event(TraceArea.WIDGET, "hide", "reason" to reason, by = cause)
+        else Trace.event(TraceArea.WIDGET, "show", "was" to previous, by = cause)
     }
 
     /** Boolean wrapper over [hideReason] for callers that only need the yes/no answer. */

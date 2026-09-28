@@ -2,9 +2,11 @@ package com.bydmate.app.agent
 
 import android.util.Log
 import com.bydmate.app.BuildConfig
+import com.bydmate.app.diagnostics.Trace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -37,6 +39,8 @@ class ChargerSearchClient @Inject constructor(private val http: OkHttpClient) {
                 val formBody = FormBody.Builder().add("data", query).build()
                 var lastError: IOException? = null
                 for (ep in endpoints) {
+                    val host = ep.toHttpUrl().host
+                    val startMs = System.nanoTime() / NANOS_PER_MS
                     try {
                         val request = Request.Builder().url(ep).header("User-Agent", MAP_USER_AGENT).post(formBody).build()
                         val result = overpassHttp.newCall(request).execute().use { resp ->
@@ -60,15 +64,21 @@ class ChargerSearchClient @Inject constructor(private val http: OkHttpClient) {
                                 Charger(name, cLat, cLon)
                             }
                         }
+                        Trace.call("overpass", host, System.nanoTime() / NANOS_PER_MS - startMs)
                         return@runCatching result
                     } catch (e: IOException) {
                         Log.w("ChargerSearchClient", "overpass $ep failed: ${e.message}")
+                        Trace.call("overpass", host, System.nanoTime() / NANOS_PER_MS - startMs, e)
                         lastError = e
                     }
                 }
                 throw IOException("зарядочные серверы недоступны: ${lastError?.message}")
             }
         }
+
+    private companion object {
+        const val NANOS_PER_MS = 1_000_000L
+    }
 }
 
 /** overpass-api.de answers 406 to OkHttp's default User-Agent (`okhttp/x.y.z`) and serves a
