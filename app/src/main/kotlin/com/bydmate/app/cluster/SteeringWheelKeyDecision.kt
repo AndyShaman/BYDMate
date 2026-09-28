@@ -75,11 +75,20 @@ const val LEARN_COMPANION_WINDOW_MS = 300L
 /**
  * Pure gate for the key right after a learn CAPTURE: true when [keyCode] is a companion of the
  * learned [primaryKeyCode] press — a DOWN of a different, assignable key within
- * [LEARN_COMPANION_WINDOW_MS] of the capture. Times are the events' uptime millis.
+ * [LEARN_COMPANION_WINDOW_MS] of the primary's last edge ([learnWindowAnchor]). Times are the
+ * events' uptime millis.
  */
 fun isLearnCompanion(keyCode: Int, isDown: Boolean, primaryKeyCode: Int, primaryAtMs: Long, nowMs: Long): Boolean =
     isDown && keyCode != primaryKeyCode && isAssignable(keyCode) &&
         nowMs - primaryAtMs in 0..LEARN_COMPANION_WINDOW_MS
+
+/**
+ * Start of the companion window after this key event: any edge of the learned key restarts it, so
+ * a companion sent after the primary's UP (Atto 3: 327 DOWN 3-59 ms after 304 UP) is caught
+ * however long the button was held. Another key leaves the window where it was.
+ */
+fun learnWindowAnchor(keyCode: Int, primaryKeyCode: Int, anchorMs: Long, eventMs: Long): Long =
+    if (keyCode == primaryKeyCode) eventMs else anchorMs
 
 const val DEFAULT_VOICE_KEYCODE = 320  // steering "voice" button on Leopard 3 (learnable)
 

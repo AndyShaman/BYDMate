@@ -36,8 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class SteeringWheelKeyService : AccessibilityService() {
 
     private var cachedEntryPoint: ClusterEntryPoint? = null
-    // Last learn CAPTURE and its event time: the start of the companion window (isLearnCompanion).
-    private var learnCapture: CaptureResult? = null
+    // Start of the companion window of the key in capturedKey (isLearnCompanion, learnWindowAnchor).
     private var learnCaptureAtMs = 0L
     private val prefs: SharedPreferences by lazy {
         applicationContext.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
@@ -139,21 +138,21 @@ class SteeringWheelKeyService : AccessibilityService() {
         // A second keycode of the press just learned joins the capture and is swallowed. Checked
         // before learn mode: the dialog may have re-armed it already (occupied key), and the
         // companion must not become a capture of its own.
-        val capture = learnCapture
-        if (capture != null &&
-            isLearnCompanion(event.keyCode, isDown, capture.keyCode, learnCaptureAtMs, event.eventTime)
-        ) {
-            val withCompanion = capture.copy(companions = capture.companions + event.keyCode)
-            learnCapture = withCompanion
-            capturedKey.value = withCompanion
-            return traced(event, "learn_companion")
+        // The capture lives in capturedKey, which the dialog clears on "again" and on closing:
+        // outside the dialog there is no window and nothing is swallowed.
+        val capture = capturedKey.value?.takeIf { it.assignable }
+        if (capture != null) {
+            if (isLearnCompanion(event.keyCode, isDown, capture.keyCode, learnCaptureAtMs, event.eventTime)) {
+                capturedKey.value = capture.copy(companions = capture.companions + event.keyCode)
+                return traced(event, "learn_companion")
+            }
+            learnCaptureAtMs = learnWindowAnchor(event.keyCode, capture.keyCode, learnCaptureAtMs, event.eventTime)
         }
         if (!learnMode) return null
         return when (learnDecision(event.keyCode, isDown)) {
             LearnAction.CAPTURE -> {
                 val result = CaptureResult(event.keyCode, assignable = true)
                 capturedKey.value = result
-                learnCapture = result
                 learnCaptureAtMs = event.eventTime
                 learnMode = false  // got it; dialog moves to the confirm step
                 traced(event, "learn")
