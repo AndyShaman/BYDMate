@@ -305,6 +305,10 @@ If the car has a factory head-up display, BYDMate draws Yandex Navigator guidanc
 
 Enable it in **Settings → Display**, section "HUD (head-up display)": the "Navigation on HUD" toggle and, separately, "Speed sign under the arrow". Guidance travels over the HUD's own factory channel, so a car equipped with a head-up display is required. If the car has no such channel, the app says so in Settings and does not enable the feature.
 
+**What the app changes in the car.** While "Navigation on HUD" is on and the navigator is guiding a route, BYDMate turns on the car's navigation mode on the head-up display. Once the route ends or the toggle is off, everything returns to how it was. With the toggle off, the app does not touch anything in the car.
+
+**If nothing shows up on the glass.** Open **Settings → Service & Data**, "Data" section, and tap **"Start"** next to the "HUD check" line. The car needs to be parked, with no route running in the navigator. The check takes about a minute and a half and shows three markers on the glass one after another: "BYDMATE 1", "BYDMATE 2", and "BYDMATE 3". Note which ones you saw, record a log with the log recording button, and send it in a GitHub issue along with your car model.
+
 ---
 
 ## Blind-Spot Cameras
@@ -488,6 +492,8 @@ In Settings you pick one of three response personalities (Navigator by default) 
 ### Turning Off BYD's Built-In Assistant
 
 At the bottom of the "Voice agent" section there is a toggle that disables BYD's built-in voice assistant, so it does not wake up alongside the agent. Fully reversible, applies after the car restarts (both turning it on and off). Off by default.
+
+The stock assistant is disabled in the car's system, so turn this toggle off before uninstalling BYDMate, otherwise the stock assistant stays disabled. How to bring the stock assistant back if BYDMate is already uninstalled: install BYDMate again, turn the toggle off, and restart the head unit.
 
 ### Requirements
 
