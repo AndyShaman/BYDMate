@@ -590,3 +590,55 @@ utterance	expected	category	danger
 умный режим	智能模式	drive mode
 выключи спортивный режим	UNRECOGNIZED	drive mode
 закрой окна и спортивный режим	UNRECOGNIZED	drive mode
+температура снаружи	ASK:outside_temp	questions	
+какая температура снаружи	ASK:outside_temp	questions	
+температура на улице	ASK:outside_temp	questions	
+какая температура на улице	ASK:outside_temp	questions	
+температура за бортом	ASK:outside_temp	questions	
+какая температура за бортом	ASK:outside_temp	questions	
+сколько градусов снаружи	ASK:outside_temp	questions	
+сколько градусов на улице	ASK:outside_temp	questions	
+сколько градусов за бортом	ASK:outside_temp	questions	
+температура в салоне	ASK:cabin_temp	questions	
+какая температура в салоне	ASK:cabin_temp	questions	
+температура в машине	ASK:cabin_temp	questions	
+какая температура в машине	ASK:cabin_temp	questions	
+сколько градусов в салоне	ASK:cabin_temp	questions	
+сколько градусов в машине	ASK:cabin_temp	questions	
+какой заряд	ASK:soc	questions	
+какой заряд пожалуйста	ASK:soc	questions	
+какой заряд батареи	ASK:soc	questions	
+заряд батареи	ASK:soc	questions	
+сколько заряда осталось	ASK:soc	questions	
+запас хода	ASK:range	questions	
+какой запас хода	ASK:range	questions	
+сколько осталось километров	UNRECOGNIZED	questions	
+сколько километров осталось	UNRECOGNIZED	questions	
+на сколько стоит климат	ASK:ac_temp	questions	
+на сколько стоит кондиционер	ASK:ac_temp	questions	
+на сколько стоит кондиционр	ASK:ac_temp	questions	
+на сколько стоит кандиционер	ASK:ac_temp	questions	
+на сколько стоит кондей	ASK:ac_temp	questions	
+на сколько градусов стоит климат	ASK:ac_temp	questions	
+на сколько градусов стоит кондиционер	ASK:ac_temp	questions	
+на сколько градусов стоит кондиционр	ASK:ac_temp	questions	
+на сколько градусов стоит кандиционер	ASK:ac_temp	questions	
+на сколько градусов стоит кондей	ASK:ac_temp	questions	
+какая температура на климате	ASK:ac_temp	questions	
+какая температура стоит на климате	ASK:ac_temp	questions	
+какая погода на улице	UNRECOGNIZED	questions	
+погода завтра	UNRECOGNIZED	questions	
+какая погода завтра	UNRECOGNIZED	questions	
+где зарядка	UNRECOGNIZED	questions	
+найди зарядку	UNRECOGNIZED	questions	
+где ближайшая зарядка	UNRECOGNIZED	questions	
+найди зарядку по пути	UNRECOGNIZED	questions	
+хватит ли заряда до дома	UNRECOGNIZED	questions	
+сколько километров до дома	UNRECOGNIZED	questions	
+какая температура	UNRECOGNIZED	questions	
+сколько градусов	UNRECOGNIZED	questions	
+температура в салоне двадцать два	UNRECOGNIZED	questions	
+какой заряд и закрой окна	UNRECOGNIZED	questions	
+закрой окна и какой заряд	UNRECOGNIZED	questions	
+температура на двадцать два	设置温度22	climate	
+поставь температуру на двадцать два	设置温度22	climate	

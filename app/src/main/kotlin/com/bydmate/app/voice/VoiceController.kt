@@ -622,6 +622,13 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is ParseResult.Command -> Resolution.Cmd(r.commands, VoiceCommandLabels.of(r.commands))
             is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
             is ParseResult.Volume -> Resolution.Vol(r.payload)
+            // A value the car does not report goes to the agent, never a made-up answer; so does
+            // every question while the snapshot is not live: it is never cleared on transport
+            // loss, and the range, kept elsewhere, would be just as old.
+            is ParseResult.Ask -> r.question
+                .takeIf { gate.snapshotAgeMs()?.let { it <= ASK_MAX_SNAPSHOT_AGE_MS } == true }
+                ?.answer(gate.vehicleSnapshot(), gate.rangeKm())
+                ?.let { Resolution.Answer(r.question, it) } ?: Resolution.None(VoiceRefusal.VALUE_UNKNOWN)
             ParseResult.Unrecognized -> Resolution.None(VoiceRefusal.UNRECOGNIZED)
         }
     }
@@ -633,6 +640,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is Resolution.Cmd -> execute(res.commands, transcript, decodeMs, res.label)
             is Resolution.RelTemp -> dispatchRelativeTemp(res.sign, transcript, decodeMs)
             is Resolution.Vol -> dispatchVolume(res.payload, transcript, decodeMs)
+            is Resolution.Answer -> answer(res, transcript, decodeMs)
             is Resolution.Auto -> fireAutomation(res.match, transcript, decodeMs)
             is Resolution.None -> agentFallback(transcript, decodeMs)
         }
@@ -776,6 +784,16 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 .copy(reason = reason, refusal = VoiceRefusal.DISPATCH_FAILED), "NLU blocked: cmd=media_volume payload=$payload transcript=\"$transcript\" reason=$reason")
             announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
         }
+    }
+
+    /** A dictionary question answered from the car's readings: said and shown like any other
+     *  outcome, journaled as a built-in command with the answer, so a log tells it from the agent. */
+    private suspend fun answer(res: Resolution.Answer, transcript: String, decodeMs: Long? = null) {
+        earcon.ok()
+        _state.value = VoiceUiState.Done(transcript)
+        record(nluEntry(transcript, decodeMs, res.label, VoiceJournalEntry.Outcome.OK).copy(answer = res.text),
+            "NLU answered: cmd=${res.label} answer=\"${res.text}\" transcript=\"$transcript\"")
+        announce("Голос", res.text, res.text)
     }
 
     private suspend fun fireAutomation(match: VoiceAutomationMatch, transcript: String, decodeMs: Long? = null) {
@@ -1000,6 +1018,10 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         data class Cmd(val commands: List<String>, val label: String) : Resolution
         data class RelTemp(val sign: Int) : Resolution
         data class Vol(val payload: String) : Resolution
+        /** A dictionary question with the value known: [text] is said, nothing is dispatched. */
+        data class Answer(val question: VehicleQuestion, val text: String) : Resolution {
+            val label: String get() = "ask:${question.id}"
+        }
         data class Auto(val match: VoiceAutomationMatch) : Resolution
         /** Nothing local claimed the phrase: it goes to the agent; [reason] is a VoiceRefusal code. */
         data class None(val reason: String) : Resolution
@@ -1007,7 +1029,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         /** The route code of the trace. */
         val route: String get() = when (this) {
             is Cmd -> if (label.startsWith("phrase:")) "phrase" else "nlu"
-            is RelTemp, is Vol -> "nlu"
+            is RelTemp, is Vol, is Answer -> "nlu"
             is Auto -> "automation"
             is None -> "agent"
         }
@@ -1053,6 +1075,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // characters per minute, with a hard cap so the block never squats on the screen.
         private const val DIALOG_READ_MS_PER_CHAR = 60L
         private const val DIALOG_READ_MAX_MS = 30_000L
+
+        // Oldest vehicle snapshot a dictionary question is answered from; an older one goes to the agent.
+        private const val ASK_MAX_SNAPSHOT_AGE_MS = 30_000L
 
         // Continuous session (Wave B): silence auto-stop. Wave P removed the hard session cap --
         // long conversations must never be cut off; silence is the only automatic exit.

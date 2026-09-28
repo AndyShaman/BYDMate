@@ -147,6 +147,7 @@ object VoiceModule {
         override fun vehicleSnapshot(): DiParsData? = TrackingService.lastData.value
         override fun snapshotAgeMs(): Long? =
             TrackingService.lastDataAtMs.takeIf { it > 0L }?.let { System.currentTimeMillis() - it }
+        override fun rangeKm(): Double? = TrackingService.lastRangeKm.value
         override fun ttsEnabled(): Boolean =
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
                 .getBoolean("tts_enabled", false)

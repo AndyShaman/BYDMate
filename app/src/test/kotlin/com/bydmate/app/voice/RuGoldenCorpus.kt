@@ -32,6 +32,7 @@ object RuGoldenCorpus {
         is ParseResult.Command -> result.commands.joinToString("+")
         is ParseResult.RelativeTemp -> "TEMP:" + if (result.sign > 0) "+1" else "-1"
         is ParseResult.Volume -> "VOL:" + result.payload
+        is ParseResult.Ask -> "ASK:" + result.question.id
         ParseResult.Unrecognized -> UNRECOGNIZED
     }
 
