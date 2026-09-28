@@ -280,6 +280,8 @@
     <string name="settings_app_units_header">Адзінкі і валюта</string>
     <string name="settings_app_distance_label">Адлегласць</string>
     <string name="settings_app_currency_label">Валюта</string>
+    <string name="settings_charge_connector_label">Раз’ём для зарадкі</string>
+    <string name="settings_charge_connector_desc">Памочнік шукае зарадкі з гэтым раз’ёмам</string>
     <string name="settings_map_tile_source_label">Крыніца карты</string>
     <string name="settings_app_data_header">Даныя</string>
     <string name="settings_log_recording_start_button">Запіс логаў</string>

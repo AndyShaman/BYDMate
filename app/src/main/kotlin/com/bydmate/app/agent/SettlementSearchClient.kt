@@ -58,8 +58,13 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
 
     /** Test seam so unit tests point at MockWebServer. Tried in order; first clean answer wins.
      *  The maps.mail.ru mirror is gone: the head unit lacks its TLS root (Android 12), and it
-     *  answered in 9-12 s against the 8 s call timeout (field 28.09). */
-    internal var endpoints = listOf("https://overpass-api.de/api/interpreter")
+     *  answered in 9-12 s against the 8 s call timeout (field 28.09). Measured from the head
+     *  unit the same day: overpass.openstreetmap.fr answered 4 of 4 small queries in 0.5-1.4 s,
+     *  overpass-api.de gave a 504 after 7.5 s and a 200 after 17.9 s. */
+    internal var endpoints = listOf(
+        "https://overpass.openstreetmap.fr/api/interpreter",
+        "https://overpass-api.de/api/interpreter",
+    )
 
     /** Test seam: Nominatim reverse geocoding, asked once every Overpass endpoint has failed. */
     internal var nominatimUrl = "https://nominatim.openstreetmap.org/reverse"
@@ -69,10 +74,11 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
     @Volatile var lastEndpoint: String? = null
         private set
 
-    /** Test seams. One Overpass endpoint may take [callTimeoutMs], Nominatim
-     *  [nominatimCallTimeoutMs] (body included); the whole search, fallback included, never takes
-     *  longer than [totalTimeoutMs], so a voice turn waits at most that long for where_am_i. */
-    internal var callTimeoutMs = 8_000L
+    /** Test seams. One Overpass endpoint may take [callTimeoutMs] (a slow first server leaves the
+     *  second its turn), Nominatim [nominatimCallTimeoutMs] (body included); the whole search,
+     *  fallback included, never takes longer than [totalTimeoutMs], so a voice turn waits at
+     *  most that long for where_am_i. */
+    internal var callTimeoutMs = 4_000L
     internal var nominatimCallTimeoutMs = 3_000L
     internal var totalTimeoutMs = 10_000L
 

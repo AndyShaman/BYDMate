@@ -55,20 +55,25 @@ class SettlementSearchClientTest {
     private val minsk = requireNotNull(javaClass.classLoader?.getResource("nominatim/reverse-minsk.json")).readText()
 
     // Review: timing tests below override the timeouts, so a change to the production defaults
-    // (8 s Overpass, 3 s Nominatim, 10 s in total - the budget a voice turn actually waits)
-    // would pass them unnoticed. Pin the defaults on a client nobody has touched.
-    @Test fun production_timeout_defaults_are_8s_overpass_3s_nominatim_10s_total() {
+    // (4 s per Overpass server, 3 s Nominatim, 10 s in total - the budget a voice turn actually
+    // waits) would pass them unnoticed. Pin the defaults on a client nobody has touched.
+    @Test fun production_timeout_defaults_are_4s_overpass_3s_nominatim_10s_total() {
         val fresh = SettlementSearchClient(OkHttpClient())
-        assertEquals(8_000L, fresh.callTimeoutMs)
+        assertEquals(4_000L, fresh.callTimeoutMs)
         assertEquals(3_000L, fresh.nominatimCallTimeoutMs)
         assertEquals(10_000L, fresh.totalTimeoutMs)
     }
 
     // Field 28.09: the maps.mail.ru mirror never worked on the head unit (Android 12 lacks its
-    // TLS root, and it answered in 9-12 s); the backup is Nominatim reverse geocoding now.
-    @Test fun production_servers_are_overpass_api_de_then_nominatim() {
+    // TLS root, and it answered in 9-12 s). Measured from the head unit the same day:
+    // overpass.openstreetmap.fr answered in 0.5-1.4 s every time, overpass-api.de gave a 504
+    // after 7.5 s and a 200 after 17.9 s. Nominatim reverse geocoding is the last resort.
+    @Test fun production_servers_are_the_french_mirror_then_overpass_api_de_then_nominatim() {
         val fresh = SettlementSearchClient(OkHttpClient())
-        assertEquals(listOf("https://overpass-api.de/api/interpreter"), fresh.endpoints)
+        assertEquals(
+            listOf("https://overpass.openstreetmap.fr/api/interpreter", "https://overpass-api.de/api/interpreter"),
+            fresh.endpoints)
+        assertTrue(fresh.endpoints.none { it.contains("mail.ru") })
         assertEquals("https://nominatim.openstreetmap.org/reverse", fresh.nominatimUrl)
     }
 

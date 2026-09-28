@@ -20,6 +20,7 @@ import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.AutoBackupRunner
 import com.bydmate.app.data.backup.AutoBackupScheduler
 import com.bydmate.app.data.backup.BackupPart
+import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.backup.TelegramBackupSink
 import com.bydmate.app.data.backup.TelegramChat
@@ -140,6 +141,7 @@ data class SettingsUiState(
     val units: String = SettingsRepository.DEFAULT_UNITS,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
+    val chargeConnector: ChargeConnector = ChargeConnector.GBT,
     val importStatus: String? = null,
     val appVersion: String = "0.0.0",
     val updateStatus: String? = null,
@@ -489,6 +491,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 SettingsRepository.DEFAULT_UNITS
             )
             val currency = settingsRepository.getCurrency()
+            val chargeConnector = settingsRepository.getChargeConnector()
             val tripCostTariff = settingsRepository.getTripCostTariffKey()
             val consumptionGood = settingsRepository.getString(
                 SettingsRepository.KEY_CONSUMPTION_GOOD,
@@ -591,6 +594,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     units = units,
                     currency = currency.code,
                     currencySymbol = currency.symbol,
+                    chargeConnector = chargeConnector,
                     tripCostTariff = tripCostTariff,
                     consumptionGood = consumptionGood,
                     consumptionBad = consumptionBad,
@@ -793,6 +797,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(currency = currency.code, currencySymbol = currency.symbol) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_CURRENCY, code)
+        }
+    }
+
+    /** Save the car's charging connector, the voice agent's station filter. */
+    fun saveChargeConnector(connector: ChargeConnector) {
+        _uiState.update { it.copy(chargeConnector = connector) }
+        viewModelScope.launch {
+            settingsRepository.setChargeConnector(connector)
         }
     }
 

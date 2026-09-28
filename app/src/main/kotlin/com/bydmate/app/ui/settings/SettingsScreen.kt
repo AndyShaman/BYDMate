@@ -13,6 +13,7 @@ import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.data.autoservice.AdbVerdict
 import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.BackupPart
+import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
@@ -451,6 +452,14 @@ private fun BatterySection(
                 options = SettingsRepository.CURRENCIES.map { it.code },
                 selectedIndex = SettingsRepository.CURRENCIES.indexOfFirst { it.code == state.currency }.coerceAtLeast(0),
                 onSelect = { idx -> viewModel.saveCurrency(SettingsRepository.CURRENCIES[idx].code) },
+            )
+            SettingDivider()
+            SettingChipRow(
+                title = stringResource(R.string.settings_charge_connector_label),
+                description = stringResource(R.string.settings_charge_connector_desc),
+                options = ChargeConnector.entries.map { it.label },
+                selectedIndex = state.chargeConnector.ordinal,
+                onSelect = { idx -> viewModel.saveChargeConnector(ChargeConnector.entries[idx]) },
             )
             SettingDivider()
             SettingActionRow(
