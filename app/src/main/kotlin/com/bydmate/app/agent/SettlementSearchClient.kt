@@ -79,7 +79,7 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
         var lastError: IOException? = null
         for (ep in endpoints) {
             try {
-                val request = Request.Builder().url(ep).post(formBody).build()
+                val request = Request.Builder().url(ep).header("User-Agent", OVERPASS_USER_AGENT).post(formBody).build()
                 val body = await(overpassHttp.newCall(request))
                 val result = parse(ep, body)
                 Log.i(TAG, "overpass $ep: ${result.size} settlements")
