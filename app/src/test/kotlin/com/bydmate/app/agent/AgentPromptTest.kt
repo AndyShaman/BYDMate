@@ -95,4 +95,13 @@ class AgentPromptTest {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("remember_fact"))
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("forget_fact"))
     }
+
+    // Live charger status: the model must not claim a free connector the source does not know,
+    // must say "по прямой" and must route to the pick by its coordinates.
+    @Test fun prompt_explains_charger_answers() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("find_chargers"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("status_known=false"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("\"по прямой\""))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("navigate_to с её lat и lon"))
+    }
 }

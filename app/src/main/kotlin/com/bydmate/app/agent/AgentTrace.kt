@@ -72,11 +72,11 @@ internal class AgentTrace(
 
     /** One line per tool call: name, arguments and verdict, so a "said done, did nothing"
      *  report can be read straight out of the user's log. where_am_i's result carries settlement
-     *  names and distances close to the car, so only its length is traced, e.g.
-     *  "<123 chars, redacted>" - unless it is an error: those are fixed texts with no place in
-     *  them. Every other tool keeps its full result. */
+     *  names and distances close to the car, find_chargers' the stations around it with their
+     *  addresses, so only their length is traced, e.g. "<123 chars, redacted>" - unless it is an
+     *  error: those are fixed texts with no place in them. Every other tool keeps its full result. */
     fun tool(call: AgentToolCall, verdict: String, tookMs: Long, result: String) {
-        val redacted = call.name == "where_am_i" && verdict != "error"
+        val redacted = call.name in PLACE_RESULT_TOOLS && verdict != "error"
         val shownResult = if (redacted) "<${result.length} chars, redacted>" else clip(result)
         sink("tool ${call.name} args=${clip(call.arguments)} -> $verdict ${tookMs}ms result=$shownResult")
         Trace.event(TraceArea.AGENT, "tool", "name" to traceName(call), "verdict" to verdict, "ms" to tookMs,
@@ -97,6 +97,9 @@ internal class AgentTrace(
     companion object {
         /** Trace lines quote model/tool payloads, which can be arbitrarily long. */
         const val TRACE_CHARS = 200
+
+        /** Tools whose result places the car: traced as a length only. */
+        private val PLACE_RESULT_TOOLS = setOf("where_am_i", "find_chargers")
 
         /** Single-line, length-capped rendering of a payload for a trace/journal line. */
         fun clip(text: String?, max: Int = TRACE_CHARS): String {

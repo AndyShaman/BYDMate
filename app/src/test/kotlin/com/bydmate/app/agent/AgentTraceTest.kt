@@ -127,6 +127,25 @@ class AgentTraceTest {
             toolLine.contains("<${settlementResult.length} chars, redacted>"))
     }
 
+    // find_chargers lists the stations around the car with their addresses: the same leak as
+    // where_am_i, so only its length is traced. The arguments carry no place and stay.
+    @Test fun find_chargers_result_is_redacted_to_a_length_in_the_trace() = runTest {
+        val chargersResult = """{"chargers":[{"name":"ТЦ Dana Mall","address":"Минск, ул. Мстиславца, 11","distance_km":0.5}]}"""
+        coEvery { tools.execute(any(), any()) } returns chargersResult
+        val backend = FakeBackend(ArrayDeque(listOf(
+            Result.success(AgentReply(null, listOf(AgentToolCall("c1", "find_chargers", """{"where":"ahead"}""")))),
+            Result.success(AgentReply("Рядом ТЦ Dana Mall", emptyList())),
+        )))
+        val lines = mutableListOf<String>()
+        orchestrator(backend, lines).ask("найди зарядку")
+
+        val toolLine = lines.single { it.startsWith("tool find_chargers") }
+        assertTrue("result content leaked in tool line: $toolLine", !toolLine.contains("Мстиславца"))
+        assertTrue("no redacted length in tool line: $toolLine",
+            toolLine.contains("<${chargersResult.length} chars, redacted>"))
+        assertTrue("arguments missing in tool line: $toolLine", toolLine.contains("""args={"where":"ahead"}"""))
+    }
+
     // Field log 28.09: "где мы" failed and the trace said only "<N chars, redacted>". where_am_i's
     // error answers are fixed texts with no place in them, so an error is traced in full.
     @Test fun where_am_i_error_is_traced_in_full() = runTest {

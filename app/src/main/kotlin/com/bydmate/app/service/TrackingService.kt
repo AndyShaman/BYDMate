@@ -45,6 +45,8 @@ import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.helper.HelperBinderHolder
+import com.bydmate.app.domain.tracker.RecentTrack
+import com.bydmate.app.domain.tracker.TrackPoint
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.TripTracker
 import com.bydmate.app.domain.calculator.BigNumberCalculator
@@ -414,6 +416,9 @@ class TrackingService : Service(), LocationListener {
 
         @Volatile internal var lastLocationFix: LocationFix? = null
             private set
+
+        /** The fixes of the last minutes, for the voice agent's direction of travel. */
+        internal val recentTrack = RecentTrack()
 
         // GPS fix older than this is not forwarded to ABRP: a stale coordinate would
         // pin the car marker to an old position, which is worse than sending none.
@@ -1438,6 +1443,8 @@ class TrackingService : Service(), LocationListener {
     override fun onLocationChanged(location: Location) {
         lastLocationFix = LocationFix(location, isLive = true)
         _lastLocation.value = location
+        recentTrack.add(TrackPoint(android.os.SystemClock.elapsedRealtime(), location.latitude, location.longitude,
+            if (location.hasSpeed()) location.speed * 3.6 else null))
         // AC-06: never log raw coordinates in release — logcat is readable on DiLink
         // and ends up in user-shared diagnostic dumps.
         if (BuildConfig.DEBUG) {

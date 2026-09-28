@@ -20,6 +20,7 @@ import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.VoiceFireResult
 import com.bydmate.app.data.automation.hhmmToMinute
+import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
@@ -44,6 +45,10 @@ import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.domain.calculator.RangeEstimate
 import com.bydmate.app.domain.cost.CostCalculator
+import com.bydmate.app.domain.tracker.TrackPoint
+import com.bydmate.app.domain.tracker.TravelCourse
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.cluster.SteeringWheelKeyService
 import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.media.NaviRouteHolder
@@ -587,14 +592,31 @@ class AgentTools @Inject constructor(
         ))
         put(tool(
             "find_chargers",
-            "Найти электрозарядные станции рядом (данные OpenStreetMap). Без city ищет вокруг " +
-                "текущей позиции машины. Верни пользователю ближайшие варианты с расстоянием; " +
-                "когда он выберет, вызови navigate_to с lat и lon выбранной станции.",
+            "Найти электрозарядные станции. В Беларуси с живой занятостью разъёмов, мощностью и " +
+                "ценой (карта ассоциации BETA), иначе только станции (OpenStreetMap). Без city ищет " +
+                "от текущей позиции машины. where: «по пути», «впереди», «по дороге» - ahead (станции " +
+                "по ходу движения, а после маршрута navigate_to - с небольшим крюком к его точке); " +
+                "«рядом», «вокруг», «ближайшая» - around; без where в движении ищет ahead, на месте around. " +
+                "Поля станции: distance_km по прямой; direction_from_car - сторона света; position " +
+                "ahead/behind/aside - впереди, позади, в стороне по ходу; detour_km - лишний крюк; status " +
+                "free/busy/unavailable и connectors_free из connectors_total - разъёмы типа машины, " +
+                "connectors_unknown - по стольким из них нет данных о занятости; status_scope=station - " +
+                "занятость всей станции, не разъёма машины; " +
+                "max_power_kw; price_per_kwh и currency; status_age_min - сколько минут назад обновлена " +
+                "занятость, status_stale=true - устарела; beyond_range=true - дальше запаса хода. " +
+                "connector_known=false - разъёмы, мощность и цена неизвестны; status_known=false - занятость " +
+                "неизвестна. Когда водитель выберет станцию, вызови navigate_to с lat и lon выбранной станции.",
             JSONObject()
                 .put("city", JSONObject().put("type", "string")
                     .put("description", "Город/точка поиска, если не вокруг машины"))
                 .put("radius_km", JSONObject().put("type", "integer")
-                    .put("description", "Радиус поиска в км, по умолчанию 30, максимум 100")),
+                    .put("description", "Радиус поиска в км, по умолчанию 30 (ahead: 30-100 по скорости), максимум 100"))
+                .put("connector", JSONObject().put("type", "string")
+                    .put("enum", JSONArray(ChargeConnector.entries.map { it.label }))
+                    .put("description", "Тип разъёма, только если водитель назвал другой; по умолчанию из настроек"))
+                .put("where", JSONObject().put("type", "string")
+                    .put("enum", JSONArray(ChargerWhere.entries.map { it.code }))
+                    .put("description", "ahead - по ходу движения, around - вокруг машины")),
             emptyList(),
         ))
         put(tool(
@@ -1598,6 +1620,7 @@ class AgentTools @Inject constructor(
         val result = dispatchNavigate("Навигация", JSONObject().put("query", destination).putApp(opts.app))
         if (!result.success) return JSONObject()
             .put("error", result.reason ?: "не получилось открыть Навигатор").toString()
+        routeDestination = null
         return JSONObject().put("ok", true).put("mode", "search")
             .put("note", "точку не удалось найти автоматически, открыт поиск на карте").toString()
     }
@@ -1657,6 +1680,8 @@ class AgentTools @Inject constructor(
         if (!result.success) return JSONObject().put("error",
             result.reason ?: ("адрес не найден: добавь Место \"${target.placeName}\" в BYDMate " +
                 "или сохрани точку \"${target.placeName}\" в Навигаторе")).toString()
+        // A new route to a point we do not know: the previous destination is no longer the route.
+        routeDestination = null
         return JSONObject().put("ok", true).put("mode", "route").put("target", target.placeName)
             .put("note", "если адрес \"${target.placeName}\" сохранён в Навигаторе, " +
                 "маршрут построится по нему; запас хода не оценивался, координаты неизвестны").toString()
@@ -1669,6 +1694,7 @@ class AgentTools @Inject constructor(
             JSONObject().put("lat", lat).put("lon", lon).put("go", opts.go).putApp(opts.app))
         if (!result.success) return JSONObject()
             .put("error", result.reason ?: "не получилось открыть Навигатор").toString()
+        rememberRoute(lat, lon)
         val json = JSONObject().put("ok", true).put("mode", "route").put(labelKey, label)
         rangeAssessment(lat, lon)?.let { ra ->
             ra.keys().forEach { k -> json.put(k, ra.get(k)) }
@@ -1702,33 +1728,180 @@ class AgentTools @Inject constructor(
         return json
     }
 
+    // --- find_chargers ---
+
+    /** Where the agent's own navigate_to last built a route, for find_chargers ahead. In memory
+     *  only: [session] ties it to the trip it was built in, [startKm] = straight km to it then. */
+    private data class RouteDestination(val lat: Double, val lon: Double, val session: Long?, val startKm: Double?)
+
+    @Volatile private var routeDestination: RouteDestination? = null
+
+    /** Test seam - the GPS fixes of the last minutes, for the direction of travel. */
+    internal var recentTrackProvider: () -> List<TrackPoint> =
+        { TrackingService.recentTrack.snapshot(SystemClock.elapsedRealtime()) }
+
+    /** Test seam - the ignition-on stamp of the current trip, null while the car is idle. */
+    internal var sessionProvider: () -> Long? = { TrackingService.sessionStartedAt.value }
+
+    private fun rememberRoute(lat: Double, lon: Double) {
+        val startKm = locationProvider()?.let { PlaceGeometry.distanceMeters(it.first, it.second, lat, lon) / 1000.0 }
+        routeDestination = RouteDestination(lat, lon, sessionProvider(), startKm)
+    }
+
+    /** What the car is doing, for find_chargers: course over the last kilometre, speed, the
+     *  destination of the route built in this trip while still heading to it, range. */
+    private data class TripContext(
+        val course: Double? = null,
+        val speedKmh: Int? = null,
+        val destination: LatLon? = null,
+        val rangeKm: Double? = null,
+    )
+
+    private suspend fun tripContext(car: LatLon): TripContext {
+        val track = runCatchingCancellable { recentTrackProvider() }.getOrDefault(emptyList())
+        val course = TravelCourse.of(track)
+        val d = gate.vehicleSnapshot()
+        val rangeKm = d?.let { runCatchingCancellable { rangeCalculator.estimate(it.soc, it.totalElecConsumption, it.avgBatTemp) }.getOrNull() }
+        val session = sessionProvider()
+        val destination = routeDestination
+            ?.takeIf { session != null && it.session == session }
+            ?.let { LatLon(it.lat, it.lon) to it.startKm }
+            ?.takeIf { (point, startKm) -> ChargerSelection.stillApproaching(car, point, startKm, course) }
+            ?.first
+        return TripContext(course, d?.speed ?: track.lastOrNull()?.speedKmh?.roundToInt(), destination, rangeKm)
+    }
+
     private suspend fun findChargers(args: JSONObject): String {
         val city = args.optString("city").trim()
-        val (lat, lon) = if (city.isNotEmpty()) {
+        val origin = if (city.isNotEmpty()) {
             runCatchingCancellable { weatherClient.geocode(city) }.getOrNull()?.getOrNull()
-                ?.let { it.lat to it.lon }
+                ?.let { LatLon(it.lat, it.lon) }
                 ?: return """{"error":"не нашёл такую точку, уточни название"}"""
-        } else locationProvider() ?: return """{"error":"нет GPS и не указан город"}"""
-        val radiusKm = args.optInt("radius_km", 30).coerceIn(1, 100)
-        val chargers = runCatchingCancellable {
-            chargerSearchClient.search(lat, lon, radiusKm * 1000)
+        } else locationProvider()?.let { LatLon(it.first, it.second) } ?: return """{"error":"нет GPS и не указан город"}"""
+        val connector = ChargeConnector.parse(args.optString("connector"))
+            ?: runCatchingCancellable { settingsRepository.getChargeConnector() }.getOrDefault(ChargeConnector.GBT)
+        // The direction of travel belongs to the car, not to a city asked by name.
+        val trip = if (city.isEmpty()) tripContext(origin) else TripContext()
+        val (where, radiusKm) = chargerScope(args, city.isNotEmpty(), trip)
+        val found = runCatchingCancellable {
+            chargerSearchClient.find(origin.lat, origin.lon, radiusKm * 1000, connector)
         }.getOrNull()?.getOrNull()
             ?: return """{"error":"сервис поиска зарядок недоступен, попробуй позже"}"""
-        if (chargers.isEmpty()) return JSONObject()
-            .put("chargers", JSONArray())
-            .put("note", "в радиусе $radiusKm км зарядок в OpenStreetMap не найдено").toString()
-        val nearest = chargers
-            .sortedBy { PlaceGeometry.distanceMeters(lat, lon, it.lat, it.lon) }
-            .take(5)
-        return JSONObject().put("chargers", JSONArray().apply {
-            nearest.forEach { c ->
-                put(JSONObject()
-                    .put("name", c.name)
-                    .put("distance_km", (PlaceGeometry.distanceMeters(lat, lon, c.lat, c.lon) / 1000.0 * 10).roundToInt() / 10.0)
-                    .put("lat", c.lat)
-                    .put("lon", c.lon))
-            }
-        }).put("note", "данные OpenStreetMap, наличие и мощность не гарантированы").toString()
+        val choice = ChargerSelection.choose(origin, found.stations, connector, where, trip.course, trip.destination)
+        // Counts and modes only: no place, name or coordinate.
+        Log.i(TAG, "find_chargers: source=${found.source.code} found=${found.stations.size} picks=${choice.picks.size} " +
+            "where=${where.code} ahead=${choice.ahead} course=${trip.course != null} dest=${trip.destination != null} " +
+            "radius=${radiusKm}km connector=${connector.key} missing=${choice.connectorMissing} range=${trip.rangeKm != null}")
+        Trace.event(TraceArea.AGENT, "chargers", "source" to found.source.code, "found" to found.stations.size,
+            "picks" to choice.picks.size, "where" to where.code, "ahead" to choice.ahead.name.lowercase(),
+            "radius_km" to radiusKm, "connector" to connector.key, by = Trace.cause())
+        return chargersJson(found, choice, connector, radiusKm, trip)
+    }
+
+    /** Direction and radius of the search: a city is searched around it; `ahead` looks 30-100 km
+     *  out by speed when the course or the route's end is known; otherwise 30 km around. */
+    private fun chargerScope(args: JSONObject, city: Boolean, trip: TripContext): Pair<ChargerWhere, Int> {
+        val asked = ChargerWhere.entries.firstOrNull { it.code.equals(args.optString("where").trim(), ignoreCase = true) }
+        val where = if (city) ChargerWhere.AROUND else asked ?: ChargerSelection.defaultWhere(trip.course, trip.speedKmh)
+        val canLookAhead = where == ChargerWhere.AHEAD && (trip.course != null || trip.destination != null)
+        val radiusKm = when {
+            args.has("radius_km") -> args.optInt("radius_km", CHARGER_RADIUS_KM).coerceIn(1, MAX_CHARGER_RADIUS_KM)
+            canLookAhead -> ChargerSelection.aheadRadiusKm(trip.speedKmh)
+            else -> CHARGER_RADIUS_KM
+        }
+        return where to radiusKm
+    }
+
+    private fun chargersJson(
+        found: ChargerSearchClient.Found,
+        choice: ChargerChoice,
+        connector: ChargeConnector,
+        radiusKm: Int,
+        trip: TripContext,
+    ): String {
+        val connectorKnown = found.source == ChargerSource.BETA
+        // Gateway: a whole-station status for some networks only, so known when any pick has one,
+        // and it is the station's as a whole, not the car's connector's.
+        val stationScope = !connectorKnown && choice.picks.any { it.station.status != null }
+        val where = if (choice.ahead == AheadOutcome.NO_COURSE || choice.ahead == AheadOutcome.NOT_ASKED) {
+            ChargerWhere.AROUND
+        } else ChargerWhere.AHEAD
+        return JSONObject()
+            .put("status_source", found.source.code)
+            .put("connector", connector.label)
+            .put("connector_known", connectorKnown)
+            .put("status_known", connectorKnown || stationScope)
+            .putOpt("status_scope", if (connectorKnown) "connector" else "station".takeIf { stationScope })
+            .put("where", where.code)
+            .putOpt("course", trip.course?.let(::compassOf))
+            .put("radius_km", radiusKm)
+            .put("chargers", JSONArray().apply { choice.picks.forEach { put(chargerJson(it, trip.rangeKm)) } })
+            .put("note", chargersNote(choice, connector, radiusKm, stationScope))
+            .toString()
+    }
+
+    private fun chargerJson(pick: ChargerPick, rangeKm: Double?): JSONObject {
+        val s = pick.station
+        val json = JSONObject()
+            .put("name", s.name)
+            .putOpt("address", s.address)
+            .putOpt("operator", s.operator)
+            .put("distance_km", round1(pick.distanceKm))
+            .put("direction_from_car", compassOf(pick.bearingDeg))
+            .putOpt("position", pick.position?.code)
+            .putOpt("detour_km", pick.detourKm?.let { round1(it.coerceAtLeast(0.0)) })
+            .put("lat", s.lat)
+            .put("lon", s.lon)
+            // With the car's connectors known, a null status means unknown: no station-wide fallback.
+            .putOpt("status", (if (pick.summary != null) pick.summary.status else s.status)?.code)
+        pick.summary?.let { c ->
+            json.put("connectors_total", c.total)
+                .put("connectors_free", c.free)
+                .putOpt("connectors_unknown", c.unknown.takeIf { it > 0 })
+                .putOpt("max_power_kw", c.maxPowerKw)
+                .putOpt("price_per_kwh", c.minPricePerKwh)
+                .putOpt("price_max_per_kwh", c.maxPricePerKwh?.takeIf { it != c.minPricePerKwh })
+                .putOpt("currency", c.currency)
+        }
+        // The car's type is missing here (listed only because no station has it): say what it has.
+        if (pick.summary == null && s.connectors != null) {
+            json.put("connector_types", JSONArray(s.connectors.map { c ->
+                ChargeConnector.entries.firstOrNull { it.matches(c.standard) }?.label ?: c.standard
+            }.distinct()))
+        }
+        s.statusAtMs?.let { at ->
+            val ageMin = ((nowMs() - at) / 60_000L).coerceAtLeast(0L)
+            json.put("status_age_min", ageMin)
+            if (ageMin > STALE_STATUS_MIN) json.put("status_stale", true)
+        }
+        // Road distance is longer than the straight line: the same fudge as range_to_destination.
+        if (rangeKm != null && pick.distanceKm * ROAD_FACTOR > rangeKm) json.put("beyond_range", true)
+        return json
+    }
+
+    private fun chargersNote(choice: ChargerChoice, connector: ChargeConnector, radiusKm: Int, stationScope: Boolean): String {
+        if (choice.picks.isEmpty()) return "в радиусе $radiusKm км зарядок не найдено"
+        val parts = mutableListOf<String>()
+        when (choice.ahead) {
+            AheadOutcome.NOTHING_AHEAD ->
+                parts += "впереди по ходу движения станций не найдено, показаны ближайшие вокруг: скажи об этом"
+            AheadOutcome.NO_COURSE ->
+                parts += "показаны станции вокруг: направление движения неизвестно, машина стоит или проехала мало"
+            AheadOutcome.DESTINATION ->
+                parts += "станции по пути к точке маршрута, detour_km - лишний крюк по прямой"
+            AheadOutcome.CORRIDOR, AheadOutcome.NOT_ASKED -> Unit
+        }
+        if (choice.connectorMissing) {
+            parts += "станций с разъёмом ${connector.label} в радиусе нет, показаны станции с другими " +
+                "разъёмами (connector_types): скажи об этом"
+        }
+        if (stationScope) parts += "занятость по станции целиком, про разъём машины неизвестно"
+        if (choice.picks.any { (it.summary?.unknown ?: 0) > 0 }) {
+            parts += "по части разъёмов (connectors_unknown) нет данных о занятости: так и скажи, не называй их занятыми"
+        }
+        parts += "distance_km по прямой, по дороге дальше: говори «по прямой»"
+        parts += "когда водитель выберет станцию, вызови navigate_to с её lat и lon"
+        return parts.joinToString("; ")
     }
 
     // --- where_am_i ---
@@ -1850,8 +2023,11 @@ class AgentTools @Inject constructor(
         val y = Math.sin(dLon) * Math.cos(phi2)
         val x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon)
         val bearing = (Math.toDegrees(Math.atan2(y, x)) + 360.0) % 360.0
-        return COMPASS_RU[((bearing + 22.5) / 45.0).toInt() % 8]
+        return compassOf(bearing)
     }
+
+    /** Eight-point compass name of a bearing in degrees from north, in Russian. */
+    private fun compassOf(bearing: Double): String = COMPASS_RU[((bearing + 22.5) / 45.0).toInt() % 8]
 
     // Same saved-place-then-geocode lookup as navigateTo, plus a straight-line distance
     // (with a road-factor fudge) against the current range estimate.
@@ -2758,6 +2934,11 @@ class AgentTools @Inject constructor(
         private const val MAX_SETTLEMENTS = 5
         // where_am_i: a fix older than this gets fix_note so the model hedges.
         private const val FRESH_FIX_MS = 120_000L
+        // find_chargers: the default radius around the car and the cap on the asked one.
+        private const val CHARGER_RADIUS_KM = 30
+        private const val MAX_CHARGER_RADIUS_KM = 100
+        // find_chargers: occupancy imported longer ago than this is not "free now".
+        private const val STALE_STATUS_MIN = 60L
         private val SETTLEMENT_TYPES = mapOf(
             "city" to "город", "town" to "город", "village" to "деревня или посёлок",
             "hamlet" to "деревня", "suburb" to "район города", "isolated_dwelling" to "хутор",

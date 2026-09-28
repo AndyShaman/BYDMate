@@ -280,6 +280,8 @@
     <string name="settings_app_units_header">Jednostki i waluta</string>
     <string name="settings_app_distance_label">Odległość</string>
     <string name="settings_app_currency_label">Waluta</string>
+    <string name="settings_charge_connector_label">Złącze ładowania</string>
+    <string name="settings_charge_connector_desc">Asystent szuka ładowarek z tym złączem</string>
     <string name="settings_map_tile_source_label">Źródło mapy</string>
     <string name="settings_app_data_header">Dane</string>
     <string name="settings_log_recording_start_button">Zapis logów</string>

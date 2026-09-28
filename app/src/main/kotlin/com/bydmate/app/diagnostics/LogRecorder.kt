@@ -408,8 +408,9 @@ class LogRecorder internal constructor(
             // Power-off report in the helper daemon: arm, power off/on, send attempts, outcome.
             "OffReport:*",
             // Agent tools (where_am_i steps, failed weather requests) and the two Overpass
-            // clients behind where_am_i and find_chargers (per-server failures and answers).
-            "AgentTools:*", "SettlementSearch:*", "ChargerSearchClient:*",
+            // clients behind where_am_i and find_chargers (per-server failures and answers),
+            // plus the two Belarus charger sources ahead of Overpass.
+            "AgentTools:*", "SettlementSearch:*", "ChargerSearchClient:*", "BetaMapClient:*", "MalankaGateway:*",
             // The event journal: one line per user action, decision and failure, by=#id links.
             "Trace:*"
         )

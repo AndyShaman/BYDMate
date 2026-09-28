@@ -9,6 +9,7 @@ import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.data.autoservice.AdbConnectFailure
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
+import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.EnergyDataReader
@@ -412,6 +413,20 @@ class SettingsViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(SettingsRepository.DEFAULT_HOME_TARIFF, vm.uiState.value.homeTariff)
+    }
+
+    // «Разъём для зарядки»: GB/T until the driver picks another, the pick is saved.
+    @Test
+    fun `charge connector starts as GB-T and a pick is saved`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ChargeConnector.GBT, vm.uiState.value.chargeConnector)
+
+        vm.saveChargeConnector(ChargeConnector.CHADEMO)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ChargeConnector.CHADEMO, vm.uiState.value.chargeConnector)
+        assertEquals("chademo", settingsDao.map[SettingsRepository.KEY_CHARGE_CONNECTOR])
     }
 
     // Issue #23: pressing "Close" while an update is downloading must cancel the
