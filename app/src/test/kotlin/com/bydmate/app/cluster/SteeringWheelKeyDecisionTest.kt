@@ -168,4 +168,15 @@ class SteeringWheelKeyDecisionTest {
             steeringKeyDecision(305, isDown = false, assigned = false),
         )
     }
+
+    // Atto 3 field timing: 304 DOWN, 304 UP, then 327 DOWN 3-59 ms after the UP. A held press
+    // outlives a window counted from the DOWN, so the primary's UP restarts it.
+    @Test fun learn_window_restarts_from_the_primary_up_edge() {
+        assertEquals(1_500L, learnWindowAnchor(keyCode = 304, primaryKeyCode = 304, anchorMs = 1_000L, eventMs = 1_500L))
+        assertTrue(isLearnCompanion(327, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_500L, nowMs = 1_559L))
+    }
+
+    @Test fun learn_window_is_not_moved_by_another_key() {
+        assertEquals(1_000L, learnWindowAnchor(keyCode = 327, primaryKeyCode = 304, anchorMs = 1_000L, eventMs = 1_500L))
+    }
 }
