@@ -285,6 +285,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             var lastEventMs = System.currentTimeMillis()
             var wasAudible = false   // capture thread only
             var micGated = false     // capture thread only
+            val echoTail = EchoTailMeter() // capture thread only
             // Silence for the auto-stop: the agent's turn does not count (routing here, playback
             // never reaches the recognizer at all), and the countdown starts over once the turn
             // is over, so neither a long thinking phase nor a long answer eats the driver's
@@ -298,7 +299,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 // The mark runs on the capture thread when the frame is read, not when it is
                 // processed: frames pile up in the capture channel while GigaAM decodes, and a
                 // frame the agent's voice was captured in must stay gated however late it comes.
-                val pcm = audioCapture.captureSession(maxMs = Long.MAX_VALUE) {
+                val pcm = audioCapture.captureSession(maxMs = Long.MAX_VALUE) { samples ->
                     // Read the real, physical playback signal each frame (see
                     // lastSpeakingSeenMs above for why not a collect()-based watcher):
                     // audible(), not the logical speaking flag, which is deliberately held
@@ -317,6 +318,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                         micGated = gated
                         Log.i(TAG, if (gated) "mic gated: playback" else "mic open: playback ended +${now - lastSpeakingSeenMs}ms")
                     }
+                    echoTail.onFrame(now, audible, samples)?.let { Log.i(TAG, it) }
                     gated
                 }
                     .filter { frame ->
@@ -972,8 +974,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         private const val SPEAK_START_GRACE_MS = 5_000L
 
         // Playback window grace period after our own audio was last audible (or enqueued): the
-        // tail of the agent's voice can still reach the mic (see lastSpeakingSeenMs).
-        private const val TTS_ECHO_GRACE_MS = 500L
+        // tail of the agent's voice can still reach the mic (see lastSpeakingSeenMs). Not measured
+        // yet (500 ms before 28.09); the "echo tail:" line logs the real tail after every reply.
+        private const val TTS_ECHO_GRACE_MS = 200L
 
         /** Pure so it is unit-testable without a real clock/session: whether the mic currently
          *  hears our own playback -- either TTS is audible right now, or we're still inside the

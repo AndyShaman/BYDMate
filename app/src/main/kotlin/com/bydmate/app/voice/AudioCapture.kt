@@ -60,9 +60,10 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
     // an energy/silence heuristic here. The old RMS gate closed the window ~800 ms in if the user
     // hadn't started talking loudly yet, cutting them off mid-phrase. [maxMs] is only a safety
     // backstop so the mic can't stay open forever (e.g. continuous noise with no VAD endpoint).
-    // [mark] runs on the capture thread right after each read, so it describes the moment the
-    // audio was captured -- frames can wait in the channel while the consumer blocks (a decode).
-    fun <T> captureSession(maxMs: Long = 8000, mark: () -> T): Flow<MicFrame<T>> = callbackFlow {
+    // [mark] runs on the capture thread right after each read, with the samples just read, so it
+    // describes the moment the audio was captured -- frames can wait in the channel while the
+    // consumer blocks (a decode).
+    fun <T> captureSession(maxMs: Long = 8000, mark: (ShortArray) -> T): Flow<MicFrame<T>> = callbackFlow {
         val minBuf = AudioRecord.getMinBufferSize(
             SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
         ).coerceAtLeast(SAMPLE_RATE) // ~0.5s
@@ -103,7 +104,7 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
             try {
                 while (!isClosedForSend) {
                     val n = record.read(buf, 0, buf.size)
-                    if (n > 0) trySend(MicFrame(buf.copyOf(n), mark()))
+                    if (n > 0) buf.copyOf(n).let { pcm -> trySend(MicFrame(pcm, mark(pcm))) }
                     if ((System.nanoTime() - start) / 1_000_000 >= maxMs) break
                 }
             } finally {
