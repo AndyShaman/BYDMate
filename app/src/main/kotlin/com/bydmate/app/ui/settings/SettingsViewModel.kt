@@ -87,6 +87,8 @@ import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import com.bydmate.app.service.BootReceiver
 import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
+import com.bydmate.app.cluster.voiceCompanionsFromCsv
+import com.bydmate.app.cluster.voiceCompanionsToCsv
 import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.VoiceController
@@ -1314,14 +1316,18 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     /**
      * Persists the keycode learned from [LearnButtonDialog] into Room and into
      * SharedPreferences("voice") so SteeringWheelKeyService reads the new value immediately.
+     * [companions] (other codes of the same press) always replace the stored ones.
      */
-    fun saveVoiceKeycode(keycode: Int) {
+    fun saveVoiceKeycode(keycode: Int, companions: Set<Int>) {
         _uiState.update { it.copy(voiceKeycode = keycode) }
+        val companionsCsv = voiceCompanionsToCsv(companions)
         viewModelScope.launch {
             settingsRepository.setVoiceKeycode(keycode)
+            settingsRepository.setString(SettingsRepository.KEY_VOICE_COMPANIONS, companionsCsv)
             // Mirror for SteeringWheelKeyService
             appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
-                .edit().putInt(SettingsRepository.KEY_VOICE_KEYCODE, keycode).apply()
+                .edit().putInt(SettingsRepository.KEY_VOICE_KEYCODE, keycode)
+                .putString(SettingsRepository.KEY_VOICE_COMPANIONS, companionsCsv).apply()
         }
     }
 
@@ -2202,9 +2208,12 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 ).getString(com.bydmate.app.data.autoservice.WifiDebuggingDialogAutoAllow.KEY_LAST_OUTCOME, null)
                 appendLine("a11y_auto_allow_last: ${autoAllowLast ?: "(none)"}")
                 val voicePrefs = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                val voiceCompanions = voiceCompanionsFromCsv(
+                    voicePrefs.getString(SettingsRepository.KEY_VOICE_COMPANIONS, null))
                 appendLine(
                     "voice_ptt: enabled=${voicePrefs.getBoolean("voice_enabled", false)} " +
-                        "keycode=${voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE)}"
+                        "keycode=${voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE)} " +
+                        "companions=${voiceCompanionsToCsv(voiceCompanions).ifEmpty { "-" }}"
                 )
                 val clusterPrefs = appContext.getSharedPreferences(
                     com.bydmate.app.cluster.ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)

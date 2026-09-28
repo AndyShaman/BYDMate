@@ -84,6 +84,34 @@ class SteeringWheelKeyDecisionTest {
         assertEquals(LearnAction.CONSUME, learnDecision(309, isDown = false))
     }
 
+    @Test fun `learn companion window is 300 ms`() {
+        assertEquals(300L, LEARN_COMPANION_WINDOW_MS)
+    }
+
+    @Test fun `a different assignable key inside the window is a companion of the learned press`() {
+        // Atto 3: the mic button sends 304, then 327 for the same press.
+        assertTrue(isLearnCompanion(327, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 1_000))
+        assertTrue(isLearnCompanion(327, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 1_300))
+    }
+
+    @Test fun `a key after the window is not a companion`() {
+        assertFalse(isLearnCompanion(327, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 1_301))
+        assertFalse(isLearnCompanion(327, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 999))
+    }
+
+    @Test fun `the learned key again is not a companion`() {
+        assertFalse(isLearnCompanion(304, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 1_100))
+    }
+
+    @Test fun `a non-assignable key is not a companion`() {
+        assertFalse(isLearnCompanion(309, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 1_100))
+        assertFalse(isLearnCompanion(24, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 1_100))
+    }
+
+    @Test fun `an up edge is not a companion`() {
+        assertFalse(isLearnCompanion(327, isDown = false, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 1_100))
+    }
+
     @Test fun `knob press while disabled passes through to the native source switch`() {
         assertEquals(
             KnobDecision.PASS_THROUGH,
