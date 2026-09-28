@@ -75,11 +75,22 @@ class HudCheckDeferredRestoreSpecTest {
 
     private class Setup(val check: HudCheck, val car: FakeCar, val controller: HudController)
 
-    private fun TestScope.setup(speedAt: (Long) -> Int = { 0 }, fullscreen: (Long) -> Boolean): Setup {
+    /** A live HUD projection: its arming loop is running, so the check must hand a route over to
+     *  it instead of ending its own retry (same pattern as HudCheckRouteStartSpecTest's A4). */
+    private class LiveProduct {
+        val controller: HudController = mockk(relaxed = true)
+        init { every { controller.armingLive } returns true }
+    }
+
+    private fun TestScope.setup(
+        speedAt: (Long) -> Int = { 0 },
+        controller: HudController? = null,
+        fullscreen: (Long) -> Boolean,
+    ): Setup {
         val car = FakeCar({ testScheduler.currentTime }, fullscreen)
         val bootstrap = mockk<HelperBootstrap>()
         coEvery { bootstrap.ensureRunning() } returns true
-        val ctl = HudController(context, car.helper, bootstrap)   // HUD projection off
+        val ctl = controller ?: HudController(context, car.helper, bootstrap)   // HUD projection off
         val bridge = mockk<HudSomeIpBridge>(relaxed = true).also {
             coEvery { it.bind() } returns true
             every { it.startService(any()) } returns 0
@@ -133,7 +144,8 @@ class HudCheckDeferredRestoreSpecTest {
     @Test fun `R7 a route starting during the layout retry ends it at once and leaves the kept layout`() = runTest {
         val routeAt = stepsEndMs + 12_000
         // The cluster lets go after the route started: a retry still running would write under it.
-        val s = setup { t -> t in 58_000 until routeAt + 2_000 }
+        val product = LiveProduct()
+        val s = setup(controller = product.controller) { t -> t in 58_000 until routeAt + 2_000 }
         s.check.guidanceActive = { testScheduler.currentTime >= routeAt }
         s.check.run()
         val endedAt = testScheduler.currentTime
@@ -141,6 +153,24 @@ class HudCheckDeferredRestoreSpecTest {
         assertTrue(s.car.layoutWrites().none { it.value != HudArming.LAYOUT_NAVI })
         assertEquals(1, prefs().getInt(HudArming.KEY_AS_FOUND, -1))
         assertEquals(HudCheck.State.RouteStarted, s.check.state.value)
+        assertFalse(s.controller.armingPaused)
+    }
+
+    @Test fun `R9 a route starting during the layout retry does not end it when the product HUD is not live`() = runTest {
+        val routeAt = stepsEndMs + 12_000
+        val leavesAt = stepsEndMs + 17_000
+        // No product controller passed: HudController.armingLive stays false, as with the feature off.
+        val s = setup { t -> t in 58_000 until leavesAt }
+        s.check.guidanceActive = { testScheduler.currentTime >= routeAt }
+        s.check.run()
+        val back = s.car.layoutWrites().filter { it.value != HudArming.LAYOUT_NAVI }
+        assertEquals(1, back.size)
+        assertEquals(1, back.single().value)
+        assertTrue("layout written at ${back.single().atMs} while the cluster was fullscreen", back.single().atMs >= leavesAt)
+        assertTrue("layout written at ${back.single().atMs}, later than one retry", back.single().atMs <= leavesAt + 5_000 + 1_000)
+        assertEquals(1, s.car.state[HudArming.SCREEN])
+        assertFalse(prefs().contains(HudArming.KEY_AS_FOUND))
+        assertEquals(HudCheck.State.Done, s.check.state.value)
         assertFalse(s.controller.armingPaused)
     }
 
