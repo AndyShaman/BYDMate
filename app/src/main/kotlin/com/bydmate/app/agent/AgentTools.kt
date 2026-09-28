@@ -1097,7 +1097,7 @@ class AgentTools @Inject constructor(
         // saved Place on the GPS path (Open-Meteo has no reverse geocoding), null if neither.
         val location: String?
         if (city != null) {
-            val geo = weatherClient.geocode(city).getOrElse { return weatherErrorJson(it) }
+            val geo = weatherCall("geocode") { weatherClient.geocode(city) }.getOrElse { return weatherErrorJson(it) }
             lat = geo.lat
             lon = geo.lon
             location = geo.name.ifBlank { null }
@@ -1107,7 +1107,7 @@ class AgentTools @Inject constructor(
             lon = gps.second
             location = placeNameAt(lat, lon)
         }
-        val forecast = weatherClient.forecast(lat, lon).getOrElse { return weatherErrorJson(it) }
+        val forecast = weatherCall("forecast") { weatherClient.forecast(lat, lon) }.getOrElse { return weatherErrorJson(it) }
         if (location == null) return forecast
         // location is a String, so no put(String, float) hazard here.
         return JSONObject(forecast).put("location", location).toString()
@@ -1119,6 +1119,16 @@ class AgentTools @Inject constructor(
         runCatchingCancellable { placeRepository.getAllSnapshot() }.getOrNull()
             ?.firstOrNull { PlaceGeometry.isInside(lat, lon, it.lat, it.lon, it.radiusM) }
             ?.name
+
+    // One line per failed weather request: exception class, HTTP code and time only. The message
+    // and the URL are never logged, the forecast query carries the car's coordinates.
+    private suspend fun <T> weatherCall(step: String, call: suspend () -> Result<T>): Result<T> {
+        val startMs = nowMs()
+        return call().onFailure { e ->
+            Log.w(TAG, "get_weather: $step failed: ${e.javaClass.simpleName} " +
+                "http=${(e as? WeatherClient.HttpError)?.code ?: "-"} took=${nowMs() - startMs}ms")
+        }
+    }
 
     // Raw Throwable messages are English ("timeout", "No value for current") and must not leak
     // into the error JSON the LLM reads back to the driver; only WeatherClient.UserError carries

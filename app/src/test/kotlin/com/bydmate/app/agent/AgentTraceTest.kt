@@ -126,4 +126,20 @@ class AgentTraceTest {
         assertTrue("no redacted length in tool line: $toolLine",
             toolLine.contains("<${settlementResult.length} chars, redacted>"))
     }
+
+    // Field log 28.09: "где мы" failed and the trace said only "<N chars, redacted>". where_am_i's
+    // error answers are fixed texts with no place in them, so an error is traced in full.
+    @Test fun where_am_i_error_is_traced_in_full() = runTest {
+        coEvery { tools.execute(any(), any()) } returns """{"error":"сервис карт недоступен, не могу определить, где мы"}"""
+        val backend = FakeBackend(ArrayDeque(listOf(
+            Result.success(AgentReply(null, listOf(AgentToolCall("c1", "where_am_i", "{}")))),
+            Result.success(AgentReply("Не могу определить", emptyList())),
+        )))
+        val lines = mutableListOf<String>()
+        orchestrator(backend, lines).ask("где мы")
+
+        val toolLine = lines.single { it.startsWith("tool where_am_i") }
+        assertTrue("error text missing in tool line: $toolLine",
+            toolLine.contains("-> error") && toolLine.contains("сервис карт недоступен"))
+    }
 }
