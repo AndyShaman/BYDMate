@@ -49,9 +49,11 @@ internal class AgentTrace(private val clock: () -> Long, private val sink: (Stri
     /** One line per tool call: name, arguments and verdict, so a "said done, did nothing"
      *  report can be read straight out of the user's log. where_am_i's result carries settlement
      *  names and distances close to the car, so only its length is traced, e.g.
-     *  "<123 chars, redacted>" - every other tool keeps its full result. */
+     *  "<123 chars, redacted>" - unless it is an error: those are fixed texts with no place in
+     *  them. Every other tool keeps its full result. */
     fun tool(call: AgentToolCall, verdict: String, tookMs: Long, result: String) {
-        val shownResult = if (call.name == "where_am_i") "<${result.length} chars, redacted>" else clip(result)
+        val redacted = call.name == "where_am_i" && verdict != "error"
+        val shownResult = if (redacted) "<${result.length} chars, redacted>" else clip(result)
         sink("tool ${call.name} args=${clip(call.arguments)} -> $verdict ${tookMs}ms result=$shownResult")
     }
 

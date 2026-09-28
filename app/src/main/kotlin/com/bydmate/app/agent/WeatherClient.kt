@@ -22,6 +22,9 @@ class WeatherClient @Inject constructor(private val http: OkHttpClient) {
      *  must be collapsed to a generic Russian error by the caller. */
     class UserError(message: String) : IOException(message)
 
+    /** A non-2xx answer; [code] is safe to log, unlike the URL with the coordinates. */
+    class HttpError(val code: Int) : IOException("HTTP $code")
+
     /** A geocoded location: coordinates plus the resolved place name, voiced back by the tool. */
     data class GeoPoint(val lat: Double, val lon: Double, val name: String)
 
@@ -41,7 +44,7 @@ class WeatherClient @Inject constructor(private val http: OkHttpClient) {
                 .addQueryParameter("wind_speed_unit", "ms")
                 .build()
             http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
-                if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+                if (!resp.isSuccessful) throw HttpError(resp.code)
                 val body = resp.body?.string().takeUnless { it.isNullOrBlank() }
                     ?: throw IOException("empty body")
                 val json = JSONObject(body)
@@ -84,7 +87,7 @@ class WeatherClient @Inject constructor(private val http: OkHttpClient) {
                 .addQueryParameter("language", "ru")
                 .build()
             http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
-                if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+                if (!resp.isSuccessful) throw HttpError(resp.code)
                 val body = resp.body?.string().takeUnless { it.isNullOrBlank() }
                     ?: throw IOException("empty body")
                 val results = JSONObject(body).optJSONArray("results")

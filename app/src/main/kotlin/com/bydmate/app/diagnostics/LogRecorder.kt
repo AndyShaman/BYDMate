@@ -406,7 +406,10 @@ class LogRecorder internal constructor(
             // Telegram reports: build (items taken / skipped, length), send, outbox add/drain/drop.
             "TgReport:*",
             // Power-off report in the helper daemon: arm, power off/on, send attempts, outcome.
-            "OffReport:*"
+            "OffReport:*",
+            // Agent tools (where_am_i steps, failed weather requests) and the two Overpass
+            // clients behind where_am_i and find_chargers (per-server failures and answers).
+            "AgentTools:*", "SettlementSearch:*", "ChargerSearchClient:*"
         )
     }
 }
