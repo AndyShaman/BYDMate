@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.19.1] - 2026-09-28
+
 ### Новое
 - Отчёт в Telegram стал нагляднее: состояние машины, последняя поездка и открытые двери отдельными блоками, ссылка на карту в конце без большой карточки.
 - В отчёте в Telegram появился пробег машины. Он включён сразу, в том числе в уже настроенном отчёте при выключении; убрать его можно в списке «Что попадает в отчёт». В уже созданных автоматизациях пробег не добавляется сам.
@@ -1289,7 +1291,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.19.0...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.19.1...HEAD
+[3.19.1]: https://github.com/AndyShaman/BYDMate/compare/v3.19.0...v3.19.1
 [3.19.0]: https://github.com/AndyShaman/BYDMate/compare/v3.18.2...v3.19.0
 [3.18.2]: https://github.com/AndyShaman/BYDMate/compare/v3.18.1...v3.18.2
 [3.18.1]: https://github.com/AndyShaman/BYDMate/compare/v3.18.0...v3.18.1
