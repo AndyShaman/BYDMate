@@ -243,7 +243,10 @@
     <string name="orb_agent">Agente:</string>
     <string name="settings_voice_native_assistant_header">Assistente de voz nativo da BYD</string>
     <string name="settings_voice_disable_native_label">Desativar o assistente de voz integrado</string>
-    <string name="settings_voice_disable_native_description">Oculta o assistente de voz nativo da BYD para que ele não interrompa. O app Shortcuts (comandos rápidos) desaparece junto, ele faz parte do assistente. Reversível: desligue o botão e reinicie a central multimídia, os dois voltam.</string>
+    <string name="settings_voice_disable_native_description">Oculta o assistente de voz nativo da BYD para que ele não interrompa. O app Shortcuts (comandos rápidos) desaparece junto, ele faz parte do assistente. Reversível: desligue o botão e reinicie a central multimídia, os dois voltam. Antes de desinstalar o BYDMate, desligue este botão, senão o assistente integrado continuará desativado.</string>
+    <string name="settings_voice_disable_native_confirm_title">Desativar o assistente integrado?</string>
+    <string name="settings_voice_disable_native_confirm_body">O assistente integrado da BYD será desativado no sistema do carro. Antes de desinstalar o BYDMate, desligue este botão, senão o assistente integrado continuará desativado. Se o app já foi desinstalado: instale o BYDMate de novo, desligue o botão e reinicie a central multimídia.</string>
+    <string name="settings_voice_disable_native_confirm_button">Desativar</string>
     <string name="settings_voice_native_assistant_reboot_note">Entra em vigor após reiniciar a central multimídia.</string>
     <string name="settings_widget_opacity_label">Opacidade</string>
     <string name="settings_widget_scale_label">Tamanho</string>

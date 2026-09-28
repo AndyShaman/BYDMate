@@ -259,7 +259,10 @@
     <string name="orb_agent">Агент:</string>
     <string name="settings_voice_native_assistant_header">Штатный голосовой помощник BYD</string>
     <string name="settings_voice_disable_native_label">Отключить штатный голосовой помощник</string>
-    <string name="settings_voice_disable_native_description">Скрывает встроенный голосовой ассистент BYD, чтобы он не перебивал. Вместе с ним пропадает и приложение Shortcuts (быстрые команды), это его часть. Обратимо: выключите тумблер и перезагрузите мультимедиа, оба вернутся.</string>
+    <string name="settings_voice_disable_native_description">Скрывает встроенный голосовой ассистент BYD, чтобы он не перебивал. Вместе с ним пропадает и приложение Shortcuts (быстрые команды), это его часть. Обратимо: выключите тумблер и перезагрузите мультимедиа, оба вернутся. Перед удалением BYDMate выключите этот тумблер, иначе штатный помощник останется отключённым.</string>
+    <string name="settings_voice_disable_native_confirm_title">Отключить штатный помощник?</string>
+    <string name="settings_voice_disable_native_confirm_body">Штатный помощник BYD будет отключён в системе машины. Перед удалением BYDMate выключите этот тумблер, иначе штатный помощник останется отключённым. Если приложение уже удалено: установите BYDMate снова, выключите тумблер и перезагрузите мультимедиа.</string>
+    <string name="settings_voice_disable_native_confirm_button">Отключить</string>
     <string name="settings_voice_native_assistant_reboot_note">Изменение вступит в силу после перезагрузки головного устройства.</string>
     <string name="settings_widget_opacity_label">Прозрачность</string>
     <string name="settings_widget_scale_label">Размер</string>

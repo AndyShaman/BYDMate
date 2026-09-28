@@ -299,7 +299,8 @@ interface HelperClient {
     suspend fun getGlobalSetting(key: String): Int?
 
     /** Disable ([hidden]=true) or re-enable the native BYD assistant family via `pm disable-user/enable`
-     *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts). Reversible. */
+     *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts) and
+     *  com.byd.vrassistant. Reversible. */
     suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean
 
     /**

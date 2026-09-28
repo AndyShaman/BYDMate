@@ -18,6 +18,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.consumeAsFlow
@@ -366,6 +367,8 @@ class VoiceControllerPlaybackGateTest {
 
     @Test fun `the trace shows the ptt, the mic gate around playback and where the phrase went`() {
         val r = rig()
+        // The session gets its VAD on its own coroutine: wait for that line so the order is fixed.
+        runBlocking { withTimeout(WAIT_MS) { while (trace.events().none { "vad-ready" in it }) delay(10) } }
 
         audible = true
         r.silence() // the last audible frame
@@ -375,21 +378,24 @@ class VoiceControllerPlaybackGateTest {
         r.sync()
         runBlocking { withTimeout(WAIT_MS) { r.controller.routingJobForTest()?.join() } }
 
-        val events = trace.events().map { it.replace(Regex(""" asr_ms=\d+"""), "") }
+        val events = trace.events().map {
+            it.replace(Regex(""" asr_ms=\d+"""), "").replace(Regex(""" ms=\d+"""), " ms=N")
+        }
         assertEquals(
             listOf(
                 "user   ptt listening=false #1",
                 "voice  session-start #2 by=#1",
-                "voice  tts-start #3",
-                "voice  mic-gated #4",
-                "voice  tts-end #5",
-                "voice  mic-open after_ms=200 #6",
-                "voice  heard route=nlu #7 by=#2",
+                "voice  vad-ready ms=N prebuilt=false #3",
+                "voice  tts-start #4",
+                "voice  mic-gated #5",
+                "voice  tts-end #6",
+                "voice  mic-open after_ms=200 #7",
+                "voice  heard route=nlu #8 by=#2",
             ),
-            events.take(7),
+            events.take(8),
         )
-        assertTrue(events[7], events[7].startsWith("voice  result route=nlu outcome="))
-        assertTrue(events[7], events[7].endsWith(" #8 by=#7"))
+        assertTrue(events[8], events[8].startsWith("voice  result route=nlu outcome="))
+        assertTrue(events[8], events[8].endsWith(" #9 by=#8"))
         assertTrue(events.none { it.contains("закрой") })
     }
 

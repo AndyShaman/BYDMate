@@ -555,6 +555,7 @@ class TrackingService : Service(), LocationListener {
         super.onCreate()
         Log.i(TAG, "onCreate: starting TrackingService")
         Trace.event(TraceArea.APP, "service-start")
+        com.bydmate.app.platform.LegacyHeadUnit.noteServiceStart()
         ChainLog.append(this, "TrackingService onCreate")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification(appStrings.get(R.string.service_foreground_content_starting)))
@@ -714,7 +715,8 @@ class TrackingService : Service(), LocationListener {
                         com.bydmate.app.data.repository.SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT,
                         "")
                     if (pref.isNotEmpty()) {
-                        helperClient.setAppHidden("com.byd.autovoice", pref == "true")
+                        com.bydmate.app.data.vehicle.NativeAssistant.setDisabled(
+                            helperClient, packageManager, pref == "true")
                     }
                 }
                 // Power down a cluster compositor left "on" by a car shutdown mid-projection —

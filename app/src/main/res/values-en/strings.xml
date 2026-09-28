@@ -245,7 +245,10 @@
     <string name="orb_agent">Agent:</string>
     <string name="settings_voice_native_assistant_header">Native BYD voice assistant</string>
     <string name="settings_voice_disable_native_label">Disable built-in voice assistant</string>
-    <string name="settings_voice_disable_native_description">Hides the native BYD voice assistant so it does not interrupt. The Shortcuts app (quick commands) disappears with it, it is part of the assistant. Reversible: turn the toggle off and restart the head unit, both come back.</string>
+    <string name="settings_voice_disable_native_description">Hides the native BYD voice assistant so it does not interrupt. The Shortcuts app (quick commands) disappears with it, it is part of the assistant. Reversible: turn the toggle off and restart the head unit, both come back. Before you uninstall BYDMate, turn this toggle off, or the built-in assistant stays off.</string>
+    <string name="settings_voice_disable_native_confirm_title">Disable the built-in assistant?</string>
+    <string name="settings_voice_disable_native_confirm_body">The built-in BYD assistant will be turned off in the car\'s system. Before you uninstall BYDMate, turn this toggle off, or the built-in assistant stays off. If the app is already uninstalled: install BYDMate again, turn the toggle off and restart the head unit.</string>
+    <string name="settings_voice_disable_native_confirm_button">Disable</string>
     <string name="settings_voice_native_assistant_reboot_note">Takes effect after restarting the head unit.</string>
     <string name="settings_widget_opacity_label">Opacity</string>
     <string name="settings_widget_scale_label">Size</string>

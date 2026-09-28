@@ -259,7 +259,10 @@
     <string name="orb_agent">Агент:</string>
     <string name="settings_voice_native_assistant_header">Штатны галасавы памочнік BYD</string>
     <string name="settings_voice_disable_native_label">Адключыць штатны галасавы памочнік</string>
-    <string name="settings_voice_disable_native_description">Хавае ўбудаваны галасавы асістэнт BYD, каб ён не перабіваў. Разам з ім знікае і праграма Shortcuts (хуткія каманды), гэта яго частка. Зваротна: выключыце тумблер і перазагрузіце мультымедыя, абодва вернуцца.</string>
+    <string name="settings_voice_disable_native_description">Хавае ўбудаваны галасавы асістэнт BYD, каб ён не перабіваў. Разам з ім знікае і праграма Shortcuts (хуткія каманды), гэта яго частка. Зваротна: выключыце тумблер і перазагрузіце мультымедыя, абодва вернуцца. Перад выдаленнем BYDMate выключыце гэты тумблер, інакш штатны памочнік застанецца адключаным.</string>
+    <string name="settings_voice_disable_native_confirm_title">Адключыць штатны памочнік?</string>
+    <string name="settings_voice_disable_native_confirm_body">Штатны памочнік BYD будзе адключаны ў сістэме машыны. Перад выдаленнем BYDMate выключыце гэты тумблер, інакш штатны памочнік застанецца адключаным. Калі праграма ўжо выдалена: усталюйце BYDMate зноў, выключыце тумблер і перазагрузіце мультымедыя.</string>
+    <string name="settings_voice_disable_native_confirm_button">Адключыць</string>
     <string name="settings_voice_native_assistant_reboot_note">Змена набудзе сілу пасля перазагрузкі галаўной прылады.</string>
     <string name="settings_widget_opacity_label">Празрыстасць</string>
     <string name="settings_widget_scale_label">Памер</string>

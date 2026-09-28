@@ -1,5 +1,6 @@
 package com.bydmate.app.voice
 
+import android.media.AudioAttributes
 import android.media.AudioTrack
 import io.mockk.every
 import io.mockk.mockk
@@ -74,6 +75,32 @@ class SherpaTtsEngineTest {
     @Test
     fun `BYD_STREAM_BTTS is 17`() {
         assertEquals(17, SherpaTtsEngine.BYD_STREAM_BTTS)
+    }
+
+    // --- PR #261: on Android 10 head units the assistant speaks on the navigation stream, which
+    // has its own volume; other cars keep the Voice stream 17 and the accessibility fallback. ---
+
+    @Test
+    fun `android 10 head units ask for the navigation stream 14 first`() {
+        assertEquals(14, SherpaTtsEngine.primaryStreamType(legacyHeadUnit = true))
+    }
+
+    @Test
+    fun `other head units keep the voice stream 17`() {
+        assertEquals(SherpaTtsEngine.BYD_STREAM_BTTS, SherpaTtsEngine.primaryStreamType(legacyHeadUnit = false))
+    }
+
+    @Test
+    fun `android 10 fallback is the navigation guidance usage`() {
+        assertEquals(
+            AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE,
+            SherpaTtsEngine.fallbackUsage(legacyHeadUnit = true),
+        )
+    }
+
+    @Test
+    fun `other head units keep the accessibility fallback`() {
+        assertEquals(SherpaTtsEngine.TTS_USAGE, SherpaTtsEngine.fallbackUsage(legacyHeadUnit = false))
     }
 
     // --- Fix wave 2, finding 1: barge-in must free the drain loop promptly, not spin the timeout ---
