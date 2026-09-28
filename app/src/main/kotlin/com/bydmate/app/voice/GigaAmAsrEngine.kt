@@ -178,7 +178,7 @@ internal class GigaAmAsrEngine(
                     vad.pop()
                     speaking = false
                     val text = recognizer.decode(segment)
-                    if (text.isNotBlank()) emit(ContinuousAsrEvent.Utterance(text, segment.size * 1000L / SAMPLE_RATE))
+                    if (text.isNotBlank()) emit(ContinuousAsrEvent.Utterance(text))
                 }
             }
         } finally {

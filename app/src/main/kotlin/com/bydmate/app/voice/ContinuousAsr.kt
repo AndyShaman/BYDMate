@@ -5,8 +5,7 @@ import kotlinx.coroutines.flow.Flow
 /** Segment-level ASR for the continuous session. Emits one Utterance per
  *  VAD-detected phrase; SilenceTick lets the session loop track auto-stop. */
 sealed interface ContinuousAsrEvent {
-    /** [audioMs]: length of the VAD segment the text was decoded from, 0 when unknown. */
-    data class Utterance(val text: String, val audioMs: Long = 0L) : ContinuousAsrEvent
+    data class Utterance(val text: String) : ContinuousAsrEvent
     object SpeechStart : ContinuousAsrEvent
     data class SilenceTick(val silentMs: Long) : ContinuousAsrEvent
 }

@@ -104,6 +104,13 @@ class VoiceControllerSessionTest {
      *  barrier: a tryEmit before any collector attaches (replay = 0) is simply lost. */
     private fun awaitSubscribed(events: MutableSharedFlow<*>) = awaitTrue { events.subscriptionCount.value >= 1 }
 
+    /** A clock that returns [times] one call at a time, then keeps the last: the mic gate reads
+     *  it once per captured frame, so the frames get these capture times in order. */
+    private fun frameClock(vararg times: Long): () -> Long {
+        val queue = ArrayDeque(times.toList())
+        return { if (queue.size > 1) queue.removeFirst() else queue.first() }
+    }
+
     /** Same idea as [awaitTrue] but for a block of mockk verifications, which throw
      *  AssertionError on mismatch rather than returning a Boolean. */
     private fun awaitVerify(timeoutMs: Long = 2_000L, block: () -> Unit) {
@@ -624,73 +631,54 @@ class VoiceControllerSessionTest {
         assertEquals(framesBefore, fakeAsr.recordedFrames.size)
     }
 
-    // Name barge-in during speech: the mic is no longer muted while the agent talks. The
-    // playback-overlapped utterances themselves are covered in VoiceControllerPlaybackBargeInTest.
-    @Test fun `frames arriving while tts is speaking still reach the recognizer`() {
+    // The mic is gated while the agent talks: the car has no working echo cancellation, so an
+    // echo that opened a VAD segment would swallow the driver's next phrase with it.
+    @Test fun `frames captured while tts is audible never reach the recognizer`() {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        val speaking = MutableStateFlow(false)
         val ttsEngine = mockk<TtsEngine>(relaxed = true)
-        every { ttsEngine.speaking } returns speaking
-        // The filter reads audible(), not speaking.value directly -- this test isn't about the
-        // tool-round split, so mirror the two together like a real engine with nothing queued.
-        every { ttsEngine.audible() } answers { speaking.value }
+        every { ttsEngine.speaking } returns MutableStateFlow(true)
+        // One read per captured frame: the first frame is captured while the agent is audible.
+        every { ttsEngine.audible() } returnsMany listOf(true, false)
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
+        controller.clock = frameClock(1_000L, 1_500L) // the second frame is past the 500 ms grace
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
         awaitSubscribed(rawFrames)
 
-        speaking.value = true
         rawFrames.tryEmit(shortArrayOf(1, 2, 3))
-        awaitTrue { fakeAsr.recordedFrames.size == 1 }
-        assertTrue(controller.lastSpeakingSeenMs > 0L)
-
-        // Inside the post-speech grace window as well.
-        speaking.value = false
         rawFrames.tryEmit(shortArrayOf(4, 5, 6))
-        awaitTrue { fakeAsr.recordedFrames.size == 2 }
+        awaitTrue { fakeAsr.recordedFrames.isNotEmpty() }
+        assertTrue(fakeAsr.recordedFrames.single().contentEquals(shortArrayOf(4, 5, 6)))
     }
 
     // --- Fix wave 2, finding 3: per-frame grace boundary (no collect()-based watcher) ---
 
-    @Test fun `speech starting inside the post-speech grace window is dropped, after it is routed`() {
+    @Test fun `a frame just inside the post-speech grace window is dropped, one at its end passes`() {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
-        val speaking = MutableStateFlow(false)
         val ttsEngine = mockk<TtsEngine>(relaxed = true)
-        every { ttsEngine.speaking } returns speaking
-        every { ttsEngine.audible() } answers { speaking.value }
+        every { ttsEngine.speaking } returns MutableStateFlow(false)
+        every { ttsEngine.audible() } returnsMany listOf(true, false)
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
+        controller.clock = frameClock(1_000L, 1_499L, 1_500L)
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
         awaitSubscribed(rawFrames)
-        awaitSubscribed(fakeAsr.events)
 
-        // Playback just ended: the stamp is fresh, so this frame is still in the grace window.
-        controller.lastSpeakingSeenMs = System.currentTimeMillis()
-        rawFrames.tryEmit(shortArrayOf(1))
-        awaitTrue { fakeAsr.recordedFrames.size == 1 }
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.SpeechStart)
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
-        awaitTrue { controller.droppedDuringPlaybackForTest() == 1 }
-
-        // Past the grace window (stamp moved back instead of sleeping it out): routed as today.
-        controller.lastSpeakingSeenMs = System.currentTimeMillis() - 1_000L
-        rawFrames.tryEmit(shortArrayOf(2))
-        awaitTrue { fakeAsr.recordedFrames.size == 2 }
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.SpeechStart)
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
-        awaitVerify { coVerify(exactly = 1) { dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) } }
-        assertEquals(1, controller.droppedDuringPlaybackForTest())
+        rawFrames.tryEmit(shortArrayOf(0)) // the last audible frame stamps the grace window
+        rawFrames.tryEmit(shortArrayOf(1)) // 499 ms after it: still inside
+        rawFrames.tryEmit(shortArrayOf(2)) // 500 ms after it: past the window
+        awaitTrue { fakeAsr.recordedFrames.isNotEmpty() }
+        assertTrue(fakeAsr.recordedFrames.single().contentEquals(shortArrayOf(2)))
     }
 
     // --- Task 6 (wave M): mic mute keys off physical playback (audible()), not the logical
@@ -719,43 +707,40 @@ class VoiceControllerSessionTest {
         awaitTrue { fakeAsr.recordedFrames.isNotEmpty() }
     }
 
-    @Test fun `speech is playback-overlapped while audible is true even though the logical speaking flag is false`() {
+    @Test fun `frames are dropped while audible is true even though the logical speaking flag is false`() {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        val speaking = MutableStateFlow(false)
         val ttsEngine = mockk<TtsEngine>(relaxed = true)
-        every { ttsEngine.speaking } returns speaking
-        // Physical playback is actually happening right now -- the filter must key off this,
-        // not the (stale/mocked) logical flag.
-        every { ttsEngine.audible() } returns true
+        every { ttsEngine.speaking } returns MutableStateFlow(false)
+        // Physical playback is actually happening for the first frame -- the gate must key off
+        // this, not the (stale/mocked) logical flag.
+        every { ttsEngine.audible() } returnsMany listOf(true, false)
         val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         audioCapture.stubFrames(rawFrames)
         val controller = makeController(fakeAsr, dispatcher, ttsEngine = ttsEngine, audioCapture = audioCapture)
+        controller.clock = frameClock(1_000L, 1_500L)
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
         awaitSubscribed(rawFrames)
-        awaitSubscribed(fakeAsr.events)
 
         rawFrames.tryEmit(shortArrayOf(1, 2, 3))
-        awaitTrue { fakeAsr.recordedFrames.size == 1 }
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.SpeechStart)
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
-        awaitTrue { controller.droppedDuringPlaybackForTest() == 1 }
-        coVerify(exactly = 0) { dispatcher.dispatch(any<ActionDef>(), any()) }
+        rawFrames.tryEmit(shortArrayOf(4, 5, 6))
+        awaitTrue { fakeAsr.recordedFrames.isNotEmpty() }
+        assertTrue(fakeAsr.recordedFrames.single().contentEquals(shortArrayOf(4, 5, 6)))
     }
 
     // --- Fix wave 3, finding 1: call-time stamp covers a TTS burst so short it starts AND ends
-    // entirely between two mic frames, so the per-frame filter (Fix wave 2) never samples
-    // speaking=true for it. Only stamping lastSpeakingSeenMs when we ourselves call
-    // ttsEngine.speak() (announce()/agent answer) can mute the frame that follows.
+    // entirely between two mic frames, so the per-frame gate (Fix wave 2) never samples
+    // audible=true for it. Only stamping lastSpeakingSeenMs when we ourselves call
+    // ttsEngine.speak() (announce()/agent answer) can drop the frame that follows.
 
-    @Test fun `speech right after an agent answer is playback-overlapped even though speaking never read true on any frame`() {
+    @Test fun `a frame right after an agent answer is dropped even though audible never read true on any frame`() {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        // speaking never flips true: simulates a TTS burst so short the per-frame filter never
-        // observes it, so only the call-time stamp in agentFallback()'s Answer branch can mark it.
+        // audible never flips true: simulates a TTS burst so short the per-frame gate never
+        // observes it, so only the call-time stamp in agentFallback()'s Answer branch can drop.
         val speaking = MutableStateFlow(false)
         val ttsEngine = mockk<TtsEngine>(relaxed = true)
         every { ttsEngine.speaking } returns speaking
@@ -789,6 +774,8 @@ class VoiceControllerSessionTest {
             ruStressMarker = RuStressMarker { null },
             selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
             appStrings = appStringsOver(mockk<Context>(relaxed = true)))
+        // The call-time stamp, then one read per captured frame.
+        controller.clock = frameClock(1_000L, 1_100L, 1_500L)
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -797,23 +784,21 @@ class VoiceControllerSessionTest {
 
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         // Wait for agentFallback()'s Answer branch to actually run and stamp lastSpeakingSeenMs
-        // at call time -- speaking.value stays false throughout, so this can only be the
-        // call-time stamp, never the per-frame one.
-        awaitTrue { controller.lastSpeakingSeenMs > 0L }
+        // at call time -- audible stays false throughout, so this can only be the call-time
+        // stamp, never the per-frame one.
+        awaitTrue { controller.lastSpeakingSeenMs == 1_000L }
         assertFalse(speaking.value)
 
-        // Well within TTS_ECHO_GRACE_MS(500ms) of the stamp: the phrase is playback-overlapped.
-        rawFrames.tryEmit(shortArrayOf(7))
-        awaitTrue { fakeAsr.recordedFrames.size == 1 }
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.SpeechStart)
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
-        awaitTrue { controller.droppedDuringPlaybackForTest() == 1 }
+        rawFrames.tryEmit(shortArrayOf(7)) // well within TTS_ECHO_GRACE_MS(500ms) of the stamp
+        rawFrames.tryEmit(shortArrayOf(8)) // past it
+        awaitTrue { fakeAsr.recordedFrames.isNotEmpty() }
+        assertTrue(fakeAsr.recordedFrames.single().contentEquals(shortArrayOf(8)))
         coVerify(exactly = 1) { agentOrchestrator.ask(any(), any(), any()) }
     }
 
     // --- Fix wave 4, finding 1: speak() returning false (blank text, or engine not ready -- e.g.
     // voice not downloaded while the settings toggle is on) means no audio was ever enqueued, so
-    // the call-time stamp must NOT fire and the following phrase must NOT count as overlapped. ---
+    // the call-time stamp must NOT fire and the following frame must NOT be dropped. ---
 
     @Test fun `agent answer with speak() returning false does not stamp the playback window, next phrase is routed`() {
         val fakeAsr = FakeContinuousAsr(ready = true)
@@ -868,7 +853,6 @@ class VoiceControllerSessionTest {
         fakeAsr.events.tryEmit(ContinuousAsrEvent.SpeechStart)
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         awaitVerify { coVerify(exactly = 2) { agentOrchestrator.ask(any(), any(), any()) } }
-        assertEquals(0, controller.droppedDuringPlaybackForTest())
     }
 
     // --- Fix wave 2, finding 3: inPlaybackWindow pins the exact grace-window boundary ---
