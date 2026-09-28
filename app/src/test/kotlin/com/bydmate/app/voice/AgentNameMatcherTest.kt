@@ -30,17 +30,4 @@ class AgentNameMatcherTest {
     @Test fun `name-only utterance is returned unchanged`() {
         assertEquals("Лео", AgentNameMatcher.stripLeadingName("Лео", "Лео"))
     }
-    @Test fun `startsWithName checks only the first word, fuzzily`() {
-        assertTrue(AgentNameMatcher.startsWithName("леш посмотри", "Лёша"))
-        assertTrue(AgentNameMatcher.startsWithName("Лео", "Лео"))
-        assertTrue(AgentNameMatcher.startsWithName(", лео стоп", "Лео"))
-        assertFalse(AgentNameMatcher.startsWithName("погода хорошая лео", "Лео"))
-        assertFalse(AgentNameMatcher.startsWithName("лео стоп", ""))
-    }
-    @Test fun `nameIndex is the word position of the first name token`() {
-        assertEquals(0, AgentNameMatcher.nameIndex(", лео стоп", "Лео"))
-        assertEquals(2, AgentNameMatcher.nameIndex("погода хорошая лео", "Лео"))
-        assertEquals(-1, AgentNameMatcher.nameIndex("открой окно", "Лео"))
-        assertEquals(-1, AgentNameMatcher.nameIndex("лео стоп", ""))
-    }
 }

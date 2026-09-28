@@ -31,13 +31,6 @@ class VoiceControllerLogLineTest {
         assertTrue(line.length.toString(), line.length < 600)
     }
 
-    @Test fun `the playback overlap line keeps its measurements for a long transcript`() {
-        val line = VoiceController.playbackOverlapLine("а".repeat(600), nameAt = 3, segmentMs = 4_200L,
-            decision = "dropped", decodeMs = 180L)
-        assertTrue(line.length.toString(), line.length < 600)
-        assertTrue(line, "nameAt=3" in line && "segmentMs=4200" in line)
-    }
-
     @Test fun `long values are capped`() {
         val long = "а".repeat(1_000)
         val line = VoiceController.logLine(VoiceJournalEntry(transcript = long, route = VoiceJournalEntry.Route.NLU,

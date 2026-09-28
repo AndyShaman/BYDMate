@@ -15,7 +15,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -33,13 +32,13 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 /**
- * Name barge-in while the agent is speaking, through the real GigaAmAsrEngine control flow
+ * The mic gate while the agent is speaking, through the real GigaAmAsrEngine control flow
  * (PCM -> VAD -> decode, one frame at a time) over fake VadHandle/RecognizerHandle. The test
  * plays the capture thread: [Rig.capture] marks a frame with the controller's capture-time
  * mark on a test clock and queues it, the session consumes the queue at its own pace. No
  * real time is involved; waits are barriers on the engine's per-frame progress.
  */
-class VoiceControllerPlaybackBargeInTest {
+class VoiceControllerPlaybackGateTest {
 
     /** Speech is any non-zero frame; the first silent frame after speech closes the segment. */
     private class FakeVad : VadHandle {
@@ -91,25 +90,33 @@ class VoiceControllerPlaybackBargeInTest {
         private val mic: Channel<MicFrame<Any?>>,
         private val mark: () -> Any?,
     ) {
-        private var captured = 0
+        // Frames the controller forwards to the recognizer: its mark is true for a frame the
+        // playback gate drops.
+        private var forwarded = 0
 
         fun capture(pcm: ShortArray) {
             now += FRAME_MS
-            mic.trySend(MicFrame(pcm, mark()))
-            captured++
+            val m = mark()
+            mic.trySend(MicFrame(pcm, m))
+            if (m != true) forwarded++
         }
 
         fun silence(frames: Int = 1) = repeat(frames) { capture(ShortArray(FRAME_SAMPLES)) }
 
+        /** [frames] speech frames carrying [text], without a silent frame after them. */
+        fun speech(text: String, frames: Int) {
+            val id = (phrases.indexOf(text).takeIf { it >= 0 } ?: phrases.size.also { phrases += text }) + 1
+            repeat(frames) { capture(ShortArray(FRAME_SAMPLES) { id.toShort() }) }
+        }
+
         /** Speech frames carrying [text] and the silent frame that ends the segment. */
         fun utter(text: String) {
-            val id = (phrases.indexOf(text).takeIf { it >= 0 } ?: phrases.size.also { phrases += text }) + 1
-            repeat(3) { capture(ShortArray(FRAME_SAMPLES) { id.toShort() }) }
+            speech(text, 3)
             silence()
         }
 
-        /** Barrier: every frame captured so far went through VAD, decode and the event handler. */
-        fun sync() = await(vad.framesDone) { it >= captured }
+        /** Barrier: every forwarded frame went through VAD, decode and the event handler. */
+        fun sync() = await(vad.framesDone) { it >= forwarded }
 
         fun close() {
             if (controller.listening.value) controller.onPttPressed()
@@ -140,7 +147,7 @@ class VoiceControllerPlaybackBargeInTest {
         coEvery { it.prewarm() } returns Unit
     }
 
-    private fun rig(orchestrator: AgentOrchestrator = orchestrator(), ttsEnabled: Boolean = false, name: String = "Лео"): Rig {
+    private fun rig(orchestrator: AgentOrchestrator = orchestrator(), ttsEnabled: Boolean = false): Rig {
         val vad = FakeVad()
         val recognizer = FakeRecognizer(phrases)
         val asr = GigaAmAsrEngine(
@@ -177,7 +184,7 @@ class VoiceControllerPlaybackBargeInTest {
         val controller = VoiceController(audioCapture, dispatcher, earcon, gate,
             mockk<AutomationEngine>(relaxed = true), resolver, orchestrator, context,
             tts, journal, asr,
-            agentIdentity = { AgentIdentity(name, AgentPersona.NAVIGATOR) },
+            agentIdentity = { AgentIdentity("Лео", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
             selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
@@ -205,9 +212,29 @@ class VoiceControllerPlaybackBargeInTest {
         await(answersShown) { it >= 1 }
     }
 
+    // --- Field log 28.09: the driver answers the instant the reply ends, no pause after its echo ---
+
+    @Test fun `a command spoken right after the reply with no pause after its echo is routed once`() {
+        val r = rig()
+
+        audible = true
+        r.speech("сейчас пять градусов", frames = 3) // the reply's echo, no silent frame after it
+        audible = false
+        r.speech("закрой окна", frames = 8) // the first frames still fall inside the echo grace
+        r.silence()
+        r.sync()
+        runBlocking { withTimeout(WAIT_MS) { r.controller.routingJobForTest()?.join() } }
+
+        val entries = r.journal.entries.value
+        assertEquals(listOf("закрой окна"), entries.map { it.transcript })
+        assertEquals(VoiceJournalEntry.Route.NLU, entries.single().route)
+        coVerify(exactly = 1) { r.dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) }
+        coVerify(exactly = 0) { r.orchestrator.ask(any(), any(), any()) }
+    }
+
     // --- Review finding 1: the playback window is judged at capture time ---
 
-    @Test fun `agent voice captured during playback stays overlapped when processed after playback and grace ended`() {
+    @Test fun `agent voice captured during playback is never heard however late it is processed`() {
         val r = rig()
         val release = CountDownLatch(1)
         r.recognizer.holdNextDecode(release)
@@ -221,14 +248,13 @@ class VoiceControllerPlaybackBargeInTest {
         release.countDown()
         r.sync()
 
-        assertEquals(1, r.controller.droppedDuringPlaybackForTest())
         assertEquals(null, r.controller.routingJobForTest())
         assertTrue(r.journal.entries.value.isEmpty())
         coVerify(exactly = 0) { r.dispatcher.dispatch(any<ActionDef>(), any()) }
         coVerify(exactly = 0) { r.orchestrator.ask(any(), any(), any()) }
     }
 
-    @Test fun `speech captured inside the echo grace stays overlapped however late it is decoded`() {
+    @Test fun `speech captured inside the echo grace is never heard however late it is processed`() {
         val r = rig()
         val release = CountDownLatch(1)
         r.recognizer.holdNextDecode(release)
@@ -243,206 +269,27 @@ class VoiceControllerPlaybackBargeInTest {
         release.countDown()
         r.sync()
 
-        assertEquals(1, r.controller.droppedDuringPlaybackForTest())
+        assertTrue(r.journal.entries.value.isEmpty())
         coVerify(exactly = 0) { r.dispatcher.dispatch(any<ActionDef>(), any()) }
     }
 
-    // --- Name barge-in during playback ---
+    // --- No name barge-in while the agent talks: the recognizer does not hear the playback ---
 
-    @Test fun `name while the last sentences play and no ask is in flight barges in without routing`() {
-        val r = rig(name = "Лёша")
-
-        audible = true
-        r.utter("леш посмотри") // how GigaAM renders "Лёша, посмотри" in field logs
-        r.sync()
-
-        assertEquals(1, r.journal.bargeIns().size)
-        assertEquals(VoiceJournalEntry.Route.AGENT, r.journal.bargeIns().single().route)
-        verify(exactly = 1) { r.tts.stop() }
-        verify(exactly = 1) { r.earcon.ok() }
-        assertEquals(VoiceUiState.Listening, r.controller.state.value)
-        assertEquals(0, r.controller.droppedDuringPlaybackForTest())
-        coVerify(exactly = 0) { r.orchestrator.ask(any(), any(), any()) }
-        coVerify(exactly = 0) { r.dispatcher.dispatch(any<ActionDef>(), any()) }
-        assertTrue(r.controller.listening.value)
-    }
-
-    @Test fun `name during playback cancels the ask in flight`() {
-        val askStarted = CompletableDeferred<Unit>()
-        val askCancelled = CompletableDeferred<Unit>()
-        val orchestrator = orchestrator()
-        coEvery { orchestrator.ask(any(), any(), any()) } coAnswers {
-            askStarted.complete(Unit)
-            try {
-                CompletableDeferred<Unit>().await()
-                AgentResult.Disabled
-            } catch (ce: CancellationException) {
-                askCancelled.complete(Unit)
-                throw ce
-            }
-        }
-        val r = rig(orchestrator)
-
-        r.utter("расскажи про заряд") // before any playback: routed
-        runBlocking { withTimeout(WAIT_MS) { askStarted.await() } }
-        audible = true
-        r.utter("Лео")
-        r.sync()
-
-        runBlocking { withTimeout(WAIT_MS) { askCancelled.await() } }
-        await(r.journal.entries) { list -> list.any { it.refusal == VoiceRefusal.BARGE_IN && it.outcome == VoiceJournalEntry.Outcome.ERROR } }
-        verify(atLeast = 1) { r.tts.stop() }
-        assertTrue(r.journal.bargeIns().any { it.outcome == VoiceJournalEntry.Outcome.OK && it.transcript == "Лео" })
-        coVerify(exactly = 1) { orchestrator.ask(any(), any(), any()) }
-    }
-
-    @Test fun `a phrase without the name at its start during playback is dropped, not routed`() {
+    @Test fun `speech during playback, the agent's name included, neither barges in nor is routed`() {
         val r = rig()
 
         audible = true
+        r.utter("Лео")
         r.utter("закрой окна")
-        // A name later in the phrase does not count: the segment began with the agent's voice.
-        r.utter("погода хорошая Лео")
+        audible = false
+        r.silence(10)
         r.sync()
 
-        assertEquals(2, r.controller.droppedDuringPlaybackForTest())
         verify(exactly = 0) { r.tts.stop() }
         assertTrue(r.journal.entries.value.isEmpty())
         coVerify(exactly = 0) { r.dispatcher.dispatch(any<ActionDef>(), any()) }
         coVerify(exactly = 0) { r.orchestrator.ask(any(), any(), any()) }
-    }
-
-    // --- Review finding 2: the self-name guard follows the reply's playback, not its enqueue ---
-
-    @Test fun `echo of the agent's own name is ignored while its reply is still playing long after enqueue`() {
-        val r = rig(orchestrator(AgentResult.Answer("Лео на связи.")), ttsEnabled = true)
-        r.askAgent("как тебя зовут")
-        verify { r.tts.speak("Лео на связи.") }
-
-        // The reply is still going 21 s later (earlier sentences, synthesis) -- past the old 20 s guard.
-        speaking.value = true
-        r.silence(210)
-        audible = true
-        r.utter("Лео на связи") // its own voice, echoed back through the mic
-        r.sync()
-
-        assertEquals(1, r.controller.droppedDuringPlaybackForTest())
-        verify(exactly = 0) { r.tts.stop() }
-        assertTrue(r.journal.bargeIns().isEmpty())
-    }
-
-    @Test fun `echo right after the named reply ended is ignored, a name once the guard is released barges in`() {
-        val r = rig(orchestrator(AgentResult.Answer("Лео на связи.")), ttsEnabled = true)
-        r.askAgent("как тебя зовут")
-
-        speaking.value = true
-        audible = true
-        r.silence(3) // the named reply plays
-        speaking.value = false
-        audible = false
-        r.utter("Лео на связи") // the echo tail, right after the audio ended
-        r.sync()
-        assertEquals(1, r.controller.droppedDuringPlaybackForTest())
-        assertTrue(r.journal.bargeIns().isEmpty())
-
-        r.silence(210) // past the synthesis hold of the named text and the guard's own grace
-        audible = true // later audio without the name
-        r.utter("Лео")
-        r.sync()
-
-        assertEquals(1, r.journal.bargeIns().size)
-        verify(exactly = 1) { r.tts.stop() }
-    }
-
-    @Test fun `echo of a named sentence whose online synthesis took longer than 5 s is ignored`() {
-        val r = rig(orchestrator(AgentResult.Answer("Лео на связи.")), ttsEnabled = true)
-        r.askAgent("как тебя зовут")
-
-        r.silence(70) // 7 s of online synthesis: nothing audible, not speaking yet
-        speaking.value = true
-        audible = true
-        r.utter("Лео на связи") // its own voice, echoed back through the mic
-        r.sync()
-
-        assertEquals(1, r.controller.droppedDuringPlaybackForTest())
-        verify(exactly = 0) { r.tts.stop() }
-        assertTrue(r.journal.bargeIns().isEmpty())
-    }
-
-    @Test fun `a new reply without the name started within the hold of a named reply is interruptible`() {
-        val orchestrator = orchestrator()
-        coEvery { orchestrator.ask(any(), any(), any()) } returnsMany
-            listOf(AgentResult.Answer("Лео на связи."), AgentResult.Answer("Пять градусов."))
-        val r = rig(orchestrator, ttsEnabled = true)
-        r.askAgent("как тебя зовут")
-
-        speaking.value = true
-        audible = true
-        r.silence(3) // the short named reply plays
-        speaking.value = false
-        audible = false
-        r.silence(10)
-        r.utter("а на улице") // a new question a second later, well within the hold
-        await(r.journal.entries) { list -> list.any { it.answer == "Пять градусов." } }
-        speaking.value = true
-        audible = true
-        r.utter("Лео")
-        r.sync()
-
-        assertEquals(0, r.controller.droppedDuringPlaybackForTest())
-        assertEquals(1, r.journal.bargeIns().size)
-    }
-
-    @Test fun `a named reply that never played does not block a real name later`() {
-        val r = rig(orchestrator(AgentResult.Answer("Лео на связи.")), ttsEnabled = true)
-        r.askAgent("как тебя зовут") // speak() accepted it, but synthesis failed: never audible
-
-        r.silence(210) // past the synthesis hold of the named text
-        audible = true
-        r.utter("Лео")
-        r.sync()
-
-        assertEquals(1, r.journal.bargeIns().size)
-        assertEquals(0, r.controller.droppedDuringPlaybackForTest())
-    }
-
-    @Test fun `after a name barge-in the next reply without the name is interruptible by the name`() {
-        val askStarted = CompletableDeferred<Unit>()
-        val orchestrator = orchestrator()
-        var asks = 0
-        coEvery { orchestrator.ask(any(), any(), any()) } coAnswers {
-            val onSentence = thirdArg<((String) -> Unit)?>()!!
-            if (++asks == 1) {
-                onSentence("Лео на связи.") // arms the guard, then a slow tool round
-                askStarted.complete(Unit)
-                CompletableDeferred<Unit>().await()
-            }
-            onSentence("Пять градусов.")
-            AgentResult.Answer("Пять градусов.")
-        }
-        val r = rig(orchestrator, ttsEnabled = true)
-        every { r.tts.startQueue() } returns mockk<TtsEngine.SpeechQueue>(relaxed = true).also {
-            every { it.enqueue(any()) } returns true
-        }
-
-        r.utter("как тебя зовут")
-        runBlocking { withTimeout(WAIT_MS) { askStarted.await() } }
-        val firstTurn = r.controller.routingJobForTest()!!
-        r.silence(10) // the named sentence is still synthesizing: nothing audible
-        r.utter("Лео") // barges in during the tool round
-        r.sync()
-        runBlocking { withTimeout(WAIT_MS) { firstTurn.join() } }
-        assertEquals(1, r.journal.bargeIns().count { it.outcome == VoiceJournalEntry.Outcome.OK })
-
-        r.utter("а на улице") // a new question, its reply does not name the agent
-        await(r.journal.entries) { list -> list.any { it.answer == "Пять градусов." } }
-        speaking.value = true
-        audible = true
-        r.utter("Лео")
-        r.sync()
-
-        assertEquals(0, r.controller.droppedDuringPlaybackForTest())
-        assertEquals(2, r.journal.bargeIns().count { it.outcome == VoiceJournalEntry.Outcome.OK })
+        assertTrue(r.controller.listening.value)
     }
 
     // --- Review finding 3: a long answer does not eat the driver's waiting time ---
@@ -494,17 +341,31 @@ class VoiceControllerPlaybackBargeInTest {
 
     // --- Review finding 4: a barge-in cancels the play_music auto-close ---
 
-    @Test fun `name barge-in during a play_music reply keeps the session open`() {
-        val r = rig(orchestrator(AgentResult.Answer("Включаю.", listOf(AgentToolOutcome("play_music", true)))), ttsEnabled = true)
+    @Test fun `name barge-in during the next question keeps a play_music reply's session open`() {
+        val nextAsk = CompletableDeferred<Unit>()
+        val orchestrator = orchestrator()
+        var asks = 0
+        coEvery { orchestrator.ask(any(), any(), any()) } coAnswers {
+            if (++asks == 1) {
+                AgentResult.Answer("Включаю.", listOf(AgentToolOutcome("play_music", true)))
+            } else {
+                nextAsk.complete(Unit)
+                CompletableDeferred<Unit>().await() // a slow tool round
+                AgentResult.Disabled
+            }
+        }
+        val r = rig(orchestrator, ttsEnabled = true)
         every { r.tts.speak(any()) } answers { speaking.value = true; true }
 
         r.askAgent("поставь что-нибудь")
         // Both the dialog clear and the play_music auto-close now wait for the reply to end.
         await(speaking.subscriptionCount) { it >= 2 }
-        audible = true
+        r.silence(5) // the reply is still being synthesized: nothing audible past the echo grace
+        r.utter("расскажи про заряд")
+        runBlocking { withTimeout(WAIT_MS) { nextAsk.await() } }
         r.utter("Лео")
         r.sync()
-        assertEquals(1, r.journal.bargeIns().size)
+        assertEquals(1, r.journal.bargeIns().count { it.outcome == VoiceJournalEntry.Outcome.OK })
 
         await(speaking.subscriptionCount) { it == 0 }
         r.silence()
