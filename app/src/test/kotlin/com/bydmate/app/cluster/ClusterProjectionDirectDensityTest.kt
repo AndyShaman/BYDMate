@@ -449,6 +449,36 @@ class ClusterProjectionDirectDensityTest {
         )
     }
 
+    /**
+     * A VirtualDisplay id orphaned by a prior process must be forgotten once released — otherwise
+     * the same stale id is "released" (a daemon no-op) on every future projection start forever.
+     *
+     * Anti-vacuity: not clearing KEY_LAST_VD_ID after the release call leaves the marker in prefs,
+     * so a second projection releases id 23 again → the second coVerify(exactly = 1) fails (would
+     * see 2 calls).
+     */
+    @Test
+    fun `an orphaned VirtualDisplay marker is cleared after release`() {
+        context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putInt(ClusterProjectionManager.KEY_LAST_VD_ID, 23).commit()
+        val helper = directProjectionHelper()
+
+        projectDirect(helper)
+
+        coVerify(exactly = 1) { helper.releaseVirtualDisplay(23) }
+        assertEquals(
+            "the stale marker must be cleared once the orphan is released",
+            -1,
+            context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(ClusterProjectionManager.KEY_LAST_VD_ID, -1),
+        )
+
+        resetManagerState()
+        projectDirect(helper)
+
+        coVerify(exactly = 1) { helper.releaseVirtualDisplay(23) }
+    }
+
     // --- helpers ---
 
     private fun directProjectionHelper(): HelperClient = mockk<HelperClient>(relaxed = true).also {

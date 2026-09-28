@@ -937,7 +937,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     fun saveOpenRouterApiKey(value: String) {
         _uiState.update { it.copy(openRouterApiKey = value) }
         viewModelScope.launch {
-            settingsRepository.setString(SettingsRepository.KEY_OPENROUTER_API_KEY, value)
+            settingsRepository.setString(SettingsRepository.KEY_OPENROUTER_API_KEY, value.trim())
             // When a key is entered but no model has been chosen yet, fill in the default.
             // Decision is made against the CURRENT state inside the CAS loop so a concurrent
             // selectModel() call cannot be overwritten by a stale snapshot.
