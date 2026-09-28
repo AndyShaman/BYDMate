@@ -130,6 +130,20 @@ class HudCheckDeferredRestoreSpecTest {
         assertFalse(s.controller.armingPaused)
     }
 
+    @Test fun `R7 a route starting during the layout retry ends it at once and leaves the kept layout`() = runTest {
+        val routeAt = stepsEndMs + 12_000
+        // The cluster lets go after the route started: a retry still running would write under it.
+        val s = setup { t -> t in 58_000 until routeAt + 2_000 }
+        s.check.guidanceActive = { testScheduler.currentTime >= routeAt }
+        s.check.run()
+        val endedAt = testScheduler.currentTime
+        assertTrue("the check ended at $endedAt", endedAt in routeAt..(routeAt + 1_500))
+        assertTrue(s.car.layoutWrites().none { it.value != HudArming.LAYOUT_NAVI })
+        assertEquals(1, prefs().getInt(HudArming.KEY_AS_FOUND, -1))
+        assertEquals(HudCheck.State.RouteStarted, s.check.state.value)
+        assertFalse(s.controller.armingPaused)
+    }
+
     @Test fun `R3 a check stopped by moving off at a fullscreen cluster retries the layout the same way`() = runTest {
         val s = setup(speedAt = { t -> if (t >= 30_000) 25 else 0 }) { t -> t in 29_000 until 40_000 }
         s.check.run()
