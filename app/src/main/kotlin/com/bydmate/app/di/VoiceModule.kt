@@ -6,6 +6,7 @@ import android.util.Log
 import com.bydmate.app.agent.LlmConnectionResolver
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.platform.LegacyHeadUnit
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.voice.*
 import com.bydmate.app.voice.online.MiniMaxTtsBackend
@@ -55,7 +56,7 @@ object VoiceModule {
 
     @Provides @Singleton
     fun provideContinuousAsr(mm: GigaAmModelManager, guard: AsrLoadGuard): ContinuousAsr =
-        GigaAmAsrEngine(mm, loadGuard = guard)
+        GigaAmAsrEngine(mm, loadGuard = guard, warmVad = LegacyHeadUnit.isAndroid10)
 
     @Provides @Singleton
     fun provideRuStressMarker(mm: TtsModelManager): RuStressMarker =

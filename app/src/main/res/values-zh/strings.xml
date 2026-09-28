@@ -176,7 +176,10 @@
     <string name="orb_agent">助手：</string>
     <string name="settings_voice_native_assistant_header">BYD 原车语音助手</string>
     <string name="settings_voice_disable_native_label">关闭原车语音助手</string>
-    <string name="settings_voice_disable_native_description">隐藏 BYD 内置语音助手，避免其打断。快捷指令应用会随之消失，它是语音助手的一部分。可恢复：关闭此开关并重启车机，两者都会回来。</string>
+    <string name="settings_voice_disable_native_description">隐藏 BYD 内置语音助手，避免其打断。快捷指令应用会随之消失，它是语音助手的一部分。可恢复：关闭此开关并重启车机，两者都会回来。卸载 BYDMate 前请先关闭此开关，否则原车语音助手会一直处于关闭状态。</string>
+    <string name="settings_voice_disable_native_confirm_title">关闭原车语音助手？</string>
+    <string name="settings_voice_disable_native_confirm_body">原车 BYD 语音助手将在车机系统中被关闭。卸载 BYDMate 前请先关闭此开关，否则原车语音助手会一直处于关闭状态。如果已经卸载：请重新安装 BYDMate，关闭此开关并重启车机。</string>
+    <string name="settings_voice_disable_native_confirm_button">关闭</string>
     <string name="settings_voice_native_assistant_reboot_note">重启车机后生效。</string>
     <string name="settings_widget_opacity_label">不透明度</string>
     <string name="settings_widget_scale_label">大小</string>

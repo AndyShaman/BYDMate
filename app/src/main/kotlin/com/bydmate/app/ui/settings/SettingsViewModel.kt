@@ -82,6 +82,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import com.bydmate.app.data.vehicle.DumpFidsResult
+import com.bydmate.app.data.vehicle.NativeAssistant
 import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import com.bydmate.app.service.BootReceiver
@@ -266,6 +267,8 @@ data class SettingsUiState(
     val gigaAmSpaceShortfall: SpaceShortfall? = null,
     /** When true, the native BYD voice assistant is disabled (pm disable-user). */
     val disableNativeAssistant: Boolean = false,
+    /** The warning shown before [disableNativeAssistant] is switched on. */
+    val showDisableNativeAssistantDialog: Boolean = false,
     // Voice agent (Phase 1, hidden)
     val agentEnabled: Boolean = false,
     val modelTestResult: String? = null,
@@ -528,8 +531,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val webhookSecret = settingsRepository.getString(SettingsRepository.KEY_WEBHOOK_SECRET, "")
             val webhookSendLocation = settingsRepository.getString(SettingsRepository.KEY_WEBHOOK_SEND_LOCATION, "false") == "true"
             val mapTileSource = settingsRepository.getMapTileSource()
+            // Never chosen here (a reinstall after an uninstall with the toggle on): show what the
+            // system has, so switching the toggle off brings the assistant back. The service's
+            // reconcile still leaves the packages alone until the driver chooses.
+            val disableNativeAssistantPref =
+                settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "")
             val disableNativeAssistant =
-                settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "false") == "true"
+                if (disableNativeAssistantPref.isEmpty()) NativeAssistant.disabledInSystem(appContext.packageManager)
+                else disableNativeAssistantPref == "true"
 
             // Voice settings
             val voiceEnabled = settingsRepository.isVoiceEnabled()
@@ -657,8 +666,26 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(disableNativeAssistant = disabled) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, disabled.toString())
-            helperClient.setAppHidden("com.byd.autovoice", disabled)
+            NativeAssistant.setDisabled(helperClient, appContext.packageManager, disabled)
         }
+    }
+
+    /**
+     * The settings toggle. Switching on first shows a warning: the disable outlives BYDMate, so
+     * the driver learns before it how to bring the assistant back. Switching off applies at once.
+     */
+    fun toggleDisableNativeAssistant(checked: Boolean) {
+        if (checked) _uiState.update { it.copy(showDisableNativeAssistantDialog = true) }
+        else setDisableNativeAssistant(false)
+    }
+
+    fun confirmDisableNativeAssistant() {
+        _uiState.update { it.copy(showDisableNativeAssistantDialog = false) }
+        setDisableNativeAssistant(true)
+    }
+
+    fun dismissDisableNativeAssistantDialog() {
+        _uiState.update { it.copy(showDisableNativeAssistantDialog = false) }
     }
 
     /** Save battery capacity setting. */
@@ -2191,7 +2218,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("disable_native_assistant pref: \"$pref\"")
                 // Same package family the helper daemon disables via TX_SET_APP_HIDDEN.
                 val pm = appContext.packageManager
-                for (pkg in listOf("com.byd.autovoice", "com.byd.autovoice.engine", "com.byd.autovoice.tts")) {
+                for (pkg in listOf("com.byd.autovoice", "com.byd.autovoice.engine", "com.byd.autovoice.tts", "com.byd.vrassistant")) {
                     val state = runCatching { enabledSettingName(pm.getApplicationEnabledSetting(pkg)) }
                         .getOrElse { "not installed" }
                     appendLine("$pkg: $state")

@@ -19,6 +19,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
@@ -72,6 +73,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
     private val busy = AtomicBoolean(false)
     @Volatile private var sessionJob: Job? = null
+    // Android 10 head units: the press is waiting for the ASR warm-up (startContinuousSessionWhenWarm).
+    @Volatile private var warmupJob: Job? = null
     @Volatile private var routingJob: Job? = null
     @Volatile private var cancellableAskJob: Job? = null
     // Busy drops are Log.i-only by contract (no journal/earcon/state change), so tests have no
@@ -102,6 +105,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  instead of fixed sleeps, no public API surface added. */
     internal fun routingJobForTest(): Job? = routingJob
     internal fun droppedWhileBusyForTest(): Int = droppedWhileBusy
+    internal fun warmupJobForTest(): Job? = warmupJob
     // Hard-stop contract: orb press (stopContinuousSession) cancels routingJob immediately.
     // A vehicle-write unit that has already started runs to completion regardless — VehicleApiImpl
     // wraps composite (window fan-out, fridge preset) and seat (switch+level) write sequences in
@@ -238,12 +242,23 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             Trace.event(TraceArea.VOICE, "ptt-ignored", "reason" to "voice-off", by = ptt)
             return
         }
+        // Android 10 head units: the warm-up job starts the session off the main thread. Until it
+        // is done a press is dropped: the session may already be listening while its job is not
+        // assigned yet, and a stop would miss it.
+        if (warmupJob?.isActive == true) {
+            Trace.event(TraceArea.VOICE, "ptt-ignored", "reason" to "warming", by = ptt)
+            return
+        }
         if (_listening.value) {
             stopContinuousSession("ptt")
             return
         }
         if (continuousAsr.isReady()) {
-            startContinuousSession(ptt)
+            if (continuousAsr.requiresWarmBeforeListening() && !continuousAsr.isWarm()) {
+                startContinuousSessionWhenWarm(ptt)
+            } else {
+                startContinuousSession(ptt)
+            }
         } else {
             // GigaAM model missing: preserve the degraded UX the legacy path produced —
             // overlay + journal ERROR.
@@ -263,6 +278,29 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             busy.set(false)
             scheduleIdleReset()
             scope.launch { announce("Голос", msg, msg) }
+        }
+    }
+
+    /** Android 10 head units (see [ContinuousAsr.requiresWarmBeforeListening]): the start cue and
+     *  the mic wait until the recognizer and the VAD are built, or the driver's first words go
+     *  to a mic that is not open yet. The pill answers the press at once in its "Думаю" look.
+     *  A warm-up that could not finish still starts the session: its own build then either
+     *  works or reports the failure the usual way. */
+    private fun startContinuousSessionWhenWarm(cause: Long) {
+        warmupJob = scope.launch(Dispatchers.IO) {
+            runCatching { showListeningOverlay(appStrings.get(R.string.voice_thinking)) }
+            val startedMs = System.currentTimeMillis()
+            runCatching { continuousAsr.warmUp() }
+            val waitedMs = System.currentTimeMillis() - startedMs
+            val warm = continuousAsr.isWarm()
+            Log.i(TAG, "warm-up before listening: ${waitedMs}ms warm=$warm")
+            Trace.event(TraceArea.VOICE, "warm-wait", "ms" to waitedMs, "warm" to warm, by = cause)
+            if (gate.isEnabled()) {
+                runCatching { updateListeningOverlay(appStrings.get(R.string.voice_listening)) }
+                startContinuousSession(cause)
+            } else {
+                runCatching { hideListeningOverlay() }
+            }
         }
     }
 

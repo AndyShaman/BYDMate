@@ -1,5 +1,6 @@
 package com.bydmate.app.voice
 
+import com.bydmate.app.diagnostics.TraceRecorder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -19,13 +20,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import java.util.concurrent.Executor
 
 /**
  * Segmentation logic tests for GigaAmAsrEngine, driven entirely through fake
  * RecognizerHandle/VadHandle seams -- the sherpa-onnx JNI classes are never touched.
  */
 class GigaAmSegmenterTest {
+
+    @get:Rule val trace = TraceRecorder()
 
     private fun readyModelManager(): GigaAmModelManager =
         mockk<GigaAmModelManager>(relaxed = true).also { every { it.isReady() } returns true }
@@ -305,5 +310,162 @@ class GigaAmSegmenterTest {
         val events = engine.transcribe(List(2) { ShortArray(320) }.asFlow()).toList()
 
         assertTrue(events.filterIsInstance<ContinuousAsrEvent.Utterance>().isEmpty())
+    }
+
+    // --- Android 10 head units (PR #261): one VAD is built ahead, so a session's first frames go
+    // into a ready VAD instead of waiting for its construction. Other cars keep the path above. ---
+
+    /** Holds the background builds until the test runs them. */
+    private class ManualExecutor : Executor {
+        val pending = mutableListOf<Runnable>()
+        override fun execute(command: Runnable) { pending += command }
+        fun runAll() {
+            val jobs = pending.toList()
+            pending.clear()
+            jobs.forEach { it.run() }
+        }
+    }
+
+    private fun warmEngine(
+        vads: MutableList<FakeVadHandle>,
+        background: Executor,
+        recognizerFactory: () -> RecognizerHandle = { FakeRecognizerHandle() },
+    ) =
+        GigaAmAsrEngine(
+            modelManager = readyModelManager(),
+            recognizerFactory = recognizerFactory,
+            vadFactory = { FakeVadHandle().also { vads += it } },
+            warmVad = true,
+            prewarmExecutor = background,
+        )
+
+    @Test fun `warm vad - warmUp builds the recognizer and one spare vad`() = runTest {
+        val vads = mutableListOf<FakeVadHandle>()
+        var recognizerCreations = 0
+        val engine = warmEngine(vads, ManualExecutor()) { recognizerCreations++; FakeRecognizerHandle() }
+        assertTrue(engine.requiresWarmBeforeListening())
+        assertFalse(engine.isWarm())
+
+        engine.warmUp()
+        engine.warmUp()
+
+        assertEquals(1, recognizerCreations)
+        assertEquals(1, vads.size)
+        assertFalse(vads.single().closed)
+        assertTrue(engine.isWarm())
+    }
+
+    @Test fun `warm vad - the session takes the prebuilt vad and a new one is prepared in the background`() = runTest {
+        val vads = mutableListOf<FakeVadHandle>()
+        val background = ManualExecutor()
+        val engine = warmEngine(vads, background)
+        engine.warmUp()
+        val prebuilt = vads.single()
+
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+
+        // The session built nothing on its own path and closed the VAD it took; the next one is
+        // only handed to the background.
+        assertEquals(1, vads.size)
+        assertTrue(prebuilt.closed)
+        assertEquals(1, background.pending.size)
+        assertFalse(engine.isWarm())
+
+        background.runAll()
+
+        assertEquals(2, vads.size)
+        assertFalse(vads[1].closed)
+        assertTrue(engine.isWarm())
+    }
+
+    @Test fun `warm vad - a session with no spare ready builds its own and closes it`() = runTest {
+        val vads = mutableListOf<FakeVadHandle>()
+        val background = ManualExecutor()
+        val engine = warmEngine(vads, background)
+
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+
+        assertEquals(1, vads.size)
+        assertTrue(vads.single().closed)
+        background.runAll()
+        assertEquals(2, vads.size)
+        assertTrue(engine.isWarm())
+    }
+
+    @Test fun `warm vad - every vad built is closed, the spare one when the model is dropped`() = runTest {
+        val vads = mutableListOf<FakeVadHandle>()
+        val background = ManualExecutor()
+        val engine = warmEngine(vads, background)
+        engine.warmUp()
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+        background.runAll()
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+        background.runAll()
+
+        engine.invalidateCachedRecognizer()
+
+        assertEquals(3, vads.size)
+        assertTrue(vads.all { it.closed })
+        assertFalse(engine.isWarm())
+    }
+
+    @Test fun `default path - no spare vad and no wait before listening`() = runTest {
+        val vads = mutableListOf<FakeVadHandle>()
+        var recognizerCreations = 0
+        val background = ManualExecutor()
+        val engine = GigaAmAsrEngine(
+            modelManager = readyModelManager(),
+            recognizerFactory = { recognizerCreations++; FakeRecognizerHandle() },
+            vadFactory = { FakeVadHandle().also { vads += it } },
+            prewarmExecutor = background,
+        )
+        assertFalse(engine.requiresWarmBeforeListening())
+        assertTrue(engine.isWarm())
+
+        engine.warmUp()
+        assertEquals(1, recognizerCreations)
+        assertTrue(vads.isEmpty())
+
+        // As before the Android 10 change: each session builds its own VAD on its own path and
+        // closes it when it ends, nothing is built ahead or in the background.
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+        assertEquals(1, vads.size)
+        assertTrue(vads.single().closed)
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+        assertEquals(2, vads.size)
+        assertTrue(vads.all { it.closed })
+        assertEquals(1, recognizerCreations)
+        assertTrue(background.pending.isEmpty())
+        assertTrue(engine.isWarm())
+    }
+
+    // --- VAD build time in the trace on every car: shows whether newer head units need the warm
+    // VAD too. Milliseconds only, never the audio or the recognized text. ---
+
+    @Test fun `the time to get the session vad is traced in milliseconds and nothing else`() = runTest {
+        val vad = FakeVadHandle(listOf(
+            FakeVadHandle.FrameScript(speech = true),
+            FakeVadHandle.FrameScript(speech = false, segment = floatArrayOf(0.1f)),
+        ))
+        val engine = GigaAmAsrEngine(readyModelManager(), { FakeRecognizerHandle("открой окно") }, { vad })
+
+        engine.transcribe(List(2) { ShortArray(320) { 1000 } }.asFlow()).toList()
+
+        assertEquals(
+            listOf("voice  vad-ready ms=N prebuilt=false #1"),
+            trace.events().map { it.replace(Regex(""" ms=\d+"""), " ms=N") },
+        )
+    }
+
+    @Test fun `warm vad - a prebuilt vad is traced as prebuilt`() = runTest {
+        val engine = warmEngine(mutableListOf(), ManualExecutor())
+        engine.warmUp()
+
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+
+        assertEquals(
+            listOf("voice  vad-ready ms=N prebuilt=true #1"),
+            trace.events().map { it.replace(Regex(""" ms=\d+"""), " ms=N") },
+        )
     }
 }

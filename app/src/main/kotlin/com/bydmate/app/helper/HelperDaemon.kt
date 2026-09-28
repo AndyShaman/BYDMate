@@ -2,6 +2,7 @@
 package com.bydmate.app.helper
 
 import com.bydmate.app.BuildConfig
+import com.bydmate.app.data.vehicle.NativeAssistant
 import com.bydmate.app.helper.push.FidPushRegistry
 import com.bydmate.app.helper.push.FidRecorder
 import com.bydmate.app.helper.offreport.OffReport
@@ -537,10 +538,16 @@ fun main(args: Array<String>) {
                     val hidden = data.readInt()    // 1 = disable, 0 = enable
                     // Hardcoded — ONLY the native BYD voice assistant family. Fully reversible
                     // (pm enable) and touches no firmware. NOT a generic package-disable passthrough;
-                    // the caller may only name the launcher package.
+                    // the caller may only name the launcher package or com.byd.vrassistant.
                     // Validate the flag daemon-side too — a privileged shell-uid op must not
                     // trust the caller. Only 0/1 are a defined state; reject anything else.
-                    val ok = if (pkg == "com.byd.autovoice" && hidden in 0..1) {
+                    val ok = if (pkg == "com.byd.vrassistant" && hidden in 0..1) {
+                        // The stock voice UI of Android 10 head units (DiLink 3.0), a single
+                        // package; the app asks for it only there and only when it is installed.
+                        // Same disable-user / enable pair as below, reversible.
+                        val cmd = if (hidden == 1) "pm disable-user --user 0" else "pm enable"
+                        shExec("$cmd \"\$1\"", pkg).code == 0
+                    } else if (pkg == NativeAssistant.AUTOVOICE && hidden in 0..1) {
                         // `pm disable-user --user 0` force-stops the package and disables its
                         // components so the framework stops routing the steering voice button to it.
                         // `pm hide` left the already-running system assistant alive — the wheel
@@ -551,11 +558,12 @@ fun main(args: Array<String>) {
                         // (com.byd.autovoice), the wake/recognition engine (.engine) that actually
                         // services the wheel mic button, and TTS output (.tts). Disabling only the
                         // launcher leaves the wheel button live, so we disable the whole family.
-                        // Siblings are hardcoded literals, never caller input. Success is gated on
-                        // BOTH the launcher and the wake engine; TTS is output-only and best-effort.
+                        // Siblings come from NativeAssistant.AUTOVOICE_FAMILY, never caller input.
+                        // Success is gated on BOTH the launcher and the wake engine; TTS is
+                        // output-only and best-effort.
                         val primaryOk = shExec("$cmd \"\$1\"", pkg).code == 0
-                        val engineOk = shExec("$cmd \"\$1\"", "com.byd.autovoice.engine").code == 0
-                        shExec("$cmd \"\$1\"", "com.byd.autovoice.tts")
+                        val engineOk = shExec("$cmd \"\$1\"", NativeAssistant.AUTOVOICE_ENGINE).code == 0
+                        shExec("$cmd \"\$1\"", NativeAssistant.AUTOVOICE_TTS)
                         primaryOk && engineOk
                     } else false
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)

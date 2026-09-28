@@ -33,10 +33,13 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -1764,5 +1767,118 @@ class VoiceControllerSessionTest {
         awaitTrue { controller.listening.value }
 
         verify(exactly = 0) { ttsEngine.prewarmNetwork() }
+    }
+
+    // --- Android 10 head units (PR #261): listening opens only once the recognizer and the VAD
+    // are built, so the first words after the start cue are recorded. Until then the press is
+    // answered with the pill in its "Думаю" look. Other cars start at once, as before. ---
+
+    /** warmUp() blocks until the test opens [warmGate]; [warmFails] leaves the engine cold. */
+    private class WarmingAsr(private val requiresWarm: Boolean) : ContinuousAsr {
+        val events = MutableSharedFlow<ContinuousAsrEvent>(extraBufferCapacity = 16)
+        val warmGate = CountDownLatch(1)
+        val warmUps = AtomicInteger(0)
+        @Volatile var warm = false
+        @Volatile var warmFails = false
+        override fun isReady(): Boolean = true
+        override fun isWarm(): Boolean = warm
+        override fun requiresWarmBeforeListening(): Boolean = requiresWarm
+        override fun warmUp() {
+            warmUps.incrementAndGet()
+            warmGate.await(5, TimeUnit.SECONDS)
+            if (!warmFails) warm = true
+        }
+        override fun transcribe(pcm: Flow<ShortArray>): Flow<ContinuousAsrEvent> = events
+    }
+
+    /** The warm-up job has started the session and is done: presses count again from here. */
+    private fun awaitStartedAfterWarmUp(controller: VoiceController) {
+        awaitTrue { controller.listening.value }
+        awaitTrue { controller.warmupJobForTest()?.isActive != true }
+    }
+
+    @Test fun `android 10 - listening waits for the warm-up and starts right after it`() {
+        val asr = WarmingAsr(requiresWarm = true)
+        val earcon = mockk<VoiceEarcon>(relaxed = true)
+        val controller = makeController(asr, mockk(relaxed = true), earcon = earcon, context = stubbedContext())
+        val shown = Collections.synchronizedList(mutableListOf<String>())
+        val updates = Collections.synchronizedList(mutableListOf<String>())
+        controller.showListeningOverlay = { text -> shown.add(text) }
+        controller.updateListeningOverlay = { text -> updates.add(text) }
+
+        controller.onPttPressed()
+        awaitTrue { asr.warmUps.get() == 1 }
+
+        assertEquals(listOf("Думаю"), shown)
+        assertFalse(controller.listening.value)
+        verify(exactly = 0) { earcon.ok() }
+
+        asr.warmGate.countDown()
+        awaitStartedAfterWarmUp(controller)
+        awaitSubscribed(asr.events)
+
+        assertEquals("Слушаю", updates.first())
+        verify(exactly = 1) { earcon.ok() }
+        controller.onPttPressed()
+        awaitTrue { !controller.listening.value }
+    }
+
+    @Test fun `android 10 - an already warm engine starts listening at once`() {
+        val asr = WarmingAsr(requiresWarm = true).apply { warm = true }
+        val controller = makeController(asr, mockk(relaxed = true))
+
+        controller.onPttPressed()
+
+        assertTrue(controller.listening.value)
+        assertEquals(0, asr.warmUps.get())
+    }
+
+    @Test fun `android 10 - a second press during the warm-up is ignored`() {
+        val asr = WarmingAsr(requiresWarm = true)
+        val controller = makeController(asr, mockk(relaxed = true))
+
+        controller.onPttPressed()
+        awaitTrue { asr.warmUps.get() == 1 }
+        controller.onPttPressed()
+        asr.warmGate.countDown()
+        awaitStartedAfterWarmUp(controller)
+
+        assertEquals(1, asr.warmUps.get())
+        controller.onPttPressed()
+        awaitTrue { !controller.listening.value }
+    }
+
+    @Test fun `android 10 - a warm-up that could not finish still starts the session`() {
+        val asr = WarmingAsr(requiresWarm = true).apply { warmFails = true }
+        val controller = makeController(asr, mockk(relaxed = true))
+
+        controller.onPttPressed()
+        asr.warmGate.countDown()
+
+        awaitStartedAfterWarmUp(controller)
+        controller.onPttPressed()
+        awaitTrue { !controller.listening.value }
+    }
+
+    @Test fun `other cars start listening at once without waiting for a warm-up`() {
+        val asr = WarmingAsr(requiresWarm = false)
+        val earcon = mockk<VoiceEarcon>(relaxed = true)
+        val controller = makeController(asr, mockk(relaxed = true), earcon = earcon, context = stubbedContext())
+        val shown = Collections.synchronizedList(mutableListOf<String>())
+        controller.showListeningOverlay = { text -> shown.add(text) }
+
+        controller.onPttPressed()
+
+        // Same as before the Android 10 change: the cue and the listening state on the press
+        // itself, no warm-up job, the pill opens as «Слушаю» and never shows «Думаю».
+        assertTrue(controller.listening.value)
+        verify(exactly = 1) { earcon.ok() }
+        assertNull(controller.warmupJobForTest())
+        awaitSubscribed(asr.events)
+        awaitTrue { shown.isNotEmpty() }
+        assertEquals(listOf("Слушаю"), shown)
+        assertEquals(0, asr.warmUps.get())
+        controller.onPttPressed()
+        awaitTrue { !controller.listening.value }
     }
 }

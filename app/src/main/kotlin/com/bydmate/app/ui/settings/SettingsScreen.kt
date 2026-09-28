@@ -3519,10 +3519,36 @@ private fun VoiceSettingsContent(
                 traceId = "voice_disable_native",
                 description = stringResource(R.string.settings_voice_disable_native_description),
                 checked = state.disableNativeAssistant,
-                onCheckedChange = { viewModel.setDisableNativeAssistant(it) },
+                onCheckedChange = { viewModel.toggleDisableNativeAssistant(it) },
             )
             SettingHint(stringResource(R.string.settings_voice_native_assistant_reboot_note))
         }
+    }
+    if (state.showDisableNativeAssistantDialog) {
+        AppAlertDialog(
+            onDismissRequest = { viewModel.dismissDisableNativeAssistantDialog() },
+            containerColor = CardSurface,
+            title = {
+                Text(stringResource(R.string.settings_voice_disable_native_confirm_title), color = TextPrimary)
+            },
+            text = {
+                Text(
+                    stringResource(R.string.settings_voice_disable_native_confirm_body),
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmDisableNativeAssistant() }) {
+                    Text(stringResource(R.string.settings_voice_disable_native_confirm_button), color = AccentGreen)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissDisableNativeAssistantDialog() }) {
+                    Text(stringResource(R.string.settings_cancel_button), color = TextSecondary)
+                }
+            },
+        )
     }
 }
 
