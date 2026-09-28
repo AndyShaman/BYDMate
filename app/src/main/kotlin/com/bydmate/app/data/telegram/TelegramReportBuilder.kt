@@ -30,15 +30,20 @@ data class ReportInputs(
 /** The message in Telegram HTML plus what went into it, for the log (never the text itself). */
 data class BuiltReport(val text: String, val taken: List<ReportField>, val skipped: List<ReportField>)
 
+/** Where the car stands, for the native location under a report; toString never shows it. */
+data class MapPoint(val latitude: Double, val longitude: Double) {
+    override fun toString(): String = "MapPoint"
+}
+
 /**
  * Builds the Telegram report text (Telegram HTML, every value escaped). An item the car does not
  * report is left out and named in [BuiltReport.skipped]; nothing is guessed. Pure, so the automation
  * action and the power-off report (phase B) share one text.
  *
- * Layout (approved 2026-09-27): blocks split by one empty line, each only when it has something:
- * the bold header; the user's own text; the car (🔋 charge and range, 🌡 temperatures, 🛞 tires,
- * 🔒 all closed); 🚗 the trip, its numbers indented below the title; ⚠️ what is open; 📍 the map
- * link, always last.
+ * Layout (approved 2026-09-27, the odometer 2026-09-28): blocks split by one empty line, each only
+ * when it has something: the bold header; the user's own text; the car (🔋 charge and range,
+ * 🧭 odometer, 🌡 temperatures, 🛞 tires, 🔒 all closed); 🚗 the trip, its numbers indented below
+ * the title; ⚠️ what is open; 📍 the map link, always last.
  */
 @Suppress("TooManyFunctions") // one small function per report line
 object TelegramReportBuilder {
@@ -64,6 +69,13 @@ object TelegramReportBuilder {
 
     /** How the map block starts; user text is escaped, so only the builder's own link matches. */
     private const val MAP_PREFIX = "📍 <a href="
+
+    /** `pt=<lon>,<lat>` in a Yandex link, `query=<lat>,<lon>` in a Google one ([mapUrl]). */
+    private val YANDEX_POINT = Regex("""[?&]pt=(-?\d+\.\d+),(-?\d+\.\d+)""")
+    private val GOOGLE_POINT = Regex("""[?&]query=(-?\d+\.\d+),(-?\d+\.\d+)""")
+
+    /** An odometer below this is one the car has not reported yet (the fid reads 0 at startup). */
+    private const val MIN_ODOMETER_KM = 1.0
 
     private val TIME = SimpleDateFormat("HH:mm", Locale.US)
     private val DATE = SimpleDateFormat("dd.MM", Locale.US)
@@ -96,6 +108,19 @@ object TelegramReportBuilder {
         else text.substring(0, at) + BLOCK_GAP + mark + text.substring(at)
     }
 
+    /**
+     * The place of [text]'s own map link (found the way [withLateMark] finds it), for the native
+     * location sent after the report; null when the text has no map link (a text from 3.19.0 too).
+     */
+    fun mapPoint(text: String): MapPoint? {
+        val at = text.lastIndexOf(BLOCK_GAP + MAP_PREFIX)
+        if (at < 0) return null
+        val href = text.substring(at + BLOCK_GAP.length + MAP_PREFIX.length)
+            .removePrefix("\"").substringBefore('"').replace("&amp;", "&")
+        YANDEX_POINT.find(href)?.let { return MapPoint(it.groupValues[2].toDouble(), it.groupValues[1].toDouble()) }
+        return GOOGLE_POINT.find(href)?.let { MapPoint(it.groupValues[1].toDouble(), it.groupValues[2].toDouble()) }
+    }
+
     @Suppress("LongParameterList") // the report is exactly these inputs
     fun build(
         header: String,
@@ -111,6 +136,7 @@ object TelegramReportBuilder {
         val openings = found[ReportField.OPENINGS]
         val car = listOfNotNull(
             chargeLine(found[ReportField.SOC], found[ReportField.RANGE], Locale.forLanguageTag(lang)),
+            found[ReportField.ODOMETER]?.html,
             found[ReportField.TEMPS]?.html,
             found[ReportField.TIRES]?.html,
             openings?.takeIf { !it.alert }?.html,
@@ -161,6 +187,7 @@ object TelegramReportBuilder {
         return when (field) {
             ReportField.SOC -> socPart(d?.soc, strings)
             ReportField.RANGE -> rangePart(inputs.rangeKm, strings)
+            ReportField.ODOMETER -> odometerLine(d?.mileage, strings)
             ReportField.TRIP -> tripBlock(inputs, strings, nowMs)
             ReportField.TEMPS -> d?.let { tempsLine(it, strings, locale) }?.let { "🌡 ${escape(it)}" }
             ReportField.TIRES -> d?.let { tiresLine(it, strings, locale) }?.let { "🛞 ${escape(it)}" }
@@ -177,6 +204,11 @@ object TelegramReportBuilder {
     /** «запас <b>312 км</b>», null for no range. */
     private fun rangePart(km: Double?, strings: ReportStrings): String? = km?.takeIf { it > 0.0 }?.let {
         markup(strings, R.string.tg_report_range, bold(escape(text(strings, R.string.tg_report_trip_km_whole, it.roundToInt()))))
+    }
+
+    /** «🧭 Пробег 23 456 км»: whole kilometers cut like the car's own odometer, grouped by the language. */
+    private fun odometerLine(km: Double?, strings: ReportStrings): String? = km?.takeIf { it >= MIN_ODOMETER_KM }?.let {
+        "🧭 ${escape(text(strings, R.string.tg_report_odometer, it.toInt()))}"
     }
 
     /** «🔋 Заряд <b>64%</b>, запас <b>312 км</b>», either half alone when only one is reported. */

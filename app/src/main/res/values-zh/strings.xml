@@ -1847,6 +1847,7 @@
     <string name="tg_report_field_location">地图位置</string>
     <string name="tg_report_field_soc">电量</string>
     <string name="tg_report_field_range">续航</string>
+    <string name="tg_report_field_odometer">总里程</string>
     <string name="tg_report_field_trip">行程</string>
     <string name="tg_report_field_temps">温度</string>
     <string name="tg_report_field_openings">未关闭项</string>
@@ -1862,6 +1863,7 @@
     <string name="tg_report_trip_distance_time">%1$s，用时 %2$s</string>
     <string name="tg_report_trip_km">%1$.1f 公里</string>
     <string name="tg_report_trip_km_whole">%1$d 公里</string>
+    <string name="tg_report_odometer">总里程 %1$,d 公里</string>
     <string name="tg_report_trip_consumption">能耗 %1$.1f kWh/100 公里</string>
     <string name="tg_report_temp_outside">车外 %1$+d°</string>
     <string name="tg_report_temp_inside">车内 %1$+d°</string>
@@ -1889,6 +1891,7 @@
     <string name="tg_report_field_location_desc">「在地图上打开」链接</string>
     <string name="tg_report_field_soc_desc">电池百分比</string>
     <string name="tg_report_field_range_desc">公里数，与主页相同</string>
+    <string name="tg_report_field_odometer_desc">车辆的总行驶里程</string>
     <string name="tg_report_field_trip_desc">公里数、能耗和行驶时间</string>
     <string name="tg_report_field_temps_desc">车外和车内</string>
     <string name="tg_report_field_openings_desc">车门、车窗、天窗、后备箱、引擎盖</string>

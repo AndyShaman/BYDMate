@@ -1729,6 +1729,7 @@
     <string name="tg_report_field_location">Local no mapa</string>
     <string name="tg_report_field_soc">Carga</string>
     <string name="tg_report_field_range">Autonomia</string>
+    <string name="tg_report_field_odometer">Hodômetro</string>
     <string name="tg_report_field_trip">Viagem</string>
     <string name="tg_report_field_temps">Temperatura</string>
     <string name="tg_report_field_openings">O que está aberto</string>
@@ -1744,6 +1745,7 @@
     <string name="tg_report_trip_distance_time">%1$s em %2$s</string>
     <string name="tg_report_trip_km">%1$.1f km</string>
     <string name="tg_report_trip_km_whole">%1$d km</string>
+    <string name="tg_report_odometer">Hodômetro %1$,d km</string>
     <string name="tg_report_trip_consumption">Consumo %1$.1f kWh/100 km</string>
     <string name="tg_report_temp_outside">lado de fora %1$+d°</string>
     <string name="tg_report_temp_inside">cabine %1$+d°</string>
@@ -1771,6 +1773,7 @@
     <string name="tg_report_field_location_desc">Link «Abrir no mapa»</string>
     <string name="tg_report_field_soc_desc">Porcentagem da bateria</string>
     <string name="tg_report_field_range_desc">Quilômetros, como na tela inicial</string>
+    <string name="tg_report_field_odometer_desc">Quilometragem total do carro</string>
     <string name="tg_report_field_trip_desc">Quilômetros, consumo e tempo de viagem</string>
     <string name="tg_report_field_temps_desc">Lado de fora e na cabine</string>
     <string name="tg_report_field_openings_desc">Portas, janelas, teto solar, porta-malas, capô</string>

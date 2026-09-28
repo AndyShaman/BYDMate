@@ -1733,6 +1733,7 @@
     <string name="tg_report_field_location">Location on the map</string>
     <string name="tg_report_field_soc">Charge</string>
     <string name="tg_report_field_range">Range</string>
+    <string name="tg_report_field_odometer">Odometer</string>
     <string name="tg_report_field_trip">Trip</string>
     <string name="tg_report_field_temps">Temperature</string>
     <string name="tg_report_field_openings">What is open</string>
@@ -1748,6 +1749,7 @@
     <string name="tg_report_trip_distance_time">%1$s in %2$s</string>
     <string name="tg_report_trip_km">%1$.1f km</string>
     <string name="tg_report_trip_km_whole">%1$d km</string>
+    <string name="tg_report_odometer">Odometer %1$,d km</string>
     <string name="tg_report_trip_consumption">Consumption %1$.1f kWh/100 km</string>
     <string name="tg_report_temp_outside">outside %1$+d°</string>
     <string name="tg_report_temp_inside">cabin %1$+d°</string>
@@ -1775,6 +1777,7 @@
     <string name="tg_report_field_location_desc">An «Open on the map» link</string>
     <string name="tg_report_field_soc_desc">Battery percent</string>
     <string name="tg_report_field_range_desc">Kilometers, as on Home</string>
+    <string name="tg_report_field_odometer_desc">Total distance of the car</string>
     <string name="tg_report_field_trip_desc">Kilometers, consumption and driving time</string>
     <string name="tg_report_field_temps_desc">Outside and in the cabin</string>
     <string name="tg_report_field_openings_desc">Doors, windows, sunroof, trunk, hood</string>

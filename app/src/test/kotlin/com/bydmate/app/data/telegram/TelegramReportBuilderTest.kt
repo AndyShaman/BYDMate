@@ -2,11 +2,17 @@ package com.bydmate.app.data.telegram
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.autoservice.SentinelDecoder
+import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.data.nativestack.ParamDecoder
 import com.bydmate.app.data.remote.diParsData
+import com.bydmate.app.ui.automation.newTelegramReportAction
+import com.bydmate.app.ui.automation.reportFields
 import com.bydmate.app.util.localizedContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,7 +37,7 @@ class TelegramReportBuilderTest {
     private val em = "\u2003\u2003"
 
     private val fullData = diParsData(
-        soc = 64, exteriorTemp = 12, insideTemp = 19,
+        soc = 64, mileage = 23_456.7, exteriorTemp = 12, insideTemp = 19,
         doorFL = 0, doorFR = 0, doorRL = 0, doorRR = 0,
         windowFL = 30, windowFR = 0, windowRL = 0, windowRR = 0,
         sunroof = 0, trunk = 2, hood = 0,
@@ -67,6 +73,7 @@ class TelegramReportBuilderTest {
                 "<b>BYDMate: Где машина</b>",
                 "",
                 "🔋 Заряд <b>64%</b>, запас <b>312 км</b>",
+                "🧭 Пробег 23\u00A0456 км",
                 "🌡 Снаружи +12°, в салоне +19°",
                 "🛞 Шины: ПЛ 2,4 · ПП 2,4 · ЗЛ 2,3 · ЗП 2,4 бар",
                 "",
@@ -124,7 +131,10 @@ class TelegramReportBuilderTest {
         assertEquals(listOf("<b>BYDMate: Где машина</b>", "", "🔋 Заряд <b>51%</b>"), report.text.lines())
         assertEquals(listOf(ReportField.SOC), report.taken)
         assertEquals(
-            listOf(ReportField.LOCATION, ReportField.RANGE, ReportField.TRIP, ReportField.TEMPS, ReportField.OPENINGS, ReportField.TIRES),
+            listOf(
+                ReportField.LOCATION, ReportField.RANGE, ReportField.ODOMETER, ReportField.TRIP,
+                ReportField.TEMPS, ReportField.OPENINGS, ReportField.TIRES,
+            ),
             report.skipped,
         )
     }
@@ -241,7 +251,7 @@ class TelegramReportBuilderTest {
     @Test fun `every interface language builds the whole report`() {
         for (lang in listOf("ru", "be", "en", "pl", "pt", "zh")) {
             val report = build(lang = lang, inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L)))
-            assertEquals(lang, 13, report.text.lines().size)
+            assertEquals(lang, 14, report.text.lines().size)
             assertFalse(lang, report.text.contains("%1"))
             assertFalse(lang, report.text.contains('\u0000'))
             assertTrue(lang, report.text.lines().last().startsWith("📍 <a href="))
@@ -265,6 +275,93 @@ class TelegramReportBuilderTest {
         val text = build(fields = setOf(ReportField.SOC), custom = "📍 <a href=\"x\">y</a>").text
         val marked = TelegramReportBuilder.withLateMark(text, "<i>m</i>")
         assertTrue(marked, marked.endsWith("\n\n<i>m</i>"))
+    }
+
+    // --- the odometer ---
+
+    /** By its stored id: rule payloads and the power-off setting keep the item as `odometer`. */
+    private val odometer: ReportField get() = ReportField.fromId("odometer")!!
+
+    @Test fun `the odometer comes right after the range in the pickers, in every interface language`() {
+        val ids = ReportField.entries.map { it.id }
+        assertEquals(ids.indexOf("range") + 1, ids.indexOf("odometer"))
+        val langs = listOf("ru", "be", "en", "pl", "pt", "zh")
+        val labels = langs.map { ctx.localizedContext(it).getString(odometer.labelRes) }
+        val descs = langs.map { ctx.localizedContext(it).getString(odometer.descRes) }
+        assertEquals("Пробег", labels.first())
+        assertEquals("each language has its own label: $labels", langs.size, labels.toSet().size)
+        assertEquals("each language has its own description: $descs", langs.size, descs.toSet().size)
+    }
+
+    @Test fun `the odometer line follows the charge line, whole kilometers grouped as the language groups them`() {
+        val data = fullData.copy(mileage = 23_456.7)
+        val fields = setOf(ReportField.SOC, ReportField.RANGE, odometer, ReportField.TEMPS)
+        assertEquals(
+            listOf(
+                "<b>BYDMate: Где машина</b>",
+                "",
+                "🔋 Заряд <b>64%</b>, запас <b>312 км</b>",
+                "🧭 Пробег 23\u00A0456 км",
+                "🌡 Снаружи +12°, в салоне +19°",
+            ),
+            build(fields = fields, inputs = inputs(data = data)).text.lines(),
+        )
+        val en = build(fields = setOf(odometer), inputs = inputs(data = data), lang = "en")
+        assertEquals("🧭 Odometer 23,456 km", en.text.lines()[2])
+        assertEquals(listOf(odometer), en.taken)
+    }
+
+    @Test fun `without charge and range the odometer opens the car block`() {
+        val data = fullData.copy(mileage = 23_456.7)
+        val report = build(fields = setOf(odometer, ReportField.TIRES), inputs = inputs(data = data))
+        assertEquals(
+            listOf("<b>BYDMate: Где машина</b>", "", "🧭 Пробег 23\u00A0456 км", "🛞 Шины: ПЛ 2,4 · ПП 2,4 · ЗЛ 2,3 · ЗП 2,4 бар"),
+            report.text.lines(),
+        )
+    }
+
+    @Test fun `an odometer the car does not report is left out, never shown as zero`() {
+        val sentinel = ParamDecoder.decodeScaled(SentinelDecoder.FEATURE_LINK_ERROR, 0.1)
+        for (km in listOf(null, sentinel, 0.0, 0.4, -12.0)) {
+            val report = build(fields = setOf(ReportField.SOC, odometer), inputs = inputs(data = fullData.copy(mileage = km)))
+            assertEquals("$km", listOf("<b>BYDMate: Где машина</b>", "", "🔋 Заряд <b>64%</b>"), report.text.lines())
+            assertEquals("$km", listOf(odometer), report.skipped)
+        }
+    }
+
+    @Test fun `a new report action and a fresh install start with the odometer on`() {
+        assertTrue(odometer in ReportField.DEFAULT)
+        assertTrue(odometer in ReportField.parseCsv(null))
+        assertTrue(odometer in newTelegramReportAction(ctx).reportFields())
+    }
+
+    @Test fun `a rule saved before the odometer existed keeps exactly its own items`() {
+        val saved = ActionDef(
+            command = "", displayName = "x", kind = TELEGRAM_REPORT_KIND,
+            payload = """{"fields":["location","soc","range","trip"],"text":""}""",
+        )
+        assertEquals(setOf(ReportField.LOCATION, ReportField.SOC, ReportField.RANGE, ReportField.TRIP), saved.reportFields())
+    }
+
+    // --- the point under the report ---
+
+    @Test fun `the point comes back from the report's own map link in every language, late mark or not`() {
+        for (lang in listOf("ru", "be", "en", "pl", "pt", "zh")) {
+            for ((lat, lon) in listOf(53.9 to 27.56, -22.906847 to -43.172897)) {
+                val text = build(fields = setOf(ReportField.SOC, ReportField.LOCATION), inputs = inputs(location = lat to lon), lang = lang).text
+                assertEquals(lang, MapPoint(lat, lon), TelegramReportBuilder.mapPoint(text))
+                assertEquals(lang, MapPoint(lat, lon), TelegramReportBuilder.mapPoint(TelegramReportBuilder.withLateMark(text, "<i>m</i>")))
+            }
+        }
+    }
+
+    @Test fun `no map link, no point, and own text that looks like one never gives a point`() {
+        assertNull(TelegramReportBuilder.mapPoint(build(fields = setOf(ReportField.SOC)).text))
+        assertNull(TelegramReportBuilder.mapPoint(build(inputs = inputs(location = null)).text))
+        val forged = "📍 <a href=\"https://yandex.ru/maps/?pt=1.000000,2.000000&amp;z=16\">x</a>"
+        assertNull(TelegramReportBuilder.mapPoint(build(fields = setOf(ReportField.SOC), custom = forged).text))
+        assertNull(TelegramReportBuilder.mapPoint("<b>h</b>\n\n📍 <a href=\"https://yandex.ru/maps/?pt=1&amp;z=16\">x</a>"))
+        assertFalse(MapPoint(53.9, 27.56).toString().contains("53"))
     }
 
     @Test fun `power-off header carries the time placeholder the daemon fills`() {

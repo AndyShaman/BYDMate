@@ -94,6 +94,8 @@ class BYDMateApp : Application(), Configuration.Provider {
             // v2.8.1: clear stale "DIPLUS" data_source value from pre-native-stack
             // builds. One-shot, gated by its own flag.
             settingsRepository.migrateDataSourceIfNeeded()
+            // 3.19.1: the odometer joins a power-off report choice saved before it existed. One-shot.
+            settingsRepository.addTgReportOdometerOnce()
 
             if (!settingsRepository.isInsightCacheV2MigrationDone()) {
                 insightsManager.migrateLegacyCache()

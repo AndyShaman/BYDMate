@@ -179,6 +179,8 @@ class TelegramReporter @Inject constructor(
                     }
                 }
                 saveOutbox(queue)
+                // Only once the report is off the disk: a point cut short never sends it again.
+                if (failure == null) sendPoint(entry.id, config.token, entry.chatId, text)
             }
         }
     }
@@ -228,6 +230,7 @@ class TelegramReporter @Inject constructor(
         return when {
             failure == null -> {
                 Log.i(TAG, "send id=$id rc=ok")
+                sendPoint(id, config.token, chatId, text)
                 drainOutbox("after_send")
                 SendResult.Sent
             }
@@ -244,6 +247,17 @@ class TelegramReporter @Inject constructor(
                 SendResult.Failed(errorKey(failure))
             }
         }
+    }
+
+    /**
+     * The native location under a report Telegram took, from the report's own map link: one attempt,
+     * never queued. Its failure is one log line; the report itself stays delivered.
+     */
+    private suspend fun sendPoint(id: String, token: String, chatId: Long, text: String) {
+        val point = TelegramReportBuilder.mapPoint(text) ?: return
+        val failure = sink.sendLocation(token, chatId, point.latitude, point.longitude).exceptionOrNull()
+        if (failure == null) Log.i(TAG, "location id=$id rc=ok")
+        else Log.w(TAG, "location id=$id rc=${errorKey(failure)}")
     }
 
     /** [BuiltReport] plus the moment it describes the car: what [deliver] stamps an outbox entry with. */

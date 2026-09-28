@@ -160,6 +160,17 @@ class TelegramBackupSinkTest {
         assertTrue(body, body.contains("""link_preview_options={"is_disabled":true}"""))
     }
 
+    @Test fun `sendLocation posts the chat, both coordinates and no notification`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"ok":true,"result":{}}"""))
+
+        assertTrue(sink.sendLocation("123:abc", 42L, 53.9, -27.56).isSuccess)
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/bot123:abc/sendLocation", request.path)
+        val body = java.net.URLDecoder.decode(request.body.readUtf8(), "UTF-8")
+        assertEquals("chat_id=42&latitude=53.900000&longitude=-27.560000&disable_notification=true", body)
+    }
+
     @Test fun `sendDocument uploads a multipart zip with chat id and caption`() = runTest {
         server.enqueue(MockResponse().setBody("""{"ok":true,"result":{}}"""))
         val file = tmp.newFile("bydmate_backup_auto_20260923_100000.zip").apply { writeBytes(byteArrayOf(80, 75, 3, 4)) }
