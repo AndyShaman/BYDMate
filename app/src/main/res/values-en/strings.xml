@@ -883,6 +883,17 @@
     <!-- Fid catalog dump (Task O) -->
     <string name="settings_fid_dump_button">Save fid catalog</string>
     <string name="settings_fid_dump_desc">SDK constant names and values. Technical identifiers only: no VIN, no location, no personal data</string>
+    <string name="settings_hud_check_title">HUD check</string>
+    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. Start log recording first and film the glass. The car stands still, no route needed</string>
+    <string name="settings_hud_check_button">Start</string>
+    <string name="settings_hud_check_preparing">Preparing the check</string>
+    <string name="settings_hud_check_step">Step %1$d of %2$d, watch the glass</string>
+    <string name="settings_hud_check_restoring">Finishing the check</string>
+    <string name="settings_hud_check_done">Done, save the logs and send them together with the video of the glass</string>
+    <string name="settings_hud_check_route_started">Check stopped: a route has started</string>
+    <string name="settings_hud_check_refused_guidance">Finish the route in the navigator first</string>
+    <string name="settings_hud_check_refused_moving">Stop the car, the check runs only when standing</string>
+    <string name="settings_hud_check_refused_no_link">No connection to the car, the check did not start</string>
     <string name="settings_fid_dump_saved">Saved: %1$s</string>
     <string name="settings_fid_dump_in_progress">Reading fids...</string>
     <string name="settings_fid_dump_empty">Fid catalog is empty on this firmware</string>

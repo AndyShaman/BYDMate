@@ -1,5 +1,7 @@
 package com.bydmate.app.navdata
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -22,6 +24,10 @@ object NavA11yFeed {
      *  alternate codes faster than the driver passes intersections. */
     private const val TREE_DUMP_MIN_INTERVAL_MS = 30_000L
     private const val NO_MANEUVER = Int.MIN_VALUE
+    /** A standing car changes nothing on screen, so no events come and the hub would expire
+     *  the maneuver (MANEUVER_TIMEOUT_MS) while the navigator still shows it: the window is
+     *  re-read when no read happened for this long, looked at on the same period. */
+    private const val TIMER_READ_MS = 5_000L
 
     /** Re-enabling starts a fresh diagnostic episode: the transition-only flags below
      *  would otherwise survive a HUD off/on cycle and swallow the first edge log. */
@@ -32,8 +38,11 @@ object NavA11yFeed {
                 sourceFallbackWorking = false
                 lastDumpedGaode = NO_MANEUVER
                 lastDumpMs = 0L
+                timerKeptAlive = false
+                resetTimer(start = true)
             }
             field = value
+            if (!value) resetTimer(start = false)
         }
 
     /** Where the tree dump goes; logcat in production, a collector in tests. */
@@ -49,12 +58,21 @@ object NavA11yFeed {
     // Maneuver the tree was last dumped for; NO_MANEUVER means "nothing dumped yet".
     @Volatile private var lastDumpedGaode = NO_MANEUVER
     @Volatile internal var lastDumpMs = 0L
+    // Edge guard for the timer's keep-alive line: set by the first timer refresh of a quiet
+    // episode, cleared by the next event read.
+    @Volatile private var timerKeptAlive = false
+    // Main-looper handler of the current enable; a tick from an older one stops itself.
+    @Volatile private var timer: Handler? = null
+
+    /** Where timer reads get the window from; the live a11y service in production. */
+    internal var timerService: () -> SteeringWheelKeyService? = { SteeringWheelKeyService.instance }
 
     fun onEvent(service: SteeringWheelKeyService, event: AccessibilityEvent?) {
         if (!enabled) return
         val nowMs = System.currentTimeMillis()
         if (!shouldProcess(event?.packageName?.toString(), event?.eventType ?: 0, nowMs, lastProcessMs)) return
         lastProcessMs = nowMs
+        timerKeptAlive = false
         // An unreachable window says NOTHING about the route: the navigator may be
         // minimized, covered by another pane, or projected onto a private VirtualDisplay
         // while guidance keeps running (field-confirmed, issue #144). Only a REACHABLE
@@ -83,20 +101,60 @@ object NavA11yFeed {
             sourceFallbackWorking = false
             Log.i(TAG, "Navigator window reachable again")
         }
+        readWindow(root, nowMs)
+    }
+
+    /** Timer tick (main looper, like the events): the same window read as [onEvent] when a
+     *  route is guided and neither events nor the timer read for [TIMER_READ_MS]. An
+     *  unreachable window says nothing here either, and there is no event source to fall
+     *  back to. */
+    internal fun onTimer(service: SteeringWheelKeyService?, nowMs: Long) {
+        if (!shouldTimerRead(enabled, NavGuidanceHub.snapshot(nowMs).active, nowMs, lastProcessMs)) return
+        service ?: return
+        lastProcessMs = nowMs
+        val root = runCatching { service.findNavigatorRoot() }.getOrNull() ?: return
+        if (readWindow(root, nowMs) && !timerKeptAlive) {
+            timerKeptAlive = true
+            Log.i(TAG, "timer re-read keeps maneuver alive")
+        }
+    }
+
+    /** Reads a reachable navigator [root] into the hub and recycles it: widgets present =
+     *  guidance, a navigator without them = route ended. True when guidance was read. */
+    private fun readWindow(root: AccessibilityNodeInfo, nowMs: Long): Boolean {
         try {
-            when (val result = NavA11yExtractor.read(root)) {
+            return when (val result = NavA11yExtractor.read(root)) {
                 is NavA11yExtractor.ReadResult.Guidance -> {
                     NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
                     dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
+                    true
                 }
-                is NavA11yExtractor.ReadResult.NoGuidance ->
+                is NavA11yExtractor.ReadResult.NoGuidance -> {
                     NavGuidanceHub.markNoGuidance(nowMs)
-                is NavA11yExtractor.ReadResult.NotNavigator -> Unit
+                    false
+                }
+                is NavA11yExtractor.ReadResult.NotNavigator -> false
             }
         } finally {
             @Suppress("DEPRECATION")
             runCatching { root.recycle() }
         }
+    }
+
+    /** Drops the current enable's timer; [start] posts a fresh one. */
+    private fun resetTimer(start: Boolean) {
+        timer?.removeCallbacksAndMessages(null)
+        timer = null
+        if (!start) return
+        val handler = Handler(Looper.getMainLooper())
+        timer = handler
+        handler.postDelayed(object : Runnable {
+            override fun run() {
+                if (timer !== handler) return
+                onTimer(timerService(), System.currentTimeMillis())
+                handler.postDelayed(this, TIMER_READ_MS)
+            }
+        }, TIMER_READ_MS)
     }
 
     /** Last resort when window enumeration cannot see the Navigator (projected onto a
@@ -179,6 +237,10 @@ object NavA11yFeed {
             }
         }
     }
+
+    /** Pure gate of the timer read: the feed on, a route guided, no read for [TIMER_READ_MS]. */
+    fun shouldTimerRead(enabled: Boolean, guidanceActive: Boolean, nowMs: Long, lastMs: Long): Boolean =
+        enabled && guidanceActive && nowMs - lastMs >= TIMER_READ_MS
 
     /** Pure gate, unit-tested separately from the framework-bound onEvent. */
     fun shouldProcess(pkg: String?, eventType: Int, nowMs: Long, lastMs: Long): Boolean {

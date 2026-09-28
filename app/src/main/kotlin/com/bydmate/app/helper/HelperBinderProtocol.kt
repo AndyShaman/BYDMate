@@ -478,6 +478,35 @@ object HelperBinderProtocol {
      */
     val TX_OFFREPORT_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 54  // 55
 
+    /**
+     * HUD navigation status (HUD wave 1, #198): BYDAutoInstrumentDevice.sendAutoNaviStatus(status)
+     * called reflectively inside the daemon. From the app uid the SDK answers
+     * `SecurityException: [setInt] permission deny!`; under the shell uid it goes through.
+     *
+     * Request: [int status (0..4; [HUD_NAVI_PROBE] = only say whether the method exists)]
+     * Reply:   [int outcome (HUD_NAVI_CALLED / HUD_NAVI_ABSENT / HUD_NAVI_THREW), int sdkReturn]
+     * An old daemon without this handler makes transact return false → the client returns null,
+     * and the app, finding the daemon alive, logs it as outdated and writes the fid raw instead.
+     */
+    val TX_HUD_NAVI_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 55  // 56
+
+    /**
+     * autoservice setBuffer (tx 14): the instrument's road-name field takes a byte buffer, not an
+     * int. Ported from the archived CAN probe (test/hud-can-probe); the bytes go out as given.
+     *
+     * Request: [int dev, int fid, byte[] bytes] -> Reply: [int status, int 0] (raw autoservice status)
+     * An old daemon without this handler makes transact return false → the client returns null.
+     */
+    val TX_WRITE_BUFFER: Int = IBinder.FIRST_CALL_TRANSACTION + 56  // 57
+
+    /** TX_HUD_NAVI_STATUS: the status that asks only whether the SDK method exists. */
+    const val HUD_NAVI_PROBE = -1
+    /** TX_HUD_NAVI_STATUS outcomes: the method exists (and was called unless probed), is absent
+     *  on this firmware, or the device / the call threw (the daemon logs the exception class). */
+    const val HUD_NAVI_CALLED = 0
+    const val HUD_NAVI_ABSENT = 1
+    const val HUD_NAVI_THREW = -1
+
     /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
      *  convention: 2 says the firmware has no native split surface at all (methods absent on the
      *  IActivityTaskManager proxy), which is a verdict, unlike 1 = the call threw. The split is

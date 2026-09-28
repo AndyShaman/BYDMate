@@ -7,7 +7,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 
 /** Where an event comes from: the first column of a trace line. */
 enum class TraceArea {
-    USER, VOICE, AGENT, NET, WIDGET, SCREEN, APP;
+    USER, VOICE, AGENT, NET, WIDGET, SCREEN, APP, HUD;
 
     internal val label: String = name.lowercase().padEnd(LABEL_WIDTH)
 }
