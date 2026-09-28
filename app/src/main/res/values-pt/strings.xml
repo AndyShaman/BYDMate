@@ -876,6 +876,17 @@
     <!-- Fid catalog dump (Task O) -->
     <string name="settings_fid_dump_button">Salvar catálogo de fids</string>
     <string name="settings_fid_dump_desc">Nomes e valores das constantes do SDK. Apenas identificadores técnicos: sem VIN, sem localização, sem dados pessoais</string>
+    <string name="settings_hud_check_title">Teste do HUD</string>
+    <string name="settings_hud_check_desc">Um minuto e meio de indicações de teste no para-brisa. Primeiro ative a gravação de logs e filme o para-brisa. Carro parado, sem rota</string>
+    <string name="settings_hud_check_button">Iniciar</string>
+    <string name="settings_hud_check_preparing">Preparando o teste</string>
+    <string name="settings_hud_check_step">Passo %1$d de %2$d, olhe para o para-brisa</string>
+    <string name="settings_hud_check_restoring">Finalizando o teste</string>
+    <string name="settings_hud_check_done">Pronto, salve os logs e envie junto com o vídeo do para-brisa</string>
+    <string name="settings_hud_check_route_started">Teste interrompido: uma rota foi iniciada</string>
+    <string name="settings_hud_check_refused_guidance">Primeiro encerre a rota no navegador</string>
+    <string name="settings_hud_check_refused_moving">Pare o carro, o teste só funciona com o carro parado</string>
+    <string name="settings_hud_check_refused_no_link">Sem conexão com o carro, o teste não foi iniciado</string>
     <string name="settings_fid_dump_saved">Salvo: %1$s</string>
     <string name="settings_fid_dump_in_progress">Lendo os fids...</string>
     <string name="settings_fid_dump_empty">O catálogo de fids está vazio neste firmware</string>

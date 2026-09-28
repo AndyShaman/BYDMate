@@ -4,6 +4,7 @@ import com.bydmate.app.data.autoservice.AdbRestoreManager
 import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.hud.HudCheck
 import com.bydmate.app.hud.HudController
 import com.bydmate.app.split.SplitPreferences
 import com.bydmate.app.voice.VoiceController
@@ -25,4 +26,5 @@ interface ClusterEntryPoint {
     fun splitPreferences(): SplitPreferences
     fun adbRestoreManager(): AdbRestoreManager
     fun cameraStateMonitor(): CameraStateMonitor
+    fun hudCheck(): HudCheck
 }

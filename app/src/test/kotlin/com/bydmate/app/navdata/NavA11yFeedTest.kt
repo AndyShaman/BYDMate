@@ -34,4 +34,11 @@ class NavA11yFeedTest {
         assertTrue(NavA11yFeed.shouldProcess("ru.yandex.yandexmaps", contentChanged, nowMs = 1000, lastMs = 0))
         assertTrue(NavA11yFeed.shouldProcess("ru.yandex.yandexmaps.rustore", stateChanged, nowMs = 1000, lastMs = 0))
     }
+
+    @Test fun `timer reads only with the feed on, a route guided and no read for 5 s`() {
+        assertTrue(NavA11yFeed.shouldTimerRead(enabled = true, guidanceActive = true, nowMs = 6000, lastMs = 1000))
+        assertFalse(NavA11yFeed.shouldTimerRead(enabled = true, guidanceActive = true, nowMs = 5999, lastMs = 1000))
+        assertFalse(NavA11yFeed.shouldTimerRead(enabled = false, guidanceActive = true, nowMs = 6000, lastMs = 1000))
+        assertFalse(NavA11yFeed.shouldTimerRead(enabled = true, guidanceActive = false, nowMs = 6000, lastMs = 1000))
+    }
 }

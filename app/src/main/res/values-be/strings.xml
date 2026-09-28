@@ -1034,6 +1034,17 @@
     <!-- Fid catalog dump (Task O) -->
     <string name="settings_fid_dump_button">Захаваць каталог fid\'аў</string>
     <string name="settings_fid_dump_desc">Імёны і значэнні канстант SDK. Толькі тэхнічныя ідэнтыфікатары: без VIN, без геалакацыі, без асабістых даных</string>
+    <string name="settings_hud_check_title">Праверка HUD</string>
+    <string name="settings_hud_check_desc">Паўтары хвіліны тэставых падказак на шкле. Спачатку ўключыце запіс логаў і здымайце шкло на відэа. Машына стаіць, маршрут не патрэбны</string>
+    <string name="settings_hud_check_button">Запусціць</string>
+    <string name="settings_hud_check_preparing">Рыхтуем праверку</string>
+    <string name="settings_hud_check_step">Крок %1$d з %2$d, глядзіце на шкло</string>
+    <string name="settings_hud_check_restoring">Завяршаем праверку</string>
+    <string name="settings_hud_check_done">Гатова, запішыце логі і дашліце іх разам з відэа шкла</string>
+    <string name="settings_hud_check_route_started">Праверка перапынена: пачаўся маршрут</string>
+    <string name="settings_hud_check_refused_guidance">Спачатку завяршыце маршрут у навігатары</string>
+    <string name="settings_hud_check_refused_moving">Спыніце машыну, праверка ідзе толькі на месцы</string>
+    <string name="settings_hud_check_refused_no_link">Няма сувязі з машынай, праверка не запушчана</string>
     <!-- %1$s = file name -->
     <string name="settings_fid_dump_saved">Захавана: %1$s</string>
     <string name="settings_fid_dump_in_progress">Чытанне fid\'аў...</string>

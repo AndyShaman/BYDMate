@@ -115,9 +115,18 @@ class HudProtobufBuilderTest {
         ))
         assertEquals(1L, (f[6]!![0] as Long))
         assertNull(f[7])    // no sign -> render class 1 and no f7
-        assertNull(f[10])   // empty road omitted
         assertNull(f[11])   // zero speed limit omitted
         assertNull(f[26])   // null eta omitted
+    }
+
+    @Test fun `empty road name is sent as one space`() {
+        // OpenBYD's updateNavigation never leaves the road out: an empty name goes as " ".
+        val f = unwrap(HudProtobufBuilder.buildFrame(
+            maneuverGaode = 2, distanceMeters = 100, road = "",
+            etaString = null, totalDistMeters = 0, speedLimit = 0,
+            maneuverIconPng = byteArrayOf(1), speedSignPng = null,
+        ))
+        assertEquals(" ", String(f[10]!![0] as ByteArray, Charsets.UTF_8))
     }
 
     @Test fun `clear frame has render class 255 and f16=1`() {

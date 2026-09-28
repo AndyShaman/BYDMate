@@ -55,6 +55,15 @@ internal fun helperServiceBinder(): IBinder? = try {
 data class BatchReadItem(val tx: Int, val dev: Int, val fid: Int)
 
 /**
+ * TX_HUD_NAVI_STATUS answer: [outcome] is HelperBinderProtocol.HUD_NAVI_CALLED / _ABSENT / _THREW,
+ * [sdkReturn] what sendAutoNaviStatus returned when it was called.
+ */
+data class HudNaviReply(val outcome: Int, val sdkReturn: Int) {
+    /** The SDK took the status: called, and answered a non-negative code. */
+    val accepted: Boolean get() = outcome == HelperBinderProtocol.HUD_NAVI_CALLED && sdkReturn >= 0
+}
+
+/**
  * Windowing state of a running task as reported by TX_GET_TASK_STATE.
  * [taskId] == -1 means the package has no running task (other fields are 0 in that case).
  * [displayId] is the Android display the task lives on: 0 = main screen, 2 = cluster fission
@@ -549,6 +558,17 @@ interface HelperClient {
 
     /** Where report [id] stands in the daemon (TX_OFFREPORT_STATUS); null when there is no answer. */
     suspend fun offReportStatus(id: String): OffReportStatus?
+
+    /**
+     * BYDAutoInstrumentDevice.sendAutoNaviStatus([status]) inside the daemon (TX_HUD_NAVI_STATUS);
+     * [HelperBinderProtocol.HUD_NAVI_PROBE] only asks whether the firmware has the method. Null
+     * when the daemon is unreachable or too old to know the transaction; [isAlive] tells the two
+     * apart.
+     */
+    suspend fun hudNaviStatus(status: Int): HudNaviReply?
+
+    /** Raw autoservice setBuffer status (transact 14); null when the daemon is unreachable or too old. */
+    suspend fun writeBufferStatus(dev: Int, fid: Int, bytes: ByteArray): Int?
 }
 
 @Singleton
@@ -1153,6 +1173,23 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             if (reply.dataAvail() < 4 || reply.readInt() != 0) return@transactParsed null
             readOffReportStatus(reply)
         }
+
+    override suspend fun hudNaviStatus(status: Int): HudNaviReply? {
+        val reply = transact(HelperBinderProtocol.TX_HUD_NAVI_STATUS) { it.writeInt(status) }
+            ?.let { (outcome, sdkReturn) -> HudNaviReply(outcome, sdkReturn) }
+        Log.i(TAG, "hudNaviStatus status=$status outcome=${reply?.outcome} ret=${reply?.sdkReturn}")
+        return reply
+    }
+
+    override suspend fun writeBufferStatus(dev: Int, fid: Int, bytes: ByteArray): Int? {
+        val status = transact(HelperBinderProtocol.TX_WRITE_BUFFER) {
+            it.writeInt(dev); it.writeInt(fid); it.writeByteArray(bytes)
+        }?.first
+        // Same raw autoservice status convention as writeStatus, forwarded untouched; null also
+        // covers a daemon too old to know TX_WRITE_BUFFER (transact returns false).
+        Log.i(TAG, "writeBuffer dev=$dev fid=$fid bytes=${bytes.size} status=$status accepted=${status != null && writeAccepted(status)}")
+        return status
+    }
 
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =

@@ -350,6 +350,8 @@ class LogRecorder internal constructor(
             "AudioCapture:*", "SherpaTtsEngine:*", "VoiceController:*",
             // HUD wave: SOME/IP output + cluster projection diagnostics
             "HudController:*", "HudSomeIpBridge:*", "HudPushLoop:*",
+            // HUD navigation status (app and daemon share the tag) and the HUD check's hudprobe lines.
+            "HudArming:*", "HudCheck:*",
             "ClusterProjection:*",
             // Direct projection wave: helper daemon (freeform switch diagnostics; visible
             // only once READ_LOGS is granted AND the app process restarted - the daemon

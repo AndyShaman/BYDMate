@@ -70,7 +70,8 @@ object HudProtobufBuilder {
         if (speedSignPng != null) writeBytesField(inner, 7, speedSignPng)
         if (maneuverIconPng != null) writeBytesField(inner, 8, maneuverIconPng)
         writeVarintField(inner, 9, displayDistance(distanceMeters).toLong())
-        if (road.isNotEmpty()) writeBytesField(inner, 10, road.toByteArray(Charsets.UTF_8))
+        // An empty name goes as one space, never left out (OpenBYD updateNavigation).
+        writeBytesField(inner, 10, road.ifEmpty { " " }.toByteArray(Charsets.UTF_8))
         if (speedLimit > 0) writeVarintField(inner, 11, speedLimit.toLong())
         writeVarintField(inner, 16, 2L)
         if (etaString != null) writeBytesField(inner, 26, etaString.toByteArray(Charsets.UTF_8))

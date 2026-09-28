@@ -1034,6 +1034,17 @@
     <!-- Fid catalog dump (Task O) -->
     <string name="settings_fid_dump_button">Zapisz katalog fidów</string>
     <string name="settings_fid_dump_desc">Nazwy i wartości stałych SDK. Tylko identyfikatory techniczne: bez VIN, bez geolokalizacji, bez danych osobowych</string>
+    <string name="settings_hud_check_title">Test HUD</string>
+    <string name="settings_hud_check_desc">Półtorej minuty testowych wskazówek na szybie. Najpierw włącz zapis logów i nagrywaj szybę. Samochód stoi, trasa nie jest potrzebna</string>
+    <string name="settings_hud_check_button">Uruchom</string>
+    <string name="settings_hud_check_preparing">Przygotowujemy test</string>
+    <string name="settings_hud_check_step">Krok %1$d z %2$d, patrz na szybę</string>
+    <string name="settings_hud_check_restoring">Kończymy test</string>
+    <string name="settings_hud_check_done">Gotowe, zapisz logi i wyślij je razem z nagraniem szyby</string>
+    <string name="settings_hud_check_route_started">Test przerwany: rozpoczęła się trasa</string>
+    <string name="settings_hud_check_refused_guidance">Najpierw zakończ trasę w nawigacji</string>
+    <string name="settings_hud_check_refused_moving">Zatrzymaj samochód, test działa tylko na postoju</string>
+    <string name="settings_hud_check_refused_no_link">Brak połączenia z samochodem, test nie został uruchomiony</string>
     <!-- %1$s = file name -->
     <string name="settings_fid_dump_saved">Zapisano: %1$s</string>
     <string name="settings_fid_dump_in_progress">Odczyt fidów...</string>

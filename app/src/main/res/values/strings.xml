@@ -1038,6 +1038,17 @@
     <!-- Fid catalog dump (Task O) -->
     <string name="settings_fid_dump_button">Сохранить каталог fid\'ов</string>
     <string name="settings_fid_dump_desc">Имена и значения констант SDK. Только технические идентификаторы: без VIN, без геолокации, без личных данных</string>
+    <string name="settings_hud_check_title">Проверка HUD</string>
+    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Сначала включите запись логов и снимайте стекло на видео. Машина стоит, маршрут не нужен</string>
+    <string name="settings_hud_check_button">Запустить</string>
+    <string name="settings_hud_check_preparing">Готовим проверку</string>
+    <string name="settings_hud_check_step">Шаг %1$d из %2$d, смотрите на стекло</string>
+    <string name="settings_hud_check_restoring">Завершаем проверку</string>
+    <string name="settings_hud_check_done">Готово, запишите логи и пришлите их вместе с видео стекла</string>
+    <string name="settings_hud_check_route_started">Проверка прервана: начался маршрут</string>
+    <string name="settings_hud_check_refused_guidance">Сначала завершите маршрут в навигаторе</string>
+    <string name="settings_hud_check_refused_moving">Остановите машину, проверка идёт только на месте</string>
+    <string name="settings_hud_check_refused_no_link">Нет связи с машиной, проверка не запущена</string>
     <!-- %1$s = file name -->
     <string name="settings_fid_dump_saved">Сохранено: %1$s</string>
     <string name="settings_fid_dump_in_progress">Чтение fid\'ов...</string>

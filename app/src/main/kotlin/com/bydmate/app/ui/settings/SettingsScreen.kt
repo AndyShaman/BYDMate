@@ -160,6 +160,7 @@ import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.TtsVoiceCatalog
 import com.bydmate.app.voice.online.TtsRouter
+import com.bydmate.app.hud.HudCheck
 import com.bydmate.app.hud.HudController
 import com.bydmate.app.split.Split37Engine
 import com.bydmate.app.split.SplitFreeformVerdict
@@ -2414,6 +2415,8 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
             text = state.logSaveStatus!!,
         )
     }
+    SettingDivider()
+    HudCheckRow()
     // Diagnostic fid recorder (-test/debug builds only): the daemon owns the run, this row
     // only reflects and toggles it, so a reopened screen still shows a recording in force.
     if (state.fidRecorderVisible) {
@@ -2450,6 +2453,42 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
             text = state.fidDumpStatus!!,
         )
     }
+}
+
+/** «Проверка HUD»: about 90 s of test hints on the glass; the recorded log and a video of the
+ *  glass tell which channel draws on this car. The row only starts the check and shows where it is. */
+@Composable
+private fun HudCheckRow() {
+    val context = LocalContext.current
+    val hudCheck = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java).hudCheck()
+    }
+    val checkState by hudCheck.state.collectAsStateWithLifecycle()
+    val running = checkState is HudCheck.State.Preparing || checkState is HudCheck.State.Step ||
+        checkState == HudCheck.State.Restoring
+    SettingActionRow(
+        title = stringResource(R.string.settings_hud_check_title),
+        description = stringResource(R.string.settings_hud_check_desc),
+        buttonLabel = stringResource(R.string.settings_hud_check_button),
+        onClick = { hudCheck.start() },
+        enabled = !running,
+    )
+    val hint = when (val s = checkState) {
+        HudCheck.State.Idle -> null
+        HudCheck.State.Preparing -> stringResource(R.string.settings_hud_check_preparing)
+        is HudCheck.State.Step -> stringResource(R.string.settings_hud_check_step, s.number, HudCheck.STEPS)
+        HudCheck.State.Restoring -> stringResource(R.string.settings_hud_check_restoring)
+        HudCheck.State.Done -> stringResource(R.string.settings_hud_check_done)
+        HudCheck.State.RouteStarted -> stringResource(R.string.settings_hud_check_route_started)
+        is HudCheck.State.Refused -> stringResource(
+            when (s.reason) {
+                HudCheck.Refusal.GUIDANCE -> R.string.settings_hud_check_refused_guidance
+                HudCheck.Refusal.MOVING -> R.string.settings_hud_check_refused_moving
+                HudCheck.Refusal.NO_LINK -> R.string.settings_hud_check_refused_no_link
+            }
+        )
+    }
+    hint?.let { SettingHint(text = it) }
 }
 
 /**
