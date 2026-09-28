@@ -313,25 +313,36 @@ class HudCheck @Inject constructor(
             runCatching { bridge.unbind() }
         }
         // Still the check's layout: the product's loop keeps off it until the retry is over.
-        if (deferred) retryDeferredLayout(run)
+        val routeInRetry = deferred && retryDeferredLayout(run)
         hudController.armingPaused = false
-        _state.value = when {
-            routeStep != null -> State.RouteStarted
-            movingStep != null -> State.Refused(Refusal.MOVING)
-            else -> State.Done
-        }
+        _state.value = outcome(routeStep != null || routeInRetry, movingStep)
+    }
+
+    /** The check's last state: a route that started, in the steps or during the layout retry,
+     *  wins over moving off. */
+    private fun outcome(routeStarted: Boolean, movingStep: Int?): State = when {
+        routeStarted -> State.RouteStarted
+        movingStep != null -> State.Refused(Refusal.MOVING)
+        else -> State.Done
     }
 
     /** A layout the restore left at a fullscreen cluster: looked at every 5 s for up to
-     *  [DEFERRED_RETRY_MS]. Still fullscreen then, the kept as-found goes back at the next start. */
-    private suspend fun retryDeferredLayout(run: Run) {
+     *  [DEFERRED_RETRY_MS]. Still fullscreen then, the kept as-found goes back at the next start.
+     *  A route that starts meanwhile ends the retry at once and gets the kept as-found: true then. */
+    private suspend fun retryDeferredLayout(run: Run): Boolean {
         var waitedMs = 0L
         while (waitedMs < DEFERRED_RETRY_MS) {
-            delay(HudArming.CHECK_PERIOD_MS)
-            waitedMs += HudArming.CHECK_PERIOD_MS
-            if (runCatching { run.arming.retryDeferred() }.getOrDefault(false)) return
+            delay(GUIDANCE_LOOK_MS)
+            waitedMs += GUIDANCE_LOOK_MS
+            if (guidanceActive()) {
+                log("hudprobe: layout retry ended by a route, as-found kept")
+                return true
+            }
+            if (waitedMs % HudArming.CHECK_PERIOD_MS != 0L) continue
+            if (runCatching { run.arming.retryDeferred() }.getOrDefault(false)) return false
         }
         log("hudprobe: layout still deferred after ${DEFERRED_RETRY_MS / 1_000} s, kept for the next start")
+        return false
     }
 
     /** The line and trace event of a check that a route or the speed ended in [step]. */
