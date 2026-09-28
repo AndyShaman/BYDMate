@@ -328,13 +328,15 @@ class HudCheck @Inject constructor(
 
     /** A layout the restore left at a fullscreen cluster: looked at every 5 s for up to
      *  [DEFERRED_RETRY_MS]. Still fullscreen then, the kept as-found goes back at the next start.
-     *  A route that starts meanwhile ends the retry at once and gets the kept as-found: true then. */
+     *  A route that starts meanwhile ends the retry at once and gets the kept as-found (true then),
+     *  but only when the product's own arming loop is live to take that route over; without it the
+     *  retry is the only thing that will ever put the layout back, so it runs its full course. */
     private suspend fun retryDeferredLayout(run: Run): Boolean {
         var waitedMs = 0L
         while (waitedMs < DEFERRED_RETRY_MS) {
             delay(GUIDANCE_LOOK_MS)
             waitedMs += GUIDANCE_LOOK_MS
-            if (guidanceActive()) {
+            if (hudController.armingLive && guidanceActive()) {
                 log("hudprobe: layout retry ended by a route, as-found kept")
                 return true
             }
