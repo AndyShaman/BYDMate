@@ -153,8 +153,9 @@ class HudController @Inject constructor(
                     when {
                         arming != null -> true
                         // The HUD check's session holds the kept layout; mode 2 leaves a guided
-                        // route to the arming loop that starts after the bind.
-                        armingPaused || (armsNaviStatus() && NavGuidanceHub.snapshot().active) -> false
+                        // route to the arming loop, but only while a bind that starts it is running.
+                        armingPaused || (armsNaviStatus() && NavGuidanceHub.snapshot().active &&
+                            startJob?.isActive == true && bridge == null) -> false
                         else -> withContext(NonCancellable) { putBackStep(arm, tried).also { tried = true } }
                     }
                 }
@@ -290,7 +291,9 @@ class HudController @Inject constructor(
                 loop = null
                 arming?.stop()
                 arming = null
-                restoreLeftover()   // a layout the stop deferred has no loop left to finish it
+                // A layout the stop deferred has no loop left to finish it. bridge null = a stop
+                // already ended this session: its late callback starts nothing.
+                if (bridge != null) restoreLeftover()
                 bridge = null   // the bridge already unbound itself in onBindingDied
                 _status.value = Status.BIND_FAILED
             }
