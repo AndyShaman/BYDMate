@@ -26,6 +26,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * A stored leftover (status raised by 3.19.1/3.19.2 mode 2, layout as-found kept) while no arming
@@ -42,6 +43,7 @@ class HudLeftoverRestoreTest {
     /** Every write the car received, (dev, fid) to value; SDK NAVI_STATUS calls count as NAVI. */
     private val writes = Collections.synchronizedList(mutableListOf<Pair<Pair<Int, Int>, Int>>())
     private lateinit var state: MutableMap<Pair<Int, Int>, Int>
+    private val reads = AtomicInteger()
 
     @Before fun reset() {
         NavGuidanceHub.reset()
@@ -58,6 +60,7 @@ class HudLeftoverRestoreTest {
             HudArming.CAN_NAVI to 0, HudArming.ISA to 0,
         ))
         coEvery { helperClient.readBatch(any()) } answers {
+            reads.incrementAndGet()
             firstArg<List<BatchReadItem>>().map { 0 to (state[it.dev to it.fid] ?: 0) }
         }
         coEvery { helperClient.writeStatus(any(), any(), any(), any()) } answers {
@@ -177,6 +180,66 @@ class HudLeftoverRestoreTest {
         coVerify(exactly = 0) { helperClient.hudNaviStatus(4) }
         assertTrue(synchronized(writes) { writes.none { it == HudArming.NAVI to 4 || it == HudArming.SCREEN to 1 } })
         assertEquals(1, prefs().getInt(HudArming.KEY_AS_FOUND, -1))
+        c.setEnabled(false)
+    }
+
+    /** Mode 2, a guided route armed through a controller whose binding-lost callback the test holds. */
+    private fun armedWithLostHook(): Pair<HudController, () -> Unit> {
+        hudOn(HudController.MODE_NAVI_STATUS)
+        guideRoute()
+        var onLost: () -> Unit = {}
+        val c = controller().apply { bridgeFactory = { _, lost -> onLost = lost; bridge } }
+        c.startIfEnabled()
+        awaitTrue { state[HudArming.SCREEN] == 3 && c.armingLive }
+        return c to onLost
+    }
+
+    @Test fun `a binding-lost callback queued behind a stop leaves nothing running after it`() {
+        val (c, onLost) = armedWithLostHook()
+        state[HudArming.CLUSTER] = HudArming.CLUSTER_FULLSCREEN   // the stop's put-back is deferred
+        val gate = CompletableDeferred<Unit>()
+        coEvery { helperClient.writeStatus(HudArming.NAVI.first, HudArming.NAVI.second, 4, any()) } coAnswers {
+            gate.await()
+            state[HudArming.NAVI] = 4
+            1
+        }
+        c.stop()          // suspended inside the disarm, holding the controller's lock
+        onLost()          // waits for that lock
+        NavGuidanceHub.reset()   // route over: a stray put-back job would poll the car now
+        gate.complete(Unit)
+        awaitTrue { c.status.value != HudController.Status.ON }
+        Thread.sleep(RETRY_MS * 2)
+        val readsAfter = reads.get()
+        val writesAfter = writes.size
+        Thread.sleep(RETRY_MS * 6)
+        assertEquals(readsAfter, reads.get())
+        assertEquals(writesAfter, writes.size)
+        assertEquals(1, prefs().getInt(HudArming.KEY_AS_FOUND, -1))   // left for the next start
+    }
+
+    @Test fun `mode 2 with a route, a binding lost at a fullscreen cluster still gets its layout back`() {
+        val (c, onLost) = armedWithLostHook()
+        state[HudArming.CLUSTER] = HudArming.CLUSTER_FULLSCREEN
+        onLost()
+        awaitTrue { c.status.value == HudController.Status.BIND_FAILED }
+        Thread.sleep(RETRY_MS * 3)
+        assertEquals(3, state[HudArming.SCREEN])
+        state[HudArming.CLUSTER] = 0
+        awaitTrue(timeoutMs = RETRY_MS * 20) { state[HudArming.SCREEN] == 1 }
+        awaitTrue { !prefs().contains(HudArming.KEY_AS_FOUND) }
+        c.setEnabled(false)
+    }
+
+    @Test fun `mode 2 with a route and a failed bind puts a leftover back`() {
+        leftover()
+        hudOn(HudController.MODE_NAVI_STATUS)
+        guideRoute()
+        coEvery { bridge.bind() } returns false
+        val c = controller()
+        c.startIfEnabled()
+        awaitTrue { c.status.value == HudController.Status.BIND_FAILED }
+        awaitTrue(timeoutMs = RETRY_MS * 20) { state[HudArming.SCREEN] == 1 && state[HudArming.NAVI] == 4 }
+        awaitTrue { !prefs().contains(HudArming.KEY_AS_FOUND) }
         c.setEnabled(false)
     }
 
