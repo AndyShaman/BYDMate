@@ -42,8 +42,8 @@ class HudCanChannel(private val helper: HelperClient) {
     }
 
     /** Blanks what [show] drew the way OpenBYD's navigation stop does: no icon, distance -1,
-     *  empty road name. */
-    suspend fun clear(): Sent = show(TURN_NONE, DISTANCE_NONE, "")
+     *  a single space as the road name (the car rejects an empty buffer, user log 2026-09-29). */
+    suspend fun clear(): Sent = show(TURN_NONE, DISTANCE_NONE, " ")
 
     companion object {
         const val DEV = 1007
