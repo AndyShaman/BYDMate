@@ -151,6 +151,32 @@ class ActionDispatcherVoiceActionsTest {
         assertTrue(d.dispatch(clusterAction("1"), data = null).success)
     }
 
+    // Issue #263: direct projection on a Sea Lion 07 took 5-6 s while the wait was 5 s, so the
+    // rule journal said "did not come up" for a projection that did. These run on the production
+    // defaults (virtual time), so shortening the wait again breaks them.
+    @Test fun `cluster_projection that comes up at the 6th second is a success on production defaults`() = runTest {
+        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
+        every { cluster.projectionMode() } answers {
+            if (testScheduler.currentTime >= 6_000L) ClusterMode.FULLSCREEN else ClusterMode.OFF
+        }
+        every { cluster.lastFailure() } returns null
+        val d = makeDispatcherWithCluster(cluster)
+        val r = d.dispatch(clusterAction("1"), data = null)
+        assertTrue(r.success)
+        assertEquals(6_000L, testScheduler.currentTime)
+    }
+
+    @Test fun `cluster_projection that never comes up fails only after the full 15 s wait`() = runTest {
+        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
+        every { cluster.projectionMode() } returns ClusterMode.OFF
+        every { cluster.lastFailure() } returns null
+        val d = makeDispatcherWithCluster(cluster)
+        val r = d.dispatch(clusterAction("1"), data = null)
+        assertFalse(r.success)
+        assertEquals("проекция на приборку не включилась", r.reason)
+        assertEquals(15_000L, testScheduler.currentTime)
+    }
+
     @Test fun `cluster_projection with bad payload fails without calling apply`() = runTest {
         val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
         val d = makeDispatcherWithCluster(cluster)
