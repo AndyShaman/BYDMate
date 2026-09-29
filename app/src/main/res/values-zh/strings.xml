@@ -1517,7 +1517,7 @@
     <string name="settings_hud_status_connecting">正在连接总线…</string>
     <string name="settings_hud_status_on">正在向 HUD 传输</string>
     <string name="settings_hud_status_bind_failed">无法连接 SOME/IP 总线</string>
-    <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口</string>
+    <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口。导航期间，仪表盘左侧会出现导航箭头，这是正常现象</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">盲区</string>
     <string name="settings_blindspot_title">转向灯触发摄像头</string>
