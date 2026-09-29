@@ -27,6 +27,8 @@ import com.bydmate.app.cluster.DEFAULT_SCALE_PCT
 import com.bydmate.app.cluster.NAVI_PACKAGE
 import dagger.hilt.android.EntryPointAccessors
 import kotlin.math.roundToInt
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.ui.widget.LeftTapMode
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
@@ -1306,6 +1308,7 @@ private fun DisplaySection() {
     val hudController = remember { entryPoint.hudController() }
     var hudEnabled by remember { mutableStateOf(hudController.isEnabled()) }
     var hudSpeedSign by remember { mutableStateOf(hudController.isSpeedSignEnabled()) }
+    var hudMode by remember { mutableStateOf(hudController.mode()) }
     val hudStatus by hudController.status.collectAsState()
 
     SettingCollapsibleCard(
@@ -1334,6 +1337,26 @@ private fun DisplaySection() {
                     hudController.setSpeedSignEnabled(it)
                 },
             )
+            SettingDivider()
+            // #266: mode 1 (default) never raises the car's navigation status, mode 2 does.
+            SettingChipRow(
+                title = stringResource(R.string.settings_hud_mode_title),
+                options = listOf(
+                    stringResource(R.string.settings_hud_mode_1),
+                    stringResource(R.string.settings_hud_mode_2),
+                ),
+                selectedIndex = if (hudMode == HudController.MODE_NAVI_STATUS) 1 else 0,
+                onSelect = { idx ->
+                    val mode = if (idx == 1) HudController.MODE_NAVI_STATUS else HudController.MODE_GLASS_ONLY
+                    if (mode != hudMode) {
+                        Trace.event(TraceArea.USER, "choice", "id" to "hud_mode", "mode" to mode)
+                        hudMode = mode
+                        hudController.setMode(mode)
+                    }
+                },
+            )
+            SettingHint(text = stringResource(R.string.settings_hud_mode_1_desc))
+            SettingHint(text = stringResource(R.string.settings_hud_mode_2_desc))
             SettingDivider()
             SettingStatusRow(
                 title = when (hudStatus) {

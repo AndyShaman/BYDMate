@@ -1555,7 +1555,12 @@
     <string name="settings_hud_status_connecting">Łączenie z magistralą…</string>
     <string name="settings_hud_status_on">Przesyłanie na HUD aktywne</string>
     <string name="settings_hud_status_bind_failed">Nie udało się połączyć z magistralą SOME/IP</string>
-    <string name="settings_hud_hint">Potrzebna wersja wyposażenia z wyświetlaczem przeziernym. Dane brane są z okna Yandex Nawigatora. Podczas prowadzenia trasy na zestawie wskaźników po lewej pojawia się strzałka nawigacji, to normalne</string>
+    <string name="settings_hud_hint">Potrzebna wersja wyposażenia z wyświetlaczem przeziernym. Dane brane są z okna Yandex Nawigatora</string>
+    <string name="settings_hud_mode_title">Tryb HUD</string>
+    <string name="settings_hud_mode_1">Tryb 1</string>
+    <string name="settings_hud_mode_2">Tryb 2</string>
+    <string name="settings_hud_mode_1_desc">Tryb 1. Wskazówki trafiają na szybę, aplikacja nie zmienia zestawu wskaźników.</string>
+    <string name="settings_hud_mode_2_desc">Tryb 2. Na czas trasy samochód przechodzi w tryb nawigacji. Wypróbuj, jeśli w trybie 1 szyba jest pusta. Na zestawie wskaźników pojawi się strzałka, aplikacje i kamery na zestawie wskaźników mogą się nie wyświetlać.</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Martwe pola</string>
     <string name="settings_blindspot_title">Kamera przy kierunkowskazie</string>

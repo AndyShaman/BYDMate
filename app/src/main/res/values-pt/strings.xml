@@ -1399,7 +1399,12 @@
     <string name="settings_hud_status_connecting">Conectando ao barramento…</string>
     <string name="settings_hud_status_on">Transmissão para o HUD ativa</string>
     <string name="settings_hud_status_bind_failed">Falha ao conectar ao barramento SOME/IP</string>
-    <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator. Enquanto uma rota é guiada, o painel de instrumentos mostra uma seta de navegação à esquerda, isso é normal</string>
+    <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
+    <string name="settings_hud_mode_title">Modo do HUD</string>
+    <string name="settings_hud_mode_1">Modo 1</string>
+    <string name="settings_hud_mode_2">Modo 2</string>
+    <string name="settings_hud_mode_1_desc">Modo 1. As indicações vão para o para-brisa, o aplicativo não mexe no painel de instrumentos.</string>
+    <string name="settings_hud_mode_2_desc">Modo 2. Durante a rota o carro entra no modo de navegação. Experimente se no modo 1 o para-brisa fica vazio. O painel mostrará uma seta, aplicativos e câmeras no painel podem não aparecer.</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Pontos cegos</string>
     <string name="settings_blindspot_title">Câmera pela seta</string>
