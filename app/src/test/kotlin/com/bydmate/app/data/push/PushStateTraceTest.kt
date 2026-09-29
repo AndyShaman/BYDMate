@@ -24,10 +24,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -177,6 +179,35 @@ class PushStateTraceTest {
         assertEquals(ADAS.values.map { "car adas name=$it to=0" }, changes())
     }
 
+    @Test fun `a call that cannot get the subscription in time gives up without calling the daemon`() = runTest {
+        val held = CompletableDeferred<Unit>()
+        var calls = 0
+        coEvery { helper.pushSubscribe(capture(binder), any()) } coAnswers {
+            calls++
+            held.await()
+            secondArg<List<FidPushSub>>().map { FidPushResult(it.fid, it.device, FID_PUSH_OK) }
+        }
+        val first = launch { channel.resubscribe("binder accepted") { null } }
+        runCurrent()
+
+        var retryLoopGoesOn = false
+        launch {
+            channel.resubscribe("fid catalog resolved") { CATALOG }
+            retryLoopGoesOn = true
+        }
+        advanceTimeBy(LOCK_WAIT_MS - 1)
+        runCurrent()
+        assertFalse(retryLoopGoesOn)
+        advanceTimeBy(1)
+        runCurrent()
+
+        assertTrue(retryLoopGoesOn)
+        assertEquals(1, calls)
+        assertEquals(listOf("car adas-subscribe result=skipped reason=in-progress"), events())
+        held.complete(Unit)
+        first.join()
+    }
+
     @Test fun `the ADAS decision is traced even when the daemon does not answer`() = runTest {
         coEvery { helper.pushSubscribe(any(), any()) } returns null
 
@@ -185,8 +216,8 @@ class PushStateTraceTest {
 
         assertEquals(
             listOf(
-                "car adas-subscribe reason=no-catalog daemon=unreachable",
-                "car adas-subscribe confirmed=7 skipped=0 daemon=unreachable",
+                "car adas-subscribe reason=no-catalog result=unconfirmed",
+                "car adas-subscribe confirmed=7 skipped=0 result=unconfirmed",
             ),
             events(),
         )
@@ -317,6 +348,9 @@ class PushStateTraceTest {
 
     private companion object {
         val ID = Regex(" #\\d+")
+
+        /** How long a second call waits for the one in progress (FidPushChannel). */
+        const val LOCK_WAIT_MS = 3_000L
         val SPACES = Regex(" +")
         val TURN = FidMap.byField.getValue("turnSignal").fid
         const val LANE_GRAY = 535826452
