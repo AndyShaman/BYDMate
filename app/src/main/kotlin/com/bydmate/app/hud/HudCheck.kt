@@ -276,7 +276,20 @@ class HudCheck @Inject constructor(
         logAborted("guidance", routeStep)
         logAborted("moving", movingStep)
         if (run.canShown) {
-            val cleared = runCatching { run.can.clear().describe() }.getOrElse { "failed ${it.javaClass.simpleName}" }
+            val cleared = runCatching { run.can.clear() }.fold(
+                onSuccess = { sent ->
+                    Trace.event(
+                        TraceArea.HUD, "probe-can-clear", "icon" to HudArming.rc(sent.iconRc),
+                        "ahead" to HudArming.rc(sent.iconAheadRc), "dist" to HudArming.rc(sent.distRc), "road" to HudArming.rc(sent.roadRc),
+                        "rb-icon" to sent.icon.toString(), "rb-dist" to sent.dist.toString(),
+                    )
+                    sent.describe()
+                },
+                onFailure = {
+                    Trace.event(TraceArea.HUD, "probe-can-clear", "error" to it.javaClass.simpleName, "ok" to false)
+                    "failed ${it.javaClass.simpleName}"
+                },
+            )
             log("hudprobe: can clear $cleared")
         }
         // The route's frames and arming are the projection's now: no clear frame under them, no

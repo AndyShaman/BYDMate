@@ -6,6 +6,7 @@ import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.HudNaviReply
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.helper.HelperBinderProtocol
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -22,6 +23,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -34,6 +36,8 @@ import org.robolectric.RobolectricTestRunner
 class HudCheckTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
+
+    @get:Rule val trace = TraceRecorder()
 
     @Before fun clear() {
         context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE).edit().clear().commit()
@@ -251,6 +255,38 @@ class HudCheckTest {
         job.join()
         assertEquals("hudprobe: restore navi rc=skipped screen=na rc=skipped ok=true", s.probeLines().last())
         assertTrue(s.car.calls.isEmpty())
+    }
+
+    private fun canClearEvents() = trace.events().filter { it.contains("probe-can-clear") }
+
+    @Test fun `the restore traces the statuses of the CAN clear`() = runTest {
+        val s = setup()
+        s.check.run()
+        val events = canClearEvents()
+        assertEquals(1, events.size)
+        val line = events.single()
+        listOf("icon=1", "ahead=1", "dist=1", "road=0", "rb-icon=", "rb-dist=").forEach { assertTrue("$it in $line", line.contains(it)) }
+        assertFalse(line.contains("ok=false"))
+    }
+
+    @Test fun `a CAN clear that throws is traced and the restore still completes`() = runTest {
+        val car = FakeCar().apply { bufferFailsOn = "" }
+        val s = setup(car = car)
+        s.check.run()
+        val line = canClearEvents().single()
+        assertTrue(line, line.contains("error=IllegalStateException") && line.contains("ok=false"))
+        assertTrue(s.probeLines().contains("hudprobe: can clear failed IllegalStateException"))
+        assertEquals(4, car.state[HudArming.NAVI])
+        assertEquals(HudCheck.State.Done, s.check.state.value)
+    }
+
+    @Test fun `a check that never reached step 3 traces no CAN clear`() = runTest {
+        val s = setup()
+        val job = launch { s.check.run() }
+        advanceTimeBy(5_000)   // inside step 1
+        job.cancel()
+        job.join()
+        assertTrue(canClearEvents().isEmpty())
     }
 
     // --- a route that starts during the check ---
