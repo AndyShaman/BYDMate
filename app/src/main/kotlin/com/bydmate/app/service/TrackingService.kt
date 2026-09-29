@@ -2049,17 +2049,7 @@ class TrackingService : Service(), LocationListener {
 
     private suspend fun ensureStarServiceRunning(reason: String) {
         val prefs = getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
-        val mirrorEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
-        // Voice PTT depends on the same a11y service (SteeringWheelKeyService reads "voice" prefs
-        // itself); without this, enabling Voice alone never re-binds the service (Finding 3).
-        val voiceEnabled = getSharedPreferences("voice", Context.MODE_PRIVATE)
-            .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
-        // The volume-knob play/pause interception lives in the same a11y filter: without the
-        // service bound the knob falls back to the firmware's audio-source switch.
-        val knobEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false)
-        // HUD guidance also reads Navigator via this a11y service; gate on CONFIRMED
-        // support, not the raw pref, so unsupported cars stay untouched (Codex fix 1).
-        if (!mirrorEnabled && !voiceEnabled && !knobEnabled && !hudController.requiresA11y()) return
+        if (!starServiceNeeded(prefs)) return
         starGrant.ensure(reason)
         // Android 10 (DiLink 3.0/4.0): once our process died while bound, AccessibilityManagerService
         // parks the component in mBindingServices and skips it on every settings rewrite until a
@@ -2103,6 +2093,31 @@ class TrackingService : Service(), LocationListener {
             }
         }
     }
+
+    private suspend fun starServiceNeeded(prefs: android.content.SharedPreferences): Boolean {
+        val mirrorEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
+        // Voice PTT depends on the same a11y service (SteeringWheelKeyService reads "voice" prefs
+        // itself); without this, enabling Voice alone never re-binds the service (Finding 3).
+        val voiceEnabled = getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
+        // The volume-knob play/pause interception lives in the same a11y filter: without the
+        // service bound the knob falls back to the firmware's audio-source switch.
+        val knobEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false)
+        // HUD guidance also reads Navigator via this a11y service; gate on CONFIRMED
+        // support, not the raw pref, so unsupported cars stay untouched (Codex fix 1).
+        if (!mirrorEnabled && !voiceEnabled && !knobEnabled && !hudController.requiresA11y()) {
+            // A steering-key rule is caught by the same a11y filter (#262); the DB is read last,
+            // only when every cheap check above left the gate closed.
+            return steeringKeyRuleEnabled()
+        }
+        return true
+    }
+
+    private suspend fun steeringKeyRuleEnabled(): Boolean =
+        runCatching { automationEngine.steeringKeyRuleEnabled() }.getOrElse {
+            Log.w(TAG, "steering-key rule check failed, treating as none: ${it.javaClass.simpleName}: ${it.message}")
+            false
+        }
 
     private fun notificationListenerGranted(): Boolean {
         val component = ComponentName(this, com.bydmate.app.media.MediaSessionListenerService::class.java)
