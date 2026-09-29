@@ -515,8 +515,8 @@ class VehicleApiImpl @Inject constructor(
      * never nudged: 1 % open is worse than an honest failure.
      *
      * Needs a pane that was SEEN not to move, exactly like [retryOnPercentChannel]; the nudged
-     * write itself is never eligible for another nudge. Returns the panes that must still be
-     * reported as failures.
+     * write itself is never eligible for another nudge. A nudge that does not move either gets
+     * the [anchorTarget] step. Returns the panes that must still be reported as failures.
      */
     private suspend fun nudgeSameTarget(stuck: List<PendingPane>): List<PendingPane> {
         val percent = stuck.filter {
@@ -525,6 +525,7 @@ class VehicleApiImpl @Inject constructor(
         if (percent.isEmpty()) return stuck
         val nudged = mutableListOf<WindowVerify>()
         val notNudged = mutableListOf<PendingPane>()
+        val requested = mutableMapOf<WindowVerify, Int>()
         val stagger = WriteStagger()
         for (pane in percent) {
             val check = pane.check
@@ -534,9 +535,55 @@ class VehicleApiImpl @Inject constructor(
             Log.i(TAG, "window nudge: ${check.actionName} ${check.value} -> $value " +
                 "reason=same target ignored (pane did not move)")
             doWrite(check.actionName, value, verifyInto = nudged)
-            if (nudged.size == before) notNudged += pane
+            if (nudged.size == before) notNudged += pane else requested[nudged.last()] = check.value
         }
-        return stuck.filterNot { it in percent } + notNudged + watchPanes(sampleWindows(nudged).pending)
+        val stillStuck = watchPanes(sampleWindows(nudged).pending)
+        return stuck.filterNot { it in percent } + notNudged + anchorTarget(stillStuck, requested)
+    }
+
+    /**
+     * Last chance for a percent pane whose nudge did not move either (Song L, user log
+     * 2026-09-29: "10" stuck, "11" stuck, a clearly different value later moved). Measured on a
+     * Leopard 3 the same day: writing the pane's CURRENT position is accepted without moving the
+     * glass and replaces the stored target, after which the requested value moves it. So the
+     * pane's position is read fresh, written as the target, and the ORIGINAL [requested] value
+     * is sent [COMPOSITE_WRITE_STAGGER_MS] later; only THAT write is judged.
+     *
+     * Nothing is sent when the position cannot be read or already equals the requested value.
+     * One anchor per pane per command, never followed by another nudge or anchor. Returns the
+     * panes that must still be reported as failures.
+     */
+    private suspend fun anchorTarget(
+        stuck: List<PendingPane>,
+        requested: Map<WindowVerify, Int>,
+    ): List<PendingPane> {
+        if (stuck.isEmpty()) return stuck
+        val anchored = mutableListOf<WindowVerify>()
+        val notAnchored = mutableListOf<PendingPane>()
+        val stagger = WriteStagger()
+        for (pane in stuck) {
+            val check = pane.check
+            val target = requested.getValue(check)
+            val position = windowPercent(readWindowRaw(pane.readFid))
+            if (position == null || position == target) {
+                notAnchored += pane
+                continue
+            }
+            val before = anchored.size
+            stagger.pace()
+            Log.i(TAG, "window anchor: ${check.actionName} position=$position -> target=$target " +
+                "reason=nudge did not move")
+            // The anchor write is expected not to move the glass: its movement check is dropped.
+            val anchor = mutableListOf<WindowVerify>()
+            val accepted = doWrite(check.actionName, position, verifyInto = anchor).isSuccess
+            anchor.forEach { it.before.cancel() }
+            if (accepted) {
+                stagger.pace()
+                doWrite(check.actionName, target, verifyInto = anchored)
+            }
+            if (anchored.size == before) notAnchored += pane
+        }
+        return notAnchored + watchPanes(sampleWindows(anchored).pending)
     }
 
     /** Re-sends one door on its percent fid; false when there is no percent twin or the
