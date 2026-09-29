@@ -1035,7 +1035,7 @@
     <string name="settings_fid_dump_button">Zapisz katalog fidów</string>
     <string name="settings_fid_dump_desc">Nazwy i wartości stałych SDK. Tylko identyfikatory techniczne: bez VIN, bez geolokalizacji, bez danych osobowych</string>
     <string name="settings_hud_check_title">Test HUD</string>
-    <string name="settings_hud_check_desc">Półtorej minuty testowych wskazówek na szybie. Najpierw włącz zapis logów i nagrywaj szybę. Samochód stoi, trasa nie jest potrzebna</string>
+    <string name="settings_hud_check_desc">Półtorej minuty testowych wskazówek na szybie. Najpierw włącz zapis logów i nagrywaj szybę. Samochód stoi, trasa nie jest potrzebna. Na szybie pojawią się testowe napisy „BYDMATE 1”, „BYDMATE 2” i „BYDMATE 3”, po sprawdzeniu znikną</string>
     <string name="settings_hud_check_button">Uruchom</string>
     <string name="settings_hud_check_preparing">Przygotowujemy test</string>
     <string name="settings_hud_check_step">Krok %1$d z %2$d, patrz na szybę</string>
