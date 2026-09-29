@@ -23,9 +23,11 @@ internal class PushStateTrace {
     /** [field] is the FidMap field the fid belongs to, null for the ADAS states. */
     @Synchronized
     fun onEvent(fid: Int, field: String?, raw: Int) {
+        // One read: the confirmed set can be replaced by a resubscribe between two.
+        val name = if (field == null) adas[fid] else null
         val value = when {
             field == TURN_SIGNAL -> turnSide(raw)
-            field == null && fid in adas -> SentinelDecoder.decodeInt(raw)?.toString() ?: NONE
+            name != null -> SentinelDecoder.decodeInt(raw)?.toString() ?: NONE
             else -> return
         }
         val was = last[fid]
@@ -34,7 +36,7 @@ internal class PushStateTrace {
         if (field == TURN_SIGNAL) {
             Trace.event(TraceArea.CAR, "turn", "from" to was, "to" to value)
         } else {
-            Trace.event(TraceArea.CAR, "adas", "name" to adas[fid], "from" to was, "to" to value)
+            Trace.event(TraceArea.CAR, "adas", "name" to name, "from" to was, "to" to value)
         }
     }
 

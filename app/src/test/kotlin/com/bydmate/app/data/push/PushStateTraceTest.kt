@@ -20,9 +20,11 @@ import com.bydmate.app.helper.push.writePushEvents
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -85,7 +87,7 @@ class PushStateTraceTest {
     // --- subscription ---
 
     @Test fun `the ADAS states the catalog confirms ride after the FidMap wave, on the ADAS device`() = runTest {
-        channel.resubscribe("binder accepted", CATALOG)
+        channel.resubscribe("binder accepted") { CATALOG }
 
         val wave = FidPushApplier.PUSH_FIELDS.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
         assertEquals(wave, subs.captured.take(wave.size))
@@ -97,7 +99,7 @@ class PushStateTraceTest {
 
     @Test fun `a symbol this firmware numbers differently is skipped, and never traced by name`() = runTest {
         // DiLink 4 catalog (alimzhan, 2026-09-11): ADAS_LKS_FAULT=309 there.
-        channel.resubscribe("fid catalog resolved", catalogWith(LKS_SYMBOL to 309))
+        channel.resubscribe("fid catalog resolved") { catalogWith(LKS_SYMBOL to 309) }
 
         val wave = FidPushApplier.PUSH_FIELDS.size
         assertEquals(ADAS.keys.filter { it != LKS_FAULT }.map { FidPushSub(it, 1038) }, subs.captured.drop(wave))
@@ -113,14 +115,14 @@ class PushStateTraceTest {
 
     @Test fun `a symbol missing from this firmware's catalog is skipped`() = runTest {
         // Song Plus DiLink 3 catalog (crazyhack, 2026-09-10): only ADAS_LKS_FAULT is there.
-        channel.resubscribe("fid catalog resolved", FidCatalog(mapOf(LKS_SYMBOL to LKS_FAULT), emptyMap()))
+        channel.resubscribe("fid catalog resolved") { FidCatalog(mapOf(LKS_SYMBOL to LKS_FAULT), emptyMap()) }
 
         assertEquals(listOf(FidPushSub(LKS_FAULT, 1038)), subs.captured.drop(FidPushApplier.PUSH_FIELDS.size))
         assertEquals(listOf("car adas-subscribe confirmed=1 skipped=6"), events())
     }
 
     @Test fun `without a catalog no ADAS state is subscribed or traced`() = runTest {
-        channel.resubscribe("binder accepted", catalog = null)
+        channel.resubscribe("binder accepted") { null }
 
         val wave = FidPushApplier.PUSH_FIELDS.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
         assertEquals(wave, subs.captured)
@@ -132,8 +134,8 @@ class PushStateTraceTest {
     }
 
     @Test fun `a later catalog brings the ADAS states in`() = runTest {
-        channel.resubscribe("binder accepted", catalog = null)
-        channel.resubscribe("fid catalog resolved", CATALOG)
+        channel.resubscribe("binder accepted") { null }
+        channel.resubscribe("fid catalog resolved") { CATALOG }
 
         push(LANE_GRAY to 1)
 
@@ -142,6 +144,49 @@ class PushStateTraceTest {
                 "car adas-subscribe reason=no-catalog",
                 "car adas-subscribe confirmed=7 skipped=0",
                 "car adas name=lane-change-gray to=1",
+            ),
+            events(),
+        )
+    }
+
+    @Test fun `a first subscription that finishes late does not take the ADAS states back out`() = runTest {
+        var catalog: FidCatalog? = null
+        val held = CompletableDeferred<Unit>()
+        var calls = 0
+        // The daemon installs what it was handed when the call returns; the first call is held there.
+        var installed: List<FidPushSub> = emptyList()
+        coEvery { helper.pushSubscribe(capture(binder), any()) } coAnswers {
+            val handed = secondArg<List<FidPushSub>>()
+            if (++calls == 1) held.await()
+            installed = handed
+            handed.map { FidPushResult(it.fid, it.device, FID_PUSH_OK) }
+        }
+
+        val first = launch { channel.resubscribe("binder accepted") { catalog } }
+        runCurrent()
+        catalog = CATALOG
+        val second = launch { channel.resubscribe("fid catalog resolved") { catalog } }
+        runCurrent()
+        held.complete(Unit)
+        first.join()
+        second.join()
+
+        assertEquals(ADAS.keys.map { FidPushSub(it, 1038) }, installed.drop(FidPushApplier.PUSH_FIELDS.size))
+        assertEquals(installed.map { it.fid }, channel.results.map { it.fid })
+        push(*ADAS.keys.map { it to 0 }.toTypedArray())
+        assertEquals(ADAS.values.map { "car adas name=$it to=0" }, changes())
+    }
+
+    @Test fun `the ADAS decision is traced even when the daemon does not answer`() = runTest {
+        coEvery { helper.pushSubscribe(any(), any()) } returns null
+
+        channel.resubscribe("binder accepted") { null }
+        channel.resubscribe("fid catalog resolved") { CATALOG }
+
+        assertEquals(
+            listOf(
+                "car adas-subscribe reason=no-catalog daemon=unreachable",
+                "car adas-subscribe confirmed=7 skipped=0 daemon=unreachable",
             ),
             events(),
         )
@@ -159,7 +204,7 @@ class PushStateTraceTest {
             emptyList(), "test",
         ))
 
-        channel.resubscribe("fid catalog resolved", CATALOG)
+        channel.resubscribe("fid catalog resolved") { CATALOG }
 
         assertEquals(1, subs.captured.count { it.fid == lane })
         assertEquals("bsdLeft", channel.fieldFor(lane))
@@ -167,7 +212,7 @@ class PushStateTraceTest {
     }
 
     @Test fun `ADAS fids are not FidMap fields, so nothing patches the snapshot with them`() = runTest {
-        channel.resubscribe("binder accepted", CATALOG)
+        channel.resubscribe("binder accepted") { CATALOG }
 
         ADAS.keys.forEach { assertNull(channel.fieldFor(it)) }
         assertEquals("turnSignal", channel.fieldFor(FidAddresses.fid("turnSignal")))
@@ -175,7 +220,7 @@ class PushStateTraceTest {
 
     @Test fun `ADAS fids this car refuses cost nothing`() = runTest {
         refused = ADAS.keys
-        channel.resubscribe("binder accepted", CATALOG)
+        channel.resubscribe("binder accepted") { CATALOG }
         val received = mutableListOf<FidPushEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { channel.events.toList(received) }
 
@@ -193,7 +238,7 @@ class PushStateTraceTest {
     // --- trace ---
 
     @Test fun `ADAS changes are traced old to new, repeats are not`() = runTest {
-        channel.resubscribe("binder accepted", CATALOG)
+        channel.resubscribe("binder accepted") { CATALOG }
 
         push(LANE_GRAY to 0, ILCA to 1)
         push(LANE_GRAY to 0, ILCA to 1)
@@ -213,7 +258,7 @@ class PushStateTraceTest {
     }
 
     @Test fun `every ADAS state has its own short name`() = runTest {
-        channel.resubscribe("binder accepted", CATALOG)
+        channel.resubscribe("binder accepted") { CATALOG }
 
         push(*ADAS.keys.map { it to 0 }.toTypedArray())
 
@@ -221,7 +266,7 @@ class PushStateTraceTest {
     }
 
     @Test fun `a sentinel is traced as none, not as a number`() = runTest {
-        channel.resubscribe("binder accepted", CATALOG)
+        channel.resubscribe("binder accepted") { CATALOG }
 
         push(TOR_FAULT to 65535)
         push(TOR_FAULT to 3)
@@ -239,7 +284,7 @@ class PushStateTraceTest {
     }
 
     @Test fun `turn signal transitions are traced by side, the held mask is not`() = runTest {
-        channel.resubscribe("binder accepted", CATALOG)
+        channel.resubscribe("binder accepted") { CATALOG }
 
         push(TURN to 1)
         push(TURN to 2)
@@ -263,7 +308,7 @@ class PushStateTraceTest {
     }
 
     @Test fun `other push fields are not traced`() = runTest {
-        channel.resubscribe("binder accepted", CATALOG)
+        channel.resubscribe("binder accepted") { CATALOG }
 
         push(FidAddresses.fid("gear") to 4, FidAddresses.fid("bsdLeft") to 2)
 

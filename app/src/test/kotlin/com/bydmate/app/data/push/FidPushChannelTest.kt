@@ -38,7 +38,7 @@ class FidPushChannelTest {
         val captured = slot<List<FidPushSub>>()
         coEvery { helper.pushSubscribe(any(), capture(captured)) } answers { okTable(captured.captured) }
 
-        channel.resubscribe("binder accepted", catalog = null)
+        channel.resubscribe("binder accepted") { null }
 
         assertEquals(FidPushApplier.PUSH_FIELDS.size, captured.captured.size)
         val turnSignal = captured.captured[FidPushApplier.PUSH_FIELDS.indexOf("turnSignal")]
@@ -52,8 +52,8 @@ class FidPushChannelTest {
         val captured = slot<List<FidPushSub>>()
         coEvery { helper.pushSubscribe(any(), capture(captured)) } answers { okTable(captured.captured) }
 
-        channel.resubscribe("binder accepted", catalog = null)
-        channel.resubscribe("fid catalog resolved", catalog = null)
+        channel.resubscribe("binder accepted") { null }
+        channel.resubscribe("fid catalog resolved") { null }
 
         assertEquals(2, channel.resubscribes)
     }
@@ -61,7 +61,7 @@ class FidPushChannelTest {
     @Test fun `an unreachable daemon leaves no subscription`() = runTest {
         coEvery { helper.pushSubscribe(any(), any()) } returns null
 
-        channel.resubscribe("binder accepted", catalog = null)
+        channel.resubscribe("binder accepted") { null }
 
         assertEquals(emptyList<FidPushResult>(), channel.results)
         assertEquals(0, channel.resubscribes)
@@ -81,7 +81,7 @@ class FidPushChannelTest {
             )
         }
 
-        channel.resubscribe("binder accepted", catalog = null)
+        channel.resubscribe("binder accepted") { null }
         val lines = channel.diagnosticsSnapshot()
 
         assertEquals("subscribed=${FidPushApplier.PUSH_FIELDS.size} ok=${FidPushApplier.PUSH_FIELDS.size} failed=0", lines.first())
