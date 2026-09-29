@@ -19,6 +19,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -63,6 +65,8 @@ class FidPushChannel @Inject constructor(
 
     private val states = PushStateTrace()
 
+    private val subscribeLock = Mutex()
+
     /** Last outcome table the daemon reported; empty = no subscription in force. */
     @Volatile var results: List<FidPushResult> = emptyList()
         private set
@@ -84,22 +88,28 @@ class FidPushChannel @Inject constructor(
      * (Re)installs the subscription with the fid addresses in force right now. Called whenever the
      * daemon became available or the firmware catalog moved the addresses — both are rare, and the
      * daemon side treats a repeat as a clean reinstall, so there is no state to keep in step here.
-     * [catalog] is this car's fid catalog, null while none has been read; it decides which ADAS
+     * [catalog] gives this car's fid catalog, null while none has been read; it decides which ADAS
      * states ride along.
+     *
+     * One call at a time, the catalog and the addresses read inside the lock: a call that started
+     * before the catalog was read and finished late would otherwise reinstall the subscription
+     * without the ADAS states over the one that carries them.
      */
-    suspend fun resubscribe(reason: String, catalog: FidCatalog?) {
+    suspend fun resubscribe(reason: String, catalog: () -> FidCatalog?): Unit = subscribeLock.withLock {
         val fields = FidPushApplier.PUSH_FIELDS
         val subs = fields.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
-        val adas = confirmedAdas(catalog, subs)
+        val current = catalog()
+        val adas = confirmedAdas(current, subs)
         // Set before the subscription goes out, so a state this catalog does not confirm is never
         // traced by name, even from a packet of the subscription it replaces.
         states.adas = adas.associate { it.fid to it.name }
         val table = helper.pushSubscribe(callback, subs + adas.map { FidPushSub(it.fid, PushStateTrace.ADAS_DEVICE) })
+        traceAdas(current, adas.size, installed = table != null)
         if (table == null) {
             results = emptyList()
             fieldByFid = emptyMap()
             Log.w(TAG, "resubscribe ($reason): daemon unreachable")
-            return
+            return@withLock
         }
         results = table
         fieldByFid = fields.indices.associate { subs[it].fid to fields[it] }
@@ -107,12 +117,17 @@ class FidPushChannel @Inject constructor(
         resubscribes++
         val ok = table.count { it.outcome == FID_PUSH_OK }
         Log.i(TAG, "resubscribe ($reason): ok=$ok failed=${table.size - ok}")
+    }
+
+    /** One line per call: what was decided about the ADAS states, and whether the daemon took it. */
+    private fun traceAdas(catalog: FidCatalog?, confirmed: Int, installed: Boolean) {
+        val daemon = if (installed) null else "unreachable"
         if (catalog == null) {
-            Trace.event(TraceArea.CAR, "adas-subscribe", "reason" to "no-catalog")
+            Trace.event(TraceArea.CAR, "adas-subscribe", "reason" to "no-catalog", "daemon" to daemon)
         } else {
             Trace.event(
                 TraceArea.CAR, "adas-subscribe",
-                "confirmed" to adas.size, "skipped" to PushStateTrace.ADAS_STATES.size - adas.size,
+                "confirmed" to confirmed, "skipped" to PushStateTrace.ADAS_STATES.size - confirmed, "daemon" to daemon,
             )
         }
     }
