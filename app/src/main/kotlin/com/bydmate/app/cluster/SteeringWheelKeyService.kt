@@ -57,6 +57,10 @@ class SteeringWheelKeyService : AccessibilityService() {
         instance = this
         isConnected = true
         Log.d(TAG, "connected; filtering steering-wheel keys")
+        // Streak before markBound resets it: > 0 means this bind follows our own force-stop recovery.
+        Trace.event(TraceArea.APP, "a11y-connected",
+            "streak" to prefs.getInt(com.bydmate.app.service.A11yRecoveryGate.KEY_FAIL_STREAK, 0),
+            "service_running" to TrackingService.isRunning.value)
         com.bydmate.app.service.A11yRecoveryGate.markBound(prefs)  // ends the Android 10 recovery streak
         // Android 10 (DiLink 3.0/4.0) a11y recovery: the daemon force-stops our package and the
         // framework re-binds this service, which brings the process back without TrackingService.
@@ -64,7 +68,7 @@ class SteeringWheelKeyService : AccessibilityService() {
         // (startForegroundService on a running service is a no-op); gated so DiLink 5.x is untouched.
         if (android.os.Build.VERSION.SDK_INT <= 29 && !TrackingService.isRunning.value) {
             try {
-                TrackingService.start(this)
+                TrackingService.start(this, com.bydmate.app.service.AutostartTrace.TRIGGER_A11Y)
                 Log.i(TAG, "a11y connected with TrackingService stopped: started it")
             } catch (e: Exception) {
                 Log.w(TAG, "a11y connected: TrackingService start failed: ${e.message}")

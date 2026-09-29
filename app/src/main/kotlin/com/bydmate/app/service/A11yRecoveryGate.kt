@@ -29,6 +29,11 @@ object A11yRecoveryGate {
             nowElapsedMs < lastAttemptElapsedMs ||
             nowElapsedMs - lastAttemptElapsedMs >= MIN_INTERVAL_MS
 
+    /** How long until [shouldAttempt] allows the next attempt; 0 when it already does. For the trace and dump. */
+    fun remainingWaitMs(lastAttemptElapsedMs: Long, nowElapsedMs: Long, failStreak: Int): Long =
+        if (shouldAttempt(lastAttemptElapsedMs, nowElapsedMs, failStreak)) 0L
+        else MIN_INTERVAL_MS - (nowElapsedMs - lastAttemptElapsedMs)
+
     fun shouldAttempt(prefs: SharedPreferences, nowElapsedMs: Long = SystemClock.elapsedRealtime()): Boolean =
         shouldAttempt(
             prefs.getLong(KEY_LAST_ATTEMPT_ELAPSED_MS, 0L),
