@@ -1346,6 +1346,9 @@ private fun DisplaySection() {
             )
         }
         SettingHint(text = stringResource(R.string.settings_hud_hint))
+        // Outside the switch: the check is meant to run with HUD output turned off too.
+        SettingDivider()
+        HudCheckRow()
     }
 
     if (learning) {
@@ -2424,8 +2427,6 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
             text = state.logSaveStatus!!,
         )
     }
-    SettingDivider()
-    HudCheckRow()
     // Diagnostic fid recorder (-test/debug builds only): the daemon owns the run, this row
     // only reflects and toggles it, so a reopened screen still shows a recording in force.
     if (state.fidRecorderVisible) {
