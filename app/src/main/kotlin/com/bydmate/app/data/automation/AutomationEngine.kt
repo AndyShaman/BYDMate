@@ -80,6 +80,11 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         const val TRIGGER_KIND_STEERING_KEY = "steering_key"
         const val TRIGGER_PARAM_STEERING_KEY = "steering_key"
 
+        /** An enabled rule with a steering_key trigger needs the a11y key filter bound (#262). */
+        fun hasEnabledSteeringKeyRule(rules: List<RuleEntity>): Boolean = rules.any { rule ->
+            rule.enabled && TriggerDef.listFromJson(rule.triggers).any { it.kind == TRIGGER_KIND_STEERING_KEY }
+        }
+
         /**
          * Creates the confirmation channel, or renames it: the same id updates the name and the
          * description to [strings], a context in the app language.
@@ -193,6 +198,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             }
         }
     }
+
+    // Read from the DB, not steeringKeyCodes: that cache is filled asynchronously after start.
+    suspend fun steeringKeyRuleEnabled(): Boolean = hasEnabledSteeringKeyRule(ruleDao.getEnabled())
 
     // One line for the diagnostics dump (#177).
     fun serviceStartDumpLine(): String =
