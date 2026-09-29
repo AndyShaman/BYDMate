@@ -22,7 +22,8 @@ import javax.inject.Singleton
 /**
  * App end of the fid push channel: hands the daemon a callback binder, receives the events the
  * vendor listeners produce, lays them into the live snapshot and republishes them as a flow for
- * consumers that must react faster than the poll (the blind-spot loop).
+ * consumers that must react faster than the poll (the blind-spot loop). A few ADAS states ride
+ * along for the trace alone ([PushStateTrace]); they are not FidMap fields and reach no consumer.
  *
  * The poll is untouched and stays the source of truth — a push only moves a value forward between
  * two ticks, and a snapshot that does not exist yet is never invented.
@@ -49,10 +50,15 @@ class FidPushChannel @Inject constructor(
             // One transact carries a whole flush of the daemon's buffer; consumers still see
             // one event at a time.
             val now = System.currentTimeMillis()
-            for (event in readPushEvents(data, now)) _events.tryEmit(event)
+            for (event in readPushEvents(data, now)) {
+                states.onEvent(event.fid, fieldByFid[event.fid], event.intValue)
+                _events.tryEmit(event)
+            }
             return true
         }
     }
+
+    private val states = PushStateTrace()
 
     /** Last outcome table the daemon reported; empty = no subscription in force. */
     @Volatile var results: List<FidPushResult> = emptyList()
@@ -79,7 +85,11 @@ class FidPushChannel @Inject constructor(
     suspend fun resubscribe(reason: String) {
         val fields = FidPushApplier.PUSH_FIELDS
         val subs = fields.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
-        val table = helper.pushSubscribe(callback, subs)
+        // After the wave, and never a fid a field already holds here: the daemon keys its tables
+        // by fid, so a shared one would take that field's row over.
+        val adas = PushStateTrace.ADAS_STATES.keys.filter { fid -> subs.none { it.fid == fid } }
+            .map { FidPushSub(it, PushStateTrace.ADAS_DEVICE) }
+        val table = helper.pushSubscribe(callback, subs + adas)
         if (table == null) {
             results = emptyList()
             fieldByFid = emptyMap()
@@ -108,7 +118,7 @@ class FidPushChannel @Inject constructor(
             "subscribed=${local.size} ok=$ok failed=${local.size - ok}"
         )
         for (result in local) {
-            val field = fieldByFid[result.fid] ?: "?"
+            val field = labelOf(result.fid)
             val row = rows[result.fid]
             val age = row?.lastTsElapsed?.takeIf { it > 0 }?.let { (nowElapsed - it) / 1000 }
             lines += "$field ${result.fid} dev=${result.device} ${outcomes[result.fid]} " +
@@ -132,6 +142,9 @@ class FidPushChannel @Inject constructor(
         return lines
     }
 
+    /** Dump name of a subscribed fid: its FidMap field, or the trace name of an ADAS state. */
+    private fun labelOf(fid: Int): String = fieldByFid[fid] ?: PushStateTrace.ADAS_STATES[fid] ?: "?"
+
     private fun pollPushRows(
         local: List<FidPushResult>,
         outcomes: Map<Int, String>,
@@ -139,7 +152,7 @@ class FidPushChannel @Inject constructor(
     ): List<FidPushDiagnostics.PollPushRow> {
         val polled = com.bydmate.app.data.nativestack.PollFieldValues.latest()
         return local.map { result ->
-            val field = fieldByFid[result.fid] ?: "?"
+            val field = labelOf(result.fid)
             FidPushDiagnostics.PollPushRow(
                 field = field,
                 fid = result.fid,

@@ -40,11 +40,11 @@ class FidPushChannelTest {
 
         channel.resubscribe("binder accepted")
 
-        assertEquals(FidPushApplier.PUSH_FIELDS.size, captured.captured.size)
+        assertEquals(FidPushApplier.PUSH_FIELDS.size + ADAS_STATES, captured.captured.size)
         val turnSignal = captured.captured[FidPushApplier.PUSH_FIELDS.indexOf("turnSignal")]
         assertEquals(FidAddresses.fid("turnSignal"), turnSignal.fid)
         assertEquals(FidAddresses.device("turnSignal"), turnSignal.device)
-        assertEquals(FidPushApplier.PUSH_FIELDS.size, channel.results.size)
+        assertEquals(FidPushApplier.PUSH_FIELDS.size + ADAS_STATES, channel.results.size)
         assertEquals(1, channel.resubscribes)
     }
 
@@ -84,10 +84,16 @@ class FidPushChannelTest {
         channel.resubscribe("binder accepted")
         val lines = channel.diagnosticsSnapshot()
 
-        assertEquals("subscribed=${FidPushApplier.PUSH_FIELDS.size} ok=${FidPushApplier.PUSH_FIELDS.size} failed=0", lines.first())
+        val subscribed = FidPushApplier.PUSH_FIELDS.size + ADAS_STATES
+        assertEquals("subscribed=$subscribed ok=$subscribed failed=0", lines.first())
         assertTrue(lines.any { it.startsWith("turnSignal ${FidAddresses.fid("turnSignal")} dev=1004 OK") })
         assertTrue(lines.contains("callback: dead deliver errors=3"))
         assertTrue(lines.contains("delivery: packets=0 events=0 coalesced=0"))
         assertTrue(lines.contains("resubscribes=1"))
+    }
+
+    private companion object {
+        /** The ADAS states subscribed for the trace alone, after the FidMap wave (PushStateTraceTest). */
+        const val ADAS_STATES = 7
     }
 }

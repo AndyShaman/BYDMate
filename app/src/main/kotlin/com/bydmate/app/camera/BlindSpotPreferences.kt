@@ -1,8 +1,11 @@
 package com.bydmate.app.camera
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Rect
 import android.util.Size
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -72,6 +75,13 @@ class BlindSpotPreferences @Inject constructor(
         const val MAX_THRESHOLD_KMH = 60
         const val MIN_PIP_WIDTH_PCT = 20
         const val MAX_PIP_WIDTH_PCT = 60
+
+        /** The settings card's main switch: writes it and traces the flip, old to new. */
+        fun setEnabled(prefs: SharedPreferences, on: Boolean) {
+            val was = prefs.getBoolean(KEY_ENABLED, false)
+            prefs.edit().putBoolean(KEY_ENABLED, on).apply()
+            Trace.event(TraceArea.USER, "toggle", "id" to "blindspot", "on" to on, "was" to was)
+        }
 
         /**
          * 16:9 window sized to [widthPct] % of the display width, upright (#207) or not.
