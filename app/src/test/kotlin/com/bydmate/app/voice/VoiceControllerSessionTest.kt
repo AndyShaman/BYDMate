@@ -107,6 +107,11 @@ class VoiceControllerSessionTest {
      *  barrier: a tryEmit before any collector attaches (replay = 0) is simply lost. */
     private fun awaitSubscribed(events: MutableSharedFlow<*>) = awaitTrue { events.subscriptionCount.value >= 1 }
 
+    /** A stopped session flips `listening` false first and releases `busy` last in its finally
+     *  (off-cue, overlay and trace run in between); a press before the release is dropped as
+     *  busy. sessionActive() covers both, so a test presses again only once it reads false. */
+    private fun awaitReleased(controller: VoiceController) = awaitTrue { !controller.sessionActive() }
+
     /** A clock that returns [times] one call at a time, then keeps the last: the mic gate reads
      *  it once per captured frame, so the frames get these capture times in order. */
     private fun frameClock(vararg times: Long): () -> Long {
@@ -941,7 +946,7 @@ class VoiceControllerSessionTest {
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
         controller.onPttPressed()
-        awaitTrue { !controller.listening.value }
+        awaitReleased(controller)
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -1487,7 +1492,10 @@ class VoiceControllerSessionTest {
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         audioCapture.stubFrames(rawFrames)
-        val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
+        // A slow off-cue widens the window between listening=false and the session's release, the
+        // window a press right after !listening used to fall into (dropped as ptt-ignored busy).
+        val earcon = mockk<VoiceEarcon>(relaxed = true) { every { off() } answers { Thread.sleep(300) } }
+        val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture, earcon = earcon)
         val answers = mutableListOf<String>()
         controller.showAnswerHook = { text -> answers.add(text) }
 
@@ -1495,7 +1503,7 @@ class VoiceControllerSessionTest {
         awaitTrue { controller.listening.value }
         awaitSubscribed(fakeAsr.events)
         controller.onPttPressed() // hard stop: sets stopRequested and tears the session down
-        awaitTrue { !controller.listening.value }
+        awaitReleased(controller)
 
         // A fresh continuous session starts: startContinuousSession() must clear the stale flag.
         controller.onPttPressed()
@@ -1550,7 +1558,7 @@ class VoiceControllerSessionTest {
         awaitTrue { askStarted.isCompleted }
 
         controller.onPttPressed() // hard stop while the ask is suspended
-        awaitTrue { !controller.listening.value }
+        awaitReleased(controller)
 
         // A NEW continuous session starts and resets the global stopRequested flag.
         controller.onPttPressed()
@@ -1674,7 +1682,7 @@ class VoiceControllerSessionTest {
         awaitTrue {
             silentMs += 30_000L
             fakeAsr.events.tryEmit(ContinuousAsrEvent.SilenceTick(silentMs))
-            !controller.listening.value
+            !controller.sessionActive()
         }
 
         controller.onPttPressed()               // user starts a fresh session...
@@ -1835,7 +1843,7 @@ class VoiceControllerSessionTest {
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitTrue { controller.state.value is VoiceUiState.Done && controller.routingJobForTest() == null }
         controller.onPttPressed()               // the driver stops this session...
-        awaitTrue { !controller.listening.value }
+        awaitReleased(controller)
         controller.onPttPressed()               // ...and starts a fresh one
         awaitTrue { controller.listening.value }
         speaking.value = false                  // the old reply finally ends
@@ -1985,7 +1993,7 @@ class VoiceControllerSessionTest {
         awaitTrue { controller.listening.value }
         awaitSubscribed(fakeAsr.events)
         controller.onPttPressed() // hard stop: sets stopRequested, session tears down
-        awaitTrue { !controller.listening.value }
+        awaitReleased(controller)
 
         fakeAsr.ready = false // model becomes not ready (or user switched to a non-RU language)
         controller.onPttPressed() // else-branch: model-not-ready path
