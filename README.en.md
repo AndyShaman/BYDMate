@@ -37,33 +37,37 @@ All core features (trips, charges, automations, local insights, offline voice ag
 
 ## What's New
 
-The main changes in version 3.18.1.
+The main changes in version 3.19.3.
 
-**Redesigned trip window.** The header now shows the date, weekday, and a close button. New: odometer at the start and finish, time in motion, cost per 100 km, charge change in percent, and outside temperature at the start and end. The odometer is recorded only for trips after the update.
+**The agent closes by itself.** The voice agent settings have a new switch, "Close the agent after a completed command", off by default. When it is on, the agent closes on its own after a completed command or an answer. If the agent asked you a question, it waits for your reply.
 
-**Automation as a list or as cards.** A toggle in the tab header shows rules as a compact list or as cards in three columns; the choice is remembered. Each rule shows how many times and when it last fired.
+**Close the agent with words.** Say "close the agent", "turn off", or "that's all, thanks, rest", and the agent closes. This goes through the model, so it needs the internet.
 
-**Roomier Home screen.** Recent trips now always show six entries, and the bottom tab bar is shorter.
+**Two HUD modes.** The HUD card now has a mode choice. Mode 1 is the default: hints go to the glass and the app does not touch the cluster. Mode 2 puts the car into navigation mode for the length of the route; try it if the glass is empty in Mode 1. Showing apps and cameras on the cluster works again during a route. The test text after "HUD check" is now cleared from the glass.
 
-The main changes in version 3.18.0.
+**"Climate auto".** The phrases "climate auto" and "climate in automatic" switch the climate to automatic mode instead of only turning it on.
 
-**Configuration in one place.** The "Save configuration" button replaces CSV export, settings export, and manual backup. You choose what to save: trips and charges, settings with tariffs, keys. On restore you can bring back only the parts you need. Details in [Configuration Backup and Telegram Bot](#configuration-backup-and-telegram-bot).
+**Windows by a fraction.** A repeated command to open a window by a fraction, such as venting or halfway, now works even where the car used to skip it.
 
-**Auto-save with a copy in Telegram.** Once a day, week, or month the app saves a copy by itself when the car starts. Download keeps the 5 most recent copies, and each one is also sent to your Telegram bot.
+**Head units with Android 10.** A steering wheel button assigned in an automation works after the car is turned off and on. The widget no longer disappears for half a minute after the car starts. Log recording now also keeps the work of the blind-spot cameras.
 
-**Automations can be shared.** The "Share" button saves a rule to a file without your phone numbers, contacts, or places. The "Import" button adds a rule from such a file, off by default. Details in the "Automation" section.
+The main changes in versions 3.19.0 - 3.19.2.
 
-**Test run for a rule.** In the automation editor, the "Test run" button runs all the actions right away, without waiting for the condition.
+**Telegram report.** When the car is turned off, a report arrives in Telegram: the car's state, the last trip, and open doors as separate blocks. The report includes the car's odometer reading, and right under it comes a point showing where the car is on the map: it opens in the maps app on your phone with one tap and arrives silently. If there is no connection, the report arrives the next time the car starts. What goes into the report is chosen in Settings, and automations have a "Send report to Telegram" action.
 
-**Voice commands from a fixed phrase list.** The built-in offline commands are now a fixed list of common Russian phrases. A phrase from the list runs without internet; everything else goes to the agent. Windows and the sunroof can open by a fraction: "halfway", "50 percent", "just a bit", "all the way". Details in the "Voice AI Agent" section.
+**The assistant answers by itself.** For simple questions about the car the assistant answers right away: outside and cabin temperature, charge, range, how much the climate costs. It takes the answer from the car's data, so there is no delay. The assistant also answers "where am I" and "what is nearby", naming the closest towns and villages with the distance and direction.
 
-**Text size.** Settings, App section, "Text size": normal, large, or extra large. This changes the app screens and the voice agent windows; the widget and the cluster stay the same.
+**Chargers nearby and along the way.** In Belarus the assistant says whether a station is free, its power and price, and on the road it looks for stations ahead along your route. Pick a station and the assistant builds a route to it. The connector used for the search is chosen in Settings: GB/T, CCS2, Type2, or CHAdeMO.
 
-**TRIP resets after charging.** The TRIP 1 and TRIP 2 counters can reset themselves: after any charge, AC only, DC only, or only after charging to 100%. Each counter has its own setting, chosen in the counter's detail window.
+**The assistant's voice.** You can interrupt the assistant by saying its name. It again hears a phrase you start right after its answer. On DiLink 3.0 and DiLink 4.0 it no longer loses the first words, and its voice plays at navigation volume without changing the music volume. A steering wheel button that sends two codes per press, like on the Atto 3, is assigned to the assistant as a whole.
 
-**Clear ADB status line.** On Home and in Settings, the status line says why vehicle control does not work: ADB is not enabled, it turned off after a reboot, there is no access, or the helper did not start. Tapping it opens a tip with an action. The first-run wizard now has an "ADB" step with a connection check.
+**Drive mode.** ECO, Normal, and Sport switch from automations, by voice, and through the assistant. Snow, sand, mud, mountain, and smart mode are available at speeds up to 15 km/h. The app checks that the mode really changed.
 
-**Steering wheel heating and discharge power.** Steering wheel heating can be turned on and off from automation and by voice, on cars that have it. On the "Tech" screen, the BMS limits now show a "max discharge power" line, the same figure diagnostic scanners show.
+**Automation is clearer.** Each rule is written in words, and you can see when it fired and how it ended. The editor is simpler, with large buttons. There is a one-time condition "Once: date and time" and rear passenger seat belts in the conditions.
+
+**Cluster and HUD.** Both blind-spot cameras can be shown on the cluster while the main screen stays free. The "HUD check" button in the HUD settings runs test hints on the glass for a minute and a half, no route needed. The maneuver arrow on the glass no longer disappears while the car waits at a traffic light.
+
+**Small things.** The OpenRouter key is saved without stray spaces. The assistant knows the current time and honestly says when it does not remember the start of a long conversation. After an update the app starts by itself.
 
 ---
 
