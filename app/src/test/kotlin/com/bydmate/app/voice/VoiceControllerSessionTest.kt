@@ -159,11 +159,14 @@ class VoiceControllerSessionTest {
         earcon: VoiceEarcon = mockk(relaxed = true),
         context: Context = mockk<Context>(relaxed = true),
         agentIdentity: () -> AgentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
+        closeAfterCommand: Boolean = false,
+        ttsEnabled: Boolean = false,
     ): VoiceController {
         val gate = mockk<VoiceGate>()
         every { gate.isEnabled() } returns true
         every { gate.vehicleSnapshot() } returns null
-        every { gate.ttsEnabled() } returns false
+        every { gate.ttsEnabled() } returns ttsEnabled
+        every { gate.closeAfterCommand() } returns closeAfterCommand
 
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
@@ -1680,6 +1683,188 @@ class VoiceControllerSessionTest {
 
         Thread.sleep(700)
         assertTrue(controller.listening.value)  // the new session must survive the stale close
+    }
+
+    // --- Close the agent after a done command (Settings toggle) and on the driver's request ---
+
+    private fun okDispatcher(): ActionDispatcher = mockk<ActionDispatcher>(relaxed = true).also {
+        coEvery { it.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
+    }
+
+    private fun answeringAgent(text: String, vararg tools: AgentToolOutcome): AgentOrchestrator =
+        mockk<AgentOrchestrator>().also {
+            coEvery { it.ask(any(), any(), any()) } returns AgentResult.Answer(text, tools.toList())
+            coEvery { it.noteAction(any()) } returns Unit
+            coEvery { it.expectsFollowUp() } returns false
+        }
+
+    /** A TTS whose speak() enqueues playback; the test drives [speaking] by hand. */
+    private fun speakingTts(speaking: MutableStateFlow<Boolean>): TtsEngine = mockk<TtsEngine>(relaxed = true) {
+        every { speak(any()) } returns true
+        every { this@mockk.speaking } returns speaking
+    }
+
+    private fun startSession(controller: VoiceController, asr: FakeContinuousAsr) {
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(asr.events)
+    }
+
+    // Longest unspoken reading dwell of the short outcome texts below with the 50 ms floor.
+    private val shortDwellMs = 2_500L
+
+    @Test fun `toggle off - a done command keeps the session listening`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(fakeAsr, okDispatcher())
+        controller.dialogClearDelayMs = 50L
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { controller.state.value is VoiceUiState.Done && controller.routingJobForTest() == null }
+        Thread.sleep(shortDwellMs)
+        assertTrue(controller.listening.value)
+    }
+
+    @Test fun `toggle on - a done command closes the session once the spoken reply ends`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val speaking = MutableStateFlow(false)
+        val controller = makeController(fakeAsr, okDispatcher(), ttsEngine = speakingTts(speaking),
+            closeAfterCommand = true, ttsEnabled = true)
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { controller.state.value is VoiceUiState.Done }
+        Thread.sleep(500)
+        assertTrue(controller.listening.value)   // the reply has not started playing yet
+        speaking.value = true
+        Thread.sleep(300)
+        assertTrue(controller.listening.value)   // still open while the reply plays
+        speaking.value = false
+        awaitTrue { !controller.listening.value }
+    }
+
+    @Test fun `toggle on - an agent question keeps the session listening`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(fakeAsr, mockk(relaxed = true),
+            agentOrchestrator = answeringAgent("Какое окно закрыть? "), closeAfterCommand = true)
+        controller.dialogClearDelayMs = 50L
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи анекдот"))
+        awaitTrue { controller.state.value is VoiceUiState.AgentAnswer }
+        Thread.sleep(shortDwellMs)
+        assertTrue(controller.listening.value)
+    }
+
+    @Test fun `toggle on - a final agent answer closes the session`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(fakeAsr, mockk(relaxed = true),
+            agentOrchestrator = answeringAgent("Окна закрыты."), closeAfterCommand = true)
+        controller.dialogClearDelayMs = 50L
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи анекдот"))
+        awaitTrue(timeoutMs = 5_000L) { !controller.listening.value }
+    }
+
+    @Test fun `toggle on - a blocked or not understood phrase keeps the session listening`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(false, "занято")
+        // The default agent is disabled: an unknown phrase ends NotUnderstood.
+        val controller = makeController(fakeAsr, dispatcher, closeAfterCommand = true)
+        controller.dialogClearDelayMs = 50L
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { controller.state.value is VoiceUiState.Blocked && controller.routingJobForTest() == null }
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи анекдот"))
+        awaitTrue { controller.state.value is VoiceUiState.NotUnderstood }
+        Thread.sleep(shortDwellMs)
+        assertTrue(controller.listening.value)
+    }
+
+    @Test fun `toggle on - a new phrase before the close cancels it`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        // The second phrase's dispatch is held, so it never arms a close of its own.
+        val secondStarted = AtomicBoolean(false)
+        val releaseSecond = AtomicBoolean(false)
+        val calls = AtomicInteger(0)
+        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
+            if (calls.incrementAndGet() >= 2) {
+                secondStarted.set(true)
+                while (!releaseSecond.get()) delay(10)
+            }
+            DispatchResult(true)
+        }
+        val controller = makeController(fakeAsr, dispatcher, closeAfterCommand = true)
+        controller.dialogClearDelayMs = 50L
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { controller.state.value is VoiceUiState.Done && controller.routingJobForTest() == null }
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { secondStarted.get() }
+
+        Thread.sleep(shortDwellMs)   // past the first close's reading dwell
+        assertTrue(controller.listening.value)
+        releaseSecond.set(true)
+    }
+
+    @Test fun `toggle on - with nothing spoken the session closes after the reading dwell`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(fakeAsr, okDispatcher(), closeAfterCommand = true)
+        controller.dialogClearDelayMs = 50L
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { controller.state.value is VoiceUiState.Done }
+        Thread.sleep(500)
+        assertTrue(controller.listening.value)   // the text is still being read
+        awaitTrue(timeoutMs = 5_000L) { !controller.listening.value }
+    }
+
+    @Test fun `toggle on - a newer session started while the close waited is not closed`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val speaking = MutableStateFlow(true)   // the reply keeps playing until flipped below
+        val controller = makeController(fakeAsr, okDispatcher(), ttsEngine = speakingTts(speaking),
+            closeAfterCommand = true, ttsEnabled = true)
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { controller.state.value is VoiceUiState.Done && controller.routingJobForTest() == null }
+        controller.onPttPressed()               // the driver stops this session...
+        awaitTrue { !controller.listening.value }
+        controller.onPttPressed()               // ...and starts a fresh one
+        awaitTrue { controller.listening.value }
+        speaking.value = false                  // the old reply finally ends
+
+        Thread.sleep(700)
+        assertTrue(controller.listening.value)
+    }
+
+    @Test fun `end_conversation closes the session after the reply even with the toggle off`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(fakeAsr, mockk(relaxed = true),
+            agentOrchestrator = answeringAgent("Пока", AgentToolOutcome("end_conversation", true)))
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой агента"))
+        awaitTrue { !controller.listening.value }
+    }
+
+    @Test fun `an agent answer without end_conversation keeps the session listening with the toggle off`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(fakeAsr, mockk(relaxed = true),
+            agentOrchestrator = answeringAgent("Пока"))
+        controller.dialogClearDelayMs = 50L
+        startSession(controller, fakeAsr)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой агента"))
+        awaitTrue { controller.state.value is VoiceUiState.AgentAnswer }
+        Thread.sleep(shortDwellMs)
+        assertTrue(controller.listening.value)
     }
 
     // --- I-1 fix: the else-branch (model not ready / non-RU) must also reset stopRequested ---

@@ -1340,6 +1340,8 @@
     <string name="settings_voice_button_mic_header">Przycisk i mikrofon</string>
     <string name="settings_voice_enable_label">Komendy głosowe</string>
     <string name="settings_voice_enable_description">Komendy przyciskiem kierownicy bez internetu</string>
+    <string name="settings_voice_close_after_command_label">Zamykaj agenta po wykonanym poleceniu</string>
+    <string name="settings_voice_close_after_command_description">Po wykonanym poleceniu lub odpowiedzi agent sam się zamknie. Jeśli agent zadał pytanie, poczeka na odpowiedź.</string>
     <string name="settings_voice_model_downloading">Pobieranie… %1$d%%</string>
     <string name="settings_voice_model_unpacking">Rozpakowywanie… %1$d%%</string>
     <string name="voice_listening">Słucham</string>

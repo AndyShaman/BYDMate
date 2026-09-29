@@ -151,6 +151,9 @@ object VoiceModule {
         override fun ttsEnabled(): Boolean =
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
                 .getBoolean("tts_enabled", false)
+        override fun closeAfterCommand(): Boolean =
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getBoolean("close_after_command", false)
     }
 
     @Provides @Singleton

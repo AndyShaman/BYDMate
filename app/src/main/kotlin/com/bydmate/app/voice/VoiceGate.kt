@@ -19,4 +19,7 @@ interface VoiceGate {
 
     /** True when the user enabled spoken agent answers (Settings mirror). */
     fun ttsEnabled(): Boolean
+
+    /** True when the session closes itself after a done command or a final agent answer. */
+    fun closeAfterCommand(): Boolean = false
 }

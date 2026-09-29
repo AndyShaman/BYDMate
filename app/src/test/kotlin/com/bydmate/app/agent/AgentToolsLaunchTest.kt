@@ -124,6 +124,19 @@ class AgentToolsLaunchTest {
         assertEquals("go_home", captured.captured.kind)
     }
 
+    // end_conversation is offered to the model and only reports ok: the voice session closes itself.
+    @Test fun end_conversation_is_in_the_schemas_and_returns_ok() = runTest {
+        coEvery { ruleDao.getEnabled() } returns emptyList()
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns ""
+        val schemas = tools().schemas()
+        val names = (0 until schemas.length())
+            .map { schemas.getJSONObject(it).getJSONObject("function").getString("name") }
+        assertTrue("end_conversation" in names)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "end_conversation", "{}")))
+        assertTrue(out.getBoolean("ok"))
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    }
+
     // (f) dispatcher failure -> Russian error JSON.
     @Test fun navigate_to_dispatch_failure_reports_error() = runTest {
         coEvery { dispatcher.dispatch(any(), any()) } returns

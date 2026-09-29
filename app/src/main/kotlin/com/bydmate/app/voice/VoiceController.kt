@@ -138,8 +138,10 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     // Test seam: the clock of the playback window.
     internal var clock: () -> Long = System::currentTimeMillis
 
-    // Wave P play_music auto-close waiting for the reply to end; a name barge-in cancels it.
-    @Volatile private var musicCloseJob: Job? = null
+    // Session auto-close waiting for the reply to end (play_music, the close-after-command toggle,
+    // the driver's own request); a name barge-in cancels it, a new phrase cancels all but play_music.
+    @Volatile private var sessionCloseJob: Job? = null
+    @Volatile private var sessionCloseReason: String? = null
 
     // After a terminal state (Done/NotUnderstood/Blocked) the voice UI state auto-returns to Idle
     // so it never sticks (the "не распознал" red used to stay forever). Kept short so it
@@ -174,7 +176,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
     /** Speak a short phrase for every session outcome (not only agent answers).
      *  Overlay text stays detailed; the spoken phrase is terse for the road. */
-    private suspend fun announce(title: String, overlay: String, spoken: String) {
+    private suspend fun announce(title: String, overlay: String, spoken: String, done: Boolean = false) {
         // Hard stop gate: never start a new announcement after the orb went off — the callers'
         // runCatching wrappers swallow the cancellation that would otherwise stop this path.
         // coroutineContext.isActive is the per-turn mark: a cancelled routing turn stays
@@ -198,6 +200,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // orb; the agent Answer branch, which does not call announce(), does the same two calls itself.
         showAnswerHook(overlay)
         scheduleClear(overlay, didSpeak)
+        if (done) closeAfterCommand(overlay, didSpeak)
     }
 
     /** Everything the agent hands to TTS: the echo filter's memory and the playback-window stamp
@@ -509,10 +512,10 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     /** Name barge-in: silence the agent and hand the turn back to the driver. The caller has
      *  already cancelled the in-flight ask. */
     private fun bargeIn(transcript: String, logMsg: String) {
-        // Before stop(): the play_music auto-close resumes on the very speaking=false it causes.
-        musicCloseJob?.takeIf { it.isActive }?.let {
+        // Before stop(): the session auto-close resumes on the very speaking=false it causes.
+        sessionCloseJob?.takeIf { it.isActive }?.let {
             it.cancel()
-            Log.i(TAG, "play_music auto-close cancelled by barge-in: the driver stays in the dialog")
+            Log.i(TAG, "$sessionCloseReason auto-close cancelled by barge-in: the driver stays in the dialog")
         }
         runCatching { ttsEngine.stop() }
         earcon.ok()
@@ -570,6 +573,14 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 reason = "Эхо своей речи", refusal = VoiceRefusal.ECHO, asrMs = decodeMs),
                 "Echo filtered: transcript=\"$transcript\"")
             return
+        }
+        // The driver goes on talking: a pending close stays off. After the echo check, or our own
+        // voice heard back would cancel it; the play_music close is left as it always was.
+        if (sessionCloseReason != REASON_PLAY_MUSIC) {
+            sessionCloseJob?.takeIf { it.isActive }?.let {
+                it.cancel()
+                Log.i(TAG, "$sessionCloseReason auto-close cancelled by a new phrase")
+            }
         }
 
         // An unanswered clarifying question from the agent outranks every local resolver: the
@@ -686,6 +697,39 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         clearJob?.cancel()
     }
 
+    /** Close-after-command toggle: a done command or a final agent answer closes the session once
+     *  the reply is heard, or, when nothing was said aloud, once the text had time to be read.
+     *  The gate read is guarded: a failed settings read keeps the session open, as before. */
+    private fun closeAfterCommand(text: String, spoken: Boolean) {
+        if (sessionJob == null || !runCatching { gate.closeAfterCommand() }.getOrDefault(false)) return
+        scheduleSessionClose("auto-close", waitForSpeech = spoken, dwellMs = readingDwellMs(text, spoken = false))
+    }
+
+    /** Closes the running session after the reply: with [waitForSpeech] once playback began and
+     *  ended, else after [dwellMs]. [reason] goes to the session-stop trace. */
+    private fun scheduleSessionClose(reason: String, waitForSpeech: Boolean, dwellMs: Long = 0L) {
+        val closingJob = sessionJob ?: return
+        Log.i(TAG, "$reason auto-close armed: waitForSpeech=$waitForSpeech dwellMs=$dwellMs")
+        sessionCloseReason = reason
+        sessionCloseJob = scope.launch {
+            if (waitForSpeech) {
+                // speak()/enqueue() returns before the TTS worker flips speaking=true, so
+                // waiting for !speaking alone completes immediately and would cut the reply
+                // before it starts. Wait (bounded) for playback to begin, then for it to
+                // end; if it never begins (TTS off, synth failed), the grace elapses and
+                // the session still closes.
+                withTimeoutOrNull(SPEAK_START_GRACE_MS) { ttsEngine.speaking.first { it } }
+                ttsEngine.speaking.first { !it }   // let the agent finish its own reply first
+            } else {
+                delay(dwellMs)
+            }
+            // PTT restarting a session stops TTS -- the very signal this coroutine
+            // waits for -- so only close the session this reply belongs to, never a
+            // newer one the user has already started.
+            if (sessionJob === closingJob) stopContinuousSession(reason)
+        }
+    }
+
     private suspend fun execute(
         commands: List<String>,
         transcript: String,
@@ -732,7 +776,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             _state.value = VoiceUiState.Done(transcript)
             record(nluEntry(transcript, decodeMs, label, VoiceJournalEntry.Outcome.OK),
                 "NLU dispatched: cmd=$cmdLog transcript=\"$transcript\"")
-            announce("Голос", "Услышал: «$transcript». Выполнено", "Готово")
+            announce("Голос", "Услышал: «$transcript». Выполнено", "Готово", done = true)
             // Fire-and-forget: the note must never make the voice announce path wait on the
             // agent's mutex, which may be held by a concurrent ask().
             scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
@@ -774,7 +818,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             _state.value = VoiceUiState.Done(transcript)
             record(nluEntry(transcript, decodeMs, "media_volume=$payload", VoiceJournalEntry.Outcome.OK),
                 "NLU dispatched: cmd=media_volume payload=$payload transcript=\"$transcript\"")
-            announce("Голос", "Услышал: «$transcript». Выполнено", "Готово")
+            announce("Голос", "Услышал: «$transcript». Выполнено", "Готово", done = true)
             scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
         } else {
             val reason = result.reason ?: transcript
@@ -793,7 +837,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         _state.value = VoiceUiState.Done(transcript)
         record(nluEntry(transcript, decodeMs, res.label, VoiceJournalEntry.Outcome.OK).copy(answer = res.text),
             "NLU answered: cmd=${res.label} answer=\"${res.text}\" transcript=\"$transcript\"")
-        announce("Голос", res.text, res.text)
+        announce("Голос", res.text, res.text, done = true)
     }
 
     private suspend fun fireAutomation(match: VoiceAutomationMatch, transcript: String, decodeMs: Long? = null) {
@@ -811,7 +855,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                     earcon.ok(); _state.value = VoiceUiState.Done(transcript)
                     record(entry(VoiceJournalEntry.Outcome.OK),
                         "NLU automation fired: ruleId=$ruleId transcript=\"$transcript\"")
-                    announce("Голос", "Услышал: «$transcript». Выполняю", "Выполняю")
+                    announce("Голос", "Услышал: «$transcript». Выполняю", "Выполняю", done = true)
                     scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
                 } else {
                     earcon.fail(); _state.value = VoiceUiState.Blocked(transcript)
@@ -823,7 +867,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 earcon.ok(); _state.value = VoiceUiState.Done(transcript)
                 record(entry(VoiceJournalEntry.Outcome.OK),
                     "NLU automation confirming: ruleId=$ruleId transcript=\"$transcript\"")
-                announce("Голос", "Услышал: «$transcript». Выполнено", "Готово")
+                announce("Голос", "Услышал: «$transcript». Выполнено", "Готово", done = true)
                 scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
             }
             VoiceFireResult.ParkRequired -> {
@@ -973,24 +1017,16 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 showAnswerHook(result.text)
                 scheduleClear(result.text, didSpeak)
                 // Wave P: a successful play_music closes the whole session after the reply -- the orb's
-                // presence ducks the very music the agent just started. Music only; every other tool
-                // keeps the dialogue open. Gated on sessionJob so the legacy single-shot path (which has
-                // no session to close) is untouched.
-                val closingJob = sessionJob
-                if (closingJob != null && result.tools.any { it.name == "play_music" && it.ok }) {
-                    musicCloseJob = scope.launch {
-                        // speak()/enqueue() returns before the TTS worker flips speaking=true, so
-                        // waiting for !speaking alone completes immediately and would cut the reply
-                        // before it starts. Wait (bounded) for playback to begin, then for it to
-                        // end; if it never begins (TTS off, synth failed), the grace elapses and
-                        // the session still closes.
-                        withTimeoutOrNull(SPEAK_START_GRACE_MS) { ttsEngine.speaking.first { it } }
-                        ttsEngine.speaking.first { !it }   // let the agent finish its own reply first
-                        // PTT restarting a session stops TTS -- the very signal this coroutine
-                        // waits for -- so only close the session this reply belongs to, never a
-                        // newer one the user has already started.
-                        if (sessionJob === closingJob) stopContinuousSession("play_music")
-                    }
+                // presence ducks the very music the agent just started. end_conversation is the driver
+                // asking the agent to close; any other final answer (not a question) closes only with
+                // the close-after-command toggle on. Gated on sessionJob so the legacy single-shot
+                // path (which has no session to close) is untouched.
+                if (sessionJob != null) when {
+                    result.tools.any { it.name == "play_music" && it.ok } ->
+                        scheduleSessionClose(REASON_PLAY_MUSIC, waitForSpeech = true)
+                    result.tools.any { it.name == "end_conversation" && it.ok } ->
+                        scheduleSessionClose("user-stop", waitForSpeech = didSpeak)
+                    !result.text.trimEnd().endsWith('?') -> closeAfterCommand(result.text, didSpeak)
                 }
             }
             AgentResult.Disabled -> {
@@ -1087,6 +1123,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // begin (speaking=false -> true) before giving up and closing anyway. Covers offline
         // synth latency and the online 2 s per-sentence timeout with margin.
         private const val SPEAK_START_GRACE_MS = 5_000L
+
+        // Session-stop reason of the play_music close; a new phrase never cancels that one.
+        private const val REASON_PLAY_MUSIC = "play_music"
 
         // Playback window grace period after our own audio was last audible (or enqueued): the
         // tail of the agent's voice can still reach the mic (see lastSpeakingSeenMs). Not measured

@@ -241,6 +241,7 @@ data class SettingsUiState(
     // Voice settings
     val voiceEnabled: Boolean = false,
     val voiceKeycode: Int = 0,
+    val closeAfterCommand: Boolean = false,
     // TTS settings (offline synthesis of agent replies)
     val ttsEnabled: Boolean = false,
     val ttsVoice: String = TtsModelManager.DEFAULT_VOICE_ID,
@@ -547,6 +548,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val voiceKeycode = settingsRepository.getVoiceKeycode().let {
                 if (it == 0) DEFAULT_VOICE_KEYCODE else it
             }
+            val closeAfterCommand = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getBoolean("close_after_command", false)
 
             val ttsEnabled = settingsRepository.isTtsEnabled()
             // Resolve through the catalog so a legacy id (retired "denis"/"dmitri") shows its
@@ -632,6 +635,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     disableNativeAssistant = disableNativeAssistant,
                     voiceEnabled = voiceEnabled,
                     voiceKeycode = voiceKeycode,
+                    closeAfterCommand = closeAfterCommand,
                     ttsEnabled = ttsEnabled,
                     ttsVoice = ttsVoice,
                     ttsReadyVoices = ttsReadyVoices,
@@ -1329,6 +1333,13 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 .edit().putInt(SettingsRepository.KEY_VOICE_KEYCODE, keycode)
                 .putString(SettingsRepository.KEY_VOICE_COMPANIONS, companionsCsv).apply()
         }
+    }
+
+    /** Close-after-command toggle, read by VoiceGate.closeAfterCommand() straight from the prefs. */
+    fun setCloseAfterCommand(enabled: Boolean) {
+        _uiState.update { it.copy(closeAfterCommand = enabled) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putBoolean("close_after_command", enabled).apply()
     }
 
     // --- TTS (offline synthesis of agent replies) ---

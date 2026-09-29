@@ -646,6 +646,14 @@ class AgentTools @Inject constructor(
             JSONObject(), emptyList(),
         ))
         put(tool(
+            "end_conversation",
+            "Закрыть голосового помощника (тебя самого). Вызывать ТОЛЬКО когда водитель прямо просит " +
+                "закрыть, выключить или остановить помощника или говорит, что разговор окончен: " +
+                "\"закрой агента\", \"выключись\", \"отключись\", \"всё, спасибо, хватит\". Никогда не " +
+                "вызывать просто после выполненной команды. После вызова ответь очень коротким прощанием.",
+            JSONObject(), emptyList(),
+        ))
+        put(tool(
             "play_music",
             "Включить музыку в Яндекс Музыке. Без query играет персональная подборка (Моя волна). " +
                 "С query ищет и включает трек, альбом или исполнителя.",
@@ -915,6 +923,8 @@ class AgentTools @Inject constructor(
                 "range_to_destination" -> rangeToDestination(args)
                 "get_route_info" -> routeInfo()
                 "go_home" -> goHomeScreen()
+                // The voice session closes itself on this outcome (VoiceController); nothing to do here.
+                "end_conversation" -> """{"ok":true}"""
                 "play_music" -> playMusic(args)
                 "youtube" -> youtubeTool(args)
                 "launch_app" -> launchAppTool(args)

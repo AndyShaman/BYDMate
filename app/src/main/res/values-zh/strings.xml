@@ -1303,6 +1303,8 @@
     <string name="settings_voice_button_mic_header">按键与麦克风</string>
     <string name="settings_voice_enable_label">语音指令</string>
     <string name="settings_voice_enable_description">方向盘按键离线语音控制</string>
+    <string name="settings_voice_close_after_command_label">命令执行后关闭助手</string>
+    <string name="settings_voice_close_after_command_description">命令执行完或回答后，助手会自动关闭。如果助手提出了问题，会等待你的回答。</string>
     <string name="settings_voice_model_downloading">下载中… %1$d%%</string>
     <string name="settings_voice_model_unpacking">解压中… %1$d%%</string>
     <string name="voice_listening">聆听中</string>
