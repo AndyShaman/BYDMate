@@ -19,8 +19,6 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,8 +63,6 @@ class FidPushChannel @Inject constructor(
 
     private val states = PushStateTrace()
 
-    private val subscribeLock = Mutex()
-
     /** Last outcome table the daemon reported; empty = no subscription in force. */
     @Volatile var results: List<FidPushResult> = emptyList()
         private set
@@ -91,35 +87,23 @@ class FidPushChannel @Inject constructor(
      * [catalog] gives this car's fid catalog, null while none has been read; it decides which ADAS
      * states ride along.
      *
-     * One call at a time, the catalog and the addresses read inside the lock: a call that started
-     * before the catalog was read and finished late would otherwise reinstall the subscription
-     * without the ADAS states over the one that carries them.
-     *
-     * The wait for the lock is bounded: the call in progress ends in a Binder transact no timeout
-     * can interrupt, and a caller parked here without limit would stall the fid catalog retry
-     * loop. A call that gives up leaves the subscription in force as it is.
+     * Calls may overlap. One that started before the catalog was read and finished after a call
+     * that carried the ADAS states has just installed the list without them, so after an install
+     * the catalog is read again, and a different ADAS set gets one more pass. A car without ADAS
+     * confirmation reads an empty set both times: one daemon call, as always.
      */
     suspend fun resubscribe(reason: String, catalog: () -> FidCatalog?) {
-        var acquired = false
-        withTimeoutOrNull(LOCK_WAIT_MS) {
-            subscribeLock.lock()
-            acquired = true
-        }
-        if (!acquired) {
-            Log.w(TAG, "resubscribe ($reason): skipped, another subscription is still in progress")
-            Trace.event(TraceArea.CAR, "adas-subscribe", "result" to "skipped", "reason" to "in-progress")
-            return
-        }
-        try {
-            subscribeLocked(reason, catalog)
-        } finally {
-            subscribeLock.unlock()
-        }
+        var passes = 0
+        do {
+            val installed = subscribeOnce(reason, catalog)
+            passes++
+        } while (installed != null && passes < MAX_PASSES && confirmedAdas(catalog(), waveSubs()) != installed)
     }
 
-    private suspend fun subscribeLocked(reason: String, catalog: () -> FidCatalog?) {
+    /** One install; returns the ADAS states it installed, or null when the daemon returned no table. */
+    private suspend fun subscribeOnce(reason: String, catalog: () -> FidCatalog?): List<PushStateTrace.AdasState>? {
         val fields = FidPushApplier.PUSH_FIELDS
-        val subs = fields.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
+        val subs = waveSubs()
         val current = catalog()
         val adas = confirmedAdas(current, subs)
         // Set before the subscription goes out, so a state this catalog does not confirm is never
@@ -131,7 +115,7 @@ class FidPushChannel @Inject constructor(
             results = emptyList()
             fieldByFid = emptyMap()
             Log.w(TAG, "resubscribe ($reason): daemon unreachable")
-            return
+            return null
         }
         results = table
         fieldByFid = fields.indices.associate { subs[it].fid to fields[it] }
@@ -139,7 +123,12 @@ class FidPushChannel @Inject constructor(
         resubscribes++
         val ok = table.count { it.outcome == FID_PUSH_OK }
         Log.i(TAG, "resubscribe ($reason): ok=$ok failed=${table.size - ok}")
+        return adas
     }
+
+    /** The FidMap wave at the addresses in force right now. */
+    private fun waveSubs(): List<FidPushSub> =
+        FidPushApplier.PUSH_FIELDS.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
 
     /** One line per call: what was decided about the ADAS states, and whether the daemon took it. */
     private fun traceAdas(catalog: FidCatalog?, confirmed: Int, installed: Boolean) {
@@ -230,8 +219,8 @@ class FidPushChannel @Inject constructor(
     private companion object {
         const val TAG = "FidPush"
 
-        /** Wait for a subscription in progress: its daemon call has a 2 s transport budget, plus a margin. */
-        const val LOCK_WAIT_MS = 3_000L
+        /** Installs per [resubscribe] call: the first, and one more when the catalog moved during it. */
+        const val MAX_PASSES = 2
 
         /** Room for a few whole flushes (one event per subscribed fid each) before the collector runs. */
         const val EVENT_BUFFER = 256

@@ -18,18 +18,17 @@ import com.bydmate.app.helper.push.FidPushSub
 import com.bydmate.app.helper.push.MAX_PUSH_FIDS
 import com.bydmate.app.helper.push.writePushEvents
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -179,45 +178,46 @@ class PushStateTraceTest {
         assertEquals(ADAS.values.map { "car adas name=$it to=0" }, changes())
     }
 
-    @Test fun `a call that cannot get the subscription in time gives up without calling the daemon`() = runTest {
-        val held = CompletableDeferred<Unit>()
-        var calls = 0
-        coEvery { helper.pushSubscribe(capture(binder), any()) } coAnswers {
-            calls++
-            held.await()
-            secondArg<List<FidPushSub>>().map { FidPushResult(it.fid, it.device, FID_PUSH_OK) }
-        }
-        val first = launch { channel.resubscribe("binder accepted") { null } }
-        runCurrent()
-
-        var retryLoopGoesOn = false
-        launch {
-            channel.resubscribe("fid catalog resolved") { CATALOG }
-            retryLoopGoesOn = true
-        }
-        advanceTimeBy(LOCK_WAIT_MS - 1)
-        runCurrent()
-        assertFalse(retryLoopGoesOn)
-        advanceTimeBy(1)
-        runCurrent()
-
-        assertTrue(retryLoopGoesOn)
-        assertEquals(1, calls)
-        assertEquals(listOf("car adas-subscribe result=skipped reason=in-progress"), events())
-        held.complete(Unit)
-        first.join()
-    }
-
-    @Test fun `the ADAS decision is traced even when the daemon does not answer`() = runTest {
-        coEvery { helper.pushSubscribe(any(), any()) } returns null
+    @Test fun `a car without ADAS confirmation gets one daemon call per resubscribe, the wave alone`() = runTest {
+        // Confirms nothing: the one symbol it carries is numbered differently (DiLink 4).
+        val nothing = FidCatalog(mapOf(LKS_SYMBOL to 309), emptyMap())
 
         channel.resubscribe("binder accepted") { null }
+        channel.resubscribe("fid catalog resolved") { nothing }
+
+        val wave = FidPushApplier.PUSH_FIELDS.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
+        coVerify(exactly = 2) { helper.pushSubscribe(any(), any()) }
+        coVerify(exactly = 2) { helper.pushSubscribe(any(), wave) }
+        assertEquals(wave.map { FidPushResult(it.fid, it.device, FID_PUSH_OK) }, channel.results)
+        assertEquals(2, channel.resubscribes)
+    }
+
+    @Test fun `a stable catalog that confirms all seven gets one daemon call per resubscribe`() = runTest {
+        channel.resubscribe("binder accepted") { CATALOG }
         channel.resubscribe("fid catalog resolved") { CATALOG }
 
+        coVerify(exactly = 2) { helper.pushSubscribe(any(), any()) }
+        assertEquals(FidPushApplier.PUSH_FIELDS.size + 7, channel.results.size)
+        assertEquals(2, channel.resubscribes)
+    }
+
+    @Test fun `a daemon call that returns nothing clears the tables, is traced as unconfirmed and not repeated`() = runTest {
+        channel.resubscribe("binder accepted") { null }
+        coEvery { helper.pushSubscribe(any(), any()) } returns null
+
+        // The catalog confirms seven the call could not install: still no second call.
+        channel.resubscribe("fid catalog resolved") { CATALOG }
+        channel.resubscribe("fid catalog resolved") { null }
+
+        coVerify(exactly = 3) { helper.pushSubscribe(any(), any()) }
+        assertEquals(emptyList<FidPushResult>(), channel.results)
+        assertNull(channel.fieldFor(TURN))
+        assertEquals(1, channel.resubscribes)
         assertEquals(
             listOf(
-                "car adas-subscribe reason=no-catalog result=unconfirmed",
+                "car adas-subscribe reason=no-catalog",
                 "car adas-subscribe confirmed=7 skipped=0 result=unconfirmed",
+                "car adas-subscribe reason=no-catalog result=unconfirmed",
             ),
             events(),
         )
@@ -349,8 +349,6 @@ class PushStateTraceTest {
     private companion object {
         val ID = Regex(" #\\d+")
 
-        /** How long a second call waits for the one in progress (FidPushChannel). */
-        const val LOCK_WAIT_MS = 3_000L
         val SPACES = Regex(" +")
         val TURN = FidMap.byField.getValue("turnSignal").fid
         const val LANE_GRAY = 535826452
