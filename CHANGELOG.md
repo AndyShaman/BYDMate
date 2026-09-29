@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.19.3] - 2026-09-29
+
 ### Новое
 - В настройках голосового агента появился переключатель «Закрывать агента после выполненной команды», по умолчанию он выключен. Когда он включён, после выполненной команды или ответа агент закрывается сам. Если агент задал вопрос, он дождётся ответа (#226).
 - Агента можно закрыть словами: «закрой агента», «выключись», «всё, спасибо, отдыхай». Просьба уходит модели, поэтому нужен интернет.
@@ -1321,7 +1323,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.19.2...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.19.3...HEAD
+[3.19.3]: https://github.com/AndyShaman/BYDMate/compare/v3.19.2...v3.19.3
 [3.19.2]: https://github.com/AndyShaman/BYDMate/compare/v3.19.1...v3.19.2
 [3.19.1]: https://github.com/AndyShaman/BYDMate/compare/v3.19.0...v3.19.1
 [3.19.0]: https://github.com/AndyShaman/BYDMate/compare/v3.18.2...v3.19.0
