@@ -20,6 +20,19 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
+ * False for a key that types text (digits, letters, punctuation, numpad): the a11y filter also
+ * sees a hardware keyboard, and typed text must never reach the always-on trace journal.
+ */
+fun isTraceableKey(keyCode: Int): Boolean =
+    keyCode !in 7..18 &&   // KEYCODE_0..KEYCODE_9, KEYCODE_STAR, KEYCODE_POUND
+        keyCode !in 29..77 && // KEYCODE_A..KEYCODE_Z, KEYCODE_COMMA..KEYCODE_AT (SPACE, ENTER, DEL, TAB)
+        keyCode !in 144..163 && // KEYCODE_NUMPAD_0..KEYCODE_NUMPAD_RIGHT_PAREN
+        keyCode !in TEXT_KEYS_OUTSIDE_RANGES
+
+/** KEYCODE_PLUS, KEYCODE_YEN, KEYCODE_RO: text keys that sit outside the blocks above. */
+private val TEXT_KEYS_OUTSIDE_RANGES = setOf(81, 216, 217)
+
+/**
  * Steering-wheel key filter for cluster projection. When the settings master switch
  * ([ClusterProjectionManager.KEY_MIRROR_ENABLED]) is ON, a short press of the configured trigger
  * button (keycode in [ClusterProjectionManager.KEY_TRIGGER_KEYCODE], default
@@ -171,10 +184,11 @@ class SteeringWheelKeyService : AccessibilityService() {
     }
 
     /** Trace of a key press and what it did, once per press: only the first DOWN is written, so
-     *  UP edges and auto-repeats (a held key, the volume knob) stay out of the journal. Returns
+     *  UP edges and auto-repeats (a held key, the volume knob) stay out of the journal, and keys that
+     *  type text never are. Returns
      *  [consumed], the filter's verdict. */
     private fun traced(event: KeyEvent, action: String, consumed: Boolean = true): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && isTraceableKey(event.keyCode)) {
             Trace.event(TraceArea.USER, "key", "code" to event.keyCode, "action" to action)
         }
         return consumed

@@ -339,18 +339,25 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
-                HelperBinderProtocol.TX_CREATE_VIRTUAL_DISPLAY -> runCatching {
-                    val name = data.readString() ?: "BYDMate_VD"
-                    val width = data.readInt(); val height = data.readInt()
-                    val density = data.readInt(); val flags = data.readInt()
-                    val surface = Surface.CREATOR.createFromParcel(data)
-                    val ctx = systemContext
-                    val id = if (ctx == null || !surface.isValid) -1
-                            else createVirtualDisplay(ctx, virtualDisplays, name, width, height, density, surface, flags)
-                    if (id > 0) { reply?.writeInt(0); reply?.writeInt(id) }
-                    else { surface.release(); reply?.writeInt(-1); reply?.writeInt(0) }
-                    true
-                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+                HelperBinderProtocol.TX_CREATE_VIRTUAL_DISPLAY -> {
+                    var logFlags = 0; var logWidth = 0; var logHeight = 0
+                    runCatching {
+                        val name = data.readString() ?: "BYDMate_VD"
+                        val width = data.readInt(); val height = data.readInt()
+                        val density = data.readInt(); val flags = data.readInt()
+                        logFlags = flags; logWidth = width; logHeight = height
+                        val surface = Surface.CREATOR.createFromParcel(data)
+                        val ctx = systemContext
+                        val id = if (ctx == null || !surface.isValid) -1
+                                else createVirtualDisplay(ctx, virtualDisplays, name, width, height, density, surface, flags)
+                        if (id > 0) { reply?.writeInt(0); reply?.writeInt(id) }
+                        else { surface.release(); reply?.writeInt(-1); reply?.writeInt(0) }
+                        true
+                    }.getOrElse { t ->
+                        android.util.Log.w("bydmate_helper", "TX_CREATE_VIRTUAL_DISPLAY failed flags=$logFlags ${logWidth}x$logHeight", t)
+                        reply?.writeInt(-1); reply?.writeInt(0); true
+                    }
+                }
 
                 HelperBinderProtocol.TX_RELEASE_VIRTUAL_DISPLAY -> runCatching {
                     val displayId = data.readInt()
