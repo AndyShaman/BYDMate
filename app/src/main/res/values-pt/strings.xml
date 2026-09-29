@@ -1337,6 +1337,8 @@
     <!-- Voice agent settings -->
     <string name="settings_voice_enable_label">Comandos de voz</string>
     <string name="settings_voice_enable_description">Comandos pelo botão do volante, totalmente offline</string>
+    <string name="settings_voice_close_after_command_label">Fechar o agente após um comando concluído</string>
+    <string name="settings_voice_close_after_command_description">Depois de um comando concluído ou de uma resposta, o agente fecha sozinho. Se o agente fez uma pergunta, ele espera a resposta.</string>
     <string name="settings_voice_model_downloading">Baixando… %1$d%%</string>
     <string name="settings_voice_model_unpacking">Descompactando… %1$d%%</string>
     <string name="voice_listening">Ouvindo</string>

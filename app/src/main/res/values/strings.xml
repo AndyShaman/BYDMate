@@ -1344,6 +1344,8 @@
     <string name="settings_voice_button_mic_header">Кнопка и микрофон</string>
     <string name="settings_voice_enable_label">Голосовые команды</string>
     <string name="settings_voice_enable_description">Команды кнопкой руля без интернета</string>
+    <string name="settings_voice_close_after_command_label">Закрывать агента после выполненной команды</string>
+    <string name="settings_voice_close_after_command_description">После выполненной команды или ответа агент закроется сам. Если агент задал вопрос, он дождётся ответа.</string>
     <string name="settings_voice_model_downloading">Загрузка… %1$d%%</string>
     <string name="settings_voice_model_unpacking">Распаковка… %1$d%%</string>
     <string name="voice_listening">Слушаю</string>

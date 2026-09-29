@@ -1340,6 +1340,8 @@
     <string name="settings_voice_button_mic_header">Кнопка і мікрафон</string>
     <string name="settings_voice_enable_label">Галасавыя каманды</string>
     <string name="settings_voice_enable_description">Каманды кнопкай руля без інтэрнэту</string>
+    <string name="settings_voice_close_after_command_label">Закрываць агента пасля выкананай каманды</string>
+    <string name="settings_voice_close_after_command_description">Пасля выкананай каманды або адказу агент закрыецца сам. Калі агент задаў пытанне, ён дачакаецца адказу.</string>
     <string name="settings_voice_model_downloading">Загрузка… %1$d%%</string>
     <string name="settings_voice_model_unpacking">Распакоўка… %1$d%%</string>
     <string name="voice_listening">Слухаю</string>

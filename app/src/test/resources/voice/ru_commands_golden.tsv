@@ -248,6 +248,11 @@ utterance	expected	category	danger
 сколько у меня останется заряда когда я доеду до точки	UNRECOGNIZED	misc	
 так ну ка проверим как ты работаешь	UNRECOGNIZED	misc	
 выключайся	UNRECOGNIZED	misc	
+закрой агента	UNRECOGNIZED	misc	
+закрыть агента	UNRECOGNIZED	misc	
+выключись	UNRECOGNIZED	misc	
+отключись	UNRECOGNIZED	misc	
+выключи агента	UNRECOGNIZED	misc	
 расскажи анекдот	UNRECOGNIZED	misc	
 включи холодильник	UNRECOGNIZED	misc	
 нет не надо	UNRECOGNIZED	misc	

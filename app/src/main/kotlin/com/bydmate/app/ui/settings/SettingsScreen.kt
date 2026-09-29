@@ -3499,6 +3499,13 @@ private fun VoiceSettingsContent(
                     }
                 },
             )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_voice_close_after_command_label),
+                traceId = "close_after_command",
+                description = stringResource(R.string.settings_voice_close_after_command_description),
+                checked = state.closeAfterCommand,
+                onCheckedChange = { viewModel.setCloseAfterCommand(it) },
+            )
         }
     }
 

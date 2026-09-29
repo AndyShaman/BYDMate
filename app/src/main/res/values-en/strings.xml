@@ -1188,6 +1188,8 @@
     <string name="settings_voice_button_mic_header">Button and microphone</string>
     <string name="settings_voice_enable_label">Voice commands</string>
     <string name="settings_voice_enable_description">Steering-wheel commands, fully offline</string>
+    <string name="settings_voice_close_after_command_label">Close the agent after a completed command</string>
+    <string name="settings_voice_close_after_command_description">After a completed command or an answer, the agent closes by itself. If the agent asked a question, it waits for your answer.</string>
     <string name="settings_voice_model_downloading">Downloading… %1$d%%</string>
     <string name="settings_voice_model_unpacking">Unpacking… %1$d%%</string>
     <string name="voice_listening">Listening</string>
