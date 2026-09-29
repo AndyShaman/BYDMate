@@ -176,6 +176,7 @@ class HudControllerTest {
         NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 300), NavGuidanceHub.Source.A11Y)
         val bridge = connectedBridge()
         val c = controller(bridge)
+        c.setMode(HudController.MODE_NAVI_STATUS)   // only mode 2 arms
         c.setEnabled(true)
         awaitTrue { runCatching { coVerify { helperClient.hudNaviStatus(2) } }.isSuccess }
         awaitTrue { runCatching { verify(atLeast = 5) { bridge.fireEvent(HudSomeIpBridge.TOPIC_NAVI, any()) } }.isSuccess }
@@ -238,12 +239,13 @@ class HudControllerTest {
         coVerify(exactly = 1) { helperClient.hudNaviStatus(4) }   // nothing armed, nothing more to undo
     }
 
-    @Test fun `a leftover with a guided route is left to the arming loop`() {
+    @Test fun `a leftover with a guided route is left to the arming loop in mode 2`() {
         installSomeIp()
         coEvery { helperBootstrap.ensureRunning() } returns true
         leftoverCar()
         NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 300), NavGuidanceHub.Source.A11Y)
         val c = controller(connectedBridge())
+        c.setMode(HudController.MODE_NAVI_STATUS)
         c.startIfEnabled()
         coVerify(exactly = 1) { helperClient.hudNaviStatus(2) }
         coVerify(exactly = 0) { helperClient.hudNaviStatus(4) }

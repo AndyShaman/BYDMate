@@ -56,6 +56,12 @@ class HudController @Inject constructor(
         const val KEY_ENABLED = "hud_enabled"
         const val KEY_SUPPORTED = "hud_supported"
         const val KEY_SPEED_SIGN = "hud_speed_sign"
+        const val KEY_MODE = "hud_mode"
+
+        /** Mode 1 (default, 3.19.0): hints go to the glass, the car's navigation status is never
+         *  raised. Mode 2 (3.19.1): [HudArming] raises it while a route is guided (#266). */
+        const val MODE_GLASS_ONLY = 1
+        const val MODE_NAVI_STATUS = 2
     }
 
     /** Single lane: stop()/startIfEnabled() launched across a service restart must
@@ -95,6 +101,30 @@ class HudController @Inject constructor(
     fun setSpeedSignEnabled(on: Boolean) {
         prefs().edit().putBoolean(KEY_SPEED_SIGN, on).apply()
     }
+
+    fun mode(): Int = prefs().getInt(KEY_MODE, MODE_GLASS_ONLY)
+
+    private fun armsNaviStatus(): Boolean = mode() == MODE_NAVI_STATUS
+
+    /** A running output follows the new mode at once: mode 1 disarms a raised status the same
+     *  way [stop] does, mode 2 starts arming. Not running, the next start reads the mode. */
+    fun setMode(mode: Int) {
+        prefs().edit().putInt(KEY_MODE, mode).apply()
+        scope.launch { applyMode() }
+    }
+
+    private suspend fun applyMode() = mutex.withLock {
+        if (bridge == null) return
+        if (armsNaviStatus()) {
+            if (arming == null) arming = HudArming(helperClient, prefs()).also { startArming(it) }
+        } else {
+            arming?.stop()
+            arming = null
+        }
+    }
+
+    private fun startArming(arm: HudArming) =
+        arm.start(scope, layoutOwned = { !armingPaused }) { !armingPaused && NavGuidanceHub.snapshot().active }
 
     fun diag(): HudDiag? = loop?.let { l ->
         HudDiag(
@@ -153,10 +183,12 @@ class HudController @Inject constructor(
         startJob = scope.launch {
             val arm = HudArming(helperClient, prefs())
             // A process killed mid-route left our values up. The HUD check's running session owns
-            // the kept layout, so it is left alone then.
+            // the kept layout, so it is left alone then. A guided route leaves it to the arming
+            // loop, which mode 1 never runs.
             if (!armingPaused) {
+                val guided = armsNaviStatus() && NavGuidanceHub.snapshot().active
                 withContext(NonCancellable) {
-                    runCatching { arm.disarmLeftover(guided = NavGuidanceHub.snapshot().active) }
+                    runCatching { arm.disarmLeftover(guided = guided) }
                         .onFailure { Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}") }
                 }
             }
@@ -180,11 +212,9 @@ class HudController @Inject constructor(
                     amap = HudAmapBroadcaster(context),
                     maneuvers = HudManeuverJournal(prefs()))
                     .also { it.start(scope) }
-                // The car's navigation status, only while a route is guided; own coroutine, so
-                // a slow or refused write never delays a frame.
-                arming = arm.also {
-                    it.start(scope, layoutOwned = { !armingPaused }) { !armingPaused && NavGuidanceHub.snapshot().active }
-                }
+                // Mode 2: the car's navigation status, only while a route is guided; own
+                // coroutine, so a slow or refused write never delays a frame.
+                if (armsNaviStatus()) arming = arm.also { startArming(it) }
                 _status.value = Status.ON
                 Log.i(TAG, "HUD output active")
             } catch (ce: CancellationException) {

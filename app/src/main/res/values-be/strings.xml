@@ -1555,7 +1555,12 @@
     <string name="settings_hud_status_connecting">Падключэнне да шыны…</string>
     <string name="settings_hud_status_on">Перадача на HUD актыўная</string>
     <string name="settings_hud_status_bind_failed">Не ўдалося падключыцца да шыны SOME/IP</string>
-    <string name="settings_hud_hint">Патрэбна камплектацыя з праекцыйным дысплеем. Даныя бяруцца з акна Яндэкс Навігатара. Пакуль вядзецца маршрут, на прыборцы злева з\'яўляецца стрэлка навігацыі, гэта нармальна</string>
+    <string name="settings_hud_hint">Патрэбна камплектацыя з праекцыйным дысплеем. Даныя бяруцца з акна Яндэкс Навігатара</string>
+    <string name="settings_hud_mode_title">Рэжым HUD</string>
+    <string name="settings_hud_mode_1">Рэжым 1</string>
+    <string name="settings_hud_mode_2">Рэжым 2</string>
+    <string name="settings_hud_mode_1_desc">Рэжым 1. Падказкі ідуць на шкло, прыборку праграма не кранае.</string>
+    <string name="settings_hud_mode_2_desc">Рэжым 2. На час маршруту машына пераходзіць у рэжым навігацыі. Паспрабуйце, калі ў рэжыме 1 шкло пустое. На прыборцы з\'явіцца стрэлка, праграмы і камеры на прыборцы могуць не паказвацца.</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Сляпыя зоны</string>
     <string name="settings_blindspot_title">Камера па паваротніку</string>

@@ -2007,6 +2007,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     com.bydmate.app.hud.HudSomeIpBridge.isServicePresent(appContext.packageManager)
                 appendLine("someip_gateway: " + if (gatewayPresent) "present" else "absent")
                 appendLine("speed_sign: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SPEED_SIGN, true)}")
+                appendLine("mode: ${hudController.mode()}")
                 // Frame/RC counters from HudPushLoop via HudController.diag().
                 val diag = hudController.diag()
                 appendLine("frames_sent=${diag?.framesSent ?: 0} last_frame_ts=${diag?.lastFrameTs ?: 0}")
