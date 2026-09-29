@@ -83,6 +83,8 @@ class SettingsViewModelConnectionsTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        // The bare test Application does not run the app's locale bootstrap: pin the language the assertions read.
+        LocalePreferences(ApplicationProvider.getApplicationContext<Context>()).setLanguage("en")
     }
 
     @After
