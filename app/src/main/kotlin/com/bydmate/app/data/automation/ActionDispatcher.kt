@@ -584,9 +584,12 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     /** Last seat step asked for per seat, so a «toggle» can bring the seat back to it. */
     internal var seatLevelMemory = SeatLevelMemory(context)
 
-    /** Test seam -- how long to wait for the cluster projection to actually come up. */
+    /**
+     * Test seam -- how long to wait for the cluster projection to actually come up. 15 s in
+     * total: direct projection on a Sea Lion 07 takes 5-6 s (issue #263).
+     */
     internal var clusterPollIntervalMs = 500L
-    internal var clusterPollAttempts = 10
+    internal var clusterPollAttempts = 30
 
     internal var activeMediaControllers: () -> List<MediaController> = {
         runCatching {
