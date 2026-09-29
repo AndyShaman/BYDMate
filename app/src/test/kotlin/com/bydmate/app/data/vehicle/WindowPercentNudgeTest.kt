@@ -31,6 +31,9 @@ class WindowPercentNudgeTest {
         const val DEV = 1001
         const val DRIVER_OPEN_FID = 1125122104
         const val DRIVER_POS_FID = 1276219408
+        const val PASSENGER_POS_FID = 1276219424
+        const val DRIVER_READ_FID = 947912728
+        const val PASSENGER_READ_FID = 1267728400
     }
 
     private val parsReader: ParsReader = mockk(relaxed = true)
@@ -178,6 +181,75 @@ class WindowPercentNudgeTest {
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
         assertEquals(listOf(10, 11), posWrites)
+    }
+
+    /** The glass moved after the "did not move" verdict (late start, door button): writing
+     *  that stale position would be a move command, so the pane stays a failure. */
+    @Test fun `a position that changed since the stuck verdict is not anchored`() = runTest {
+        positions(0, 0, 0, 0, 0, 0, 5)
+
+        val result = api().writeWindowDriver(10)
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
+        assertEquals(listOf(10, 11), posWrites)
+    }
+
+    /** Two panes stuck after the nudge: each pane's position is read after the pacing delay,
+     *  right before its own anchor write, never 150 ms earlier. */
+    @Test fun `each pane's anchor position is read right before its anchor write`() = runTest {
+        val clock = testScheduler
+        val events = mutableListOf<Triple<String, Int, Long>>()
+        val writes = mutableMapOf<Int, MutableList<Int>>()
+        coEvery { autoservice.getIntRaw(any(), any()) } coAnswers {
+            events += Triple("read", secondArg<Int>(), clock.currentTime)
+            0
+        }
+        coEvery { helper.write(any(), any(), any()) } coAnswers {
+            events += Triple("write", secondArg<Int>(), clock.currentTime)
+            writes.getOrPut(secondArg()) { mutableListOf() } += thirdArg<Int>()
+            true
+        }
+
+        assertTrue(api().dispatch("前排车窗半开").isFailure)
+
+        assertEquals(listOf(50, 51, 0, 50), writes[DRIVER_POS_FID])
+        assertEquals(listOf(50, 51, 0, 50), writes[PASSENGER_POS_FID])
+        for ((posFid, readFid) in listOf(DRIVER_POS_FID to DRIVER_READ_FID, PASSENGER_POS_FID to PASSENGER_READ_FID)) {
+            // The fresh position read, then the anchor write's own "before" sample, then the write.
+            val anchorAt = events.indices.filter { events[it].first == "write" && events[it].second == posFid }[2]
+            val reads = events.subList(anchorAt - 2, anchorAt)
+            assertTrue(reads.toString(), reads.all { it.first == "read" && it.second == readFid })
+            assertTrue(reads.toString(), reads.all { it.third == events[anchorAt].third })
+        }
+    }
+
+    @Test fun `a refused anchor write is not followed by the requested value`() = runTest {
+        positions(0)
+        coEvery { helper.write(any(), any(), any()) } coAnswers {
+            if (secondArg<Int>() == DRIVER_POS_FID) posWrites += thirdArg<Int>()
+            posWrites.size != 3
+        }
+
+        val result = api().writeWindowDriver(10)
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
+        assertEquals(listOf(10, 11, 0), posWrites)
+    }
+
+    @Test fun `a refused requested value after the anchor is a failure with no more writes`() = runTest {
+        positions(0)
+        coEvery { helper.write(any(), any(), any()) } coAnswers {
+            if (secondArg<Int>() == DRIVER_POS_FID) posWrites += thirdArg<Int>()
+            posWrites.size != 4
+        }
+
+        val result = api().writeWindowDriver(10)
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
+        assertEquals(listOf(10, 11, 0, 10), posWrites)
     }
 
     @Test fun `a position equal to the requested value is not anchored`() = runTest {

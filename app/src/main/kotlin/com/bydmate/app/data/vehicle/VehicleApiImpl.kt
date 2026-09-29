@@ -564,22 +564,37 @@ class VehicleApiImpl @Inject constructor(
         for (pane in stuck) {
             val check = pane.check
             val target = requested.getValue(check)
+            // Paced BEFORE the read: the position written must be the one read right now.
+            stagger.pace()
             val position = windowPercent(readWindowRaw(pane.readFid))
-            if (position == null || position == target) {
+            // Only a glass standing still: a position other than the last "did not move"
+            // sample means it is travelling (late start, door button), and writing it would
+            // be a move command.
+            val lastSeen = pane.seen.lastOrNull()?.toIntOrNull()
+            val travelling = position != null && position != target && position != lastSeen
+            if (travelling) {
+                Log.i(TAG, "window anchor: ${check.actionName} skipped reason=position changed " +
+                    "$lastSeen -> $position")
+            }
+            if (position == null || position == target || travelling) {
                 notAnchored += pane
                 continue
             }
             val before = anchored.size
-            stagger.pace()
             Log.i(TAG, "window anchor: ${check.actionName} position=$position -> target=$target " +
                 "reason=nudge did not move")
             // The anchor write is expected not to move the glass: its movement check is dropped.
             val anchor = mutableListOf<WindowVerify>()
             val accepted = doWrite(check.actionName, position, verifyInto = anchor).isSuccess
             anchor.forEach { it.before.cancel() }
-            if (accepted) {
+            if (!accepted) {
+                Log.w(TAG, "window anchor: ${check.actionName} anchor position=$position not accepted")
+            } else {
                 stagger.pace()
-                doWrite(check.actionName, target, verifyInto = anchored)
+                if (doWrite(check.actionName, target, verifyInto = anchored).isFailure) {
+                    Log.w(TAG, "window anchor: ${check.actionName} target=$target not accepted " +
+                        "after anchor position=$position")
+                }
             }
             if (anchored.size == before) notAnchored += pane
         }
