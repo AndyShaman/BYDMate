@@ -51,6 +51,7 @@ object VoiceCatalog {
         // Climate
         VoiceCommandSpec(ON, AC_AUTO) { "自动空调" },
         VoiceCommandSpec(OFF, AC_AUTO) { "关闭空调" },
+        VoiceCommandSpec(ON, AC_AUTO_MODE) { "空调自动" },
         VoiceCommandSpec(ON, AC_FLOW) { "打开空调通风" },
         VoiceCommandSpec(SET, AC_FAN, ValueSpec(1, 7)) { n -> "风量${n}" },
         VoiceCommandSpec(SET, AC_TEMP, ValueSpec(16, 30)) { n -> "设置温度${n}" },
