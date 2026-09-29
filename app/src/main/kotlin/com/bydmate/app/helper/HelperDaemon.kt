@@ -2142,12 +2142,15 @@ private fun recoverAccessibilityService(): Boolean {
     // TrackingService is not exported, so shell uid cannot start it directly; BootReceiver is
     // (BOOT_COMPLETED needs it) and its WorkManager chain starts the service. Explicit component +
     // include-stopped-packages: the force-stop just put the package into the stopped state.
+    // --receiver-foreground: a plain shell broadcast goes to the background queue, behind other
+    // apps' BOOT_COMPLETED receivers after a quick boot; Atto 3 logs showed 11-44 s from the
+    // force-stop to BootReceiver, with the widget and key service gone for that long.
     var am = ""
     var restarted = false
     for (attempt in 1..2) {
         am = runCatching {
             amShell(
-                "am broadcast --include-stopped-packages -a com.bydmate.app.action.RECOVER_START -n \"\$1\"",
+                "am broadcast --include-stopped-packages --receiver-foreground -a com.bydmate.app.action.RECOVER_START -n \"\$1\"",
                 listOf("$pkg/com.bydmate.app.service.BootReceiver"),
             )
         }.getOrElse { "broadcast failed: ${it.javaClass.simpleName}: ${it.message}" }
