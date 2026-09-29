@@ -14,6 +14,9 @@ import com.bydmate.app.diagnostics.TraceArea
  */
 internal class PushStateTrace {
 
+    /** fid → trace name of the ADAS states in the subscription in force; nothing else is traced as one. */
+    @Volatile var adas: Map<Int, String> = emptyMap()
+
     /** Last traced value per fid. */
     private val last = HashMap<Int, String>()
 
@@ -22,7 +25,7 @@ internal class PushStateTrace {
     fun onEvent(fid: Int, field: String?, raw: Int) {
         val value = when {
             field == TURN_SIGNAL -> turnSide(raw)
-            field == null && fid in ADAS_STATES -> SentinelDecoder.decodeInt(raw)?.toString() ?: NONE
+            field == null && fid in adas -> SentinelDecoder.decodeInt(raw)?.toString() ?: NONE
             else -> return
         }
         val was = last[fid]
@@ -31,9 +34,12 @@ internal class PushStateTrace {
         if (field == TURN_SIGNAL) {
             Trace.event(TraceArea.CAR, "turn", "from" to was, "to" to value)
         } else {
-            Trace.event(TraceArea.CAR, "adas", "name" to ADAS_STATES[fid], "from" to was, "to" to value)
+            Trace.event(TraceArea.CAR, "adas", "name" to adas[fid], "from" to was, "to" to value)
         }
     }
+
+    /** One ADAS state: its Leopard 3 fid, its trace name and its catalog symbol. */
+    data class AdasState(val fid: Int, val name: String, val symbol: String)
 
     companion object {
         private const val TURN_SIGNAL = "turnSignal"
@@ -43,19 +49,19 @@ internal class PushStateTrace {
         const val ADAS_DEVICE = 1038
 
         /**
-         * ADAS states subscribed for the trace alone, fid → trace name (Leopard 3
-         * BYDAutoFeatureIds; all seven answered a plain read there on 2026-09-29). Not FidMap
-         * fields: nothing polls them, patches the snapshot with them or resolves them against
-         * the catalog, so on a platform that numbers them differently they simply fail to register.
+         * ADAS states subscribed for the trace alone (Leopard 3 BYDAutoFeatureIds; all seven
+         * answered a plain read there on 2026-09-29). Not FidMap fields: nothing polls them or
+         * patches the snapshot with them. The fid is the Leopard 3 number; the push channel
+         * subscribes one only where this car's catalog gives its symbol that same number.
          */
-        val ADAS_STATES: Map<Int, String> = linkedMapOf(
-            535826452 to "lane-change-gray",    // ADAS_INTERACTIVE_LANE_CHANGE_ASSIST_GRAY
-            700448776 to "ilca-switch",         // ADAS_ILCA_SWITCH_STATE
-            -1728052359 to "domain-disconnect", // ADAS_DOMAIN_CONTROL_DISCONNECTION_STATUS
-            230686760 to "tor-fault",           // ADAS_TOR_FAULT_CODE_ID
-            535826458 to "noa-gray",            // ADAS_NOA_GRAY_STATE
-            535830556 to "noa-quit",            // ADAS_NOA_QUIT_PROMPT
-            828375060 to "lks-fault",           // ADAS_LKS_FAULT
+        val ADAS_STATES: List<AdasState> = listOf(
+            AdasState(535826452, "lane-change-gray", "Adas.ADAS_INTERACTIVE_LANE_CHANGE_ASSIST_GRAY"),
+            AdasState(700448776, "ilca-switch", "Adas.ADAS_ILCA_SWITCH_STATE"),
+            AdasState(-1728052359, "domain-disconnect", "Adas.ADAS_DOMAIN_CONTROL_DISCONNECTION_STATUS"),
+            AdasState(230686760, "tor-fault", "Adas.ADAS_TOR_FAULT_CODE_ID"),
+            AdasState(535826458, "noa-gray", "Adas.ADAS_NOA_GRAY_STATE"),
+            AdasState(535830556, "noa-quit", "Adas.ADAS_NOA_QUIT_PROMPT"),
+            AdasState(828375060, "lks-fault", "Adas.ADAS_LKS_FAULT"),
         )
 
         /** Turn signal mask (Leopard 3): 1=off, 2=left, 4=right, 6=hazard; anything else by number. */

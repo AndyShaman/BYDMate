@@ -2,6 +2,7 @@ package com.bydmate.app.data.nativestack
 
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.autoservice.AutoserviceClient
+import com.bydmate.app.data.push.PushStateTrace
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.HelperClient
@@ -93,6 +94,18 @@ class FidCatalogManagerTest {
 
         subject.ensureResolved()
         assertTrue(FidAddresses.table.source.startsWith("daemon"))
+    }
+
+    /** The push channel confirms the ADAS states by symbol, so a catalog read back from the cache must still carry them. */
+    @Test fun `the cached catalog keeps the ADAS symbols the push channel confirms`() = runTest {
+        val adas = PushStateTrace.ADAS_STATES.joinToString("\n") { "${it.symbol}=${it.fid}" }
+        manager(FakeHelper(listOf(DumpFidsResult.Success("$dump\n$adas")))).ensureResolved()
+
+        val fromFile = manager(FakeHelper(listOf(DumpFidsResult.BinderAbsent)))
+        fromFile.ensureResolved()
+
+        val catalog = fromFile.catalog!!
+        PushStateTrace.ADAS_STATES.forEach { assertEquals(it.symbol, it.fid, catalog.fidOf(it.symbol)) }
     }
 
     /**

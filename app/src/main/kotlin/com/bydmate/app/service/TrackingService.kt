@@ -597,7 +597,7 @@ class TrackingService : Service(), LocationListener {
             }
             // A binder that just arrived carries no subscription yet: the daemon clears its
             // listener table when it dies, and a fresh one starts empty.
-            serviceScope.launch { fidPushChannel.resubscribe("binder accepted") }
+            serviceScope.launch { fidPushChannel.resubscribe("binder accepted", fidCatalogManager.catalog) }
             // Tell the daemon we hold its binder so it stops re-announcing it (#64/#148).
             // Must not block the receiver thread — registerClient is a binder transact.
             serviceScope.launch { helperClient.registerClient() }
@@ -970,7 +970,7 @@ class TrackingService : Service(), LocationListener {
             fidCatalogManager.ensureResolved()
             // The one point every daemon path passes through once the daemon is live, on both
             // transports: startup chain, watchdog respawn, binder arrival and the retry timer.
-            fidPushChannel.resubscribe("fid catalog resolved")
+            fidPushChannel.resubscribe("fid catalog resolved", fidCatalogManager.catalog)
         }
     }
 
@@ -989,7 +989,7 @@ class TrackingService : Service(), LocationListener {
                 // still spawning the daemon would be a wasted one.
                 if (fidCatalogManager.resolvePending) {
                     fidCatalogManager.ensureResolved()
-                    fidPushChannel.resubscribe("fid catalog resolved")
+                    fidPushChannel.resubscribe("fid catalog resolved", fidCatalogManager.catalog)
                 }
             }
             Log.i(TAG, "fid resolve: retry timer done (${fidCatalogManager.resolveStatus})")

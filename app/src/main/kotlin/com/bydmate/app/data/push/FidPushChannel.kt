@@ -4,7 +4,10 @@ import android.os.Binder
 import android.os.Parcel
 import android.util.Log
 import com.bydmate.app.data.nativestack.FidAddresses
+import com.bydmate.app.data.nativestack.FidCatalog
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.helper.push.FID_PUSH_OK
 import com.bydmate.app.helper.push.FidPushEvent
@@ -81,15 +84,17 @@ class FidPushChannel @Inject constructor(
      * (Re)installs the subscription with the fid addresses in force right now. Called whenever the
      * daemon became available or the firmware catalog moved the addresses — both are rare, and the
      * daemon side treats a repeat as a clean reinstall, so there is no state to keep in step here.
+     * [catalog] is this car's fid catalog, null while none has been read; it decides which ADAS
+     * states ride along.
      */
-    suspend fun resubscribe(reason: String) {
+    suspend fun resubscribe(reason: String, catalog: FidCatalog?) {
         val fields = FidPushApplier.PUSH_FIELDS
         val subs = fields.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
-        // After the wave, and never a fid a field already holds here: the daemon keys its tables
-        // by fid, so a shared one would take that field's row over.
-        val adas = PushStateTrace.ADAS_STATES.keys.filter { fid -> subs.none { it.fid == fid } }
-            .map { FidPushSub(it, PushStateTrace.ADAS_DEVICE) }
-        val table = helper.pushSubscribe(callback, subs + adas)
+        val adas = confirmedAdas(catalog, subs)
+        // Set before the subscription goes out, so a state this catalog does not confirm is never
+        // traced by name, even from a packet of the subscription it replaces.
+        states.adas = adas.associate { it.fid to it.name }
+        val table = helper.pushSubscribe(callback, subs + adas.map { FidPushSub(it.fid, PushStateTrace.ADAS_DEVICE) })
         if (table == null) {
             results = emptyList()
             fieldByFid = emptyMap()
@@ -102,6 +107,27 @@ class FidPushChannel @Inject constructor(
         resubscribes++
         val ok = table.count { it.outcome == FID_PUSH_OK }
         Log.i(TAG, "resubscribe ($reason): ok=$ok failed=${table.size - ok}")
+        if (catalog == null) {
+            Trace.event(TraceArea.CAR, "adas-subscribe", "reason" to "no-catalog")
+        } else {
+            Trace.event(
+                TraceArea.CAR, "adas-subscribe",
+                "confirmed" to adas.size, "skipped" to PushStateTrace.ADAS_STATES.size - adas.size,
+            )
+        }
+    }
+
+    /**
+     * The ADAS states to ride after the wave: only where this car's catalog gives the symbol the
+     * same fid (another platform may number it differently, or use that number for something
+     * else), none without a catalog, and never a fid a field already holds here — the daemon keys
+     * its tables by fid, so a shared one would take that field's row over.
+     */
+    private fun confirmedAdas(catalog: FidCatalog?, subs: List<FidPushSub>): List<PushStateTrace.AdasState> {
+        if (catalog == null) return emptyList()
+        return PushStateTrace.ADAS_STATES.filter { state ->
+            catalog.fidOf(state.symbol) == state.fid && subs.none { it.fid == state.fid }
+        }
     }
 
     /** The `--- fid push ---` section of the diagnostic dump. */
@@ -142,8 +168,8 @@ class FidPushChannel @Inject constructor(
         return lines
     }
 
-    /** Dump name of a subscribed fid: its FidMap field, or the trace name of an ADAS state. */
-    private fun labelOf(fid: Int): String = fieldByFid[fid] ?: PushStateTrace.ADAS_STATES[fid] ?: "?"
+    /** Dump name of a subscribed fid: its FidMap field, or the trace name of a confirmed ADAS state. */
+    private fun labelOf(fid: Int): String = fieldByFid[fid] ?: states.adas[fid] ?: "?"
 
     private fun pollPushRows(
         local: List<FidPushResult>,

@@ -5,6 +5,7 @@ import android.os.Build
 import android.util.Log
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.data.autoservice.AutoserviceClient
+import com.bydmate.app.data.push.PushStateTrace
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.HelperClient
@@ -211,14 +212,15 @@ class FidCatalogManager @Inject constructor(
     }
 
     /**
-     * Persists the symbols this app can use (READ entries plus the WRITE symbols the dump
-     * prints) and the whole device table. Keeping only those turns a ~700 KB dump into a few
+     * Persists the symbols this app can use (READ entries, the WRITE symbols the dump prints
+     * and the ADAS states the push channel confirms) and the whole device table. Keeping only those turns a ~700 KB dump into a few
      * KB; the original symbol count travels in the header so the log stays honest about what
      * the firmware reported.
      */
     private fun writeCache(fingerprint: String, catalog: FidCatalog) {
         try {
-            val wanted = (FidMap.all.mapNotNull { it.symbol } + WriteFidSymbols.byFid.values).toSortedSet()
+            val adas = PushStateTrace.ADAS_STATES.map { it.symbol }
+            val wanted = (FidMap.all.mapNotNull { it.symbol } + WriteFidSymbols.byFid.values + adas).toSortedSet()
             val body = buildString {
                 append(FidCatalogCache.header(fingerprint, BuildConfig.VERSION_CODE, catalog.totalSymbols))
                 append('\n')
