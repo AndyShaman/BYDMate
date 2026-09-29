@@ -15,6 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,9 +73,14 @@ class HudController @Inject constructor(
         CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
     internal var bridgeFactory: (Context, () -> Unit) -> HudSomeIpBridge =
         { ctx, onLost -> HudSomeIpBridge(ctx, onLost) }
+    internal var leftoverRetryMs = HudArming.CHECK_PERIOD_MS
 
     private val mutex = Mutex()
+    // One owner of the car's navigation values at a time: a leftover put-back step and the
+    // moment the arming loop starts or stops both run under it.
+    private val ownerLock = Mutex()
     private var startJob: Job? = null
+    private var leftoverJob: Job? = null
     @Volatile private var bridge: HudSomeIpBridge? = null
     @Volatile private var loop: HudPushLoop? = null
     @Volatile private var arming: HudArming? = null
@@ -114,13 +121,55 @@ class HudController @Inject constructor(
     }
 
     private suspend fun applyMode() = mutex.withLock {
-        if (bridge == null) return
+        if (bridge == null && startJob?.isActive != true) return
         if (armsNaviStatus()) {
-            if (arming == null) arming = HudArming(helperClient, prefs()).also { startArming(it) }
+            // Still binding: the start job reads the mode once the gateway is up.
+            if (bridge != null && arming == null) {
+                ownerLock.withLock { arming = HudArming(helperClient, prefs()).also { startArming(it) } }
+            }
         } else {
-            arming?.stop()
-            arming = null
+            ownerLock.withLock {
+                arming?.stop()
+                arming = null
+            }
+            restoreLeftover()
         }
+    }
+
+    /**
+     * A leftover kept in prefs (our status and layout still up after a process death, or a
+     * put-back a fullscreen cluster postponed) while no arming loop runs: this job owns putting
+     * it back. It retries every [leftoverRetryMs] while the cluster keeps the layout waiting, and
+     * ends once nothing is kept, the arming loop takes over, a put-back failed for another reason
+     * (the next start tries again), or the output stops. Nothing kept = nothing read or written.
+     */
+    private fun restoreLeftover() {
+        if (leftoverJob?.isActive == true || !prefs().contains(HudArming.KEY_AS_FOUND)) return
+        leftoverJob = scope.launch {
+            val arm = HudArming(helperClient, prefs())
+            var tried = false
+            while (prefs().contains(HudArming.KEY_AS_FOUND)) {
+                val done = ownerLock.withLock {
+                    when {
+                        arming != null -> true
+                        // The HUD check's session holds the kept layout; mode 2 leaves a guided
+                        // route to the arming loop that starts after the bind.
+                        armingPaused || (armsNaviStatus() && NavGuidanceHub.snapshot().active) -> false
+                        else -> withContext(NonCancellable) { putBackStep(arm, tried).also { tried = true } }
+                    }
+                }
+                if (done) break
+                delay(leftoverRetryMs)
+            }
+        }
+    }
+
+    /** One put-back; true when it is over, false while the fullscreen cluster still defers it. */
+    private suspend fun putBackStep(arm: HudArming, retry: Boolean): Boolean = runCatching {
+        if (retry) arm.retryDeferred() else arm.disarmLeftover(guided = false)?.screenDeferred != true
+    }.getOrElse {
+        Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}")
+        true
     }
 
     private fun startArming(arm: HudArming) =
@@ -181,17 +230,8 @@ class HudController @Inject constructor(
         if (helperBootstrap.ensureRunning()) helperClient.enableAccessibilityService()
         // Bind OUTSIDE the mutex: up to ~71 s and must not block toggle-off (Codex fix 2).
         startJob = scope.launch {
-            val arm = HudArming(helperClient, prefs())
-            // A process killed mid-route left our values up. The HUD check's running session owns
-            // the kept layout, so it is left alone then. A guided route leaves it to the arming
-            // loop, which mode 1 never runs.
-            if (!armingPaused) {
-                val guided = armsNaviStatus() && NavGuidanceHub.snapshot().active
-                withContext(NonCancellable) {
-                    runCatching { arm.disarmLeftover(guided = guided) }
-                        .onFailure { Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}") }
-                }
-            }
+            // A process killed mid-route left our values up.
+            restoreLeftover()
             val b = bridgeFactory(context) { onBindingLost() }
             try {
                 if (!b.bind()) {
@@ -206,15 +246,19 @@ class HudController @Inject constructor(
                     return@launch
                 }
                 HudIconLoader.init(context)
-                bridge = b
-                NavA11yFeed.enabled = true
-                loop = HudPushLoop(b, speedSignEnabled = { isSpeedSignEnabled() },
-                    amap = HudAmapBroadcaster(context),
-                    maneuvers = HudManeuverJournal(prefs()))
-                    .also { it.start(scope) }
-                // Mode 2: the car's navigation status, only while a route is guided; own
-                // coroutine, so a slow or refused write never delays a frame.
-                if (armsNaviStatus()) arming = arm.also { startArming(it) }
+                // Taken before the bridge is set: cancelled while waiting, nothing is up yet.
+                ownerLock.withLock {
+                    bridge = b
+                    NavA11yFeed.enabled = true
+                    loop = HudPushLoop(b, speedSignEnabled = { isSpeedSignEnabled() },
+                        amap = HudAmapBroadcaster(context),
+                        maneuvers = HudManeuverJournal(prefs()))
+                        .also { it.start(scope) }
+                    // Mode 2: the car's navigation status, only while a route is guided; own
+                    // coroutine, so a slow or refused write never delays a frame.
+                    if (armsNaviStatus()) arming = HudArming(helperClient, prefs()).also { startArming(it) }
+                }
+                if (arming == null) restoreLeftover()
                 _status.value = Status.ON
                 Log.i(TAG, "HUD output active")
             } catch (ce: CancellationException) {
@@ -246,6 +290,7 @@ class HudController @Inject constructor(
                 loop = null
                 arming?.stop()
                 arming = null
+                restoreLeftover()   // a layout the stop deferred has no loop left to finish it
                 bridge = null   // the bridge already unbound itself in onBindingDied
                 _status.value = Status.BIND_FAILED
             }
@@ -257,6 +302,8 @@ class HudController @Inject constructor(
         mutex.withLock {
             startJob?.let { it.cancel(); it.join() }
             startJob = null
+            leftoverJob?.cancelAndJoin()
+            leftoverJob = null
             // startJob may have flipped the feed back on between our first write and its
             // completion (no suspension points after bind()) - re-clear (final-review fix 3).
             NavA11yFeed.enabled = false
