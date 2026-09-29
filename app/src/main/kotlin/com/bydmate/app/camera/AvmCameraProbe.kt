@@ -170,8 +170,11 @@ class AvmCameraProbe(private val clock: () -> Long = System::currentTimeMillis) 
                             else -> null
                         }
                         m.name == "onEvent" && args != null && args.size >= 4 -> {
-                            append("avm event type=${args[1]} arg1=${args[2]} arg2=${args[3]}")
-                            events.onEvent(args[1], args[2], args[3])
+                            // Dropped before any work: it comes once per frame on the vendor thread.
+                            if ((args[1] as? Number)?.toInt() != AVM_EVENT_FRAME) {
+                                append("avm event type=${args[1]} arg1=${args[2]} arg2=${args[3]}")
+                                events.onEvent(args[1], args[2], args[3])
+                            }
                             null
                         }
                         else -> {
@@ -329,7 +332,7 @@ private class AvmEventTrace {
     }
 }
 
-/** The vendor event for every delivered frame: far too many for the trace. */
+/** The vendor event for every delivered frame: far too many for the camera log and the trace. */
 private const val AVM_EVENT_FRAME = 1001
 
 /** Trace names of the vendor event types we know; any other is traced by its number. */

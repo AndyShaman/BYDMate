@@ -210,6 +210,26 @@ class AvmCameraProbeTraceTest {
         )
     }
 
+    // --- camera log ---
+
+    @Test fun `frame events leave the camera log unchanged`() {
+        openBoth()
+        val before = probe.log.value
+
+        repeat(500) { AVMCamera.last!!.fire(FRAME) }
+
+        assertEquals(before, probe.log.value)
+    }
+
+    @Test fun `any other vendor event is still logged with its time`() {
+        openBoth()
+        AVMCamera.last!!.fire(FRAME)
+        AVMCamera.last!!.fire(1008, arg1 = 1, arg2 = 2)
+
+        val line = probe.log.value.last()
+        assertTrue(line, Regex("""\d{2}:\d{2}:\d{2}\.\d{3} avm event type=1008 arg1=1 arg2=2""").matches(line))
+    }
+
     // --- dump ---
 
     @Test fun `camera log lines carry the wall-clock time of day`() {
