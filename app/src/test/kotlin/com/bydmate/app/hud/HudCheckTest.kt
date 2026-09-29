@@ -156,7 +156,7 @@ class HudCheckTest {
             s.car.calls.take(8),
         )
         assertEquals(
-            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=-1", "buf 1007/1140461576=",
+            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=-1", "buf 1007/1140461576= ",
                 "sdk 4", "set 1023/1276174357=1", "set 1014/1083203624=0", "set 1014/1262485592=0"),
             s.car.calls.takeLast(8),
         )
@@ -270,7 +270,7 @@ class HudCheckTest {
     }
 
     @Test fun `a CAN clear that throws is traced and the restore still completes`() = runTest {
-        val car = FakeCar().apply { bufferFailsOn = "" }
+        val car = FakeCar().apply { bufferFailsOn = " " }
         val s = setup(car = car)
         s.check.run()
         val line = canClearEvents().single()
@@ -356,7 +356,7 @@ class HudCheckTest {
         assertHandedOver(s, product, step = 3)
         assertEquals(1, product.clearFrames())   // the one before the CAN step, none in the restore
         assertEquals(
-            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=-1", "buf 1007/1140461576="),
+            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=-1", "buf 1007/1140461576= "),
             s.car.calls.takeLast(4),
         )
         assertEquals(1, prefs().getInt(HudArming.KEY_AS_FOUND, -1))
