@@ -1555,7 +1555,7 @@
     <string name="settings_hud_status_connecting">Łączenie z magistralą…</string>
     <string name="settings_hud_status_on">Przesyłanie na HUD aktywne</string>
     <string name="settings_hud_status_bind_failed">Nie udało się połączyć z magistralą SOME/IP</string>
-    <string name="settings_hud_hint">Potrzebna wersja wyposażenia z wyświetlaczem przeziernym. Dane brane są z okna Yandex Nawigatora</string>
+    <string name="settings_hud_hint">Potrzebna wersja wyposażenia z wyświetlaczem przeziernym. Dane brane są z okna Yandex Nawigatora. Podczas prowadzenia trasy na zestawie wskaźników po lewej pojawia się strzałka nawigacji, to normalne</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Martwe pola</string>
     <string name="settings_blindspot_title">Kamera przy kierunkowskazie</string>

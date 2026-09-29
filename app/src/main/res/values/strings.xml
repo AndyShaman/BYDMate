@@ -1559,7 +1559,7 @@
     <string name="settings_hud_status_connecting">Подключение к шине…</string>
     <string name="settings_hud_status_on">Передача на HUD активна</string>
     <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
-    <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
+    <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора. Пока ведётся маршрут, на приборке слева появляется стрелка навигации, это нормально</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Слепые зоны</string>
     <string name="settings_blindspot_title">Камера по поворотнику</string>
