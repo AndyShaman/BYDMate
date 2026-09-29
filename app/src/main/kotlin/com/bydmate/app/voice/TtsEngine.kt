@@ -67,6 +67,10 @@ interface TtsEngine {
         /** Signals no more sentences: waits (async, on the tts worker) for playback to drain,
          *  then releases the speaking flag. Must be called exactly once. */
         fun finish()
+        /** Suspends until the whole reply went out: every sentence handed to playback and the
+         *  queue finished (or superseded). [speaking] can dip false between two sentences, so it
+         *  alone cannot tell the end of the reply. Default returns at once. */
+        suspend fun awaitPlayed() {}
     }
 
     /** Starts a speech queue, superseding any current speech. Null when the engine is not

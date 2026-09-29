@@ -420,6 +420,10 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
 
         override fun finish() { pending.close() }
 
+        // The player ends once the last sentence was played (or the queue was cancelled); each
+        // sentence's speaking=false in the delegate is only the end of that one sentence.
+        override suspend fun awaitPlayed() = playJob.join()
+
         /** stop() on the router cancels the whole queue: both coroutines are torn down
          *  immediately (even mid-synthesis) and further enqueue() calls are rejected. */
         fun cancel() {

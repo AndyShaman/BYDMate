@@ -15,6 +15,7 @@ import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -553,6 +554,10 @@ class SherpaTtsEngine(
         // drain/audible targets use the engine-level trackFramesWritten (cumulative over the
         // track's lifetime), this local only gates the drain wait in finish().
         private var totalFramesWritten = 0L
+        // Completed by finish()'s worker block once the reply drained (or was superseded).
+        private val played = CompletableDeferred<Unit>()
+
+        override suspend fun awaitPlayed() = played.await()
 
         override fun enqueue(text: String): Boolean {
             if (text.isBlank() || generation.get() != myGen) return false
@@ -639,6 +644,7 @@ class SherpaTtsEngine(
                         pendingTarget = null
                         _speaking.value = false
                     }
+                    played.complete(Unit)
                 }
             }
         }

@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -140,8 +141,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
     // Session auto-close waiting for the reply to end (play_music, the close-after-command toggle,
     // the driver's own request); a name barge-in cancels it, a new phrase cancels all but play_music.
-    @Volatile private var sessionCloseJob: Job? = null
-    @Volatile private var sessionCloseReason: String? = null
+    // One pending close at a time: reason and job live in one holder.
+    private class PendingClose(val reason: String, val job: Job)
+    @Volatile private var pendingClose: PendingClose? = null
 
     // After a terminal state (Done/NotUnderstood/Blocked) the voice UI state auto-returns to Idle
     // so it never sticks (the "не распознал" red used to stay forever). Kept short so it
@@ -513,9 +515,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  already cancelled the in-flight ask. */
     private fun bargeIn(transcript: String, logMsg: String) {
         // Before stop(): the session auto-close resumes on the very speaking=false it causes.
-        sessionCloseJob?.takeIf { it.isActive }?.let {
-            it.cancel()
-            Log.i(TAG, "$sessionCloseReason auto-close cancelled by barge-in: the driver stays in the dialog")
+        pendingClose?.takeIf { it.job.isActive }?.let {
+            it.job.cancel()
+            Log.i(TAG, "${it.reason} auto-close cancelled by barge-in: the driver stays in the dialog")
         }
         runCatching { ttsEngine.stop() }
         earcon.ok()
@@ -576,11 +578,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         }
         // The driver goes on talking: a pending close stays off. After the echo check, or our own
         // voice heard back would cancel it; the play_music close is left as it always was.
-        if (sessionCloseReason != REASON_PLAY_MUSIC) {
-            sessionCloseJob?.takeIf { it.isActive }?.let {
-                it.cancel()
-                Log.i(TAG, "$sessionCloseReason auto-close cancelled by a new phrase")
-            }
+        pendingClose?.takeIf { it.job.isActive && it.reason != REASON_PLAY_MUSIC }?.let {
+            it.job.cancel()
+            Log.i(TAG, "${it.reason} auto-close cancelled by a new phrase")
         }
 
         // An unanswered clarifying question from the agent outranks every local resolver: the
@@ -700,34 +700,49 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     /** Close-after-command toggle: a done command or a final agent answer closes the session once
      *  the reply is heard, or, when nothing was said aloud, once the text had time to be read.
      *  The gate read is guarded: a failed settings read keeps the session open, as before. */
-    private fun closeAfterCommand(text: String, spoken: Boolean) {
+    private fun closeAfterCommand(text: String, spoken: Boolean, reply: TtsEngine.SpeechQueue? = null) {
         if (sessionJob == null || !runCatching { gate.closeAfterCommand() }.getOrDefault(false)) return
-        scheduleSessionClose("auto-close", waitForSpeech = spoken, dwellMs = readingDwellMs(text, spoken = false))
+        scheduleSessionClose("auto-close", waitForSpeech = spoken, dwellMs = readingDwellMs(text, spoken = false), reply = reply)
     }
 
     /** Closes the running session after the reply: with [waitForSpeech] once playback began and
-     *  ended, else after [dwellMs]. [reason] goes to the session-stop trace. */
-    private fun scheduleSessionClose(reason: String, waitForSpeech: Boolean, dwellMs: Long = 0L) {
+     *  ended (the whole [reply] queue when the reply was queued), else after [dwellMs]. [reason]
+     *  goes to the session-stop trace. A newer close replaces a pending one. */
+    private fun scheduleSessionClose(
+        reason: String,
+        waitForSpeech: Boolean,
+        dwellMs: Long = 0L,
+        reply: TtsEngine.SpeechQueue? = null,
+    ) {
         val closingJob = sessionJob ?: return
-        Log.i(TAG, "$reason auto-close armed: waitForSpeech=$waitForSpeech dwellMs=$dwellMs")
-        sessionCloseReason = reason
-        sessionCloseJob = scope.launch {
+        Log.i(TAG, "$reason auto-close armed: waitForSpeech=$waitForSpeech queued=${reply != null} dwellMs=$dwellMs")
+        pendingClose?.job?.cancel()
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             if (waitForSpeech) {
-                // speak()/enqueue() returns before the TTS worker flips speaking=true, so
-                // waiting for !speaking alone completes immediately and would cut the reply
-                // before it starts. Wait (bounded) for playback to begin, then for it to
-                // end; if it never begins (TTS off, synth failed), the grace elapses and
-                // the session still closes.
-                withTimeoutOrNull(SPEAK_START_GRACE_MS) { ttsEngine.speaking.first { it } }
+                if (reply != null) {
+                    // speaking dips false between two queued sentences (online voices report it
+                    // per sentence), so the queue itself tells when the last one was handed out.
+                    reply.awaitPlayed()
+                } else {
+                    // speak()/enqueue() returns before the TTS worker flips speaking=true, so
+                    // waiting for !speaking alone completes immediately and would cut the reply
+                    // before it starts. Wait (bounded) for playback to begin, then for it to
+                    // end; if it never begins (TTS off, synth failed), the grace elapses and
+                    // the session still closes.
+                    withTimeoutOrNull(SPEAK_START_GRACE_MS) { ttsEngine.speaking.first { it } }
+                }
                 ttsEngine.speaking.first { !it }   // let the agent finish its own reply first
             } else {
                 delay(dwellMs)
             }
+            ensureActive()   // a cancel that landed right as the wait ended still wins
             // PTT restarting a session stops TTS -- the very signal this coroutine
             // waits for -- so only close the session this reply belongs to, never a
             // newer one the user has already started.
             if (sessionJob === closingJob) stopContinuousSession(reason)
         }
+        pendingClose = PendingClose(reason, job)
+        job.start()
     }
 
     private suspend fun execute(
@@ -1018,15 +1033,19 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 scheduleClear(result.text, didSpeak)
                 // Wave P: a successful play_music closes the whole session after the reply -- the orb's
                 // presence ducks the very music the agent just started. end_conversation is the driver
-                // asking the agent to close; any other final answer (not a question) closes only with
-                // the close-after-command toggle on. Gated on sessionJob so the legacy single-shot
-                // path (which has no session to close) is untouched.
+                // asking the agent to close; any other final answer (not a question, no failed tool:
+                // the driver will rephrase) closes only with the close-after-command toggle on. Gated
+                // on sessionJob so the legacy single-shot path (which has no session to close) is
+                // untouched.
+                val reply = queue.takeIf { queuedAny }
                 if (sessionJob != null) when {
                     result.tools.any { it.name == "play_music" && it.ok } ->
-                        scheduleSessionClose(REASON_PLAY_MUSIC, waitForSpeech = true)
+                        scheduleSessionClose(REASON_PLAY_MUSIC, waitForSpeech = true, reply = reply)
                     result.tools.any { it.name == "end_conversation" && it.ok } ->
-                        scheduleSessionClose("user-stop", waitForSpeech = didSpeak)
-                    !result.text.trimEnd().endsWith('?') -> closeAfterCommand(result.text, didSpeak)
+                        scheduleSessionClose("user-stop", waitForSpeech = didSpeak,
+                            dwellMs = readingDwellMs(result.text, spoken = false), reply = reply)
+                    !result.text.trimEnd().endsWith('?') && result.tools.all { it.ok } ->
+                        closeAfterCommand(result.text, didSpeak, reply)
                 }
             }
             AgentResult.Disabled -> {
