@@ -229,6 +229,21 @@ class TtsRouterTest {
         assertTrue(delegate.queueEnqueued.isEmpty()) // offline queue never started
     }
 
+    // The voice session's close waits on this, not on speaking: the delegate reports speaking
+    // per sentence, so a slow second sentence leaves a false dip in the middle of the reply.
+    @Test
+    fun `queue awaitPlayed returns only after the last sentence was played`() {
+        val backend = FakeBackend(delayMs = 300)
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val queue = router.startQueue()!!
+        queue.enqueue("Первое.")
+        queue.enqueue("Второе.")
+        queue.finish()
+        runBlocking { withTimeout(5_000) { queue.awaitPlayed() } }
+        assertEquals(2, delegate.playPcmCalls.size)
+    }
+
     @Test
     fun `queue silences the remainder when the first sentence fails (no fallback)`() {
         val backend = FlakyBackend(failFrom = 1) // all sentences fail from the very first
