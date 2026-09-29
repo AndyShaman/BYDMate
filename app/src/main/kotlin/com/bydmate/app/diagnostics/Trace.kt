@@ -61,6 +61,10 @@ object Trace {
         journal?.flush()
     }
 
+    /** [flush] that waits up to [timeoutMs] for the file write: for a line the process is about to
+     *  lose (our own force-stop). Blocks the calling thread; false when nothing confirmed the write. */
+    fun flushBlocking(timeoutMs: Long): Boolean = journal?.flushBlocking(timeoutMs) ?: false
+
     /** The whole journal, oldest first, for the diagnostic dump. */
     suspend fun lines(): List<String> = journal?.lines().orEmpty()
 

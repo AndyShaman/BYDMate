@@ -3,6 +3,7 @@ package com.bydmate.app.service
 import android.content.SharedPreferences
 import io.mockk.every
 import io.mockk.mockk
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -50,6 +51,19 @@ class A11yRecoveryGateTest {
         val last = now - 2 * 60 * 1000L
         assertFalse(A11yRecoveryGate.shouldAttempt(last, now, streak))
         assertFalse(A11yRecoveryGate.shouldAttempt(last, now + 5 * 1000L, streak))
+    }
+
+    @Test
+    fun `remaining wait is zero whenever an attempt is allowed`() {
+        assertEquals(0L, A11yRecoveryGate.remainingWaitMs(0L, now, streak))
+        assertEquals(0L, A11yRecoveryGate.remainingWaitMs(now - 5_000L, now, failStreak = 1))
+        assertEquals(0L, A11yRecoveryGate.remainingWaitMs(now, 30_000L, streak))
+    }
+
+    @Test
+    fun `remaining wait counts down to the end of the interval when refused`() {
+        assertEquals(A11yRecoveryGate.MIN_INTERVAL_MS - 9 * 60 * 1000L,
+            A11yRecoveryGate.remainingWaitMs(now - 9 * 60 * 1000L, now, streak))
     }
 
     @Test

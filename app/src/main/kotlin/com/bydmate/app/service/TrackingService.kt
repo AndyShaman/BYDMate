@@ -60,6 +60,7 @@ import com.bydmate.app.domain.calculator.RangeEstimate
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.bydmate.app.BuildConfig
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -235,6 +236,10 @@ class TrackingService : Service(), LocationListener {
     // instead of one per second while driving.
     @Volatile private var webhookCooldownUntilMs: Long = 0L
 
+    // onStartCommand calls since onCreate, main thread only: tells the start that created the
+    // service apart from repeats on a running one in the trace.
+    private var startCommands = 0
+
     // Self-heal engines for daemon-backed grants. Lazy so they capture the service context only
     // after onCreate, and are never instantiated for callers that short-circuit before use.
     private val starGrant by lazy {
@@ -283,6 +288,7 @@ class TrackingService : Service(), LocationListener {
         private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
         private const val A11Y_ATTEMPTS_ANDROID10 = 2
+        private const val A11Y_RECOVERY_TRACE_FLUSH_MS = 500L
         private const val CHANNEL_ID = "bydmate_tracking"
         // Opt-in "quiet" channel (IMPORTANCE_MIN): the mandatory foreground notification collapses
         // into the shade's silent list with no status-bar icon. Off by default - existing users keep
@@ -541,8 +547,10 @@ class TrackingService : Service(), LocationListener {
         fun steeringKeyAssigned(keyCode: Int): Boolean =
             instance?.automationEngine?.steeringKeyCodes?.value?.contains(keyCode) == true
 
-        fun start(context: Context) {
+        /** [trigger] names the entry point for the trace (see [AutostartTrace]). */
+        fun start(context: Context, trigger: String) {
             val intent = Intent(context, TrackingService::class.java)
+                .putExtra(AutostartTrace.EXTRA_TRIGGER, trigger)
             context.startForegroundService(intent)
         }
 
@@ -989,6 +997,10 @@ class TrackingService : Service(), LocationListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // n=1 is the command that follows onCreate; later ones hit an already running service.
+        Trace.event(TraceArea.APP, "service-trigger",
+            "trigger" to AutostartTrace.startTrigger(intent != null, intent?.getStringExtra(AutostartTrace.EXTRA_TRIGGER)),
+            "n" to ++startCommands)
         maybeAttachWidget()
         return START_STICKY
     }
@@ -1409,7 +1421,9 @@ class TrackingService : Service(), LocationListener {
 
         // Auto-restart via WorkManager (like BydConnect AutoRestartReceiver)
         try {
-            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>().build()
+            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>()
+                .setInputData(workDataOf(AutostartTrace.KEY_WORKER_SOURCE to AutostartTrace.SOURCE_SERVICE_DESTROYED))
+                .build()
             WorkManager.getInstance(this).enqueueUniqueWork(
                 ServiceStartWorker.WORK_NAME,
                 ExistingWorkPolicy.KEEP,
@@ -1429,7 +1443,9 @@ class TrackingService : Service(), LocationListener {
         Log.i(TAG, "onTaskRemoved: scheduling restart via WorkManager")
         ChainLog.append(this, "onTaskRemoved → restart")
         try {
-            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>().build()
+            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>()
+                .setInputData(workDataOf(AutostartTrace.KEY_WORKER_SOURCE to AutostartTrace.SOURCE_TASK_REMOVED))
+                .build()
             WorkManager.getInstance(this).enqueueUniqueWork(
                 ServiceStartWorker.WORK_NAME,
                 ExistingWorkPolicy.REPLACE,
@@ -2052,6 +2068,10 @@ class TrackingService : Service(), LocationListener {
         // state only when every re-assert succeeded (daemon path healthy) and the service still is
         // not running - all-false re-asserts mean a broken daemon, not a stuck framework.
         val last = GrantSelfHeal.history().lastOrNull { it.name == "star a11y" }
+        last?.let {
+            Trace.event(TraceArea.APP, "a11y-grant", "reason" to it.reason, "granted" to it.granted,
+                "tries" to it.tries, "reasserts" to AutostartTrace.reasserts(it.reasserts))
+        }
         val daemonOkButUnbound = last != null && !last.granted &&
             last.reasserts.isNotEmpty() && last.reasserts.all { it }
         if (android.os.Build.VERSION.SDK_INT <= 29 && daemonOkButUnbound && !starServiceRunning()) {
@@ -2064,12 +2084,22 @@ class TrackingService : Service(), LocationListener {
             val nowElapsed = android.os.SystemClock.elapsedRealtime()
             if (A11yRecoveryGate.shouldAttempt(prefs, nowElapsed)) {
                 if (A11yRecoveryGate.markAttempt(prefs, nowElapsed)) {
-                    Log.w(TAG, "star a11y recovery: asking daemon to force-stop + re-bind " +
-                        "(streak=${prefs.getInt(A11yRecoveryGate.KEY_FAIL_STREAK, 0)})")
+                    val streak = prefs.getInt(A11yRecoveryGate.KEY_FAIL_STREAK, 0)
+                    Log.w(TAG, "star a11y recovery: asking daemon to force-stop + re-bind (streak=$streak)")
+                    // The force-stop kills this process: write the line to disk before asking.
+                    Trace.event(TraceArea.APP, "a11y-recovery-force-stop", "reason" to reason, "streak" to streak)
+                    Trace.flushBlocking(A11Y_RECOVERY_TRACE_FLUSH_MS)
                     helperClient.recoverAccessibilityService()
                 } else {
                     Log.w(TAG, "star a11y recovery: skipped, could not persist the rate-limit mark")
+                    Trace.event(TraceArea.APP, "a11y-recovery-refused", "cause" to "mark_not_saved")
                 }
+            } else {
+                val streak = prefs.getInt(A11yRecoveryGate.KEY_FAIL_STREAK, 0)
+                val waitMs = A11yRecoveryGate.remainingWaitMs(
+                    prefs.getLong(A11yRecoveryGate.KEY_LAST_ATTEMPT_ELAPSED_MS, 0L), nowElapsed, streak)
+                Trace.event(TraceArea.APP, "a11y-recovery-refused", "cause" to "rate_limit",
+                    "streak" to streak, "wait_ms" to waitMs)
             }
         }
     }

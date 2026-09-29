@@ -134,7 +134,7 @@ class WelcomeViewModel @Inject constructor(
             settingsRepository.setSetupCompleted()
 
             // Start tracking service
-            TrackingService.start(appContext)
+            TrackingService.start(appContext, com.bydmate.app.service.AutostartTrace.TRIGGER_WELCOME)
 
             _uiState.update { it.copy(isLoading = false, isComplete = true) }
         }

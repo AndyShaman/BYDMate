@@ -2221,6 +2221,21 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     com.bydmate.app.cluster.ClusterProjectionManager.KEY_MIRROR_ENABLED, false)}")
             } catch (e: Exception) { appendLine("(failed to gather steering key state: ${e.message})") }
 
+            appendLine("--- autostart ---")
+            try {
+                val bootPrefs = appContext.getSharedPreferences(BootReceiver.PREFS_NAME, Context.MODE_PRIVATE)
+                // The a11y recovery gate lives in the cluster prefs, where TrackingService keeps it.
+                val gatePrefs = appContext.getSharedPreferences(
+                    com.bydmate.app.cluster.ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+                AutostartDiagnostics.format(
+                    chainLog = bootPrefs.getString(BootReceiver.KEY_CHAIN_LOG, null),
+                    failStreak = gatePrefs.getInt(com.bydmate.app.service.A11yRecoveryGate.KEY_FAIL_STREAK, 0),
+                    lastAttemptElapsedMs = gatePrefs.getLong(
+                        com.bydmate.app.service.A11yRecoveryGate.KEY_LAST_ATTEMPT_ELAPSED_MS, 0L),
+                    nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+                ).forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("(failed to gather autostart state: ${e.message})") }
+
             appendLine("--- native assistant packages ---")
             try {
                 val pref = settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "")
