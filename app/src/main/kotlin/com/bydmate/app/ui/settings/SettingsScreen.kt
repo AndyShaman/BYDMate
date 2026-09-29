@@ -1454,7 +1454,7 @@ private fun BlindSpotCard() {
         checked = enabled,
         onCheckedChange = {
             enabled = it
-            prefs.edit().putBoolean(BlindSpotPreferences.KEY_ENABLED, it).apply()
+            BlindSpotPreferences.setEnabled(prefs, it)
             if (it && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED
             ) {

@@ -75,6 +75,27 @@ class FidPushRegistryTest {
         assertEquals(FID_PUSH_NOT_IN_FEATURE_MAP, table.getValue(gear.fid).outcome)
     }
 
+    /** The ADAS states ride on the device the BSD fids use: a car that refuses them must keep BSD. */
+    @Test fun `a fid refused or thrown on by a shared device costs only that fid`() {
+        val bsd = FidPushSub(1098907664, 1038)
+        val laneGray = FidPushSub(535826452, 1038)
+        val lks = FidPushSub(828375060, 1038)
+        val device = MappedDevice(setOf(bsd.fid, lks.fid), throwsOn = setOf(lks.fid))
+        FidPushRegistry.deviceFactory = { device }
+        FidPushRegistry.listenerFactory = { _, sink -> AdasPushListener(sink) }
+
+        val table = FidPushRegistry.subscribe(
+            listOf(bsd, laneGray, lks),
+            mockk<IBinder>(relaxed = true),
+            2000,
+        ).associateBy { it.fid }
+
+        assertEquals(FID_PUSH_OK, table.getValue(bsd.fid).outcome)
+        assertEquals(FID_PUSH_NOT_IN_FEATURE_MAP, table.getValue(laneGray.fid).outcome)
+        assertTrue(table.getValue(lks.fid).outcome, table.getValue(lks.fid).outcome.contains("IllegalArgumentException"))
+        assertEquals(1, FidPushRegistry.unsubscribe())
+    }
+
     @Test fun `without a readback the fid is sent and its first event confirms it`() {
         val device = OpaqueDevice()
         FidPushRegistry.deviceFactory = { device }
@@ -210,13 +231,18 @@ class FidPushRegistryTest {
     }
 
     /** Stands in for AbsBYDAutoDevice: keeps a listener map the registry can read back. */
-    private inner class MappedDevice(private val known: Set<Int>) {
+    private inner class MappedDevice(
+        private val known: Set<Int>,
+        /** Fids whose registration the firmware answers with an exception. */
+        private val throwsOn: Set<Int> = emptySet(),
+    ) {
         private val mIBYDAutoListenerMap = FakeListenerMap()
         val lockFree = mutableListOf<Boolean>()
         val seen = mutableSetOf<IBYDAutoListener>()
         var unregisterCalls = 0
 
         fun registerListener(listener: IBYDAutoListener, featureIds: IntArray) {
+            require(featureIds.none { it in throwsOn }) { "feature refused" }
             lockFree += lockIsFree()
             seen += listener
             featureIds.filterTo(mIBYDAutoListenerMap.ids) { it in known }

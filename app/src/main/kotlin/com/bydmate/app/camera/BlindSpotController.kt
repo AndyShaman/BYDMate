@@ -34,6 +34,8 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.ui.widget.WidgetController
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -251,6 +253,7 @@ class BlindSpotController @Inject constructor(
         val reason = blindSpotArmedReason(prefs.enabled, data.gear, data.speed, prefs.thresholdKmh)
         if (armed != lastArmed) {
             Log.i(TAG, "armed=$armed reason=$reason speed=${data.speed} gear=${data.gear}")
+            Trace.event(TraceArea.CAMERA, "armed", "on" to armed, "reason" to reason, "speed" to data.speed, "gear" to data.gear)
             lastArmed = armed
         }
         lastArmedReason = reason
@@ -392,6 +395,7 @@ class BlindSpotController @Inject constructor(
             lastNativeCameraForeground = nativeCameraForeground
             val verb = if (nativeCameraForeground) "hidden" else "released"
             Log.i(TAG, "native camera foreground=$nativeCameraForeground: blind-spot $verb")
+            Trace.event(TraceArea.CAMERA, "native-360", "on" to nativeCameraForeground)
             clusterJournal.append(
                 "camera: native 360 ${if (nativeCameraForeground) "up, hide" else "down, release"}"
             )
@@ -482,7 +486,7 @@ class BlindSpotController @Inject constructor(
             // The windows can have gone away while the vendor stack was opening (a teardown from
             // the poll thread, a destroyed surface): do not keep a camera nobody can see.
             if (clusterWindow == null && pipWindow == null) {
-                withContext(cameraDispatcher()) { probe.close() }
+                withContext(cameraDispatcher()) { probe.close("windows gone") }
                 return
             }
             cameraOpen = true
@@ -517,6 +521,7 @@ class BlindSpotController @Inject constructor(
 
     private suspend fun failCamera(reason: String, now: Long) {
         Log.w(TAG, "camera error: $reason; retry in ${RETRY_DELAY_MS / 1000} s")
+        Trace.event(TraceArea.CAMERA, "fail", "reason" to reason)
         clusterJournal.append("camera: error $reason, retry in ${RETRY_DELAY_MS / 1000} s")
         awaitTeardown(reason)
         backoff.fail(now, RETRY_DELAY_MS)
@@ -852,7 +857,7 @@ class BlindSpotController @Inject constructor(
             // Camera first: nothing may write into a surface that is about to be released.
             if (cameraOpen) {
                 clusterJournal.append("camera: teardown $reason")
-                withContext(cameraDispatcher()) { probe.close() }
+                withContext(cameraDispatcher()) { probe.close(reason) }
                 cameraOpen = false
             }
             applyShow(BlindSpotSide.NONE)
