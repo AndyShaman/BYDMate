@@ -14,6 +14,7 @@ import com.bydmate.app.navdata.NavGuidanceHub
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import java.util.Collections
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -326,6 +327,33 @@ class HudControllerWayTest {
         awaitTrue { !prefs().contains(HudWayChannels.KEY_LMCN_LEFT) }
         assertTrue(snapshot().containsAll(lmcnOff + lmcnStops))
         c.setEnabled(false)
+    }
+
+    @Test fun `a crash-left family is stopped with HUD off on a one-off binding, after the CAN clear and the disarm`() {
+        car().also { leftover(it, enabled = false) }
+        prefs().edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L).commit()
+        val c = controller()
+        c.startIfEnabled()
+        awaitTrue { !prefs().contains(HudWayChannels.KEY_LMCN_LEFT) }
+        val calls = snapshot()
+        assertClearedBeforeDisarm(calls)
+        assertEquals(lmcnOff + lmcnStops, calls.filter { it.startsWith("fire") || it.startsWith("stop") })
+        assertTrue(calls.indexOf(lmcnStops.first()) > calls.indexOf("sdk 4"))
+        // Only the stops: the binding starts no service of its own and is let go.
+        assertTrue(calls.none { it.startsWith("start") })
+        awaitTrue { runCatching { verify { bridge.unbind() } }.isSuccess }
+        assertFalse(c.armingLive)
+    }
+
+    @Test fun `a crash-left family with HUD off and no binding stays kept for the next start`() {
+        car()
+        coEvery { bridge.bind() } returns false
+        prefs().edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L).commit()
+        val c = controller()
+        c.startIfEnabled()
+        awaitTrue { runCatching { verify { bridge.unbind() } }.isSuccess }
+        assertTrue(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
+        assertTrue(snapshot().isEmpty())
     }
 
     @Test fun `a refused CAN clear at start is kept for the next start`() {
