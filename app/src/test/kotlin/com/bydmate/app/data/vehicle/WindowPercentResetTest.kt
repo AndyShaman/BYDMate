@@ -175,6 +175,56 @@ class WindowPercentResetTest {
         assertEveryPercentReset(car, DRIVER_POS)
     }
 
+    /** An automation writes 10, a voice command 50 during the first one's reset delay: the
+     *  first reset must not land after 50 and take the new target off the bus. */
+    @Test fun `a second command to the same window waits for the first one's reset`() = runTest {
+        val car = car()
+        val api = car.api()
+
+        val first = launch { api.writeWindowDriver(10) }
+        advanceTimeBy(250)
+        val second = launch { api.writeWindowDriver(50) }
+        first.join()
+        second.join()
+
+        assertEquals(listOf(10, RESET, 50, RESET), car.writesTo(DRIVER_POS))
+        assertEveryPercentReset(car, DRIVER_POS)
+    }
+
+    @Test fun `a command waiting behind a cancelled one still comes after its reset`() = runTest {
+        val car = car()
+        val api = car.api()
+
+        val first = launch { api.writeWindowDriver(10) }
+        advanceTimeBy(100)
+        val second = launch { api.writeWindowDriver(50) }
+        advanceTimeBy(50)
+        first.cancel()
+        first.join()
+        second.join()
+
+        assertEquals(listOf(10, RESET, 50, RESET), car.writesTo(DRIVER_POS))
+        assertEveryPercentReset(car, DRIVER_POS)
+    }
+
+    @Test fun `commands to two windows do not wait for each other's reset`() = runTest {
+        val car = car()
+        val api = car.api()
+
+        val driver = launch { api.writeWindowDriver(10) }
+        advanceTimeBy(100)
+        val passenger = launch { api.writeWindowPassenger(50) }
+        runCurrent()
+
+        val passengerWrite = car.writes.first { it.fid == PASSENGER_POS }
+        assertEquals(50, passengerWrite.value)
+        assertEquals(100L, passengerWrite.atMs)
+        driver.join()
+        passenger.join()
+        assertEveryPercentReset(car, DRIVER_POS)
+        assertEveryPercentReset(car, PASSENGER_POS)
+    }
+
     @Test fun `a refused reset is retried once`() = runTest {
         val car = car()
         var resets = 0
