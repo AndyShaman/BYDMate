@@ -105,6 +105,35 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             return entry.valueMin == entry.valueMax && entry.valueMin in allowed
         }
 
+        /**
+         * "No request" on a window target-position fid. The fid holds its last value as a live
+         * request, so BYD's own apps write the percent, wait 300 ms and write 255 to the same
+         * fid (autovoice CarWindowApiImpl.setLeftFrontWindowPercent → setLeftFrontWindowPercentInvalid,
+         * BydMyCar carlib vz). Never a user target: the percent entries stop at 100.
+         */
+        const val PERCENT_RESET_VALUE = 255
+
+        /** The percent window actions whose fid takes [PERCENT_RESET_VALUE]. */
+        private val PERCENT_RESET_ACTIONS = setOf(
+            "window_driver_pos", "window_passenger_pos", "window_rear_left_pos", "window_rear_right_pos",
+        )
+
+        /**
+         * The reset write of a percent window [entry] (same dev and fid, value 255 only), or null
+         * for every other entry. Not in the action map: [find] never returns it, so no command,
+         * automation or agent tool can send 255.
+         */
+        fun percentResetFor(entry: WriteEntry): WriteEntry? {
+            if (entry.actionName.lowercase() !in PERCENT_RESET_ACTIONS) return null
+            return entry.copy(
+                actionName = "${entry.actionName}_reset",
+                valueMin = PERCENT_RESET_VALUE,
+                valueMax = PERCENT_RESET_VALUE,
+                validated = false,
+                source = "byd-stock CarWindowApiImpl",
+            )
+        }
+
         /** An entry may load: not on a banned dev (unless carved out) and within its value set. */
         private fun admitted(entry: WriteEntry): Boolean =
             !isBanned(entry.dev, entry.writeFid) && valuesAllowed(entry)
