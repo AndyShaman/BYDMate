@@ -492,6 +492,18 @@ class HudArmingTest {
         a.stop()
     }
 
+    @Test fun `the after-arm hook runs even when the arm throws after the session is armed`() = runTest {
+        val car = FakeCar()
+        val a = arming(car)
+        var hooks = 0
+        a.afterArm = { hooks++ }
+        coEvery { car.helper.writeStatus(HudArming.CAN_NAVI.first, HudArming.CAN_NAVI.second, any(), any()) } throws
+            IllegalStateException("helper gone")
+        assertTrue(runCatching { a.arm() }.isFailure)
+        assertTrue(a.armed)
+        assertEquals(1, hooks)
+    }
+
     @Test fun `a failing hook still disarms`() = runTest {
         val car = FakeCar()
         val a = arming(car)

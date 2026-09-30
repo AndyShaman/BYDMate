@@ -71,7 +71,8 @@ class HudControllerWayTest {
     private fun guideRoute() =
         NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 300, road = "Main St"), NavGuidanceHub.Source.A11Y)
 
-    private fun car(): MutableMap<Pair<Int, Int>, Int> {
+    /** [fails]: a write for which it is true throws, as a helper that died mid-call. */
+    private fun car(fails: (String) -> Boolean = { false }): MutableMap<Pair<Int, Int>, Int> {
         val state = Collections.synchronizedMap(mutableMapOf(
             HudArming.NAVI to 4, HudArming.SCREEN to 1, HudArming.CLUSTER to 0,
             HudArming.CAN_NAVI to 0, HudArming.ISA to 0,
@@ -80,7 +81,9 @@ class HudControllerWayTest {
             firstArg<List<BatchReadItem>>().map { 0 to (state[it.dev to it.fid] ?: 0) }
         }
         coEvery { helperClient.writeStatus(any(), any(), any(), any()) } answers {
-            calls += "set ${arg<Int>(0)}/${arg<Int>(1)}=${arg<Int>(2)}"
+            val call = "set ${arg<Int>(0)}/${arg<Int>(1)}=${arg<Int>(2)}"
+            calls += call
+            check(!fails(call)) { "helper gone" }
             state[arg<Int>(0) to arg<Int>(1)] = arg(2)
             1
         }
@@ -270,6 +273,24 @@ class HudControllerWayTest {
         awaitTrue { snapshot().let { it.subList(it.indexOf("sdk 4"), it.size) }.let { it.contains("sdk 2") && it.contains(canShown) } }
         val after = snapshot().let { it.subList(it.indexOf("sdk 4"), it.size) }
         assertTrue(after.toString(), after.indexOf("sdk 2") < after.indexOf(canShown))
+        c.setEnabled(false)
+    }
+
+    @Test fun `an arm that throws after the status is up still lets the channels write`() {
+        var canNaviRaises = 0
+        car { it == "set 1014/1083203624=1" && ++canNaviRaises == 2 }
+        guideRoute()
+        val c = controller()
+        c.setMode(HudController.MODE_NAVI_STATUS)
+        c.setEnabled(true)
+        awaitTrue { snapshot().contains(canShown) }
+        NavGuidanceHub.reset()   // the route ends: cleanup, disarm
+        awaitTrue { snapshot().contains("sdk 4") }
+        // The next route's arm raises the status, then the helper throws; the rechecks see
+        // the status held and never arm again.
+        guideRoute()
+        awaitTrue { canNaviRaises == 2 }
+        awaitTrue { snapshot().let { it.subList(it.indexOf("sdk 4"), it.size) }.contains(canShown) }
         c.setEnabled(false)
     }
 

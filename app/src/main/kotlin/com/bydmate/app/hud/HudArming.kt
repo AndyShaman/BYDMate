@@ -142,8 +142,16 @@ class HudArming(
         return Status(r[0], r[1], r[2])
     }
 
-    /** Raises the status. The first call of a session reads and keeps the layout it will restore. */
-    suspend fun arm(status: Status? = null): ArmReport {
+    /** Raises the status. The first call of a session reads and keeps the layout it will restore.
+     *  [afterArm] runs whenever it ends with the session armed, a throw midway included: a status
+     *  already up is only rechecked, never armed again, so the hook would otherwise never come. */
+    suspend fun arm(status: Status? = null): ArmReport = try {
+        raise(status)
+    } finally {
+        if (armed) afterArm()
+    }
+
+    private suspend fun raise(status: Status?): ArmReport {
         val s = status ?: readStatus()
         if (!armed) {
             // A layout kept by a session that never reached its disarm (process killed at ignition
@@ -167,7 +175,6 @@ class HudArming(
         val canNaviRc = helper.writeStatus(CAN_NAVI.first, CAN_NAVI.second, 1)
         val isaRc = helper.writeStatus(ISA.first, ISA.second, 1)
         val rb = read(NAVI, SCREEN, CAN_NAVI, ISA)
-        afterArm()
         return ArmReport(via, naviRc, !layout, screenRc, canNaviRc, isaRc, rb[0], rb[1], rb[2], rb[3])
     }
 
