@@ -1,8 +1,8 @@
 package com.bydmate.app.media
 
 /**
- * Pure half of [ClusterMusicBridge]: which session feeds the instrument's music card, what the
- * card should say, and how the text goes on the wire. JVM-tested; nothing here touches Android.
+ * Pure half of [ClusterMusicBridge]: who owns playback right now, what the card should say, and
+ * how the text goes on the wire. JVM-tested; nothing here touches Android.
  *
  * Background: the stock `com.byd.mediacontroller` fills the card (INSTRUMENT_MUSIC_INFO_SET and
  * friends) only for a hard-coded whitelist of Chinese players, BYD's own player and Bluetooth.
@@ -59,27 +59,40 @@ object ClusterMusicCard {
         fun steady(): Card = copy(progress = null, positionSec = null)
     }
 
-    /** Hours, minutes, seconds, as the stock sendAudioTime splits them. */
-    fun hms(totalSec: Int): Triple<Int, Int, Int> = Triple(totalSec / 3600, totalSec / 60 % 60, totalSec % 60)
+    /** What the bridge should do with the card this tick. */
+    sealed interface Target {
+        /** A source package owns playback: the card should say this. */
+        data class Show(val card: Card) : Target
+
+        /** Another app is playing: the stock controller owns the card, hands off. */
+        data class OtherPlaying(val packageName: String) : Target
+
+        /** Nobody is playing and no source session has a track: nothing of ours belongs there. */
+        data object Idle : Target
+    }
 
     /**
-     * The card for [sessions] (system priority order), or null when no source session has a
-     * track to show. A playing source session wins over a paused one; stopped or untitled
-     * sessions never produce a card.
+     * Picks the playback owner across *all* sessions ([sessions] in the system's priority order):
+     * the first one that is playing or buffering, else the first paused one. A source package
+     * becomes [Target.Show]; any other playing app is [Target.OtherPlaying], so a paused Yandex
+     * session never outranks the stock player or Bluetooth that is actually playing. A paused
+     * non-source owner, a stopped source or an untitled one is [Target.Idle].
      */
-    fun pick(sessions: List<SessionSnapshot>, sources: List<String> = SOURCE_PACKAGES): Card? {
-        val candidates = sessions.filter { it.packageName in sources && !it.title.isNullOrBlank() }
-        val playing = candidates.firstOrNull { it.playbackState == PB_PLAYING || it.playbackState == PB_BUFFERING }
-        val chosen = playing ?: candidates.firstOrNull { it.playbackState == PB_PAUSED } ?: return null
-        val state = if (chosen === playing) MUSIC_PLAYING else MUSIC_PAUSED
-        val duration = chosen.durationMs?.takeIf { it > 0 }
-        return Card(
-            title = chosen.title!!.trim(),
-            artist = chosen.artist?.trim().orEmpty(),
-            musicState = state,
-            progress = progressPercent(chosen.positionMs, duration),
-            positionSec = chosen.positionMs?.let { (it.coerceIn(0, duration ?: it) / 1000).toInt() },
-            durationSec = duration?.let { (it / 1000).toInt() },
+    fun decide(sessions: List<SessionSnapshot>, sources: List<String> = SOURCE_PACKAGES): Target {
+        val playing = sessions.firstOrNull { it.playbackState == PB_PLAYING || it.playbackState == PB_BUFFERING }
+        if (playing != null && playing.packageName !in sources) return Target.OtherPlaying(playing.packageName)
+        val owner = playing ?: sessions.firstOrNull { it.playbackState == PB_PAUSED }
+        if (owner == null || owner.packageName !in sources || owner.title.isNullOrBlank()) return Target.Idle
+        val duration = owner.durationMs?.takeIf { it > 0 }
+        return Target.Show(
+            Card(
+                title = owner.title.trim(),
+                artist = owner.artist?.trim().orEmpty(),
+                musicState = if (owner === playing) MUSIC_PLAYING else MUSIC_PAUSED,
+                progress = progressPercent(owner.positionMs, duration),
+                positionSec = owner.positionMs?.let { (it.coerceIn(0, duration ?: it) / 1000).toInt() },
+                durationSec = duration?.let { (it / 1000).toInt() },
+            )
         )
     }
 
@@ -88,6 +101,9 @@ object ClusterMusicCard {
         if (positionMs == null || durationMs == null || durationMs <= 0) return null
         return ((positionMs.coerceIn(0, durationMs) * 100.0 / durationMs) + 0.5).toInt()
     }
+
+    /** Hours, minutes, seconds, as the stock sendAudioTime splits them. */
+    fun hms(totalSec: Int): Triple<Int, Int, Int> = Triple(totalSec / 3600, totalSec / 60 % 60, totalSec % 60)
 
     /**
      * UTF-16LE without a BOM, cut to [MAX_TEXT_BYTES] without splitting a surrogate pair.

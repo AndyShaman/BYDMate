@@ -2,6 +2,7 @@ package com.bydmate.app.media
 
 import com.bydmate.app.media.ClusterMusicCard.Card
 import com.bydmate.app.media.ClusterMusicCard.SessionSnapshot
+import com.bydmate.app.media.ClusterMusicCard.Target
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -15,38 +16,70 @@ class ClusterMusicCardTest {
     private val playing = 3
     private val navi = "ru.yandex.yandexnavi"
 
-    @Test fun `no sessions means no card`() {
-        assertNull(ClusterMusicCard.pick(emptyList()))
+    private fun shown(sessions: List<SessionSnapshot>): Card? = (ClusterMusicCard.decide(sessions) as? Target.Show)?.card
+
+    @Test fun `no sessions means idle`() {
+        assertEquals(Target.Idle, ClusterMusicCard.decide(emptyList()))
     }
 
     @Test fun `a playing navigator session becomes a playing card`() {
-        val card = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, " Кино ", "Цой")))
+        val card = shown(listOf(SessionSnapshot(navi, playing, " Кино ", "Цой")))
         assertEquals(Card("Кино", "Цой", ClusterMusicCard.MUSIC_PLAYING), card)
     }
 
-    @Test fun `whitelisted players are left to the stock controller`() {
-        assertNull(ClusterMusicCard.pick(listOf(SessionSnapshot("com.byd.mediacenter", playing, "Song", "Artist"))))
+    @Test fun `a playing whitelisted player is handed off to the stock controller`() {
+        assertEquals(
+            Target.OtherPlaying("com.byd.mediacenter"),
+            ClusterMusicCard.decide(listOf(SessionSnapshot("com.byd.mediacenter", playing, "Song", "Artist"))),
+        )
     }
 
-    @Test fun `playing source wins over an earlier paused one`() {
-        val card = ClusterMusicCard.pick(
+    // Review point 2: a paused Yandex session must not outrank a player that is actually playing.
+    @Test fun `paused yandex loses to the stock player that is playing`() {
+        val target = ClusterMusicCard.decide(
             listOf(
-                SessionSnapshot("ru.yandex.music", paused, "Old", "A"),
+                SessionSnapshot(navi, paused, "Old", "A"),
+                SessionSnapshot("com.byd.mediacenter", playing, "Song", "B"),
+            )
+        )
+        assertEquals(Target.OtherPlaying("com.byd.mediacenter"), target)
+    }
+
+    @Test fun `paused yandex loses to bluetooth that is playing`() {
+        val target = ClusterMusicCard.decide(
+            listOf(SessionSnapshot(navi, paused, "Old", "A"), SessionSnapshot("com.android.bluetooth", playing, null, null))
+        )
+        assertEquals(Target.OtherPlaying("com.android.bluetooth"), target)
+    }
+
+    @Test fun `playing yandex wins over an earlier paused stock session`() {
+        val card = shown(
+            listOf(
+                SessionSnapshot("com.byd.mediacenter", paused, "No songs", "No artists"),
                 SessionSnapshot(navi, playing, "New", "B"),
             )
         )
         assertEquals("New", card?.title)
     }
 
-    @Test fun `paused session keeps its title with paused state`() {
-        val card = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, paused, "Song", null)))
+    @Test fun `paused yandex on top keeps its title with paused state`() {
+        val card = shown(
+            listOf(SessionSnapshot(navi, paused, "Song", null), SessionSnapshot("com.byd.mediacenter", paused, "No songs", null))
+        )
         assertEquals(Card("Song", "", ClusterMusicCard.MUSIC_PAUSED), card)
     }
 
-    @Test fun `stopped or untitled sessions produce nothing`() {
-        assertNull(ClusterMusicCard.pick(listOf(SessionSnapshot(navi, stopped, "Song", "A"))))
-        assertNull(ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "  ", "A"))))
-        assertNull(ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, null, "A"))))
+    @Test fun `a paused stock session on top with nothing playing is idle, not a hand-off`() {
+        val target = ClusterMusicCard.decide(
+            listOf(SessionSnapshot("com.byd.mediacenter", paused, "No songs", null), SessionSnapshot(navi, stopped, "Song", "A"))
+        )
+        assertEquals(Target.Idle, target)
+    }
+
+    @Test fun `stopped or untitled sessions are idle`() {
+        assertEquals(Target.Idle, ClusterMusicCard.decide(listOf(SessionSnapshot(navi, stopped, "Song", "A"))))
+        assertEquals(Target.Idle, ClusterMusicCard.decide(listOf(SessionSnapshot(navi, playing, "  ", "A"))))
+        assertEquals(Target.Idle, ClusterMusicCard.decide(listOf(SessionSnapshot(navi, playing, null, "A"))))
     }
 
     @Test fun `encode is utf-16le without bom`() {
@@ -81,13 +114,9 @@ class ClusterMusicCardTest {
         assertNull(ClusterMusicCard.progressPercent(null, 180_000))
     }
 
-    @Test fun `card carries progress from the chosen session`() {
-        val card = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 45_000, 180_000)))
-        assertEquals(25, card?.progress)
-    }
-
-    @Test fun `card carries played and total seconds`() {
-        val card = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 95_400, 214_000)))
+    @Test fun `card carries progress and times from the owner`() {
+        val card = shown(listOf(SessionSnapshot(navi, playing, "Song", "A", 95_400, 214_000)))
+        assertEquals(45, card?.progress)
         assertEquals(95, card?.positionSec)
         assertEquals(214, card?.durationSec)
     }
@@ -98,8 +127,8 @@ class ClusterMusicCardTest {
     }
 
     @Test fun `ticking position does not count as a new track`() {
-        val a = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 10_000, 214_000)))!!
-        val b = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 12_000, 214_000)))!!
+        val a = shown(listOf(SessionSnapshot(navi, playing, "Song", "A", 10_000, 214_000)))!!
+        val b = shown(listOf(SessionSnapshot(navi, playing, "Song", "A", 12_000, 214_000)))!!
         assertEquals(a.steady(), b.steady())
     }
 }

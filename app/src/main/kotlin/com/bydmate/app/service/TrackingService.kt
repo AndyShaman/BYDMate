@@ -836,7 +836,7 @@ class TrackingService : Service(), LocationListener {
         // threshold, and only when the feature is switched on (default off).
         blindSpotController.start(serviceScope)
         // Cluster music card: mirrors Yandex music the stock controller leaves blank.
-        clusterMusicBridge.start(serviceScope)
+        clusterMusicBridge.start(serviceScope) { reason -> notificationListenerGrant.ensure(reason) }
         instance = this
         _isRunning.value = true
         adbVerdictMonitor.onServiceStarted()
