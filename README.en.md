@@ -198,6 +198,17 @@ Rules created in earlier versions keep working and open for editing as before, n
 - **OR**: any one condition is enough
 - **Park only**: the rule fires only when the car is in Park
 
+### Checking a Condition Every Time the Car Is Turned On
+
+A rule fires at the moment a value crosses its threshold while the app is running. If you get into a car where the cabin is already at 32 degrees and the threshold is 29, nothing crossed the threshold, so the rule does not fire. To have the condition checked every time the car is turned on, add a second rule next to the first one:
+
+1. First condition: **"BYDMate startup"**.
+2. Second condition: **"Cabin Temp"** above 29.
+3. Choose **"All conditions"**.
+4. Same actions as in the first rule.
+
+Do not choose **"Any condition"**: the rule would then fire on every startup, whatever the temperature.
+
 ### Share and Import an Automation
 
 A finished rule can be handed to another owner, and someone else's rule can be added to yours.
