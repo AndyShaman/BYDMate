@@ -1,0 +1,47 @@
+# Song L, DiLink 5.0, BYDMate 3.19.2, user log 2026-09-29 (driver window lowers by itself at power-on,
+# a repeated "проветрить"/"половина" fails). Only the driver window lines are kept: our writes to the
+# percent fid 1276219408 and the CTRL fid 1125122104, the movement verdicts, and the automation
+# commands that caused them. The last percent command before this excerpt (17:48:36, "проветрить" = 10)
+# succeeded; the glass was then closed with the door button. At power-on the glass moved with no
+# write of ours:
+# 09-29 17:55:40.898 I/FidPush (23024): push fid=947912728 windowFL=2/0.0 applied
+# 09-29 17:56:19.042 I/FidPush (23024): push fid=947912728 windowFL=3/0.0 applied
+09-29 17:56:26.686 I/HelperClient(23024): write dev=1001 fid=1276219408 value=10 status=1 accepted=true
+09-29 17:56:26.691 I/VoiceController(23024): heard="проветрить" route=automation cmd=Проветрить reason=-
+09-29 17:56:27.544 I/VehicleApiImpl(23024): window nudge: window_driver_pos 10 -> 11 reason=same target ignored (pane did not move)
+09-29 17:56:27.570 I/HelperClient(23024): write dev=1001 fid=1276219408 value=11 status=1 accepted=true
+09-29 17:56:28.440 I/VehicleApiImpl(23024): window readback action=window_driver_pos dev=1001 fid=1276219408 value=11 before=0 after=0,0 verdict=не сдвинулось
+09-29 17:56:28.445 W/ActionDispatcher(23024): param '主驾通风' failed: window_driver_pos: окно водителя не сдвинулось с места, команда не сработала
+09-29 17:56:38.567 I/VoiceController(23024): heard="открыть" route=automation cmd=Открыть reason=-
+09-29 17:56:38.572 I/HelperClient(23024): write dev=1001 fid=1125122104 value=1 status=1 accepted=true
+09-29 17:56:39.425 I/VehicleApiImpl(23024): window readback action=window_driver_open dev=1001 fid=1125122104 value=1 before=0 after=1,9 verdict=moved
+09-29 17:57:13.412 I/VoiceController(23024): heard="половина" route=automation cmd=Половина reason=-
+09-29 17:57:13.417 I/HelperClient(23024): write dev=1001 fid=1276219408 value=50 status=1 accepted=true
+09-29 17:57:13.855 I/VehicleApiImpl(23024): window readback action=window_driver_pos dev=1001 fid=1276219408 value=50 before=97 after=94 verdict=moved
+09-29 17:57:19.553 I/VoiceController(23024): heard="проветрить" route=automation cmd=Проветрить reason=-
+09-29 17:57:19.571 I/HelperClient(23024): write dev=1001 fid=1276219408 value=10 status=1 accepted=true
+09-29 17:57:20.419 I/VehicleApiImpl(23024): window readback action=window_driver_pos dev=1001 fid=1276219408 value=10 before=49 after=48,39 verdict=moved
+09-29 17:57:24.251 I/VoiceController(23024): heard="половина" route=automation cmd=Половина reason=-
+09-29 17:57:24.270 I/HelperClient(23024): write dev=1001 fid=1276219408 value=50 status=1 accepted=true
+09-29 17:57:24.711 I/VehicleApiImpl(23024): window readback action=window_driver_pos dev=1001 fid=1276219408 value=50 before=9 after=12 verdict=moved
+09-29 17:57:39.325 I/HelperClient(23024): write dev=1001 fid=1125122104 value=2 status=1 accepted=true
+09-29 17:57:39.336 I/VoiceController(23024): heard="закрыть" route=automation cmd=Закрыть reason=-
+09-29 17:57:40.180 I/VehicleApiImpl(23024): window readback action=window_driver_close dev=1001 fid=1125122104 value=2 before=49 after=47,36 verdict=moved
+09-29 17:57:44.160 I/VoiceController(23024): heard="половина" route=automation cmd=Половина reason=-
+09-29 17:57:44.179 I/HelperClient(23024): write dev=1001 fid=1276219408 value=50 status=1 accepted=true
+09-29 17:57:45.047 I/VehicleApiImpl(23024): window nudge: window_driver_pos 50 -> 51 reason=same target ignored (pane did not move)
+09-29 17:57:45.090 I/HelperClient(23024): write dev=1001 fid=1276219408 value=51 status=1 accepted=true
+09-29 17:57:45.944 I/VehicleApiImpl(23024): window readback action=window_driver_pos dev=1001 fid=1276219408 value=51 before=0 after=0,0 verdict=не сдвинулось
+09-29 17:57:45.947 W/ActionDispatcher(23024): param '主驾半开' failed: window_driver_pos: окно водителя не сдвинулось с места, команда не сработала
+09-29 17:58:08.474 I/VoiceController(23024): heard="проветрить" route=automation cmd=Проветрить reason=-
+09-29 17:58:08.479 I/HelperClient(23024): write dev=1001 fid=1276219408 value=10 status=1 accepted=true
+09-29 17:58:09.328 I/VehicleApiImpl(23024): window readback action=window_driver_pos dev=1001 fid=1276219408 value=10 before=0 after=1,9 verdict=moved
+09-29 17:58:15.984 I/HelperClient(23024): write dev=1001 fid=1125122104 value=2 status=1 accepted=true
+09-29 17:58:15.993 I/VoiceController(23024): heard="закрыть" route=automation cmd=Закрыть reason=-
+09-29 17:58:16.824 I/VehicleApiImpl(23024): window readback action=window_driver_close dev=1001 fid=1125122104 value=2 before=9 after=8,1 verdict=moved
+09-29 17:58:23.718 I/VoiceController(23024): heard="проветрить" route=automation cmd=Проветрить reason=-
+09-29 17:58:23.725 I/HelperClient(23024): write dev=1001 fid=1276219408 value=10 status=1 accepted=true
+09-29 17:58:24.593 I/VehicleApiImpl(23024): window nudge: window_driver_pos 10 -> 11 reason=same target ignored (pane did not move)
+09-29 17:58:24.613 I/HelperClient(23024): write dev=1001 fid=1276219408 value=11 status=1 accepted=true
+09-29 17:58:25.463 I/VehicleApiImpl(23024): window readback action=window_driver_pos dev=1001 fid=1276219408 value=11 before=0 after=0,0 verdict=не сдвинулось
+09-29 17:58:25.469 W/ActionDispatcher(23024): param '主驾通风' failed: window_driver_pos: окно водителя не сдвинулось с места, команда не сработала

@@ -483,4 +483,48 @@ class WriteAllowlistTest {
         assertEquals(1125122076, al.find("passenger_seat_heat_fallback")!!.writeFid)
         assertEquals(1125122072, al.find("passenger_seat_vent_fallback")!!.writeFid)
     }
+
+    // ── Window target reset: 255 exists only as the release of a percent write ──
+    private val percentActions = listOf(
+        "window_driver_pos", "window_passenger_pos", "window_rear_left_pos", "window_rear_right_pos",
+    )
+
+    private fun productionWithAsset(): WriteAllowlist {
+        val root = generateSequence(File(".").canonicalFile) { it.parentFile }
+            .first { File(it, "app/src/main/assets/competitor-actions.json").exists() }
+        return WriteAllowlist.loadProduction { File(root, "app/src/main/assets/competitor-actions.json").readText() }
+    }
+
+    @Test fun `each window percent entry has a reset of 255 on its own fid`() {
+        val al = productionWithAsset()
+        for (name in percentActions) {
+            val entry = al.find(name)!!
+            val reset = WriteAllowlist.percentResetFor(entry)
+            assertNotNull("$name must have a reset", reset)
+            assertEquals(entry.dev, reset!!.dev)
+            assertEquals(entry.writeFid, reset.writeFid)
+            assertEquals(255, reset.valueMin)
+            assertEquals(255, reset.valueMax)
+        }
+    }
+
+    @Test fun `no other entry has a reset`() {
+        val al = productionWithAsset()
+        for (entry in al.allEntries().filter { it.actionName.lowercase() !in percentActions }) {
+            assertNull("${entry.actionName} must have no reset", WriteAllowlist.percentResetFor(entry))
+        }
+    }
+
+    @Test fun `255 is not writable on a window percent fid through any allowlist entry`() {
+        val al = productionWithAsset()
+        val percentFids = percentActions.map { al.find(it)!!.dev to al.find(it)!!.writeFid }.toSet()
+        for (entry in al.allEntries().filter { (it.dev to it.writeFid) in percentFids }) {
+            assertFalse("${entry.actionName} accepts 255", 255 in entry.valueMin..entry.valueMax)
+        }
+        for (name in percentActions) assertNull(al.find("${name}_reset"))
+    }
+
+    @Test fun `no translator command resolves to 255 on a window`() {
+        assertTrue(CommandTranslator.allResolved().none { it.actionName.startsWith("window") && it.value == 255 })
+    }
 }

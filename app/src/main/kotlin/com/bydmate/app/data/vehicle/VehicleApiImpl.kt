@@ -10,6 +10,8 @@ import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -238,14 +240,21 @@ class VehicleApiImpl @Inject constructor(
 
         logAttempt(actionName, entry, value)
 
+        // A percent window write is a held request on the bus: once its transact is on the way,
+        // whatever it answers, the fid is released before anything else happens (see
+        // [releasePercentTarget]).
+        val reset = WriteAllowlist.percentResetFor(entry)
+        var sent = false
         val wrote: Boolean = try {
             if (windowCheck != null) {
                 // Bounded wait so the "before" sample usually precedes the write, but a hung
                 // read channel costs at most WINDOW_BEFORE_READ_BUDGET_MS.
                 withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowCheck.before.await() }
             }
+            sent = true
             helper.write(entry.dev, entry.writeFid, value)
         } catch (e: Exception) {
+            if (sent && reset != null) releasePercentTarget(reset, value)
             // Rethrow cancellation so callers outside the NonCancellable write unit
             // (status reads, channel resolution) can still be cancelled normally.
             if (e is CancellationException) throw e
@@ -256,6 +265,8 @@ class VehicleApiImpl @Inject constructor(
             maybeReportValidatedFailure(actionName, err, entry)
             return Result.failure(err)
         }
+
+        if (reset != null) releasePercentTarget(reset, value)
 
         if (!wrote) {
             windowCheck?.before?.cancel()
@@ -386,6 +397,40 @@ class VehicleApiImpl @Inject constructor(
         // Pair with the HelperClient "status=" line to tell a real action from a no-op.
         Log.i(TAG, "doWrite OK: action=$actionName dev=${entry.dev} fid=${entry.writeFid} value=$value readback=$readback validated=${entry.validated}")
         logWrite(actionName, entry.dev, entry.writeFid, value, readback?.toInt(), true, null, entry.validated)
+    }
+
+    /**
+     * Releases a window target-position fid after a percent write, exactly as BYD's own apps do:
+     * the percent, [PERCENT_RESET_DELAY_MS], then 255 "no request" on the same fid (autovoice
+     * CarWindowApiImpl, BydMyCar). Left at the percent, the fid keeps requesting it: the unit
+     * ignores a repeated identical percent, and a Song L drives the glass to it again when the
+     * car wakes (user log 2026-09-29). Runs for every percent transact that was sent, whatever it
+     * answered and whether or not the glass moved, inside the write so the next write to the fid
+     * always comes after it; NonCancellable so a cancelled command still leaves 255 behind. A
+     * reset that is not accepted is tried once more, then logged as left undone.
+     */
+    private suspend fun releasePercentTarget(reset: WriteEntry, percent: Int) = withContext(NonCancellable) {
+        delay(PERCENT_RESET_DELAY_MS)
+        val window = WindowPane.of(reset.actionName).name.lowercase()
+        for (attempt in 1..PERCENT_RESET_ATTEMPTS) {
+            val status: Int? = try {
+                helper.writeStatus(reset.dev, reset.writeFid, reset.valueMin)
+            } catch (e: Exception) {
+                Log.w(TAG, "window target reset: ${reset.actionName} threw ${e.javaClass.simpleName}: ${e.message}")
+                null
+            }
+            val ok = status != null && HelperClientImpl.writeAccepted(status)
+            val rc = status?.toString() ?: "none"
+            Log.i(TAG, "window target reset: window=$window dev=${reset.dev} fid=${reset.writeFid} " +
+                "value=${reset.valueMin} after percent=$percent attempt=$attempt rc=$rc accepted=$ok")
+            Trace.event(TraceArea.CAR, "window-reset", "window" to window, "fid" to reset.writeFid,
+                "after" to percent, "attempt" to attempt, "rc" to rc)
+            logWrite(reset.actionName, reset.dev, reset.writeFid, reset.valueMin, null, ok,
+                if (ok) null else "reset_rc_$rc", reset.validated)
+            if (ok) return@withContext
+        }
+        Log.w(TAG, "window target reset FAILED: window=$window fid=${reset.writeFid} " +
+            "percent=$percent may stay held on the bus")
     }
 
     // ─── Window readback ───────────────────────────────────────────────────────
@@ -547,7 +592,7 @@ class VehicleApiImpl @Inject constructor(
      * Leopard 3 the same day: writing the pane's CURRENT position is accepted without moving the
      * glass and replaces the stored target, after which the requested value moves it. So the
      * pane's position is read fresh, written as the target, and the ORIGINAL [requested] value
-     * is sent [COMPOSITE_WRITE_STAGGER_MS] later; only THAT write is judged.
+     * is sent [COMPOSITE_WRITE_STAGGER_MS] after the anchor's own reset; only THAT write is judged.
      *
      * Nothing is sent when the position cannot be read or already equals the requested value.
      * One anchor per pane per command, never followed by another nudge or anchor. Returns the
@@ -883,6 +928,10 @@ class VehicleApiImpl @Inject constructor(
         private const val TAG = "VehicleApiImpl"
         private const val VALIDATED_FAILURE_TAG = "VehicleApi.ValidatedFailure"
         private const val COMPOSITE_WRITE_STAGGER_MS = 150L
+        /** Percent write → 255 reset on the same fid, the stock delay (CarWindowApiImpl delay(300)). */
+        private const val PERCENT_RESET_DELAY_MS = 300L
+        /** The reset and one retry. */
+        private const val PERCENT_RESET_ATTEMPTS = 2
         private val STEERING_HEAT_ACTIONS = setOf("steering_heat_on", "steering_heat_off")
 
         // ── Window readback (write verdict) ────────────────────────────────────
