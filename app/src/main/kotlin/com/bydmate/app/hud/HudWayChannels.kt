@@ -256,8 +256,8 @@ class HudWayChannels(
         var stopped: Map<Long, Int> = emptyMap()
         val bridge = gateway
         if (bridge != null && lmcnServices.isNotEmpty()) {
-            HudLauncherMapCnFrames.stop(routeId, nowMs()).forEach { e -> countFire(e.topic, fire(bridge, e)) }
-            stopped = stopServices(bridge, lmcnServices.keys, prefs)
+            val off = HudLauncherMapCnFrames.stop(routeId, nowMs()).map { e -> fire(bridge, e).also { countFire(e.topic, it) } }
+            stopped = stopServices(bridge, lmcnServices.keys, prefs, off)
             lmcnServices.clear()
         }
         if (routeOpen) logEnd(clear, stopped)
@@ -325,8 +325,8 @@ class HudWayChannels(
         internal fun cleared(sent: HudCanChannel.Sent): Boolean =
             listOf(sent.iconRc, sent.iconAheadRc, sent.distRc, sent.roadRc).all(::accepted)
 
-        /** Every stop answered: not unbound (-1), not a transact that threw (-2), not a call that
-         *  threw here (-3). Only then the family's leftover key goes, the HUD check's too. */
+        /** Every off event and stop answered: not unbound (-1), not a transact that threw (-2), not a
+         *  call that threw here (-3). Only then the family's leftover key goes, the HUD check's too. */
         internal fun stopsAnswered(rcs: Collection<Int>): Boolean = rcs.none { it in THREW..UNBOUND }
 
         /** CAN values a process death left: blanked and forgotten; kept when the car refused.
@@ -353,23 +353,29 @@ class HudWayChannels(
         ) {
             if (!prefs.contains(KEY_LMCN_LEFT)) return
             val routeId = prefs.getLong(KEY_LMCN_LEFT, 0L)
-            HudLauncherMapCnFrames.stop(routeId, nowMs).forEach { e ->
-                runCatching { gateway.fireEvent(e.topic, e.payload) }
+            val off = HudLauncherMapCnFrames.stop(routeId, nowMs).map { e ->
+                runCatching { gateway.fireEvent(e.topic, e.payload) }.getOrDefault(THREW)
             }
-            val stopped = stopServices(gateway, HudLauncherMapCnFrames.SERVICE_IDS, prefs)
+            val stopped = stopServices(gateway, HudLauncherMapCnFrames.SERVICE_IDS, prefs, off)
             log("hud way: leftover lmcn stop=${HudSomeIpBridge.describeServices(stopped)}")
             Trace.event(TraceArea.HUD, "way-leftover", "what" to "lmcn", "stopped" to okCount(stopped))
         }
 
-        /** Stops [ids]; the family's leftover key goes once every stop was answered ([stopsAnswered]). */
-        private fun stopServices(gateway: HudSomeIpBridge, ids: Collection<Long>, prefs: SharedPreferences): Map<Long, Int> {
+        /** Stops [ids]; the family's leftover key goes once its [off] events and every stop were
+         *  answered ([stopsAnswered]). */
+        private fun stopServices(
+            gateway: HudSomeIpBridge,
+            ids: Collection<Long>,
+            prefs: SharedPreferences,
+            off: List<Int>,
+        ): Map<Long, Int> {
             val stopped = LinkedHashMap<Long, Int>()
             ids.forEach { id ->
                 val rc = runCatching { gateway.stopService(id) }.getOrDefault(THREW)
                 stopped[id] = rc
                 Trace.event(TraceArea.HUD, "way-service", "op" to "stop", "id" to HudSomeIpBridge.hex(id), "rc" to rc)
             }
-            if (stopsAnswered(stopped.values)) prefs.edit().remove(KEY_LMCN_LEFT).apply()
+            if (stopsAnswered(off + stopped.values)) prefs.edit().remove(KEY_LMCN_LEFT).apply()
             return stopped
         }
 
