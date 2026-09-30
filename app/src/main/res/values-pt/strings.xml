@@ -877,7 +877,7 @@
     <string name="settings_fid_dump_button">Salvar catálogo de fids</string>
     <string name="settings_fid_dump_desc">Nomes e valores das constantes do SDK. Apenas identificadores técnicos: sem VIN, sem localização, sem dados pessoais</string>
     <string name="settings_hud_check_title">Teste do HUD</string>
-    <string name="settings_hud_check_desc">Um minuto e meio de indicações de teste no para-brisa. Primeiro ative a gravação de logs e filme o para-brisa. Carro parado, sem rota. No para-brisa aparecem, um após o outro, os textos de teste “BYDMATE 1”, “BYDMATE 2” e “BYDMATE 3”, depois uma seta para a esquerda com 444 m. Tudo some no fim da verificação</string>
+    <string name="settings_hud_check_desc">Um minuto e meio de indicações de teste no para-brisa. Carro parado, sem rota. Primeiro ative a gravação de logs. No para-brisa aparecem, um após o outro, os números 111, 222, 333 e 444. No fim o aplicativo pergunta o que você viu e escolhe o método sozinho. Tudo some no fim da verificação</string>
     <string name="settings_hud_check_button">Iniciar</string>
     <string name="settings_hud_check_preparing">Preparando o teste</string>
     <string name="settings_hud_check_step">Passo %1$d de %2$d, olhe para o para-brisa</string>
@@ -1402,11 +1402,23 @@
     <string name="settings_hud_status_on">Transmissão para o HUD ativa</string>
     <string name="settings_hud_status_bind_failed">Falha ao conectar ao barramento SOME/IP</string>
     <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
-    <string name="settings_hud_mode_title">Modo do HUD</string>
-    <string name="settings_hud_mode_1">Modo 1</string>
-    <string name="settings_hud_mode_2">Modo 2</string>
-    <string name="settings_hud_mode_1_desc">Modo 1. As indicações vão para o para-brisa, o aplicativo não mexe no painel de instrumentos.</string>
-    <string name="settings_hud_mode_2_desc">Modo 2. Durante a rota o carro entra no modo de navegação. Experimente se no modo 1 o para-brisa fica vazio. O painel mostrará uma seta, aplicativos e câmeras no painel podem não aparecer.</string>
+    <string name="settings_hud_mode_title">Método de exibição no para-brisa</string>
+    <string name="settings_hud_mode_1">Método 1</string>
+    <string name="settings_hud_mode_2">Método 2</string>
+    <string name="settings_hud_mode_1_desc">Método 1. As indicações vão para o para-brisa, o aplicativo não mexe no painel de instrumentos.</string>
+    <string name="settings_hud_mode_2_desc">Método 2. As indicações vão para o para-brisa e para o painel: lá aparece um cartão de navegação com a seta, os metros e a rua.</string>
+    <string name="settings_hud_mode_3">Método 3</string>
+    <string name="settings_hud_mode_3_desc">Método 3. Como o método 2, e por mais um caminho. Experimente se os dois primeiros não mostraram nada.</string>
+    <string name="settings_hud_mode_trial">teste</string>
+    <string name="settings_hud_mode_pick_hint">Não sabe qual escolher? Rode o “Teste do HUD”.</string>
+    <string name="settings_hud_answer_title">Qual número você viu no para-brisa?</string>
+    <string name="settings_hud_answer_text">O aplicativo escolhe o método sozinho. Se viu vários números, toque no menor.</string>
+    <string name="settings_hud_answer_none">Nada</string>
+    <string name="settings_hud_answer_chosen_title">Método %1$d escolhido</string>
+    <string name="settings_hud_answer_chosen_text">As indicações vão para o para-brisa por este método. Dá para mudar nas configurações do HUD.</string>
+    <string name="settings_hud_answer_nothing_title">O para-brisa não mostrou nada</string>
+    <string name="settings_hud_answer_nothing_text">Nenhum dos métodos funcionou no para-brisa deste carro. Grave um log e envie para nós, vamos analisar.</string>
+    <string name="settings_hud_answer_done">Pronto</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Pontos cegos</string>
     <string name="settings_blindspot_title">Câmera pela seta</string>

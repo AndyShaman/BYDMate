@@ -532,6 +532,84 @@ class HudCheckTest {
 
     private fun prefs() = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
 
+    // --- the question at the end ---
+
+    @Test fun `a check that ran to the end asks which number the glass showed`() = runTest {
+        val s = setup()
+        assertFalse(s.check.askAnswer.value)
+        s.check.run()
+        assertTrue(s.check.askAnswer.value)
+    }
+
+    @Test fun `a check without a gateway still asks`() = runTest {
+        val s = setup(gatewayPresent = false)
+        s.check.run()
+        assertTrue(s.check.askAnswer.value)
+    }
+
+    @Test fun `the number seen picks the way`() = runTest {
+        val s = setup()
+        listOf(111 to 1, 222 to 2, 333 to 2, 444 to 3).forEach { (seen, way) ->
+            s.check.run()
+            assertEquals(way, s.check.answer(seen))
+            assertEquals(way, s.controller.mode())
+            assertFalse(s.check.askAnswer.value)
+            assertTrue(trace.events().any { it.contains("probe-answer") && it.contains("seen=$seen") && it.contains("way=$way") })
+        }
+    }
+
+    @Test fun `nothing seen keeps the way and says so in the trace`() = runTest {
+        val s = setup()
+        s.controller.setMode(HudController.MODE_NAVI_STATUS)
+        s.check.run()
+        assertEquals(null, s.check.answer(null))
+        assertEquals(HudController.MODE_NAVI_STATUS, s.controller.mode())
+        assertFalse(s.check.askAnswer.value)
+        assertTrue(trace.events().any { it.contains("probe-answer") && it.contains("seen=none") && it.contains("way=2") })
+    }
+
+    @Test fun `a refused check does not ask`() = runTest {
+        val s = setup(speed = 6)
+        s.check.run()
+        assertFalse(s.check.askAnswer.value)
+    }
+
+    @Test fun `a cancelled check does not ask`() = runTest {
+        val s = setup()
+        val job = launch { s.check.run() }
+        advanceTimeBy(70_000)   // inside step 4
+        job.cancel()
+        job.join()
+        assertEquals(HudCheck.State.Done, s.check.state.value)
+        assertFalse(s.check.askAnswer.value)
+    }
+
+    @Test fun `a check a route or moving off ended does not ask`() = runTest {
+        val route = setup()
+        routeStartsAt(25_000, route)
+        route.check.run()
+        assertFalse(route.check.askAnswer.value)
+        val moving = setup()
+        moving.check.speedKmh = { if (testScheduler.currentTime >= 30_000) 20 else 0 }
+        moving.check.run()
+        assertFalse(moving.check.askAnswer.value)
+    }
+
+    @Test fun `a check whose step threw does not ask`() = runTest {
+        val s = setup(car = FakeCar().apply { bufferFailsOn = "BYDMATE 3" })
+        s.check.run()
+        assertFalse(s.check.askAnswer.value)
+    }
+
+    @Test fun `a new check drops an unanswered question`() = runTest {
+        val s = setup()
+        s.check.run()
+        assertTrue(s.check.askAnswer.value)
+        s.check.speedKmh = { 6 }
+        s.check.run()
+        assertFalse(s.check.askAnswer.value)
+    }
+
     // --- refusals ---
 
     @Test fun `a refused check starts no service`() = runTest {

@@ -84,6 +84,11 @@ class HudCheck @Inject constructor(
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
 
+    /** A check that ran through its steps asks which number the glass showed ([answer]); a refused,
+     *  cancelled or broken-off one does not. */
+    private val _askAnswer = MutableStateFlow(false)
+    val askAnswer: StateFlow<Boolean> = _askAnswer.asStateFlow()
+
     internal var scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     internal var stepMs = STEP_MS
     internal var bridgeFactory: (Context) -> HudSomeIpBridge = { HudSomeIpBridge(it) }
@@ -123,6 +128,7 @@ class HudCheck @Inject constructor(
     }
 
     internal suspend fun run() {
+        _askAnswer.value = false
         _state.value = State.Preparing
         refusal()?.let { reason ->
             log("hudprobe: refused reason=${reason.name.lowercase()}")
@@ -134,8 +140,9 @@ class HudCheck @Inject constructor(
         val run = Run()
         var routeStep: Int? = null
         var movingStep: Int? = null
+        var completed = false
         try {
-            runCatching { steps(run) }.onFailure {
+            runCatching { steps(run); completed = true }.onFailure {
                 when (it) {
                     is CancellationException -> throw it
                     is RouteStartedException -> routeStep = it.step
@@ -146,6 +153,26 @@ class HudCheck @Inject constructor(
         } finally {
             withContext(NonCancellable) { restore(run, routeStep, movingStep) }
         }
+        _askAnswer.value = completed && _state.value == State.Done
+    }
+
+    /**
+     * The answer to the check's question: the smallest number [seen] on the glass (null = none).
+     * 111 is way 1, 222 and 333 way 2, 444 way 3; nothing seen keeps the way. Returns the way chosen.
+     */
+    fun answer(seen: Int?): Int? {
+        _askAnswer.value = false
+        val way = seen?.let(::wayFor)
+        way?.let(hudController::setMode)
+        val now = way ?: hudController.mode()
+        log("hudprobe: answer seen=${seen ?: "none"} way=$now")
+        Trace.event(TraceArea.HUD, "probe-answer", "seen" to (seen?.toString() ?: "none"), "way" to now)
+        return way
+    }
+
+    /** The question closed without an answer: nothing changes. */
+    fun dismissAnswer() {
+        _askAnswer.value = false
     }
 
     /** Looked at before anything goes out, at least once a second through the steps. */
@@ -537,5 +564,17 @@ class HudCheck @Inject constructor(
         private const val DEFERRED_RETRY_MS = 60_000L
         /** SET_HUD_CONFIG: 1 = W-HUD, 2 = AR-HUD (carsetting HudFuncVisibleUtils). */
         val HUD_TYPE = 1023 to 951058453
+
+        /** The numbers the question offers, smallest first. */
+        val MARKERS = listOf(MARKER_1, MARKER_2, MARKER_3, MARKER_4)
+
+        /** The way whose channel drew [marker]: step 1 is way 1, steps 2 and 3 (the raised status
+         *  with the frames, then the CAN fields) way 2, step 4 way 3. */
+        fun wayFor(marker: Int): Int = when (marker) {
+            MARKER_1 -> HudController.MODE_GLASS_ONLY
+            MARKER_2, MARKER_3 -> HudController.MODE_NAVI_STATUS
+            MARKER_4 -> HudController.MODE_LMCN
+            else -> throw IllegalArgumentException("not a check marker: $marker")
+        }
     }
 }

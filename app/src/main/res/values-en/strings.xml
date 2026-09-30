@@ -884,7 +884,7 @@
     <string name="settings_fid_dump_button">Save fid catalog</string>
     <string name="settings_fid_dump_desc">SDK constant names and values. Technical identifiers only: no VIN, no location, no personal data</string>
     <string name="settings_hud_check_title">HUD check</string>
-    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. Start log recording first and film the glass. The car stands still, no route needed. The glass shows test labels “BYDMATE 1”, “BYDMATE 2”, “BYDMATE 3” one after another, then a left arrow with 444 m. All of it goes away when the check ends</string>
+    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. The car stands still, no route needed. Start log recording first. The glass shows the numbers 111, 222, 333 and 444 one after another. At the end the app asks what you saw and picks the method itself. All of it goes away when the check ends</string>
     <string name="settings_hud_check_button">Start</string>
     <string name="settings_hud_check_preparing">Preparing the check</string>
     <string name="settings_hud_check_step">Step %1$d of %2$d, watch the glass</string>
@@ -1405,11 +1405,23 @@
     <string name="settings_hud_status_on">Streaming to the HUD</string>
     <string name="settings_hud_status_bind_failed">Could not connect to the SOME/IP bus</string>
     <string name="settings_hud_hint">Requires a trim with the head-up display. Data comes from the Yandex Navigator window</string>
-    <string name="settings_hud_mode_title">HUD mode</string>
-    <string name="settings_hud_mode_1">Mode 1</string>
-    <string name="settings_hud_mode_2">Mode 2</string>
-    <string name="settings_hud_mode_1_desc">Mode 1. Hints go to the glass, the app leaves the instrument cluster alone.</string>
-    <string name="settings_hud_mode_2_desc">Mode 2. During a route the car switches to navigation mode. Try it if the glass stays blank in mode 1. The instrument cluster shows an arrow, apps and cameras on the cluster may not be shown.</string>
+    <string name="settings_hud_mode_title">Glass output method</string>
+    <string name="settings_hud_mode_1">Method 1</string>
+    <string name="settings_hud_mode_2">Method 2</string>
+    <string name="settings_hud_mode_1_desc">Method 1. Hints go to the glass, the app leaves the instrument cluster alone.</string>
+    <string name="settings_hud_mode_2_desc">Method 2. Hints go to the glass and to the instrument cluster: a navigation card with the arrow, metres and street appears there.</string>
+    <string name="settings_hud_mode_3">Method 3</string>
+    <string name="settings_hud_mode_3_desc">Method 3. Like method 2, plus one more path. Try it if the first two showed nothing.</string>
+    <string name="settings_hud_mode_trial">trial</string>
+    <string name="settings_hud_mode_pick_hint">Not sure which one? Run the “HUD check”.</string>
+    <string name="settings_hud_answer_title">Which number did you see on the glass?</string>
+    <string name="settings_hud_answer_text">The app picks the method itself. If you saw several numbers, tap the smallest one.</string>
+    <string name="settings_hud_answer_none">Nothing</string>
+    <string name="settings_hud_answer_chosen_title">Method %1$d selected</string>
+    <string name="settings_hud_answer_chosen_text">Hints will go to the glass this way. You can change it in the HUD settings.</string>
+    <string name="settings_hud_answer_nothing_title">The glass showed nothing</string>
+    <string name="settings_hud_answer_nothing_text">None of the methods worked on this car\'s glass. Record a log and send it to us, we will look into it.</string>
+    <string name="settings_hud_answer_done">Done</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Blind spots</string>
     <string name="settings_blindspot_title">Camera on turn signal</string>

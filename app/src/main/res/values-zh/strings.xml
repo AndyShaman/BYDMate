@@ -953,7 +953,7 @@
     <string name="settings_fid_dump_button">保存 fid 目录</string>
     <string name="settings_fid_dump_desc">SDK 常量的名称和数值。仅技术标识符：不含 VIN，不含定位，不含个人数据</string>
     <string name="settings_hud_check_title">HUD 检测</string>
-    <string name="settings_hud_check_desc">挡风玻璃上显示约一分半钟的测试提示。请先开启日志录制，并用视频拍下挡风玻璃。车辆静止，无需导航路线。挡风玻璃上会依次出现测试文字“BYDMATE 1”“BYDMATE 2”“BYDMATE 3”，然后是向左箭头和 444 米，检查结束后会全部消失</string>
+    <string name="settings_hud_check_desc">挡风玻璃上显示约一分半钟的测试提示。车辆静止，无需导航路线。请先开启日志录制。挡风玻璃上会依次出现数字 111、222、333 和 444。结束时应用会询问您看到了什么，并自动选择方式。检查结束后会全部消失</string>
     <string name="settings_hud_check_button">开始</string>
     <string name="settings_hud_check_preparing">正在准备检测</string>
     <string name="settings_hud_check_step">第 %1$d 步，共 %2$d 步，请看挡风玻璃</string>
@@ -1520,11 +1520,23 @@
     <string name="settings_hud_status_on">正在向 HUD 传输</string>
     <string name="settings_hud_status_bind_failed">无法连接 SOME/IP 总线</string>
     <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口</string>
-    <string name="settings_hud_mode_title">HUD 模式</string>
-    <string name="settings_hud_mode_1">模式 1</string>
-    <string name="settings_hud_mode_2">模式 2</string>
-    <string name="settings_hud_mode_1_desc">模式 1：提示显示在挡风玻璃上，应用不改动仪表盘。</string>
-    <string name="settings_hud_mode_2_desc">模式 2：导航期间车辆进入导航模式。如果模式 1 下挡风玻璃上没有显示，请尝试此模式。仪表盘上会出现箭头，仪表盘上的应用和摄像头画面可能无法显示。</string>
+    <string name="settings_hud_mode_title">挡风玻璃显示方式</string>
+    <string name="settings_hud_mode_1">方式 1</string>
+    <string name="settings_hud_mode_2">方式 2</string>
+    <string name="settings_hud_mode_1_desc">方式 1：提示显示在挡风玻璃上，应用不改动仪表盘。</string>
+    <string name="settings_hud_mode_2_desc">方式 2：提示同时显示在挡风玻璃和仪表盘上，仪表盘会出现带箭头、距离和街道名的导航卡片。</string>
+    <string name="settings_hud_mode_3">方式 3</string>
+    <string name="settings_hud_mode_3_desc">方式 3：与方式 2 相同，并多走一条通道。如果前两种都没有显示，请尝试此方式。</string>
+    <string name="settings_hud_mode_trial">试用</string>
+    <string name="settings_hud_mode_pick_hint">不确定选哪个？请运行“HUD 检测”。</string>
+    <string name="settings_hud_answer_title">您在挡风玻璃上看到了哪个数字？</string>
+    <string name="settings_hud_answer_text">应用会自动选择方式。如果看到了多个数字，请点最小的那个。</string>
+    <string name="settings_hud_answer_none">都没有</string>
+    <string name="settings_hud_answer_chosen_title">已选择方式 %1$d</string>
+    <string name="settings_hud_answer_chosen_text">提示将通过此方式显示在挡风玻璃上。可在 HUD 设置中更改。</string>
+    <string name="settings_hud_answer_nothing_title">挡风玻璃上没有显示</string>
+    <string name="settings_hud_answer_nothing_text">所有方式在这辆车的挡风玻璃上都没有生效。请录制日志并发送给我们，我们会处理。</string>
+    <string name="settings_hud_answer_done">完成</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">盲区</string>
     <string name="settings_blindspot_title">转向灯触发摄像头</string>
