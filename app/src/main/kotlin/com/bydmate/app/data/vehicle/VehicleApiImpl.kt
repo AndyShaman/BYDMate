@@ -22,8 +22,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -68,6 +70,10 @@ class VehicleApiImpl @Inject constructor(
     // default here) so tests can swap in a deterministic scope (e.g. Dispatchers.Unconfined)
     // instead of racing the real Dispatchers.IO scheduler.
     internal var readbackScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // One lock per window percent fid: a percent write and its 255 reset go out as one unit
+    // (see doWrite). Other fids never wait on it.
+    private val percentLocks = ConcurrentHashMap<Int, Mutex>()
 
     // Liveness + snapshots — passthroughs.
     override suspend fun isAvailable(): Boolean = autoservice.isAvailable()
@@ -242,31 +248,38 @@ class VehicleApiImpl @Inject constructor(
 
         // A percent window write is a held request on the bus: once its transact is on the way,
         // whatever it answers, the fid is released before anything else happens (see
-        // [releasePercentTarget]).
+        // [releasePercentTarget]). The pair runs under the fid's own lock, so another command to
+        // the same window cannot land its percent between them and have it reset by ours.
         val reset = WriteAllowlist.percentResetFor(entry)
+        val lock = reset?.let { percentLocks.computeIfAbsent(it.writeFid) { Mutex() } }
+        lock?.lock()
         var sent = false
-        val wrote: Boolean = try {
-            if (windowCheck != null) {
-                // Bounded wait so the "before" sample usually precedes the write, but a hung
-                // read channel costs at most WINDOW_BEFORE_READ_BUDGET_MS.
-                withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowCheck.before.await() }
+        var wrote = false
+        try {
+            wrote = try {
+                if (windowCheck != null) {
+                    // Bounded wait so the "before" sample usually precedes the write, but a hung
+                    // read channel costs at most WINDOW_BEFORE_READ_BUDGET_MS.
+                    withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowCheck.before.await() }
+                }
+                sent = true
+                helper.write(entry.dev, entry.writeFid, value)
+            } catch (e: Exception) {
+                if (sent && reset != null) releasePercentTarget(reset, value)
+                // Rethrow cancellation so callers outside the NonCancellable write unit
+                // (status reads, channel resolution) can still be cancelled normally.
+                if (e is CancellationException) throw e
+                Log.w(TAG, "doWrite: action=$actionName helper.write threw: ${e.message}")
+                windowCheck?.before?.cancel()
+                logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
+                val err = VehicleWriteError.HelperUnreachable(actionName, e.message ?: "io error")
+                maybeReportValidatedFailure(actionName, err, entry)
+                return Result.failure(err)
             }
-            sent = true
-            helper.write(entry.dev, entry.writeFid, value)
-        } catch (e: Exception) {
-            if (sent && reset != null) releasePercentTarget(reset, value)
-            // Rethrow cancellation so callers outside the NonCancellable write unit
-            // (status reads, channel resolution) can still be cancelled normally.
-            if (e is CancellationException) throw e
-            Log.w(TAG, "doWrite: action=$actionName helper.write threw: ${e.message}")
-            windowCheck?.before?.cancel()
-            logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
-            val err = VehicleWriteError.HelperUnreachable(actionName, e.message ?: "io error")
-            maybeReportValidatedFailure(actionName, err, entry)
-            return Result.failure(err)
+            if (reset != null) releasePercentTarget(reset, value)
+        } finally {
+            lock?.unlock()
         }
-
-        if (reset != null) releasePercentTarget(reset, value)
 
         if (!wrote) {
             windowCheck?.before?.cancel()
@@ -405,8 +418,8 @@ class VehicleApiImpl @Inject constructor(
      * CarWindowApiImpl, BydMyCar). Left at the percent, the fid keeps requesting it: the unit
      * ignores a repeated identical percent, and a Song L drives the glass to it again when the
      * car wakes (user log 2026-09-29). Runs for every percent transact that was sent, whatever it
-     * answered and whether or not the glass moved, inside the write so the next write to the fid
-     * always comes after it; NonCancellable so a cancelled command still leaves 255 behind. A
+     * answered and whether or not the glass moved, under the fid's lock in [doWrite] so the next
+     * write to the fid always comes after it; NonCancellable so a cancelled command still leaves 255 behind. A
      * reset that is not accepted is tried once more, then logged as left undone.
      */
     private suspend fun releasePercentTarget(reset: WriteEntry, percent: Int) = withContext(NonCancellable) {
