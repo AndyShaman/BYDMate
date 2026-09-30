@@ -33,6 +33,9 @@ import javax.inject.Singleton
  * Checked on a Sealion 07 (DiLink 5.0): source 26 renders the text, the "armrest screen" singer
  * fid is the card's second line, long titles scroll, and the stock controller leaves the card
  * alone on a track change while focus stays with the same app, so every change is ours to push.
+ * The progress bar follows INSTRUMENT_MUSIC_PLAYBACK_PROGRESS_SET. Cover art is out of reach: the
+ * stock sender hands it to `content://com.byd.mediacenter.provider/info`, whose read and write
+ * permissions are signature-level, and the shell uid is refused.
  */
 @Singleton
 class ClusterMusicBridge @Inject constructor(
@@ -43,6 +46,7 @@ class ClusterMusicBridge @Inject constructor(
     private var job: Job? = null
     private var lastCard: Card? = null
     private var lastWriteAt = 0L
+    private var lastProgress: Int? = null
 
     fun start(scope: CoroutineScope) {
         job?.cancel()
@@ -69,33 +73,49 @@ class ClusterMusicBridge @Inject constructor(
         val now = SystemClock.elapsedRealtime()
         when {
             card == null -> if (lastCard != null) clear()
-            card != lastCard || now - lastWriteAt >= REASSERT_MS -> write(card, now)
+            card.withoutProgress() != lastCard?.withoutProgress() || now - lastWriteAt >= REASSERT_MS -> write(card, now)
+        }
+        if (card?.progress != null && card.progress != lastProgress) {
+            helper.writeStatus(DEV_INSTRUMENT, FID_MUSIC_PROGRESS, card.progress)
+            lastProgress = card.progress
         }
     }
 
     private fun readSessions(): List<ClusterMusicCard.SessionSnapshot> = runCatching {
         val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+        val now = SystemClock.elapsedRealtime()
         msm.getActiveSessions(ComponentName(context, MediaSessionListenerService::class.java)).map {
             val md = it.metadata
+            val pb = it.playbackState
             ClusterMusicCard.SessionSnapshot(
                 packageName = it.packageName,
-                playbackState = it.playbackState?.state,
+                playbackState = pb?.state,
                 title = md?.getString(MediaMetadata.METADATA_KEY_TITLE),
                 artist = md?.getString(MediaMetadata.METADATA_KEY_ARTIST)
                     ?: md?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST),
+                positionMs = pb?.let { st ->
+                    // PlaybackState.position is as of lastPositionUpdateTime; advance it while playing.
+                    val moving = st.state == android.media.session.PlaybackState.STATE_PLAYING
+                    if (st.position < 0) null
+                    else st.position + if (moving) ((now - st.lastPositionUpdateTime) * st.playbackSpeed).toLong() else 0L
+                },
+                durationMs = md?.getLong(MediaMetadata.METADATA_KEY_DURATION),
             )
         }
     }.getOrElse { emptyList() }
 
+    private fun Card.withoutProgress() = copy(progress = null)
+
     private suspend fun write(card: Card, now: Long) {
-        val changed = card != lastCard
+        val changed = card.withoutProgress() != lastCard?.withoutProgress()
         val src = helper.writeStatus(DEV_INSTRUMENT, FID_MUSIC_SOURCE, ClusterMusicCard.SOURCE_THIRD_PARTY)
         val state = helper.writeStatus(DEV_INSTRUMENT, FID_MUSIC_STATE, card.musicState)
         val name = helper.writeBufferStatus(DEV_INSTRUMENT, FID_MUSIC_INFO, ClusterMusicCard.encode(card.title))
         val singer = helper.writeBufferStatus(DEV_AUDIO, FID_SINGER_NAME, ClusterMusicCard.encode(card.artist))
         if (changed) {
             Log.i(TAG, "card <- \"${card.title}\" / \"${card.artist}\" state=${card.musicState} " +
-                "rc src=$src state=$state name=$name singer=$singer")
+                "progress=${card.progress ?: "no duration"} rc src=$src state=$state name=$name singer=$singer")
+            if (card.progress == null) lastProgress = null
         }
         lastCard = card
         lastWriteAt = now
@@ -104,6 +124,8 @@ class ClusterMusicBridge @Inject constructor(
     /** What the stock sender sends when a source goes away: stopped, blank name and singer. */
     private suspend fun clear() {
         helper.writeStatus(DEV_INSTRUMENT, FID_MUSIC_STATE, ClusterMusicCard.MUSIC_STOPPED)
+        helper.writeStatus(DEV_INSTRUMENT, FID_MUSIC_PROGRESS, 0)
+        lastProgress = null
         helper.writeBufferStatus(DEV_INSTRUMENT, FID_MUSIC_INFO, ClusterMusicCard.encode(""))
         helper.writeBufferStatus(DEV_AUDIO, FID_SINGER_NAME, ClusterMusicCard.encode(""))
         Log.i(TAG, "card cleared")
@@ -120,6 +142,7 @@ class ClusterMusicBridge @Inject constructor(
         const val FID_MUSIC_INFO = 1140527112     // INSTRUMENT_MUSIC_INFO_SET (buffer)
         const val FID_MUSIC_STATE = 1138753546    // INSTRUMENT_MUSIC_STATE_SET
         const val FID_MUSIC_SOURCE = 871366704    // INSTRUMENT_MUSIC_SOURCE_SET, CAN-FD variant
+        const val FID_MUSIC_PROGRESS = 1138753552 // INSTRUMENT_MUSIC_PLAYBACK_PROGRESS_SET (0..100)
         const val FID_SINGER_NAME = 1140396040    // AUDIO_ARMREST_SCREEN_SINGER_NAME_SET (buffer)
     }
 }
