@@ -83,9 +83,11 @@ class HudWayChannels(
     private var lmcnRoute = false
 
     /** The loop: [active] = a route is guided and the status is up. While [held] (the HUD check
-     *  runs, its CAN and family markers are the same keys) it does nothing at all. */
-    fun start(scope: CoroutineScope, held: () -> Boolean = { false }, active: () -> Boolean) {
+     *  runs, its CAN and family markers are the same keys) it does nothing at all. [closed]: a way
+     *  change during the cleanup and disarm ([HudArming.closing]); it waits for the same next arm. */
+    fun start(scope: CoroutineScope, held: () -> Boolean = { false }, closed: Boolean = false, active: () -> Boolean) {
         if (job?.isActive == true) return
+        if (closed) closing = true
         job = scope.launch {
             while (isActive) {
                 if (runCatching { held() }.getOrDefault(true)) {

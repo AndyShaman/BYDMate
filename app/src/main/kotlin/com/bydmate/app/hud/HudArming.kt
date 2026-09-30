@@ -129,6 +129,11 @@ class HudArming(
      *  ([HudWayChannels.reopen]). */
     internal var afterArm: () -> Unit = {}
 
+    /** From the cleanup before a disarm ([beforeDisarm]) until the next arm: channels a way change
+     *  starts meanwhile wait for that arm too. */
+    @Volatile var closing: Boolean = false
+        private set
+
     @Volatile private var outdatedLogged = false
     private var job: Job? = null
     private var rearms = 0
@@ -148,7 +153,10 @@ class HudArming(
     suspend fun arm(status: Status? = null): ArmReport = try {
         raise(status)
     } finally {
-        if (armed) afterArm()
+        if (armed) {
+            closing = false
+            afterArm()
+        }
     }
 
     private suspend fun raise(status: Status?): ArmReport {
@@ -329,6 +337,7 @@ class HudArming(
 
     /** A failing hook never keeps the status up. */
     private suspend fun runBeforeDisarm() {
+        closing = true
         runCatching { beforeDisarm() }.onFailure {
             if (it is CancellationException) throw it
             Log.w(TAG, "hud disarm: cleanup before it failed: ${it.javaClass.simpleName}")
