@@ -210,6 +210,105 @@ class HudSomeIpBridgeTest {
         verify(exactly = 0) { stale.transact(any(), any(), any(), any()) }
     }
 
+    // --- service ids and the set of started services ---
+
+    @Test fun `service id of a topic follows OpenBYD's formula`() {
+        assertEquals(0xB010A00010000L, HudSomeIpBridge.serviceIdFor(0x4010a00018001L))
+        assertEquals(0xB820282020000L, HudSomeIpBridge.serviceIdFor(0x482028202800bL))
+        assertEquals(HudSomeIpBridge.SERVICE_ID_NAVI, HudSomeIpBridge.serviceIdFor(HudSomeIpBridge.TOPIC_NAVI))
+    }
+
+    /** A gateway binder that records every startService / stopService id it receives. */
+    private class RecordingBinder {
+        val starts = mutableListOf<Long>()
+        val stops = mutableListOf<Long>()
+        val binder: IBinder = mockk(relaxed = true)
+
+        init {
+            every { binder.transact(any(), any(), any(), any()) } answers {
+                val code = firstArg<Int>()
+                val data = secondArg<Parcel>()
+                data.setDataPosition(0)
+                data.enforceInterface(DESC)
+                when (code) {
+                    IBinder.FIRST_CALL_TRANSACTION + 3 -> starts += data.readLong()
+                    IBinder.FIRST_CALL_TRANSACTION + 4 -> stops += data.readLong()
+                }
+                true
+            }
+        }
+    }
+
+    /** A bridge bound to [first]; [conns] holds its connection for the reconnect. */
+    private suspend fun boundBridge(first: IBinder, conns: MutableList<ServiceConnection>): HudSomeIpBridge {
+        val ctx = RecordingContext(context, onBind = { conn ->
+            conns.add(conn)
+            conn.onServiceConnected(COMPONENT, first)
+        })
+        return HudSomeIpBridge(ctx).also { assertTrue(it.bind()) }
+    }
+
+    private fun reconnect(conn: ServiceConnection, to: IBinder) {
+        conn.onServiceDisconnected(COMPONENT)
+        conn.onServiceConnected(COMPONENT, to)
+    }
+
+    @Test fun `a reconnect reopens every started service and none of the stopped ones`() = runTest {
+        val conns = mutableListOf<ServiceConnection>()
+        val first = RecordingBinder()
+        val bridge = boundBridge(first.binder, conns)
+        bridge.startService(HudSomeIpBridge.SERVICE_ID_NAVI)
+        bridge.startService(0xB820282020000L)
+        bridge.startService(0xB000700070000L)
+        bridge.stopService(0xB820282020000L)
+        assertEquals(listOf(HudSomeIpBridge.SERVICE_ID_NAVI, 0xB820282020000L, 0xB000700070000L), first.starts)
+
+        val second = RecordingBinder()
+        reconnect(conns.single(), second.binder)
+        assertEquals(listOf(HudSomeIpBridge.SERVICE_ID_NAVI, 0xB000700070000L), second.starts)
+    }
+
+    @Test fun `with only the navigation service a reconnect reopens exactly it, as before`() = runTest {
+        val conns = mutableListOf<ServiceConnection>()
+        val bridge = boundBridge(RecordingBinder().binder, conns)
+        bridge.startService(HudSomeIpBridge.SERVICE_ID_NAVI)
+        val second = RecordingBinder()
+        reconnect(conns.single(), second.binder)
+        assertEquals(listOf(HudSomeIpBridge.SERVICE_ID_NAVI), second.starts)
+
+        bridge.stopService(HudSomeIpBridge.SERVICE_ID_NAVI)
+        val third = RecordingBinder()
+        reconnect(conns.single(), third.binder)
+        assertTrue(third.starts.isEmpty())
+    }
+
+    @Test fun `a service started while unbound is opened by the next connect`() = runTest {
+        val conns = mutableListOf<ServiceConnection>()
+        val bridge = boundBridge(RecordingBinder().binder, conns)
+        conns.single().onServiceDisconnected(COMPONENT)
+        assertEquals(-1, bridge.startService(0xB000d000d0000L))
+        val next = RecordingBinder()
+        conns.single().onServiceConnected(COMPONENT, next.binder)
+        assertEquals(listOf(0xB000d000d0000L), next.starts)
+    }
+
+    @Test fun `started services keep their start rc and fires are counted per topic and rc`() = runTest {
+        val conns = mutableListOf<ServiceConnection>()
+        val bridge = boundBridge(RecordingBinder().binder, conns)
+        bridge.startService(HudSomeIpBridge.SERVICE_ID_NAVI)
+        bridge.startService(0xB820282020000L)
+        bridge.fireEvent(HudSomeIpBridge.TOPIC_NAVI, byteArrayOf(1))
+        bridge.fireEvent(HudSomeIpBridge.TOPIC_NAVI, byteArrayOf(2))
+        bridge.fireEvent(0x482028202800bL, byteArrayOf(3))
+        bridge.stopService(0xB820282020000L)
+        // The relaxed binder answers every call with an empty reply: rc 0.
+        assertEquals(mapOf(HudSomeIpBridge.SERVICE_ID_NAVI to 0), bridge.startedServices())
+        assertEquals(
+            mapOf(HudSomeIpBridge.TOPIC_NAVI to mapOf(0 to 2), 0x482028202800bL to mapOf(0 to 1)),
+            bridge.fireCounts(),
+        )
+    }
+
     /** Records what reaches bindService: [bindResult] answers it, [onBind] plays the
      *  gateway's callbacks, [resolvedClass] is what the package manager knows about the
      *  SOME/IP action (null = nothing resolves). */
@@ -290,6 +389,7 @@ class HudSomeIpBridgeTest {
         const val ACTION = "com.ts.car.someip.SomeIpServerService"
         const val DONOR_CLASS = "com.ts.car.someip.service.manager.SomeIpServerService"
         const val OTHER_CLASS = "com.ts.car.someip.service.SomeIpServerService"
+        const val DESC = "ts.car.someip.sdk.ISomeIpServerInterface"
         val COMPONENT: ComponentName = ComponentName(PKG, DONOR_CLASS)
     }
 }

@@ -26,7 +26,7 @@ interface HudEventSink {
  *  Lifecycle: [activeConn] is the connection currently registered with the framework
  *  (must be balanced by unbindService), [serverBinder] is the LIVE connection - null
  *  between a gateway crash and the framework's automatic reconnect. On reconnect the
- *  callback is re-registered and the active service re-opened (Codex fix 3). */
+ *  callback is re-registered and every started service re-opened (Codex fix 3). */
 class HudSomeIpBridge(
     private val ctx: Context,
     private val onConnectionLost: () -> Unit = {},
@@ -52,6 +52,10 @@ class HudSomeIpBridge(
         const val TOPIC_NAVI = 0x4010a00018001L
         const val SERVICE_ID_NAVI = 0xB010A00010000L
 
+        /** The gateway service that carries [topic], OpenBYD's rule (LauncherMapCnStrategy):
+         *  bits 16..47 of the topic under the service mask 0xB000000000000. */
+        fun serviceIdFor(topic: Long): Long = (((topic ushr 16) and 0xFFFFFFFFL) shl 16) or 0xB000000000000L
+
         /** Cheap capability probe - MUST run before any binding or helper-daemon work:
          *  cars without the SOME/IP gateway (no factory HUD) take this exit (Codex fix 1). */
         fun isServicePresent(pm: PackageManager): Boolean =
@@ -74,8 +78,12 @@ class HudSomeIpBridge(
      *  must wait rather than unbind the registration the first one is waiting on. */
     private val bindMutex = Mutex()
 
-    /** Service id to re-open when the framework reconnects after a gateway crash. */
-    @Volatile private var activeServiceId: Long? = null
+    /** Service ids to re-open when the framework reconnects after a gateway crash, in start
+     *  order, each with the rc of its last start; guarded by itself. */
+    private val startedServices = LinkedHashMap<Long, Int>()
+
+    /** fireEvent rcs per topic for the diagnostic dump; guarded by itself. */
+    private val fireRcs = LinkedHashMap<Long, MutableMap<Int, Int>>()
 
     // The gateway pings callbacks; the reply must follow the AIDL stub contract or the
     // gateway drops our registration (donor SomeIpBridge shape): INTERFACE_TRANSACTION
@@ -117,8 +125,9 @@ class HudSomeIpBridge(
             }
             // Reconnect path: the gateway lost our registration when it died.
             registerCallback(service)
-            activeServiceId?.let { id ->
+            synchronized(startedServices) { startedServices.keys.toList() }.forEach { id ->
                 val rc = transact(service, TX_START_SERVICE) { it.writeLong(id) }
+                synchronized(startedServices) { if (id in startedServices) startedServices[id] = rc }
                 Log.i(TAG, "re-startService(0x${id.toString(16)}) rc=$rc")
             }
             Log.i(TAG, "server connected $name")
@@ -234,15 +243,17 @@ class HudSomeIpBridge(
     }
 
     fun startService(serviceId: Long): Int {
-        activeServiceId = serviceId
+        // Kept while unbound too: the next connect opens it.
+        synchronized(startedServices) { startedServices[serviceId] = -1 }
         val binder = serverBinder ?: return -1
         val rc = transact(binder, TX_START_SERVICE) { it.writeLong(serviceId) }
+        synchronized(startedServices) { if (serviceId in startedServices) startedServices[serviceId] = rc }
         Log.i(TAG, "startService(0x${serviceId.toString(16)}) rc=$rc")
         return rc
     }
 
     fun stopService(serviceId: Long): Int {
-        activeServiceId = null
+        synchronized(startedServices) { startedServices.remove(serviceId) }
         val binder = serverBinder ?: return -1
         val rc = transact(binder, TX_STOP_SERVICE) { it.writeLong(serviceId) }
         Log.i(TAG, "stopService(0x${serviceId.toString(16)}) rc=$rc")
@@ -250,15 +261,26 @@ class HudSomeIpBridge(
     }
 
     override fun fireEvent(topic: Long, payload: ByteArray): Int {
-        val binder = serverBinder ?: return -1
-        return transact(binder, TX_FIRE_EVENT) {
+        val binder = serverBinder
+        val rc = if (binder == null) -1 else transact(binder, TX_FIRE_EVENT) {
             it.writeInt(1)
             it.writeLong(topic)
             it.writeLong(0L)
             it.writeInt(payload.size)
             it.writeByteArray(payload)
         }
+        synchronized(fireRcs) {
+            val counts = fireRcs.getOrPut(topic) { LinkedHashMap() }
+            counts[rc] = (counts[rc] ?: 0) + 1
+        }
+        return rc
     }
+
+    /** The services started and not stopped, in start order, with the rc of the last start. */
+    fun startedServices(): Map<Long, Int> = synchronized(startedServices) { LinkedHashMap(startedServices) }
+
+    /** How often each fireEvent rc came back, per topic, over this bridge's life. */
+    fun fireCounts(): Map<Long, Map<Int, Int>> = synchronized(fireRcs) { fireRcs.mapValues { LinkedHashMap(it.value) } }
 
     private fun registerCallback(binder: IBinder): Int {
         val rc = transact(binder, TX_REGISTER_CB) { it.writeStrongBinder(callback) }
