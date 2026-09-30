@@ -39,9 +39,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  *  2. the status raised the product's way ([HudArming]), same frame: 222 m, «BYDMATE 2»;
  *  3. the instrument's own CAN fields ([HudCanChannel]) while raised: 333 m, «BYDMATE 3»;
  *  4. OpenBYD's default SOME/IP family ([HudLauncherMapCnFrames]) on its six gateway services,
- *     still raised: a left turn, 444 m, no road name (the family carries none). Skipped without
- *     a gateway binding.
- * Then the restore: the family's off events and its services stopped, CAN fields blanked,
+ *     still raised, the CAN fields blanked first: a left turn, 444 m, no road name (the family
+ *     carries none). Skipped without a gateway binding.
+ * Then the restore: the family's off events and its services stopped, CAN fields still shown blanked,
  * NAVI_STATUS = 4, the layout as found, our gateway service stopped. The restore runs whatever
  * happened before it, cancellation included. A layout the fullscreen cluster holds back is
  * retried every 5 s for up to a minute.
@@ -93,8 +93,8 @@ class HudCheck @Inject constructor(
     internal var fingerprint: String = Build.FINGERPRINT.orEmpty()
     internal var random: Random = Random.Default
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
-    /** What step 4 sends as the car's position; see [HudLauncherMapCnFrames.Position.DEFAULT]. */
-    internal var position: () -> HudLauncherMapCnFrames.Position = { HudLauncherMapCnFrames.Position.DEFAULT }
+    /** What step 4 sends as the car's position ([HudPosition]); never logged. */
+    internal var position: () -> HudLauncherMapCnFrames.Position = { HudPosition.lastKnown(context) }
     internal var log: (String) -> Unit = { Log.i(TAG, it) }
 
     private var job: Job? = null
@@ -219,6 +219,9 @@ class HudCheck @Inject constructor(
             logLmcnStep(run, emptyMap())
             return
         }
+        // Step 4 must show the family alone on the glass; a clear that fails is tried again in the restore.
+        watchGuidance(3)
+        clearCan(run)
         _state.value = State.Step(4)
         watchGuidance(4)
         HudLauncherMapCnFrames.SERVICE_IDS.forEach { id ->
@@ -344,6 +347,27 @@ class HudCheck @Inject constructor(
         Trace.event(TraceArea.HUD, "probe-lmcn-stop", "fire" to fired, "stopped" to okCount(stopped))
     }
 
+    /** Blanks step 3's CAN fields with its line and trace event; [Run.canShown] stays set when it threw. */
+    private suspend fun clearCan(run: Run) {
+        val cleared = runCatching { run.can.clear() }.fold(
+            onSuccess = { sent ->
+                run.canShown = false
+                Trace.event(
+                    TraceArea.HUD, "probe-can-clear", "icon" to HudArming.rc(sent.iconRc),
+                    "ahead" to HudArming.rc(sent.iconAheadRc), "dist" to HudArming.rc(sent.distRc), "road" to HudArming.rc(sent.roadRc),
+                    "rb-icon" to sent.icon.toString(), "rb-dist" to sent.dist.toString(),
+                )
+                sent.describe()
+            },
+            onFailure = {
+                if (it is CancellationException) throw it
+                Trace.event(TraceArea.HUD, "probe-can-clear", "error" to it.javaClass.simpleName, "ok" to false)
+                "failed ${it.javaClass.simpleName}"
+            },
+        )
+        log("hudprobe: can clear $cleared")
+    }
+
     /** The product's 5 s look, so the check keeps the status up exactly like a route would. */
     private suspend fun recheck(run: Run) {
         val c = run.arming.recheck()
@@ -360,23 +384,7 @@ class HudCheck @Inject constructor(
         logAborted("moving", movingStep)
         // Step 4 is the check's own on any binding, a route's hand-over included.
         runCatching { stopLmcn(run) }.onFailure { log("hudprobe: lmcn stop failed ${it.javaClass.simpleName}") }
-        if (run.canShown) {
-            val cleared = runCatching { run.can.clear() }.fold(
-                onSuccess = { sent ->
-                    Trace.event(
-                        TraceArea.HUD, "probe-can-clear", "icon" to HudArming.rc(sent.iconRc),
-                        "ahead" to HudArming.rc(sent.iconAheadRc), "dist" to HudArming.rc(sent.distRc), "road" to HudArming.rc(sent.roadRc),
-                        "rb-icon" to sent.icon.toString(), "rb-dist" to sent.dist.toString(),
-                    )
-                    sent.describe()
-                },
-                onFailure = {
-                    Trace.event(TraceArea.HUD, "probe-can-clear", "error" to it.javaClass.simpleName, "ok" to false)
-                    "failed ${it.javaClass.simpleName}"
-                },
-            )
-            log("hudprobe: can clear $cleared")
-        }
+        if (run.canShown) clearCan(run)
         // The route's frames and arming are the projection's now: no clear frame under them, no
         // closing of the status they hold; its first arm takes the kept as-found. Without a
         // running projection nobody would ever close them, so the full restore runs.
