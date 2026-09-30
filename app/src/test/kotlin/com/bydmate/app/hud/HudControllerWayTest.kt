@@ -238,7 +238,8 @@ class HudControllerWayTest {
         prefs().edit().putInt(HudController.KEY_MODE, HudController.MODE_NAVI_STATUS).commit()
         val c = controller()
         c.startIfEnabled()
-        awaitTrue { !prefs().contains(HudArming.KEY_AS_FOUND) && !prefs().contains(HudWayChannels.KEY_CAN_LEFT) }
+        // Way 2's arming loop takes the kept layout back on its first 5 s look.
+        awaitTrue(timeoutMs = 10_000) { !prefs().contains(HudArming.KEY_AS_FOUND) && !prefs().contains(HudWayChannels.KEY_CAN_LEFT) }
         assertClearedBeforeDisarm(snapshot())
         assertEquals(1, state[HudArming.SCREEN])
         c.setEnabled(false)
