@@ -183,6 +183,22 @@ class HudWayChannelsTest {
         assertTrue(long.toByteArray(Charsets.UTF_16LE).size <= 255)
     }
 
+    @Test fun `the road name goes to the instrument in Latin, cut after the transliteration`() {
+        assertEquals("Prospekt Nezavisimosti", HudWayChannels.roadName("Проспект Независимости"))
+        assertEquals("M1 Minsk-Brest 42", HudWayChannels.roadName("M1 Minsk-Brest 42"))
+        // 100 letters grow to 200 (ß is ss): the cap applies to what goes out.
+        assertEquals("ss".repeat(100).take(127), HudWayChannels.roadName("ß".repeat(100)))
+        // One letter at a time, as OpenBYD does: ICU's per-letter Cyrillic is ISO 9, so Щ is S.
+        assertEquals("Sukina", HudWayChannels.roadName("Щукина"))
+    }
+
+    @Test fun `way 2 writes a Cyrillic road in Latin`() = runTest {
+        val c = channels(2)
+        route(road = "Проспект Независимости")
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.contains("buf $road=Prospekt Nezavisimosti"))
+    }
+
     @Test fun `the distance is kept in the instrument's range`() = runTest {
         val c = channels(2)
         route(dist = 20_000_000)

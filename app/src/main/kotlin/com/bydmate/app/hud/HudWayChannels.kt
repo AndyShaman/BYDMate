@@ -22,9 +22,10 @@ import kotlinx.coroutines.withContext
  * Ways 2 and 3 of the HUD output, on top of the frames and the raised status ([HudArming]):
  * way 2 adds the instrument's CAN guidance fields ([HudCanChannel]), written the way OpenBYD's
  * CanBydFidStrategy writes them: the icon id as is into both icon fids with the distance when
- * either changes, the road name when it changes. Way 3 adds OpenBYD's LAUNCHER_MAP_CN family
- * ([HudLauncherMapCnFrames]): its six gateway services started at the route start, the update set
- * every [PERIOD_MS], the off events and the stops at the end.
+ * either changes, the road name (in Latin, as OpenBYD transliterates it) when it changes. Way 3
+ * adds OpenBYD's LAUNCHER_MAP_CN family ([HudLauncherMapCnFrames]): its six gateway services
+ * started at the route start, the update set every [PERIOD_MS], the off events and the stops at
+ * the end.
  *
  * Only while a route is guided and the status is up (`active`). [close] runs before every disarm
  * (route end, way change, HUD off, service stop): the CAN fields blanked with distance 0, then the
@@ -60,6 +61,8 @@ class HudWayChannels(
     private val canDirty: Boolean get() = prefs.contains(KEY_CAN_LEFT)
     private var lastGuidance: Pair<Int, Int>? = null
     private var lastRoad: String? = null
+    /** The navigator's road and what [roadName] made of it: the transliteration runs on a change only. */
+    private var roadMemo: Pair<String, String>? = null
     private var routeAccepted = 0
     private var routeRefused = 0
     private val lmcnServices = LinkedHashMap<Long, Int>()
@@ -143,7 +146,8 @@ class HudWayChannels(
 
     private suspend fun writeCan(s: NavGuidanceHub.Snapshot) {
         val guidance = turnKind(s.maneuverGaode) to s.distanceMeters.coerceIn(0, MAX_DISTANCE_M)
-        val road = roadName(s.road)
+        val road = roadMemo?.takeIf { it.first == s.road }?.second
+            ?: roadName(s.road).also { roadMemo = s.road to it }
         if (guidance == lastGuidance && road == lastRoad) return
         if (!canDirty) prefs.edit().putBoolean(KEY_CAN_LEFT, true).apply()
         if (guidance != lastGuidance) {
@@ -251,9 +255,9 @@ class HudWayChannels(
          *  Outside what the instrument accepts: blank. */
         fun turnKind(iconId: Int): Int = if (iconId in 0..MAX_TURN_KIND) iconId else 0
 
-        /** The road name as the instrument takes it: trimmed, capped, a space when empty (the car
-         *  rejects an empty buffer). */
-        fun roadName(road: String): String = road.trim().take(MAX_ROAD_CHARS).ifEmpty { " " }
+        /** The road name as the instrument takes it: in Latin ([HudTextSanitizer], trimmed), capped
+         *  after that, a space when empty (the car rejects an empty buffer). */
+        fun roadName(road: String): String = HudTextSanitizer.sanitize(road).take(MAX_ROAD_CHARS).ifEmpty { " " }
 
         internal fun accepted(rc: Int?): Boolean = rc != null && rc >= 0
 

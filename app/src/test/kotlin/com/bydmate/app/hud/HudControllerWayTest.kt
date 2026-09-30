@@ -136,6 +136,27 @@ class HudControllerWayTest {
         assertFalse(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
     }
 
+    @Test fun `way 1 frames carry the road as the navigator gave it, no transliteration`() {
+        car()
+        val frames: MutableList<ByteArray> = Collections.synchronizedList(mutableListOf())
+        every { bridge.fireEvent(HudSomeIpBridge.TOPIC_NAVI, capture(frames)) } returns 0
+        NavGuidanceHub.update(
+            NavGuidance(maneuverGaode = 2, distanceMeters = 300, road = "Проспект Независимости"), NavGuidanceHub.Source.A11Y,
+        )
+        val c = controller()
+        c.setEnabled(true)
+        awaitTrue { frames.size >= 2 }
+        c.setEnabled(false)
+        val cyrillic = "Проспект Независимости".toByteArray(Charsets.UTF_8)
+        val latin = "Prospekt".toByteArray(Charsets.UTF_8)
+        val sent = synchronized(frames) { frames.toList() }
+        assertTrue(sent.any { contains(it, cyrillic) })
+        assertTrue(sent.none { contains(it, latin) })
+    }
+
+    private fun contains(haystack: ByteArray, needle: ByteArray): Boolean =
+        (0..haystack.size - needle.size).any { i -> needle.indices.all { haystack[i + it] == needle[it] } }
+
     // --- way 2 ---
 
     @Test fun `way 2 writes the CAN fields during a route and blanks them before the status goes down at its end`() {
