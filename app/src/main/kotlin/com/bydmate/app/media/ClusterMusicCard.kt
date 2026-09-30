@@ -43,8 +43,24 @@ object ClusterMusicCard {
         val durationMs: Long? = null,
     )
 
-    /** [progress] is the 0..100 bar value, null when the session gives no duration. */
-    data class Card(val title: String, val artist: String, val musicState: Int, val progress: Int? = null)
+    /**
+     * [progress] is the 0..100 bar value; [positionSec] / [durationSec] feed the played / total
+     * time fids. Each is null when the session doesn't give it.
+     */
+    data class Card(
+        val title: String,
+        val artist: String,
+        val musicState: Int,
+        val progress: Int? = null,
+        val positionSec: Int? = null,
+        val durationSec: Int? = null,
+    ) {
+        /** The part that only changes with the track or play state; progress and position tick. */
+        fun steady(): Card = copy(progress = null, positionSec = null)
+    }
+
+    /** Hours, minutes, seconds, as the stock sendAudioTime splits them. */
+    fun hms(totalSec: Int): Triple<Int, Int, Int> = Triple(totalSec / 3600, totalSec / 60 % 60, totalSec % 60)
 
     /**
      * The card for [sessions] (system priority order), or null when no source session has a
@@ -56,8 +72,15 @@ object ClusterMusicCard {
         val playing = candidates.firstOrNull { it.playbackState == PB_PLAYING || it.playbackState == PB_BUFFERING }
         val chosen = playing ?: candidates.firstOrNull { it.playbackState == PB_PAUSED } ?: return null
         val state = if (chosen === playing) MUSIC_PLAYING else MUSIC_PAUSED
-        val progress = progressPercent(chosen.positionMs, chosen.durationMs)
-        return Card(chosen.title!!.trim(), chosen.artist?.trim().orEmpty(), state, progress)
+        val duration = chosen.durationMs?.takeIf { it > 0 }
+        return Card(
+            title = chosen.title!!.trim(),
+            artist = chosen.artist?.trim().orEmpty(),
+            musicState = state,
+            progress = progressPercent(chosen.positionMs, duration),
+            positionSec = chosen.positionMs?.let { (it.coerceIn(0, duration ?: it) / 1000).toInt() },
+            durationSec = duration?.let { (it / 1000).toInt() },
+        )
     }
 
     /** The bar value as the stock OtherClient rounds it: position / duration * 100, clamped. */
