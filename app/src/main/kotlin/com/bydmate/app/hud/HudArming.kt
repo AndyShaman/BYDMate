@@ -125,6 +125,10 @@ class HudArming(
      *  ([HudWayChannels.close]). */
     internal var beforeDisarm: suspend () -> Unit = {}
 
+    /** The hook right after every [arm], the status just raised: ways 2 and 3 may write again
+     *  ([HudWayChannels.reopen]). */
+    internal var afterArm: () -> Unit = {}
+
     @Volatile private var outdatedLogged = false
     private var job: Job? = null
     private var rearms = 0
@@ -163,6 +167,7 @@ class HudArming(
         val canNaviRc = helper.writeStatus(CAN_NAVI.first, CAN_NAVI.second, 1)
         val isaRc = helper.writeStatus(ISA.first, ISA.second, 1)
         val rb = read(NAVI, SCREEN, CAN_NAVI, ISA)
+        afterArm()
         return ArmReport(via, naviRc, !layout, screenRc, canNaviRc, isaRc, rb[0], rb[1], rb[2], rb[3])
     }
 

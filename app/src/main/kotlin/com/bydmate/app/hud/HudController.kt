@@ -200,6 +200,7 @@ class HudController @Inject constructor(
 
     private fun startArming(arm: HudArming) {
         arm.beforeDisarm = { channels?.close() }
+        arm.afterArm = { channels?.reopen() }
         arm.start(scope, layoutOwned = { !armingPaused }) { !armingPaused && NavGuidanceHub.snapshot().active }
     }
 

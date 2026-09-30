@@ -149,6 +149,21 @@ class HudWayChannelsTest {
         assertTrue(calls.isEmpty())
     }
 
+    @Test fun `after a close the loop writes and starts nothing until the next arm reopens it`() = runTest {
+        val c = channels(3)
+        route()
+        c.tick(active = true)
+        c.close()
+        calls.clear()
+        // The route is back while the disarm after the close still waits on the helper.
+        route(dist = 250)
+        repeat(3) { c.tick(active = true) }
+        assertTrue(calls.toString(), calls.isEmpty())
+        c.reopen()
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.contains("set $dist=250") && calls.containsAll(starts))
+    }
+
     @Test fun `close before any write writes nothing`() = runTest {
         val c = channels(3)
         c.tick(active = false)

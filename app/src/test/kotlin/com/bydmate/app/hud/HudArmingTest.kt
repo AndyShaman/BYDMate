@@ -475,6 +475,23 @@ class HudArmingTest {
         assertEquals(listOf("hook navi=2", "sdk 4"), car.calls.takeLast(5).take(2))
     }
 
+    @Test fun `the after-arm hook runs once the status is up, and again on the arm after a disarm`() = runTest {
+        val car = FakeCar()
+        var guided = true
+        val a = arming(car)
+        a.afterArm = { car.calls += "after navi=${car.state[HudArming.NAVI]}" }
+        a.start(backgroundScope) { guided }
+        runCurrent()
+        assertTrue(car.calls.toString(), car.calls.indexOf("after navi=2") > car.calls.indexOf("sdk 2"))
+        guided = false
+        advanceTimeBy(1_100); runCurrent()
+        assertEquals(1, car.calls.count { it.startsWith("after") })
+        guided = true
+        advanceTimeBy(1_100); runCurrent()
+        assertEquals(2, car.calls.count { it.startsWith("after") })
+        a.stop()
+    }
+
     @Test fun `a failing hook still disarms`() = runTest {
         val car = FakeCar()
         val a = arming(car)
