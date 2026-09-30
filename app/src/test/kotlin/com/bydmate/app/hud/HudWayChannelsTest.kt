@@ -1,6 +1,7 @@
 package com.bydmate.app.hud
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.diagnostics.TraceRecorder
@@ -36,7 +37,11 @@ class HudWayChannelsTest {
     private val helper: HelperClient = mockk(relaxed = true)
     private val gateway: HudSomeIpBridge = mockk(relaxed = true)
     private var writeRc: Int? = 0
-    private var stopRc = 0
+    /** The road buffer's rc; the set writes' by default. */
+    private var bufRc: () -> Int? = { writeRc }
+    private var stopRc: (Long) -> Int = { 0 }
+    /** [flaky] prefs: a commit keeps the value in memory but reports the disk write failed. */
+    private var saveFails = true
     private var snapshot = NavGuidanceHub.Snapshot()
     private val lines = mutableListOf<String>()
 
@@ -48,14 +53,27 @@ class HudWayChannelsTest {
         }
         coEvery { helper.writeBufferStatus(any(), any(), any()) } answers {
             calls += "buf ${arg<Int>(1)}=${String(arg<ByteArray>(2), Charsets.UTF_16LE)}"
-            writeRc
+            bufRc()
         }
         every { gateway.startService(any()) } answers { calls += "start 0x${firstArg<Long>().toString(16)}"; 0 }
-        every { gateway.stopService(any()) } answers { calls += "stop 0x${firstArg<Long>().toString(16)}"; stopRc }
+        every { gateway.stopService(any()) } answers { calls += "stop 0x${firstArg<Long>().toString(16)}"; stopRc(firstArg()) }
         every { gateway.fireEvent(any(), any()) } answers { calls += "fire 0x${firstArg<Long>().toString(16)}"; 0 }
     }
 
-    private fun channels(way: Int) = HudWayChannels(
+    /** Prefs whose commit fails while [saveFails], as a full disk does: the value is in memory only. */
+    private val flaky: SharedPreferences = object : SharedPreferences by prefs {
+        override fun edit(): SharedPreferences.Editor {
+            val real = prefs.edit()
+            return object : SharedPreferences.Editor by real {
+                override fun putBoolean(key: String?, value: Boolean): SharedPreferences.Editor { real.putBoolean(key, value); return this }
+                override fun putLong(key: String?, value: Long): SharedPreferences.Editor { real.putLong(key, value); return this }
+                override fun remove(key: String?): SharedPreferences.Editor { real.remove(key); return this }
+                override fun commit(): Boolean = if (saveFails) { real.apply(); false } else real.commit()
+            }
+        }
+    }
+
+    private fun channels(way: Int, prefs: SharedPreferences = this.prefs) = HudWayChannels(
         way = way, can = HudCanChannel(helper), gateway = gateway, prefs = prefs,
         position = { HudLauncherMapCnFrames.Position(53.9, 27.56) },
     ).apply {
@@ -265,9 +283,99 @@ class HudWayChannelsTest {
         val c = channels(3)
         route()
         c.tick(active = true)
-        stopRc = -1
+        stopRc = { -1 }
         c.close()
         assertTrue(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
+    }
+
+    @Test fun `a stop that threw in the binder keeps the family leftover`() = runTest {
+        val c = channels(3)
+        route()
+        c.tick(active = true)
+        // -2: the transact threw (DeadObjectException); the five before it answered.
+        stopRc = { if (it == HudLauncherMapCnFrames.SERVICE_IDS.last()) -2 else 0 }
+        c.close()
+        assertEquals(stops, calls.filter { it.startsWith("stop") })
+        assertTrue(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
+    }
+
+    @Test fun `a family marker that does not reach the disk starts no family for the route and says so`() = runTest {
+        val c = channels(3, flaky)
+        route()
+        repeat(3) { c.tick(active = true) }
+        assertTrue(calls.toString(), calls.none { it.startsWith("start") || it.startsWith("fire") })
+        assertFalse(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
+        assertTrue(lines.toString(), lines.any { it.contains("marker not saved what=lmcn") })
+        c.tick(active = false)
+        assertTrue(calls.none { it.startsWith("stop") })
+    }
+
+    // --- writes the car refused ---
+
+    @Test fun `a refused road write is tried again in 5 s, not every tick`() = runTest {
+        val c = channels(2)
+        route()
+        c.tick(active = true)
+        calls.clear()
+        bufRc = { -1 }
+        route(road = "Side Rd")
+        c.tick(active = true)
+        assertEquals(listOf("buf $road=Side Rd"), calls)
+        calls.clear()
+        repeat((HudWayChannels.RETRY_MS / HudWayChannels.PERIOD_MS).toInt() - 1) { c.tick(active = true) }
+        assertTrue(calls.toString(), calls.isEmpty())
+        bufRc = { 0 }
+        c.tick(active = true)
+        assertEquals(listOf("buf $road=Side Rd"), calls)
+        calls.clear()
+        c.tick(active = true)
+        assertTrue(calls.isEmpty())
+    }
+
+    @Test fun `a refused guidance write is tried again in 5 s`() = runTest {
+        val c = channels(2)
+        route()
+        c.tick(active = true)
+        calls.clear()
+        writeRc = -1
+        bufRc = { 0 }
+        route(dist = 250)
+        c.tick(active = true)
+        assertEquals(listOf("set $icon=2", "set $ahead=2", "set $dist=250"), calls)
+        calls.clear()
+        repeat((HudWayChannels.RETRY_MS / HudWayChannels.PERIOD_MS).toInt() - 1) { c.tick(active = true) }
+        assertTrue(calls.toString(), calls.isEmpty())
+        writeRc = 0
+        c.tick(active = true)
+        assertEquals(listOf("set $icon=2", "set $ahead=2", "set $dist=250"), calls)
+    }
+
+    @Test fun `a road the car keeps refusing does not slow the distance down`() = runTest {
+        val c = channels(2)
+        bufRc = { -1 }
+        route(dist = 300)
+        c.tick(active = true)
+        calls.clear()
+        route(dist = 290)
+        c.tick(active = true)
+        route(dist = 280)
+        c.tick(active = true)
+        assertEquals(listOf("set $icon=2", "set $ahead=2", "set $dist=290", "set $icon=2", "set $ahead=2", "set $dist=280"), calls)
+    }
+
+    @Test fun `a CAN marker that does not reach the disk holds the writes, says so and is tried again in 5 s`() = runTest {
+        val c = channels(2, flaky)
+        route()
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.isEmpty())
+        assertFalse(prefs.contains(HudWayChannels.KEY_CAN_LEFT))
+        assertTrue(lines.toString(), lines.any { it.contains("marker not saved what=can") })
+        saveFails = false
+        repeat((HudWayChannels.RETRY_MS / HudWayChannels.PERIOD_MS).toInt() - 1) { c.tick(active = true) }
+        assertTrue(calls.toString(), calls.isEmpty())
+        c.tick(active = true)
+        assertEquals(listOf("set $icon=2", "set $ahead=2", "set $dist=300", "buf $road=Main St"), calls)
+        assertTrue(prefs.getBoolean(HudWayChannels.KEY_CAN_LEFT, false))
     }
 
     // --- what a process death left ---
@@ -299,6 +407,13 @@ class HudWayChannelsTest {
         expected.zip(sent).forEach { (e, a) -> assertTrue(e.payload.contentEquals(a.second)) }
         assertEquals(stops, calls.filter { it.startsWith("stop") })
         assertFalse(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
+    }
+
+    @Test fun `a family leftover whose last stop threw stays kept`() {
+        prefs.edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L).commit()
+        stopRc = { if (it == HudLauncherMapCnFrames.SERVICE_IDS.last()) -2 else 0 }
+        HudWayChannels.stopLmcnLeftover(gateway, prefs, nowMs = 1_700_000_000_000L)
+        assertTrue(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
     }
 
     // --- diagnostics ---
