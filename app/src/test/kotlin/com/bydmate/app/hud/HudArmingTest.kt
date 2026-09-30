@@ -448,4 +448,41 @@ class HudArmingTest {
         assertTrue(car.calls.contains("set 1023/1276174357=3"))
         a.stop()
     }
+
+    // --- the hook ways 2 and 3 clean up in ---
+
+    @Test fun `the hook runs before the route end's disarm, while the status is up`() = runTest {
+        val car = FakeCar()
+        var guided = true
+        val a = arming(car)
+        a.beforeDisarm = { car.calls += "hook navi=${car.state[HudArming.NAVI]}" }
+        a.start(backgroundScope) { guided }
+        runCurrent()
+        guided = false
+        advanceTimeBy(1_100); runCurrent()
+        assertEquals(listOf("hook navi=2", "sdk 4"), car.calls.takeLast(5).take(2))
+        a.stop()
+        assertEquals(1, car.calls.count { it.startsWith("hook") })
+    }
+
+    @Test fun `the hook runs before the disarm of a stop`() = runTest {
+        val car = FakeCar()
+        val a = arming(car)
+        a.beforeDisarm = { car.calls += "hook navi=${car.state[HudArming.NAVI]}" }
+        a.start(backgroundScope) { true }
+        runCurrent()
+        a.stop()
+        assertEquals(listOf("hook navi=2", "sdk 4"), car.calls.takeLast(5).take(2))
+    }
+
+    @Test fun `a failing hook still disarms`() = runTest {
+        val car = FakeCar()
+        val a = arming(car)
+        a.beforeDisarm = { error("helper gone") }
+        a.start(backgroundScope) { true }
+        runCurrent()
+        a.stop()
+        assertEquals(4, car.state[HudArming.NAVI])
+        assertFalse(a.armed)
+    }
 }
