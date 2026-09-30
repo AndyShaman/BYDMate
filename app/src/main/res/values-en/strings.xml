@@ -884,7 +884,7 @@
     <string name="settings_fid_dump_button">Save fid catalog</string>
     <string name="settings_fid_dump_desc">SDK constant names and values. Technical identifiers only: no VIN, no location, no personal data</string>
     <string name="settings_hud_check_title">HUD check</string>
-    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. Start log recording first and film the glass. The car stands still, no route needed. The glass shows test labels “BYDMATE 1”, “BYDMATE 2” and “BYDMATE 3”, which go away when the check ends</string>
+    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. Start log recording first and film the glass. The car stands still, no route needed. The glass shows test labels “BYDMATE 1”, “BYDMATE 2”, “BYDMATE 3” one after another, then a left arrow with 444 m. All of it goes away when the check ends</string>
     <string name="settings_hud_check_button">Start</string>
     <string name="settings_hud_check_preparing">Preparing the check</string>
     <string name="settings_hud_check_step">Step %1$d of %2$d, watch the glass</string>

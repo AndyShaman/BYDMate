@@ -1035,7 +1035,7 @@
     <string name="settings_fid_dump_button">Захаваць каталог fid\'аў</string>
     <string name="settings_fid_dump_desc">Імёны і значэнні канстант SDK. Толькі тэхнічныя ідэнтыфікатары: без VIN, без геалакацыі, без асабістых даных</string>
     <string name="settings_hud_check_title">Праверка HUD</string>
-    <string name="settings_hud_check_desc">Паўтары хвіліны тэставых падказак на шкле. Спачатку ўключыце запіс логаў і здымайце шкло на відэа. Машына стаіць, маршрут не патрэбны. На шкле будуць тэставыя надпісы «BYDMATE 1», «BYDMATE 2» і «BYDMATE 3», пасля праверкі яны знікнуць</string>
+    <string name="settings_hud_check_desc">Паўтары хвіліны тэставых падказак на шкле. Спачатку ўключыце запіс логаў і здымайце шкло на відэа. Машына стаіць, маршрут не патрэбны. На шкле па чарзе будуць тэставыя надпісы «BYDMATE 1», «BYDMATE 2», «BYDMATE 3», потым стрэлка налева і 444 м. Пасля праверкі ўсё знікне</string>
     <string name="settings_hud_check_button">Запусціць</string>
     <string name="settings_hud_check_preparing">Рыхтуем праверку</string>
     <string name="settings_hud_check_step">Крок %1$d з %2$d, глядзіце на шкло</string>
