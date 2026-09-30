@@ -15,6 +15,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import java.util.Collections
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
@@ -206,6 +207,38 @@ class HudControllerWayTest {
         awaitTrue { c.status.value == HudController.Status.OFF }
         assertClearedBeforeDisarm(snapshot())
         assertFalse(prefs().contains(HudWayChannels.KEY_CAN_LEFT))
+    }
+
+    @Test fun `a route back while the disarm waits on the helper writes no CAN until the next arm`() {
+        val state = car()
+        val gate = CompletableDeferred<Unit>()
+        coEvery { helperClient.hudNaviStatus(4) } coAnswers {
+            calls += "sdk 4 wait"
+            gate.await()
+            calls += "sdk 4"
+            state[HudArming.NAVI] = 4
+            HudNaviReply(HelperBinderProtocol.HUD_NAVI_CALLED, 0)
+        }
+        guideRoute()
+        val c = controller()
+        c.setMode(HudController.MODE_NAVI_STATUS)
+        c.setEnabled(true)
+        awaitTrue { snapshot().contains(canShown) }
+        NavGuidanceHub.reset()   // the route ends...
+        awaitTrue { snapshot().contains("sdk 4 wait") }
+        guideRoute()             // ...and is back while the status is going down
+        Thread.sleep(1_000)
+        val waiting = snapshot()
+        val clearAt = Collections.lastIndexOfSubList(waiting, canClear)
+        assertTrue("cleared before the disarm: $waiting", clearAt in 0 until waiting.indexOf("sdk 4 wait"))
+        assertTrue("nothing written while the disarm waits: $waiting",
+            waiting.drop(clearAt + canClear.size).none { it.startsWith(can) || it.startsWith("buf ") })
+        gate.complete(Unit)
+        // The next arm raises the status again, and only then the route's values come back.
+        awaitTrue { snapshot().let { it.subList(it.indexOf("sdk 4"), it.size) }.let { it.contains("sdk 2") && it.contains(canShown) } }
+        val after = snapshot().let { it.subList(it.indexOf("sdk 4"), it.size) }
+        assertTrue(after.toString(), after.indexOf("sdk 2") < after.indexOf(canShown))
+        c.setEnabled(false)
     }
 
     // --- way 3 ---

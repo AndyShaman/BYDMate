@@ -55,6 +55,7 @@ class HudWayChannels(
 
     private val lock = Mutex()
     private var job: Job? = null
+    @Volatile private var closing = false
     private var routeOpen = false
     /** Our values may be on the instrument: kept before the first write, dropped by an accepted
      *  clear. Read from [prefs], so values a process death left are this way's to clear too. */
@@ -103,8 +104,18 @@ class HudWayChannels(
         withContext(NonCancellable) { close() }
     }
 
-    /** The cleanup before a disarm; nothing written = nothing to undo. */
-    suspend fun close() = lock.withLock { closeLocked() }
+    /** The cleanup before a disarm; nothing written = nothing to undo. From here until [reopen]
+     *  the loop writes nothing and starts nothing: a route back while the disarm still runs would
+     *  otherwise draw again under a status about to go down. */
+    suspend fun close() {
+        closing = true
+        lock.withLock { closeLocked() }
+    }
+
+    /** The next arm raised the status again ([HudArming.afterArm]): the loop may write. */
+    fun reopen() {
+        closing = false
+    }
 
     internal suspend fun tick(active: Boolean) = lock.withLock {
         if (!active) {
@@ -116,6 +127,7 @@ class HudWayChannels(
             closeLocked()
             return@withLock
         }
+        if (closing) return@withLock
         val s = snapshot()
         if (!routeOpen) openLocked()
         writeCan(s)
