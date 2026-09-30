@@ -113,6 +113,10 @@ internal sealed interface CommandExpr {
         override fun resolve(values: Map<String, String>) = ParseResult.Ask(question)
     }
 
+    object Music : CommandExpr {
+        override fun resolve(values: Map<String, String>) = ParseResult.Music
+    }
+
     class Commands(private val terms: List<String>) : CommandExpr {
         override fun resolve(values: Map<String, String>) = ParseResult.Command(terms.flatMap { fill(it, values) })
     }
@@ -123,6 +127,7 @@ internal sealed interface CommandExpr {
         fun parse(text: String): CommandExpr = when {
             text == "TEMP +1" -> Temp(1)
             text == "TEMP -1" -> Temp(-1)
+            text == "MUSIC" -> Music
             text.startsWith("VOL ") -> Vol(text.removePrefix("VOL ").trim())
             text.startsWith("ASK ") -> text.removePrefix("ASK ").trim().let { id ->
                 Ask(requireNotNull(VehicleQuestion.of(id)) { "unknown question \"$id\" in \"$text\"" })

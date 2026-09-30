@@ -13,6 +13,8 @@ sealed interface ParseResult {
     data class Volume(val payload: String) : ParseResult
     /** A question answered from the car's readings; nothing is dispatched. */
     data class Ask(val question: VehicleQuestion) : ParseResult
+    /** Yandex Music's personal mix, started like the agent's play_music with no query. */
+    data object Music : ParseResult
     data object Unrecognized : ParseResult
 }
 

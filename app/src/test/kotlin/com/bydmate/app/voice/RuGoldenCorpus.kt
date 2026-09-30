@@ -33,6 +33,7 @@ object RuGoldenCorpus {
         is ParseResult.RelativeTemp -> "TEMP:" + if (result.sign > 0) "+1" else "-1"
         is ParseResult.Volume -> "VOL:" + result.payload
         is ParseResult.Ask -> "ASK:" + result.question.id
+        ParseResult.Music -> "MUSIC"
         ParseResult.Unrecognized -> UNRECOGNIZED
     }
 
