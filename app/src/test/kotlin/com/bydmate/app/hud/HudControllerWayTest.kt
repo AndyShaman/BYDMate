@@ -325,6 +325,21 @@ class HudControllerWayTest {
         c.setEnabled(false)
     }
 
+    @Test fun `stopping the output during the HUD check's CAN step leaves its 333 and its marker to the check`() {
+        car()
+        val c = controller()
+        c.setMode(HudController.MODE_NAVI_STATUS)
+        c.setEnabled(true)
+        awaitTrue { c.status.value == HudController.Status.ON }
+        // The check runs its step 3: the product stands aside, the CAN marker is the check's.
+        c.armingPaused = true
+        prefs().edit().putBoolean(HudWayChannels.KEY_CAN_LEFT, true).commit()
+        c.stop()
+        awaitTrue { c.status.value == HudController.Status.OFF }
+        assertTrue(snapshot().toString(), snapshot().none { it.startsWith(can) || it.startsWith("buf ") })
+        assertTrue(prefs().getBoolean(HudWayChannels.KEY_CAN_LEFT, false))
+    }
+
     // --- way 3 ---
 
     @Test fun `way 3 runs the family during a route and stops it after the CAN clear and before the disarm`() {

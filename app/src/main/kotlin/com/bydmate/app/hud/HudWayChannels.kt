@@ -55,6 +55,7 @@ class HudWayChannels(
 
     private val lock = Mutex()
     private var job: Job? = null
+    private var held: () -> Boolean = { false }
     @Volatile private var closing = false
     private var routeOpen = false
     /** Our values may be on the instrument: kept before the first write, dropped by an accepted
@@ -87,6 +88,7 @@ class HudWayChannels(
      *  change during the cleanup and disarm ([HudArming.closing]); it waits for the same next arm. */
     fun start(scope: CoroutineScope, held: () -> Boolean = { false }, closed: Boolean = false, active: () -> Boolean) {
         if (job?.isActive == true) return
+        this.held = held
         if (closed) closing = true
         job = scope.launch {
             while (isActive) {
@@ -104,10 +106,15 @@ class HudWayChannels(
         }
     }
 
-    /** Stops the loop and cleans up what the route left. */
+    /** Stops the loop and cleans up what the route left; while [held] only the loop stops, the
+     *  HUD check's restore cleans its own values up. */
     suspend fun stop() {
         job?.cancelAndJoin()
         job = null
+        if (runCatching { held() }.getOrDefault(true)) {
+            log("hud way: stop while held, cleanup left to the HUD check")
+            return
+        }
         withContext(NonCancellable) { close() }
     }
 
