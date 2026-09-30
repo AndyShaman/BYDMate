@@ -1035,7 +1035,7 @@
     <string name="settings_fid_dump_button">Zapisz katalog fidów</string>
     <string name="settings_fid_dump_desc">Nazwy i wartości stałych SDK. Tylko identyfikatory techniczne: bez VIN, bez geolokalizacji, bez danych osobowych</string>
     <string name="settings_hud_check_title">Test HUD</string>
-    <string name="settings_hud_check_desc">Półtorej minuty testowych wskazówek na szybie. Najpierw włącz zapis logów i nagrywaj szybę. Samochód stoi, trasa nie jest potrzebna. Na szybie po kolei pojawią się testowe napisy „BYDMATE 1”, „BYDMATE 2”, „BYDMATE 3”, a potem strzałka w lewo i 444 m. Po sprawdzeniu wszystko zniknie</string>
+    <string name="settings_hud_check_desc">Półtorej minuty testowych wskazówek na szybie. Samochód stoi, trasa nie jest potrzebna. Najpierw włącz zapis logów. Na szybie po kolei pojawią się liczby 111, 222, 333 i 444. Na końcu aplikacja zapyta, co się pojawiło, i sama wybierze sposób. Po sprawdzeniu wszystko zniknie</string>
     <string name="settings_hud_check_button">Uruchom</string>
     <string name="settings_hud_check_preparing">Przygotowujemy test</string>
     <string name="settings_hud_check_step">Krok %1$d z %2$d, patrz na szybę</string>
@@ -1558,11 +1558,23 @@
     <string name="settings_hud_status_on">Przesyłanie na HUD aktywne</string>
     <string name="settings_hud_status_bind_failed">Nie udało się połączyć z magistralą SOME/IP</string>
     <string name="settings_hud_hint">Potrzebna wersja wyposażenia z wyświetlaczem przeziernym. Dane brane są z okna Yandex Nawigatora</string>
-    <string name="settings_hud_mode_title">Tryb HUD</string>
-    <string name="settings_hud_mode_1">Tryb 1</string>
-    <string name="settings_hud_mode_2">Tryb 2</string>
-    <string name="settings_hud_mode_1_desc">Tryb 1. Wskazówki trafiają na szybę, aplikacja nie zmienia zestawu wskaźników.</string>
-    <string name="settings_hud_mode_2_desc">Tryb 2. Na czas trasy samochód przechodzi w tryb nawigacji. Wypróbuj, jeśli w trybie 1 szyba jest pusta. Na zestawie wskaźników pojawi się strzałka, aplikacje i kamery na zestawie wskaźników mogą się nie wyświetlać.</string>
+    <string name="settings_hud_mode_title">Sposób wyświetlania na szybie</string>
+    <string name="settings_hud_mode_1">Sposób 1</string>
+    <string name="settings_hud_mode_2">Sposób 2</string>
+    <string name="settings_hud_mode_1_desc">Sposób 1. Wskazówki trafiają na szybę, aplikacja nie zmienia zestawu wskaźników.</string>
+    <string name="settings_hud_mode_2_desc">Sposób 2. Wskazówki trafiają na szybę i na zestaw wskaźników: pojawi się tam karta nawigacji ze strzałką, metrami i ulicą.</string>
+    <string name="settings_hud_mode_3">Sposób 3</string>
+    <string name="settings_hud_mode_3_desc">Sposób 3. Jak sposób 2, plus jeszcze jedna droga. Wypróbuj, jeśli dwa pierwsze nic nie pokazały.</string>
+    <string name="settings_hud_mode_trial">próbny</string>
+    <string name="settings_hud_mode_pick_hint">Nie wiesz, który wybrać? Uruchom „Test HUD”.</string>
+    <string name="settings_hud_answer_title">Jaka liczba pojawiła się na szybie?</string>
+    <string name="settings_hud_answer_text">Aplikacja sama wybierze sposób. Jeśli pojawiło się kilka liczb, naciśnij najmniejszą.</string>
+    <string name="settings_hud_answer_none">Nic</string>
+    <string name="settings_hud_answer_chosen_title">Wybrano sposób %1$d</string>
+    <string name="settings_hud_answer_chosen_text">Wskazówki będą trafiać na szybę tym sposobem. Można go zmienić w ustawieniach HUD.</string>
+    <string name="settings_hud_answer_nothing_title">Szyba nic nie pokazała</string>
+    <string name="settings_hud_answer_nothing_text">Żaden sposób nie zadziałał na szybie tego samochodu. Zapisz log i wyślij go nam, sprawdzimy to.</string>
+    <string name="settings_hud_answer_done">Gotowe</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Martwe pola</string>
     <string name="settings_blindspot_title">Kamera przy kierunkowskazie</string>

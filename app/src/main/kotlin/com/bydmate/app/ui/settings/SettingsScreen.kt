@@ -33,6 +33,7 @@ import com.bydmate.app.ui.widget.LeftTapMode
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
@@ -52,6 +53,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1338,16 +1340,19 @@ private fun DisplaySection() {
                 },
             )
             SettingDivider()
-            // #266: mode 1 (default) never raises the car's navigation status, mode 2 does.
+            // «Способ вывода на стекло» (#266): way 1 (default) never raises the car's navigation
+            // status, ways 2 and 3 do and add their channels (HudWayChannels).
+            val hudWays = listOf(HudController.MODE_GLASS_ONLY, HudController.MODE_NAVI_STATUS, HudController.MODE_LMCN)
             SettingChipRow(
                 title = stringResource(R.string.settings_hud_mode_title),
                 options = listOf(
                     stringResource(R.string.settings_hud_mode_1),
                     stringResource(R.string.settings_hud_mode_2),
+                    stringResource(R.string.settings_hud_mode_3),
                 ),
-                selectedIndex = if (hudMode == HudController.MODE_NAVI_STATUS) 1 else 0,
+                selectedIndex = hudWays.indexOf(hudMode).coerceAtLeast(0),
                 onSelect = { idx ->
-                    val mode = if (idx == 1) HudController.MODE_NAVI_STATUS else HudController.MODE_GLASS_ONLY
+                    val mode = hudWays[idx]
                     if (mode != hudMode) {
                         Trace.event(TraceArea.USER, "choice", "id" to "hud_mode", "mode" to mode)
                         hudMode = mode
@@ -1357,6 +1362,11 @@ private fun DisplaySection() {
             )
             SettingHint(text = stringResource(R.string.settings_hud_mode_1_desc))
             SettingHint(text = stringResource(R.string.settings_hud_mode_2_desc))
+            HudTrialHint(
+                text = stringResource(R.string.settings_hud_mode_3_desc),
+                tag = stringResource(R.string.settings_hud_mode_trial),
+            )
+            SettingHint(text = stringResource(R.string.settings_hud_mode_pick_hint))
             SettingDivider()
             SettingStatusRow(
                 title = when (hudStatus) {
@@ -1371,7 +1381,7 @@ private fun DisplaySection() {
         SettingHint(text = stringResource(R.string.settings_hud_hint))
         // Outside the switch: the check is meant to run with HUD output turned off too.
         SettingDivider()
-        HudCheckRow()
+        HudCheckRow(onWayChosen = { hudMode = it })
     }
 
     if (learning) {
@@ -2491,12 +2501,26 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
 /** «Проверка HUD»: about 90 s of test hints on the glass; the recorded log and a video of the
  *  glass tell which channel draws on this car. The row only starts the check and shows where it is. */
 @Composable
-private fun HudCheckRow() {
+private fun HudCheckRow(onWayChosen: (Int) -> Unit) {
     val context = LocalContext.current
     val hudCheck = remember {
         EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java).hudCheck()
     }
     val checkState by hudCheck.state.collectAsStateWithLifecycle()
+    val askAnswer by hudCheck.askAnswer.collectAsStateWithLifecycle()
+    // After an answer: the way the check picked, 0 when the glass showed nothing.
+    var answered by remember { mutableStateOf<Int?>(null) }
+    if (askAnswer) {
+        HudCheckQuestionDialog(
+            onAnswer = { seen ->
+                val way = hudCheck.answer(seen)
+                way?.let(onWayChosen)
+                answered = way ?: 0
+            },
+            onDismiss = { hudCheck.dismissAnswer() },
+        )
+    }
+    answered?.let { way -> HudCheckAnswerDialog(way) { answered = null } }
     val running = checkState is HudCheck.State.Preparing || checkState is HudCheck.State.Step ||
         checkState == HudCheck.State.Restoring
     SettingActionRow(
@@ -2522,6 +2546,91 @@ private fun HudCheckRow() {
         )
     }
     hint?.let { SettingHint(text = it) }
+}
+
+/** A hint line with a small orange tag after it (way 3 «пробный»). */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun HudTrialHint(text: String, tag: String) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(text = text, color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp)
+        Text(
+            text = tag,
+            color = AccentOrange,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .border(1.dp, AccentOrange, RoundedCornerShape(4.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        )
+    }
+}
+
+/** The end of a finished HUD check: which number the glass showed; the smallest picks the way. */
+@Composable
+private fun HudCheckQuestionDialog(onAnswer: (Int?) -> Unit, onDismiss: () -> Unit) {
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnClickOutside = false),
+        title = { Text(stringResource(R.string.settings_hud_answer_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.settings_hud_answer_text), color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HudCheck.MARKERS.forEach { marker ->
+                        Button(
+                            onClick = { onAnswer(marker) },
+                            modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+                        ) { Text(marker.toString(), fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1) }
+                    }
+                }
+                OutlinedButton(
+                    onClick = { onAnswer(null) },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, CardBorder),
+                ) { Text(stringResource(R.string.settings_hud_answer_none), color = TextPrimary, fontSize = 15.sp) }
+            }
+        },
+        confirmButton = {},
+    )
+}
+
+/** What the answer did: the way picked ([way] 1..3), or 0 = the glass showed nothing, way kept. */
+@Composable
+private fun HudCheckAnswerDialog(way: Int, onDone: () -> Unit) {
+    AppAlertDialog(
+        onDismissRequest = onDone,
+        title = {
+            Text(
+                if (way > 0) stringResource(R.string.settings_hud_answer_chosen_title, way)
+                else stringResource(R.string.settings_hud_answer_nothing_title)
+            )
+        },
+        text = {
+            Text(
+                stringResource(
+                    if (way > 0) R.string.settings_hud_answer_chosen_text else R.string.settings_hud_answer_nothing_text
+                ),
+                fontSize = 14.sp, lineHeight = 19.sp,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onDone,
+                modifier = Modifier.heightIn(min = 48.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+            ) { Text(stringResource(R.string.settings_hud_answer_done), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+        },
+    )
 }
 
 /**

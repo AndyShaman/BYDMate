@@ -1039,7 +1039,7 @@
     <string name="settings_fid_dump_button">Сохранить каталог fid\'ов</string>
     <string name="settings_fid_dump_desc">Имена и значения констант SDK. Только технические идентификаторы: без VIN, без геолокации, без личных данных</string>
     <string name="settings_hud_check_title">Проверка HUD</string>
-    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Сначала включите запись логов и снимайте стекло на видео. Машина стоит, маршрут не нужен. На стекле по очереди будут тестовые надписи «BYDMATE 1», «BYDMATE 2», «BYDMATE 3», затем стрелка налево и 444 м. После проверки всё пропадёт</string>
+    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Машина стоит, маршрут не нужен. Сначала включите запись логов. На стекле по очереди появятся числа 111, 222, 333 и 444. В конце приложение спросит, что вы видели, и само выберет способ. После проверки всё пропадёт</string>
     <string name="settings_hud_check_button">Запустить</string>
     <string name="settings_hud_check_preparing">Готовим проверку</string>
     <string name="settings_hud_check_step">Шаг %1$d из %2$d, смотрите на стекло</string>
@@ -1562,11 +1562,23 @@
     <string name="settings_hud_status_on">Передача на HUD активна</string>
     <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
     <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
-    <string name="settings_hud_mode_title">Режим HUD</string>
-    <string name="settings_hud_mode_1">Режим 1</string>
-    <string name="settings_hud_mode_2">Режим 2</string>
-    <string name="settings_hud_mode_1_desc">Режим 1. Подсказки идут на стекло, приборку приложение не трогает.</string>
-    <string name="settings_hud_mode_2_desc">Режим 2. На время маршрута машина переходит в режим навигации. Попробуйте, если в режиме 1 стекло пустое. На приборке появится стрелка, приложения и камеры на приборке могут не показываться.</string>
+    <string name="settings_hud_mode_title">Способ вывода на стекло</string>
+    <string name="settings_hud_mode_1">Способ 1</string>
+    <string name="settings_hud_mode_2">Способ 2</string>
+    <string name="settings_hud_mode_1_desc">Способ 1. Подсказки идут на стекло, приборку приложение не трогает.</string>
+    <string name="settings_hud_mode_2_desc">Способ 2. Подсказки идут и на стекло, и на приборку: там появится карточка навигации со стрелкой, метрами и улицей.</string>
+    <string name="settings_hud_mode_3">Способ 3</string>
+    <string name="settings_hud_mode_3_desc">Способ 3. Как способ 2, и ещё одним путём. Попробуйте, если первые два ничего не показали.</string>
+    <string name="settings_hud_mode_trial">пробный</string>
+    <string name="settings_hud_mode_pick_hint">Не знаете, какой выбрать? Запустите «Проверку HUD».</string>
+    <string name="settings_hud_answer_title">Какое число вы увидели на стекле?</string>
+    <string name="settings_hud_answer_text">Приложение само выберет способ. Если видели несколько чисел, нажмите меньшее.</string>
+    <string name="settings_hud_answer_none">Ничего</string>
+    <string name="settings_hud_answer_chosen_title">Выбран способ %1$d</string>
+    <string name="settings_hud_answer_chosen_text">Подсказки пойдут на стекло этим способом. Поменять его можно в настройках HUD.</string>
+    <string name="settings_hud_answer_nothing_title">Стекло ничего не показало</string>
+    <string name="settings_hud_answer_nothing_text">Ни один из способов не сработал на стекле этой машины. Запишите лог и пришлите его нам, мы разберёмся.</string>
+    <string name="settings_hud_answer_done">Готово</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Слепые зоны</string>
     <string name="settings_blindspot_title">Камера по поворотнику</string>
