@@ -37,9 +37,14 @@ object ClusterMusicCard {
         val playbackState: Int?,
         val title: String?,
         val artist: String?,
+        /** Current position, already advanced to "now" by the caller; null = unknown. */
+        val positionMs: Long? = null,
+        /** METADATA_KEY_DURATION; null or <= 0 = unknown. */
+        val durationMs: Long? = null,
     )
 
-    data class Card(val title: String, val artist: String, val musicState: Int)
+    /** [progress] is the 0..100 bar value, null when the session gives no duration. */
+    data class Card(val title: String, val artist: String, val musicState: Int, val progress: Int? = null)
 
     /**
      * The card for [sessions] (system priority order), or null when no source session has a
@@ -51,7 +56,14 @@ object ClusterMusicCard {
         val playing = candidates.firstOrNull { it.playbackState == PB_PLAYING || it.playbackState == PB_BUFFERING }
         val chosen = playing ?: candidates.firstOrNull { it.playbackState == PB_PAUSED } ?: return null
         val state = if (chosen === playing) MUSIC_PLAYING else MUSIC_PAUSED
-        return Card(chosen.title!!.trim(), chosen.artist?.trim().orEmpty(), state)
+        val progress = progressPercent(chosen.positionMs, chosen.durationMs)
+        return Card(chosen.title!!.trim(), chosen.artist?.trim().orEmpty(), state, progress)
+    }
+
+    /** The bar value as the stock OtherClient rounds it: position / duration * 100, clamped. */
+    fun progressPercent(positionMs: Long?, durationMs: Long?): Int? {
+        if (positionMs == null || durationMs == null || durationMs <= 0) return null
+        return ((positionMs.coerceIn(0, durationMs) * 100.0 / durationMs) + 0.5).toInt()
     }
 
     /**

@@ -67,4 +67,22 @@ class ClusterMusicCardTest {
         val decoded = String(ClusterMusicCard.encode(text), Charsets.UTF_16LE)
         assertEquals("x".repeat(ClusterMusicCard.MAX_TEXT_BYTES / 2 - 1), decoded)
     }
+
+    @Test fun `progress is position over duration rounded like the stock sender`() {
+        assertEquals(50, ClusterMusicCard.progressPercent(90_000, 180_000))
+        assertEquals(1, ClusterMusicCard.progressPercent(1_000, 180_000))
+        assertEquals(100, ClusterMusicCard.progressPercent(200_000, 180_000))
+        assertEquals(0, ClusterMusicCard.progressPercent(-5, 180_000))
+    }
+
+    @Test fun `no duration means no progress`() {
+        assertNull(ClusterMusicCard.progressPercent(90_000, null))
+        assertNull(ClusterMusicCard.progressPercent(90_000, 0))
+        assertNull(ClusterMusicCard.progressPercent(null, 180_000))
+    }
+
+    @Test fun `card carries progress from the chosen session`() {
+        val card = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 45_000, 180_000)))
+        assertEquals(25, card?.progress)
+    }
 }
