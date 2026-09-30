@@ -188,8 +188,9 @@ class HudWayChannelsTest {
         assertEquals("M1 Minsk-Brest 42", HudWayChannels.roadName("M1 Minsk-Brest 42"))
         // 100 letters grow to 200 (ß is ss): the cap applies to what goes out.
         assertEquals("ss".repeat(100).take(127), HudWayChannels.roadName("ß".repeat(100)))
-        // One letter at a time, as OpenBYD does: ICU's per-letter Cyrillic is ISO 9, so Щ is S.
-        assertEquals("Sukina", HudWayChannels.roadName("Щукина"))
+        // Cyrillic reads as a driver would spell it: Щ is Shch, not ICU's per-letter S.
+        assertEquals("Shchukina", HudWayChannels.roadName("Щукина"))
+        assertEquals("shch".repeat(100).take(127), HudWayChannels.roadName("щ".repeat(100)))
     }
 
     @Test fun `way 2 writes a Cyrillic road in Latin`() = runTest {
