@@ -83,12 +83,9 @@ class ClusterMusicBridge @Inject constructor(
         job?.cancel()
         job = scope.launch {
             while (isActive) {
-                try {
-                    mutex.withLock { if (isActive) tick() }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "tick failed: ${e.message}")
+                runCatching { mutex.withLock { if (isActive) tick() } }.onFailure {
+                    if (it is CancellationException) throw it
+                    Log.w(TAG, "tick failed: ${it.message}")
                 }
                 delay(POLL_MS)
             }

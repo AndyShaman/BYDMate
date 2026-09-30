@@ -51,7 +51,8 @@ class ClusterMusicSync(private val port: Port) {
         if (fids == null) return Outcome.NONE
         if (!wanted) return if (dirty) clear(fids) else Outcome.NONE
         return when (target) {
-            is Target.OtherPlaying -> handOff()
+            // Another app plays: the stock controller rewrites the card on the focus change. Ours is gone.
+            is Target.OtherPlaying -> if (dirty || shown != null) Outcome.HANDED_OFF.also { forget() } else Outcome.NONE
             Target.Idle -> if (dirty) clear(fids) else Outcome.NONE
             is Target.Show -> show(fids, target.card, nowMs, stillWanted)
         }
@@ -65,13 +66,6 @@ class ClusterMusicSync(private val port: Port) {
         if (fids == null || !dirty) return Outcome.NONE
         clearAttempts = 0
         return clear(fids)
-    }
-
-    /** Another app plays: the stock controller rewrites the card on the focus change. Ours is gone. */
-    private fun handOff(): Outcome {
-        if (!dirty && shown == null) return Outcome.NONE
-        forget()
-        return Outcome.HANDED_OFF
     }
 
     private suspend fun show(fids: ClusterMusicFids, card: Card, nowMs: Long, stillWanted: () -> Boolean): Outcome {
@@ -120,8 +114,8 @@ class ClusterMusicSync(private val port: Port) {
         playedSent = null
         fids.progress?.let { if (ok(port.writeInt(fids.instrumentDev, it, card.progress ?: 0))) progressSent = card.progress ?: 0 }
         val audio = fids.audioDev ?: return
-        fids.totalTime?.let { writeHms(audio, it, ClusterMusicCard.hms(card.durationSec ?: 0)) }
-        fids.playTime?.let { if (writeHms(audio, it, ClusterMusicCard.hms(card.positionSec ?: 0))) playedSent = ClusterMusicCard.hms(card.positionSec ?: 0) }
+        fids.totalTime?.let { port.writeHms(audio, it, ClusterMusicCard.hms(card.durationSec ?: 0)) }
+        fids.playTime?.let { if (port.writeHms(audio, it, ClusterMusicCard.hms(card.positionSec ?: 0))) playedSent = ClusterMusicCard.hms(card.positionSec ?: 0) }
     }
 
     /** Progress and played time as they move; a failed write is simply retried next tick. */
@@ -132,22 +126,25 @@ class ClusterMusicSync(private val port: Port) {
             if (ok(port.writeInt(fids.instrumentDev, fids.progress, progress))) progressSent = progress
             wrote = true
         }
-        val position = card.positionSec
-        val audio = fids.audioDev
-        if (position != null && audio != null && fids.playTime != null) {
-            val played = ClusterMusicCard.hms(position)
-            val last = playedSent
-            if (played != last) {
-                var allOk = true
-                if (played.first != last?.first) allOk = ok(port.writeInt(audio, fids.playTime[0], played.first)) && allOk
-                if (played.second != last?.second) allOk = ok(port.writeInt(audio, fids.playTime[1], played.second)) && allOk
-                if (played.third != last?.third) allOk = ok(port.writeInt(audio, fids.playTime[2], played.third)) && allOk
-                playedSent = if (allOk) played else null
-                wrote = true
-            }
-        }
-        return wrote
+        return tickPlayed(fids, card.positionSec) || wrote
     }
+
+    /** Played time, only the hour/minute/second parts that moved. True when anything was written. */
+    private suspend fun tickPlayed(fids: ClusterMusicFids, positionSec: Int?): Boolean {
+        val audio = fids.audioDev
+        val fidsHms = fids.playTime
+        if (positionSec == null || audio == null || fidsHms == null) return false
+        val played = ClusterMusicCard.hms(positionSec)
+        val last = playedSent
+        if (played == last) return false
+        var allOk = true
+        if (played.first != last?.first) allOk = ok(port.writeInt(audio, fidsHms[0], played.first)) && allOk
+        if (played.second != last?.second) allOk = ok(port.writeInt(audio, fidsHms[1], played.second)) && allOk
+        if (played.third != last?.third) allOk = ok(port.writeInt(audio, fidsHms[2], played.third)) && allOk
+        playedSent = if (allOk) played else null
+        return true
+    }
+
 
     /** What the stock sender sends when a source goes away: stopped, blank name and singer, zeroed extras. */
     private suspend fun clear(fids: ClusterMusicFids): Outcome {
@@ -158,8 +155,8 @@ class ClusterMusicSync(private val port: Port) {
         writeSinger(fids, "")
         fids.progress?.let { port.writeInt(fids.instrumentDev, it, 0) }
         fids.audioDev?.let { audio ->
-            fids.playTime?.let { writeHms(audio, it, Triple(0, 0, 0)) }
-            fids.totalTime?.let { writeHms(audio, it, Triple(0, 0, 0)) }
+            fids.playTime?.let { port.writeHms(audio, it, Triple(0, 0, 0)) }
+            fids.totalTime?.let { port.writeHms(audio, it, Triple(0, 0, 0)) }
         }
         if (required) {
             forget()
@@ -174,11 +171,6 @@ class ClusterMusicSync(private val port: Port) {
         port.writeBuffer(audio, singer, ClusterMusicCard.encode(artist))
     }
 
-    private suspend fun writeHms(dev: Int, fids: List<Int>, hms: Triple<Int, Int, Int>): Boolean =
-        ok(port.writeInt(dev, fids[0], hms.first)) and
-            ok(port.writeInt(dev, fids[1], hms.second)) and
-            ok(port.writeInt(dev, fids[2], hms.third))
-
     private fun forget() {
         shown = null
         dirty = false
@@ -187,14 +179,21 @@ class ClusterMusicSync(private val port: Port) {
         clearAttempts = 0
     }
 
-    private fun ok(status: Int?): Boolean = status != null && status >= 0
-
     companion object {
         const val REASSERT_MS = 10_000L
         /** ~30 s of polls; after that the clear is dropped and logged instead of hammering a dead helper. */
         const val MAX_CLEAR_ATTEMPTS = 20
     }
 }
+
+/** A helper write landed: status 1 real, 0 no-op; negative is an error, null the daemon unreachable. */
+private fun ok(status: Int?): Boolean = status != null && status >= 0
+
+/** Hours, minutes, seconds into three fids, as the stock sendAudioTime does; true when all three landed. */
+private suspend fun ClusterMusicSync.Port.writeHms(dev: Int, fids: List<Int>, hms: Triple<Int, Int, Int>): Boolean =
+    ok(writeInt(dev, fids[0], hms.first)) and
+        ok(writeInt(dev, fids[1], hms.second)) and
+        ok(writeInt(dev, fids[2], hms.third))
 
 /**
  * When the bridge re-arms notification-listener access: once when the switch is turned on, and
