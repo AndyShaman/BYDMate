@@ -37,6 +37,16 @@ All core features (trips, charges, automations, local insights, offline voice ag
 
 ## What's New
 
+The main changes in version 3.19.4.
+
+**Three ways to draw on the glass.** The HUD settings now offer three ways instead of two modes. Way 1 is the default and works as before: hints go to the glass and the app does not touch the cluster. Way 2 puts the car into navigation mode and passes the arrow, the meters and the street to the navigation card on the cluster; the street is written in Latin letters there. Way 3 is experimental: everything as in Way 2, plus one more path that OpenBYD uses. Ways 2 and 3 are new and have not been checked on cars yet. When the route ends, the way is changed or the HUD is turned off, the app removes from the glass and the cluster everything it put there.
+
+**HUD check picks the way for you.** The check shows the numbers 111, 222, 333 and 444 on the glass one after another, each by its own way, and at the end asks which number you saw and sets the right way. If the glass showed nothing, the app will ask you to send a log. The test distance 333 m is cleared after the check.
+
+**The window no longer lowers by itself.** After parking, the window no longer opens by itself when the car starts, and repeated "vent" and "halfway" commands work the first time: after each command to open a window by a fraction, the app clears it from the car the same way the factory BYD voice assistant does.
+
+**Yandex Music without the internet.** The phrases "turn on Yandex Music", "launch Yandex Music" and just "Yandex Music" start "My Wave" right away, without the cloud assistant.
+
 The main changes in version 3.19.3.
 
 **The agent closes by itself.** The voice agent settings have a new switch, "Close the agent after a completed command", off by default. When it is on, the agent closes on its own after a completed command or an answer. If the agent asked you a question, it waits for your reply.
@@ -50,24 +60,6 @@ The main changes in version 3.19.3.
 **Windows by a fraction.** A repeated command to open a window by a fraction, such as venting or halfway, now works even where the car used to skip it.
 
 **Head units with Android 10.** A steering wheel button assigned in an automation works after the car is turned off and on. The widget no longer disappears for half a minute after the car starts. Log recording now also keeps the work of the blind-spot cameras.
-
-The main changes in versions 3.19.0 - 3.19.2.
-
-**Telegram report.** When the car is turned off, a report arrives in Telegram: the car's state, the last trip, and open doors as separate blocks. The report includes the car's odometer reading, and right under it comes a point showing where the car is on the map: it opens in the maps app on your phone with one tap and arrives silently. If there is no connection, the report arrives the next time the car starts. What goes into the report is chosen in Settings, and automations have a "Send report to Telegram" action.
-
-**The assistant answers by itself.** For simple questions about the car the assistant answers right away: outside and cabin temperature, charge, range, how much the climate costs. It takes the answer from the car's data, so there is no delay. The assistant also answers "where am I" and "what is nearby", naming the closest towns and villages with the distance and direction.
-
-**Chargers nearby and along the way.** In Belarus the assistant says whether a station is free, its power and price, and on the road it looks for stations ahead along your route. Pick a station and the assistant builds a route to it. The connector used for the search is chosen in Settings: GB/T, CCS2, Type2, or CHAdeMO.
-
-**The assistant's voice.** You can interrupt the assistant by saying its name. It again hears a phrase you start right after its answer. On DiLink 3.0 and DiLink 4.0 it no longer loses the first words, and its voice plays at navigation volume without changing the music volume. A steering wheel button that sends two codes per press, like on the Atto 3, is assigned to the assistant as a whole.
-
-**Drive mode.** ECO, Normal, and Sport switch from automations, by voice, and through the assistant. Snow, sand, mud, mountain, and smart mode are available at speeds up to 15 km/h. The app checks that the mode really changed.
-
-**Automation is clearer.** Each rule is written in words, and you can see when it fired and how it ended. The editor is simpler, with large buttons. There is a one-time condition "Once: date and time" and rear passenger seat belts in the conditions.
-
-**Cluster and HUD.** Both blind-spot cameras can be shown on the cluster while the main screen stays free. The "HUD check" button in the HUD settings runs test hints on the glass for a minute and a half, no route needed. The maneuver arrow on the glass no longer disappears while the car waits at a traffic light.
-
-**Small things.** The OpenRouter key is saved without stray spaces. The assistant knows the current time and honestly says when it does not remember the start of a long conversation. After an update the app starts by itself.
 
 ---
 
@@ -318,11 +310,11 @@ The projection runs in one of the two modes described above. In "Factory" mode, 
 
 If the car has a factory head-up display, BYDMate draws Yandex Navigator guidance on the windshield: the maneuver icon, the distance to it, the street name and the arrival time. A separate toggle adds the speed limit sign, sent as a number. While the Navigator warns about a speed camera, the camera icon and the distance to it replace the maneuver arrow. Guidance keeps running even when the Navigator is minimized or projected to the cluster; Yandex Maps works as a guidance source alongside the Navigator.
 
-Enable it in **Settings → Display**, section "HUD (head-up display)": the "Navigation on HUD" toggle and, separately, "Speed sign under the arrow". Guidance travels over the HUD's own factory channel, so a car equipped with a head-up display is required. If the car has no such channel, the app says so in Settings and does not enable the feature.
+Enable it in **Settings → Display**, section "HUD (head-up display)": the "Navigation on HUD" toggle and, separately, "Speed sign under the arrow". The way of drawing on the glass is chosen there too: Way 1 is the default, Ways 2 and 3 are for cars where the glass is empty in Way 1. Guidance travels over the HUD's own factory channel, so a car equipped with a head-up display is required. If the car has no such channel, the app says so in Settings and does not enable the feature.
 
-**What the app changes in the car.** While "Navigation on HUD" is on and the navigator is guiding a route, BYDMate turns on the car's navigation mode on the head-up display. Once the route ends or the toggle is off, everything returns to how it was. With the toggle off, the app does not touch anything in the car.
+**What the app changes in the car.** In Way 1, nothing: hints go over the HUD's own channel. In Ways 2 and 3, while "Navigation on HUD" is on and the navigator is guiding a route, BYDMate turns on the car's navigation mode and writes the arrow, the meters and the street to the navigation card on the cluster. Once the route ends, the way is changed or the toggle is off, everything returns to how it was. With the toggle off, the app does not touch anything in the car.
 
-**If nothing shows up on the glass.** Open **Settings → Service & Data**, "Data" section, and tap **"Start"** next to the "HUD check" line. The car needs to be parked, with no route running in the navigator. The check takes about a minute and a half and shows three markers on the glass one after another: "BYDMATE 1", "BYDMATE 2", and "BYDMATE 3". Note which ones you saw, record a log with the log recording button, and send it in a GitHub issue along with your car model.
+**If nothing shows up on the glass.** Open **Settings → Service & Data**, "Data" section, and tap **"Start"** next to the "HUD check" line. The car needs to be parked, with no route running in the navigator. The check takes about two minutes and shows the numbers 111, 222, 333 and 444 on the glass one after another, each by its own way. At the end it asks which number you saw and sets the right way itself. If the glass showed nothing, record a log with the log recording button and send it in a GitHub issue along with your car model.
 
 ---
 
@@ -448,6 +440,7 @@ Examples from the list. Full list with wording variants: [docs/VOICE_COMMANDS.md
 | "Включи подогрев руля" (Turn on the steering wheel heater) | steering wheel heating |
 | "Поставь температуру 22" (Set the temperature to 22) | climate set to 22 degrees |
 | "Громкость 20" (Volume 20) | media volume set to 20 |
+| "Включи Яндекс Музыку", "Яндекс Музыка" (Turn on Yandex Music, Yandex Music) | starts "My Wave" in Yandex Music |
 | "Запри машину" (Lock the car) | doors lock |
 
 The English offline commands were removed, the list is Russian only. The app's interface language does not affect this: the offline commands and the agent work regardless of the app's language.
