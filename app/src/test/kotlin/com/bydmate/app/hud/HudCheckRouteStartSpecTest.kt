@@ -145,7 +145,7 @@ class HudCheckRouteStartSpecTest {
         val s = setup()
         guidanceStartingAt(45_000, s)
         s.check.run()
-        // The CAN clear is the LAST word on these fids: icon back to TURN_NONE, distance to -1
+        // The CAN clear is the LAST word on these fids: icon back to TURN_NONE, distance to DISTANCE_NONE
         // (the display step itself wrote a turn icon and a real distance first).
         assertEquals(HudCanChannel.TURN_NONE, s.car.writes.last { it.dev == HudCanChannel.DEV && it.fid == HudCanChannel.FID_TURN_KIND }.value)
         assertEquals(HudCanChannel.DISTANCE_NONE, s.car.writes.last { it.dev == HudCanChannel.DEV && it.fid == HudCanChannel.FID_TURN_DISTANCE_M }.value)

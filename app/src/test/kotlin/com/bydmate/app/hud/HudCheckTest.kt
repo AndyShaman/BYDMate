@@ -141,10 +141,10 @@ class HudCheckTest {
         )
         assertEquals("hudprobe: step=2 chan=someip-ui7 armed=true start_rc=0 fire_rc={0:67} marker=222m", probe[3])
         assertEquals(
-            "hudprobe: step=3 chan=can icon st=1/1 dist st=1 road st=0 readback icon=1 dist=333 marker=333m",
+            "hudprobe: step=3 chan=can icon st=1/1 dist st=1 road st=0 readback icon=7 dist=333 marker=333m",
             probe[4],
         )
-        assertEquals("hudprobe: can clear icon st=1/1 dist st=1 road st=0 readback icon=0 dist=-1", probe[5])
+        assertEquals("hudprobe: can clear icon st=1/1 dist st=1 road st=0 readback icon=0 dist=0", probe[5])
         assertEquals("hudprobe: restore navi rc=0 screen=1 rc=1 ok=true canNavi rc=1 isa rc=1 via=sdk readback navi=4 screen=1 canNavi=0 isa=0", probe[6])
         assertEquals(7, probe.size)
 
@@ -152,11 +152,11 @@ class HudCheckTest {
         // them, closed the status, put the layout back and cleared canNavi and isa.
         assertEquals(
             listOf("sdk 2", "set 1023/1276174357=3", "set 1014/1083203624=1", "set 1014/1262485592=1",
-                "set 1007/1139806224=1", "set 1007/1139806256=1", "set 1007/1139806232=333", "buf 1007/1140461576=BYDMATE 3"),
+                "set 1007/1139806224=7", "set 1007/1139806256=7", "set 1007/1139806232=333", "buf 1007/1140461576=BYDMATE 3"),
             s.car.calls.take(8),
         )
         assertEquals(
-            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=-1", "buf 1007/1140461576= ",
+            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=0", "buf 1007/1140461576= ",
                 "sdk 4", "set 1023/1276174357=1", "set 1014/1083203624=0", "set 1014/1262485592=0"),
             s.car.calls.takeLast(8),
         )
@@ -356,7 +356,7 @@ class HudCheckTest {
         assertHandedOver(s, product, step = 3)
         assertEquals(1, product.clearFrames())   // the one before the CAN step, none in the restore
         assertEquals(
-            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=-1", "buf 1007/1140461576= "),
+            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=0", "buf 1007/1140461576= "),
             s.car.calls.takeLast(4),
         )
         assertEquals(1, prefs().getInt(HudArming.KEY_AS_FOUND, -1))
