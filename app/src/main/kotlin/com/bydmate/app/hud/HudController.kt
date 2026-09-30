@@ -180,9 +180,11 @@ class HudController @Inject constructor(
         }
     }
 
-    /** Our status and layout kept up, or CAN values of way 2 or 3 left on the instrument. */
+    /** Our status and layout kept up, CAN values of way 2 or 3 left on the instrument, or way 3's
+     *  family left up on the gateway. */
     private fun leftoverKept(): Boolean =
-        prefs().contains(HudArming.KEY_AS_FOUND) || prefs().contains(HudWayChannels.KEY_CAN_LEFT)
+        prefs().contains(HudArming.KEY_AS_FOUND) || prefs().contains(HudWayChannels.KEY_CAN_LEFT) ||
+            prefs().contains(HudWayChannels.KEY_LMCN_LEFT)
 
     /** One put-back; true when it is over, false while the fullscreen cluster still defers it. The
      *  CAN values go first, while the status is still up; a refused clear waits for the next start. */
@@ -313,7 +315,8 @@ class HudController @Inject constructor(
 
     /** A layout the HUD check kept (process killed mid-check, or its put-back deferred at a
      *  fullscreen cluster) on a car where the HUD output does not start: nothing else would put it
-     *  back. Without the key nothing starts, reads or writes. */
+     *  back. Without the key nothing starts, reads or writes. A family left up gets its stops
+     *  last, on a binding of its own. */
     private suspend fun putBackLeftover() {
         if (!leftoverKept() || armingPaused || NavGuidanceHub.snapshot().active) return
         if (!helperBootstrap.ensureRunning()) return
@@ -321,6 +324,20 @@ class HudController @Inject constructor(
             HudWayChannels.clearCanLeftover(HudCanChannel(helperClient), prefs())
             HudArming(helperClient, prefs()).disarmLeftover(guided = false)
         }.onFailure { Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}") }
+        stopLmcnLeftover()
+    }
+
+    /** Way 3's family a process death left up while the output does not run: a one-off binding
+     *  for its off events and stops, then let go. Unbound, the key waits for the next start. */
+    private suspend fun stopLmcnLeftover() {
+        if (!prefs().contains(HudWayChannels.KEY_LMCN_LEFT)) return
+        if (!HudSomeIpBridge.isServicePresent(context.packageManager)) return
+        val b = bridgeFactory(context) {}
+        try {
+            if (b.bind()) HudWayChannels.stopLmcnLeftover(b, prefs())
+        } finally {
+            b.unbind()
+        }
     }
 
     /** Gateway binding died (crash/update). Clean up so the next startIfEnabled()
