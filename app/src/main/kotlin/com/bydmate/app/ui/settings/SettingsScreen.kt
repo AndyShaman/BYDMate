@@ -2167,6 +2167,30 @@ private fun ServiceSection(
         }
     }
 
+    // Instrument music card: mirrors Yandex music, which the stock controller leaves blank.
+    // ClusterMusicBridge reads the flag on every poll, so no restart is needed.
+    var clusterMusicCard by remember {
+        mutableStateOf(clusterPrefs.getBoolean(ClusterProjectionManager.KEY_CLUSTER_MUSIC_CARD, false))
+    }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+            SettingToggleRow(
+                title = stringResource(R.string.settings_cluster_music_card_title),
+                traceId = "cluster_music_card",
+                description = stringResource(R.string.settings_cluster_music_card_desc),
+                checked = clusterMusicCard,
+                onCheckedChange = {
+                    clusterMusicCard = it
+                    clusterPrefs.edit().putBoolean(ClusterProjectionManager.KEY_CLUSTER_MUSIC_CARD, it).apply()
+                },
+            )
+        }
+    }
+
     // ADB restore (firmwares that close port 5555 on every reboot). The toggle is shown on
     // every car: where the port survives a reboot the status line simply says so.
     val adbRestore = remember { clusterEntryPoint.adbRestoreManager() }
