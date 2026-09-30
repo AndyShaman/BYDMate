@@ -211,7 +211,9 @@ class HudController @Inject constructor(
         if (!armsNaviStatus()) return null
         return HudWayChannels(mode(), HudCanChannel(helperClient), b, prefs()) { HudPosition.lastKnown(context) }
             .also { ch ->
-                ch.start(scope, held = { armingPaused }) { NavGuidanceHub.snapshot().active && arming?.armed == true }
+                ch.start(scope, held = { armingPaused }, closed = arming?.closing == true) {
+                    NavGuidanceHub.snapshot().active && arming?.armed == true
+                }
             }
     }
 

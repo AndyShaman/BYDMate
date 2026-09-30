@@ -276,6 +276,37 @@ class HudControllerWayTest {
         c.setEnabled(false)
     }
 
+    @Test fun `switching way 2 to way 3 while the disarm waits on the helper writes and starts nothing until the next arm`() {
+        val state = car()
+        val gate = CompletableDeferred<Unit>()
+        coEvery { helperClient.hudNaviStatus(4) } coAnswers {
+            calls += "sdk 4 wait"
+            gate.await()
+            calls += "sdk 4"
+            state[HudArming.NAVI] = 4
+            HudNaviReply(HelperBinderProtocol.HUD_NAVI_CALLED, 0)
+        }
+        guideRoute()
+        val c = controller()
+        c.setMode(HudController.MODE_NAVI_STATUS)
+        c.setEnabled(true)
+        awaitTrue { snapshot().contains(canShown) }
+        NavGuidanceHub.reset()
+        awaitTrue { snapshot().contains("sdk 4 wait") }
+        guideRoute()
+        c.setMode(HudController.MODE_LMCN)
+        Thread.sleep(1_000)
+        val waiting = snapshot()
+        val clearAt = Collections.lastIndexOfSubList(waiting, canClear)
+        assertTrue("nothing written or started while the disarm waits: $waiting",
+            waiting.drop(clearAt + canClear.size).none { it.startsWith(can) || it.startsWith("buf ") || it in lmcnStarts })
+        gate.complete(Unit)
+        awaitTrue { snapshot().let { it.subList(it.indexOf("sdk 4"), it.size) }.let { it.contains(canShown) && it.containsAll(lmcnStarts) } }
+        val after = snapshot().let { it.subList(it.indexOf("sdk 4"), it.size) }
+        assertTrue(after.toString(), after.indexOf("sdk 2") < after.indexOf(lmcnStarts.first()))
+        c.setEnabled(false)
+    }
+
     @Test fun `an arm that throws after the status is up still lets the channels write`() {
         var canNaviRaises = 0
         car { it == "set 1014/1083203624=1" && ++canNaviRaises == 2 }
