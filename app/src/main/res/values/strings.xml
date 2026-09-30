@@ -82,6 +82,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Колёсико громкости на руле</string>
     <string name="settings_knob_play_pause_desc">Нажатие ставит на паузу и продолжает воспроизведение, а не переключает источник звука. Нужно после обновления прошивки, где нажатие стало менять источник.</string>
+    <string name="settings_cluster_music_card_title">Трек Яндекса на приборке</string>
+    <string name="settings_cluster_music_card_desc">Показывает название и исполнителя из Яндекс Навигатора (Алиса) и Яндекс Музыки в карточке музыки на приборке. Штатная прошивка заполняет её только для своих плееров и Bluetooth.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Восстанавливать ADB после перезагрузки</string>
