@@ -1683,7 +1683,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         private const val BIND_CODE_SPAN = 900_000
         /** Same tag as TelegramReporter: the report's settings changes sit next to its sends. */
         private const val TAG_TG_REPORT = "TgReport"
-        /** Shared budget for the daemon-backed dump sections (liveness + seat and steering heat reads).
+        /** Shared budget for the daemon-backed dump sections (liveness + seat, steering heat and window reads).
          *  The dump must not hang on a wedged daemon. */
         private const val HELPER_DIAG_BUDGET_MS = 3_000L
 
@@ -1711,6 +1711,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 collected.set(collected.get().copy(seats = seats))
                 val steeringHeat = runCatching { helper.readBatch(SteeringHeatDiagnostics.batchItems()) }.getOrNull()
                 collected.set(collected.get().copy(steeringHeat = steeringHeat))
+                val windows = runCatching { helper.readBatch(WindowDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(windows = windows))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
@@ -1722,9 +1724,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         val alive: Boolean?,
         val seats: List<Pair<Int, Int>>?,
         val steeringHeat: List<Pair<Int, Int>>? = null,
+        val windows: List<Pair<Int, Int>>? = null,
     )
 
-    /** Liveness, the seat fid snapshot and the steering heat snapshot under ONE shared budget. */
+    /** Liveness and the seat, steering heat and window fid snapshots under ONE shared budget. */
     private suspend fun gatherHelperDiagnostics(): HelperDiagnostics =
         collectHelperDiagnostics(viewModelScope, helperClient, HELPER_DIAG_BUDGET_MS)
 
@@ -2361,6 +2364,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             appendLine("--- windows ---")
             // Which write channel this firmware ended up on (#79): percent fids or CTRL.
             appendLine("window channel: ${windowChannelStore.winner()}")
+            WindowDiagnostics.format(helperDiag.windows).forEach { appendLine(it) }
 
             appendLine("--- seats ---")
             SeatsDiagnostics.format(helperDiag.seats).forEach { appendLine(it) }

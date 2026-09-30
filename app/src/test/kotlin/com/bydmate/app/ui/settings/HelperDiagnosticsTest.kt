@@ -14,6 +14,7 @@ import org.junit.Test
 class HelperDiagnosticsTest {
     private val seats = SeatsDiagnostics.batchItems().map { 0 to 1 }
     private val steering = SteeringHeatDiagnostics.batchItems().map { 0 to 1 }
+    private val windows = WindowDiagnostics.batchItems().map { 0 to 2 }
     private val helper = mockk<HelperClient> {
         coEvery { isAlive() } returns true
         coEvery { readBatch(SeatsDiagnostics.batchItems()) } returns seats
@@ -30,11 +31,33 @@ class HelperDiagnosticsTest {
         assertEquals(3_000L, testScheduler.currentTime)
     }
 
-    @Test fun `all three sections come back when the daemon answers`() = runTest {
+    @Test fun `all four sections come back when the daemon answers`() = runTest {
         coEvery { helper.readBatch(SteeringHeatDiagnostics.batchItems()) } returns steering
+        coEvery { helper.readBatch(WindowDiagnostics.batchItems()) } returns windows
         val diag = SettingsViewModel.collectHelperDiagnostics(
             backgroundScope, helper, 3_000L, StandardTestDispatcher(testScheduler),
         )
-        assertEquals(SettingsViewModel.HelperDiagnostics(true, seats, steering), diag)
+        assertEquals(SettingsViewModel.HelperDiagnostics(true, seats, steering, windows), diag)
+    }
+
+    @Test fun `a hanging window batch still yields the other sections`() = runTest {
+        coEvery { helper.readBatch(SteeringHeatDiagnostics.batchItems()) } returns steering
+        coEvery { helper.readBatch(WindowDiagnostics.batchItems()) } coAnswers { awaitCancellation() }
+        val diag = SettingsViewModel.collectHelperDiagnostics(
+            backgroundScope, helper, 3_000L, StandardTestDispatcher(testScheduler),
+        )
+        assertEquals(SettingsViewModel.HelperDiagnostics(true, seats, steering, null), diag)
+    }
+
+    @Test fun `window fids are printed with their device and fid`() {
+        assertEquals(
+            listOf(
+                "percentage_control_config[dev=1001 fid=1222639652]=1",
+                "control_plan[dev=1001 fid=1222639650]=(status=-10011)",
+                "left_front_current_state[dev=1001 fid=1222639653]=0",
+            ),
+            WindowDiagnostics.format(listOf(0 to 1, -10011 to 0, 0 to 0)),
+        )
+        assertEquals(listOf("(unavailable)"), WindowDiagnostics.format(null))
     }
 }
