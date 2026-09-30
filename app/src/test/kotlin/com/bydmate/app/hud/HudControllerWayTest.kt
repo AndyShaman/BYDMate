@@ -479,6 +479,59 @@ class HudControllerWayTest {
         c.setEnabled(false)
     }
 
+    @Test fun `a HUD-off put-back held up on the helper when the HUD goes on sends nothing to the new route`() {
+        val state = car()
+        prefs().edit().putBoolean(HudWayChannels.KEY_CAN_LEFT, true).putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L)
+            .putInt(HudController.KEY_MODE, HudController.MODE_LMCN).commit()
+        val gate = CompletableDeferred<Unit>()
+        var held = false
+        coEvery { helperClient.writeStatus(any(), any(), any(), any()) } coAnswers {
+            if (!held) { held = true; calls += "held"; gate.await() }
+            calls += "set ${arg<Int>(0)}/${arg<Int>(1)}=${arg<Int>(2)}"
+            state[arg<Int>(0) to arg<Int>(1)] = arg(2)
+            1
+        }
+        val c = controller()
+        c.startIfEnabled()   // HUD off: the put-back's first CAN write waits on the helper
+        awaitTrue { snapshot().contains("held") }
+        guideRoute()
+        c.setEnabled(true)   // way 3 starts a route with its own route id
+        awaitTrue { snapshot().containsAll(lmcnStarts) }
+        val routeKey = prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L)
+        assertTrue(routeKey != 1_234_567_890L)
+        val routeAt = snapshot().indexOf(lmcnStarts.last())
+        gate.complete(Unit)
+        Thread.sleep(1_000)
+        val after = snapshot().drop(routeAt + 1)
+        // The off events share their topics with the route's update set: the stops and the CAN
+        // clear tell the old put-back apart.
+        assertTrue(after.toString(), after.none { it in lmcnStops || it in canClear })
+        assertEquals(routeKey, prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L))
+        c.setEnabled(false)
+    }
+
+    @Test fun `a HUD-off put-back held up on the helper takes the family's route id from before the wait`() {
+        val state = car()
+        prefs().edit().putBoolean(HudWayChannels.KEY_CAN_LEFT, true).putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L).commit()
+        val gate = CompletableDeferred<Unit>()
+        var held = false
+        coEvery { helperClient.writeStatus(any(), any(), any(), any()) } coAnswers {
+            if (!held) { held = true; gate.await() }
+            calls += "set ${arg<Int>(0)}/${arg<Int>(1)}=${arg<Int>(2)}"
+            state[arg<Int>(0) to arg<Int>(1)] = arg(2)
+            1
+        }
+        val c = controller()
+        c.startIfEnabled()
+        awaitTrue { held }
+        // The HUD check's step 4, say, keeps its own family while the put-back waits.
+        prefs().edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 42L).commit()
+        gate.complete(Unit)
+        awaitTrue { runCatching { verify { bridge.unbind() } }.isSuccess }
+        assertTrue(snapshot().toString(), snapshot().none { it in lmcnStops })
+        assertEquals(42L, prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L))
+    }
+
     @Test fun `a one-off family binding leaves a key another route id took meanwhile`() {
         car()
         prefs().edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L).commit()

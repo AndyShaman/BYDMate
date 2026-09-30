@@ -16,6 +16,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,8 +88,9 @@ class HudController @Inject constructor(
     private val ownerLock = Mutex()
     private var startJob: Job? = null
     private var leftoverJob: Job? = null
-    /** The one-off binding that stops a family left up while the output is off. */
-    private var lmcnLeftoverJob: Job? = null
+    /** The put-back while the output is off ([putBackLeftover]), the family's one-off binding
+     *  included: the output going on or stopping cancels all of it. */
+    private var putBackJob: Job? = null
     @Volatile private var bridge: HudSomeIpBridge? = null
     @Volatile private var loop: HudPushLoop? = null
     @Volatile private var arming: HudArming? = null
@@ -250,7 +253,11 @@ class HudController @Inject constructor(
 
     /** TrackingService.onCreate hook. */
     fun startIfEnabled() {
-        if (isEnabled()) scope.launch { startSequence() } else scope.launch { putBackLeftover() }
+        if (isEnabled()) {
+            scope.launch { startSequence() }
+        } else if (putBackJob?.isActive != true) {
+            putBackJob = scope.launch { putBackLeftover() }
+        }
     }
 
     /** TrackingService.onDestroy hook. */
@@ -262,9 +269,9 @@ class HudController @Inject constructor(
     private suspend fun startSequence() = mutex.withLock {
         if (!isEnabled()) return
         if (startJob?.isActive == true || bridge != null) return
-        // The output's own binding stops a family left up; the one-off one must not race it.
-        lmcnLeftoverJob?.cancelAndJoin()
-        lmcnLeftoverJob = null
+        // The output's own leftover handling takes over; the HUD-off put-back must not race it.
+        putBackJob?.cancelAndJoin()
+        putBackJob = null
         // Probe BEFORE any helper-daemon work: unsupported cars must see zero side effects.
         if (!HudSomeIpBridge.isServicePresent(context.packageManager)) {
             prefs().edit().putBoolean(KEY_SUPPORTED, false).apply()
@@ -327,34 +334,35 @@ class HudController @Inject constructor(
      *  back. Without the key nothing starts, reads or writes. A family left up gets its stops
      *  last, on a binding of its own. */
     private suspend fun putBackLeftover() {
+        // Taken before anything suspends: a key a route writes meanwhile is not this put-back's.
+        val lmcnRoute = prefs().takeIf { it.contains(HudWayChannels.KEY_LMCN_LEFT) }?.getLong(HudWayChannels.KEY_LMCN_LEFT, 0L)
         if (!leftoverKept() || armingPaused || NavGuidanceHub.snapshot().active) return
         if (!helperBootstrap.ensureRunning()) return
         runCatching {
             HudWayChannels.clearCanLeftover(HudCanChannel(helperClient), prefs())
             HudArming(helperClient, prefs()).disarmLeftover(guided = false)
-        }.onFailure { Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}") }
-        stopLmcnLeftover()
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}")
+        }
+        lmcnRoute?.let { stopLmcnLeftover(it) }
     }
 
     /** Way 3's family a process death left up while the output does not run: a one-off binding
-     *  for its off events and stops, then let go. Unbound, the key waits for the next start. The
-     *  output going on or stopping cancels it; a key that changed while it bound (a new route's)
-     *  is not its to stop. */
-    private fun stopLmcnLeftover() {
-        if (!prefs().contains(HudWayChannels.KEY_LMCN_LEFT) || lmcnLeftoverJob?.isActive == true) return
+     *  for its off events and stops, then let go. Unbound, the key waits for the next start. A key
+     *  that no longer holds [routeId] when the binding is up (a new route's) is not its to stop. */
+    private suspend fun stopLmcnLeftover(routeId: Long) {
+        currentCoroutineContext().ensureActive()
         if (!HudSomeIpBridge.isServicePresent(context.packageManager)) return
-        val routeId = prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L)
-        lmcnLeftoverJob = scope.launch {
-            val b = bridgeFactory(context) {}
-            try {
-                if (!b.bind()) return@launch
-                val same = prefs().contains(HudWayChannels.KEY_LMCN_LEFT) &&
-                    prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L) == routeId
-                if (same) HudWayChannels.stopLmcnLeftover(b, prefs())
-                else Log.i(TAG, "hud way: leftover lmcn changed while binding, left to its owner")
-            } finally {
-                b.unbind()
-            }
+        val b = bridgeFactory(context) {}
+        try {
+            if (!b.bind()) return
+            val same = prefs().contains(HudWayChannels.KEY_LMCN_LEFT) &&
+                prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L) == routeId
+            if (same) HudWayChannels.stopLmcnLeftover(b, prefs())
+            else Log.i(TAG, "hud way: leftover lmcn changed while binding, left to its owner")
+        } finally {
+            b.unbind()
         }
     }
 
@@ -388,8 +396,8 @@ class HudController @Inject constructor(
             startJob = null
             leftoverJob?.cancelAndJoin()
             leftoverJob = null
-            lmcnLeftoverJob?.cancelAndJoin()
-            lmcnLeftoverJob = null
+            putBackJob?.cancelAndJoin()
+            putBackJob = null
             // startJob may have flipped the feed back on between our first write and its
             // completion (no suspension points after bind()) - re-clear (final-review fix 3).
             NavA11yFeed.enabled = false
