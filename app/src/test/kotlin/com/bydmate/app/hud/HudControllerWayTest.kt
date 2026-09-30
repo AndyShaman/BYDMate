@@ -121,19 +121,50 @@ class HudControllerWayTest {
 
     // --- way 1 ---
 
-    @Test fun `way 1 draws only the frames on the navigation service`() {
+    /** 3.19.0's frames as 759f7046 built them: 300 m, 250 m, the clear frame. */
+    private fun way1Reference(): List<Pair<Long, ByteArray>> =
+        requireNotNull(javaClass.classLoader?.getResource("hud/way1-frames-759f7046.txt")).readText().lines()
+            .filter { it.isNotBlank() && !it.startsWith("#") }
+            .map { line ->
+                val (topic, size, hex) = line.split(" ")
+                val bytes = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                assertEquals(size.toInt(), bytes.size)
+                topic.removePrefix("0x").toLong(16) to bytes
+            }
+
+    @Test fun `way 1 sends 3_19_0's frames byte for byte on the navigation topic alone and writes nothing to the car`() {
         car()
-        guideRoute()
+        val fired: MutableList<Pair<Long, ByteArray>> = Collections.synchronizedList(mutableListOf())
+        every { bridge.fireEvent(any(), any()) } answers {
+            calls += "fire 0x${firstArg<Long>().toString(16)}"
+            fired += firstArg<Long>() to secondArg<ByteArray>()
+            0
+        }
+        val reference = way1Reference()
+        fun sent() = synchronized(fired) { fired.toList() }
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 300, road = "Main St"), NavGuidanceHub.Source.A11Y)
         val c = controller()
         c.setEnabled(true)
-        awaitTrue { c.status.value == HudController.Status.ON }
-        Thread.sleep(1_500)
+        awaitTrue { sent().size >= 2 }
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = "Main St"), NavGuidanceHub.Source.A11Y)
+        awaitTrue { sent().last().second.contentEquals(reference[1].second) }
+        NavGuidanceHub.reset()   // the route ends
+        awaitTrue { sent().last().second.contentEquals(reference[2].second) }
         c.setEnabled(false)
         awaitTrue { c.status.value == HudController.Status.OFF }
-        assertEquals(
-            listOf("start 0x${HudSomeIpBridge.SERVICE_ID_NAVI.toString(16)}", "stop 0x${HudSomeIpBridge.SERVICE_ID_NAVI.toString(16)}"),
-            snapshot(),
-        )
+
+        val frames = sent()
+        // Each frame repeats every 300 ms; what changes, and in which order, is 3.19.0's.
+        val runs = frames.fold(mutableListOf<Pair<Long, ByteArray>>()) { acc, f ->
+            if (acc.isEmpty() || !acc.last().second.contentEquals(f.second) || acc.last().first != f.first) acc += f
+            acc
+        }
+        assertEquals(reference.map { it.first }, runs.map { it.first })
+        reference.zip(runs).forEachIndexed { i, (want, got) -> assertTrue("frame $i", want.second.contentEquals(got.second)) }
+        // The navigation service around its frames, nothing else on the gateway or the car.
+        val navi = "0x${HudSomeIpBridge.SERVICE_ID_NAVI.toString(16)}"
+        val topic = "fire 0x${HudSomeIpBridge.TOPIC_NAVI.toString(16)}"
+        assertEquals(listOf("start $navi") + List(frames.size) { topic } + "stop $navi", snapshot())
         assertFalse(prefs().contains(HudWayChannels.KEY_CAN_LEFT))
         assertFalse(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
     }
