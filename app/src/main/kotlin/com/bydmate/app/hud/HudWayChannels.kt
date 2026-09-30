@@ -30,9 +30,9 @@ import kotlinx.coroutines.withContext
  * Only while a route is guided and the status is up (`active`). [close] runs before every disarm
  * (route end, way change, HUD off, service stop): the CAN fields blanked with distance 0, then the
  * family's off events and stopped services. What a process death leaves is kept in [prefs]
- * ([KEY_CAN_LEFT], [KEY_LMCN_LEFT]) and cleaned at the next start (CAN values also by the next
- * way 2 or 3 run, before its first disarm); a refused CAN clear is kept too and tried again every
- * [RETRY_MS].
+ * ([KEY_CAN_LEFT], [KEY_LMCN_LEFT]), committed to disk before the first write it covers, and
+ * cleaned at the next start (CAN values also by the next way 2 or 3 run, before its first disarm);
+ * a refused CAN clear is kept too and tried again every [RETRY_MS], and so is a refused CAN write.
  */
 @Suppress("TooManyFunctions") // the route's open, writes, close and their log lines, kept in one place
 class HudWayChannels(
@@ -59,8 +59,11 @@ class HudWayChannels(
     /** Our values may be on the instrument: kept before the first write, dropped by an accepted
      *  clear. Read from [prefs], so values a process death left are this way's to clear too. */
     private val canDirty: Boolean get() = prefs.contains(KEY_CAN_LEFT)
+    /** What the instrument accepted last; a refused write waits [RETRY_MS] before it is tried again. */
     private var lastGuidance: Pair<Int, Int>? = null
     private var lastRoad: String? = null
+    private var guidanceWaitMs = 0L
+    private var roadWaitMs = 0L
     /** The navigator's road and what [roadName] made of it: the transliteration runs on a change only. */
     private var roadMemo: Pair<String, String>? = null
     private var routeAccepted = 0
@@ -75,6 +78,8 @@ class HudWayChannels(
     private var retryWaitMs = 0L
 
     private val lmcn: Boolean get() = way >= HudController.MODE_LMCN && gateway != null
+    /** This route runs the family: way 3 with its marker on disk. */
+    private var lmcnRoute = false
 
     /** The loop: [active] = a route is guided and the status is up. */
     fun start(scope: CoroutineScope, active: () -> Boolean) {
@@ -114,7 +119,7 @@ class HudWayChannels(
         val s = snapshot()
         if (!routeOpen) openLocked()
         writeCan(s)
-        if (lmcn) fireUpdate(s)
+        if (lmcnRoute) fireUpdate(s)
     }
 
     private fun openLocked() {
@@ -123,13 +128,18 @@ class HudWayChannels(
         routeAccepted = 0
         routeRefused = 0
         lmcnFires.clear()
+        guidanceWaitMs = 0L
+        roadWaitMs = 0L
         val bridge = gateway
+        lmcnRoute = false
         if (lmcn && bridge != null) {
             routeId = HudLauncherMapCnFrames.newRouteId(random)
+            // Kept on disk before the first start: a process death from here on leaves the family up.
+            lmcnRoute = mark("lmcn", KEY_LMCN_LEFT) { putLong(KEY_LMCN_LEFT, routeId) }
+        }
+        if (lmcnRoute && bridge != null) {
             counter = 0
             positionAgeMs = RETRY_MS
-            // Kept before the first start: a process death from here on leaves the family up.
-            prefs.edit().putLong(KEY_LMCN_LEFT, routeId).apply()
             HudLauncherMapCnFrames.SERVICE_IDS.forEach { id ->
                 val rc = runCatching { bridge.startService(id) }.getOrDefault(THREW)
                 lmcnServices[id] = rc
@@ -145,23 +155,43 @@ class HudWayChannels(
     }
 
     private suspend fun writeCan(s: NavGuidanceHub.Snapshot) {
+        guidanceWaitMs = (guidanceWaitMs - PERIOD_MS).coerceAtLeast(0L)
+        roadWaitMs = (roadWaitMs - PERIOD_MS).coerceAtLeast(0L)
         val guidance = turnKind(s.maneuverGaode) to s.distanceMeters.coerceIn(0, MAX_DISTANCE_M)
         val road = roadMemo?.takeIf { it.first == s.road }?.second
             ?: roadName(s.road).also { roadMemo = s.road to it }
-        if (guidance == lastGuidance && road == lastRoad) return
-        if (!canDirty) prefs.edit().putBoolean(KEY_CAN_LEFT, true).apply()
-        if (guidance != lastGuidance) {
-            can.guidance(guidance.first, guidance.second).forEach(::count)
-            lastGuidance = guidance
+        val guidanceDue = guidance != lastGuidance && guidanceWaitMs == 0L
+        val roadDue = road != lastRoad && roadWaitMs == 0L
+        if (!guidanceDue && !roadDue) return
+        // Kept on disk before the first write: a process death from here on leaves our values up.
+        if (!canDirty && !mark("can", KEY_CAN_LEFT) { putBoolean(KEY_CAN_LEFT, true) }) {
+            guidanceWaitMs = RETRY_MS
+            roadWaitMs = RETRY_MS
+            return
         }
-        if (road != lastRoad) {
-            count(can.road(road))
-            lastRoad = road
+        if (guidanceDue) {
+            if (can.guidance(guidance.first, guidance.second).map(::count).all { it }) lastGuidance = guidance
+            else guidanceWaitMs = RETRY_MS
+        }
+        if (roadDue) {
+            if (count(can.road(road))) lastRoad = road else roadWaitMs = RETRY_MS
         }
     }
 
-    private fun count(rc: Int?) {
-        if (accepted(rc)) { routeAccepted++; canAccepted++ } else { routeRefused++; canRefused++ }
+    /** Counts one CAN write for the dump; true when the car accepted it. */
+    private fun count(rc: Int?): Boolean {
+        val ok = accepted(rc)
+        if (ok) { routeAccepted++; canAccepted++ } else { routeRefused++; canRefused++ }
+        return ok
+    }
+
+    /** Commits a leftover marker; a failed disk write is taken back out of memory and logged. */
+    private fun mark(what: String, key: String, put: SharedPreferences.Editor.() -> Unit): Boolean {
+        if (prefs.edit().apply(put).commit()) return true
+        prefs.edit().remove(key).apply()
+        log("hud way: marker not saved what=$what, held")
+        Trace.event(TraceArea.HUD, "way-marker", "what" to what, "ok" to false)
+        return false
     }
 
     private fun fireUpdate(s: NavGuidanceHub.Snapshot) {
@@ -206,6 +236,7 @@ class HudWayChannels(
         }
         if (routeOpen) logEnd(clear, stopped)
         routeOpen = false
+        lmcnRoute = false
         lastGuidance = null
         lastRoad = null
         retryWaitMs = if (canDirty) RETRY_MS else 0L
@@ -299,7 +330,8 @@ class HudWayChannels(
             Trace.event(TraceArea.HUD, "way-leftover", "what" to "lmcn", "stopped" to okCount(stopped))
         }
 
-        /** Stops [ids]; the family's leftover key goes once the gateway answered. */
+        /** Stops [ids]; the family's leftover key goes once every stop was answered: not unbound
+         *  (-1), not a transact that threw (-2), not a call that threw here (-3). */
         private fun stopServices(gateway: HudSomeIpBridge, ids: Collection<Long>, prefs: SharedPreferences): Map<Long, Int> {
             val stopped = LinkedHashMap<Long, Int>()
             ids.forEach { id ->
@@ -307,7 +339,7 @@ class HudWayChannels(
                 stopped[id] = rc
                 Trace.event(TraceArea.HUD, "way-service", "op" to "stop", "id" to HudSomeIpBridge.hex(id), "rc" to rc)
             }
-            if (stopped.values.none { it == UNBOUND || it == THREW }) prefs.edit().remove(KEY_LMCN_LEFT).apply()
+            if (stopped.values.none { it in THREW..UNBOUND }) prefs.edit().remove(KEY_LMCN_LEFT).apply()
             return stopped
         }
 
