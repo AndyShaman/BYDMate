@@ -85,4 +85,21 @@ class ClusterMusicCardTest {
         val card = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 45_000, 180_000)))
         assertEquals(25, card?.progress)
     }
+
+    @Test fun `card carries played and total seconds`() {
+        val card = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 95_400, 214_000)))
+        assertEquals(95, card?.positionSec)
+        assertEquals(214, card?.durationSec)
+    }
+
+    @Test fun `hms splits like the stock sender`() {
+        assertEquals(Triple(0, 3, 34), ClusterMusicCard.hms(214))
+        assertEquals(Triple(1, 0, 5), ClusterMusicCard.hms(3605))
+    }
+
+    @Test fun `ticking position does not count as a new track`() {
+        val a = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 10_000, 214_000)))!!
+        val b = ClusterMusicCard.pick(listOf(SessionSnapshot(navi, playing, "Song", "A", 12_000, 214_000)))!!
+        assertEquals(a.steady(), b.steady())
+    }
 }
