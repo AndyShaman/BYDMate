@@ -106,8 +106,8 @@ class HudCheckDeferredRestoreSpecTest {
         return Setup(check, car, ctl)
     }
 
-    /** The steps last 3 x 20 s; the restore starts right after them. */
-    private val stepsEndMs = 60_000L
+    /** The steps last 4 x 20 s; the restore starts right after them. */
+    private val stepsEndMs = 80_000L
 
     @Test fun `R3 a layout deferred at the end goes back once the cluster leaves fullscreen`() = runTest {
         val leavesAt = stepsEndMs + 17_000

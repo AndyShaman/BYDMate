@@ -953,7 +953,7 @@
     <string name="settings_fid_dump_button">保存 fid 目录</string>
     <string name="settings_fid_dump_desc">SDK 常量的名称和数值。仅技术标识符：不含 VIN，不含定位，不含个人数据</string>
     <string name="settings_hud_check_title">HUD 检测</string>
-    <string name="settings_hud_check_desc">挡风玻璃上显示约一分半钟的测试提示。请先开启日志录制，并用视频拍下挡风玻璃。车辆静止，无需导航路线。挡风玻璃上会出现测试文字“BYDMATE 1”“BYDMATE 2”“BYDMATE 3”，检查结束后会消失</string>
+    <string name="settings_hud_check_desc">挡风玻璃上显示约一分半钟的测试提示。请先开启日志录制，并用视频拍下挡风玻璃。车辆静止，无需导航路线。挡风玻璃上会依次出现测试文字“BYDMATE 1”“BYDMATE 2”“BYDMATE 3”，然后是向左箭头和 444 米，检查结束后会全部消失</string>
     <string name="settings_hud_check_button">开始</string>
     <string name="settings_hud_check_preparing">正在准备检测</string>
     <string name="settings_hud_check_step">第 %1$d 步，共 %2$d 步，请看挡风玻璃</string>

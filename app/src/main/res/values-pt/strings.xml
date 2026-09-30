@@ -877,7 +877,7 @@
     <string name="settings_fid_dump_button">Salvar catálogo de fids</string>
     <string name="settings_fid_dump_desc">Nomes e valores das constantes do SDK. Apenas identificadores técnicos: sem VIN, sem localização, sem dados pessoais</string>
     <string name="settings_hud_check_title">Teste do HUD</string>
-    <string name="settings_hud_check_desc">Um minuto e meio de indicações de teste no para-brisa. Primeiro ative a gravação de logs e filme o para-brisa. Carro parado, sem rota. No para-brisa aparecem textos de teste “BYDMATE 1”, “BYDMATE 2” e “BYDMATE 3”, que somem no fim da verificação</string>
+    <string name="settings_hud_check_desc">Um minuto e meio de indicações de teste no para-brisa. Primeiro ative a gravação de logs e filme o para-brisa. Carro parado, sem rota. No para-brisa aparecem, um após o outro, os textos de teste “BYDMATE 1”, “BYDMATE 2” e “BYDMATE 3”, depois uma seta para a esquerda com 444 m. Tudo some no fim da verificação</string>
     <string name="settings_hud_check_button">Iniciar</string>
     <string name="settings_hud_check_preparing">Preparando o teste</string>
     <string name="settings_hud_check_step">Passo %1$d de %2$d, olhe para o para-brisa</string>

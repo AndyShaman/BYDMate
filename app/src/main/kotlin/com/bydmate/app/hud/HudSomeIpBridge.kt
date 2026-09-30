@@ -56,6 +56,19 @@ class HudSomeIpBridge(
          *  bits 16..47 of the topic under the service mask 0xB000000000000. */
         fun serviceIdFor(topic: Long): Long = (((topic ushr 16) and 0xFFFFFFFFL) shl 16) or 0xB000000000000L
 
+        /** `0xb010a00010000`: a topic or a service id the way the log lines print it. */
+        fun hex(id: Long): String = "0x${id.toString(16)}"
+
+        /** `{0xb010a00010000:0}`: [startedServices] for a log line or the dump. */
+        fun describeServices(services: Map<Long, Int>): String =
+            services.entries.joinToString(",", "{", "}") { "${hex(it.key)}:${it.value}" }
+
+        /** `{0x4010a00018001:{0:66,1:1}}`: [fireCounts] for a log line or the dump. */
+        fun describeFires(fires: Map<Long, Map<Int, Int>>): String =
+            fires.entries.joinToString(",", "{", "}") { (topic, rcs) ->
+                "${hex(topic)}:" + rcs.entries.sortedBy { it.key }.joinToString(",", "{", "}") { "${it.key}:${it.value}" }
+            }
+
         /** Cheap capability probe - MUST run before any binding or helper-daemon work:
          *  cars without the SOME/IP gateway (no factory HUD) take this exit (Codex fix 1). */
         fun isServicePresent(pm: PackageManager): Boolean =

@@ -1039,7 +1039,7 @@
     <string name="settings_fid_dump_button">Сохранить каталог fid\'ов</string>
     <string name="settings_fid_dump_desc">Имена и значения констант SDK. Только технические идентификаторы: без VIN, без геолокации, без личных данных</string>
     <string name="settings_hud_check_title">Проверка HUD</string>
-    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Сначала включите запись логов и снимайте стекло на видео. Машина стоит, маршрут не нужен. На стекле будут тестовые надписи «BYDMATE 1», «BYDMATE 2» и «BYDMATE 3», после проверки они пропадут</string>
+    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Сначала включите запись логов и снимайте стекло на видео. Машина стоит, маршрут не нужен. На стекле по очереди будут тестовые надписи «BYDMATE 1», «BYDMATE 2», «BYDMATE 3», затем стрелка налево и 444 м. После проверки всё пропадёт</string>
     <string name="settings_hud_check_button">Запустить</string>
     <string name="settings_hud_check_preparing">Готовим проверку</string>
     <string name="settings_hud_check_step">Шаг %1$d из %2$d, смотрите на стекло</string>

@@ -2023,6 +2023,11 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 val diag = hudController.diag()
                 appendLine("frames_sent=${diag?.framesSent ?: 0} last_frame_ts=${diag?.lastFrameTs ?: 0}")
                 appendLine("last_fire_rc=${diag?.lastRc ?: "n/a"} nonzero_rc_count=${diag?.nonZeroRcCount ?: 0}")
+                // Every gateway service the product's binding holds open (the HUD check's step 4 adds
+                // its own while it runs on that binding), and each topic's fireEvent rcs.
+                val someIp = hudController.boundBridge
+                appendLine("someip_services=${someIp?.startedServices()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeServices(it) } ?: "n/a"}")
+                appendLine("someip_fire_rc=${someIp?.fireCounts()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeFires(it) } ?: "n/a"}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
                 appendLine("hub_snapshot=${com.bydmate.app.navdata.NavGuidanceHub.snapshot()}")
                 // What each channel actually carried at every maneuver change (#94): the

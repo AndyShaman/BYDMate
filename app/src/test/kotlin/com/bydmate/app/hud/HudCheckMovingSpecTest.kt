@@ -126,7 +126,7 @@ class HudCheckMovingSpecTest {
         val s = setup { 0 }
         s.check.run()
         assertEquals(HudCheck.State.Done, s.check.state.value)
-        // The steps last about 60 s: one look before they start, then about one a second.
+        // The steps last about 80 s: one look before they start, then about one a second.
         assertTrue("only ${s.speedReads.size} speed reads", s.speedReads.size >= 45)
         val gaps = s.speedReads.zipWithNext { a, b -> b - a }
         assertTrue("a gap of ${gaps.max()} ms without a speed read", gaps.all { it <= 2_000 })
