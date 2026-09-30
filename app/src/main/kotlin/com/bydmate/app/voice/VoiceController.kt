@@ -35,6 +35,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -633,6 +634,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is ParseResult.Command -> Resolution.Cmd(r.commands, VoiceCommandLabels.of(r.commands))
             is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
             is ParseResult.Volume -> Resolution.Vol(r.payload)
+            ParseResult.Music -> Resolution.Music
             // A value the car does not report goes to the agent, never a made-up answer; so does
             // every question while the snapshot is not live: it is never cleared on transport
             // loss, and the range, kept elsewhere, would be just as old.
@@ -651,6 +653,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is Resolution.Cmd -> execute(res.commands, transcript, decodeMs, res.label)
             is Resolution.RelTemp -> dispatchRelativeTemp(res.sign, transcript, decodeMs)
             is Resolution.Vol -> dispatchVolume(res.payload, transcript, decodeMs)
+            Resolution.Music -> dispatchMusic(transcript, decodeMs)
             is Resolution.Answer -> answer(res, transcript, decodeMs)
             is Resolution.Auto -> fireAutomation(res.match, transcript, decodeMs)
             is Resolution.None -> agentFallback(transcript, decodeMs)
@@ -824,25 +827,40 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     /** Media volume is not speed-gated (not a window op). Dispatch as a
      *  media_volume action; the dispatcher's AudioManager applies it. */
     private suspend fun dispatchVolume(payload: String, transcript: String, decodeMs: Long? = null) {
-        val result = actionDispatcher.dispatch(
-            ActionDef(command = "media_volume", displayName = transcript, kind = "media_volume", payload = payload),
-            data = gate.vehicleSnapshot()
-        )
+        dispatchMedia(ActionDef(command = "media_volume", displayName = transcript, kind = "media_volume", payload = payload),
+            "media_volume=$payload", transcript, decodeMs)
+    }
+
+    /** Yandex Music's personal mix: the very action the agent's play_music dispatches with no
+     *  query, and the same session close after the reply, or the orb would duck the music. */
+    private suspend fun dispatchMusic(transcript: String, decodeMs: Long? = null) {
+        val action = ActionDef(command = "", displayName = "Музыка", kind = "yandex_music",
+            payload = JSONObject().put("mode", "mybeat").toString())
+        if (dispatchMedia(action, "yandex_music=mybeat", transcript, decodeMs)) {
+            scheduleSessionClose(REASON_PLAY_MUSIC, waitForSpeech = true)
+        }
+    }
+
+    /** Runs a dictionary media [action] (never speed-gated) and reports it like any command;
+     *  [label] is its journal command. True when it ran. */
+    private suspend fun dispatchMedia(action: ActionDef, label: String, transcript: String, decodeMs: Long?): Boolean {
+        val result = actionDispatcher.dispatch(action, data = gate.vehicleSnapshot())
         if (result.success) {
             earcon.ok()
             _state.value = VoiceUiState.Done(transcript)
-            record(nluEntry(transcript, decodeMs, "media_volume=$payload", VoiceJournalEntry.Outcome.OK),
-                "NLU dispatched: cmd=media_volume payload=$payload transcript=\"$transcript\"")
+            record(nluEntry(transcript, decodeMs, label, VoiceJournalEntry.Outcome.OK),
+                "NLU dispatched: cmd=${action.kind} payload=${action.payload} transcript=\"$transcript\"")
             announce("Голос", "Услышал: «$transcript». Выполнено", "Готово", done = true)
             scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
         } else {
             val reason = result.reason ?: transcript
             earcon.fail()
             _state.value = VoiceUiState.Blocked(reason)
-            record(nluEntry(transcript, decodeMs, "media_volume=$payload", VoiceJournalEntry.Outcome.BLOCKED)
-                .copy(reason = reason, refusal = VoiceRefusal.DISPATCH_FAILED), "NLU blocked: cmd=media_volume payload=$payload transcript=\"$transcript\" reason=$reason")
+            record(nluEntry(transcript, decodeMs, label, VoiceJournalEntry.Outcome.BLOCKED)
+                .copy(reason = reason, refusal = VoiceRefusal.DISPATCH_FAILED), "NLU blocked: cmd=${action.kind} payload=${action.payload} transcript=\"$transcript\" reason=$reason")
             announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
         }
+        return result.success
     }
 
     /** A dictionary question answered from the car's readings: said and shown like any other
@@ -1073,6 +1091,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         data class Cmd(val commands: List<String>, val label: String) : Resolution
         data class RelTemp(val sign: Int) : Resolution
         data class Vol(val payload: String) : Resolution
+        data object Music : Resolution
         /** A dictionary question with the value known: [text] is said, nothing is dispatched. */
         data class Answer(val question: VehicleQuestion, val text: String) : Resolution {
             val label: String get() = "ask:${question.id}"
@@ -1084,7 +1103,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         /** The route code of the trace. */
         val route: String get() = when (this) {
             is Cmd -> if (label.startsWith("phrase:")) "phrase" else "nlu"
-            is RelTemp, is Vol, is Answer -> "nlu"
+            is RelTemp, is Vol, Music, is Answer -> "nlu"
             is Auto -> "automation"
             is None -> "agent"
         }

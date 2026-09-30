@@ -27,6 +27,8 @@
 #   ASK QUESTION        a question answered from the car's readings, nothing runs: outside_temp,
 #                       cabin_temp, soc, range, ac_temp; a value the car does not report sends
 #                       the phrase to the agent
+#   MUSIC               Yandex Music's personal mix («Моя волна»), as the agent's play_music
+#                       starts it with no query
 # Every template phrase has a row in app/src/test/resources/voice/ru_commands_golden.tsv.
 
 # ---- Verbs ---------------------------------------------------------------------------------
@@ -274,6 +276,13 @@ solo (тише|потише) => VOL -1
 <on> звук => VOL unmute
 <set> громкость [на] {vol} [<pct_word>] => VOL {vol}
 solo громкость [на] {vol} [<pct_word>] => VOL {vol}
+
+# ---- Yandex Music --------------------------------------------------------------------------
+# Only with "яндекс": a bare "включи музыку" names no app and stays with the agent.
+
+rule yandex_music: яндекс (музыку|музыка|мьюзик)
+(включи|запусти|открой|поставь) <yandex_music> => MUSIC
+solo <yandex_music> => MUSIC
 
 # ---- Locks and trunk -----------------------------------------------------------------------
 # "закрой дверь" said to a passenger is not addressed to the car: only "машину" and the lock

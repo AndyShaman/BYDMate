@@ -234,6 +234,14 @@ utterance	expected	category	danger
 пауза	UNRECOGNIZED	media	
 следующий трек	UNRECOGNIZED	media	
 включи музыку	UNRECOGNIZED	media	
+включи музыку на спотифай	UNRECOGNIZED	media	
+включи яндекс музыку	MUSIC	media	
+запусти яндекс мьюзик	MUSIC	media	
+открой яндекс музыка	MUSIC	media	
+поставь яндекс музыку	MUSIC	media	
+яндекс музыку	MUSIC	media	
+яндекс музыка	MUSIC	media	
+яндекс мьюзик	MUSIC	media	
 включи подсветку	氛围灯打开	misc	
 выключи амбиент	氛围灯关闭	misc	
 включи свет в салоне	打开车内灯	misc	

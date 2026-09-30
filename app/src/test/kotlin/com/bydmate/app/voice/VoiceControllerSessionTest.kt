@@ -42,6 +42,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Wave B: PTT-toggled continuous session (onPttPressed / startContinuousSession /
@@ -1633,6 +1634,36 @@ class VoiceControllerSessionTest {
         Thread.sleep(300)
         assertTrue(controller.listening.value)   // still open while the reply plays
         speaking.value = false   // playback ends
+        awaitTrue { !controller.listening.value }
+    }
+
+    // The dictionary's Yandex Music phrase starts the same personal mix the agent's play_music
+    // starts with no query, and closes the session after the reply for the same reason.
+    @Test fun `dictionary Yandex Music plays the agent's personal mix and closes the session after the reply`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val captured = AtomicReference<ActionDef?>(null)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
+            captured.set(firstArg<ActionDef>()); DispatchResult(true)
+        }
+        val tts = mockk<TtsEngine>(relaxed = true)
+        val speaking = MutableStateFlow(false)
+        every { tts.speaking } returns speaking
+        every { tts.speak(any()) } answers { speaking.value = true; true }
+        val controller = makeController(fakeAsr, dispatcher, ttsEngine = tts, ttsEnabled = true)
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("включи яндекс музыку"))
+
+        awaitTrue { captured.get() != null }
+        assertEquals("yandex_music", captured.get()?.kind)
+        assertEquals("""{"mode":"mybeat"}""", captured.get()?.payload)
+        // Open while "Готово" is being said, closed once it ends.
+        Thread.sleep(500)
+        assertTrue(controller.listening.value)
+        speaking.value = false
         awaitTrue { !controller.listening.value }
     }
 
