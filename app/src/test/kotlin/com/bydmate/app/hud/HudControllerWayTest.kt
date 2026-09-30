@@ -454,6 +454,47 @@ class HudControllerWayTest {
         assertTrue(snapshot().isEmpty())
     }
 
+    @Test fun `a one-off family binding still waiting when the HUD goes on stops nothing of the new route`() {
+        car()
+        prefs().edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L)
+            .putInt(HudController.KEY_MODE, HudController.MODE_LMCN).commit()
+        val gate = CompletableDeferred<Unit>()
+        val oneOff: HudSomeIpBridge = mockk(relaxed = true)
+        coEvery { oneOff.bind() } coAnswers { gate.await(); true }
+        every { oneOff.fireEvent(any(), any()) } answers { calls += "one-off fire"; 0 }
+        every { oneOff.stopService(any()) } answers { calls += "one-off stop"; 0 }
+        var bindings = 0
+        val c = controller().apply { bridgeFactory = { _, _ -> if (bindings++ == 0) oneOff else bridge } }
+        c.startIfEnabled()   // HUD off: the one-off binding waits
+        awaitTrue { bindings == 1 }
+        guideRoute()
+        c.setEnabled(true)   // way 3 starts a route with its own route id
+        awaitTrue { snapshot().containsAll(lmcnStarts) }
+        val routeKey = prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L)
+        assertTrue(routeKey != 1_234_567_890L)
+        gate.complete(Unit)
+        Thread.sleep(500)
+        assertTrue(snapshot().toString(), snapshot().none { it.startsWith("one-off") })
+        assertEquals(routeKey, prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L))
+        c.setEnabled(false)
+    }
+
+    @Test fun `a one-off family binding leaves a key another route id took meanwhile`() {
+        car()
+        prefs().edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L).commit()
+        val gate = CompletableDeferred<Unit>()
+        coEvery { bridge.bind() } coAnswers { gate.await(); true }
+        val c = controller()
+        c.startIfEnabled()
+        Thread.sleep(200)
+        // The HUD check's step 4, say, keeps its own family meanwhile.
+        prefs().edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 42L).commit()
+        gate.complete(Unit)
+        awaitTrue { runCatching { verify { bridge.unbind() } }.isSuccess }
+        assertTrue(snapshot().toString(), snapshot().isEmpty())
+        assertEquals(42L, prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L))
+    }
+
     @Test fun `a refused CAN clear at start is kept for the next start`() {
         val state = car().also { leftover(it, enabled = true) }
         coEvery { helperClient.writeBufferStatus(any(), any(), any()) } returns -1
