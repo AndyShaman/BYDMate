@@ -210,7 +210,9 @@ class HudController @Inject constructor(
     private fun startChannels(b: HudSomeIpBridge): HudWayChannels? {
         if (!armsNaviStatus()) return null
         return HudWayChannels(mode(), HudCanChannel(helperClient), b, prefs()) { HudPosition.lastKnown(context) }
-            .also { ch -> ch.start(scope) { !armingPaused && NavGuidanceHub.snapshot().active && arming?.armed == true } }
+            .also { ch ->
+                ch.start(scope, held = { armingPaused }) { NavGuidanceHub.snapshot().active && arming?.armed == true }
+            }
     }
 
     fun diag(): HudDiag? = loop?.let { l ->

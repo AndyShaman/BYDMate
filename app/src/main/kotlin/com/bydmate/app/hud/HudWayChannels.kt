@@ -82,11 +82,16 @@ class HudWayChannels(
     /** This route runs the family: way 3 with its marker on disk. */
     private var lmcnRoute = false
 
-    /** The loop: [active] = a route is guided and the status is up. */
-    fun start(scope: CoroutineScope, active: () -> Boolean) {
+    /** The loop: [active] = a route is guided and the status is up. While [held] (the HUD check
+     *  runs, its CAN and family markers are the same keys) it does nothing at all. */
+    fun start(scope: CoroutineScope, held: () -> Boolean = { false }, active: () -> Boolean) {
         if (job?.isActive == true) return
         job = scope.launch {
             while (isActive) {
+                if (runCatching { held() }.getOrDefault(true)) {
+                    delay(PERIOD_MS)
+                    continue
+                }
                 val on = runCatching { active() }.getOrDefault(false)
                 runCatching { tick(on) }.onFailure {
                     if (it is CancellationException) throw it
@@ -305,10 +310,15 @@ class HudWayChannels(
         internal fun accepted(rc: Int?): Boolean = rc != null && rc >= 0
 
         /** Blanks the CAN fields with the SDK's invalid distance 0; true when every write was accepted. */
-        private suspend fun clearCan(can: HudCanChannel): Boolean {
-            val sent = can.clear()
-            return listOf(sent.iconRc, sent.iconAheadRc, sent.distRc, sent.roadRc).all(::accepted)
-        }
+        private suspend fun clearCan(can: HudCanChannel): Boolean = cleared(can.clear())
+
+        /** A clear the car took: all four writes accepted. The HUD check drops its marker on it too. */
+        internal fun cleared(sent: HudCanChannel.Sent): Boolean =
+            listOf(sent.iconRc, sent.iconAheadRc, sent.distRc, sent.roadRc).all(::accepted)
+
+        /** Every stop answered: not unbound (-1), not a transact that threw (-2), not a call that
+         *  threw here (-3). Only then the family's leftover key goes, the HUD check's too. */
+        internal fun stopsAnswered(rcs: Collection<Int>): Boolean = rcs.none { it in THREW..UNBOUND }
 
         /** CAN values a process death left: blanked and forgotten; kept when the car refused.
          *  True when nothing is left. */
@@ -342,8 +352,7 @@ class HudWayChannels(
             Trace.event(TraceArea.HUD, "way-leftover", "what" to "lmcn", "stopped" to okCount(stopped))
         }
 
-        /** Stops [ids]; the family's leftover key goes once every stop was answered: not unbound
-         *  (-1), not a transact that threw (-2), not a call that threw here (-3). */
+        /** Stops [ids]; the family's leftover key goes once every stop was answered ([stopsAnswered]). */
         private fun stopServices(gateway: HudSomeIpBridge, ids: Collection<Long>, prefs: SharedPreferences): Map<Long, Int> {
             val stopped = LinkedHashMap<Long, Int>()
             ids.forEach { id ->
@@ -351,7 +360,7 @@ class HudWayChannels(
                 stopped[id] = rc
                 Trace.event(TraceArea.HUD, "way-service", "op" to "stop", "id" to HudSomeIpBridge.hex(id), "rc" to rc)
             }
-            if (stopped.values.none { it in THREW..UNBOUND }) prefs.edit().remove(KEY_LMCN_LEFT).apply()
+            if (stopsAnswered(stopped.values)) prefs.edit().remove(KEY_LMCN_LEFT).apply()
             return stopped
         }
 

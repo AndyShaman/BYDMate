@@ -164,6 +164,21 @@ class HudWayChannelsTest {
         assertTrue(calls.toString(), calls.contains("set $dist=250") && calls.containsAll(starts))
     }
 
+    @Test fun `a held loop leaves the CAN leftover of the HUD check alone`() = runTest {
+        prefs.edit().putBoolean(HudWayChannels.KEY_CAN_LEFT, true).commit()
+        var held = true
+        val c = channels(2)
+        c.start(backgroundScope, held = { held }) { false }
+        testScheduler.advanceTimeBy(HudWayChannels.RETRY_MS * 2)
+        testScheduler.runCurrent()
+        assertTrue(calls.toString(), calls.isEmpty())
+        assertTrue(prefs.contains(HudWayChannels.KEY_CAN_LEFT))
+        held = false
+        testScheduler.advanceTimeBy(HudWayChannels.PERIOD_MS * 2)
+        testScheduler.runCurrent()
+        assertEquals(clearCalls, calls)
+    }
+
     @Test fun `close before any write writes nothing`() = runTest {
         val c = channels(3)
         c.tick(active = false)

@@ -1,6 +1,7 @@
 package com.bydmate.app.hud
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.util.Log
 import com.bydmate.app.data.autoservice.SentinelDecoder
@@ -41,10 +42,13 @@ import kotlinx.coroutines.withTimeoutOrNull
  *  4. OpenBYD's default SOME/IP family ([HudLauncherMapCnFrames]) on its six gateway services,
  *     still raised, the CAN fields blanked first: a left turn, 444 m, no road name (the family
  *     carries none). Skipped without a gateway binding.
- * Then the restore: the family's off events and its services stopped, CAN fields still shown blanked,
- * NAVI_STATUS = 4, the layout as found, our gateway service stopped. The restore runs whatever
- * happened before it, cancellation included. A layout the fullscreen cluster holds back is
- * retried every 5 s for up to a minute.
+ * Then the restore: CAN fields still shown blanked (a clear the car refused before step 4 again),
+ * the family's off events and its services stopped, NAVI_STATUS = 4, the layout as found, our
+ * gateway service stopped. The restore runs whatever happened before it, cancellation included. A
+ * layout the fullscreen cluster holds back is retried every 5 s for up to a minute. Steps 3 and 4
+ * keep the product's leftover markers ([HudWayChannels.KEY_CAN_LEFT], [HudWayChannels.KEY_LMCN_LEFT])
+ * on disk from before their first write until a confirmed clear or stop, so a process death
+ * mid-check is cleaned at the next start like a route's.
  *
  * Refuses to start while a real route is guided, while the car moves faster than
  * [MAX_SPEED_KMH], or without the helper daemon (the speed cannot be known then). The speed is
@@ -106,8 +110,8 @@ class HudCheck @Inject constructor(
 
     /** What one run holds from step to step, and what the restore has to undo. */
     private inner class Run {
-        val arming = HudArming(helperClient, context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE))
-            .also { it.log = log }
+        val prefs = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
+        val arming = HudArming(helperClient, prefs).also { it.log = log }
         val can = HudCanChannel(helperClient)
         var sink: HudEventSink? = null
         var ownBridge: HudSomeIpBridge? = null
@@ -221,6 +225,7 @@ class HudCheck @Inject constructor(
 
         _state.value = State.Step(3)
         watchGuidance(3)
+        mark(run, "can") { putBoolean(HudWayChannels.KEY_CAN_LEFT, true) }
         run.canShown = true
         val sent = run.can.show(HudCanChannel.TURN_LEFT, MARKER_3, "BYDMATE 3")
         log("hudprobe: step=3 chan=can ${sent.describe()} marker=${MARKER_3}m")
@@ -251,6 +256,8 @@ class HudCheck @Inject constructor(
         clearCan(run)
         _state.value = State.Step(4)
         watchGuidance(4)
+        run.lmcnRouteId = HudLauncherMapCnFrames.newRouteId(random)
+        mark(run, "lmcn") { putLong(HudWayChannels.KEY_LMCN_LEFT, run.lmcnRouteId) }
         HudLauncherMapCnFrames.SERVICE_IDS.forEach { id ->
             val rc = bridge.startService(id)
             run.lmcnServices[id] = rc
@@ -326,7 +333,6 @@ class HudCheck @Inject constructor(
     private suspend fun lmcnFrames(run: Run, gateway: HudSomeIpBridge): Map<Long, Map<Int, Int>> {
         val rcs = LinkedHashMap<Long, MutableMap<Int, Int>>()
         val position = position()
-        run.lmcnRouteId = HudLauncherMapCnFrames.newRouteId(random)
         var counter = 0
         var elapsedMs = 0L
         var sinceCheckMs = 0L
@@ -369,22 +375,28 @@ class HudCheck @Inject constructor(
             stopped[id] = rc
             traceService("stop", id, rc)
         }
+        if (HudWayChannels.stopsAnswered(stopped.values)) run.prefs.edit().remove(HudWayChannels.KEY_LMCN_LEFT).apply()
         val fired = HudSomeIpBridge.describeFires(rcs)
         log("hudprobe: lmcn stop fire=$fired services=${HudSomeIpBridge.describeServices(stopped)}")
         Trace.event(TraceArea.HUD, "probe-lmcn-stop", "fire" to fired, "stopped" to okCount(stopped))
     }
 
-    /** Blanks step 3's CAN fields with its line and trace event; [Run.canShown] stays set when it threw. */
+    /** Blanks step 3's CAN fields with its line and trace event; [Run.canShown] and the marker stay
+     *  set unless the car accepted all four writes. */
     private suspend fun clearCan(run: Run) {
         val cleared = runCatching { run.can.clear() }.fold(
             onSuccess = { sent ->
-                run.canShown = false
+                val ok = HudWayChannels.cleared(sent)
+                if (ok) {
+                    run.canShown = false
+                    run.prefs.edit().remove(HudWayChannels.KEY_CAN_LEFT).apply()
+                }
                 Trace.event(
                     TraceArea.HUD, "probe-can-clear", "icon" to HudArming.rc(sent.iconRc),
                     "ahead" to HudArming.rc(sent.iconAheadRc), "dist" to HudArming.rc(sent.distRc), "road" to HudArming.rc(sent.roadRc),
-                    "rb-icon" to sent.icon.toString(), "rb-dist" to sent.dist.toString(),
+                    "rb-icon" to sent.icon.toString(), "rb-dist" to sent.dist.toString(), "ok" to ok,
                 )
-                sent.describe()
+                sent.describe() + if (ok) "" else " ok=false"
             },
             onFailure = {
                 if (it is CancellationException) throw it
@@ -393,6 +405,12 @@ class HudCheck @Inject constructor(
             },
         )
         log("hudprobe: can clear $cleared")
+    }
+
+    /** Keeps a leftover marker on disk before the write it covers; a disk that refused is logged and
+     *  the step still runs (the check is watched, the restore still cleans up). */
+    private fun mark(run: Run, what: String, put: SharedPreferences.Editor.() -> Unit) {
+        if (!run.prefs.edit().apply(put).commit()) log("hudprobe: marker not saved what=$what")
     }
 
     /** The product's 5 s look, so the check keeps the status up exactly like a route would. */
@@ -409,9 +427,10 @@ class HudCheck @Inject constructor(
         _state.value = State.Restoring
         logAborted("guidance", routeStep)
         logAborted("moving", movingStep)
-        // Step 4 is the check's own on any binding, a route's hand-over included.
-        runCatching { stopLmcn(run) }.onFailure { log("hudprobe: lmcn stop failed ${it.javaClass.simpleName}") }
+        // CAN first, while the status is up, then the family: step 4 is the check's own on any
+        // binding, a route's hand-over included.
         if (run.canShown) clearCan(run)
+        runCatching { stopLmcn(run) }.onFailure { log("hudprobe: lmcn stop failed ${it.javaClass.simpleName}") }
         // The route's frames and arming are the projection's now: no clear frame under them, no
         // closing of the status they hold; its first arm takes the kept as-found. Without a
         // running projection nobody would ever close them, so the full restore runs.

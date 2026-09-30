@@ -52,6 +52,10 @@ class HudCheckTest {
         )
         val calls = mutableListOf<String>()
         var bufferFailsOn: String? = null
+        /** A write for which this is true comes back -1, refused. */
+        var refuse: (String) -> Boolean = { false }
+        /** Called right before each write goes on the timeline. */
+        var beforeWrite: (String) -> Unit = {}
         val helper: HelperClient = mockk(relaxed = true)
 
         init {
@@ -61,7 +65,10 @@ class HudCheckTest {
             // yield() like the real client's IO hop: a cancelled caller cannot write.
             coEvery { helper.writeStatus(any(), any(), any(), any()) } coAnswers {
                 yield()
-                calls += "set ${arg<Int>(0)}/${arg<Int>(1)}=${arg<Int>(2)}"
+                val call = "set ${arg<Int>(0)}/${arg<Int>(1)}=${arg<Int>(2)}"
+                beforeWrite(call)
+                calls += call
+                if (refuse(call)) return@coAnswers -1
                 state[arg<Int>(0) to arg<Int>(1)] = arg(2)
                 1
             }
@@ -431,6 +438,76 @@ class HudCheckTest {
         assertTrue(s.probeLines().contains("hudprobe: can clear failed IllegalStateException"))
         assertEquals(4, car.state[HudArming.NAVI])
         assertEquals(HudCheck.State.Done, s.check.state.value)
+    }
+
+    @Test fun `a refused CAN clear before step 4 is repeated in the restore, before the family stops and the disarm`() = runTest {
+        val car = FakeCar()
+        var refusals = 1
+        car.refuse = { it == "set 1007/1139806232=0" && refusals-- > 0 }
+        val s = setup(car = car)
+        s.timeline()
+        s.check.run()
+        val calls = car.calls
+        assertEquals(2, calls.count { it == "set 1007/1139806232=0" })
+        assertTrue(s.probeLines().any { it.startsWith("hudprobe: can clear") && it.endsWith(" ok=false") })
+        val restoreClear = calls.lastIndexOf("buf 1007/1140461576= ")
+        assertTrue(calls.toString(), restoreClear > calls.indexOf("start 0xb000700070000"))
+        assertTrue(calls.toString(), restoreClear < calls.indexOf("stop 0xb000700070000"))
+        assertTrue(calls.indexOf("stop 0xb001700170000") < calls.indexOf("sdk 4"))
+        assertFalse(prefs().contains(HudWayChannels.KEY_CAN_LEFT))
+        assertEquals(HudCheck.State.Done, s.check.state.value)
+    }
+
+    @Test fun `a CAN clear the car keeps refusing leaves its marker for the next start`() = runTest {
+        val car = FakeCar().apply { refuse = { it == "set 1007/1139806232=0" } }
+        val s = setup(car = car)
+        s.check.run()
+        assertEquals(2, car.calls.count { it == "set 1007/1139806232=0" })
+        assertTrue(prefs().getBoolean(HudWayChannels.KEY_CAN_LEFT, false))
+        assertEquals(4, car.state[HudArming.NAVI])
+    }
+
+    // --- what a process death mid-check would leave ---
+
+    @Test fun `step 3 keeps its CAN marker on disk before its first write, the accepted clear drops it`() = runTest {
+        val car = FakeCar()
+        val kept = mutableListOf<Boolean>()
+        car.beforeWrite = { if (it == "set 1007/1139806224=7") kept += prefs().contains(HudWayChannels.KEY_CAN_LEFT) }
+        val s = setup(car = car)
+        val job = launch { s.check.run() }
+        advanceTimeBy(50_000)   // inside step 3
+        assertEquals(HudCheck.State.Step(3), s.check.state.value)
+        assertTrue(prefs().getBoolean(HudWayChannels.KEY_CAN_LEFT, false))
+        job.join()
+        assertTrue(kept.isNotEmpty() && kept.all { it })
+        assertFalse(prefs().contains(HudWayChannels.KEY_CAN_LEFT))
+    }
+
+    @Test fun `step 4 keeps the family marker with its route id before the first start, the answered stops drop it`() = runTest {
+        val s = setup()
+        s.check.random = Random(7)
+        val kept = mutableListOf<Long?>()
+        every { s.bridge.startService(any()) } answers {
+            val id = firstArg<Long>()
+            if (id != HudSomeIpBridge.SERVICE_ID_NAVI) {
+                kept += prefs().takeIf { it.contains(HudWayChannels.KEY_LMCN_LEFT) }?.getLong(HudWayChannels.KEY_LMCN_LEFT, 0L)
+            }
+            0
+        }
+        val job = launch { s.check.run() }
+        advanceTimeBy(70_000)   // inside step 4
+        assertEquals(HudCheck.State.Step(4), s.check.state.value)
+        assertFalse(prefs().contains(HudWayChannels.KEY_CAN_LEFT))
+        job.join()
+        assertEquals(List(6) { HudLauncherMapCnFrames.newRouteId(Random(7)) }, kept)
+        assertFalse(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
+    }
+
+    @Test fun `a family stop that threw leaves the family marker for the next start`() = runTest {
+        val s = setup()
+        every { s.bridge.stopService(HudLauncherMapCnFrames.SERVICE_IDS.last()) } returns -2
+        s.check.run()
+        assertTrue(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
     }
 
     @Test fun `a check that never reached step 3 traces no CAN clear`() = runTest {
