@@ -329,6 +329,16 @@ class HudWayChannelsTest {
         assertTrue(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
     }
 
+    @Test fun `an off event that threw keeps the family leftover though every stop answered`() = runTest {
+        val c = channels(3)
+        route()
+        c.tick(active = true)
+        every { gateway.fireEvent(0x4000d000d8001L, any()) } answers { calls += "fire 0x4000d000d8001"; -2 }
+        c.close()
+        assertEquals(stops, calls.filter { it.startsWith("stop") })
+        assertTrue(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
+    }
+
     @Test fun `a family marker that does not reach the disk starts no family for the route and says so`() = runTest {
         val c = channels(3, flaky)
         route()
@@ -437,6 +447,14 @@ class HudWayChannelsTest {
         expected.zip(sent).forEach { (e, a) -> assertTrue(e.payload.contentEquals(a.second)) }
         assertEquals(stops, calls.filter { it.startsWith("stop") })
         assertFalse(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
+    }
+
+    @Test fun `a family leftover whose off event threw stays kept`() {
+        prefs.edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L).commit()
+        every { gateway.fireEvent(0x4000e000e8001L, any()) } returns -2
+        HudWayChannels.stopLmcnLeftover(gateway, prefs, nowMs = 1_700_000_000_000L)
+        assertEquals(stops, calls.filter { it.startsWith("stop") })
+        assertTrue(prefs.contains(HudWayChannels.KEY_LMCN_LEFT))
     }
 
     @Test fun `a family leftover whose last stop threw stays kept`() {

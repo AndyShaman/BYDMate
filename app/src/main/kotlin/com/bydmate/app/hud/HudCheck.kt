@@ -368,14 +368,14 @@ class HudCheck @Inject constructor(
         val gateway = run.gateway ?: return
         if (run.lmcnServices.isEmpty()) return
         val rcs = LinkedHashMap<Long, MutableMap<Int, Int>>()
-        HudLauncherMapCnFrames.stop(run.lmcnRouteId, nowMs()).forEach { e -> count(rcs, e.topic, fire(gateway, e)) }
+        val off = HudLauncherMapCnFrames.stop(run.lmcnRouteId, nowMs()).map { e -> fire(gateway, e).also { count(rcs, e.topic, it) } }
         val stopped = LinkedHashMap<Long, Int>()
         run.lmcnServices.keys.forEach { id ->
             val rc = runCatching { gateway.stopService(id) }.getOrDefault(FIRE_THREW)
             stopped[id] = rc
             traceService("stop", id, rc)
         }
-        if (HudWayChannels.stopsAnswered(stopped.values)) run.prefs.edit().remove(HudWayChannels.KEY_LMCN_LEFT).apply()
+        if (HudWayChannels.stopsAnswered(off + stopped.values)) run.prefs.edit().remove(HudWayChannels.KEY_LMCN_LEFT).apply()
         val fired = HudSomeIpBridge.describeFires(rcs)
         log("hudprobe: lmcn stop fire=$fired services=${HudSomeIpBridge.describeServices(stopped)}")
         Trace.event(TraceArea.HUD, "probe-lmcn-stop", "fire" to fired, "stopped" to okCount(stopped))

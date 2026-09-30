@@ -503,6 +503,14 @@ class HudCheckTest {
         assertFalse(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
     }
 
+    @Test fun `a family off event that threw leaves the family marker for the next start`() = runTest {
+        val s = setup()
+        every { s.bridge.fireEvent(0x4000d000d8005L, any()) } returns -2
+        s.check.run()
+        HudLauncherMapCnFrames.SERVICE_IDS.forEach { verify { s.bridge.stopService(it) } }
+        assertTrue(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
+    }
+
     @Test fun `a family stop that threw leaves the family marker for the next start`() = runTest {
         val s = setup()
         every { s.bridge.stopService(HudLauncherMapCnFrames.SERVICE_IDS.last()) } returns -2
