@@ -66,6 +66,9 @@ class HudWayChannels(
     private val lmcnFires = LinkedHashMap<Long, MutableMap<Int, Int>>()
     private var routeId = 0L
     private var counter = 0
+    /** The position goes out every tick but is looked up once per [RETRY_MS]: a system call. */
+    private var lastPosition = HudLauncherMapCnFrames.Position.DEFAULT
+    private var positionAgeMs = 0L
     private var retryWaitMs = 0L
 
     private val lmcn: Boolean get() = way >= HudController.MODE_LMCN && gateway != null
@@ -121,6 +124,7 @@ class HudWayChannels(
         if (lmcn && bridge != null) {
             routeId = HudLauncherMapCnFrames.newRouteId(random)
             counter = 0
+            positionAgeMs = RETRY_MS
             // Kept before the first start: a process death from here on leaves the family up.
             prefs.edit().putLong(KEY_LMCN_LEFT, routeId).apply()
             HudLauncherMapCnFrames.SERVICE_IDS.forEach { id ->
@@ -158,9 +162,14 @@ class HudWayChannels(
 
     private fun fireUpdate(s: NavGuidanceHub.Snapshot) {
         val bridge = gateway ?: return
+        if (positionAgeMs >= RETRY_MS) {
+            lastPosition = position()
+            positionAgeMs = 0L
+        }
+        positionAgeMs += PERIOD_MS
         HudLauncherMapCnFrames.update(
             iconId = s.maneuverGaode, distanceM = s.distanceMeters, remainDistanceM = s.totalDistMeters,
-            remainTimeS = s.etaSeconds, position = position(), routeId = routeId, counter = counter, nowMs = nowMs(),
+            remainTimeS = s.etaSeconds, position = lastPosition, routeId = routeId, counter = counter, nowMs = nowMs(),
         ).forEach { e -> countFire(e.topic, fire(bridge, e)) }
         counter = (counter + 1) and COUNTER_MASK
     }

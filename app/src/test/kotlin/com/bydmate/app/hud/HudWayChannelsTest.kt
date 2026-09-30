@@ -215,6 +215,21 @@ class HudWayChannelsTest {
         assertTrue(calls.contains("set $dist=300"))
     }
 
+    @Test fun `way 3 looks up the position at the route start and then every 5 s, not every tick`() = runTest {
+        var lookups = 0
+        val c = HudWayChannels(3, HudCanChannel(helper), gateway, prefs) {
+            lookups++
+            HudLauncherMapCnFrames.Position.DEFAULT
+        }.apply { snapshot = { this@HudWayChannelsTest.snapshot } }
+        route()
+        c.tick(active = true)
+        assertEquals(1, lookups)
+        repeat((HudWayChannels.RETRY_MS / HudWayChannels.PERIOD_MS).toInt() - 1) { c.tick(active = true) }
+        assertEquals(1, lookups)
+        c.tick(active = true)
+        assertEquals(2, lookups)
+    }
+
     @Test fun `way 3 at the route end blanks the CAN fields, then sends the off events and stops the six services`() = runTest {
         val c = channels(3)
         route()
