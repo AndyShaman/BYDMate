@@ -120,6 +120,11 @@ class HudArming(
     /** Where the product lines go; tests collect them. */
     internal var log: (String) -> Unit = { Log.i(TAG, it) }
 
+    /** The loop's hook right before a disarm (a kept layout's retry included), while the status is
+     *  still up: ways 2 and 3 blank their CAN fields and stop their family there
+     *  ([HudWayChannels.close]). */
+    internal var beforeDisarm: suspend () -> Unit = {}
+
     @Volatile private var outdatedLogged = false
     private var job: Job? = null
     private var rearms = 0
@@ -292,8 +297,8 @@ class HudArming(
     private suspend fun tick(guided: Boolean, checkDue: Boolean, owned: Boolean): Boolean = when {
         guided && !armed -> { onArm(arm()); true }
         guided && checkDue -> { onRecheck(recheck()); true }
-        !guided && armed -> { onDisarm(disarm()); false }
-        !guided && checkDue && owned && layoutWaits() -> { retryDeferred(); true }
+        !guided && armed -> { runBeforeDisarm(); onDisarm(disarm()); false }
+        !guided && checkDue && owned && layoutWaits() -> { runBeforeDisarm(); retryDeferred(); true }
         else -> false
     }
 
@@ -303,9 +308,18 @@ class HudArming(
         job = null
         if (armed) {
             withContext(NonCancellable) {
+                runBeforeDisarm()
                 runCatching { onDisarm(disarm()) }
                     .onFailure { Log.w(TAG, "hud disarm: failed: ${it.javaClass.simpleName}") }
             }
+        }
+    }
+
+    /** A failing hook never keeps the status up. */
+    private suspend fun runBeforeDisarm() {
+        runCatching { beforeDisarm() }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w(TAG, "hud disarm: cleanup before it failed: ${it.javaClass.simpleName}")
         }
     }
 

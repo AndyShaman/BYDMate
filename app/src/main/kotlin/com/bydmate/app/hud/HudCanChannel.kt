@@ -8,8 +8,8 @@ import com.bydmate.app.data.vehicle.HelperClient
  * OpenBYD's sendSimpleGuidanceInfo / sendNextPathName fill: the maneuver kind into both icon fids
  * (the factory adapter writes every icon into both, and which one a given HUD listens to is not
  * known), the distance in metres, and the road name through setBuffer as UTF-16LE without a BOM.
- * Ported from the archived CAN probe (test/hud-can-probe). In this wave only the HUD check drives
- * it; the product's guidance path does not.
+ * Ported from the archived CAN probe (test/hud-can-probe). The HUD check draws with [show]; ways 2
+ * and 3 of the product ([HudWayChannels]) write [guidance] and [road] on change, like OpenBYD.
  *
  * Statuses stay raw: in this channel setInt answers 0 on success (the probe's finding), unlike the
  * 1 = real action of the comfort fids.
@@ -40,6 +40,18 @@ class HudCanChannel(private val helper: HelperClient) {
         val rb = List(2) { i -> replies?.getOrNull(i)?.let { (st, v) -> HudArming.FidRead(st, v) } ?: HudArming.FidRead(null) }
         return Sent(iconRc, aheadRc, distRc, roadRc, rb[0], rb[1])
     }
+
+    /** OpenBYD's sendSimpleGuidanceInfo: [turnKind] into both icon fids, then the distance; each
+     *  write's raw status, no readback. */
+    suspend fun guidance(turnKind: Int, distanceM: Int): List<Int?> = listOf(
+        helper.writeStatus(DEV, FID_TURN_KIND, turnKind),
+        helper.writeStatus(DEV, FID_GUIDE_INFO_ROAD_AHEAD, turnKind),
+        helper.writeStatus(DEV, FID_TURN_DISTANCE_M, distanceM),
+    )
+
+    /** OpenBYD's sendNextPathName: the road name as UTF-16LE; the raw status. */
+    suspend fun road(name: String): Int? =
+        helper.writeBufferStatus(DEV, FID_NEXT_PATHNAME, name.toByteArray(Charsets.UTF_16LE))
 
     /** Blanks what [show] drew: no icon, the SDK's invalid distance 0, a single space as the road
      *  name (the car rejects an empty buffer, user log 2026-09-29). Distance -1 was accepted by the
