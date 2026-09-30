@@ -145,25 +145,30 @@ class HudCheckTest {
             "hudprobe: step=3 chan=can icon st=1/1 dist st=1 road st=0 readback icon=7 dist=333 marker=333m",
             probe[4],
         )
+        // Step 4 must show its family alone: the CAN fields are blanked before it, not again after.
+        assertEquals("hudprobe: can clear icon st=1/1 dist st=1 road st=0 readback icon=0 dist=0", probe[5])
         // 20 s of the LAUNCHER_MAP_CN set every 200 ms: 100 of each event.
-        assertEquals("hudprobe: step=4 chan=someip-lmcn services=$LMCN_STARTED fire=$LMCN_FIRED marker=444m", probe[5])
-        assertEquals("hudprobe: lmcn stop fire=$LMCN_STOP_FIRED services=$LMCN_STARTED", probe[6])
-        assertEquals("hudprobe: can clear icon st=1/1 dist st=1 road st=0 readback icon=0 dist=0", probe[7])
+        assertEquals("hudprobe: step=4 chan=someip-lmcn services=$LMCN_STARTED fire=$LMCN_FIRED marker=444m", probe[6])
+        assertEquals("hudprobe: lmcn stop fire=$LMCN_STOP_FIRED services=$LMCN_STARTED", probe[7])
         assertEquals("hudprobe: restore navi rc=0 screen=1 rc=1 ok=true canNavi rc=1 isa rc=1 via=sdk readback navi=4 screen=1 canNavi=0 isa=0", probe[8])
         assertEquals(9, probe.size)
 
-        // Step 1 wrote nothing; step 2 armed; step 3 wrote the CAN fields; the restore blanked
-        // them, closed the status, put the layout back and cleared canNavi and isa.
+        // Step 1 wrote nothing; step 2 armed; step 3 wrote the CAN fields and blanked them before
+        // step 4; the restore closed the status, put the layout back and cleared canNavi and isa.
         assertEquals(
             listOf("sdk 2", "set 1023/1276174357=3", "set 1014/1083203624=1", "set 1014/1262485592=1",
                 "set 1007/1139806224=7", "set 1007/1139806256=7", "set 1007/1139806232=333", "buf 1007/1140461576=BYDMATE 3"),
             s.car.calls.take(8),
         )
         assertEquals(
-            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=0", "buf 1007/1140461576= ",
-                "sdk 4", "set 1023/1276174357=1", "set 1014/1083203624=0", "set 1014/1262485592=0"),
-            s.car.calls.takeLast(8),
+            listOf("set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=0", "buf 1007/1140461576= "),
+            s.car.calls.drop(s.car.calls.lastIndexOf("buf 1007/1140461576=BYDMATE 3") + 1).take(4),
         )
+        assertEquals(
+            listOf("sdk 4", "set 1023/1276174357=1", "set 1014/1083203624=0", "set 1014/1262485592=0"),
+            s.car.calls.takeLast(4),
+        )
+        assertEquals(1, s.car.calls.count { it == "buf 1007/1140461576= " })
         assertEquals(1, s.car.state[HudArming.SCREEN])
         assertEquals(4, s.car.state[HudArming.NAVI])
         verifyOrder {
@@ -251,15 +256,15 @@ class HudCheckTest {
                 "start 0xb000d000d0000", "start 0xb000e000e0000", "start 0xb001700170000"),
             starts,
         )
-        assertTrue(calls.indexOf("start 0xb000700070000") > calls.indexOf("buf 1007/1140461576=BYDMATE 3"))
+        // The CAN fields are blank before the family's services start.
+        assertTrue(calls.indexOf("start 0xb000700070000") > calls.indexOf("buf 1007/1140461576= "))
         assertEquals(1000, calls.count { it.startsWith("fire ") } - 3)
-        // The restore: the off events and the six stops, then the CAN clear, then the status and layout.
+        // The restore: the off events and the six stops, then the status and layout.
         val stopAt = calls.indexOfLast { it == "fire 0x4001700178003" } + 1
         assertEquals(
             listOf("fire 0x4000d000d8001", "fire 0x4000d000d8005", "fire 0x4000e000e8001",
                 "stop 0xb000700070000", "stop 0xb820282020000", "stop 0xb000c000c0000",
                 "stop 0xb000d000d0000", "stop 0xb000e000e0000", "stop 0xb001700170000",
-                "set 1007/1139806224=0", "set 1007/1139806256=0", "set 1007/1139806232=0", "buf 1007/1140461576= ",
                 "sdk 4", "set 1023/1276174357=1", "set 1014/1083203624=0", "set 1014/1262485592=0",
                 "stop 0xb010a00010000"),
             calls.drop(stopAt),
@@ -405,7 +410,7 @@ class HudCheckTest {
 
     private fun canClearEvents() = trace.events().filter { it.contains("probe-can-clear") }
 
-    @Test fun `the restore traces the statuses of the CAN clear`() = runTest {
+    @Test fun `the CAN clear before step 4 is traced with its statuses`() = runTest {
         val s = setup()
         s.check.run()
         val events = canClearEvents()
@@ -415,12 +420,14 @@ class HudCheckTest {
         assertFalse(line.contains("ok=false"))
     }
 
-    @Test fun `a CAN clear that throws is traced and the restore still completes`() = runTest {
+    @Test fun `a CAN clear that throws is traced, step 4 still runs and the restore tries it again`() = runTest {
         val car = FakeCar().apply { bufferFailsOn = " " }
         val s = setup(car = car)
         s.check.run()
-        val line = canClearEvents().single()
-        assertTrue(line, line.contains("error=IllegalStateException") && line.contains("ok=false"))
+        val events = canClearEvents()
+        assertEquals(2, events.size)
+        events.forEach { line -> assertTrue(line, line.contains("error=IllegalStateException") && line.contains("ok=false")) }
+        assertTrue(s.probeLines().any { it.startsWith("hudprobe: step=4 chan=someip-lmcn services={") })
         assertTrue(s.probeLines().contains("hudprobe: can clear failed IllegalStateException"))
         assertEquals(4, car.state[HudArming.NAVI])
         assertEquals(HudCheck.State.Done, s.check.state.value)
