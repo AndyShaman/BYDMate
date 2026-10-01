@@ -1436,7 +1436,7 @@ private fun EditorDialog(
                                 Spacer(Modifier.height(8.dp))
                             }
 
-                            if (editing.actions.size < 10) {
+                            if (editing.actions.size < MAX_RULE_ACTIONS) {
                                 AddActionButton(
                                     highlight = Missing.NoActions in missing,
                                     modifier = Modifier.anchor(false, "addAction"),
