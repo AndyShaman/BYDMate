@@ -889,7 +889,7 @@
     <string name="settings_fid_dump_button">Save fid catalog</string>
     <string name="settings_fid_dump_desc">SDK constant names and values. Technical identifiers only: no VIN, no location, no personal data</string>
     <string name="settings_hud_check_title">HUD check</string>
-    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. The car stands still, no route needed. Start log recording first. The glass shows the numbers 111, 222, 333 and 444 one after another. At the end the app asks what you saw and picks the method itself. All of it goes away when the check ends</string>
+    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. The car stands still, no route running in the navigator. Start log recording first. The glass shows the numbers 111, 222, 333 and 444 one after another. At the end the app asks what you saw and picks the method itself. All of it goes away when the check ends</string>
     <string name="settings_hud_check_button">Start</string>
     <string name="settings_hud_check_preparing">Preparing the check</string>
     <string name="settings_hud_check_step">Step %1$d of %2$d, watch the glass</string>
@@ -899,6 +899,12 @@
     <string name="settings_hud_check_refused_guidance">Finish the route in the navigator first</string>
     <string name="settings_hud_check_refused_moving">Stop the car, the check runs only when standing</string>
     <string name="settings_hud_check_refused_no_link">No connection to the car, the check did not start</string>
+    <string name="settings_hud_check_notice_refused_title">Check not started</string>
+    <string name="settings_hud_check_notice_interrupted_title">Check interrupted</string>
+    <string name="settings_hud_check_notice_guidance">A route is running in the navigator. End it and start the check again.</string>
+    <string name="settings_hud_check_notice_moving">The car is moving. Stop and start the check again.</string>
+    <string name="settings_hud_check_notice_route_started">A route started during the check. End it and start the check again.</string>
+    <string name="settings_hud_check_notice_ok">Got it</string>
     <string name="settings_fid_dump_saved">Saved: %1$s</string>
     <string name="settings_fid_dump_in_progress">Reading fids...</string>
     <string name="settings_fid_dump_empty">Fid catalog is empty on this firmware</string>

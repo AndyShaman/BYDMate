@@ -93,6 +93,11 @@ class HudCheck @Inject constructor(
     private val _askAnswer = MutableStateFlow(false)
     val askAnswer: StateFlow<Boolean> = _askAnswer.asStateFlow()
 
+    /** A check that did not run through leaves its [State.Refused] or [State.RouteStarted] here once,
+     *  for the dialog; [dismissNotice] clears it, so the same [state] read again later is no new event. */
+    private val _notice = MutableStateFlow<State?>(null)
+    val notice: StateFlow<State?> = _notice.asStateFlow()
+
     internal var scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     internal var stepMs = STEP_MS
     internal var bridgeFactory: (Context) -> HudSomeIpBridge = { HudSomeIpBridge(it) }
@@ -133,11 +138,13 @@ class HudCheck @Inject constructor(
 
     internal suspend fun run() {
         _askAnswer.value = false
+        _notice.value = null
         _state.value = State.Preparing
         refusal()?.let { reason ->
             log("hudprobe: refused reason=${reason.name.lowercase()}")
             Trace.event(TraceArea.HUD, "probe-refused", "reason" to reason)
             _state.value = State.Refused(reason)
+            _notice.value = State.Refused(reason)
             return
         }
         hudController.armingPaused = true
@@ -177,6 +184,11 @@ class HudCheck @Inject constructor(
     /** The question closed without an answer: nothing changes. */
     fun dismissAnswer() {
         _askAnswer.value = false
+    }
+
+    /** The notice was read: nothing starts, [state] keeps its hint. */
+    fun dismissNotice() {
+        _notice.value = null
     }
 
     /** Looked at before anything goes out, at least once a second through the steps. */
@@ -470,7 +482,9 @@ class HudCheck @Inject constructor(
         // Still the check's layout: the product's loop keeps off it until the retry is over.
         val routeInRetry = deferred && retryDeferredLayout(run)
         hudController.armingPaused = false
-        _state.value = outcome(routeStep != null || routeInRetry, movingStep)
+        val end = outcome(routeStep != null || routeInRetry, movingStep)
+        _state.value = end
+        if (end != State.Done) _notice.value = end
     }
 
     /** The check's last state: a route that started, in the steps or during the layout retry,

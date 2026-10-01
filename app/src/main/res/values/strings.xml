@@ -1044,7 +1044,7 @@
     <string name="settings_fid_dump_button">Сохранить каталог fid\'ов</string>
     <string name="settings_fid_dump_desc">Имена и значения констант SDK. Только технические идентификаторы: без VIN, без геолокации, без личных данных</string>
     <string name="settings_hud_check_title">Проверка HUD</string>
-    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Машина стоит, маршрут не нужен. Сначала включите запись логов. На стекле по очереди появятся числа 111, 222, 333 и 444. В конце приложение спросит, что вы видели, и само выберет способ. После проверки всё пропадёт</string>
+    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Машина стоит, маршрут в навигаторе завершён. Сначала включите запись логов. На стекле по очереди появятся числа 111, 222, 333 и 444. В конце приложение спросит, что вы видели, и само выберет способ. После проверки всё пропадёт</string>
     <string name="settings_hud_check_button">Запустить</string>
     <string name="settings_hud_check_preparing">Готовим проверку</string>
     <string name="settings_hud_check_step">Шаг %1$d из %2$d, смотрите на стекло</string>
@@ -1054,6 +1054,12 @@
     <string name="settings_hud_check_refused_guidance">Сначала завершите маршрут в навигаторе</string>
     <string name="settings_hud_check_refused_moving">Остановите машину, проверка идёт только на месте</string>
     <string name="settings_hud_check_refused_no_link">Нет связи с машиной, проверка не запущена</string>
+    <string name="settings_hud_check_notice_refused_title">Проверка не запущена</string>
+    <string name="settings_hud_check_notice_interrupted_title">Проверка прервана</string>
+    <string name="settings_hud_check_notice_guidance">В навигаторе идёт маршрут. Завершите его и запустите проверку ещё раз.</string>
+    <string name="settings_hud_check_notice_moving">Машина едет. Остановитесь и запустите проверку ещё раз.</string>
+    <string name="settings_hud_check_notice_route_started">Во время проверки начался маршрут. Завершите его и запустите проверку ещё раз.</string>
+    <string name="settings_hud_check_notice_ok">Понятно</string>
     <!-- %1$s = file name -->
     <string name="settings_fid_dump_saved">Сохранено: %1$s</string>
     <string name="settings_fid_dump_in_progress">Чтение fid\'ов...</string>
