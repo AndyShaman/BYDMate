@@ -20,6 +20,12 @@ class ClusterDisplayPickTest {
     }
 
     @Test
+    fun `Android 12 hidden cluster surface is picked, from the field dump and the full one`() {
+        assertEquals(2, pick(DisplayDumpFixtures.ANDROID12_FIELD)?.id)
+        assertEquals(2, pick(DisplayDumpFixtures.ANDROID12_FULL)?.id)
+    }
+
+    @Test
     fun `Leopard 3 resolves to the same surface the app-uid path picks today`() {
         val devices = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.LEOPARD3)
         val appUidName = pickProjectionDisplayName(
