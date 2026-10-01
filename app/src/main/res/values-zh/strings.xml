@@ -432,6 +432,9 @@
     <string name="automation_action_app_launch">启动应用</string>
     <string name="automation_action_app_close">关闭应用</string>
     <string name="automation_action_app_close_hint">应用将被完全关闭，其中未保存的路线或音乐会丢失。</string>
+    <string name="automation_action_media_play">媒体：播放</string>
+    <string name="automation_action_media_pause">媒体：暂停</string>
+    <string name="automation_action_media_key_hint">仅在播放器已运行时生效：如需启动，请在此步骤前添加“启动应用”。</string>
     <string name="automation_action_yandex_music">Yandex 音乐</string>
     <string name="automation_action_call">拨打电话</string>
     <string name="automation_action_navigate">Yandex 导航路线</string>
@@ -1212,6 +1215,7 @@
     <string name="auto_msg_url_no_scheme">动作 #%1$d：URL 必须包含协议头（http://, yandexmusic://, tel:, ...）</string>
     <string name="auto_msg_ymusic_mode_missing">动作 #%1$d：未选择 Yandex 音乐模式</string>
     <string name="auto_msg_sentry_invalid">动作 #%1$d：哨兵模式状态无效</string>
+    <string name="auto_msg_media_key_invalid">动作 #%1$d：请选择播放或暂停</string>
     <string name="auto_msg_hotspot_invalid">动作 #%1$d：热点状态无效</string>
     <string name="auto_msg_speak_text_empty">动作 #%1$d：未设置朗读文本</string>
     <string name="auto_msg_agent_query_prompt_empty">动作 #%1$d：未设置代理查询内容</string>
@@ -1830,6 +1834,9 @@
     <string name="dispatch_app_not_installed">应用未安装：%1$s</string>
     <string name="dispatch_app_close_self">BYDMate 不会关闭自身</string>
     <string name="dispatch_app_close_failed">无法关闭应用：%1$s</string>
+    <string name="dispatch_media_no_session">没有正在运行的播放器</string>
+    <string name="dispatch_media_key_invalid">未知的播放器命令</string>
+    <string name="dispatch_media_key_failed">播放器未接受命令：%1$s</string>
     <string name="dispatch_phone_missing">未设置 phone</string>
     <string name="dispatch_dgis_fallback">未安装 2GIS，已打开 Yandex 导航</string>
     <string name="dispatch_maps_fallback">未安装 Yandex 地图，已打开 Yandex 导航</string>

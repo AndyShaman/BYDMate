@@ -807,7 +807,7 @@ class AgentTools @Inject constructor(
                                     .put("enum", JSONArray(listOf(
                                         "param", "delay", "media_volume", "notification",
                                         "call", "navigate", "url",
-                                        "yandex_music", "sentry", "hotspot", "app_launch", "app_close",
+                                        "yandex_music", "sentry", "hotspot", "app_launch", "app_close", "media_key",
                                         "cluster_projection", "speak", "agent_query",
                                         "split_screen", "split_screen_close",
                                         "split_screen_toggle", "youtube", "go_home")))
@@ -851,6 +851,10 @@ class AgentTools @Inject constructor(
                                 .put("app", JSONObject().put("type", "string")
                                     .put("description", "Для kind=app_launch и kind=app_close: название приложения, как на домашнем экране. " +
                                         "app_close закрывает приложение полностью"))
+                                .put("key", JSONObject().put("type", "string")
+                                    .put("enum", JSONArray(listOf("play", "pause")))
+                                    .put("description", "Только для kind=media_key: play - играть, pause - пауза. " +
+                                        "Плеер должен быть уже запущен"))
                                 .put("narrow_app", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=split_screen: приложение в узкой панели (1/3), название как на домашнем экране"))
                                 .put("wide_app", JSONObject().put("type", "string")
@@ -2777,6 +2781,12 @@ class AgentTools @Inject constructor(
                 ) else ActionDef(command = "", displayName = "Закрыть $label", kind = "app_close",
                     payload = payload.toString()))
             }
+            "media_key" -> {
+                val key = a.optString("key").trim()
+                if (ActionDispatcher.mediaKeyCode(key) == null) return Built.Error("для media_key укажи key: play или pause")
+                Built.Value(ActionDef(command = "", displayName = if (key == "play") "Медиа: играть" else "Медиа: пауза",
+                    kind = "media_key", payload = key))
+            }
             "cluster_projection" -> {
                 val on = requireBoolArg(a, "on")
                     ?: return Built.Error("не указано состояние проекции на приборку")
@@ -2859,6 +2869,8 @@ class AgentTools @Inject constructor(
                 "некорректное состояние охранного режима (действие ${err.index})"
             is ActionValidationError.HotspotInvalid ->
                 "некорректное состояние точки доступа (действие ${err.index})"
+            is ActionValidationError.MediaKeyInvalid ->
+                "для media_key нужен key: play или pause (действие ${err.index})"
             is ActionValidationError.SpeakTextEmpty ->
                 "не задан текст для озвучки (действие ${err.index})"
             is ActionValidationError.AgentQueryPromptEmpty ->

@@ -358,6 +358,13 @@ class RuleShareTest {
         assertEquals(listOf(close), parsed.rule.actions)
     }
 
+    @Test fun `media key steps survive the share file`() {
+        val steps = listOf(ActionDef("", "Медиа: играть", "media_key", "play"), ActionDef("", "Медиа: пауза", "media_key", "pause"))
+        val rule = SharedRule.fromEntity(sourceEntity()).copy(actions = steps)
+        val parsed = RuleShare.parse(RuleShare.exportJson(rule, "3.19.5"), "Звонок") as RuleParseResult.Ok
+        assertEquals(steps, parsed.rule.actions)
+    }
+
     // --- Import ---
 
     @Test fun `export then parse keeps the rule minus private fields`() {

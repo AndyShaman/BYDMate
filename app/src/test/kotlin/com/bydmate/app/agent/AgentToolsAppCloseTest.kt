@@ -25,7 +25,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** create_automation with a «Закрыть приложение» step (#280): the app is resolved like app_launch. */
+/** create_automation with the steps added in 3.20: «Закрыть приложение» (#280), «Медиа: играть / пауза» (#212, #275). */
 class AgentToolsAppCloseTest {
 
     private val ruleDao = mockk<RuleDao> { coEvery { getCount() } returns 0 }
@@ -66,5 +66,21 @@ class AgentToolsAppCloseTest {
         t.launcherAppsProvider = { listOf("Шахматы" to "com.example.chess") }
         val out = create(t, """[{"kind":"app_close","app":"тетрис"}]""")
         assertTrue(out.getString("error").contains("не найдено"))
+    }
+
+    @Test fun `create with media_key play and pause`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val saved = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(saved)) } returns 1L
+        val out = create(tools(), """[{"kind":"media_key","key":"pause"},{"kind":"media_key","key":"play"}]""")
+        assertTrue(out.getBoolean("ok"))
+        val a = ActionDef.listFromJson(saved.captured.actions)
+        assertEquals(listOf("media_key" to "pause", "media_key" to "play"), a.map { it.kind to it.payload })
+    }
+
+    @Test fun `media_key without play or pause is rejected`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        assertTrue(create(tools(), """[{"kind":"media_key","key":"next"}]""").has("error"))
+        assertTrue(create(tools(), """[{"kind":"media_key"}]""").has("error"))
     }
 }

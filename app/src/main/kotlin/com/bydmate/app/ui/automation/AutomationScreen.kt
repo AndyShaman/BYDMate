@@ -2553,6 +2553,8 @@ private fun ActionRow(
                     AppLaunchActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 "app_close" ->
                     AppCloseActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "media_key" ->
+                    MediaKeyActionControls(payload = action.payload, modifier = fill)
                 "call" ->
                     CallActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 "navigate" ->
@@ -3034,6 +3036,8 @@ private fun pickerSections(): List<PickerSection> {
                 PickerTile(lc.getString(R.string.automation_action_app_launch)) { newAppLaunchAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_app_close)) { newAppCloseAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_yandex_music)) { newYandexMusicAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_media_play)) { newMediaKeyAction(it, "play") },
+                PickerTile(lc.getString(R.string.automation_action_media_pause)) { newMediaKeyAction(it, "pause") },
                 PickerTile(lc.getString(R.string.automation_action_call)) { newCallAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_navigate)) { newNavigateAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_url)) { newUrlAction(it) },
@@ -4302,6 +4306,46 @@ private fun AppCloseActionControls(
                 onUpdate(action.withAppClose(newPkg, newLabel))
                 editing = false
             },
+        )
+    }
+}
+
+// --- Media Key Action Controls (#212, #275) ---
+
+@Composable
+private fun MediaKeyActionControls(payload: String?, modifier: Modifier = Modifier) {
+    val play = payload == "play"
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardSurface, RoundedCornerShape(6.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                .heightIn(min = FIELD_HEIGHT)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (play) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                contentDescription = null,
+                tint = AccentTeal,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = stringResource(
+                    if (play) R.string.automation_action_media_play else R.string.automation_action_media_pause
+                ),
+                fontSize = 16.sp,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = stringResource(R.string.automation_action_media_key_hint),
+            fontSize = 14.sp,
+            color = TextSecondary
         )
     }
 }

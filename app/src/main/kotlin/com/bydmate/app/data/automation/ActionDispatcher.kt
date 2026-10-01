@@ -12,8 +12,10 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
+import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
 import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterMode
@@ -33,6 +35,7 @@ import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.vehicle.VehicleWriteError
 import com.bydmate.app.data.vehicle.WindowPane
 import com.bydmate.app.data.vehicle.WriteAllowlist
+import com.bydmate.app.media.KnobPlayPause
 import com.bydmate.app.media.MediaSessionListenerService
 import com.bydmate.app.navdata.NavPackages
 import com.bydmate.app.service.TrackingService
@@ -295,6 +298,19 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
 
         /** Localized name of a toggle target; null when the id is not a known target. */
         internal fun toggleTargetNameRes(target: String): Int? = TOGGLE_TARGET_NAMES[target]
+
+        /** «Медиа: играть / пауза»: the explicit key, never PLAY_PAUSE, so a step cannot flip the wrong way. */
+        internal fun mediaKeyCode(payload: String?): Int? = when (payload) {
+            "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
+            "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE
+            else -> null
+        }
+
+        internal fun mediaKeyNameRes(payload: String?): Int? = when (payload) {
+            "play" -> R.string.automation_action_media_play
+            "pause" -> R.string.automation_action_media_pause
+            else -> null
+        }
 
         /**
          * Outcome of resolving a "toggle" against the live state: either the concrete
@@ -598,6 +614,16 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }.getOrDefault(emptyList())
     }
 
+    /** Test seam -- one media key (down + up) to a session; false when it refused the key or died. */
+    internal var sendMediaKey: (MediaController, Int) -> Boolean = { controller, keyCode ->
+        runCatching {
+            // ACTION_UP reuses ACTION_DOWN's eventTime, like RealMediaControllerHandle.
+            val now = SystemClock.uptimeMillis()
+            controller.dispatchMediaButtonEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0)) &&
+                controller.dispatchMediaButtonEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
+        }.getOrDefault(false)
+    }
+
     init {
         createUserChannels()
     }
@@ -616,6 +642,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             "go_home" -> goHome()
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
+            "media_key" -> dispatchMediaKey(action)
             "sentry" -> dispatchSentry(action)
             "hotspot" -> dispatchHotspot(action)
             "cluster_projection" -> dispatchClusterProjection(action)
@@ -635,6 +662,30 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         // Class name only: an exception message can carry the intent URI (tokens, coordinates).
         Log.e(TAG, "dispatch failed for kind=${action.kind}: ${e.javaClass.simpleName}")
         DispatchResult(false, e.javaClass.simpleName)
+    }
+
+    // --- media key (#212, #275) ---
+
+    /**
+     * Sends PLAY or PAUSE to the session the volume-knob press would pick. Only a running player
+     * is reached: no session is a failed step, with no AudioManager fallback, because on V1.6 a
+     * global media key lets com.byd.mediacenter switch the audio source.
+     */
+    private fun dispatchMediaKey(action: ActionDef): DispatchResult {
+        val keyCode = mediaKeyCode(action.payload)
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_media_key_invalid))
+        val controllers = runCatching { activeMediaControllers() }.getOrDefault(emptyList())
+        val index = KnobPlayPause.pickTarget(
+            controllers.map { KnobPlayPause.SessionSnapshot(it.packageName, it.playbackState?.state) })
+        if (index == null) {
+            Log.w(TAG, "media key ${action.payload}: no media session")
+            return DispatchResult(false, appStrings.get(R.string.dispatch_media_no_session))
+        }
+        val target = controllers[index]
+        val ok = sendMediaKey(target, keyCode)
+        Log.i(TAG, "media key ${action.payload} -> ${target.packageName} ok=$ok")
+        return if (ok) DispatchResult(true)
+        else DispatchResult(false, appStrings.get(R.string.dispatch_media_key_failed, target.packageName))
     }
 
     // --- sentry mode (Settings.Global via helper daemon) ---

@@ -70,6 +70,13 @@ class RuleDraftValidatorTest {
         assertEquals(ActionValidationError.AppNotSelected(1), err)
     }
 
+    @Test fun media_key_action_takes_only_play_or_pause() {
+        fun key(p: String) = listOf(ActionDef(command = "", displayName = "x", kind = "media_key", payload = p))
+        assertEquals(null, RuleDraftValidator.validateActions(key("play")))
+        assertEquals(null, RuleDraftValidator.validateActions(key("pause")))
+        assertEquals(ActionValidationError.MediaKeyInvalid(1), RuleDraftValidator.validateActions(key("toggle")))
+    }
+
     @Test fun call_action_phone_too_short_is_invalid() {
         val err = RuleDraftValidator.validateActions(listOf(
             ActionDef(command = "", displayName = "x", kind = "call", payload = """{"phone":"123"}""")))

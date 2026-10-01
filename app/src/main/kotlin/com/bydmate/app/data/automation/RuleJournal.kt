@@ -140,7 +140,7 @@ internal class RuleJournal(
             val json by lazy { try { JSONObject(p) } catch (_: Exception) { null } }
             fun field(key: String): String? = json?.let { JSONObject().put(key, it.optString(key)).toString() }
             return when (action.kind) {
-                "toggle", "delay", "sentry", "hotspot", "cluster_projection", "media_volume" -> p
+                "toggle", "delay", "sentry", "hotspot", "cluster_projection", "media_volume", "media_key" -> p
                 "notification", "notification_silent", "notification_sound" -> field("title")
                 "speak" -> field("text")
                 "agent_query" -> field("prompt")

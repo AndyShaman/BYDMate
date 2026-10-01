@@ -2,6 +2,7 @@ package com.bydmate.app.ui.automation
 
 import android.content.Context
 import com.bydmate.app.R
+import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.SharedRule
@@ -100,7 +101,9 @@ internal object RuleImportSummary {
     fun action(action: ActionDef, context: Context, autoGo: (JSONObject) -> Boolean = { false }): String {
         val lc = context.appLocalizedContext()
         if (action.kind == "toggle") return toggleDisplayName(context, action.payload.orEmpty())
-        val label = ACTION_KIND_LABELS[action.kind]?.let { lc.getString(it) } ?: action.kind
+        val labelRes = if (action.kind == "media_key") ActionDispatcher.mediaKeyNameRes(action.payload)
+        else ACTION_KIND_LABELS[action.kind]
+        val label = labelRes?.let { lc.getString(it) } ?: action.kind
         // Same default as the dispatcher: no flag, no minimize.
         val minimize = lc.getString(R.string.automation_import_minimize)
             .takeIf { action.kind in MINIMIZE_KINDS && payloadJson(action.payload).optBoolean("minimize", false) }

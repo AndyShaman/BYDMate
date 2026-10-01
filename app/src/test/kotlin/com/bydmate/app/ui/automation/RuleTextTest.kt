@@ -256,6 +256,15 @@ class RuleTextTest {
         assertEquals("Закрыть приложение «Радио»", journalLine(run(recorded(close)), ctx, now, zone).what)
     }
 
+    @Test fun `a media key step reads as its picker entry, also in the journal`() {
+        val lc = ctx.appLocalizedContext()
+        val play = ActionDef("", "x", "media_key", "play")
+        val pause = ActionDef("", "x", "media_key", "pause")
+        assertEquals("Медиа: играть", actionText(play, lc))
+        assertEquals("Медиа: пауза", actionText(pause, lc))
+        assertEquals("Медиа: пауза не выполнено", journalLine(run(recorded(pause, success = false), success = false), ctx, now, zone).what)
+    }
+
     @Test fun `a run shows the parameters it recorded`() {
         val pause = ActionDef("", "Пауза", "delay", "30000")
         val note = ActionDef("", "Уведомление", "notification", """{"title":"Заряд","text":"t"}""")

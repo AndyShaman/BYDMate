@@ -720,6 +720,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             is ActionValidationError.MediaVolumeMissing -> ctx.getString(R.string.auto_msg_media_volume_missing, err.index)
             is ActionValidationError.SentryInvalid -> ctx.getString(R.string.auto_msg_sentry_invalid, err.index)
             is ActionValidationError.HotspotInvalid -> ctx.getString(R.string.auto_msg_hotspot_invalid, err.index)
+            is ActionValidationError.MediaKeyInvalid -> ctx.getString(R.string.auto_msg_media_key_invalid, err.index)
             is ActionValidationError.SpeakTextEmpty -> ctx.getString(R.string.auto_msg_speak_text_empty, err.index)
             is ActionValidationError.AgentQueryPromptEmpty -> ctx.getString(R.string.auto_msg_agent_query_prompt_empty, err.index)
             is ActionValidationError.SplitScreenNarrowEmpty -> ctx.getString(R.string.auto_msg_split_narrow_empty, err.index)
@@ -1539,6 +1540,17 @@ fun newAppCloseAction(context: Context): ActionDef = ActionDef(
 
 fun ActionDef.withAppClose(packageName: String, appLabel: String): ActionDef = copy(
     payload = org.json.JSONObject().put("packageName", packageName).put("appLabel", appLabel).toString()
+)
+
+// --- Media key helpers (#212, #275): payload "play" or "pause" ---
+
+fun newMediaKeyAction(context: Context, key: String): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(
+        if (key == "play") R.string.automation_action_media_play else R.string.automation_action_media_pause
+    ),
+    kind = "media_key",
+    payload = key
 )
 
 // --- Call helpers (v2.3.0) ---
