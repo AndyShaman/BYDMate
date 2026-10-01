@@ -45,7 +45,7 @@ import javax.inject.Singleton
  * Checked on a Sealion 07 (DiLink 5.0): source 26 renders the text, the "armrest screen" singer fid
  * is the card's second line, long titles scroll, the bar follows the progress fid, and the stock
  * controller leaves the card alone on a track change while focus stays with the same app. Played /
- * total time are sent like the stock sender's, though that card layout doesn't show them. Cover art
+ * total time are not sent: that card doesn't show them. Cover art
  * is out of reach: the stock sender hands it to `content://com.byd.mediacenter.provider/info`, whose
  * read and write permissions are signature-level, and the shell uid is refused.
  */
@@ -199,12 +199,14 @@ class ClusterMusicBridge @Inject constructor(
 
     private fun report(outcome: Outcome, target: Target?, reason: String? = null) {
         when (outcome) {
-            Outcome.NONE, Outcome.TICKED, Outcome.REASSERTED -> return
+            Outcome.NONE, Outcome.TICKED, Outcome.REASSERTED, Outcome.RETRYING -> return
             Outcome.SHOWN -> {
+                // Lengths only: users post these logs in public issues.
                 val card = (target as? Target.Show)?.card
-                Log.i(TAG, "card <- \"${card?.title}\" / \"${card?.artist}\" state=${card?.musicState} " +
-                    "progress=${card?.progress ?: "no duration"}")
+                Log.i(TAG, "card <- title(${card?.title?.length}) artist(${card?.artist?.length}) " +
+                    "state=${card?.musicState} progress=${card?.progress ?: "no duration"}")
             }
+            Outcome.REFUSED -> Log.w(TAG, "card off until restart: the car refused it ${ClusterMusicSync.MAX_WRITE_REFUSALS} times")
             else -> Log.i(TAG, "card ${outcome.name.lowercase()}${reason?.let { " ($it)" } ?: ""}")
         }
         Trace.event(TraceArea.CAR, "cluster_music", "outcome" to outcome.name.lowercase(), "reason" to reason)

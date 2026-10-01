@@ -114,19 +114,12 @@ class ClusterMusicCardTest {
         assertNull(ClusterMusicCard.progressPercent(null, 180_000))
     }
 
-    @Test fun `card carries progress and times from the owner`() {
+    @Test fun `card carries progress from the owner`() {
         val card = shown(listOf(SessionSnapshot(navi, playing, "Song", "A", 95_400, 214_000)))
         assertEquals(45, card?.progress)
-        assertEquals(95, card?.positionSec)
-        assertEquals(214, card?.durationSec)
     }
 
-    @Test fun `hms splits like the stock sender`() {
-        assertEquals(Triple(0, 3, 34), ClusterMusicCard.hms(214))
-        assertEquals(Triple(1, 0, 5), ClusterMusicCard.hms(3605))
-    }
-
-    @Test fun `ticking position does not count as a new track`() {
+    @Test fun `ticking progress does not count as a new track`() {
         val a = shown(listOf(SessionSnapshot(navi, playing, "Song", "A", 10_000, 214_000)))!!
         val b = shown(listOf(SessionSnapshot(navi, playing, "Song", "A", 12_000, 214_000)))!!
         assertEquals(a.steady(), b.steady())

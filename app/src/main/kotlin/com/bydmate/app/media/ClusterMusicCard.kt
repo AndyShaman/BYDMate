@@ -43,20 +43,15 @@ object ClusterMusicCard {
         val durationMs: Long? = null,
     )
 
-    /**
-     * [progress] is the 0..100 bar value; [positionSec] / [durationSec] feed the played / total
-     * time fids. Each is null when the session doesn't give it.
-     */
+    /** [progress] is the 0..100 bar value, null when the session doesn't give a duration. */
     data class Card(
         val title: String,
         val artist: String,
         val musicState: Int,
         val progress: Int? = null,
-        val positionSec: Int? = null,
-        val durationSec: Int? = null,
     ) {
-        /** The part that only changes with the track or play state; progress and position tick. */
-        fun steady(): Card = copy(progress = null, positionSec = null)
+        /** The part that only changes with the track or play state; the bar ticks. */
+        fun steady(): Card = copy(progress = null)
     }
 
     /** What the bridge should do with the card this tick. */
@@ -83,15 +78,12 @@ object ClusterMusicCard {
         if (playing != null && playing.packageName !in sources) return Target.OtherPlaying(playing.packageName)
         val owner = playing ?: sessions.firstOrNull { it.playbackState == PB_PAUSED }
         if (owner == null || owner.packageName !in sources || owner.title.isNullOrBlank()) return Target.Idle
-        val duration = owner.durationMs?.takeIf { it > 0 }
         return Target.Show(
             Card(
                 title = owner.title.trim(),
                 artist = owner.artist?.trim().orEmpty(),
                 musicState = if (owner === playing) MUSIC_PLAYING else MUSIC_PAUSED,
-                progress = progressPercent(owner.positionMs, duration),
-                positionSec = owner.positionMs?.let { (it.coerceIn(0, duration ?: it) / 1000).toInt() },
-                durationSec = duration?.let { (it / 1000).toInt() },
+                progress = progressPercent(owner.positionMs, owner.durationMs),
             )
         )
     }
@@ -101,9 +93,6 @@ object ClusterMusicCard {
         if (positionMs == null || durationMs == null || durationMs <= 0) return null
         return ((positionMs.coerceIn(0, durationMs) * 100.0 / durationMs) + 0.5).toInt()
     }
-
-    /** Hours, minutes, seconds, as the stock sendAudioTime splits them. */
-    fun hms(totalSec: Int): Triple<Int, Int, Int> = Triple(totalSec / 3600, totalSec / 60 % 60, totalSec % 60)
 
     /**
      * UTF-16LE without a BOM, cut to [MAX_TEXT_BYTES] without splitting a surrogate pair.
