@@ -36,7 +36,7 @@ class MediaSessionListenerService : NotificationListenerService() {
 
     /** Where the unknown-maneuver lines go; logcat in production, a collector in tests. */
     internal var unknownManeuverSink: (String) -> Unit = { Log.i(TAG, it) }
-    // Maneuver icon names this lane could not map, one line each (lane thread).
+    // Maneuver icon names this lane could not map, a line per name per 5 min (lane thread).
     private val unknownManeuvers = UnknownManeuverGate(UnknownManeuverGate.MIN_INTERVAL_MS)
 
     override fun onCreate() {
@@ -167,11 +167,11 @@ class MediaSessionListenerService : NotificationListenerService() {
     }
 
     /** Field diagnostics: a guided post with a distance whose maneuver maps to 0 logs the
-     *  maneuver icon name once per distinct name. The texts are never logged, they carry streets. */
+     *  maneuver icon name once per distinct name per 5 min. The texts are never logged, they carry
+     *  streets. The route state is read only after the cheap checks. */
     private fun logUnknownManeuver(update: NavGuidanceHub.RichUpdate, path: String, value: String) {
         val nowMs = System.currentTimeMillis()
-        val active = NavGuidanceHub.snapshot(nowMs).active
-        if (!UnknownManeuverGate.applies(active, update.distanceMeters, update.maneuverGaode)) return
+        if (!UnknownManeuverGate.applies(update.distanceMeters, update.maneuverGaode) { NavGuidanceHub.snapshot(nowMs).active }) return
         val line = "nav maneuver unknown [$path]: $value"
         if (unknownManeuvers.take(line, nowMs)) unknownManeuverSink(line)
     }

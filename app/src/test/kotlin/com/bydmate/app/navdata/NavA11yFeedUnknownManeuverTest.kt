@@ -43,7 +43,7 @@ class NavA11yFeedUnknownManeuverTest {
     @Test fun `an unrecognised maneuver logs its raw node once, with one id walk`() {
         deliverPhrase("Turn right")
         assertEquals(
-            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Turn right\""),
+            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Turn right\" len=10"),
             unknownLines,
         )
         assertEquals(1, zeroWalks.size)
@@ -85,7 +85,7 @@ class NavA11yFeedUnknownManeuverTest {
             listOf(
                 "nav maneuver unknown [a11y]: found=0",
                 "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=null",
-                "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"\"",
+                "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"\" len=0",
             ),
             unknownLines,
         )
@@ -95,14 +95,31 @@ class NavA11yFeedUnknownManeuverTest {
     @Test fun `the line shows the node the parse read`() {
         deliver { listOf(maneuverNode(""), maneuverNode("Keep left", cls = "android.view.View")) }
         assertEquals(
-            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=\"Keep left\"",
+            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=\"Keep left\" len=9",
             unknownLines.single(),
         )
     }
 
-    @Test fun `a long description is capped`() {
+    @Test fun `a long description is cut to its head`() {
         deliverPhrase("x".repeat(200))
-        assertTrue(unknownLines.single(), unknownLines.single().endsWith("desc=\"" + "x".repeat(120) + "\"…"))
+        assertTrue(unknownLines.single(), unknownLines.single().endsWith("desc=\"" + "x".repeat(48) + "\"… len=200"))
+    }
+
+    @Test fun `a street after the maneuver words stays out of the line`() {
+        deliverPhrase("Turn right onto Baker Street")
+        assertEquals(
+            "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Turn right onto Baker\"… len=28",
+            unknownLines.single(),
+        )
+        assertTrue(lines.none { "Street" in it })
+    }
+
+    @Test fun `phrases with the same head and length are one value`() {
+        deliverPhrase("Turn right onto Baker Street")
+        rewindRateLimit()
+        deliverPhrase("Turn right onto Baker Avenue")
+        assertEquals(1, unknownLines.size)
+        assertEquals(1, zeroWalks.size)
     }
 
     @Test fun `a new value waits for the walk floor`() {

@@ -1,45 +1,70 @@
 package com.bydmate.app.navdata
 
 /** Field diagnostics for a guided route whose maneuver reads as 0: each lane logs the raw
- *  maneuver value it could not map, once per distinct value and never two lines within
- *  [minIntervalMs], so a recorded log shows what to map while neither a 2 -> 0 -> 2 blink nor
- *  a phrase that stays on screen floods it. */
+ *  maneuver value it could not map, once per distinct value per [REPEAT_MS] and never two lines
+ *  within [minIntervalMs], so a recorded log shows what to map while neither a 2 -> 0 -> 2 blink
+ *  nor a phrase that stays on screen floods it. The repeat lets a recording switched on after an
+ *  earlier route still catch the value. */
 internal class UnknownManeuverGate(private val minIntervalMs: Long) {
-    private val seen = HashSet<String>()
+    // Value -> time of its last line, oldest line first.
+    private val logged = LinkedHashMap<String, Long>()
     private var lastMs = 0L
 
-    /** True when [value] was not logged this episode and the floor has passed; the value is then
-     *  remembered. A value refused by the floor is not, so a later read can still log it. */
+    /** True when [value] had no line for [REPEAT_MS] and the floor has passed; its time is then
+     *  recorded. A value refused by the floor is not, so a later read can still log it. Past
+     *  [MAX_VALUES] the value logged longest ago is forgotten. */
     @Synchronized
     fun take(value: String, nowMs: Long): Boolean {
-        if (value in seen || seen.size >= MAX_VALUES || nowMs - lastMs < minIntervalMs) return false
-        seen.add(value)
+        if (nowMs - lastMs < minIntervalMs) return false
+        val last = logged[value]
+        if (last != null && nowMs - last < REPEAT_MS) return false
+        logged.remove(value)
+        if (logged.size >= MAX_VALUES) logged.remove(logged.keys.first())
+        logged[value] = nowMs
         lastMs = nowMs
         return true
     }
 
     @Synchronized
     fun reset() {
-        seen.clear()
+        logged.clear()
         lastMs = 0L
     }
 
     companion object {
         /** Floor of the notification lane; the a11y feed waits for its tree walk's instead. */
         const val MIN_INTERVAL_MS = 30_000L
-        /** Distinct values per episode, so a navigator that changes its phrases cannot grow the set. */
+        /** The same value gets a line again after this long. */
+        const val REPEAT_MS = 300_000L
+        /** Values remembered at once; a navigator that changes its phrases cannot grow the map. */
         const val MAX_VALUES = 16
         private const val MAX_TEXT_CHARS = 120
+        private const val HEAD_WORDS = 4
+        private const val HEAD_CHARS = 48
+        private val SPACES = Regex("""[\s\p{Z}]+""")
 
-        /** A route runs with a distance on screen, yet the maneuver code is 0. */
-        fun applies(guidanceActive: Boolean, distanceMeters: Int, maneuverGaode: Int): Boolean =
-            guidanceActive && distanceMeters > 0 && maneuverGaode == 0
+        /** A route runs with a distance on screen, yet the maneuver code is 0. [guidanceActive]
+         *  is read last, so a recognised maneuver costs no route-state read. */
+        inline fun applies(distanceMeters: Int, maneuverGaode: Int, guidanceActive: () -> Boolean): Boolean =
+            distanceMeters > 0 && maneuverGaode == 0 && guidanceActive()
 
-        /** Raw text for a log line: quoted and capped, so null and empty read apart. */
+        /** A resource name for a log line: quoted and capped, so null and empty read apart. */
         fun quote(raw: String?): String = when {
             raw == null -> "null"
             raw.length <= MAX_TEXT_CHARS -> "\"$raw\""
             else -> "\"${raw.take(MAX_TEXT_CHARS)}\"…"
+        }
+
+        /** A screen text for a log line: only its first [HEAD_WORDS] words, at most [HEAD_CHARS]
+         *  chars, then its full length, since the rest may name the route's street. `null`,
+         *  `"" len=0` and a cut (`…` after the closing quote) read apart. */
+        fun textHead(raw: String?): String {
+            if (raw == null) return "null"
+            val words = raw.split(SPACES).filter { it.isNotEmpty() }
+            val joined = words.take(HEAD_WORDS).joinToString(" ")
+            val head = joined.take(HEAD_CHARS)
+            val cut = if (words.size > HEAD_WORDS || joined.length > HEAD_CHARS) "…" else ""
+            return "\"$head\"$cut len=${raw.length}"
         }
     }
 }
