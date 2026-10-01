@@ -6,6 +6,7 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.bydmate.app.navdata.NavGuidanceHub
 import com.bydmate.app.navdata.NavPackages
+import com.bydmate.app.navdata.UnknownManeuverGate
 import java.util.concurrent.ConcurrentHashMap
 
 /** Listener with two narrow jobs: (1) its mere enabled existence lets
@@ -32,6 +33,11 @@ class MediaSessionListenerService : NotificationListenerService() {
     }
 
     internal var lane: NaviNotificationLane? = null
+
+    /** Where the unknown-maneuver lines go; logcat in production, a collector in tests. */
+    internal var unknownManeuverSink: (String) -> Unit = { Log.i(TAG, it) }
+    // Maneuver icon names this lane could not map, one line each (lane thread).
+    private val unknownManeuvers = UnknownManeuverGate(UnknownManeuverGate.MIN_INTERVAL_MS)
 
     override fun onCreate() {
         super.onCreate()
@@ -135,21 +141,39 @@ class MediaSessionListenerService : NotificationListenerService() {
                 return
             }
             lane?.markGuidancePosted()
-            NavGuidanceHub.updateFromNotification(
-                NaviRichPostProcessor.buildRichUpdate(rich, title, text, subText))
+            val update = NaviRichPostProcessor.buildRichUpdate(rich, title, text, subText)
+            NavGuidanceHub.updateFromNotification(update)
+            logUnknownManeuver(update, "notification", "res=${UnknownManeuverGate.quote(rich.maneuverRes)}")
             return
         }
 
         // EXTRAS_FALLBACK: RemoteViews absent or reflection broke - donor extras path.
         val snap = NavGuidanceHub.snapshot(System.currentTimeMillis())
+        val iconName = smallIconName(notification, resolver)
+        val isMaps = pkg in NavPackages.YANDEX_MAPS
+        val hubHasKnownManeuver = snap.active && snap.maneuverGaode > 0
         val update = NaviRichPostProcessor.buildExtrasFallback(
             title, text, subText,
-            smallIconName = smallIconName(notification, resolver),
-            isMaps = pkg in NavPackages.YANDEX_MAPS,
-            hubHasKnownManeuver = snap.active && snap.maneuverGaode > 0,
+            smallIconName = iconName,
+            isMaps = isMaps,
+            hubHasKnownManeuver = hubHasKnownManeuver,
         ) ?: return
         lane?.markGuidancePosted()
         NavGuidanceHub.updateFromNotification(update)
+        // Maps drops its own maneuver while the hub knows one (rule R2-1): that 0 is not unknown.
+        if (!(isMaps && hubHasKnownManeuver)) {
+            logUnknownManeuver(update, "notification extras", "icon=${UnknownManeuverGate.quote(iconName)}")
+        }
+    }
+
+    /** Field diagnostics: a guided post with a distance whose maneuver maps to 0 logs the
+     *  maneuver icon name once per distinct name. The texts are never logged, they carry streets. */
+    private fun logUnknownManeuver(update: NavGuidanceHub.RichUpdate, path: String, value: String) {
+        val nowMs = System.currentTimeMillis()
+        val active = NavGuidanceHub.snapshot(nowMs).active
+        if (!UnknownManeuverGate.applies(active, update.distanceMeters, update.maneuverGaode)) return
+        val line = "nav maneuver unknown [$path]: $value"
+        if (unknownManeuvers.take(line, nowMs)) unknownManeuverSink(line)
     }
 
     private fun smallIconName(n: Notification, resolveName: (Int) -> String?): String =

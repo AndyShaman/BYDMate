@@ -112,6 +112,28 @@ class NaviRichNotificationParserTest {
     }
 
     @Test
+    fun `the maneuver icon name is kept, an unmapped one included`() {
+        val unmapped = listOf(
+            imageAction("primaryicontinted", "notification_lane_change_sdl"),
+            textAction("titleview", "500 м"),
+        )
+        assertNull(NaviRichNotificationParser.buildFromActions(unmapped).maneuverGaode)
+        assertEquals("notification_lane_change_sdl", NaviRichNotificationParser.maneuverResOf(unmapped))
+        assertEquals("notification_right_sdl", NaviRichNotificationParser.maneuverResOf(listOf(
+            imageAction("primaryicontinted", "notification_right_sdl"))))
+        assertNull(NaviRichNotificationParser.maneuverResOf(listOf(
+            imageAction("primaryicon", "road_alerts_camera_32"), textAction("titleview", "500 м"))))
+    }
+
+    @Test
+    fun `merge keeps the icon name from actions`() {
+        val actions = NaviRichNotificationParser.RichNaviInfo(maneuverRes = "notification_lane_change_sdl")
+        val render = NaviRichNotificationParser.RichNaviInfo(instruction = "Поверните направо")
+        assertEquals("notification_lane_change_sdl",
+            NaviRichNotificationParser.mergePreferActions(actions, render)!!.maneuverRes)
+    }
+
+    @Test
     fun `actions road from descriptionview filters maneuver and time`() {
         assertEquals("улица Ленина", NaviRichNotificationParser.buildFromActions(listOf(
             textAction("descriptionview", "улица Ленина"))).road)
@@ -312,6 +334,26 @@ class NaviRichNotificationParserTest {
             context, n, "ru.yandex.yandexnavi", resolver(android.R.id.text1 to "titleview"))
         assertEquals(230, info!!.distToManeuverM)
         assertEquals("Тверская", info.road)
+    }
+
+    @Test
+    fun `parse keeps an unmapped maneuver icon name`() {
+        val views = rv()
+        views.setTextViewText(android.R.id.text1, "500 м")
+        views.setImageViewResource(android.R.id.icon, android.R.drawable.ic_delete)
+        val n = android.app.Notification.Builder(context, "test")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setCustomContentView(views)
+            .build()
+        val info = NaviRichNotificationParser.parse(
+            context, n, "ru.yandex.yandexnavi",
+            resolver(
+                android.R.id.text1 to "titleview",
+                android.R.id.icon to "primaryIconTinted",
+                android.R.drawable.ic_delete to "notification_lane_change_sdl",
+            ))
+        assertNull(info!!.maneuverGaode)
+        assertEquals("notification_lane_change_sdl", info.maneuverRes)
     }
 
     @Test

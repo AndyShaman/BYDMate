@@ -35,7 +35,8 @@ object NaviRichNotificationParser {
     data class RichAction(val viewName: String, val op: Op, val value: String)
 
     /** Parsed rich notification content (donor RvNaviInfo minus traffic-light fields).
-     *  maneuverGaode: donor maneuverEnum collapsed straight to a GAODE code, null = unknown. */
+     *  maneuverGaode: donor maneuverEnum collapsed straight to a GAODE code, null = unknown.
+     *  maneuverRes: the maneuver icon's resource name as posted, mapped or not (field log only). */
     data class RichNaviInfo(
         val instruction: String = "",
         val road: String = "",
@@ -48,6 +49,7 @@ object NaviRichNotificationParser {
         val cameraDistanceM: Int = 0,
         val cameraIconPng: ByteArray? = null,
         val maneuverGaode: Int? = null,
+        val maneuverRes: String? = null,
     )
 
     // Donor RemoteViewsParser regexes (distance regexes match NavGuidanceParser's)
@@ -139,6 +141,10 @@ object NaviRichNotificationParser {
         )
     }
 
+    /** The maneuver icon's resource name as posted, mapped or not; only the field log reads it. */
+    internal fun maneuverResOf(actions: List<RichAction>): String? =
+        actions.lastOrNull { it.viewName == "primaryicontinted" && it.op == Op.IMAGE_RES && it.value.isNotEmpty() }?.value
+
     /** Donor mergePreferActions: actions path wins for maneuver/camera/road/dist,
      *  render path wins for instruction/totals/arrival/remaining/maneuver PNG.
      *  Camera two-stage: alert only from actions; empty alert kills candidates. */
@@ -159,6 +165,7 @@ object NaviRichNotificationParser {
             cameraIconPng = if (actions.cameraAlert.isEmpty()) null
                 else render.cameraIconPng ?: actions.cameraIconPng,
             maneuverGaode = actions.maneuverGaode ?: render.maneuverGaode,
+            maneuverRes = actions.maneuverRes,
         )
     }
 
@@ -313,7 +320,7 @@ object NaviRichNotificationParser {
 
         val fromActions = extractRichActions(rv, resolveName)
             .takeIf { it.isNotEmpty() }
-            ?.let { buildFromActions(it) }
+            ?.let { buildFromActions(it).copy(maneuverRes = maneuverResOf(it)) }
 
         val isMaps = pkg in NavPackages.YANDEX_MAPS
         val fromRender = if (Looper.myLooper() == Looper.getMainLooper()) {

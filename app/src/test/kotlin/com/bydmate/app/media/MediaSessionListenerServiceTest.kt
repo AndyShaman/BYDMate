@@ -3,6 +3,7 @@ package com.bydmate.app.media
 import android.app.Notification
 import android.os.Process
 import android.service.notification.StatusBarNotification
+import com.bydmate.app.navdata.NavGuidance
 import com.bydmate.app.navdata.NavGuidanceHub
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -103,6 +104,43 @@ class MediaSessionListenerServiceTest {
         assertNotNull(NaviRouteHolder.latest)
         service.onNotificationRemoved(sbn("ru.yandex.yandexnavi", n))
         assertNull(NaviRouteHolder.latest)
+    }
+
+    // -- unknown-maneuver log (lane thread) --
+
+    private fun postAndRun(pkg: String, title: String, text: String): List<String> {
+        val lines = mutableListOf<String>()
+        service.unknownManeuverSink = { lines.add(it) }
+        val n = Notification()
+        n.extras.putString(Notification.EXTRA_TITLE, title)
+        n.extras.putString(Notification.EXTRA_TEXT, text)
+        service.onNotificationPosted(sbn(pkg, n))
+        exec.executed.forEach { it.run() }
+        exec.executed.clear()
+        return lines
+    }
+
+    @Test
+    fun `extras post without a recognised maneuver logs the icon name once and no street`() {
+        val first = postAndRun("ru.yandex.yandexnavi", "500 м", "Тверская")
+        assertEquals(listOf("nav maneuver unknown [notification extras]: icon=\"\""), first)
+        assertTrue(postAndRun("ru.yandex.yandexnavi", "450 м", "Тверская").isEmpty())
+    }
+
+    @Test
+    fun `extras post with a recognised maneuver logs nothing`() {
+        assertTrue(postAndRun("ru.yandex.yandexnavi", "500 м", "Поверните направо").isEmpty())
+    }
+
+    @Test
+    fun `extras post without a distance logs nothing`() {
+        assertTrue(postAndRun("ru.yandex.yandexnavi", "Тверская", "").isEmpty())
+    }
+
+    @Test
+    fun `maps maneuver dropped for the hub's known one is no unknown maneuver`() {
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 300), NavGuidanceHub.Source.A11Y)
+        assertTrue(postAndRun("ru.yandex.yandexmaps", "500 м", "Тверская").isEmpty())
     }
 
     @Test
