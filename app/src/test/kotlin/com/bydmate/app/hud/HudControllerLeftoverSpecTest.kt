@@ -139,6 +139,43 @@ class HudControllerLeftoverSpecTest {
         assertLeftAlone(state)
     }
 
+    // --- R5: a status raised over a layout that could not be read goes back too ---
+
+    /** The car a session killed mid-route left when the layout was unreadable at arm time: our
+     *  status and flags up, the layout never written, only the armed marker kept. */
+    private fun armedOnlyCar(hudOn: Boolean): MutableMap<Pair<Int, Int>, Int> {
+        val state = leftoverCar(hudOn)
+        prefs().edit().remove(HudArming.KEY_AS_FOUND).putBoolean(HudArming.KEY_ARMED, true).commit()
+        state[HudArming.SCREEN] = 1
+        return state
+    }
+
+    private fun assertStatusPutBack(state: Map<Pair<Int, Int>, Int>) {
+        awaitTrue { !prefs().contains(HudArming.KEY_ARMED) }
+        assertEquals(4, state[HudArming.NAVI])
+        assertEquals(0, state[HudArming.CAN_NAVI])
+        assertEquals(0, state[HudArming.ISA])
+        coVerify(exactly = 0) { helperClient.writeStatus(HudArming.SCREEN.first, HudArming.SCREEN.second, any(), any()) }
+    }
+
+    @Test fun `R5 HUD switched off, a status left up without a kept layout goes back at service start`() {
+        installSomeIp()
+        val state = armedOnlyCar(hudOn = false)
+        controller().startIfEnabled()
+        assertStatusPutBack(state)
+    }
+
+    @Test fun `R5 HUD on with the gateway, a status left up without a kept layout goes back once`() {
+        installSomeIp()
+        val state = armedOnlyCar(hudOn = true)
+        val c = controller()
+        c.startIfEnabled()
+        assertStatusPutBack(state)
+        awaitTrue { c.status.value == HudController.Status.ON }
+        coVerify(exactly = 1) { helperClient.hudNaviStatus(4) }
+        c.setEnabled(false)
+    }
+
     // --- R2: no kept layout, no side effects on a car where the HUD is off or unsupported ---
 
     @Test fun `R2 HUD off and nothing kept, service start touches nothing`() {

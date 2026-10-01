@@ -297,6 +297,45 @@ class HudArmingTest {
         coVerify(exactly = 0) { car.helper.readBatch(any()) }
     }
 
+    // --- the armed marker: a status raised over an unreadable layout ---
+
+    @Test fun `the armed marker is kept before the first write to the car`() = runTest {
+        val car = FakeCar().apply { readErrors[HudArming.SCREEN] = -10011 }
+        coEvery { car.helper.hudNaviStatus(any()) } throws IllegalStateException("helper gone")
+        assertTrue(runCatching { arming(car).arm() }.isFailure)
+        assertTrue(prefs.getBoolean(HudArming.KEY_ARMED, false))
+        assertFalse(prefs.contains(HudArming.KEY_AS_FOUND))
+    }
+
+    @Test fun `a status raised over an unreadable layout goes back after a kill, the layout untouched`() = runTest {
+        val car = FakeCar().apply { readErrors[HudArming.SCREEN] = -10011 }
+        arming(car).arm()                            // the process dies here, mid-route
+        assertFalse(prefs.contains(HudArming.KEY_AS_FOUND))
+        assertEquals(2, car.state[HudArming.NAVI])
+        car.calls.clear()
+        val lines = mutableListOf<String>()
+        val r = arming(car, lines).disarmLeftover(guided = false)   // the next start
+        assertEquals(listOf("sdk 4", "set 1014/1083203624=0", "set 1014/1262485592=0"), car.calls)
+        assertTrue(r!!.ok)
+        assertTrue(lines.single().startsWith("hud disarm: reason=leftover navi rc=0 screen=na rc=skipped ok=true "))
+        assertFalse(prefs.contains(HudArming.KEY_ARMED))
+        assertNull(arming(car).disarmLeftover(guided = false))   // nothing left the second time
+    }
+
+    @Test fun `a clean disarm clears the armed marker, a refused one keeps it`() = runTest {
+        val car = FakeCar()
+        val a = arming(car)
+        a.arm()
+        assertTrue(prefs.getBoolean(HudArming.KEY_ARMED, false))
+        a.disarm()
+        assertFalse(prefs.contains(HudArming.KEY_ARMED))
+
+        a.arm()
+        car.writeErrors[HudArming.ISA] = -10011
+        assertFalse(a.disarm().ok)
+        assertTrue(prefs.getBoolean(HudArming.KEY_ARMED, false))
+    }
+
     @Test fun `a guided route leaves the leftover to its own arm and disarm`() = runTest {
         val car = leftoverCar()
         assertNull(arming(car).disarmLeftover(guided = true))

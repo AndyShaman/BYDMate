@@ -188,7 +188,7 @@ class HudController @Inject constructor(
     /** Our status and layout kept up, CAN values of way 2 or 3 left on the instrument, or way 3's
      *  family left up on the gateway. */
     private fun leftoverKept(): Boolean =
-        prefs().contains(HudArming.KEY_AS_FOUND) || prefs().contains(HudWayChannels.KEY_CAN_LEFT) ||
+        HudArming.leftover(prefs()) || prefs().contains(HudWayChannels.KEY_CAN_LEFT) ||
             prefs().contains(HudWayChannels.KEY_LMCN_LEFT)
 
     /** One put-back; true when it is over, false while the fullscreen cluster still defers it. The
@@ -196,7 +196,7 @@ class HudController @Inject constructor(
     private suspend fun putBackStep(arm: HudArming, retry: Boolean): Boolean = runCatching {
         if (!retry) HudWayChannels.clearCanLeftover(HudCanChannel(helperClient), prefs())
         when {
-            !prefs().contains(HudArming.KEY_AS_FOUND) -> true
+            !HudArming.leftover(prefs()) -> true
             retry -> arm.retryDeferred()
             else -> arm.disarmLeftover(guided = false)?.screenDeferred != true
         }
