@@ -19,15 +19,14 @@ class ClusterMusicFidsTest {
         ClusterMusicFids.SOURCE to 871366704,
         ClusterMusicFids.PROGRESS to 1138753552,
         ClusterMusicFids.SINGER to 1140396040,
-    ) + ClusterMusicFids.PLAY_TIME.zip(listOf(1309671432, 1309671440, 1309671448)) +
-        ClusterMusicFids.TOTAL_TIME.zip(listOf(1309671456, 1309671464, 1309671472))
+    )
 
     @Test fun `can-fd unit resolves every fid from its catalog`() {
         val fids = ClusterMusicFids.resolve(catalog(canFd))!!
         assertEquals(871366704, fids.source)
         assertEquals(1007, fids.instrumentDev)
         assertEquals(1140396040, fids.singer)
-        assertEquals(listOf(1309671432, 1309671440, 1309671448), fids.playTime)
+        assertEquals(1138753552, fids.progress)
     }
 
     @Test fun `dilink 3 and 4 get their own source address`() {
@@ -57,16 +56,9 @@ class ClusterMusicFidsTest {
         assertNull(ClusterMusicFids.resolve(catalog(canFd, mapOf("AUDIO" to 1002))))
     }
 
-    @Test fun `no audio device drops singer and times, keeps the card`() {
+    @Test fun `no audio device drops the singer, keeps the card`() {
         val fids = ClusterMusicFids.resolve(catalog(canFd, mapOf("INSTRUMENT" to 1007)))!!
         assertNull(fids.singer)
-        assertNull(fids.playTime)
-        assertNull(fids.totalTime)
-    }
-
-    @Test fun `a partial time triple is dropped`() {
-        val fids = ClusterMusicFids.resolve(catalog(canFd - ClusterMusicFids.PLAY_TIME[1]))!!
-        assertNull(fids.playTime)
-        assertNotNull(fids.totalTime)
+        assertNotNull(fids.progress)
     }
 }

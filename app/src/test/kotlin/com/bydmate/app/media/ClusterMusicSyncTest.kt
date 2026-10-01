@@ -14,7 +14,7 @@ class ClusterMusicSyncTest {
 
     private val fids = ClusterMusicFids(
         instrumentDev = 1007, info = 11, state = 12, source = 13, progress = 14,
-        audioDev = 1002, singer = 21, playTime = listOf(31, 32, 33), totalTime = listOf(41, 42, 43),
+        audioDev = 1002, singer = 21,
     )
 
     /** Records every write; [status] decides each reply (null = helper down). */
@@ -32,8 +32,8 @@ class ClusterMusicSyncTest {
         fun clearTakes() = writes.clear()
     }
 
-    private fun card(title: String = "Song", progress: Int? = 10, pos: Int? = 20, dur: Int? = 200) =
-        Card(title, "Artist", ClusterMusicCard.MUSIC_PLAYING, progress, pos, dur)
+    private fun card(title: String = "Song", progress: Int? = 10) =
+        Card(title, "Artist", ClusterMusicCard.MUSIC_PLAYING, progress)
 
     @Test fun `a shown card writes source, state, title and singer`() = runTest {
         val port = FakePort()
@@ -163,40 +163,70 @@ class ClusterMusicSyncTest {
     }
 
     // Review point 5: a new track without duration zeroes the bar and the clock.
-    @Test fun `new track with unknown progress and duration writes zeros`() = runTest {
+    // Review point 5: a new track without duration empties the bar.
+    @Test fun `new track with unknown progress writes an empty bar`() = runTest {
         val port = FakePort()
         val sync = ClusterMusicSync(port)
-        sync.step(true, fids, Target.Show(card(progress = 70, pos = 140, dur = 200)), 0)
+        sync.step(true, fids, Target.Show(card(progress = 70)), 0)
         port.clearTakes()
-        sync.step(true, fids, Target.Show(card(title = "Radio", progress = null, pos = null, dur = null)), 1_500)
+        sync.step(true, fids, Target.Show(card(title = "Radio", progress = null)), 1_500)
         assertEquals(listOf(0), port.valuesFor(14))
-        assertEquals(listOf(0), port.valuesFor(41))
-        assertEquals(listOf(0), port.valuesFor(42))
-        assertEquals(listOf(0), port.valuesFor(43))
-        assertEquals(listOf(0), port.valuesFor(33))
     }
 
-    @Test fun `new track writes its total time once`() = runTest {
+    @Test fun `progress moves without rewriting the title`() = runTest {
         val port = FakePort()
         val sync = ClusterMusicSync(port)
-        sync.step(true, fids, Target.Show(card(dur = 214)), 0)
-        assertEquals(listOf(3), port.valuesFor(42))
-        assertEquals(listOf(34), port.valuesFor(43))
+        sync.step(true, fids, Target.Show(card(progress = 10)), 0)
         port.clearTakes()
-        sync.step(true, fids, Target.Show(card(progress = 11, pos = 22, dur = 214)), 1_500)
-        assertTrue(port.valuesFor(42).isEmpty())
-    }
-
-    @Test fun `progress and played seconds move without rewriting the title`() = runTest {
-        val port = FakePort()
-        val sync = ClusterMusicSync(port)
-        sync.step(true, fids, Target.Show(card(progress = 10, pos = 20)), 0)
-        port.clearTakes()
-        assertEquals(Outcome.TICKED, sync.step(true, fids, Target.Show(card(progress = 11, pos = 22)), 1_500))
+        assertEquals(Outcome.TICKED, sync.step(true, fids, Target.Show(card(progress = 11)), 1_500))
         assertEquals(listOf(11), port.valuesFor(14))
-        assertEquals(listOf(22), port.valuesFor(33))
-        assertTrue(port.valuesFor(32).isEmpty())
         assertTrue(port.valuesFor(11).isEmpty())
+    }
+
+    // Second review point 2: played / total time are not written at all.
+    @Test fun `no time fids are written`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card(progress = 10)), 0)
+        sync.step(true, fids, Target.Show(card(progress = 11)), 1_500)
+        sync.step(true, fids, Target.Idle, 3_000)
+        assertEquals(setOf(11, 12, 13, 14, 21), port.writes.map { it.first }.toSet())
+    }
+
+    // Second review point 1: a car that refuses the card is left alone until restart.
+    @Test fun `refused writes stop the card until restart`() = runTest {
+        val port = FakePort { fid -> if (fid == 13) -1 else 1 }
+        val sync = ClusterMusicSync(port)
+        assertEquals(Outcome.WRITE_FAILED, sync.step(true, fids, Target.Show(card()), 0))
+        assertEquals(Outcome.RETRYING, sync.step(true, fids, Target.Show(card()), 1_500))
+        assertEquals(Outcome.REFUSED, sync.step(true, fids, Target.Show(card()), 3_000))
+        assertTrue(sync.refused)
+        port.clearTakes()
+        port.status = { 1 }
+        assertEquals(Outcome.NONE, sync.step(true, fids, Target.Show(card()), 4_500))
+        assertEquals(Outcome.NONE, sync.step(false, fids, Target.Idle, 6_000))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    @Test fun `a success resets the refusal count`() = runTest {
+        var refuse = true
+        val port = FakePort { fid -> if (fid == 13 && refuse) -1 else 1 }
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card()), 0)
+        sync.step(true, fids, Target.Show(card()), 1_500)
+        refuse = false
+        assertEquals(Outcome.SHOWN, sync.step(true, fids, Target.Show(card()), 3_000))
+        refuse = true
+        sync.step(true, fids, Target.Show(card(title = "Next")), 4_500)
+        sync.step(true, fids, Target.Show(card(title = "Next")), 6_000)
+        assertFalse(sync.refused)
+    }
+
+    @Test fun `an unreachable helper is retried quietly and never refuses`() = runTest {
+        val sync = ClusterMusicSync(FakePort { null })
+        assertEquals(Outcome.WRITE_FAILED, sync.step(true, fids, Target.Show(card()), 0))
+        repeat(10) { assertEquals(Outcome.RETRYING, sync.step(true, fids, Target.Show(card()), (it + 1) * 1_500L)) }
+        assertFalse(sync.refused)
     }
 
     @Test fun `the card is re-asserted after the interval`() = runTest {
