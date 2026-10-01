@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.navdata.NavGuidanceHub
+import com.bydmate.app.navdata.NavManeuverCodes
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -220,6 +221,36 @@ class HudWayChannelsTest {
         assertEquals(102, HudWayChannels.turnKind(102))
         assertEquals(0, HudWayChannels.turnKind(103))
         assertEquals(0, HudWayChannels.turnKind(-1))
+    }
+
+    @Test fun `slight right goes out as OpenBYD's 5, every other code as is`() {
+        // OpenBYD and the stock adapter: 5 = slight right; their 4 is a slight left.
+        assertEquals(5, HudWayChannels.turnKind(NavManeuverCodes.GAODE_SLIGHT_RIGHT))
+        (0..102).filter { it != NavManeuverCodes.GAODE_SLIGHT_RIGHT }.forEach {
+            assertEquals(it, HudWayChannels.turnKind(it))
+        }
+    }
+
+    @Test fun `way 2 writes slight right as icon 5 into both icon fids`() = runTest {
+        val c = channels(2)
+        route(gaode = NavManeuverCodes.GAODE_SLIGHT_RIGHT)
+        c.tick(active = true)
+        assertEquals(listOf("set $icon=5", "set $ahead=5", "set $dist=300", "buf $road=Main St"), calls)
+    }
+
+    @Test fun `way 3 sends slight right as icon 5 with OpenBYD's main action for it`() = runTest {
+        val sent = mutableListOf<Pair<Long, ByteArray>>()
+        every { gateway.fireEvent(any(), any()) } answers { sent += firstArg<Long>() to secondArg<ByteArray>(); 0 }
+        val c = channels(3)
+        route(gaode = NavManeuverCodes.GAODE_SLIGHT_RIGHT)
+        c.tick(active = true)
+        val routeId = HudLauncherMapCnFrames.newRouteId(Random(3))
+        val expected = HudLauncherMapCnFrames.update(
+            5, 300, 12_000, 800, HudLauncherMapCnFrames.Position(53.9, 27.56), routeId, 0, 1_700_000_000_000L,
+        )
+        assertEquals(expected.map { it.topic }, sent.map { it.first })
+        expected.zip(sent).forEach { (e, a) -> assertTrue(e.payload.contentEquals(a.second)) }
+        assertEquals(5, HudLauncherMapCnFrames.mainAction(5))
     }
 
     @Test fun `the road name fits the instrument's 255 bytes and is never empty`() {
