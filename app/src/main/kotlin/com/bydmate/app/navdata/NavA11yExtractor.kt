@@ -9,6 +9,9 @@ import android.view.accessibility.AccessibilityNodeInfo
  *  node pool is finite on DiLink (Codex fix 5). */
 object NavA11yExtractor {
 
+    /** The maneuver image; read by the parse and by [probeManeuver]. */
+    private const val MANEUVER_ID = "image_maneuverballoon_maneuver"
+
     sealed class ReadResult {
         object NotNavigator : ReadResult()
         object NoGuidance : ReadResult()
@@ -22,7 +25,7 @@ object NavA11yExtractor {
         val pkg = root.packageName?.toString() ?: return ReadResult.NotNavigator
         if (pkg !in NavPackages.GUIDANCE_SOURCES) return ReadResult.NotNavigator
         val raw = NavGuidanceParser.RawFields(
-            maneuverDesc = descOf(root, "$pkg:id/image_maneuverballoon_maneuver"),
+            maneuverDesc = descOf(root, "$pkg:id/$MANEUVER_ID"),
             exitNumber = textOf(root, "$pkg:id/exit_number_text"),
             distance = textOf(root, "$pkg:id/text_maneuverballoon_distance"),
             distanceUnit = textOf(root, "$pkg:id/text_maneuverballoon_metrics"),
@@ -34,6 +37,25 @@ object NavA11yExtractor {
         )
         val parsed = NavGuidanceParser.parse(raw) ?: return ReadResult.NoGuidance
         return ReadResult.Guidance(parsed)
+    }
+
+    /** Raw view of the maneuver image for the unknown-maneuver log: how many nodes carry its id,
+     *  and the class and raw contentDescription of the one the parse reads (the first non-blank,
+     *  else the first). The nodes are recycled; [root] stays the caller's. */
+    internal fun probeManeuver(root: AccessibilityNodeInfo): String {
+        val pkg = root.packageName?.toString() ?: return "found=0"
+        val nodes = runCatching { root.findAccessibilityNodeInfosByViewId("$pkg:id/$MANEUVER_ID") }
+            .getOrNull().orEmpty()
+        try {
+            if (nodes.isEmpty()) return "found=0"
+            val descs = nodes.map { runCatching { it.contentDescription?.toString() }.getOrNull() }
+            val read = descs.indexOfFirst { !it.isNullOrBlank() }.coerceAtLeast(0)
+            val cls = runCatching { nodes[read].className?.toString() }.getOrNull()
+            return "found=${nodes.size} class=$cls desc=${UnknownManeuverGate.quote(descs[read])}"
+        } finally {
+            @Suppress("DEPRECATION")
+            nodes.forEach { runCatching { it.recycle() } }
+        }
     }
 
     private fun textOf(root: AccessibilityNodeInfo, viewId: String): String? =

@@ -11,6 +11,7 @@ import com.bydmate.app.cluster.SteeringWheelKeyService
  *  Gated by [enabled] (set by HudController) so that users without the HUD feature
  *  pay a single volatile read per event. Debounced: guidance widgets update ~1/s,
  *  a11y events fire far more often. */
+@Suppress("TooManyFunctions") // the event, timer and source reads plus their two diagnostic probes
 object NavA11yFeed {
     private const val TAG = "NavA11yFeed"
     private const val DEBOUNCE_MS = 500L
@@ -38,6 +39,7 @@ object NavA11yFeed {
                 sourceFallbackWorking = false
                 lastDumpedGaode = NO_MANEUVER
                 lastDumpMs = 0L
+                unknownManeuvers.reset()
                 timerKeptAlive = false
                 resetTimer(start = true)
             }
@@ -58,6 +60,8 @@ object NavA11yFeed {
     // Maneuver the tree was last dumped for; NO_MANEUVER means "nothing dumped yet".
     @Volatile private var lastDumpedGaode = NO_MANEUVER
     @Volatile internal var lastDumpMs = 0L
+    // Raw maneuver values logged as unrecognised this episode; its floor is the walk's lastDumpMs.
+    private val unknownManeuvers = UnknownManeuverGate(minIntervalMs = 0L)
     // Edge guard for the timer's keep-alive line: set by the first timer refresh of a quiet
     // episode, cleared by the next event read.
     @Volatile private var timerKeptAlive = false
@@ -127,6 +131,7 @@ object NavA11yFeed {
                 is NavA11yExtractor.ReadResult.Guidance -> {
                     NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
                     dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
+                    logUnknownManeuver(root, result.data, nowMs)
                     true
                 }
                 is NavA11yExtractor.ReadResult.NoGuidance -> {
@@ -173,6 +178,7 @@ object NavA11yFeed {
             if (result !is NavA11yExtractor.ReadResult.Guidance) return false
             NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
             dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
+            logUnknownManeuver(root, result.data, nowMs)
             return true
         } finally {
             @Suppress("DEPRECATION")
@@ -212,6 +218,25 @@ object NavA11yFeed {
             val ids = StringBuilder()
             appendIds(root, ids, intArrayOf(TREE_DUMP_MAX_NODES))
             treeDumpSink("nav tree [gaode=$maneuverGaode]:${ids.take(TREE_DUMP_MAX_CHARS)}")
+        }
+    }
+
+    /** A guided route with a distance but no recognised maneuver: one line with the raw
+     *  maneuver node and one id walk per distinct value, so a recorded log shows what the
+     *  parse could not map. Waits for the same floor as [dumpTreeOnManeuverChange], checked
+     *  before the probe so a read inside it costs no extra lookup. [root] is the caller's. */
+    private fun logUnknownManeuver(root: AccessibilityNodeInfo, data: NavGuidance, nowMs: Long) {
+        val active = NavGuidanceHub.snapshot(nowMs).active
+        if (!UnknownManeuverGate.applies(active, data.distanceMeters, data.maneuverGaode)) return
+        if (nowMs - lastDumpMs < TREE_DUMP_MIN_INTERVAL_MS) return
+        val node = NavA11yExtractor.probeManeuver(root)
+        if (!unknownManeuvers.take(node, nowMs)) return
+        lastDumpMs = nowMs
+        runCatching {
+            treeDumpSink("nav maneuver unknown [a11y]: $node")
+            val ids = StringBuilder()
+            appendIds(root, ids, intArrayOf(TREE_DUMP_MAX_NODES))
+            treeDumpSink("nav tree [gaode=0]:${ids.take(TREE_DUMP_MAX_CHARS)}")
         }
     }
 
