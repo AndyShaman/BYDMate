@@ -37,6 +37,16 @@ All core features (trips, charges, automations, local insights, offline voice ag
 
 ## What's New
 
+The main changes in version 3.19.5.
+
+**New automation actions.** “Close app” closes the chosen app completely; a route or music in it that is not saved will be lost. “Media: play” and “Media: pause” resume or pause what is playing in a player that is already running. If no player is running, put “Launch app” before this step. One rule now holds up to 20 actions.
+
+**TRIP 1 and TRIP 2 in the Telegram report.** The report settings have two new checkboxes: each Dashboard counter is added to the report separately.
+
+**Cluster output on Han and Tang 2024.** On cars with Android 12 where the app itself cannot see the cluster screen, the output stopped right away. Now that screen is found. Not checked on cars yet.
+
+**HUD, ways 2 and 3.** A “slight right” maneuver is drawn as an arrow to the right; the car used to draw it as “slight left”. If the app was closed in the middle of a route, on the next start it removes the navigation card from the cluster.
+
 The main changes in version 3.19.4.
 
 **Three ways to draw on the glass.** The HUD settings now offer three ways instead of two modes. Way 1 is the default and works as before: hints go to the glass and the app does not touch the cluster. Way 2 puts the car into navigation mode and passes the arrow, the meters and the street to the navigation card on the cluster; the street is written in Latin letters there. Way 3 is experimental: everything as in Way 2, plus one more path that OpenBYD uses. Ways 2 and 3 are new and have not been checked on cars yet. When the route ends, the way is changed or the HUD is turned off, the app removes from the glass and the cluster everything it put there.
