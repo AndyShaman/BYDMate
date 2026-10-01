@@ -63,6 +63,13 @@ class RuleDraftValidatorTest {
         assertEquals(ActionValidationError.AppNotSelected(1), err)
     }
 
+    @Test fun app_close_action_blank_package_is_invalid() {
+        val err = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "", displayName = "x", kind = "app_close",
+                payload = """{"packageName":"","appLabel":""}""")))
+        assertEquals(ActionValidationError.AppNotSelected(1), err)
+    }
+
     @Test fun call_action_phone_too_short_is_invalid() {
         val err = RuleDraftValidator.validateActions(listOf(
             ActionDef(command = "", displayName = "x", kind = "call", payload = """{"phone":"123"}""")))

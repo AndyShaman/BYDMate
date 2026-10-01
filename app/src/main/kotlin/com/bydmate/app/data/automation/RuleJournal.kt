@@ -144,7 +144,7 @@ internal class RuleJournal(
                 "notification", "notification_silent", "notification_sound" -> field("title")
                 "speak" -> field("text")
                 "agent_query" -> field("prompt")
-                "app_launch" -> field("appLabel")
+                "app_launch", "app_close" -> field("appLabel")
                 "navigate" -> field("name")
                 "url" -> field("url")
                 "call" -> field(if (json?.optString("name").isNullOrBlank()) "phone" else "name")

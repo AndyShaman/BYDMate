@@ -91,7 +91,7 @@ object RuleShare {
         "param", "notification", "notification_silent", "notification_sound", "app_launch", "call",
         "navigate", "url", "yandex_music", "youtube", "go_home", "delay", "media_volume", "sentry",
         "hotspot", "cluster_projection", "toggle", "speak", "agent_query", "split_screen",
-        "split_screen_close", "split_screen_toggle", "telegram_report",
+        "split_screen_close", "split_screen_toggle", "telegram_report", "app_close",
     )
 
     /** Marker left in a stripped call or tel/sms url payload: the importer has to ask for a number. */

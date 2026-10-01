@@ -260,6 +260,13 @@ class RuleTextTest {
         assertEquals("Вывод на приборку, отключить", actionText(cluster("0"), lc))
     }
 
+    @Test fun `a close step names the app it closes`() {
+        val lc = ctx.appLocalizedContext()
+        val close = ActionDef("", "x", "app_close", """{"packageName":"com.example.radio","appLabel":"Радио"}""")
+        assertEquals("Закрыть приложение «Радио»", actionText(close, lc))
+        assertEquals("Закрыть приложение «Радио»", journalLine(run(recorded(close)), ctx, now, zone).what)
+    }
+
     @Test fun `a run shows the parameters it recorded`() {
         val pause = ActionDef("", "Пауза", "delay", "30000")
         val note = ActionDef("", "Уведомление", "notification", """{"title":"Заряд","text":"t"}""")

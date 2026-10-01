@@ -623,6 +623,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             "param" -> dispatchParam(action, data)
             "notification", "notification_silent", "notification_sound" -> showNotification(action)
             "app_launch" -> launchApp(action)
+            "app_close" -> closeApp(action)
             "call" -> dial(action)
             "navigate" -> navigate(action)
             "url" -> openUrl(action)
@@ -1060,6 +1061,31 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val result = tryStartActivity(intent, "app_launch:$pkg")
         if (result.success) maybeMinimize(payload)
         return result
+    }
+
+    /**
+     * Force-stop through the shell-uid daemon (#280). Only an app with a launcher entry is
+     * closed, never BYDMate itself, and the package is checked again here because a shared
+     * rule or the agent can carry any string.
+     */
+    private suspend fun closeApp(action: ActionDef): DispatchResult {
+        val pkg = parsePayload(action.payload)?.optString("packageName")?.takeIf(String::isNotBlank)
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_package_missing))
+        val refusal = when {
+            pkg == context.packageName -> appStrings.get(R.string.dispatch_app_close_self)
+            context.packageManager.getLaunchIntentForPackage(pkg) == null ->
+                appStrings.get(R.string.dispatch_app_not_installed, pkg)
+            !helper.isAlive() -> appStrings.get(R.string.dispatch_cluster_daemon_restarting)
+            else -> null
+        }
+        if (refusal != null) {
+            Log.w(TAG, "app close refused: $pkg ($refusal)")
+            return DispatchResult(false, refusal)
+        }
+        val ok = helper.forceStop(pkg)
+        Log.i(TAG, "app close: $pkg ok=$ok")
+        return if (ok) DispatchResult(true)
+        else DispatchResult(false, appStrings.get(R.string.dispatch_app_close_failed, pkg))
     }
 
     private suspend fun dial(action: ActionDef): DispatchResult {

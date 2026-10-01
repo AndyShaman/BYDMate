@@ -450,6 +450,8 @@
     <string name="automation_action_dplus_command">Comando do veículo</string>
     <string name="automation_action_notification">Notificação</string>
     <string name="automation_action_app_launch">Abrir aplicativo</string>
+    <string name="automation_action_app_close">Fechar aplicativo</string>
+    <string name="automation_action_app_close_hint">O aplicativo fecha por completo. Uma rota ou música não salva nele será perdida.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Ligar</string>
     <string name="automation_action_navigate">Rota no Y.Navigator</string>
@@ -1710,6 +1712,8 @@
     <string name="dispatch_volume_invalid">Nível de volume inválido: %1$s</string>
     <string name="dispatch_package_missing">packageName não definido</string>
     <string name="dispatch_app_not_installed">Aplicativo não instalado: %1$s</string>
+    <string name="dispatch_app_close_self">O BYDMate não fecha a si mesmo</string>
+    <string name="dispatch_app_close_failed">Não foi possível fechar o aplicativo: %1$s</string>
     <string name="dispatch_phone_missing">phone não definido</string>
     <string name="dispatch_dgis_fallback">2GIS não está instalado, foi aberto o Yandex Navigator</string>
     <string name="dispatch_maps_fallback">Yandex Maps não está instalado, foi aberto o Yandex Navigator</string>

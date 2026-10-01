@@ -514,6 +514,8 @@
     <string name="automation_action_dplus_command">Каманда аўтамабілю</string>
     <string name="automation_action_notification">Апавяшчэнне</string>
     <string name="automation_action_app_launch">Запуск праграмы</string>
+    <string name="automation_action_app_close">Закрыць праграму</string>
+    <string name="automation_action_app_close_hint">Праграма закрыецца цалкам. Маршрут або музыка, якія ў ёй не захаваны, знікнуць.</string>
     <string name="automation_action_yandex_music">Яндэкс.Музыка</string>
     <string name="automation_action_call">Званок</string>
     <string name="automation_action_navigate">Маршрут у Я.Навігатары</string>
@@ -1866,6 +1868,8 @@
     <string name="dispatch_volume_invalid">Некарэктны ўзровень гучнасці: %1$s</string>
     <string name="dispatch_package_missing">packageName не зададзены</string>
     <string name="dispatch_app_not_installed">Праграма не ўсталявана: %1$s</string>
+    <string name="dispatch_app_close_self">BYDMate не закрывае сам сябе</string>
+    <string name="dispatch_app_close_failed">Не ўдалося закрыць праграму: %1$s</string>
     <string name="dispatch_phone_missing">phone не зададзены</string>
     <string name="dispatch_dgis_fallback">2ГІС не ўсталяваны, адкрыты Яндэкс Навігатар</string>
     <string name="dispatch_maps_fallback">Яндэкс Карты не ўсталяваны, адкрыты Яндэкс Навігатар</string>

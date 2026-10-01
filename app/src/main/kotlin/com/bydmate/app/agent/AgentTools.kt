@@ -807,7 +807,7 @@ class AgentTools @Inject constructor(
                                     .put("enum", JSONArray(listOf(
                                         "param", "delay", "media_volume", "notification",
                                         "call", "navigate", "url",
-                                        "yandex_music", "sentry", "hotspot", "app_launch",
+                                        "yandex_music", "sentry", "hotspot", "app_launch", "app_close",
                                         "cluster_projection", "speak", "agent_query",
                                         "split_screen", "split_screen_close",
                                         "split_screen_toggle", "youtube", "go_home")))
@@ -849,7 +849,8 @@ class AgentTools @Inject constructor(
                                 .put("on", JSONObject().put("type", "boolean")
                                     .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать. Для kind=hotspot: включить/выключить точку доступа Wi-Fi"))
                                 .put("app", JSONObject().put("type", "string")
-                                    .put("description", "Только для kind=app_launch: название приложения, как на домашнем экране"))
+                                    .put("description", "Для kind=app_launch и kind=app_close: название приложения, как на домашнем экране. " +
+                                        "app_close закрывает приложение полностью"))
                                 .put("narrow_app", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=split_screen: приложение в узкой панели (1/3), название как на домашнем экране"))
                                 .put("wide_app", JSONObject().put("type", "string")
@@ -2762,18 +2763,19 @@ class AgentTools @Inject constructor(
                     displayName = if (on) "Включить точку доступа" else "Выключить точку доступа",
                     kind = "hotspot", payload = if (on) "1" else "0"))
             }
-            "app_launch" -> {
+            "app_launch", "app_close" -> {
                 val name = a.optString("app").trim()
                 if (name.isEmpty()) return Built.Error("не указано приложение (поле app)")
                 val (label, pkg) = when (val r = resolveLauncherApp(name)) {
                     is Built.Error -> return r
                     is Built.Value -> r.value
                 }
-                Built.Value(ActionDef(
+                val payload = JSONObject().put("packageName", pkg).put("appLabel", label)
+                Built.Value(if (kind == "app_launch") ActionDef(
                     command = "", displayName = "Запуск $label", kind = "app_launch",
-                    payload = JSONObject().put("packageName", pkg).put("appLabel", label)
-                        .put("minimize", false).toString(),
-                ))
+                    payload = payload.put("minimize", false).toString(),
+                ) else ActionDef(command = "", displayName = "Закрыть $label", kind = "app_close",
+                    payload = payload.toString()))
             }
             "cluster_projection" -> {
                 val on = requireBoolArg(a, "on")
