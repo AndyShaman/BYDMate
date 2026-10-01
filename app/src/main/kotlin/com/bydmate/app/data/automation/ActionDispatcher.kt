@@ -297,6 +297,22 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         internal fun toggleTargetNameRes(target: String): Int? = TOGGLE_TARGET_NAMES[target]
 
         /**
+         * The "1" / "0" of an on/off payload. A cluster_projection step with its own app (#279)
+         * stores `{"state":"1","packageName":...,"appLabel":...}`; every other one the bare state.
+         */
+        fun onOffState(payload: String?): String? =
+            if (payload?.trimStart()?.startsWith("{") == true) payloadField(payload, "state") else payload
+
+        /** The app a cluster_projection step picked; null = the one saved in Settings. */
+        fun clusterApp(payload: String?): String? = payloadField(payload, "packageName")
+
+        /** Its label, as the picker showed it; null without an app. */
+        fun clusterAppLabel(payload: String?): String? = payloadField(payload, "appLabel")
+
+        private fun payloadField(payload: String?, key: String): String? =
+            runCatching { JSONObject(payload ?: "{}").optString(key) }.getOrNull()?.ifBlank { null }
+
+        /**
          * Outcome of resolving a "toggle" against the live state: either the concrete
          * command that flips it, or why it cannot be flipped right now.
          */
@@ -676,18 +692,24 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      * only changes what a dispatched-but-ineffective projection reports.
      */
     private suspend fun dispatchClusterProjection(action: ActionDef): DispatchResult {
-        val on = when (action.payload) {
+        val on = when (onOffState(action.payload)) {
             "1" -> true
             "0" -> false
             else -> return DispatchResult(false, appStrings.get(R.string.dispatch_cluster_invalid_state))
         }
         val want = if (on) ClusterMode.FULLSCREEN else ClusterMode.OFF
-        clusterVoiceControl.apply(on)
+        // An app picked in the step (#279) is projected instead of the Settings choice; off ignores it.
+        val app = clusterApp(action.payload)?.takeIf { on }
+        if (app != null) Log.i(TAG, "cluster projection: app=$app")
+        clusterVoiceControl.apply(on, app)
+        // With an app, only that app on the cluster is the success, not any projection.
+        fun reached() = clusterVoiceControl.projectionMode() == want &&
+            (app == null || clusterVoiceControl.projectedPackage() == app)
         repeat(clusterPollAttempts) {
-            if (clusterVoiceControl.projectionMode() == want) return DispatchResult(true)
+            if (reached()) return DispatchResult(true)
             delay(clusterPollIntervalMs)
         }
-        if (clusterVoiceControl.projectionMode() == want) return DispatchResult(true)
+        if (reached()) return DispatchResult(true)
         val daemonRestarting = clusterVoiceControl.lastFailure() == "daemon"
         val reason = if (daemonRestarting) {
             appStrings.get(R.string.dispatch_cluster_daemon_restarting)

@@ -57,6 +57,17 @@ class RuleImportSummaryTest {
         assertFalse(search, search.contains(lc.getString(R.string.automation_import_nav_show)))
     }
 
+    @Test fun `import preview names the app a projection step picked`() {
+        val rule = SharedRuleFixture.withActions(
+            ActionDef("cluster_projection", "x", "cluster_projection",
+                """{"state":"1","packageName":"com.example.radio","appLabel":"Радио"}"""),
+            ActionDef("cluster_projection", "x", "cluster_projection", "1"),
+        )
+        val preview = RuleImportSummary.preview(rule, ctx, realDispatcher()::autoGoWillRun)
+        assertEquals("Вывод на приборку: Вкл, com.example.radio", preview.actions[0])
+        assertEquals("Вывод на приборку: Вкл", preview.actions[1])
+    }
+
     @Test fun `import preview promises «Поехали» only where the dispatcher presses it`() {
         val lc = ctx.appLocalizedContext()
         val go = lc.getString(R.string.automation_import_nav_go)

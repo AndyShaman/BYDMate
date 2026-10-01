@@ -1672,6 +1672,16 @@ fun newClusterAction(context: Context): ActionDef = ActionDef(
     payload = "1"
 )
 
+/** «Включить» with an app of its own (#279); null [packageName] = the app saved in Settings again. */
+fun ActionDef.withClusterApp(packageName: String?, appLabel: String, displayName: String): ActionDef = copy(
+    displayName = displayName,
+    payload = if (packageName == null) "1" else org.json.JSONObject().apply {
+        put("state", "1")
+        put("packageName", packageName)
+        put("appLabel", appLabel)
+    }.toString(),
+)
+
 /**
  * A kind that has its own control row AND a toggle target: sentry and the cluster projection.
  * Their row shows three states, and «Переключить» stores a `toggle` action on [toggleTarget]
