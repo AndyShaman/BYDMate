@@ -65,6 +65,15 @@ class RuleImportSummaryTest {
         assertEquals("Закрыть приложение: com.example.radio", preview.actions[0])
     }
 
+    @Test fun `import preview names the media key`() {
+        val rule = SharedRuleFixture.withActions(
+            ActionDef("", "x", "media_key", "play"),
+            ActionDef("", "x", "media_key", "pause"),
+        )
+        val preview = RuleImportSummary.preview(rule, ctx, realDispatcher()::autoGoWillRun)
+        assertEquals(listOf("Медиа: играть", "Медиа: пауза"), preview.actions)
+    }
+
     @Test fun `import preview promises «Поехали» only where the dispatcher presses it`() {
         val lc = ctx.appLocalizedContext()
         val go = lc.getString(R.string.automation_import_nav_go)

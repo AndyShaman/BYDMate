@@ -77,7 +77,7 @@ data class TriggerDef(
 data class ActionDef(
     val command: String,
     val displayName: String,
-    val kind: String = "param",    // "param" | "notification" (legacy aliases "notification_silent"/"notification_sound" still dispatch) | "app_launch" | "app_close" | "call" | "navigate" | "url" | "yandex_music" | "youtube" | "go_home" | "delay" | "media_volume" | "sentry" | "speak" | "agent_query"
+    val kind: String = "param",    // "param" | "notification" (legacy aliases "notification_silent"/"notification_sound" still dispatch) | "app_launch" | "app_close" | "call" | "navigate" | "url" | "yandex_music" | "youtube" | "go_home" | "delay" | "media_volume" | "media_key" | "sentry" | "speak" | "agent_query"
     val payload: String? = null    // JSON string with kind-specific params (null for kind="param")
 ) {
     fun toJson(): JSONObject = JSONObject().apply {

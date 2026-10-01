@@ -516,6 +516,9 @@
     <string name="automation_action_app_launch">Запуск праграмы</string>
     <string name="automation_action_app_close">Закрыць праграму</string>
     <string name="automation_action_app_close_hint">Праграма закрыецца цалкам. Маршрут або музыка, якія ў ёй не захаваны, знікнуць.</string>
+    <string name="automation_action_media_play">Медыя: прайграць</string>
+    <string name="automation_action_media_pause">Медыя: паўза</string>
+    <string name="automation_action_media_key_hint">Спрацуе, калі плэер ужо запушчаны: каб яго запусціць, пастаўце перад гэтым крокам «Запуск праграмы».</string>
     <string name="automation_action_yandex_music">Яндэкс.Музыка</string>
     <string name="automation_action_call">Званок</string>
     <string name="automation_action_navigate">Маршрут у Я.Навігатары</string>
@@ -1285,6 +1288,7 @@
     <string name="auto_msg_url_no_scheme">Дзеянне #%1$d: URL павінен змяшчаць схему (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Дзеянне #%1$d: рэжым Я.Музыкі не выбраны</string>
     <string name="auto_msg_sentry_invalid">Дзеянне #%1$d: некарэктны стан ахоўнага рэжыму</string>
+    <string name="auto_msg_media_key_invalid">Дзеянне #%1$d: выберыце «прайграць» або «паўза»</string>
     <string name="auto_msg_hotspot_invalid">Дзеянне #%1$d: некарэктны стан пункта доступу</string>
     <string name="auto_msg_speak_text_empty">Дзеянне #%1$d: не зададзены тэкст для агучкі</string>
     <string name="auto_msg_agent_query_prompt_empty">Дзеянне #%1$d: не зададзены запыт агенту</string>
@@ -1868,6 +1872,9 @@
     <string name="dispatch_app_not_installed">Праграма не ўсталявана: %1$s</string>
     <string name="dispatch_app_close_self">BYDMate не закрывае сам сябе</string>
     <string name="dispatch_app_close_failed">Не ўдалося закрыць праграму: %1$s</string>
+    <string name="dispatch_media_no_session">Няма запушчанага плэера</string>
+    <string name="dispatch_media_key_invalid">Невядомая каманда плэера</string>
+    <string name="dispatch_media_key_failed">Плэер не прыняў каманду: %1$s</string>
     <string name="dispatch_phone_missing">phone не зададзены</string>
     <string name="dispatch_dgis_fallback">2ГІС не ўсталяваны, адкрыты Яндэкс Навігатар</string>
     <string name="dispatch_maps_fallback">Яндэкс Карты не ўсталяваны, адкрыты Яндэкс Навігатар</string>

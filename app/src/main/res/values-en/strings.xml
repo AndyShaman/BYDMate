@@ -459,6 +459,9 @@
     <string name="automation_action_app_launch">Launch app</string>
     <string name="automation_action_app_close">Close app</string>
     <string name="automation_action_app_close_hint">The app closes completely. A route or music in it that is not saved will be lost.</string>
+    <string name="automation_action_media_play">Media: play</string>
+    <string name="automation_action_media_pause">Media: pause</string>
+    <string name="automation_action_media_key_hint">Works when a player is already running: to start one, put “Launch app” before this step.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Call</string>
     <string name="automation_action_navigate">Route in Y.Navigator</string>
@@ -1133,6 +1136,7 @@
     <string name="auto_msg_url_no_scheme">Action #%1$d: URL must contain a scheme (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Action #%1$d: Yandex Music mode not selected</string>
     <string name="auto_msg_sentry_invalid">Action #%1$d: invalid sentry mode state</string>
+    <string name="auto_msg_media_key_invalid">Action #%1$d: choose play or pause</string>
     <string name="auto_msg_hotspot_invalid">Action #%1$d: invalid hotspot state</string>
     <string name="auto_msg_speak_text_empty">Action #%1$d: speak text is not set</string>
     <string name="auto_msg_agent_query_prompt_empty">Action #%1$d: agent query prompt is not set</string>
@@ -1716,6 +1720,9 @@
     <string name="dispatch_app_not_installed">App not installed: %1$s</string>
     <string name="dispatch_app_close_self">BYDMate does not close itself</string>
     <string name="dispatch_app_close_failed">Could not close the app: %1$s</string>
+    <string name="dispatch_media_no_session">No player is running</string>
+    <string name="dispatch_media_key_invalid">Unknown player command</string>
+    <string name="dispatch_media_key_failed">The player did not accept the command: %1$s</string>
     <string name="dispatch_phone_missing">phone not set</string>
     <string name="dispatch_dgis_fallback">2GIS is not installed, Yandex Navigator opened</string>
     <string name="dispatch_maps_fallback">Yandex Maps is not installed, Yandex Navigator opened</string>

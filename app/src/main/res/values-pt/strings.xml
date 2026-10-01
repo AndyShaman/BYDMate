@@ -452,6 +452,9 @@
     <string name="automation_action_app_launch">Abrir aplicativo</string>
     <string name="automation_action_app_close">Fechar aplicativo</string>
     <string name="automation_action_app_close_hint">O aplicativo fecha por completo. Uma rota ou música não salva nele será perdida.</string>
+    <string name="automation_action_media_play">Mídia: tocar</string>
+    <string name="automation_action_media_pause">Mídia: pausar</string>
+    <string name="automation_action_media_key_hint">Funciona quando um player já está aberto: para abri-lo, coloque “Abrir aplicativo” antes desta etapa.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Ligar</string>
     <string name="automation_action_navigate">Rota no Y.Navigator</string>
@@ -1126,6 +1129,7 @@
     <string name="auto_msg_url_no_scheme">Ação nº %1$d: a URL deve conter um esquema (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Ação nº %1$d: modo do Yandex Music não selecionado</string>
     <string name="auto_msg_sentry_invalid">Ação nº %1$d: estado do modo sentinela inválido</string>
+    <string name="auto_msg_media_key_invalid">Ação nº %1$d: escolha tocar ou pausar</string>
     <string name="auto_msg_hotspot_invalid">Ação nº %1$d: estado do ponto de acesso inválido</string>
     <string name="auto_msg_speak_text_empty">Ação nº %1$d: texto para fala não definido</string>
     <string name="auto_msg_agent_query_prompt_empty">Ação nº %1$d: consulta ao agente não definida</string>
@@ -1712,6 +1716,9 @@
     <string name="dispatch_app_not_installed">Aplicativo não instalado: %1$s</string>
     <string name="dispatch_app_close_self">O BYDMate não fecha a si mesmo</string>
     <string name="dispatch_app_close_failed">Não foi possível fechar o aplicativo: %1$s</string>
+    <string name="dispatch_media_no_session">Nenhum player aberto</string>
+    <string name="dispatch_media_key_invalid">Comando de player desconhecido</string>
+    <string name="dispatch_media_key_failed">O player não aceitou o comando: %1$s</string>
     <string name="dispatch_phone_missing">phone não definido</string>
     <string name="dispatch_dgis_fallback">2GIS não está instalado, foi aberto o Yandex Navigator</string>
     <string name="dispatch_maps_fallback">Yandex Maps não está instalado, foi aberto o Yandex Navigator</string>

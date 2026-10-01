@@ -516,6 +516,9 @@
     <string name="automation_action_app_launch">Uruchomienie aplikacji</string>
     <string name="automation_action_app_close">Zamknij aplikację</string>
     <string name="automation_action_app_close_hint">Aplikacja zamknie się całkowicie. Niezapisana trasa lub muzyka w niej zniknie.</string>
+    <string name="automation_action_media_play">Multimedia: odtwórz</string>
+    <string name="automation_action_media_pause">Multimedia: pauza</string>
+    <string name="automation_action_media_key_hint">Działa, gdy odtwarzacz jest już uruchomiony: aby go uruchomić, dodaj przed tym krokiem „Uruchomienie aplikacji”.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Połączenie</string>
     <string name="automation_action_navigate">Trasa w Yandex Nawigatorze</string>
@@ -1285,6 +1288,7 @@
     <string name="auto_msg_url_no_scheme">Akcja #%1$d: URL musi zawierać schemat (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Akcja #%1$d: nie wybrano trybu Yandex Music</string>
     <string name="auto_msg_sentry_invalid">Akcja #%1$d: nieprawidłowy stan trybu strażnika</string>
+    <string name="auto_msg_media_key_invalid">Akcja #%1$d: wybierz odtwarzanie lub pauzę</string>
     <string name="auto_msg_hotspot_invalid">Akcja #%1$d: nieprawidłowy stan hotspotu</string>
     <string name="auto_msg_speak_text_empty">Akcja #%1$d: nie podano tekstu do odczytania</string>
     <string name="auto_msg_agent_query_prompt_empty">Akcja #%1$d: nie podano zapytania do agenta</string>
@@ -1868,6 +1872,9 @@
     <string name="dispatch_app_not_installed">Aplikacja nie jest zainstalowana: %1$s</string>
     <string name="dispatch_app_close_self">BYDMate nie zamyka samego siebie</string>
     <string name="dispatch_app_close_failed">Nie udało się zamknąć aplikacji: %1$s</string>
+    <string name="dispatch_media_no_session">Żaden odtwarzacz nie jest uruchomiony</string>
+    <string name="dispatch_media_key_invalid">Nieznane polecenie odtwarzacza</string>
+    <string name="dispatch_media_key_failed">Odtwarzacz nie przyjął polecenia: %1$s</string>
     <string name="dispatch_phone_missing">nie podano phone</string>
     <string name="dispatch_dgis_fallback">Nie zainstalowano 2GIS, otwarto Yandex Navigator</string>
     <string name="dispatch_maps_fallback">Nie zainstalowano Yandex Maps, otwarto Yandex Navigator</string>
