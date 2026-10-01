@@ -472,8 +472,6 @@
     <string name="automation_action_cluster_projection">Projection to cluster</string>
     <string name="automation_action_cluster_projection_on">Enable</string>
     <string name="automation_action_cluster_projection_off">Disable</string>
-    <string name="automation_action_cluster_app_default">App from Settings</string>
-    <string name="automation_action_cluster_app_reset">Back to the app from Settings</string>
     <string name="automation_action_toggle">Toggle</string>
     <string name="automation_action_toggle_display_name">Toggle: %1$s</string>
     <string name="auto_act_toggle_catalog">%1$s: toggle</string>

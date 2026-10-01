@@ -465,8 +465,6 @@
     <string name="automation_action_cluster_projection">Projeção no painel de instrumentos</string>
     <string name="automation_action_cluster_projection_on">Ativar</string>
     <string name="automation_action_cluster_projection_off">Desativar</string>
-    <string name="automation_action_cluster_app_default">Aplicativo das configurações</string>
-    <string name="automation_action_cluster_app_reset">Voltar ao aplicativo das configurações</string>
     <string name="automation_action_toggle">Alternar</string>
     <string name="automation_action_toggle_display_name">Alternar: %1$s</string>
     <string name="auto_act_toggle_catalog">%1$s: alternar</string>

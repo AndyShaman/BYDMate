@@ -2,7 +2,6 @@ package com.bydmate.app.ui.automation
 
 import android.content.Context
 import com.bydmate.app.R
-import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.SharedRule
@@ -119,14 +118,8 @@ internal object RuleImportSummary {
             "app_launch", "app_close" -> json.optString("packageName")
             "call" -> callDetail(json, lc)
             "delay", "media_volume" -> action.payload
-            // «Вкл», with the app a projection step picked instead of the Settings one (#279).
-            "sentry", "hotspot", "cluster_projection" -> {
-                val on = ActionDispatcher.onOffState(action.payload) == "1"
-                listOfNotNull(
-                    lc.getString(if (on) R.string.auto_enum_on else R.string.auto_enum_off),
-                    ActionDispatcher.clusterApp(action.payload)?.takeIf { on },
-                ).joinToString(", ")
-            }
+            "sentry", "hotspot", "cluster_projection" ->
+                lc.getString(if (action.payload == "1") R.string.auto_enum_on else R.string.auto_enum_off)
             TELEGRAM_REPORT_KIND -> (action.reportFields().map { lc.getString(it.labelRes) } + action.reportText())
                 .filter { it.isNotBlank() }.joinToString(", ")
             else -> launchDetail(action.kind, json, lc, autoGo) ?: ACTION_TEXT_FIELDS[action.kind]?.let { json.optString(it) }

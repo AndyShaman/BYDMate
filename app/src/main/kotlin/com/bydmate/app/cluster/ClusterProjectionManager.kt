@@ -230,9 +230,6 @@ object ClusterProjectionManager {
     // back, not the live settings target — the two differ when the user switches the projection app
     // mid-projection, and tugging the new target would strand the old app on the cluster.
     private var projectedPackage: String? = null
-    /** The app an automation step asked for instead of the saved choice (#279), for the
-     *  projection it starts; null = the saved choice. Never written to the prefs. */
-    private var sessionApp: String? = null
     /** Cluster display id while direct (freeform) projection is active; -1 otherwise. */
     private var directDisplayId = -1
     /**
@@ -358,34 +355,21 @@ object ClusterProjectionManager {
      *
      * [reason] identifies the caller in the journal (star key, voice agent, settings, split) —
      * a field dump about a cluster that changed on its own has to say who asked.
-     *
-     * [app] (FULLSCREEN only): project this app instead of the saved choice, for this projection.
-     * Another app already on the cluster is taken off first; the same one is left as it is.
      */
-    @Suppress("LongParameterList") // the caller's request as it comes, two of them optional
     fun setMode(
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
-        reason: String = "unknown", app: String? = null,
+        reason: String = "unknown",
     ) {
         val appContext = context.applicationContext
         installJournal(appContext)
         scope.launch {
             mutex.withLock {
-                val swap = mode == ClusterMode.FULLSCREEN && currentMode == ClusterMode.FULLSCREEN &&
-                    app != null && app != projectedPackage
-                if (mode == currentMode && !swap) {
+                if (mode == currentMode) {
                     log("setMode $mode: already in this mode (reason=$reason)")
                     return@withLock
                 }
-                if (swap) {
-                    Log.i(TAG, "setMode: app $projectedPackage -> $app")
-                    log("setMode app $projectedPackage -> $app (reason=$reason)")
-                    applyModeLocked(appContext, ClusterMode.OFF, helper, bootstrap)
-                } else {
-                    Log.i(TAG, "setMode: $currentMode -> $mode")
-                    log("setMode $currentMode -> $mode (reason=$reason${app?.let { " app=$it" }.orEmpty()})")
-                }
-                if (mode == ClusterMode.FULLSCREEN) sessionApp = app
+                Log.i(TAG, "setMode: $currentMode -> $mode")
+                log("setMode $currentMode -> $mode (reason=$reason)")
                 applyModeLocked(appContext, mode, helper, bootstrap)
             }
         }
@@ -813,10 +797,9 @@ object ClusterProjectionManager {
         return prefs.getBoolean(KEY_DIRECT_PROJECTION, false)
     }
 
-    /** Package to project — user-selectable in settings, defaults to Yandex Navi; an automation
-     *  step's own app ([sessionApp]) for the projection it started. */
-    private fun targetPackage(context: Context): String = sessionApp
-        ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    /** Package to project — user-selectable in settings, defaults to Yandex Navi. */
+    private fun targetPackage(context: Context): String =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE
 
     /** Wave P setting: the app may drive the cluster compositor (projection AND blind-spot camera). */
@@ -866,7 +849,6 @@ object ClusterProjectionManager {
                 pullBackToMain(context, helper, focus = true)
                 hideOverlay(helper)
                 projectedPackage = null
-                sessionApp = null
                 sessionPreferFull = null
                 currentMode = ClusterMode.OFF
                 lastFailure = null
@@ -896,7 +878,6 @@ object ClusterProjectionManager {
                     log("projection failed ($failure); falling back to OFF")
                     pullBackToMain(context, helper, focus = true)
                     projectedPackage = null
-                    sessionApp = null
                     sessionPreferFull = null
                     currentMode = ClusterMode.OFF
                     lastFailure = failure

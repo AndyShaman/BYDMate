@@ -529,8 +529,6 @@
     <string name="automation_action_cluster_projection">Вывод на приборку</string>
     <string name="automation_action_cluster_projection_on">Включить</string>
     <string name="automation_action_cluster_projection_off">Отключить</string>
-    <string name="automation_action_cluster_app_default">Приложение из настроек</string>
-    <string name="automation_action_cluster_app_reset">Вернуть приложение из настроек</string>
     <string name="automation_action_toggle">Переключить</string>
     <string name="automation_action_toggle_display_name">Переключить: %1$s</string>
     <string name="auto_act_toggle_catalog">%1$s: переключить</string>
