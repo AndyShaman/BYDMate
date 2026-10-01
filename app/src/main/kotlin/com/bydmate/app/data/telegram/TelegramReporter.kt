@@ -8,6 +8,9 @@ import com.bydmate.app.data.backup.TelegramSinkException
 import com.bydmate.app.data.backup.TgBackupConfig
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.trips.TripCounterMath
+import com.bydmate.app.data.trips.TripCounterResets
+import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLanguageTag
@@ -59,12 +62,14 @@ data class PowerOffReport(
  * or the coordinates, since users post their logs in public issues.
  */
 @Singleton
-@Suppress("TooManyFunctions") // send, outbox on disk and the dump, kept in one place
+// Send, outbox on disk and the dump, kept in one place; Hilt-injected dependencies.
+@Suppress("TooManyFunctions", "LongParameterList")
 class TelegramReporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sink: TelegramBackupSink,
     private val settings: SettingsRepository,
     private val tripDao: TripDao,
+    private val tripCounterResets: TripCounterResets,
     private val appStrings: AppStrings,
     private val offState: PowerOffArmState,
 ) {
@@ -349,6 +354,8 @@ class TelegramReporter @Inject constructor(
             LiveTrip(km, TrackingService.tripKwhConsumed.value, startedAt)
         } else null
         val lastTrip = tripDao.getRecent(RECENT_TRIPS).first().firstOrNull { (it.distanceKm ?: 0.0) > 0.0 }
+        tripCounterResets.load()
+        val tariff = settings.getTripCostTariff()
         return ReportInputs(
             data = TrackingService.lastData.value,
             rangeKm = TrackingService.lastRangeKm.value,
@@ -356,6 +363,19 @@ class TelegramReporter @Inject constructor(
             longitude = location?.longitude,
             liveTrip = live,
             lastTrip = lastTrip,
+            trip1 = tripCounter(1, tariff),
+            trip2 = tripCounter(2, tariff),
+        )
+    }
+
+    /** TRIP [n] as the dashboard shows it now (DashboardViewModel.collectTripCounter, read once). */
+    private suspend fun tripCounter(n: Int, tariff: Double): TripCounterUi? {
+        val reset = tripCounterResets.state(n).value ?: return null
+        val sessionStart = TrackingService.sessionStartedAt.value
+        val stats = tripDao.observeCounterStats(reset.resetTs, sessionStart ?: Long.MAX_VALUE).first()
+        return TripCounterMath.compute(
+            stats, reset, TrackingService.tripDistanceKm.value, TrackingService.tripKwhConsumed.value,
+            sessionStart, TrackingService.liveWholeSession.value, clock(), tariff,
         )
     }
 }

@@ -7,6 +7,7 @@ import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.nativestack.ParamDecoder
 import com.bydmate.app.data.remote.diParsData
+import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.ui.automation.newTelegramReportAction
 import com.bydmate.app.ui.automation.reportFields
 import com.bydmate.app.util.localizedContext
@@ -44,13 +45,27 @@ class TelegramReportBuilderTest {
         tirePressFL = 240, tirePressFR = 240, tirePressRL = 230, tirePressRR = 240,
     )
 
+    @Suppress("LongParameterList") // one parameter per report input
     private fun inputs(
         data: com.bydmate.app.data.remote.DiParsData? = fullData,
         rangeKm: Double? = 312.4,
         location: Pair<Double, Double>? = 53.9 to 27.56,
         live: LiveTrip? = null,
         last: TripEntity? = null,
-    ) = ReportInputs(data, rangeKm, location?.first, location?.second, live, last)
+        trip1: TripCounterUi? = null,
+        trip2: TripCounterUi? = null,
+    ) = ReportInputs(data, rangeKm, location?.first, location?.second, live, last, trip1, trip2)
+
+    /** A dashboard counter reset [daysAgo] days before [now]. */
+    private fun counter(km: Double, kwh: Double, drivingMs: Long, daysAgo: Int = 6) = TripCounterUi(
+        km = km, kwh = kwh, drivingKwh = kwh, idleKwh = 0.0, cost = 0.0, tripCount = 3,
+        drivingMs = drivingMs, resetTs = now - daysAgo * 86_400_000L,
+    )
+
+    private fun dayOf(timeMs: Long): String = TelegramReportBuilder.formatDateTime(timeMs).split(' ')[0]
+
+    private val counter1 = counter(412.3, 88.2, (9 * 60 + 20) * 60_000L, daysAgo = 6)
+    private val counter2 = counter(31.6, 5.1, 47 * 60_000L, daysAgo = 1)
 
     private fun build(
         fields: Set<ReportField> = ReportField.entries.toSet(),
@@ -67,7 +82,7 @@ class TelegramReportBuilderTest {
     }
 
     @Test fun `every item present gives the approved layout with the map link last`() {
-        val report = build(inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L)))
+        val report = build(inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L), trip1 = counter1, trip2 = counter2))
         assertEquals(
             listOf(
                 "<b>BYDMate: Где машина</b>",
@@ -80,6 +95,14 @@ class TelegramReportBuilderTest {
                 "🚗 <b>Поездка</b>",
                 "${em}23 км за 34 мин",
                 "${em}Расход 16,2 кВт·ч/100 км",
+                "",
+                "🔁 <b>TRIP 1</b> с ${dayOf(counter1.resetTs)}",
+                "${em}412 км за 9 ч 20 мин",
+                "${em}Расход 21,4 кВт·ч/100 км",
+                "",
+                "🔁 <b>TRIP 2</b> с ${dayOf(counter2.resetTs)}",
+                "${em}32 км за 47 мин",
+                "${em}Расход 16,1 кВт·ч/100 км",
                 "",
                 "⚠️ <b>Открыто: окно водителя</b>",
                 "",
@@ -133,7 +156,7 @@ class TelegramReportBuilderTest {
         assertEquals(
             listOf(
                 ReportField.LOCATION, ReportField.RANGE, ReportField.ODOMETER, ReportField.TRIP,
-                ReportField.TEMPS, ReportField.OPENINGS, ReportField.TIRES,
+                ReportField.TRIP1, ReportField.TRIP2, ReportField.TEMPS, ReportField.OPENINGS, ReportField.TIRES,
             ),
             report.skipped,
         )
@@ -250,8 +273,11 @@ class TelegramReportBuilderTest {
 
     @Test fun `every interface language builds the whole report`() {
         for (lang in listOf("ru", "be", "en", "pl", "pt", "zh")) {
-            val report = build(lang = lang, inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L)))
-            assertEquals(lang, 14, report.text.lines().size)
+            val report = build(
+                lang = lang,
+                inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L), trip1 = counter1, trip2 = counter2),
+            )
+            assertEquals(lang, 22, report.text.lines().size)
             assertFalse(lang, report.text.contains("%1"))
             assertFalse(lang, report.text.contains('\u0000'))
             assertTrue(lang, report.text.lines().last().startsWith("📍 <a href="))
@@ -341,6 +367,86 @@ class TelegramReportBuilderTest {
             payload = """{"fields":["location","soc","range","trip"],"text":""}""",
         )
         assertEquals(setOf(ReportField.LOCATION, ReportField.SOC, ReportField.RANGE, ReportField.TRIP), saved.reportFields())
+    }
+
+    // --- the dashboard counters TRIP 1 and TRIP 2 ---
+
+    @Test fun `the counters come right after the trip in the pickers, off by default, with their own descriptions`() {
+        val ids = ReportField.entries.map { it.id }
+        assertEquals(listOf("trip", "trip1", "trip2"), ids.subList(ids.indexOf("trip"), ids.indexOf("trip") + 3))
+        assertFalse(ReportField.TRIP1 in ReportField.DEFAULT)
+        assertFalse(ReportField.TRIP2 in ReportField.DEFAULT)
+        assertFalse(ReportField.TRIP1 in newTelegramReportAction(ctx).reportFields())
+        assertEquals("TRIP 1", ctx.getString(ReportField.TRIP1.labelRes))
+        assertEquals("TRIP 2", ctx.getString(ReportField.TRIP2.labelRes))
+        val langs = listOf("ru", "be", "en", "pl", "pt", "zh")
+        for (field in listOf(ReportField.TRIP1, ReportField.TRIP2)) {
+            val descs = langs.map { ctx.localizedContext(it).getString(field.descRes) }
+            assertEquals("each language has its own description: $descs", langs.size, descs.toSet().size)
+        }
+        assertEquals("Счётчик TRIP 1 с Главной: километры, время в пути и расход", ctx.localizedContext("ru").getString(ReportField.TRIP1.descRes))
+    }
+
+    @Test fun `the counters survive the csv and json round trip, and an older build drops them`() {
+        val fields = setOf(ReportField.SOC, ReportField.TRIP1, ReportField.TRIP2)
+        assertEquals("soc,trip1,trip2", ReportField.toCsv(fields))
+        assertEquals(fields, ReportField.parseCsv(ReportField.toCsv(fields)))
+        assertEquals(fields, ReportField.fromJson(ReportField.toJson(fields)))
+        assertEquals(setOf(ReportField.SOC), ReportField.parseCsv("soc,trip3"))
+    }
+
+    @Test fun `each counter is its own block between the trip and what is open, TRIP 1 first`() {
+        val fields = setOf(ReportField.TRIP2, ReportField.OPENINGS, ReportField.TRIP1, ReportField.TRIP)
+        val report = build(fields = fields, inputs = inputs(live = LiveTrip(5.0, null, now), trip1 = counter1, trip2 = counter2))
+        val text = report.text
+        assertWellFormed(text)
+        val trip = text.indexOf("🚗")
+        val one = text.indexOf("🔁 <b>TRIP 1</b>")
+        val two = text.indexOf("🔁 <b>TRIP 2</b>")
+        val open = text.indexOf("⚠️")
+        assertTrue(text, trip in 0 until one && one < two && two < open)
+        assertTrue(text, text.contains("\n\n🔁 <b>TRIP 1</b>") && text.contains("\n\n🔁 <b>TRIP 2</b>"))
+        assertEquals(listOf(ReportField.TRIP, ReportField.TRIP1, ReportField.TRIP2, ReportField.OPENINGS), report.taken)
+    }
+
+    @Test fun `a counter alone gives the header and its block`() {
+        val report = build(fields = setOf(ReportField.TRIP2), inputs = inputs(trip2 = counter2))
+        assertEquals(
+            listOf(
+                "<b>BYDMate: Где машина</b>",
+                "",
+                "🔁 <b>TRIP 2</b> с ${dayOf(counter2.resetTs)}",
+                "${em}32 км за 47 мин",
+                "${em}Расход 16,1 кВт·ч/100 км",
+            ),
+            report.text.lines(),
+        )
+    }
+
+    @Test fun `a counter that is not there, never reset or empty is skipped`() {
+        val cases = listOf(
+            null,
+            counter1.copy(resetTs = 0L),
+            counter1.copy(km = 0.0),
+        )
+        for (c in cases) {
+            val report = build(fields = setOf(ReportField.SOC, ReportField.TRIP1, ReportField.TRIP2), inputs = inputs(trip1 = c))
+            assertEquals("$c", listOf("<b>BYDMate: Где машина</b>", "", "🔋 Заряд <b>64%</b>"), report.text.lines())
+            assertEquals("$c", listOf(ReportField.TRIP1, ReportField.TRIP2), report.skipped)
+        }
+    }
+
+    @Test fun `a short counter has no consumption, one without driving time shows the distance alone`() {
+        val short = counter(1.6, 0.5, 4 * 60_000L)
+        assertEquals(
+            listOf("🔁 <b>TRIP 1</b> с ${dayOf(short.resetTs)}", "${em}1,6 км за 4 мин"),
+            build(fields = setOf(ReportField.TRIP1), inputs = inputs(trip1 = short)).text.lines().drop(2),
+        )
+        val noTime = counter(41.6, 0.0, 0L)
+        assertEquals(
+            listOf("🔁 <b>TRIP 1</b> с ${dayOf(noTime.resetTs)}", "${em}42 км"),
+            build(fields = setOf(ReportField.TRIP1), inputs = inputs(trip1 = noTime)).text.lines().drop(2),
+        )
     }
 
     // --- the point under the report ---

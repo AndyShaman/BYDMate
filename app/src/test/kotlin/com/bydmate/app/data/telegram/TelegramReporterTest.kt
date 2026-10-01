@@ -6,10 +6,15 @@ import com.bydmate.app.data.backup.TelegramBackupSink
 import com.bydmate.app.data.backup.TelegramError
 import com.bydmate.app.data.backup.TelegramSinkException
 import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.data.local.dao.TripCounterStats
+import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.trips.TripCounterMath
+import com.bydmate.app.data.trips.TripCounterResets
+import com.bydmate.app.data.trips.TripResetState
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.helper.offreport.OffReportFid
 import com.bydmate.app.helper.offreport.OffReportOutcome
@@ -18,7 +23,9 @@ import com.bydmate.app.helper.offreport.OffReportStatus
 import com.bydmate.app.util.AppStrings
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -68,7 +75,7 @@ class TelegramReporterTest {
         LocalePreferences(ctx).setLanguage("ru")
         settings = SettingsRepository(dao, LocalePreferences(ctx))
         coEvery { helper.offReportStatus(any()) } returns null
-        reporter = TelegramReporter(ctx, sink, settings, mockk(relaxed = true), AppStrings(ctx), offState)
+        reporter = TelegramReporter(ctx, sink, settings, mockk(relaxed = true), TripCounterResets(settings), AppStrings(ctx), offState)
         reporter.inputs = { ReportInputs(diParsData(soc = 64), 312.0, null, null, null, null) }
         reporter.clock = { now }
         reporter.language = { "ru" }
@@ -353,5 +360,31 @@ class TelegramReporterTest {
         assertTrue(lines[0].endsWith("daemon=- pending=- outbox=0"))
         assertEquals("telegram report last_off: -", lines[1])
         assertEquals("telegram report listener: -", lines[2])
+    }
+
+    @Test fun `the live state carries both dashboard counters, computed from their reset anchors as on the dashboard`() = runBlocking {
+        val anchor1 = TripResetState(resetTs = now - 6 * 86_400_000L, corrKm = 0.0, corrKwh = 0.0, corrMs = 0L)
+        settings.setTripResetState(1, anchor1)
+        val stats1 = TripCounterStats(
+            totalKm = 412.3, totalKwh = 90.0, totalCost = 0.0, drivingKwh = 88.2, idleKwh = 1.8, tripCount = 3,
+            drivingMs = 33_600_000L, straddlingKm = 0.0, straddlingKwh = 0.0, straddlingMs = 0L, straddlingTripCount = 0,
+            landedSessionKm = 0.0, landedSessionKwh = 0.0, landedSessionMs = 0L,
+        )
+        val stats2 = stats1.copy(totalKm = 0.0, totalKwh = 0.0, drivingKwh = 0.0, idleKwh = 0.0, tripCount = 0, drivingMs = 0L)
+        val tripDao = mockk<TripDao>()
+        every { tripDao.getRecent(any()) } returns flowOf(emptyList())
+        every { tripDao.observeCounterStats(anchor1.resetTs, Long.MAX_VALUE) } returns flowOf(stats1)
+        every { tripDao.observeCounterStats(0L, Long.MAX_VALUE) } returns flowOf(stats2)
+        // A fresh holder, as in a process the dashboard never opened: the anchors come from the settings.
+        val live = TelegramReporter(ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState)
+        live.clock = { now }
+
+        val inputs = live.inputs()
+
+        val tariff = settings.getTripCostTariff()
+        assertEquals(TripCounterMath.compute(stats1, anchor1, null, null, null, false, now, tariff), inputs.trip1)
+        assertEquals(anchor1.resetTs, inputs.trip1?.resetTs)
+        assertEquals(0L, inputs.trip2?.resetTs)
+        verify { tripDao.observeCounterStats(anchor1.resetTs, Long.MAX_VALUE) }
     }
 }

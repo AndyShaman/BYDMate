@@ -1917,6 +1917,7 @@
     <string name="tg_report_trip_now">Паездка</string>
     <string name="tg_report_trip_last">Апошняя паездка</string>
     <string name="tg_report_trip_when">%1$s у %2$s</string>
+    <string name="tg_report_counter_since">з %1$s</string>
     <string name="tg_report_trip_distance_time">%1$s за %2$s</string>
     <string name="tg_report_trip_km">%1$.1f км</string>
     <string name="tg_report_trip_km_whole">%1$d км</string>
@@ -1950,6 +1951,8 @@
     <string name="tg_report_field_range_desc">Кіламетры, як на Галоўнай</string>
     <string name="tg_report_field_odometer_desc">Агульны прабег машыны</string>
     <string name="tg_report_field_trip_desc">Кіламетры, расход і час у дарозе</string>
+    <string name="tg_report_field_trip1_desc">Лічыльнік TRIP 1 з Галоўнай: кіламетры, час у дарозе і расход</string>
+    <string name="tg_report_field_trip2_desc">Лічыльнік TRIP 2 з Галоўнай: кіламетры, час у дарозе і расход</string>
     <string name="tg_report_field_temps_desc">Звонку і ў салоне</string>
     <string name="tg_report_field_openings_desc">Дзверы, вокны, люк, багажнік, капот</string>
     <string name="tg_report_field_tires_desc">Усе чатыры колы</string>
