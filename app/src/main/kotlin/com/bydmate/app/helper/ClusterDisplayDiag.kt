@@ -82,8 +82,9 @@ internal object ClusterDisplayDiag {
     private val DISPLAY_OWNER = Regex("""\bowner\s+(\S+\s*\(uid\s+\d+\))""")
     private val DISPLAY_FLAG = Regex("""FLAG_\w+""")
 
-    /** `mBaseDisplayInfo=DisplayInfo{"<name>, displayId N", ...` — the name/id link of a logical display. */
-    private val LOGICAL_DISPLAY = Regex("""DisplayInfo\{"([^"]*), displayId (\d+)"""")
+    /** The name/id link of a logical display: Android 10 prints `DisplayInfo{"<name>, displayId N", ...`,
+     *  Android 12 `DisplayInfo{"<name>", displayId N", ...` — both quotes are optional here. */
+    private val LOGICAL_DISPLAY = Regex("""DisplayInfo\{"([^"]*)"?, displayId (\d+)"?""")
     private val DISPLAY_REAL_SIZE = Regex("""\breal (\d+) x (\d+)""")
     private val DISPLAY_DENSITY = Regex("""\bdensity (\d+)""")
     private val DISPLAY_OWNER_PARTS = Regex("""\bowner (\S+) \(uid (\d+)\)""")
@@ -163,7 +164,8 @@ internal object ClusterDisplayDiag {
     /**
      * Every logical display of `dumpsys display`, joined with the physical/virtual device behind
      * it (TX_LIST_DISPLAYS). The display id and the name come from the logical section
-     * (`mBaseDisplayInfo=DisplayInfo{"<name>, displayId N"`), because that is the id an
+     * (`mBaseDisplayInfo=DisplayInfo{"<name>, displayId N"`, on Android 12
+     * `DisplayInfo{"<name>", displayId N"`), because that is the id an
      * `am start --display` understands; size, density, owner and flags come from the
      * `DisplayDeviceInfo{"<name>"...}` line of the same name, which is where dumpsys prints them.
      *

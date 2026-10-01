@@ -187,6 +187,47 @@ class ClusterDisplayDiagTest {
     }
 
     @Test
+    fun `parses the Android 12 field dump into the hidden cluster surface`() {
+        val devices = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.ANDROID12_FIELD)
+        assertEquals(listOf(2), devices.map { it.id })
+        val cluster = devices.single()
+        assertEquals("fission_bg_xdjaVirtualSurface", cluster.name)
+        assertEquals(1920, cluster.width)
+        assertEquals(720, cluster.height)
+        // Truncated like DILINK4: owner and flags are reported as absent, not invented.
+        assertEquals(-1, cluster.ownerUid)
+        assertTrue(cluster.flags.isEmpty())
+    }
+
+    @Test
+    fun `parses the untruncated Android 12 dump with the owner and flags of the device line`() {
+        val devices = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.ANDROID12_FULL)
+        assertEquals(listOf(0, 2), devices.map { it.id })
+        assertEquals("Built-in Screen", devices[0].name)
+        assertEquals(1920 to 1080, devices[0].width to devices[0].height)
+        val cluster = devices[1]
+        assertEquals("fission_bg_xdjaVirtualSurface", cluster.name)
+        assertEquals(1920 to 720, cluster.width to cluster.height)
+        assertEquals("com.xdja.containerservice", cluster.ownerPkg)
+        assertEquals(1000, cluster.ownerUid)
+        assertEquals(listOf("FLAG_PRESENTATION", "FLAG_OWN_CONTENT_ONLY"), cluster.flags)
+    }
+
+    @Test
+    fun `the reconstructed Android 12 device lines summarize to what the daemon logged on the car`() {
+        assertEquals(
+            listOf(
+                "dev: name=\"Built-in Screen\" 1920x1080 type=INTERNAL state=ON owner=? flags=FLAG_DEFAULT_DISPLAY," +
+                    "FLAG_ROTATES_WITH_CONTENT,FLAG_SECURE,FLAG_SUPPORTS_PROTECTED_BUFFERS uniqueId=local:4630946674560563842",
+                "dev: name=\"fission_bg_xdjaVirtualSurface\" 1920x720 type=VIRTUAL state=ON owner=com.xdja.containerservice " +
+                    "(uid 1000) flags=FLAG_PRESENTATION,FLAG_OWN_CONTENT_ONLY " +
+                    "uniqueId=virtual:com.xdja.containerservice,1000,fission_bg_xdjaVirtualSurface,0",
+            ),
+            ClusterDisplayDiag.displaySummaries(DisplayDumpFixtures.ANDROID12_FULL),
+        )
+    }
+
+    @Test
     fun `each logical display is reported once, not once per DisplayInfo field`() {
         // Every block carries mBaseDisplayInfo AND mOverrideDisplayInfo for the same display.
         val ids = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.DILINK4).map { it.id }
