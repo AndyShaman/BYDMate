@@ -1438,6 +1438,9 @@ private const val VALIDATION_URL = "https://localhost"
 /** Rules the user can have: the editor, the import and the voice agent stop at this many. */
 internal const val MAX_RULES = 50
 
+/** Actions one rule can hold: the editor stops offering «add» at this many. */
+internal const val MAX_RULE_ACTIONS = 20
+
 /** Set once the Telegram report templates were offered (3.19), on fresh and older installs alike. */
 private const val TG_TEMPLATES_KEY = "templates_tg_report_inserted"
 

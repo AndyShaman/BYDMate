@@ -64,6 +64,23 @@ class AutomationEngineVoiceFireTest {
         assertEquals(VoiceFireResult.NotFound, engine(ruleDao, dispatcher).fireVoiceRule(7, null))
     }
 
+    @Test fun `a rule with 20 actions runs all of them in order`() = runBlocking {
+        val actions = (1..20).map {
+            ActionDef(command = "", displayName = "A$it", kind = "app_launch", payload = """{"packageName":"p$it"}""")
+        }
+        val ruleDao = mockk<RuleDao> {
+            coEvery { getById(7) } returns rule(actions = actions)
+            coJustRun { updateLastTriggered(any(), any()) }
+        }
+        val ran = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val dispatcher = mockk<ActionDispatcher> {
+            coEvery { dispatch(any(), any()) } answers { ran += firstArg<ActionDef>().displayName; DispatchResult(true, null) }
+        }
+        engine(ruleDao, dispatcher).fireVoiceRule(7, diParsData())
+        coVerify(timeout = 2000, exactly = 20) { dispatcher.dispatch(any(), any()) }
+        assertEquals(actions.map { it.displayName }, ran.toList())
+    }
+
     @Test fun `app_launch fires and dispatches`() = runBlocking {
         val r = rule(actions = listOf(appAction))
         val ruleDao = mockk<RuleDao> {

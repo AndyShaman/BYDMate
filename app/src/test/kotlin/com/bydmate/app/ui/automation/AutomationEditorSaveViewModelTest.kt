@@ -80,6 +80,23 @@ class AutomationEditorSaveViewModelTest {
         )
     }
 
+    @Test fun `a rule with 20 actions saves all of them in order`() {
+        val existing = RuleEntity(id = 9, name = "Navi", triggers = "[]", actions = "[]")
+        coEvery { ruleDao.getById(9) } returns existing
+        val updated = slot<RuleEntity>()
+        coEvery { ruleDao.update(capture(updated)) } returns Unit
+        val actions = RuleActionLimitTest.twentyActions()
+        val vm = vm()
+        vm.openEditRule(existing)
+        vm.editWith(actions)
+        vm.saveRule()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Param labels are put in the app language on save; what runs is compared.
+        fun ActionDef.run() = Triple(kind, command, payload)
+        assertEquals(actions.map { it.run() }, ActionDef.listFromJson(updated.captured.actions).map { it.run() })
+    }
+
     @Test fun `saving a rule deleted meanwhile inserts nothing and says so`() {
         coEvery { ruleDao.getById(9) } returns null
         val vm = vm()
