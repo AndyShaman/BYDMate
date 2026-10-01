@@ -29,13 +29,9 @@ class ClusterVoiceControl @Inject constructor(
         context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
             .getString(ClusterProjectionManager.KEY_TARGET_LABEL, null)
 
-    /** The app our projection shows now; null while nothing is projected. */
-    fun projectedPackage(): String? = ClusterProjectionManager.diag().projectedPackage
-
-    /** [app]: an automation step's own app instead of the saved choice (#279), on only. */
-    fun apply(on: Boolean, app: String? = null) = ClusterProjectionManager.setMode(
+    fun apply(on: Boolean) = ClusterProjectionManager.setMode(
         context, if (on) ClusterMode.FULLSCREEN else ClusterMode.OFF,
-        helperClient, helperBootstrap, reason = "voice", app = app.takeIf { on })
+        helperClient, helperBootstrap, reason = "voice")
 
     /** Why the last FULLSCREEN attempt failed; null after success/OFF. See [ClusterProjectionManager.lastFailure]. */
     fun lastFailure(): String? = ClusterProjectionManager.lastFailure

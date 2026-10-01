@@ -252,13 +252,10 @@ internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
     "hotspot" -> onOffText(
         R.string.automation_action_hotspot, R.string.automation_action_hotspot_on, R.string.automation_action_hotspot_off, a.payload, lc,
     )
-    "cluster_projection" -> ActionDispatcher.clusterAppLabel(a.payload)
-        ?.takeIf { ActionDispatcher.onOffState(a.payload) == "1" }
-        ?.let { quoted(R.string.automation_action_cluster_projection, it, lc) }
-        ?: onOffText(
-            R.string.automation_action_cluster_projection, R.string.automation_action_cluster_projection_on,
-            R.string.automation_action_cluster_projection_off, ActionDispatcher.onOffState(a.payload), lc,
-        )
+    "cluster_projection" -> onOffText(
+        R.string.automation_action_cluster_projection, R.string.automation_action_cluster_projection_on,
+        R.string.automation_action_cluster_projection_off, a.payload, lc,
+    )
     "media_volume" -> a.payload?.toIntOrNull()
         ?.let { lc.getString(R.string.auto_ui_act_volume, lc.getString(R.string.automation_action_media_volume), it) }
         ?: a.displayName

@@ -350,15 +350,6 @@ class RuleShareTest {
         assertEquals(listOf(new, old), RuleShareFiles.listRuleFiles(dir))
     }
 
-    @Test fun `a projection step with its own app and an old-format one survive the share file`() {
-        val withApp = ActionDef("cluster_projection", "Вывод на приборку: Радио", "cluster_projection",
-            """{"state":"1","packageName":"com.example.radio","appLabel":"Радио"}""")
-        val old = ActionDef("cluster_projection", "Вывод на приборку: Включить", "cluster_projection", "1")
-        val rule = SharedRule.fromEntity(sourceEntity()).copy(actions = listOf(withApp, old))
-        val parsed = RuleShare.parse(RuleShare.exportJson(rule, "3.19.5"), "Звонок") as RuleParseResult.Ok
-        assertEquals(listOf(withApp, old), parsed.rule.actions)
-    }
-
     @Test fun `a close step survives the share file`() {
         val close = ActionDef("", "Закрыть приложение: Радио", "app_close",
             """{"packageName":"com.example.radio","appLabel":"Радио"}""")

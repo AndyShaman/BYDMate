@@ -249,17 +249,6 @@ class RuleTextTest {
     private fun legacy(a: ActionDef, success: Boolean = true) =
         JSONObject().put("command", a.command).put("displayName", a.displayName).put("kind", a.kind).put("success", success)
 
-    @Test fun `a projection step with its own app names it, without one reads as before`() {
-        val lc = ctx.appLocalizedContext()
-        fun cluster(payload: String) = ActionDef("cluster_projection", "x", "cluster_projection", payload)
-        assertEquals(
-            "Вывод на приборку «Радио»",
-            actionText(cluster("""{"state":"1","packageName":"com.example.radio","appLabel":"Радио"}"""), lc),
-        )
-        assertEquals("Вывод на приборку, включить", actionText(cluster("1"), lc))
-        assertEquals("Вывод на приборку, отключить", actionText(cluster("0"), lc))
-    }
-
     @Test fun `a close step names the app it closes`() {
         val lc = ctx.appLocalizedContext()
         val close = ActionDef("", "x", "app_close", """{"packageName":"com.example.radio","appLabel":"Радио"}""")

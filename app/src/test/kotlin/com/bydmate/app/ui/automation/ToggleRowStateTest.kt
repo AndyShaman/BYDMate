@@ -37,18 +37,6 @@ class ToggleRowStateTest {
         assertEquals(CLUSTER_ROW, toggleRowSpecFor(newClusterAction(app)))
     }
 
-    @Test fun `a projection step picks its own app and goes back to the Settings one`() {
-        val picked = newClusterAction(app).withClusterApp("com.example.radio", "Радио", "Вывод на приборку: Радио")
-        assertEquals(CLUSTER_ROW, toggleRowSpecFor(picked))
-        assertEquals("1", ActionDispatcher.onOffState(picked.payload))
-        assertEquals("com.example.radio", ActionDispatcher.clusterApp(picked.payload))
-        assertEquals("Радио", ActionDispatcher.clusterAppLabel(picked.payload))
-        val back = picked.withClusterApp(null, "", "Вывод на приборку: Включить")
-        assertEquals("1", back.payload)
-        assertNull(ActionDispatcher.clusterApp(back.payload))
-        assertEquals(newClusterAction(app).copy(displayName = "Вывод на приборку: Включить"), back)
-    }
-
     @Test fun `catalog toggles keep the target dropdown as their editor`() {
         assertNull(toggleRowSpecFor(toggleAction(ActionDispatcher.TOGGLE_TRUNK)))
         assertNull(toggleRowSpecFor(toggleAction(ActionDispatcher.TOGGLE_CLIMATE)))

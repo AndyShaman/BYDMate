@@ -1231,8 +1231,6 @@
     <string name="automation_action_cluster_projection">投射到仪表盘</string>
     <string name="automation_action_cluster_projection_on">开启</string>
     <string name="automation_action_cluster_projection_off">关闭</string>
-    <string name="automation_action_cluster_app_default">设置中的应用</string>
-    <string name="automation_action_cluster_app_reset">改回设置中的应用</string>
     <string name="automation_action_toggle">切换</string>
     <string name="automation_action_toggle_display_name">切换：%1$s</string>
     <string name="auto_act_toggle_catalog">%1$s：切换</string>

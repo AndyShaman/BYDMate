@@ -529,8 +529,6 @@
     <string name="automation_action_cluster_projection">Вывад на прыборку</string>
     <string name="automation_action_cluster_projection_on">Уключыць</string>
     <string name="automation_action_cluster_projection_off">Адключыць</string>
-    <string name="automation_action_cluster_app_default">Праграма з налад</string>
-    <string name="automation_action_cluster_app_reset">Вярнуць праграму з налад</string>
     <string name="automation_action_toggle">Пераключыць</string>
     <string name="automation_action_toggle_display_name">Пераключыць: %1$s</string>
     <string name="auto_act_toggle_catalog">%1$s: пераключыць</string>

@@ -142,48 +142,6 @@ class ActionDispatcherVoiceActionsTest {
         assertTrue(r.daemonRestarting)
     }
 
-    // --- cluster_projection with an app picked in the action (#279) ---
-
-    private val radioOn = """{"state":"1","packageName":"com.example.radio","appLabel":"Радио"}"""
-
-    @Test fun `cluster_projection without an app makes the same calls as before`() = runTest {
-        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
-        every { cluster.projectionMode() } returns ClusterMode.FULLSCREEN
-        val r = makeDispatcherWithCluster(cluster).dispatch(clusterAction("1"), data = null)
-        assertTrue(r.success)
-        verify(exactly = 1) { cluster.apply(true, null) }
-        verify(exactly = 0) { cluster.projectedPackage() }
-    }
-
-    @Test fun `cluster_projection with an app projects that app`() = runTest {
-        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
-        every { cluster.projectionMode() } returns ClusterMode.FULLSCREEN
-        every { cluster.projectedPackage() } returns "com.example.radio"
-        val r = makeDispatcherWithCluster(cluster).dispatch(clusterAction(radioOn), data = null)
-        assertTrue(r.success)
-        verify(exactly = 1) { cluster.apply(true, "com.example.radio") }
-    }
-
-    @Test fun `cluster_projection with an app waits for that app, not any projection`() = runTest {
-        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
-        every { cluster.projectionMode() } returns ClusterMode.FULLSCREEN
-        every { cluster.projectedPackage() } returnsMany listOf("ru.yandex.yandexnavi", "ru.yandex.yandexnavi", "com.example.radio")
-        val d = makeDispatcherWithCluster(cluster).also { it.clusterPollIntervalMs = 1L }
-        assertTrue(d.dispatch(clusterAction(radioOn), data = null).success)
-
-        every { cluster.projectedPackage() } returns "ru.yandex.yandexnavi"
-        every { cluster.lastFailure() } returns null
-        assertFalse(d.dispatch(clusterAction(radioOn), data = null).success)
-    }
-
-    @Test fun `cluster_projection off ignores the app`() = runTest {
-        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
-        every { cluster.projectionMode() } returns ClusterMode.OFF
-        val off = """{"state":"0","packageName":"com.example.radio","appLabel":"Радио"}"""
-        assertTrue(makeDispatcherWithCluster(cluster).dispatch(clusterAction(off), data = null).success)
-        verify(exactly = 1) { cluster.apply(false, null) }
-    }
-
     // The projection coming up a beat later is still a success: we poll, not sample once.
     @Test fun `cluster_projection that comes up on a later poll is a success`() = runTest {
         val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)

@@ -2760,14 +2760,10 @@ private fun OnOffToggleControls(
             Text(displayLabel, fontSize = EDITOR_TEXT, color = TextPrimary)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // «Включить» tapped again keeps the app a projection step picked (#279).
-            val state = ActionDispatcher.onOffState(action.payload)
-            StateChip(onLabel, selected = !isToggle && state == "1") {
-                if (isToggle || ActionDispatcher.clusterApp(action.payload) == null) {
-                    onUpdate(rowStateAction(spec, "1", "$displayLabel: $onLabel"))
-                }
+            StateChip(onLabel, selected = !isToggle && action.payload == "1") {
+                onUpdate(rowStateAction(spec, "1", "$displayLabel: $onLabel"))
             }
-            StateChip(offLabel, selected = !isToggle && state == "0") {
+            StateChip(offLabel, selected = !isToggle && action.payload == "0") {
                 onUpdate(rowStateAction(spec, "0", "$displayLabel: $offLabel"))
             }
             StateChip(toggleLabel, selected = isToggle) {
@@ -2853,77 +2849,17 @@ private fun ClusterActionControls(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val displayLabel = stringResource(R.string.automation_action_cluster_projection)
-    val onLabel = stringResource(R.string.automation_action_cluster_projection_on)
-    Column(modifier = modifier) {
-        OnOffToggleControls(
-            action = action,
-            icon = Icons.Outlined.Speed,
-            displayLabel = displayLabel,
-            onLabel = onLabel,
-            offLabel = stringResource(R.string.automation_action_cluster_projection_off),
-            spec = CLUSTER_ROW,
-            context = context,
-            onUpdate = onUpdate,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        // «Включить» may name its own app (#279); none = the app chosen in Settings.
-        if (action.kind == CLUSTER_ROW.kind && ActionDispatcher.onOffState(action.payload) == "1") {
-            Spacer(Modifier.height(8.dp))
-            ClusterAppField(
-                action = action,
-                onPick = { pkg, label ->
-                    onUpdate(action.withClusterApp(pkg, label, "$displayLabel: ${pkg?.let { label } ?: onLabel}"))
-                },
-            )
-        }
-    }
-}
-
-/** The app a projection step sends to the cluster: the Settings choice until one is picked here. */
-@Composable
-private fun ClusterAppField(action: ActionDef, onPick: (pkg: String?, label: String) -> Unit) {
-    var picking by remember { mutableStateOf(false) }
-    val pkg = ActionDispatcher.clusterApp(action.payload)
-    val label = ActionDispatcher.clusterAppLabel(action.payload) ?: pkg
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .minimumInteractiveComponentSize()
-                .background(CardSurface, RoundedCornerShape(6.dp))
-                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-                .clickable { picking = true }
-                .heightIn(min = FIELD_HEIGHT)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Outlined.Apps, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = label ?: stringResource(R.string.automation_action_cluster_app_default),
-                fontSize = EDITOR_TEXT,
-                color = if (label == null) TextSecondary else TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (pkg != null) {
-            IconButton(onClick = { onPick(null, "") }, modifier = Modifier.size(MIN_TOUCH)) {
-                Icon(Icons.Outlined.Close, stringResource(R.string.automation_action_cluster_app_reset), tint = TextSecondary)
-            }
-        }
-    }
-    if (picking) {
-        AppLaunchPickerDialog(
-            currentPackage = pkg.orEmpty(),
-            onDismiss = { picking = false },
-            onSelect = { newPkg, newLabel ->
-                onPick(newPkg, newLabel)
-                picking = false
-            },
-        )
-    }
+    OnOffToggleControls(
+        action = action,
+        icon = Icons.Outlined.Speed,
+        displayLabel = stringResource(R.string.automation_action_cluster_projection),
+        onLabel = stringResource(R.string.automation_action_cluster_projection_on),
+        offLabel = stringResource(R.string.automation_action_cluster_projection_off),
+        spec = CLUSTER_ROW,
+        context = context,
+        onUpdate = onUpdate,
+        modifier = modifier,
+    )
 }
 
 // --- Toggle Action Controls ---
