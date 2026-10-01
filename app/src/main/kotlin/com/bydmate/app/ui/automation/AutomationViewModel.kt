@@ -1528,6 +1528,19 @@ fun ActionDef.withAppLaunch(packageName: String, appLabel: String, minimize: Boo
     }.toString()
 )
 
+// --- App close helpers (#280): same payload as app launch, without minimize ---
+
+fun newAppCloseAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.automation_action_app_close),
+    kind = "app_close",
+    payload = """{"packageName":"","appLabel":""}"""
+)
+
+fun ActionDef.withAppClose(packageName: String, appLabel: String): ActionDef = copy(
+    payload = org.json.JSONObject().put("packageName", packageName).put("appLabel", appLabel).toString()
+)
+
 // --- Call helpers (v2.3.0) ---
 
 fun newCallAction(context: Context): ActionDef = ActionDef(

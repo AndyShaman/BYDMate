@@ -514,6 +514,8 @@
     <string name="automation_action_dplus_command">Команда автомобилю</string>
     <string name="automation_action_notification">Уведомление</string>
     <string name="automation_action_app_launch">Запуск приложения</string>
+    <string name="automation_action_app_close">Закрыть приложение</string>
+    <string name="automation_action_app_close_hint">Приложение закроется полностью. Маршрут или музыка, которые в нём не сохранены, пропадут.</string>
     <string name="automation_action_yandex_music">Яндекс.Музыка</string>
     <string name="automation_action_call">Звонок</string>
     <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
@@ -1881,6 +1883,8 @@
     <string name="dispatch_volume_invalid">Некорректный уровень громкости: %1$s</string>
     <string name="dispatch_package_missing">packageName не задан</string>
     <string name="dispatch_app_not_installed">Приложение не установлено: %1$s</string>
+    <string name="dispatch_app_close_self">BYDMate не закрывает сам себя</string>
+    <string name="dispatch_app_close_failed">Не удалось закрыть приложение: %1$s</string>
     <string name="dispatch_phone_missing">phone не задан</string>
     <string name="dispatch_dgis_fallback">2ГИС не установлен, открыт Яндекс Навигатор</string>
     <string name="dispatch_maps_fallback">Яндекс Карты не установлены, открыт Яндекс Навигатор</string>

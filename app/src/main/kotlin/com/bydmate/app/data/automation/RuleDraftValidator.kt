@@ -77,7 +77,7 @@ object RuleDraftValidator {
                     val title = payloadJson(a.payload).optString("title")
                     if (title.isBlank()) return ActionValidationError.NotifTitleEmpty(n)
                 }
-                "app_launch" -> {
+                "app_launch", "app_close" -> {
                     val pkg = payloadJson(a.payload).optString("packageName")
                     if (pkg.isBlank()) return ActionValidationError.AppNotSelected(n)
                 }

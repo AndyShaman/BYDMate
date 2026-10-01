@@ -68,6 +68,14 @@ class RuleImportSummaryTest {
         assertEquals("Вывод на приборку: Вкл", preview.actions[1])
     }
 
+    @Test fun `import preview names the app a close step closes`() {
+        val rule = SharedRuleFixture.withActions(
+            ActionDef("", "x", "app_close", """{"packageName":"com.example.radio","appLabel":"Радио"}"""),
+        )
+        val preview = RuleImportSummary.preview(rule, ctx, realDispatcher()::autoGoWillRun)
+        assertEquals("Закрыть приложение: com.example.radio", preview.actions[0])
+    }
+
     @Test fun `import preview promises «Поехали» only where the dispatcher presses it`() {
         val lc = ctx.appLocalizedContext()
         val go = lc.getString(R.string.automation_import_nav_go)

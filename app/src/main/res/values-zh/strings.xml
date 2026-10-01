@@ -430,6 +430,8 @@
     <string name="automation_action_dplus_command">D+ 指令</string>
     <string name="automation_action_notification">通知</string>
     <string name="automation_action_app_launch">启动应用</string>
+    <string name="automation_action_app_close">关闭应用</string>
+    <string name="automation_action_app_close_hint">应用将被完全关闭，其中未保存的路线或音乐会丢失。</string>
     <string name="automation_action_yandex_music">Yandex 音乐</string>
     <string name="automation_action_call">拨打电话</string>
     <string name="automation_action_navigate">Yandex 导航路线</string>
@@ -1828,6 +1830,8 @@
     <string name="dispatch_volume_invalid">音量无效：%1$s</string>
     <string name="dispatch_package_missing">未设置 packageName</string>
     <string name="dispatch_app_not_installed">应用未安装：%1$s</string>
+    <string name="dispatch_app_close_self">BYDMate 不会关闭自身</string>
+    <string name="dispatch_app_close_failed">无法关闭应用：%1$s</string>
     <string name="dispatch_phone_missing">未设置 phone</string>
     <string name="dispatch_dgis_fallback">未安装 2GIS，已打开 Yandex 导航</string>
     <string name="dispatch_maps_fallback">未安装 Yandex 地图，已打开 Yandex 导航</string>

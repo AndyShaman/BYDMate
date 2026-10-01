@@ -457,6 +457,8 @@
     <string name="automation_action_dplus_command">Vehicle command</string>
     <string name="automation_action_notification">Notification</string>
     <string name="automation_action_app_launch">Launch app</string>
+    <string name="automation_action_app_close">Close app</string>
+    <string name="automation_action_app_close_hint">The app closes completely. A route or music in it that is not saved will be lost.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Call</string>
     <string name="automation_action_navigate">Route in Y.Navigator</string>
@@ -1714,6 +1716,8 @@
     <string name="dispatch_volume_invalid">Invalid volume level: %1$s</string>
     <string name="dispatch_package_missing">packageName not set</string>
     <string name="dispatch_app_not_installed">App not installed: %1$s</string>
+    <string name="dispatch_app_close_self">BYDMate does not close itself</string>
+    <string name="dispatch_app_close_failed">Could not close the app: %1$s</string>
     <string name="dispatch_phone_missing">phone not set</string>
     <string name="dispatch_dgis_fallback">2GIS is not installed, Yandex Navigator opened</string>
     <string name="dispatch_maps_fallback">Yandex Maps is not installed, Yandex Navigator opened</string>

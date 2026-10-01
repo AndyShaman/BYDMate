@@ -33,6 +33,7 @@ internal object RuleImportSummary {
         "notification_silent" to R.string.automation_action_notification,
         "notification_sound" to R.string.automation_action_notification,
         "app_launch" to R.string.automation_action_app_launch,
+        "app_close" to R.string.automation_action_app_close,
         "call" to R.string.automation_action_call,
         "navigate" to R.string.automation_action_navigate,
         "url" to R.string.automation_action_url,
@@ -115,7 +116,7 @@ internal object RuleImportSummary {
                 ?.let { "${lc.getString(it.nameRes)} (${action.command})" } ?: action.command
             "notification", "notification_silent", "notification_sound" ->
                 listOf(json.optString("title"), json.optString("text")).filter { it.isNotBlank() }.joinToString(" / ")
-            "app_launch" -> json.optString("packageName")
+            "app_launch", "app_close" -> json.optString("packageName")
             "call" -> callDetail(json, lc)
             "delay", "media_volume" -> action.payload
             // «Вкл», with the app a projection step picked instead of the Settings one (#279).

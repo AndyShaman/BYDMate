@@ -241,6 +241,7 @@ internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
     "speak" -> quoted(R.string.automation_action_speak, a.speakText(), lc)
     "agent_query" -> quoted(R.string.automation_action_agent_query, a.agentPrompt(), lc)
     "app_launch" -> quoted(R.string.automation_action_app_launch, a.appLaunchLabel(), lc)
+    "app_close" -> quoted(R.string.automation_action_app_close, a.appLaunchLabel(), lc)
     "call" -> quoted(R.string.automation_action_call, a.callName().ifBlank { a.callPhone() }, lc)
     "navigate" -> quoted(R.string.automation_action_navigate, a.navigateName(), lc)
     "url" -> quoted(R.string.automation_action_url, a.urlString(), lc)
@@ -333,6 +334,7 @@ private val PAYLOAD_KIND_NAMES = mapOf(
     "speak" to R.string.automation_action_speak,
     "agent_query" to R.string.automation_action_agent_query,
     "app_launch" to R.string.automation_action_app_launch,
+    "app_close" to R.string.automation_action_app_close,
     "call" to R.string.automation_action_call,
     "navigate" to R.string.automation_action_navigate,
     "url" to R.string.automation_action_url,

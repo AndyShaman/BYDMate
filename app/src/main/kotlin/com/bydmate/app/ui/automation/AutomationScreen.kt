@@ -2551,6 +2551,8 @@ private fun ActionRow(
                     NotificationActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 "app_launch" ->
                     AppLaunchActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "app_close" ->
+                    AppCloseActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 "call" ->
                     CallActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 "navigate" ->
@@ -3094,6 +3096,7 @@ private fun pickerSections(): List<PickerSection> {
             )),
             PickerSection(lc.getString(R.string.auto_ui_section_apps), listOf(
                 PickerTile(lc.getString(R.string.automation_action_app_launch)) { newAppLaunchAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_app_close)) { newAppCloseAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_yandex_music)) { newYandexMusicAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_call)) { newCallAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_navigate)) { newNavigateAction(it) },
@@ -4302,6 +4305,65 @@ private fun AppLaunchActionControls(
             },
             onSelect = { newPkg, newLabel ->
                 onUpdate(action.withAppLaunch(newPkg, newLabel, pendingMinimize))
+                editing = false
+            },
+        )
+    }
+}
+
+// --- App Close Action Controls (#280) ---
+
+@Composable
+private fun AppCloseActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    val pkg = action.appLaunchPackageName()
+    val label = action.appLaunchLabel()
+    val selfPackage = LocalContext.current.packageName
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardSurface, RoundedCornerShape(6.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                .clickable { editing = true }
+                .heightIn(min = FIELD_HEIGHT)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Apps,
+                contentDescription = null,
+                tint = AccentTeal,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = label.ifBlank { pkg.ifBlank { stringResource(R.string.automation_tap_to_pick_app) } },
+                fontSize = 16.sp,
+                color = if (label.isBlank() && pkg.isBlank()) TextSecondary else TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = stringResource(R.string.automation_action_app_close_hint),
+            fontSize = 14.sp,
+            color = TextSecondary
+        )
+    }
+
+    if (editing) {
+        AppLaunchPickerDialog(
+            currentPackage = pkg,
+            excludedPackages = setOf(selfPackage),
+            onDismiss = { editing = false },
+            onSelect = { newPkg, newLabel ->
+                onUpdate(action.withAppClose(newPkg, newLabel))
                 editing = false
             },
         )
