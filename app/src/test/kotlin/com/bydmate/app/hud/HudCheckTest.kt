@@ -617,6 +617,51 @@ class HudCheckTest {
 
     private fun prefs() = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
 
+    // --- the notice a check that did not run through leaves, once ---
+
+    @Test fun `a refusal leaves one notice, and a dismissed one stays gone while the state stays refused`() = runTest {
+        val s = setup(guided = true)
+        assertEquals(null, s.check.notice.value)
+        s.check.run()
+        assertEquals(HudCheck.State.Refused(HudCheck.Refusal.GUIDANCE), s.check.notice.value)
+        s.check.dismissNotice()
+        // The state keeps the hint line; read again, it is no new notice.
+        assertEquals(HudCheck.State.Refused(HudCheck.Refusal.GUIDANCE), s.check.state.value)
+        assertEquals(null, s.check.notice.value)
+    }
+
+    @Test fun `every refused tap is a new notice, the same reason included`() = runTest {
+        val s = setup(speed = 6)
+        repeat(3) {
+            s.check.run()
+            assertEquals(HudCheck.State.Refused(HudCheck.Refusal.MOVING), s.check.notice.value)
+            s.check.dismissNotice()
+        }
+    }
+
+    @Test fun `no link, a route mid-check and moving off mid-check each leave their notice`() = runTest {
+        val noLink = setup(speed = null)
+        noLink.check.run()
+        assertEquals(HudCheck.State.Refused(HudCheck.Refusal.NO_LINK), noLink.check.notice.value)
+        val route = setup()
+        routeStartsAt(25_000, route)
+        route.check.run()
+        assertEquals(HudCheck.State.RouteStarted, route.check.notice.value)
+        val moving = setup()
+        moving.check.speedKmh = { if (testScheduler.currentTime >= 30_000) 20 else 0 }
+        moving.check.run()
+        assertEquals(HudCheck.State.Refused(HudCheck.Refusal.MOVING), moving.check.notice.value)
+    }
+
+    @Test fun `a check that ran through leaves no notice, and a new check drops an old one`() = runTest {
+        val s = setup(guided = true)
+        s.check.run()
+        s.check.guidanceActive = { false }
+        s.check.run()
+        assertEquals(HudCheck.State.Done, s.check.state.value)
+        assertEquals(null, s.check.notice.value)
+    }
+
     // --- the question at the end ---
 
     @Test fun `a check that ran to the end asks which number the glass showed`() = runTest {

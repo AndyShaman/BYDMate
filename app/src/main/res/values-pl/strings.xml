@@ -1040,7 +1040,7 @@
     <string name="settings_fid_dump_button">Zapisz katalog fidów</string>
     <string name="settings_fid_dump_desc">Nazwy i wartości stałych SDK. Tylko identyfikatory techniczne: bez VIN, bez geolokalizacji, bez danych osobowych</string>
     <string name="settings_hud_check_title">Test HUD</string>
-    <string name="settings_hud_check_desc">Półtorej minuty testowych wskazówek na szybie. Samochód stoi, trasa nie jest potrzebna. Najpierw włącz zapis logów. Na szybie po kolei pojawią się liczby 111, 222, 333 i 444. Na końcu aplikacja zapyta, co się pojawiło, i sama wybierze sposób. Po sprawdzeniu wszystko zniknie</string>
+    <string name="settings_hud_check_desc">Półtorej minuty testowych wskazówek na szybie. Samochód stoi, trasa w nawigacji zakończona. Najpierw włącz zapis logów. Na szybie po kolei pojawią się liczby 111, 222, 333 i 444. Na końcu aplikacja zapyta, co się pojawiło, i sama wybierze sposób. Po sprawdzeniu wszystko zniknie</string>
     <string name="settings_hud_check_button">Uruchom</string>
     <string name="settings_hud_check_preparing">Przygotowujemy test</string>
     <string name="settings_hud_check_step">Krok %1$d z %2$d, patrz na szybę</string>
@@ -1050,6 +1050,12 @@
     <string name="settings_hud_check_refused_guidance">Najpierw zakończ trasę w nawigacji</string>
     <string name="settings_hud_check_refused_moving">Zatrzymaj samochód, test działa tylko na postoju</string>
     <string name="settings_hud_check_refused_no_link">Brak połączenia z samochodem, test nie został uruchomiony</string>
+    <string name="settings_hud_check_notice_refused_title">Test nie został uruchomiony</string>
+    <string name="settings_hud_check_notice_interrupted_title">Test przerwany</string>
+    <string name="settings_hud_check_notice_guidance">W nawigacji trwa trasa. Zakończ ją i uruchom test ponownie.</string>
+    <string name="settings_hud_check_notice_moving">Samochód jedzie. Zatrzymaj się i uruchom test ponownie.</string>
+    <string name="settings_hud_check_notice_route_started">Podczas testu rozpoczęła się trasa. Zakończ ją i uruchom test ponownie.</string>
+    <string name="settings_hud_check_notice_ok">Rozumiem</string>
     <!-- %1$s = file name -->
     <string name="settings_fid_dump_saved">Zapisano: %1$s</string>
     <string name="settings_fid_dump_in_progress">Odczyt fidów...</string>

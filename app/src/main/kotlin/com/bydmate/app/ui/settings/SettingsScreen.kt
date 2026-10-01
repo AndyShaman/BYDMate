@@ -2508,6 +2508,7 @@ private fun HudCheckRow(onWayChosen: (Int) -> Unit) {
     }
     val checkState by hudCheck.state.collectAsStateWithLifecycle()
     val askAnswer by hudCheck.askAnswer.collectAsStateWithLifecycle()
+    val notice by hudCheck.notice.collectAsStateWithLifecycle()
     // After an answer: the way the check picked, 0 when the glass showed nothing.
     var answered by remember { mutableStateOf<Int?>(null) }
     if (askAnswer) {
@@ -2521,6 +2522,9 @@ private fun HudCheckRow(onWayChosen: (Int) -> Unit) {
         )
     }
     answered?.let { way -> HudCheckAnswerDialog(way) { answered = null } }
+    // The hint line under the row is easy to miss: a refusal or a route that ended the check is
+    // also said once in a dialog.
+    notice?.let { HudCheckNoticeDialog(it) { hudCheck.dismissNotice() } }
     val running = checkState is HudCheck.State.Preparing || checkState is HudCheck.State.Step ||
         checkState == HudCheck.State.Restoring
     SettingActionRow(
@@ -2629,6 +2633,40 @@ private fun HudCheckAnswerDialog(way: Int, onDone: () -> Unit) {
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
             ) { Text(stringResource(R.string.settings_hud_answer_done), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+        },
+    )
+}
+
+/** Why the check did not run through, and what to do: [notice] is a refusal or a route that ended it. */
+@Composable
+private fun HudCheckNoticeDialog(notice: HudCheck.State, onDone: () -> Unit) {
+    val text = when (notice) {
+        HudCheck.State.RouteStarted -> R.string.settings_hud_check_notice_route_started
+        is HudCheck.State.Refused -> when (notice.reason) {
+            HudCheck.Refusal.GUIDANCE -> R.string.settings_hud_check_notice_guidance
+            HudCheck.Refusal.MOVING -> R.string.settings_hud_check_notice_moving
+            HudCheck.Refusal.NO_LINK -> R.string.settings_hud_check_refused_no_link
+        }
+        else -> return
+    }
+    AppAlertDialog(
+        onDismissRequest = onDone,
+        title = {
+            Text(
+                stringResource(
+                    if (notice == HudCheck.State.RouteStarted) R.string.settings_hud_check_notice_interrupted_title
+                    else R.string.settings_hud_check_notice_refused_title
+                )
+            )
+        },
+        text = { Text(stringResource(text), fontSize = 14.sp, lineHeight = 19.sp) },
+        confirmButton = {
+            Button(
+                onClick = onDone,
+                modifier = Modifier.heightIn(min = 48.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+            ) { Text(stringResource(R.string.settings_hud_check_notice_ok), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
         },
     )
 }
