@@ -13,6 +13,7 @@ import com.bydmate.app.util.AppStrings
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,7 +25,7 @@ import org.junit.Test
  * «Медиа: играть / пауза» (#212, #275): an explicit PLAY 126 / PAUSE 127 to the session
  * KnobPlayPause.pickTarget picks, and a failed step when no player is running.
  * Plain JUnit for the same reason as ActionDispatcherMusicPlayTest (mockk vs Robolectric's
- * MediaController shadow); KeyEvent is a stub here, so the key code is checked at the sender seam.
+ * MediaController shadow); which key goes to which session is checked at the sender seam.
  */
 class ActionDispatcherMediaKeyTest {
     private val context = mockk<Context>(relaxed = true)
@@ -104,7 +105,24 @@ class ActionDispatcherMediaKeyTest {
         assertNull(ActionDispatcher.mediaKeyCode("play_pause"))
     }
 
-    @Test fun `the default sender sends a down and an up to the session`() = runBlocking {
+    @Test fun `the default sender goes through the session's transport controls`() = runBlocking {
+        val fresh = ActionDispatcher(mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), context,
+            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
+            mockk<ClusterVoiceControl>(relaxed = true),
+            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
+            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
+            appStrings, dagger.Lazy { mockk(relaxed = true) })
+        val controls = mockk<MediaController.TransportControls>(relaxed = true)
+        val player = session("a.player", 3)
+        every { player.transportControls } returns controls
+        fresh.activeMediaControllers = { listOf(player) }
+        assertTrue(fresh.dispatch(key("play"), null).success)
+        assertTrue(fresh.dispatch(key("pause"), null).success)
+        verifyOrder { controls.play(); controls.pause() }
+        verify(exactly = 0) { player.dispatchMediaButtonEvent(any()) }
+    }
+
+    @Test fun `a dead session token is a failure, not a crash`() = runBlocking {
         val fresh = ActionDispatcher(mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), context,
             dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
             mockk<ClusterVoiceControl>(relaxed = true),
@@ -112,9 +130,10 @@ class ActionDispatcherMediaKeyTest {
             mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
             appStrings, dagger.Lazy { mockk(relaxed = true) })
         val player = session("a.player", 3)
-        every { player.dispatchMediaButtonEvent(any()) } returns true
+        every { player.transportControls } throws IllegalStateException("dead")
         fresh.activeMediaControllers = { listOf(player) }
-        assertTrue(fresh.dispatch(key("play"), null).success)
-        verify(exactly = 2) { player.dispatchMediaButtonEvent(any()) }
+        val r = fresh.dispatch(key("pause"), null)
+        assertFalse(r.success)
+        assertEquals("Плеер не принял команду: a.player", r.reason)
     }
 }

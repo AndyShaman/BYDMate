@@ -12,7 +12,6 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import android.view.KeyEvent
@@ -614,14 +613,16 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }.getOrDefault(emptyList())
     }
 
-    /** Test seam -- one media key (down + up) to a session; false when it refused the key or died. */
+    /**
+     * Test seam -- PLAY or PAUSE to a session through its transport controls, which reach the
+     * player's onPlay/onPause even when it handles only PLAY_PAUSE as a media button; false when
+     * the session token died.
+     */
     internal var sendMediaKey: (MediaController, Int) -> Boolean = { controller, keyCode ->
         runCatching {
-            // ACTION_UP reuses ACTION_DOWN's eventTime, like RealMediaControllerHandle.
-            val now = SystemClock.uptimeMillis()
-            controller.dispatchMediaButtonEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0)) &&
-                controller.dispatchMediaButtonEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
-        }.getOrDefault(false)
+            if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY) controller.transportControls.play()
+            else controller.transportControls.pause()
+        }.isSuccess
     }
 
     init {
