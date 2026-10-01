@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.trips.TripCounterUi
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,6 +26,8 @@ data class ReportInputs(
     val longitude: Double?,
     val liveTrip: LiveTrip?,
     val lastTrip: TripEntity?,
+    val trip1: TripCounterUi? = null,
+    val trip2: TripCounterUi? = null,
 )
 
 /** The message in Telegram HTML plus what went into it, for the log (never the text itself). */
@@ -40,10 +43,11 @@ data class MapPoint(val latitude: Double, val longitude: Double) {
  * report is left out and named in [BuiltReport.skipped]; nothing is guessed. Pure, so the automation
  * action and the power-off report (phase B) share one text.
  *
- * Layout (approved 2026-09-27, the odometer 2026-09-28): blocks split by one empty line, each only
- * when it has something: the bold header; the user's own text; the car (🔋 charge and range,
- * 🧭 odometer, 🌡 temperatures, 🛞 tires, 🔒 all closed); 🚗 the trip, its numbers indented below
- * the title; ⚠️ what is open; 📍 the map link, always last.
+ * Layout (approved 2026-09-27, the odometer 2026-09-28, TRIP 1/2 2026-10-01): blocks split by one
+ * empty line, each only when it has something: the bold header; the user's own text; the car
+ * (🔋 charge and range, 🧭 odometer, 🌡 temperatures, 🛞 tires, 🔒 all closed); 🚗 the trip, its
+ * numbers indented below the title; 🔁 the dashboard counter TRIP 1, then 🔁 TRIP 2, each laid out
+ * like the trip; ⚠️ what is open; 📍 the map link, always last.
  */
 @Suppress("TooManyFunctions") // one small function per report line
 object TelegramReportBuilder {
@@ -147,6 +151,8 @@ object TelegramReportBuilder {
             customText.trim().takeIf { it.isNotEmpty() }?.let(::escape),
             car.takeIf { it.isNotEmpty() }?.joinToString("\n"),
             found[ReportField.TRIP]?.html,
+            found[ReportField.TRIP1]?.html,
+            found[ReportField.TRIP2]?.html,
             openings?.takeIf { it.alert }?.html,
             found[ReportField.LOCATION]?.html,
         )
@@ -189,6 +195,7 @@ object TelegramReportBuilder {
             ReportField.RANGE -> rangePart(inputs.rangeKm, strings)
             ReportField.ODOMETER -> odometerLine(d?.mileage, strings)
             ReportField.TRIP -> tripBlock(inputs, strings, nowMs)
+            ReportField.TRIP1, ReportField.TRIP2 -> counterBlock(field, inputs, strings)
             ReportField.TEMPS -> d?.let { tempsLine(it, strings, locale) }?.let { "🌡 ${escape(it)}" }
             ReportField.TIRES -> d?.let { tiresLine(it, strings, locale) }?.let { "🛞 ${escape(it)}" }
             ReportField.LOCATION -> locationLine(inputs, lang, strings)
@@ -256,6 +263,20 @@ object TelegramReportBuilder {
         val start = text(strings, R.string.tg_report_trip_when, formatDate(last.startTs), formatTime(last.startTs))
         val title = "🚗 ${bold(escape(text(strings, R.string.tg_report_trip_last)))} ${escape(start)}"
         return tripLines(title, km, last.kwhPer100km?.takeIf { it > 0.0 }, durationMs, strings)
+    }
+
+    /**
+     * The dashboard counter [field] (TRIP1 or TRIP2): «🔁 <b>TRIP 1</b> с 25.09», then «412 км за 9 ч 20 мин»
+     * and «Расход 21,4 кВт·ч/100 км» indented, consumption as the counter's popup counts it (all kWh over
+     * the km). Null for a counter never reset or with no kilometers.
+     */
+    private fun counterBlock(field: ReportField, inputs: ReportInputs, strings: ReportStrings): String? {
+        val counter = if (field == ReportField.TRIP1) inputs.trip1 else inputs.trip2
+        val c = counter?.takeIf { it.resetTs > 0L && it.km > 0.0 } ?: return null
+        val consumption = c.kwh.takeIf { it > 0.0 && c.km >= MIN_LIVE_CONSUMPTION_KM }?.let { it / c.km * 100.0 }
+        val since = text(strings, R.string.tg_report_counter_since, formatDate(c.resetTs))
+        val title = "🔁 ${bold(escape(text(strings, field.labelRes)))} ${escape(since)}"
+        return tripLines(title, c.km, consumption, c.drivingMs.takeIf { it > 0L }, strings)
     }
 
     /** [title] (HTML) and the indented «14 км за 35 мин» / «Расход …» lines under it. */

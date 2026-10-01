@@ -1765,6 +1765,7 @@
     <string name="tg_report_trip_now">Trip</string>
     <string name="tg_report_trip_last">Last trip</string>
     <string name="tg_report_trip_when">%1$s at %2$s</string>
+    <string name="tg_report_counter_since">since %1$s</string>
     <string name="tg_report_trip_distance_time">%1$s in %2$s</string>
     <string name="tg_report_trip_km">%1$.1f km</string>
     <string name="tg_report_trip_km_whole">%1$d km</string>
@@ -1798,6 +1799,8 @@
     <string name="tg_report_field_range_desc">Kilometers, as on Home</string>
     <string name="tg_report_field_odometer_desc">Total distance of the car</string>
     <string name="tg_report_field_trip_desc">Kilometers, consumption and driving time</string>
+    <string name="tg_report_field_trip1_desc">TRIP 1 counter from the Dashboard: kilometers, driving time and consumption</string>
+    <string name="tg_report_field_trip2_desc">TRIP 2 counter from the Dashboard: kilometers, driving time and consumption</string>
     <string name="tg_report_field_temps_desc">Outside and in the cabin</string>
     <string name="tg_report_field_openings_desc">Doors, windows, sunroof, trunk, hood</string>
     <string name="tg_report_field_tires_desc">All four wheels</string>

@@ -9,6 +9,7 @@ import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.trips.TripCounterResets
 import com.bydmate.app.util.AppStrings
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -78,7 +79,9 @@ class TelegramReporterLocationTest {
         LocalePreferences(ctx).setLanguage("ru")
         settings = SettingsRepository(FakeSettingsDao(), LocalePreferences(ctx))
         val sink = TelegramBackupSink(OkHttpClient(), server.url("/").toString().trimEnd('/'))
-        reporter = TelegramReporter(ctx, sink, settings, mockk(relaxed = true), AppStrings(ctx), PowerOffArmState(mockk()))
+        reporter = TelegramReporter(
+            ctx, sink, settings, mockk(relaxed = true), TripCounterResets(settings), AppStrings(ctx), PowerOffArmState(mockk()),
+        )
         place(minsk)
         reporter.language = { "ru" }
         runBlocking { settings.saveTgBackup("tok", "bot", chat, "Андрей") }

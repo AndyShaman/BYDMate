@@ -1917,6 +1917,7 @@
     <string name="tg_report_trip_now">Podróż</string>
     <string name="tg_report_trip_last">Ostatnia podróż</string>
     <string name="tg_report_trip_when">%1$s o %2$s</string>
+    <string name="tg_report_counter_since">od %1$s</string>
     <string name="tg_report_trip_distance_time">%1$s w %2$s</string>
     <string name="tg_report_trip_km">%1$.1f km</string>
     <string name="tg_report_trip_km_whole">%1$d km</string>
@@ -1950,6 +1951,8 @@
     <string name="tg_report_field_range_desc">Kilometry, jak na ekranie głównym</string>
     <string name="tg_report_field_odometer_desc">Całkowity przebieg auta</string>
     <string name="tg_report_field_trip_desc">Kilometry, zużycie i czas jazdy</string>
+    <string name="tg_report_field_trip1_desc">Licznik TRIP 1 z ekranu Główna: kilometry, czas jazdy i zużycie</string>
+    <string name="tg_report_field_trip2_desc">Licznik TRIP 2 z ekranu Główna: kilometry, czas jazdy i zużycie</string>
     <string name="tg_report_field_temps_desc">Na zewnątrz i w kabinie</string>
     <string name="tg_report_field_openings_desc">Drzwi, okna, szyberdach, bagażnik, maska</string>
     <string name="tg_report_field_tires_desc">Wszystkie cztery koła</string>

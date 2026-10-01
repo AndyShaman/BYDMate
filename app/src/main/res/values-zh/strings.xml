@@ -1879,6 +1879,7 @@
     <string name="tg_report_trip_now">行程</string>
     <string name="tg_report_trip_last">上次行程</string>
     <string name="tg_report_trip_when">%1$s %2$s</string>
+    <string name="tg_report_counter_since">自 %1$s 起</string>
     <string name="tg_report_trip_distance_time">%1$s，用时 %2$s</string>
     <string name="tg_report_trip_km">%1$.1f 公里</string>
     <string name="tg_report_trip_km_whole">%1$d 公里</string>
@@ -1912,6 +1913,8 @@
     <string name="tg_report_field_range_desc">公里数，与主页相同</string>
     <string name="tg_report_field_odometer_desc">车辆的总行驶里程</string>
     <string name="tg_report_field_trip_desc">公里数、能耗和行驶时间</string>
+    <string name="tg_report_field_trip1_desc">首页的 TRIP 1 计数器：公里数、行驶时间和能耗</string>
+    <string name="tg_report_field_trip2_desc">首页的 TRIP 2 计数器：公里数、行驶时间和能耗</string>
     <string name="tg_report_field_temps_desc">车外和车内</string>
     <string name="tg_report_field_openings_desc">车门、车窗、天窗、后备箱、引擎盖</string>
     <string name="tg_report_field_tires_desc">全部四个车轮</string>
