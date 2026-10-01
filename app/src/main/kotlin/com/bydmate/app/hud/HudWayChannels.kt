@@ -5,6 +5,7 @@ import android.util.Log
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.navdata.NavGuidanceHub
+import com.bydmate.app.navdata.NavManeuverCodes
 import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -228,7 +229,7 @@ class HudWayChannels(
         }
         positionAgeMs += PERIOD_MS
         HudLauncherMapCnFrames.update(
-            iconId = s.maneuverGaode, distanceM = s.distanceMeters, remainDistanceM = s.totalDistMeters,
+            iconId = openBydIcon(s.maneuverGaode), distanceM = s.distanceMeters, remainDistanceM = s.totalDistMeters,
             remainTimeS = s.etaSeconds, position = lastPosition, routeId = routeId, counter = counter, nowMs = nowMs(),
         ).forEach { e -> countFire(e.topic, fire(bridge, e)) }
         counter = (counter + 1) and COUNTER_MASK
@@ -299,6 +300,7 @@ class HudWayChannels(
 
         /** BYDAutoInstrumentDevice.sendSimpleGuidanceInfo accepts icon ids 0..102. */
         private const val MAX_TURN_KIND = 102
+        private const val OPENBYD_SLIGHT_RIGHT = 5
         /** ... and distances up to 16777214 m. */
         const val MAX_DISTANCE_M = 16_777_214
         /** sendNextPathName takes at most 255 bytes of UTF-16LE. */
@@ -308,9 +310,13 @@ class HudWayChannels(
         private const val THREW = -3
         private const val UNBOUND = -1
 
-        /** OpenBYD writes its icon id into TURN_KIND as is; ours is the same numbering (1 = left).
-         *  Outside what the instrument accepts: blank. */
-        fun turnKind(iconId: Int): Int = if (iconId in 0..MAX_TURN_KIND) iconId else 0
+        /** OpenBYD writes its icon id into TURN_KIND as is; ours is the same numbering (1 = left)
+         *  but for slight right ([openBydIcon]). Outside what the instrument accepts: blank. */
+        fun turnKind(iconId: Int): Int = if (iconId in 0..MAX_TURN_KIND) openBydIcon(iconId) else 0
+
+        /** Our slight right is 4, OpenBYD's and the stock adapter's is 5 (their 4 is a slight left). */
+        internal fun openBydIcon(iconId: Int): Int =
+            if (iconId == NavManeuverCodes.GAODE_SLIGHT_RIGHT) OPENBYD_SLIGHT_RIGHT else iconId
 
         /** The road name as the instrument takes it: in Latin ([HudTextSanitizer], trimmed), capped
          *  after that, a space when empty (the car rejects an empty buffer). */
