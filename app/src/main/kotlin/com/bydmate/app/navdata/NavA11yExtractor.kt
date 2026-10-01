@@ -40,7 +40,7 @@ object NavA11yExtractor {
     }
 
     /** Raw view of the maneuver image for the unknown-maneuver log: how many nodes carry its id,
-     *  and the class and raw contentDescription of the one the parse reads (the first non-blank,
+     *  and the class and contentDescription head of the one the parse reads (the first non-blank,
      *  else the first). The nodes are recycled; [root] stays the caller's. */
     internal fun probeManeuver(root: AccessibilityNodeInfo): String {
         val pkg = root.packageName?.toString() ?: return "found=0"
@@ -51,7 +51,7 @@ object NavA11yExtractor {
             val descs = nodes.map { runCatching { it.contentDescription?.toString() }.getOrNull() }
             val read = descs.indexOfFirst { !it.isNullOrBlank() }.coerceAtLeast(0)
             val cls = runCatching { nodes[read].className?.toString() }.getOrNull()
-            return "found=${nodes.size} class=$cls desc=${UnknownManeuverGate.quote(descs[read])}"
+            return "found=${nodes.size} class=$cls desc=${UnknownManeuverGate.textHead(descs[read])}"
         } finally {
             @Suppress("DEPRECATION")
             nodes.forEach { runCatching { it.recycle() } }

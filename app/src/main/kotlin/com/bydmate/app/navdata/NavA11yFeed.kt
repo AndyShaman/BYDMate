@@ -60,7 +60,7 @@ object NavA11yFeed {
     // Maneuver the tree was last dumped for; NO_MANEUVER means "nothing dumped yet".
     @Volatile private var lastDumpedGaode = NO_MANEUVER
     @Volatile internal var lastDumpMs = 0L
-    // Raw maneuver values logged as unrecognised this episode; its floor is the walk's lastDumpMs.
+    // Raw maneuver values logged as unrecognised and when; its floor is the walk's lastDumpMs.
     private val unknownManeuvers = UnknownManeuverGate(minIntervalMs = 0L)
     // Edge guard for the timer's keep-alive line: set by the first timer refresh of a quiet
     // episode, cleared by the next event read.
@@ -222,12 +222,11 @@ object NavA11yFeed {
     }
 
     /** A guided route with a distance but no recognised maneuver: one line with the raw
-     *  maneuver node and one id walk per distinct value, so a recorded log shows what the
+     *  maneuver node and one id walk per distinct value per 5 min, so a recorded log shows what the
      *  parse could not map. Waits for the same floor as [dumpTreeOnManeuverChange], checked
      *  before the probe so a read inside it costs no extra lookup. [root] is the caller's. */
     private fun logUnknownManeuver(root: AccessibilityNodeInfo, data: NavGuidance, nowMs: Long) {
-        val active = NavGuidanceHub.snapshot(nowMs).active
-        if (!UnknownManeuverGate.applies(active, data.distanceMeters, data.maneuverGaode)) return
+        if (!UnknownManeuverGate.applies(data.distanceMeters, data.maneuverGaode) { NavGuidanceHub.snapshot(nowMs).active }) return
         if (nowMs - lastDumpMs < TREE_DUMP_MIN_INTERVAL_MS) return
         val node = NavA11yExtractor.probeManeuver(root)
         if (!unknownManeuvers.take(node, nowMs)) return
