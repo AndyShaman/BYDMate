@@ -166,7 +166,10 @@ class HudArming(
             // off) is the real original: the car still holds our 3.
             asFound = prefs?.takeIf { it.contains(KEY_AS_FOUND) }?.getInt(KEY_AS_FOUND, 0)
                 ?: s.screen.value?.takeIf { it in 0..MAX_LAYOUT }
-            asFound?.let { prefs?.edit()?.putInt(KEY_AS_FOUND, it)?.apply() }
+            // The marker goes in before any write: a session killed over an unreadable layout keeps
+            // no as-found, and its status would otherwise stay up.
+            prefs?.edit()?.putBoolean(KEY_ARMED, true)?.also { e -> asFound?.let { e.putInt(KEY_AS_FOUND, it) } }
+                ?.apply()
             armed = true
         }
         // On some firmwares the SDK call moves the layout itself (#198, Han L), so it stays out
@@ -218,10 +221,12 @@ class HudArming(
         val rb = read(NAVI, SCREEN, CAN_NAVI, ISA)
         val screenBack = target == null || rb[1].value == target
         if (screenBack) prefs?.edit()?.remove(KEY_AS_FOUND)?.apply()
+        val statusBack = listOf(naviRc, canNaviRc, isaRc).all { it != null && it >= 0 }
+        if (statusBack) prefs?.edit()?.remove(KEY_ARMED)?.apply()
         armed = false
         asFound = null
         val deferred = needed && fullscreen
-        val ok = listOf(naviRc, canNaviRc, isaRc).all { it != null && it >= 0 } && (screenBack || deferred)
+        val ok = statusBack && (screenBack || deferred)
         return DisarmReport(
             via, naviRc, target, !restore, screenRc, deferred, canNaviRc, isaRc, rb[0], rb[1], rb[2], rb[3], ok,
         )
@@ -229,18 +234,19 @@ class HudArming(
 
     /**
      * What a session killed before its disarm left behind (process death at ignition off
-     * mid-route): the kept layout in [prefs] says our values are still up. Undone once, the same
-     * way as [disarm], when the HUD starts and no route is [guided]; a guided route arms and
-     * disarms it itself. Null when there was nothing to undo or it was left to the route.
+     * mid-route): the kept layout or the armed marker in [prefs] says our values are still up.
+     * Undone once, the same way as [disarm], when the HUD starts and no route is [guided]; a guided
+     * route arms and disarms it itself. Without a kept layout the layout is not written. Null when
+     * there was nothing to undo or it was left to the route.
      */
     suspend fun disarmLeftover(guided: Boolean): DisarmReport? {
-        if (prefs?.contains(KEY_AS_FOUND) != true || guided) return null
+        if (!leftover(prefs) || guided) return null
         return disarmKept(REASON_LEFTOVER)
     }
 
     /** The kept layout's disarm, logged with the [reason] that brought it. */
     private suspend fun disarmKept(reason: String): DisarmReport {
-        asFound = prefs?.getInt(KEY_AS_FOUND, 0)
+        asFound = prefs?.takeIf { it.contains(KEY_AS_FOUND) }?.getInt(KEY_AS_FOUND, 0)
         val r = disarm()
         log("hud disarm: reason=$reason ${r.describe()}")
         traceDisarm("disarm-$reason", r)
@@ -421,6 +427,14 @@ class HudArming(
 
         /** HUD prefs key of the layout found before an unfinished session. */
         const val KEY_AS_FOUND = "hud_layout_as_found"
+
+        /** HUD prefs key set from an arm's first write until a disarm whose writes went through:
+         *  our status may still be up even when no layout was kept. */
+        const val KEY_ARMED = "hud_status_armed"
+
+        /** A session that never reached its disarm left our values up. */
+        fun leftover(prefs: SharedPreferences?): Boolean =
+            prefs?.contains(KEY_AS_FOUND) == true || prefs?.contains(KEY_ARMED) == true
 
         internal fun rc(value: Int?): String = value?.toString() ?: "na"
     }
