@@ -76,6 +76,50 @@ class ClusterMusicCardTest {
         assertEquals(Target.Idle, target)
     }
 
+    // Second review question: the FM tuner plays through com.byd.mediacenter without a playing
+    // session. The focus owner, not the paused Yandex session, decides.
+    @Test fun `fm radio holding focus hands off even when only yandex has a session state`() {
+        val target = ClusterMusicCard.decide(
+            listOf(
+                SessionSnapshot(navi, paused, "Song", "A"),
+                SessionSnapshot("com.byd.mediacenter", paused, "No songs", null),
+            ),
+            focusPackage = "com.byd.mediacenter",
+        )
+        assertEquals(Target.OtherPlaying("com.byd.mediacenter"), target)
+    }
+
+    @Test fun `a non-source focus owner hands off without any session`() {
+        assertEquals(
+            Target.OtherPlaying("com.android.server.telecom"),
+            ClusterMusicCard.decide(listOf(SessionSnapshot(navi, playing, "Song", "A")), "com.android.server.telecom"),
+        )
+    }
+
+    @Test fun `yandex holding focus shows its own session only`() {
+        val card = (ClusterMusicCard.decide(
+            listOf(
+                SessionSnapshot("com.byd.mediacenter", paused, "No songs", null),
+                SessionSnapshot(navi, paused, "Song", "A"),
+            ),
+            focusPackage = navi,
+        ) as? Target.Show)?.card
+        assertEquals(Card("Song", "A", ClusterMusicCard.MUSIC_PAUSED), card)
+    }
+
+    @Test fun `yandex holding focus without a titled session is idle`() {
+        assertEquals(
+            Target.Idle,
+            ClusterMusicCard.decide(listOf(SessionSnapshot("ru.yandex.music", playing, "Song", "A")), focusPackage = navi),
+        )
+    }
+
+    @Test fun `an empty or unknown focus owner falls back to the sessions`() {
+        val sessions = listOf(SessionSnapshot(navi, paused, "Old", "A"), SessionSnapshot("com.byd.mediacenter", playing, "Song", "B"))
+        assertEquals(Target.OtherPlaying("com.byd.mediacenter"), ClusterMusicCard.decide(sessions, ""))
+        assertEquals(Target.OtherPlaying("com.byd.mediacenter"), ClusterMusicCard.decide(sessions, null))
+    }
+
     @Test fun `stopped or untitled sessions are idle`() {
         assertEquals(Target.Idle, ClusterMusicCard.decide(listOf(SessionSnapshot(navi, stopped, "Song", "A"))))
         assertEquals(Target.Idle, ClusterMusicCard.decide(listOf(SessionSnapshot(navi, playing, "  ", "A"))))
