@@ -89,20 +89,18 @@ class NavGuidanceHubTest {
         assertEquals(2, s.maneuverGaode)
     }
 
-    @Test fun `no-guidance streak deactivates after hysteresis`() {
+    @Test fun `guidance holds well past 10 s without an update`() {
         NavGuidanceHub.update(data(gaode = 2, dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 1000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2000)   // streak starts
         assertTrue(NavGuidanceHub.snapshot(nowMs = 2000).active)
-        NavGuidanceHub.markNoGuidance(nowMs = 2000 + NavGuidanceHub.NO_GUIDANCE_DEACTIVATE_MS)
-        assertFalse(NavGuidanceHub.snapshot(nowMs = 2000 + NavGuidanceHub.NO_GUIDANCE_DEACTIVATE_MS).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 2000 + 10_000).active)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 1001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
-    @Test fun `guidance update resets no-guidance streak`() {
+    @Test fun `each guidance update restarts the active timeout`() {
         NavGuidanceHub.update(data(gaode = 2), NavGuidanceHub.Source.A11Y, nowMs = 1000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2000)
         NavGuidanceHub.update(data(dist = 100), NavGuidanceHub.Source.A11Y, nowMs = 3000)
-        NavGuidanceHub.markNoGuidance(nowMs = 4000)   // new streak, not a continuation
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 4000 + 5000).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 1001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 3001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
     @Test fun `reset clears everything`() {
@@ -113,18 +111,20 @@ class NavGuidanceHubTest {
         assertEquals(0, s.maneuverGaode)
     }
 
-    @Test fun `single no-guidance signal deactivates via snapshot after deadline`() {
+    @Test fun `reading the snapshot alone never ends guidance before the active timeout`() {
         NavGuidanceHub.update(data(gaode = 2, dist = 500), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2_000)
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 5_000).active)      // deadline not reached yet
-        assertFalse(NavGuidanceHub.snapshot(nowMs = 12_001).active)    // >=10 s, NO second event
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 5_000).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 12_001).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 1_000 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
-    @Test fun `guidance update cancels pending no-guidance deadline`() {
-        NavGuidanceHub.update(data(gaode = 2, dist = 500), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2_000)
+    @Test fun `distance and road stay through a long gap between updates`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 500, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
         NavGuidanceHub.update(data(dist = 400), NavGuidanceHub.Source.A11Y, nowMs = 3_000)
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 20_000).active)
+        val s = NavGuidanceHub.snapshot(nowMs = 60_000)
+        assertTrue(s.active)
+        assertEquals(400, s.distanceMeters)
+        assertEquals("ул. А", s.road)
     }
 
     @Test
@@ -174,12 +174,11 @@ class NavGuidanceHubTest {
     }
 
     @Test
-    fun `rich update within a11y priority still cancels no-guidance streak`() {
+    fun `rich update within a11y priority still restarts the active timeout`() {
         NavGuidanceHub.update(NavGuidance(maneuverGaode = 2), NavGuidanceHub.Source.A11Y, nowMs = 1000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2000)
         NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(road = "ул. Б"), nowMs = 3000)
-        // Without the streak reset the 10s no-guidance deadline (2000+10000) would deactivate.
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 12_500).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 1001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 3001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
     @Test

@@ -128,11 +128,13 @@ class NavA11yFeedNoGuidanceTraceTest {
         assertEquals(2, notFoundLines.size)
     }
 
-    @Test fun `the hub ends guidance exactly as before`() {
+    @Test fun `a traced read leaves the hub as it was`() {
         armGuidance()
         timerRead(emptyGuidanceRoot(), T0 + 1_000)
-        assertTrue(NavGuidanceHub.snapshot(T0 + 10_999).active)
-        assertFalse(NavGuidanceHub.snapshot(T0 + 11_000).active)
+        val s = NavGuidanceHub.snapshot(T0 + 15_000)
+        assertTrue(s.active)
+        assertEquals(T0, s.lastUpdateMs)
+        assertEquals(500, s.distanceMeters)
     }
 
     /** Active a11y guidance in the hub (500 m ahead) at [atMs]. */
