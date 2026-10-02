@@ -124,6 +124,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var hudController: com.bydmate.app.hud.HudController
     @Inject lateinit var fidPushChannel: com.bydmate.app.data.push.FidPushChannel
     @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
+    @Inject lateinit var clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge
     @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
     @Inject lateinit var autoBackupScheduler: com.bydmate.app.data.backup.AutoBackupScheduler
     @Inject lateinit var postRestoreCheck: com.bydmate.app.data.backup.PostRestoreCheck
@@ -834,6 +835,8 @@ class TrackingService : Service(), LocationListener {
         // Blind-spot pipeline: idle until the poll below reports the car near the speed
         // threshold, and only when the feature is switched on (default off).
         blindSpotController.start(serviceScope)
+        // Cluster music card: mirrors Yandex music the stock controller leaves blank.
+        clusterMusicBridge.start(serviceScope) { reason -> notificationListenerGrant.ensure(reason) }
         instance = this
         _isRunning.value = true
         adbVerdictMonitor.onServiceStarted()
@@ -1391,6 +1394,7 @@ class TrackingService : Service(), LocationListener {
 
         alicePollingManager.stop()
         blindSpotController.stop()
+        clusterMusicBridge.stop()
         cameraStateMonitor.stop()
         _cameraActive.value = false
         _youtubeForeground.value = false
