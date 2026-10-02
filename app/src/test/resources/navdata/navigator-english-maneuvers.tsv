@@ -1,0 +1,33 @@
+# Yandex Navigator maneuver descriptions with the English interface, assembled from Kom-BYDMate's
+# examples («Turn right», «Take the 2nd exit») and the English phrases Kom and OpenBYD 2.5 parse.
+# Not captured from a car: no English Navigator log has reached us yet.
+# description	expected code (ours: 1 left, 2 right, 3/4 slight, 7/8 sharp, 9/10 u-turn, 11 straight,
+#               13 roundabout, 24 roundabout exit, 25..34 exit 1..10, 45 waypoint, 46 ferry, 48 arrive, 49 tunnel)
+Turn left	1
+Turn right	2
+Turn right onto Baker Street	2
+Keep left	3
+Keep right	4
+Bear right	4
+Turn slightly left	3
+Turn slightly right	4
+Fork left	3
+Turn sharply left	7
+Sharp right	8
+Make a U-turn	9
+# Our parser read «u-turn» as 9 before this file existed, the right-hand one included; it stays 9.
+Make a U-turn to the right	9
+Turn around to the right	10
+Enter the roundabout	13
+Take the 1st exit	25
+Take the 2nd exit	26
+At the roundabout, take the third exit	27
+Take the 10th exit	34
+Leave the roundabout	24
+Board the ferry	46
+Enter the tunnel	49
+Waypoint	45
+You have arrived	48
+Your destination is on the right	48
+Go straight	11
+Continue straight	11

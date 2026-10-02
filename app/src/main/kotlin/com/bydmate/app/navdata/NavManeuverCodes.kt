@@ -3,7 +3,9 @@ package com.bydmate.app.navdata
 /** Yandex Navigator maneuver -> GAODE code, three input forms: a11y balloon description,
  *  notification icon resource name, and back to a short Russian phrase for the voice agent.
  *  Ported from @rbgboost's YandexHUD (field-tested on DiLink 5); the RU phrase tables are
- *  kept verbatim, only camera/traffic-light paths were dropped. */
+ *  kept verbatim, only camera/traffic-light paths were dropped. What those tables leave at 0
+ *  goes to the competitors' dictionaries (Kom-BYDMate, OpenBYD 2.5), mapped onto our codes. */
+@Suppress("TooManyFunctions") // one parser per input form and per dictionary
 object NavManeuverCodes {
     const val GAODE_LEFT = 1
     const val GAODE_RIGHT = 2
@@ -52,7 +54,10 @@ object NavManeuverCodes {
             "поверните налево" in lower || "поворот налево" in lower || "налево" in lower -> GAODE_LEFT
             "поверните направо" in lower || "поворот направо" in lower || "направо" in lower -> GAODE_RIGHT
             "прямо" in lower || "продолжайте" in lower || "двигайтесь" in lower -> GAODE_STRAIGHT
-            else -> fromRussianTextFallback(lower)
+            // Only what the donor's phrases leave at 0 goes to the competitors: a maneuver read
+            // before reads the same.
+            else -> fromRussianTextFallback(lower).takeIf { it != 0 }
+                ?: fromCompetitors(lower.replace(Regex("\\s+"), " "))
         }
     }
 
@@ -79,8 +84,17 @@ object NavManeuverCodes {
         "notification_board_ferry_sdl" to GAODE_FERRY,
     )
 
+    /** OpenBYD 2.5 icon names the donor table lacks; leaving a ferry is straight on, as OpenBYD
+     *  and our «съезд с парома» read it. */
+    private val OPENBYD_RES = mapOf(
+        "notification_go_ahead_sdl" to GAODE_STRAIGHT,
+        "notification_arrive_sdl" to GAODE_ARRIVE,
+        "notification_leave_ferry_sdl" to GAODE_STRAIGHT,
+        "notification_uturn_sdl" to GAODE_UTURN,
+    )
+
     fun fromNotificationRes(resName: String?): Int =
-        resName?.let { NOTIFICATION_RES[it] } ?: 0
+        resName?.let { NOTIFICATION_RES[it] ?: OPENBYD_RES[it] } ?: 0
 
     /** GAODE -> short Russian phrase; used by get_route_info when only hub numerics exist. */
     private val PHRASES = mapOf(
@@ -168,6 +182,123 @@ object NavManeuverCodes {
             if (Regex("""(?:^|\s|[\p{Punct}])${Regex.escape(phrase)}(?:$|\s|[\p{Punct}])""").containsMatchIn(norm)) return code
         }
         return 0
+    }
+
+    // -- the competitors' dictionaries, for what the donor tables leave at 0 --
+
+    /** Our icon table, OpenBYD's exact names, OpenBYD's Russian stems, the English of Kom-BYDMate
+     *  (with OpenBYD's English words added); 0 when none reads it (not straight, unlike OpenBYD). */
+    private fun fromCompetitors(lower: String): Int =
+        fromNotificationRes(lower).takeIf { it != 0 }
+            ?: OPENBYD_EXACT[lower]
+            ?: russianExit(lower)
+            ?: fromOpenBydRussian(lower).takeIf { it != 0 }
+            ?: fromEnglish(lower)
+
+    /** OpenBYD's exact names our tables do not read: its transliterations and the bare «круг».
+     *  Their codes are ours but for slight right (their 5, our 4) and the roundabout (their 20, our 13). */
+    private val OPENBYD_EXACT = mapOf(
+        "круг" to GAODE_ROUNDABOUT_ENTER,
+        "kolco" to GAODE_ROUNDABOUT_ENTER,
+        "krug" to GAODE_ROUNDABOUT_ENTER,
+        "levo" to GAODE_LEFT,
+        "levyj" to GAODE_LEFT,
+        "pravo" to GAODE_RIGHT,
+        "pravyj" to GAODE_RIGHT,
+        "polu_levo" to GAODE_SLIGHT_LEFT,
+        "polulevo" to GAODE_SLIGHT_LEFT,
+        "vetvlenie_levo" to GAODE_SLIGHT_LEFT,
+        "polu_pravo" to GAODE_SLIGHT_RIGHT,
+        "polupravo" to GAODE_SLIGHT_RIGHT,
+        "vetvlenie_pravo" to GAODE_SLIGHT_RIGHT,
+        "kruto_levo" to GAODE_HARD_LEFT,
+        "kruto_levyj" to GAODE_HARD_LEFT,
+        "kruto_pravo" to GAODE_HARD_RIGHT,
+        "kruto_pravyj" to GAODE_HARD_RIGHT,
+        "razvorot" to GAODE_UTURN,
+        "pryamo" to GAODE_STRAIGHT,
+        "vpered" to GAODE_STRAIGHT,
+        "konec" to GAODE_ARRIVE,
+        "pribytie" to GAODE_ARRIVE,
+    )
+
+    /** Kom's exit in words or digits («второй съезд», «съезд 2»); null without one in 1..10. */
+    private fun russianExit(lower: String): Int? =
+        if ("съезд" in lower) exitOrdinal(lower)?.takeIf { it in 1..10 }?.let { GAODE_ROUNDABOUT_EXIT + it } else null
+
+    /** OpenBYD's Russian stems: «круто влево», «плавно вправо», «кольцевая развязка». */
+    private fun fromOpenBydRussian(lower: String): Int {
+        val left = "лев" in lower
+        val right = "прав" in lower
+        val sharp = "резк" in lower || "круто" in lower
+        return when {
+            "кольц" in lower || "кругов" in lower -> GAODE_ROUNDABOUT_ENTER
+            "плавн" in lower && left -> GAODE_SLIGHT_LEFT
+            "плавн" in lower && right -> GAODE_SLIGHT_RIGHT
+            sharp && left -> GAODE_HARD_LEFT
+            sharp && right -> GAODE_HARD_RIGHT
+            "развор" in lower -> GAODE_UTURN
+            else -> 0
+        }
+    }
+
+    private val EN_EXIT_RE = Regex("""(\d+)(?:st|nd|rd|th)?\s+exit""")
+    private val DIGITS_RE = Regex("""\d+""")
+    private val DONE_RE = Regex("""(^|[^\p{L}])done($|[^\p{L}])""")
+
+    /** Kom-BYDMate's ordinals, 1..10. */
+    private val ORDINALS = listOf(
+        listOf("first", "первый", "1st"), listOf("second", "второй", "2nd"), listOf("third", "третий", "3rd"),
+        listOf("fourth", "четвёртый", "четвертый", "4th"), listOf("fifth", "пятый", "5th"),
+        listOf("sixth", "шестой", "6th"), listOf("seventh", "седьмой", "7th"), listOf("eighth", "восьмой", "8th"),
+        listOf("ninth", "девятый", "9th"), listOf("tenth", "десятый", "10th"),
+    ).map { words -> words.map { Regex("""(^|[^\p{L}])$it($|[^\p{L}])""") } }
+
+    /** The exit number in digits («2», «2nd») or in words («second», «второй»); null without one. */
+    private fun exitOrdinal(lower: String): Int? {
+        DIGITS_RE.find(lower)?.value?.toIntOrNull()?.let { return it }
+        ORDINALS.forEachIndexed { i, words -> if (words.any { it.containsMatchIn(lower) }) return i + 1 }
+        return null
+    }
+
+    private val EN_SLIGHT = listOf("slight", "bear", "keep", "fork", "veer", "exit left", "exit right", "exit to", "exit_", "take_")
+    private val EN_SHARP = listOf("sharp", "hard")
+    private val EN_UTURN = listOf("u-turn", "u turn", "uturn", "turn around", "turn back", "turn_back")
+    private val EN_ARRIVE = listOf("arriv", "destination", "route ended", "finish", "completed", "end of route")
+    private val EN_WAYPOINT = listOf("waypoint", "via point", "way point", "intermediate")
+    private val EN_STRAIGHT = listOf("straight", "continue", "ahead", "forward")
+
+    /** Kom-BYDMate's fromEnglish (Navigator with the English interface: «Turn right», «Take the 2nd
+     *  exit»), with OpenBYD's English words in its groups: veer and the side exits are slight turns,
+     *  hard is sharp, a ferry left is straight on. */
+    @Suppress("CyclomaticComplexMethod") // one branch per maneuver family, as in the donor's tables
+    private fun fromEnglish(lower: String): Int {
+        EN_EXIT_RE.find(lower)?.groupValues?.get(1)?.toIntOrNull()?.let { n ->
+            return if (n in 1..10) GAODE_ROUNDABOUT_EXIT + n else GAODE_ROUNDABOUT_EXIT
+        }
+        if ("exit" in lower || "roundabout" in lower) exitOrdinal(lower)?.let { n ->
+            if (n in 1..10) return GAODE_ROUNDABOUT_EXIT + n
+        }
+        val left = "left" in lower
+        val right = "right" in lower
+        return when {
+            "exit the ferry" in lower || "exit ferry" in lower -> GAODE_STRAIGHT
+            "ferry" in lower -> GAODE_FERRY
+            "exit the roundabout" in lower || "leave the roundabout" in lower -> GAODE_ROUNDABOUT_EXIT
+            "roundabout" in lower || "traffic circle" in lower || "circular" in lower -> GAODE_ROUNDABOUT_ENTER
+            EN_WAYPOINT.any { it in lower } -> GAODE_WAYPOINT
+            EN_ARRIVE.any { it in lower } || DONE_RE.containsMatchIn(lower) -> GAODE_ARRIVE
+            "tunnel" in lower -> GAODE_TUNNEL
+            EN_UTURN.any { it in lower } -> if (right) GAODE_UTURN_RIGHT else GAODE_UTURN
+            EN_SLIGHT.any { it in lower } && left -> GAODE_SLIGHT_LEFT
+            EN_SLIGHT.any { it in lower } && right -> GAODE_SLIGHT_RIGHT
+            EN_SHARP.any { it in lower } && left -> GAODE_HARD_LEFT
+            EN_SHARP.any { it in lower } && right -> GAODE_HARD_RIGHT
+            left -> GAODE_LEFT
+            right -> GAODE_RIGHT
+            EN_STRAIGHT.any { it in lower } -> GAODE_STRAIGHT
+            else -> 0
+        }
     }
 
     // -- donor rich-notification mappings (RemoteViewsParser/ManeuverMapper port) --

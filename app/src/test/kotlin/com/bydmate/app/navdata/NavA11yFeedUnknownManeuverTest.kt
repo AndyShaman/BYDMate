@@ -15,7 +15,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /** A route with a distance but maneuver code 0: one line with the raw maneuver node and one id
- *  walk per distinct raw value, sharing the tree walk's floor. */
+ *  walk per distinct raw value, sharing the tree walk's floor. German stands for a language no
+ *  dictionary reads (English is read since the competitors' dictionaries). */
 @Suppress("DEPRECATION")   // recycle() is the pooling contract these tests assert
 @RunWith(RobolectricTestRunner::class)
 class NavA11yFeedUnknownManeuverTest {
@@ -41,9 +42,9 @@ class NavA11yFeedUnknownManeuverTest {
     }
 
     @Test fun `an unrecognised maneuver logs its raw node once, with one id walk`() {
-        deliverPhrase("Turn right")
+        deliverPhrase("Rechts abbiegen")
         assertEquals(
-            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Turn right\" len=10"),
+            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Rechts abbiegen\" len=15"),
             unknownLines,
         )
         assertEquals(1, zeroWalks.size)
@@ -52,7 +53,7 @@ class NavA11yFeedUnknownManeuverTest {
 
     @Test fun `a steady unknown phrase stays one line`() {
         repeat(4) {
-            deliverPhrase("Turn right")
+            deliverPhrase("Rechts abbiegen")
             rewindRateLimit()
         }
         assertEquals(1, unknownLines.size)
@@ -60,11 +61,11 @@ class NavA11yFeedUnknownManeuverTest {
     }
 
     @Test fun `a blink through a recognised maneuver does not log the phrase again`() {
-        deliverPhrase("Turn right")
+        deliverPhrase("Rechts abbiegen")
         rewindRateLimit()
         deliverPhrase("Поверните направо")
         rewindRateLimit()
-        deliverPhrase("Turn right")
+        deliverPhrase("Rechts abbiegen")
         assertEquals(1, unknownLines.size)
         assertEquals(1, zeroWalks.size)
     }
@@ -93,9 +94,9 @@ class NavA11yFeedUnknownManeuverTest {
     }
 
     @Test fun `the line shows the node the parse read`() {
-        deliver { listOf(maneuverNode(""), maneuverNode("Keep left", cls = "android.view.View")) }
+        deliver { listOf(maneuverNode(""), maneuverNode("Links halten", cls = "android.view.View")) }
         assertEquals(
-            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=\"Keep left\" len=9",
+            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=\"Links halten\" len=12",
             unknownLines.single(),
         )
     }
@@ -106,33 +107,33 @@ class NavA11yFeedUnknownManeuverTest {
     }
 
     @Test fun `a street after the maneuver words stays out of the line`() {
-        deliverPhrase("Turn right onto Baker Street")
+        deliverPhrase("Rechts abbiegen auf Baker Strasse")
         assertEquals(
-            "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Turn right onto Baker\"… len=28",
+            "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Rechts abbiegen auf Baker\"… len=33",
             unknownLines.single(),
         )
-        assertTrue(lines.none { "Street" in it })
+        assertTrue(lines.none { "Strasse" in it })
     }
 
     @Test fun `phrases with the same head and length are one value`() {
-        deliverPhrase("Turn right onto Baker Street")
+        deliverPhrase("Rechts abbiegen auf Baker Strasse")
         rewindRateLimit()
-        deliverPhrase("Turn right onto Baker Avenue")
+        deliverPhrase("Rechts abbiegen auf Baker Avenida")
         assertEquals(1, unknownLines.size)
         assertEquals(1, zeroWalks.size)
     }
 
     @Test fun `a new value waits for the walk floor`() {
         deliverPhrase("Поверните направо")   // the known maneuver's walk starts the floor
-        deliverPhrase("Turn right")          // seconds later
+        deliverPhrase("Rechts abbiegen")          // seconds later
         assertTrue(unknownLines.isEmpty())
         rewindRateLimit()
-        deliverPhrase("Turn right")
+        deliverPhrase("Rechts abbiegen")
         assertEquals(1, unknownLines.size)
     }
 
     @Test fun `nothing without a distance`() {
-        deliver(distance = null) { listOf(maneuverNode("Turn right")) }
+        deliver(distance = null) { listOf(maneuverNode("Rechts abbiegen")) }
         assertTrue(lines.isEmpty())
     }
 
@@ -145,14 +146,14 @@ class NavA11yFeedUnknownManeuverTest {
     }
 
     @Test fun `turning the feed off and on logs a value again`() {
-        deliverPhrase("Turn right")
+        deliverPhrase("Rechts abbiegen")
         NavA11yFeed.enabled = false
-        deliverPhrase("Turn right")
+        deliverPhrase("Rechts abbiegen")
         assertEquals(2, unknownLines.size)
     }
 
     @Test fun `every maneuver node looked up goes back to the pool once`() {
-        deliver { listOf(maneuverNode("Turn right"), maneuverNode("Keep left")) }
+        deliver { listOf(maneuverNode("Rechts abbiegen"), maneuverNode("Links halten")) }
         assertEquals(1, unknownLines.size)
         assertEquals(4, issued.size)   // the parse's lookup and the probe's, two nodes each
         issued.forEach { verify(exactly = 1) { it.recycle() } }
