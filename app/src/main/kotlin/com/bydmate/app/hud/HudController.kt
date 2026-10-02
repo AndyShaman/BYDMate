@@ -185,11 +185,11 @@ class HudController @Inject constructor(
         }
     }
 
-    /** Our status and layout kept up, CAN values of way 2 or 3 left on the instrument, or way 3's
-     *  family left up on the gateway. */
+    /** Our status and layout kept up, CAN values of way 2 or 3 (way 3's rest of route too) left on
+     *  the instrument, or way 3's family left up on the gateway. */
     private fun leftoverKept(): Boolean =
         HudArming.leftover(prefs()) || prefs().contains(HudWayChannels.KEY_CAN_LEFT) ||
-            prefs().contains(HudWayChannels.KEY_LMCN_LEFT)
+            prefs().contains(HudWayChannels.KEY_REST_LEFT) || prefs().contains(HudWayChannels.KEY_LMCN_LEFT)
 
     /** One put-back; true when it is over, false while the fullscreen cluster still defers it. The
      *  CAN values go first, while the status is still up; a refused clear waits for the next start. */

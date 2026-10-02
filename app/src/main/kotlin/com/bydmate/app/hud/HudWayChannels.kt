@@ -2,10 +2,14 @@ package com.bydmate.app.hud
 
 import android.content.SharedPreferences
 import android.util.Log
+import com.bydmate.app.data.vehicle.HudSdkCall
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.navdata.NavGuidanceHub
 import com.bydmate.app.navdata.NavManeuverCodes
+import java.util.Calendar
+import java.util.TimeZone
 import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -24,14 +28,17 @@ import kotlinx.coroutines.withContext
  * way 2 adds the instrument's CAN guidance fields ([HudCanChannel]), written the way OpenBYD's
  * CanBydFidStrategy writes them: the icon id as is into both icon fids with the distance when
  * either changes, the road name (in Latin, as OpenBYD transliterates it) when it changes. Way 3
- * adds OpenBYD's LAUNCHER_MAP_CN family ([HudLauncherMapCnFrames]): its six gateway services
- * started at the route start, the update set every [PERIOD_MS], the off events and the stops at
- * the end.
+ * adds the rest of OpenBYD's CAN strategy, after those writes and never instead of them: the SDK
+ * call after each (sendSimpleGuidanceInfo, sendNextPathName, through the daemon), the rest of route
+ * with its SDK call when the remaining time or distance changes, and OpenBYD's LAUNCHER_MAP_CN
+ * family ([HudLauncherMapCnFrames]): its six gateway services started at the route start, the
+ * update set every [PERIOD_MS], the off events and the stops at the end. An SDK call the daemon or
+ * the firmware cannot make is said once and not tried again until the next route.
  *
  * Only while a route is guided and the status is up (`active`). [close] runs before every disarm
- * (route end, way change, HUD off, service stop): the CAN fields blanked with distance 0, then the
- * family's off events and stopped services. What a process death leaves is kept in [prefs]
- * ([KEY_CAN_LEFT], [KEY_LMCN_LEFT]), committed to disk before the first write it covers, and
+ * (route end, way change, HUD off, service stop): the CAN fields blanked with distance 0 (way 3's
+ * rest of route as OpenBYD's turnOffNavi blanks it), then the family's off events and stopped services. What a process death leaves is kept in [prefs]
+ * ([KEY_CAN_LEFT], [KEY_REST_LEFT], [KEY_LMCN_LEFT]), committed to disk before the first write it covers, and
  * cleaned at the next start (CAN values also by the next way 2 or 3 run, before its first disarm);
  * a refused CAN clear is kept too and tried again every [RETRY_MS], and so is a refused CAN write.
  */
@@ -47,6 +54,8 @@ class HudWayChannels(
     internal var random: Random = Random.Default
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
     internal var log: (String) -> Unit = { Log.i(TAG, it) }
+    /** The car's clock for the arrival minute. */
+    internal var zone: () -> TimeZone = { TimeZone.getDefault() }
 
     /** CAN guidance writes since this way started, for the dump; the clears are not counted. */
     @Volatile var canAccepted: Long = 0L
@@ -62,6 +71,9 @@ class HudWayChannels(
     /** Our values may be on the instrument: kept before the first write, dropped by an accepted
      *  clear. Read from [prefs], so values a process death left are this way's to clear too. */
     private val canDirty: Boolean get() = prefs.contains(KEY_CAN_LEFT)
+    /** Way 3's rest of route may be on the instrument; cleared with the CAN fields. */
+    private val restDirty: Boolean get() = prefs.contains(KEY_REST_LEFT)
+    private val dirty: Boolean get() = canDirty || restDirty
     /** What the instrument accepted last; a refused write waits [RETRY_MS] before it is tried again. */
     private var lastGuidance: Pair<Int, Int>? = null
     private var lastRoad: String? = null
@@ -69,6 +81,14 @@ class HudWayChannels(
     private var roadWaitMs = 0L
     /** The navigator's road and what [roadName] made of it: the transliteration runs on a change only. */
     private var roadMemo: Pair<String, String>? = null
+    /** Way 3's rest of route the instrument accepted last: hours, minutes, mileage, as OpenBYD compares it. */
+    private var lastRest: Triple<Int, Int, Long>? = null
+    private var restWaitMs = 0L
+    /** Way 3's SDK calls this route; a method in [sdkOff] (all of them after [SDK_ALL]) is not called again. */
+    private var sdkAccepted = 0
+    private var sdkRefused = 0
+    private var sdkAbsent = 0
+    private val sdkOff = HashSet<Int>()
     private var routeAccepted = 0
     private var routeRefused = 0
     private val lmcnServices = LinkedHashMap<Long, Int>()
@@ -81,6 +101,8 @@ class HudWayChannels(
     private var retryWaitMs = 0L
 
     private val lmcn: Boolean get() = way >= HudController.MODE_LMCN && gateway != null
+    /** Way 3: OpenBYD's SDK calls and rest of route on top of way 2's writes. */
+    private val openBydSet: Boolean get() = way >= HudController.MODE_LMCN
     /** This route runs the family: way 3 with its marker on disk. */
     private var lmcnRoute = false
 
@@ -134,7 +156,7 @@ class HudWayChannels(
 
     internal suspend fun tick(active: Boolean) = lock.withLock {
         if (!active) {
-            if (!routeOpen && !canDirty && lmcnServices.isEmpty()) return@withLock
+            if (!routeOpen && !dirty && lmcnServices.isEmpty()) return@withLock
             if (retryWaitMs > 0) {
                 retryWaitMs -= PERIOD_MS
                 if (retryWaitMs > 0) return@withLock
@@ -146,6 +168,7 @@ class HudWayChannels(
         val s = snapshot()
         if (!routeOpen) openLocked()
         writeCan(s)
+        if (openBydSet) writeRest(s)
         if (lmcnRoute) fireUpdate(s)
     }
 
@@ -157,6 +180,11 @@ class HudWayChannels(
         lmcnFires.clear()
         guidanceWaitMs = 0L
         roadWaitMs = 0L
+        restWaitMs = 0L
+        sdkAccepted = 0
+        sdkRefused = 0
+        sdkAbsent = 0
+        sdkOff.clear()
         val bridge = gateway
         lmcnRoute = false
         if (lmcn && bridge != null) {
@@ -199,10 +227,50 @@ class HudWayChannels(
         if (guidanceDue) {
             if (can.guidance(guidance.first, guidance.second).map(::count).all { it }) lastGuidance = guidance
             else guidanceWaitMs = RETRY_MS
+            sdk(HudSdkCall.Guidance(guidance.first, guidance.second))
         }
         if (roadDue) {
             if (count(can.road(road))) lastRoad = road else roadWaitMs = RETRY_MS
+            sdk(HudSdkCall.PathName(road))
         }
+    }
+
+    /** Way 3: OpenBYD's sendRestRouteInfo when hours, minutes or mileage change, only while both the
+     *  remaining time and distance are known; the raw writes, then the SDK call. */
+    private suspend fun writeRest(s: NavGuidanceHub.Snapshot) {
+        restWaitMs = (restWaitMs - PERIOD_MS).coerceAtLeast(0L)
+        if (s.etaSeconds <= 0 || s.totalDistMeters <= 0 || restWaitMs > 0L) return
+        val rest = restRoute(s.etaSeconds, s.totalDistMeters, nowMs(), zone())
+        val key = Triple(rest.hours, rest.minutes, rest.mileageM)
+        if (key == lastRest) return
+        if (!restDirty && !mark("rest", KEY_REST_LEFT) { putBoolean(KEY_REST_LEFT, true) }) {
+            restWaitMs = RETRY_MS
+            return
+        }
+        if (can.rest(rest).map(::count).all { it }) lastRest = key else restWaitMs = RETRY_MS
+        sdk(HudSdkCall.RestRoute(rest.hours, rest.minutes, rest.mileageM))
+    }
+
+    /** Way 3: one SDK call after its raw writes. A daemon that does not know the call stops them all
+     *  for the route, a method the firmware lacks or that throws stops itself; the first says so. */
+    private suspend fun sdk(call: HudSdkCall) {
+        if (!openBydSet || SDK_ALL in sdkOff || call.method in sdkOff) return
+        val reply = runCatching { can.sdk(call) }.getOrElse {
+            if (it is CancellationException) throw it
+            null
+        }
+        when {
+            reply == null -> { sdkAbsent++; sdkStop(SDK_ALL, call, "daemon") }
+            reply.outcome == HelperBinderProtocol.HUD_NAVI_ABSENT -> { sdkAbsent++; sdkStop(call.method, call, "absent") }
+            reply.outcome == HelperBinderProtocol.HUD_NAVI_THREW -> { sdkRefused++; sdkStop(call.method, call, "threw") }
+            reply.accepted -> sdkAccepted++
+            else -> sdkRefused++
+        }
+    }
+
+    private fun sdkStop(method: Int, call: HudSdkCall, reason: String) {
+        if (sdkOff.isEmpty()) log("hud way: sdk unavailable call=${call.sdkName} reason=$reason, raw writes only this route")
+        sdkOff += method
     }
 
     /** Counts one CAN write for the dump; true when the car accepted it. */
@@ -246,13 +314,13 @@ class HudWayChannels(
     /** CAN first, while the status is still up, then the family; the route's end line. */
     private suspend fun closeLocked() {
         var clear = "none"
-        if (canDirty) {
-            val ok = runCatching { clearCan(can) }.getOrElse {
+        if (dirty) {
+            val ok = runCatching { clearCan(can, prefs) }.getOrElse {
                 if (it is CancellationException) throw it
                 false
             }
             clear = if (ok) "ok" else "refused"
-            if (ok) prefs.edit().remove(KEY_CAN_LEFT).apply()
+            if (ok) prefs.edit().remove(KEY_CAN_LEFT).remove(KEY_REST_LEFT).apply()
         }
         var stopped: Map<Long, Int> = emptyMap()
         val bridge = gateway
@@ -266,13 +334,15 @@ class HudWayChannels(
         lmcnRoute = false
         lastGuidance = null
         lastRoad = null
-        retryWaitMs = if (canDirty) RETRY_MS else 0L
+        lastRest = null
+        retryWaitMs = if (dirty) RETRY_MS else 0L
     }
 
     private fun logEnd(clear: String, stopped: Map<Long, Int>) {
         val fired = HudSomeIpBridge.describeFires(lmcnFires)
         val lmcnPart = if (lmcn) " fire=$fired stop=${HudSomeIpBridge.describeServices(stopped)}" else ""
-        log("hud way: route end way=$way can accepted=$routeAccepted refused=$routeRefused clear=$clear$lmcnPart")
+        val sdkPart = if (openBydSet) " sdk accepted=$sdkAccepted refused=$sdkRefused absent=$sdkAbsent" else ""
+        log("hud way: route end way=$way can accepted=$routeAccepted refused=$routeRefused clear=$clear$sdkPart$lmcnPart")
         Trace.event(
             TraceArea.HUD, "way-route-end", "way" to way, "can-ok" to routeAccepted, "can-refused" to routeRefused,
             "clear" to clear, "fired" to lmcnFires.values.sumOf { it.values.sum() },
@@ -291,6 +361,8 @@ class HudWayChannels(
 
         /** HUD prefs: our CAN guidance values may still be on the instrument. */
         const val KEY_CAN_LEFT = "hud_can_left"
+        /** HUD prefs: way 3's rest of route may still be on the instrument. */
+        const val KEY_REST_LEFT = "hud_rest_left"
         /** HUD prefs: the family's route id while its services may still be up. */
         const val KEY_LMCN_LEFT = "hud_lmcn_left"
 
@@ -306,6 +378,11 @@ class HudWayChannels(
         /** sendNextPathName takes at most 255 bytes of UTF-16LE. */
         private const val MAX_ROAD_CHARS = 127
         private const val COUNTER_MASK = 0xFF
+        /** sendRestRouteInfo accepts hours 0..254, minutes 0..59 and a mileage up to 4294967294 m. */
+        private const val MAX_REST_HOURS = 254
+        private const val MAX_REST_MILEAGE_M = 4_294_967_294L
+        /** [sdkOff]: the daemon answers no SDK call at all. */
+        private const val SDK_ALL = 0
         /** rc slot of a gateway call that threw instead of answering. */
         private const val THREW = -3
         private const val UNBOUND = -1
@@ -324,8 +401,26 @@ class HudWayChannels(
 
         internal fun accepted(rc: Int?): Boolean = rc != null && rc >= 0
 
-        /** Blanks the CAN fields with the SDK's invalid distance 0; true when every write was accepted. */
-        private suspend fun clearCan(can: HudCanChannel): Boolean = cleared(can.clear())
+        /** OpenBYD's CanBydFidStrategy: whole minutes of [etaSeconds] as hours (at most 254) and
+         *  minutes, the mileage in the SDK's range, the arrival's minute of the hour on [zone]'s clock. */
+        internal fun restRoute(etaSeconds: Int, totalDistM: Int, nowMs: Long, zone: TimeZone): HudCanChannel.Rest {
+            val totalMinutes = etaSeconds / 60
+            val hours = (totalMinutes / 60).coerceIn(0, MAX_REST_HOURS)
+            val minutes = (totalMinutes % 60).coerceIn(0, 59)
+            val arrive = Calendar.getInstance(zone).apply {
+                timeInMillis = nowMs
+                add(Calendar.MINUTE, hours * 60 + minutes)
+            }.get(Calendar.MINUTE)
+            return HudCanChannel.Rest(hours, minutes, totalDistM.toLong().coerceIn(0L, MAX_REST_MILEAGE_M), arrive)
+        }
+
+        /** Blanks the CAN fields with the SDK's invalid distance 0, then way 3's rest of route when
+         *  it may be up; true when every write was accepted. */
+        private suspend fun clearCan(can: HudCanChannel, prefs: SharedPreferences): Boolean {
+            val guidance = cleared(can.clear())
+            if (!prefs.contains(KEY_REST_LEFT)) return guidance
+            return can.clearRest().all(::accepted) && guidance
+        }
 
         /** A clear the car took: all four writes accepted. The HUD check drops its marker on it too. */
         internal fun cleared(sent: HudCanChannel.Sent): Boolean =
@@ -338,12 +433,12 @@ class HudWayChannels(
         /** CAN values a process death left: blanked and forgotten; kept when the car refused.
          *  True when nothing is left. */
         suspend fun clearCanLeftover(can: HudCanChannel, prefs: SharedPreferences, log: (String) -> Unit = { Log.i(TAG, it) }): Boolean {
-            if (!prefs.contains(KEY_CAN_LEFT)) return true
-            val ok = runCatching { clearCan(can) }.getOrElse {
+            if (!prefs.contains(KEY_CAN_LEFT) && !prefs.contains(KEY_REST_LEFT)) return true
+            val ok = runCatching { clearCan(can, prefs) }.getOrElse {
                 if (it is CancellationException) throw it
                 false
             }
-            if (ok) prefs.edit().remove(KEY_CAN_LEFT).apply()
+            if (ok) prefs.edit().remove(KEY_CAN_LEFT).remove(KEY_REST_LEFT).apply()
             log("hud way: leftover can clear=${if (ok) "ok" else "refused"}")
             Trace.event(TraceArea.HUD, "way-leftover", "what" to "can", "ok" to ok)
             return ok

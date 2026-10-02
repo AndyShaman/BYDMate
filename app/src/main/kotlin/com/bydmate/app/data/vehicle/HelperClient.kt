@@ -63,6 +63,25 @@ data class HudNaviReply(val outcome: Int, val sdkReturn: Int) {
     val accepted: Boolean get() = outcome == HelperBinderProtocol.HUD_NAVI_CALLED && sdkReturn >= 0
 }
 
+/** One TX_HUD_SDK call: the instrument SDK method way 3 makes after its raw writes, as OpenBYD does. */
+sealed class HudSdkCall(val method: Int, val sdkName: String) {
+    data class Guidance(val turnKind: Int, val distanceM: Int) :
+        HudSdkCall(HelperBinderProtocol.HUD_SDK_GUIDANCE, "sendSimpleGuidanceInfo")
+    data class PathName(val name: String) : HudSdkCall(HelperBinderProtocol.HUD_SDK_PATH_NAME, "sendNextPathName")
+    data class RestRoute(val hours: Int, val minutes: Int, val mileageM: Long) :
+        HudSdkCall(HelperBinderProtocol.HUD_SDK_REST_ROUTE, "sendRestRouteInfo")
+
+    /** The request after the method selector, in the order the daemon reads it. */
+    fun writeTo(p: Parcel) {
+        p.writeInt(method)
+        when (this) {
+            is Guidance -> { p.writeInt(turnKind); p.writeInt(distanceM) }
+            is PathName -> p.writeString(name)
+            is RestRoute -> { p.writeInt(hours); p.writeInt(minutes); p.writeLong(mileageM) }
+        }
+    }
+}
+
 /**
  * Windowing state of a running task as reported by TX_GET_TASK_STATE.
  * [taskId] == -1 means the package has no running task (other fields are 0 in that case).
@@ -566,6 +585,10 @@ interface HelperClient {
      * apart.
      */
     suspend fun hudNaviStatus(status: Int): HudNaviReply?
+
+    /** Way 3's instrument SDK [call] inside the daemon (TX_HUD_SDK); null when the daemon is
+     *  unreachable or too old to know the transaction. */
+    suspend fun hudSdk(call: HudSdkCall): HudNaviReply?
 
     /** Raw autoservice setBuffer status (transact 14); null when the daemon is unreachable or too old. */
     suspend fun writeBufferStatus(dev: Int, fid: Int, bytes: ByteArray): Int?
@@ -1180,6 +1203,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         Log.i(TAG, "hudNaviStatus status=$status outcome=${reply?.outcome} ret=${reply?.sdkReturn}")
         return reply
     }
+
+    // No line per call: way 3 counts the answers and logs them once per route.
+    override suspend fun hudSdk(call: HudSdkCall): HudNaviReply? =
+        transact(HelperBinderProtocol.TX_HUD_SDK) { call.writeTo(it) }
+            ?.let { (outcome, sdkReturn) -> HudNaviReply(outcome, sdkReturn) }
 
     override suspend fun writeBufferStatus(dev: Int, fid: Int, bytes: ByteArray): Int? {
         val status = transact(HelperBinderProtocol.TX_WRITE_BUFFER) {

@@ -499,6 +499,24 @@ object HelperBinderProtocol {
      */
     val TX_WRITE_BUFFER: Int = IBinder.FIRST_CALL_TRANSACTION + 56  // 57
 
+    /**
+     * Way 3 of the HUD output: the BYDAutoInstrumentDevice call OpenBYD's CAN strategy makes after
+     * its raw writes of the same fields, picked by [HUD_SDK_GUIDANCE] / [HUD_SDK_PATH_NAME] /
+     * [HUD_SDK_REST_ROUTE] and called reflectively inside the daemon, like [TX_HUD_NAVI_STATUS].
+     *
+     * Request: [int method, then GUIDANCE: int icon, int distance | PATH_NAME: String name |
+     *           REST_ROUTE: int hours, int minutes, long mileage]
+     * Reply:   [int outcome (HUD_NAVI_CALLED / HUD_NAVI_ABSENT / HUD_NAVI_THREW), int sdkReturn]
+     * An unknown method answers HUD_NAVI_ABSENT. An old daemon without this handler makes transact
+     * return false → the client returns null, and way 3 keeps its raw writes alone.
+     */
+    val TX_HUD_SDK: Int = IBinder.FIRST_CALL_TRANSACTION + 57  // 58
+
+    /** TX_HUD_SDK methods: sendSimpleGuidanceInfo, sendNextPathName, sendRestRouteInfo. */
+    const val HUD_SDK_GUIDANCE = 1
+    const val HUD_SDK_PATH_NAME = 2
+    const val HUD_SDK_REST_ROUTE = 3
+
     /** TX_HUD_NAVI_STATUS: the status that asks only whether the SDK method exists. */
     const val HUD_NAVI_PROBE = -1
     /** TX_HUD_NAVI_STATUS outcomes: the method exists (and was called unless probed), is absent

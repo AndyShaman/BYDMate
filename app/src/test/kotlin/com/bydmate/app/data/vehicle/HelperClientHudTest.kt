@@ -4,6 +4,7 @@ import android.os.IBinder
 import android.os.IInterface
 import android.os.Parcel
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.helper.readHudSdkInvocation
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -69,6 +70,50 @@ class HelperClientHudTest {
         }
         assertNull(clientWith(stale).hudNaviStatus(2))
         assertNull(clientWith(stale).writeBufferStatus(1007, 1140461576, byteArrayOf(1)))
+    }
+
+    @Test fun `hudSdk marshals each call so the daemon reads the same method and arguments`() = runBlocking {
+        val seen = mutableListOf<String>()
+        var seenCode = -1
+        val fake = object : FakeIBinder() {
+            override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                seenCode = code
+                data.setDataPosition(0)
+                data.enforceInterface(HelperBinderProtocol.DESCRIPTOR)
+                val call = readHudSdkInvocation(data)
+                seen += "${call?.method}(${call?.args?.joinToString(",")})"
+                reply!!.writeInt(HelperBinderProtocol.HUD_NAVI_CALLED); reply.writeInt(-5)
+                reply.setDataPosition(0)
+                return true
+            }
+        }
+        val client = clientWith(fake)
+        assertEquals(HudNaviReply(HelperBinderProtocol.HUD_NAVI_CALLED, -5), client.hudSdk(HudSdkCall.Guidance(2, 300)))
+        assertEquals(HelperBinderProtocol.TX_HUD_SDK, seenCode)
+        client.hudSdk(HudSdkCall.PathName("Main St"))
+        client.hudSdk(HudSdkCall.RestRoute(1, 5, 4_294_967_294L))
+        assertEquals(
+            listOf("sendSimpleGuidanceInfo(2,300)", "sendNextPathName(Main St)", "sendRestRouteInfo(1,5,4294967294)"),
+            seen,
+        )
+    }
+
+    @Test fun `an unknown SDK method selector reads as nothing to call`() {
+        val p = Parcel.obtain()
+        try {
+            p.writeInt(99)
+            p.setDataPosition(0)
+            assertNull(readHudSdkInvocation(p))
+        } finally {
+            p.recycle()
+        }
+    }
+
+    @Test fun `outdated daemon without the SDK transaction answers null`() = runBlocking {
+        val stale = object : FakeIBinder() {
+            override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean = false
+        }
+        assertNull(clientWith(stale).hudSdk(HudSdkCall.Guidance(2, 300)))
     }
 
     @Test fun `writeBufferStatus marshals dev fid and bytes and returns the raw status`() = runBlocking {
