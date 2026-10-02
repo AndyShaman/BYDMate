@@ -106,10 +106,63 @@ class ClusterMusicSyncTest {
         port.status = { null }
         assertEquals(Outcome.CLEAR_FAILED, sync.step(false, fids, Target.Idle, 1_500))
         assertTrue(sync.dirty)
-        assertEquals(Outcome.CLEAR_FAILED, sync.step(false, fids, Target.Idle, 3_000))
+        assertEquals(Outcome.NONE, sync.step(false, fids, Target.Idle, 3_000))
         port.status = { 1 }
-        assertEquals(Outcome.CLEARED, sync.step(false, fids, Target.Idle, 4_500))
+        assertEquals(Outcome.CLEARED, sync.step(false, fids, Target.Idle, 1_500 + ClusterMusicSync.REASSERT_MS))
         assertFalse(sync.dirty)
+    }
+
+    // A dead helper must not burn the clear budget in 30 s: the clear waits for it at the re-assert pace.
+    @Test fun `a clear that finds the helper unreachable is retried at the re-assert pace`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card()), 0)
+        port.clearTakes()
+        port.status = { null }
+        val outage = (1_500L..60_000L step 1_500L).map { sync.step(false, fids, Target.Idle, it) }
+        assertEquals(Outcome.CLEAR_FAILED, outage.first())
+        assertTrue("attempts ${port.valuesFor(12).size}", port.valuesFor(12).size <= 7)
+        assertTrue(sync.dirty)
+
+        port.status = { 1 }
+        val after = (61_500L..75_000L step 1_500L).map { sync.step(false, fids, Target.Idle, it) }
+        assertEquals(listOf(Outcome.CLEARED), after.filter { it != Outcome.NONE })
+        assertFalse(sync.dirty)
+    }
+
+    // Codex finding: stop and switch-off clear only a card that is still ours.
+    @Test fun `switching off after another player took the card writes nothing`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card()), 0)
+        port.clearTakes()
+        assertEquals(Outcome.HANDED_OFF, sync.step(false, fids, Target.OtherPlaying("com.byd.mediacenter"), 1_500))
+        assertTrue(port.writes.isEmpty())
+        assertFalse(sync.dirty)
+        assertNull(sync.shown)
+        assertEquals(Outcome.NONE, sync.step(false, fids, Target.Idle, 3_000))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    @Test fun `stopping after another player took the card since the last poll writes nothing`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card()), 0)
+        port.clearTakes()
+        assertEquals(Outcome.HANDED_OFF, sync.release(fids, Target.OtherPlaying("com.byd.mediacenter")))
+        assertTrue(port.writes.isEmpty())
+        assertFalse(sync.dirty)
+        assertEquals(Outcome.NONE, sync.release(fids, Target.Idle))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    @Test fun `stopping while our source still plays clears the card`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card()), 0)
+        port.clearTakes()
+        assertEquals(Outcome.CLEARED, sync.release(fids, Target.Show(card())))
+        assertEquals(listOf(" "), port.valuesFor(11))
     }
 
     @Test fun `a clear that never lands gives up after the budget`() = runTest {

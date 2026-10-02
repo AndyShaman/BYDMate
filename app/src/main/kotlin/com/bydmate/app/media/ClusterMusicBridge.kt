@@ -100,10 +100,11 @@ class ClusterMusicBridge @Inject constructor(
             running.cancelAndJoin()
             val outcome = withTimeoutOrNull(STOP_CLEAR_TIMEOUT_MS) {
                 mutex.withLock {
-                    var result = sync.release(lastFids)
+                    val owner = ownerBeforeClear()
+                    var result = sync.release(lastFids, owner)
                     while (result == Outcome.CLEAR_FAILED) {
                         delay(POLL_MS)
-                        result = sync.release(lastFids)
+                        result = sync.release(lastFids, owner)
                     }
                     wasEnabled = false
                     access.onSwitch(false)
@@ -126,7 +127,7 @@ class ClusterMusicBridge @Inject constructor(
         if (access.onSwitch(enabled)) ensureAccess?.invoke("cluster-music on")
         val fids = resolveFids()
         if (!enabled) {
-            report(sync.step(false, fids, Target.Idle, SystemClock.elapsedRealtime()), null)
+            report(sync.step(false, fids, ownerBeforeClear(), SystemClock.elapsedRealtime()), null)
             return
         }
         val target = readTarget() ?: return
@@ -161,13 +162,28 @@ class ClusterMusicBridge @Inject constructor(
         return fids
     }
 
-    /** Null when the sessions can't be read: without listener access the poll decides nothing. */
-    private suspend fun readTarget(): Target? {
+    /**
+     * Who owns playback right before a clear of ours (switch off, stop): another player that took
+     * the card since the last poll keeps it. Unreadable sessions fall back to [Target.Idle], a clear.
+     */
+    private suspend fun ownerBeforeClear(): Target {
+        if (!sync.dirty) return Target.Idle
+        return runCatching { readTarget(rearm = false) }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w(TAG, "owner read before clear failed: ${it.javaClass.simpleName}")
+        }.getOrNull() ?: Target.Idle
+    }
+
+    /**
+     * Null when the sessions can't be read: without listener access the poll decides nothing.
+     * [rearm] false (the feature is off or stopping) skips re-arming the access.
+     */
+    private suspend fun readTarget(rearm: Boolean = true): Target? {
         val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
         val controllers = try {
             msm.getActiveSessions(ComponentName(context, MediaSessionListenerService::class.java))
         } catch (e: SecurityException) {
-            if (access.onRefused(SystemClock.elapsedRealtime())) {
+            if (rearm && access.onRefused(SystemClock.elapsedRealtime())) {
                 Log.w(TAG, "no notification-listener access, re-arming: ${e.message}")
                 Trace.event(TraceArea.CAR, "cluster_music", "access" to "missing")
                 ensureAccess?.invoke("cluster-music no access")
