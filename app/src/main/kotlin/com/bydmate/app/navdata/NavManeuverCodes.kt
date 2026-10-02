@@ -222,81 +222,108 @@ object NavManeuverCodes {
         "pribytie" to GAODE_ARRIVE,
     )
 
-    /** Kom's exit in words or digits («второй съезд», «съезд 2»); null without one in 1..10. */
-    private fun russianExit(lower: String): Int? =
-        if ("съезд" in lower) exitOrdinal(lower)?.takeIf { it in 1..10 }?.let { GAODE_ROUNDABOUT_EXIT + it } else null
-
-    /** OpenBYD's Russian stems: «круто влево», «плавно вправо», «кольцевая развязка». */
-    private fun fromOpenBydRussian(lower: String): Int {
-        val left = "лев" in lower
-        val right = "прав" in lower
-        val sharp = "резк" in lower || "круто" in lower
-        return when {
-            "кольц" in lower || "кругов" in lower -> GAODE_ROUNDABOUT_ENTER
-            "плавн" in lower && left -> GAODE_SLIGHT_LEFT
-            "плавн" in lower && right -> GAODE_SLIGHT_RIGHT
-            sharp && left -> GAODE_HARD_LEFT
-            sharp && right -> GAODE_HARD_RIGHT
-            "развор" in lower -> GAODE_UTURN
-            else -> 0
-        }
-    }
-
-    private val EN_EXIT_RE = Regex("""(\d+)(?:st|nd|rd|th)?\s+exit""")
-    private val DIGITS_RE = Regex("""\d+""")
-    private val DONE_RE = Regex("""(^|[^\p{L}])done($|[^\p{L}])""")
+    /** A word form, not a stem inside another word: no letter or digit on either side
+     *  («кольцевая» but not «Кольцова», «right» but not «copyright»; `_` of the icon names is a gap). */
+    private fun bounded(forms: String) = Regex("""(?<![\p{L}\d])(?:$forms)(?![\p{L}\d])""")
 
     /** Kom-BYDMate's ordinals, 1..10. */
-    private val ORDINALS = listOf(
+    private val ORDINAL_NUMBER: Map<String, Int> = listOf(
         listOf("first", "первый", "1st"), listOf("second", "второй", "2nd"), listOf("third", "третий", "3rd"),
         listOf("fourth", "четвёртый", "четвертый", "4th"), listOf("fifth", "пятый", "5th"),
         listOf("sixth", "шестой", "6th"), listOf("seventh", "седьмой", "7th"), listOf("eighth", "восьмой", "8th"),
         listOf("ninth", "девятый", "9th"), listOf("tenth", "десятый", "10th"),
-    ).map { words -> words.map { Regex("""(^|[^\p{L}])$it($|[^\p{L}])""") } }
+    ).flatMapIndexed { i, words -> words.map { it to i + 1 } }.toMap()
+    private val ORDINAL_WORDS = ORDINAL_NUMBER.keys.joinToString("|")
 
-    /** The exit number in digits («2», «2nd») or in words («second», «второй»); null without one. */
-    private fun exitOrdinal(lower: String): Int? {
-        DIGITS_RE.find(lower)?.value?.toIntOrNull()?.let { return it }
-        ORDINALS.forEachIndexed { i, words -> if (words.any { it.containsMatchIn(lower) }) return i + 1 }
-        return null
+    /** The number only from the exit itself: «второй съезд», «съезд 2», «the 2nd exit», «third exit»,
+     *  «exit 2»; a distance elsewhere in the phrase («через 5 км», «in 300 m») is not it. */
+    private val RU_EXIT = listOf(
+        bounded("""($ORDINAL_WORDS)\s+съезд(?:|а|у|е|ом)"""),
+        bounded("""съезд(?:|а|у|е|ом)\s+(?:№\s*)?(\d+)"""),
+    )
+    private val EN_EXIT = listOf(
+        bounded("""(\d+)(?:st|nd|rd|th)?\s+exit"""),
+        bounded("""($ORDINAL_WORDS)\s+exit"""),
+        bounded("""exit\s+(?:number\s+)?(\d+)"""),
+    )
+
+    private fun exitNumber(lower: String, constructs: List<Regex>): Int? =
+        constructs.firstNotNullOfOrNull { it.find(lower)?.groupValues?.get(1) }
+            ?.let { it.toIntOrNull() ?: ORDINAL_NUMBER[it] }
+
+    /** Kom's exit in words or digits («второй съезд», «съезд 2»); null without one in 1..10. */
+    private fun russianExit(lower: String): Int? =
+        exitNumber(lower, RU_EXIT)?.takeIf { it in 1..10 }?.let { GAODE_ROUNDABOUT_EXIT + it }
+
+    private val RU_LEFT = bounded("(?:в|на)?лев(?:о|ее|ый|ая|ое|ой|ую|ого|ом)")
+    private val RU_RIGHT = bounded("(?:в|на|с)?прав(?:о|а|ее|ый|ая|ое|ой|ую|ого|ом)")
+    private val RU_SMOOTH = bounded("плавн(?:о|ый|ая|ое|ого|ом)")
+    private val RU_SHARP = bounded("резк(?:о|ий|ая|ое|ого|им)|крут(?:о|ой|ая|ое|ого)")
+    private val RU_RING = bounded("кольц(?:о|а|у|е|ом|ев(?:ая|ое|ой|ую|ого|ом))|кругов(?:ая|ое|ой|ую|ого|ом)")
+    private val RU_UTURN = bounded("развор(?:от|ота|оте|отом|ачивайтесь|ачивайся|ачиваться)")
+
+    /** OpenBYD's Russian stems as whole word forms: «круто влево», «плавно вправо», «кольцевая развязка». */
+    private fun fromOpenBydRussian(lower: String): Int {
+        val left = RU_LEFT.containsMatchIn(lower)
+        val right = RU_RIGHT.containsMatchIn(lower)
+        val smooth = RU_SMOOTH.containsMatchIn(lower)
+        val sharp = RU_SHARP.containsMatchIn(lower)
+        return when {
+            RU_RING.containsMatchIn(lower) -> GAODE_ROUNDABOUT_ENTER
+            smooth && left -> GAODE_SLIGHT_LEFT
+            smooth && right -> GAODE_SLIGHT_RIGHT
+            sharp && left -> GAODE_HARD_LEFT
+            sharp && right -> GAODE_HARD_RIGHT
+            RU_UTURN.containsMatchIn(lower) -> GAODE_UTURN
+            else -> 0
+        }
     }
 
-    private val EN_SLIGHT = listOf("slight", "bear", "keep", "fork", "veer", "exit left", "exit right", "exit to", "exit_", "take_")
-    private val EN_SHARP = listOf("sharp", "hard")
-    private val EN_UTURN = listOf("u-turn", "u turn", "uturn", "turn around", "turn back", "turn_back")
-    private val EN_ARRIVE = listOf("arriv", "destination", "route ended", "finish", "completed", "end of route")
-    private val EN_WAYPOINT = listOf("waypoint", "via point", "way point", "intermediate")
-    private val EN_STRAIGHT = listOf("straight", "continue", "ahead", "forward")
+    private val EN_LEFT = bounded("left")
+    private val EN_RIGHT = bounded("right")
+    private val EN_SLIGHT = bounded(
+        "slight|slightly|bear|keep|fork|veer|exit left|exit right|exit to|exit_left|exit_right|take_left|take_right",
+    )
+    private val EN_SHARP = bounded("sharp|sharply|hard")
+    private val EN_UTURN = bounded("u-turn|u turn|uturn|turn around|turn back|turn_back")
+    private val EN_ARRIVE = bounded(
+        "arrive|arrived|arriving|arrival|destination|route ended|finish|finished|completed|end of route|done",
+    )
+    private val EN_WAYPOINT = bounded("waypoint|waypoints|via point|way point|intermediate")
+    private val EN_STRAIGHT = bounded("straight|continue|ahead|forward")
+    private val EN_FERRY_EXIT = bounded("exit the ferry|exit ferry")
+    private val EN_FERRY = bounded("ferry")
+    private val EN_RING_EXIT = bounded("exit the roundabout|leave the roundabout")
+    private val EN_RING = bounded("roundabout|traffic circle|circular")
+    private val EN_TUNNEL = bounded("tunnel")
 
     /** Kom-BYDMate's fromEnglish (Navigator with the English interface: «Turn right», «Take the 2nd
      *  exit»), with OpenBYD's English words in its groups: veer and the side exits are slight turns,
      *  hard is sharp, a ferry left is straight on. */
     @Suppress("CyclomaticComplexMethod") // one branch per maneuver family, as in the donor's tables
     private fun fromEnglish(lower: String): Int {
-        EN_EXIT_RE.find(lower)?.groupValues?.get(1)?.toIntOrNull()?.let { n ->
+        exitNumber(lower, EN_EXIT)?.let { n ->
             return if (n in 1..10) GAODE_ROUNDABOUT_EXIT + n else GAODE_ROUNDABOUT_EXIT
         }
-        if ("exit" in lower || "roundabout" in lower) exitOrdinal(lower)?.let { n ->
-            if (n in 1..10) return GAODE_ROUNDABOUT_EXIT + n
-        }
-        val left = "left" in lower
-        val right = "right" in lower
+        fun has(re: Regex) = re.containsMatchIn(lower)
+        val left = has(EN_LEFT)
+        val right = has(EN_RIGHT)
         return when {
-            "exit the ferry" in lower || "exit ferry" in lower -> GAODE_STRAIGHT
-            "ferry" in lower -> GAODE_FERRY
-            "exit the roundabout" in lower || "leave the roundabout" in lower -> GAODE_ROUNDABOUT_EXIT
-            "roundabout" in lower || "traffic circle" in lower || "circular" in lower -> GAODE_ROUNDABOUT_ENTER
-            EN_WAYPOINT.any { it in lower } -> GAODE_WAYPOINT
-            EN_ARRIVE.any { it in lower } || DONE_RE.containsMatchIn(lower) -> GAODE_ARRIVE
-            "tunnel" in lower -> GAODE_TUNNEL
-            EN_UTURN.any { it in lower } -> if (right) GAODE_UTURN_RIGHT else GAODE_UTURN
-            EN_SLIGHT.any { it in lower } && left -> GAODE_SLIGHT_LEFT
-            EN_SLIGHT.any { it in lower } && right -> GAODE_SLIGHT_RIGHT
-            EN_SHARP.any { it in lower } && left -> GAODE_HARD_LEFT
-            EN_SHARP.any { it in lower } && right -> GAODE_HARD_RIGHT
+            has(EN_FERRY_EXIT) -> GAODE_STRAIGHT
+            has(EN_FERRY) -> GAODE_FERRY
+            has(EN_RING_EXIT) -> GAODE_ROUNDABOUT_EXIT
+            has(EN_RING) -> GAODE_ROUNDABOUT_ENTER
+            has(EN_WAYPOINT) -> GAODE_WAYPOINT
+            has(EN_ARRIVE) -> GAODE_ARRIVE
+            has(EN_TUNNEL) -> GAODE_TUNNEL
+            has(EN_UTURN) -> if (right) GAODE_UTURN_RIGHT else GAODE_UTURN
+            has(EN_SLIGHT) && left -> GAODE_SLIGHT_LEFT
+            has(EN_SLIGHT) && right -> GAODE_SLIGHT_RIGHT
+            has(EN_SHARP) && left -> GAODE_HARD_LEFT
+            has(EN_SHARP) && right -> GAODE_HARD_RIGHT
             left -> GAODE_LEFT
             right -> GAODE_RIGHT
-            EN_STRAIGHT.any { it in lower } -> GAODE_STRAIGHT
+            has(EN_STRAIGHT) -> GAODE_STRAIGHT
             else -> 0
         }
     }
