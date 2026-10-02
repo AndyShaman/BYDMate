@@ -427,7 +427,8 @@ class HudControllerWayTest {
             HudCanChannel.FID_REST_MILEAGE_M to -1, HudCanChannel.FID_REST_HOURS to 0, HudCanChannel.FID_REST_MINUTES to 0,
             HudCanChannel.FID_REST_SECONDS to 0, HudCanChannel.FID_ARRIVE_MINUTE to 0,
         ).map { (fid, v) -> "set 1007/$fid=$v" }
-        assertEquals(canClear + restClear, snapshot())
+        // Its CAN marker is not set: the guidance fields are not touched.
+        assertEquals(restClear, snapshot())
     }
 
     @Test fun `a crash-left family is stopped on the new binding`() {

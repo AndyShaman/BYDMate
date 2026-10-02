@@ -529,17 +529,70 @@ class HudWayChannelsTest {
         assertTrue(end, end.contains("can accepted=9 refused=0 clear=ok sdk accepted=3 refused=0 absent=0"))
     }
 
-    @Test fun `a refused rest clear keeps both leftovers and is retried`() = runTest {
+    @Test fun `a refused rest clear keeps only its own leftover and is retried in 5 s without the CAN fields`() = runTest {
         val c = channels(3)
         route()
         c.tick(active = true)
-        coEvery { helper.writeStatus(any(), HudCanChannel.FID_REST_MILEAGE_M, any(), any()) } answers { calls += "set $mileage=${arg<Int>(2)}"; -1 }
+        var mileageRc = -1
+        coEvery { helper.writeStatus(any(), HudCanChannel.FID_REST_MILEAGE_M, any(), any()) } answers {
+            calls += "set $mileage=${arg<Int>(2)}"
+            mileageRc
+        }
+        calls.clear()
+        c.tick(active = false)
+        // -1 refused: 0 in the same clear, refused too.
+        assertEquals(clearCalls + "set $mileage=-1" + "set $mileage=0" + restClear.drop(1), canAndSdk)
+        assertFalse(prefs.contains(HudWayChannels.KEY_CAN_LEFT))
+        assertTrue(prefs.contains(HudWayChannels.KEY_REST_LEFT))
+        assertTrue(lines.single { it.startsWith("hud way: route end") }.contains("clear=refused"))
+        calls.clear()
+        repeat((HudWayChannels.RETRY_MS / HudWayChannels.PERIOD_MS).toInt() - 1) { c.tick(active = false) }
+        assertTrue(calls.toString(), calls.isEmpty())
+        mileageRc = 0
+        c.tick(active = false)
+        assertEquals(restClear, calls)
+        assertFalse(prefs.contains(HudWayChannels.KEY_REST_LEFT))
+    }
+
+    @Test fun `a refused CAN clear keeps only its own leftover, the accepted rest clear is not repeated`() = runTest {
+        val c = channels(3)
+        route()
+        c.tick(active = true)
+        bufRc = { -1 }
         calls.clear()
         c.tick(active = false)
         assertEquals(clearCalls + restClear, canAndSdk)
         assertTrue(prefs.contains(HudWayChannels.KEY_CAN_LEFT))
+        assertFalse(prefs.contains(HudWayChannels.KEY_REST_LEFT))
+        calls.clear()
+        repeat((HudWayChannels.RETRY_MS / HudWayChannels.PERIOD_MS).toInt() - 1) { c.tick(active = false) }
+        assertTrue(calls.toString(), calls.isEmpty())
+        bufRc = { 0 }
+        c.tick(active = false)
+        assertEquals(clearCalls, calls)
+        assertFalse(prefs.contains(HudWayChannels.KEY_CAN_LEFT))
+    }
+
+    @Test fun `a car that refuses the mileage -1 gets 0 in the same clear and the leftover goes`() = runTest {
+        prefs.edit().putBoolean(HudWayChannels.KEY_REST_LEFT, true).commit()
+        coEvery { helper.writeStatus(any(), HudCanChannel.FID_REST_MILEAGE_M, any(), any()) } answers {
+            calls += "set $mileage=${arg<Int>(2)}"
+            if (arg<Int>(2) == -1) -2 else 0
+        }
+        assertTrue(HudWayChannels.clearCanLeftover(HudCanChannel(helper), prefs))
+        assertEquals(listOf("set $mileage=-1", "set $mileage=0") + restClear.drop(1), calls)
+        assertFalse(prefs.contains(HudWayChannels.KEY_REST_LEFT))
+    }
+
+    @Test fun `no answer to the mileage -1 is not a refusal, no 0 and the leftover stays`() = runTest {
+        prefs.edit().putBoolean(HudWayChannels.KEY_REST_LEFT, true).commit()
+        coEvery { helper.writeStatus(any(), HudCanChannel.FID_REST_MILEAGE_M, any(), any()) } answers {
+            calls += "set $mileage=${arg<Int>(2)}"
+            null
+        }
+        assertFalse(HudWayChannels.clearCanLeftover(HudCanChannel(helper), prefs))
+        assertEquals(restClear, calls)
         assertTrue(prefs.contains(HudWayChannels.KEY_REST_LEFT))
-        assertTrue(lines.single { it.startsWith("hud way: route end") }.contains("clear=refused"))
     }
 
     @Test fun `a rest leftover is blanked with the CAN fields and forgotten, a refused one kept`() = runTest {
@@ -554,17 +607,29 @@ class HudWayChannelsTest {
         assertFalse(prefs.contains(HudWayChannels.KEY_CAN_LEFT) || prefs.contains(HudWayChannels.KEY_REST_LEFT))
     }
 
-    @Test fun `a rest leftover alone, its CAN key gone with the HUD check's clear, is still blanked`() = runTest {
+    @Test fun `a rest leftover alone, its CAN key gone with the HUD check's clear, is blanked without the CAN fields`() = runTest {
         prefs.edit().putBoolean(HudWayChannels.KEY_REST_LEFT, true).commit()
         assertTrue(HudWayChannels.clearCanLeftover(HudCanChannel(helper), prefs))
-        assertEquals(clearCalls + restClear, calls)
+        assertEquals(restClear, calls)
         assertFalse(prefs.contains(HudWayChannels.KEY_REST_LEFT))
         // The loop takes it as its own leftover too.
         prefs.edit().putBoolean(HudWayChannels.KEY_REST_LEFT, true).commit()
         calls.clear()
         channels(3).tick(active = false)
-        assertEquals(clearCalls + restClear, calls)
+        assertEquals(restClear, calls)
         assertFalse(prefs.contains(HudWayChannels.KEY_REST_LEFT))
+    }
+
+    @Test fun `a leftover whose CAN clear is accepted and rest clear refused keeps only the rest`() = runTest {
+        prefs.edit().putBoolean(HudWayChannels.KEY_CAN_LEFT, true).putBoolean(HudWayChannels.KEY_REST_LEFT, true).commit()
+        coEvery { helper.writeStatus(any(), HudCanChannel.FID_ARRIVE_MINUTE, any(), any()) } answers {
+            calls += "set $arrive=${arg<Int>(2)}"
+            -1
+        }
+        assertFalse(HudWayChannels.clearCanLeftover(HudCanChannel(helper), prefs))
+        assertEquals(clearCalls + restClear, calls)
+        assertFalse(prefs.contains(HudWayChannels.KEY_CAN_LEFT))
+        assertTrue(prefs.contains(HudWayChannels.KEY_REST_LEFT))
     }
 
     @Test fun `a firmware without the SDK method keeps the raw writes, says so once per route and does not retry`() = runTest {
