@@ -106,6 +106,65 @@ class MediaSessionListenerServiceTest {
         assertNull(NaviRouteHolder.latest)
     }
 
+    // -- notification trace (lane thread), issue #199 --
+
+    private fun traced(block: () -> Unit): List<String> {
+        val lines = mutableListOf<String>()
+        service.naviNotifSink = { lines.add(it) }
+        block()
+        exec.executed.forEach { it.run() }
+        exec.executed.clear()
+        return lines
+    }
+
+    private fun naviPost(title: String, text: String, ongoing: Boolean = true) {
+        val n = Notification()
+        n.extras.putString(Notification.EXTRA_TITLE, title)
+        n.extras.putString(Notification.EXTRA_TEXT, text)
+        if (ongoing) n.flags = n.flags or Notification.FLAG_ONGOING_EVENT
+        service.onNotificationPosted(sbn("ru.yandex.yandexnavi", n))
+    }
+
+    @Test
+    fun `a navigator post is traced with numbers only, a repeat of its shape is not`() {
+        val first = traced { naviPost("500 м", "Поверните направо") }
+        assertEquals(
+            listOf("navi notif posted: pkg=ru.yandex.yandexnavi id=1 ongoing=true channel=null kind=extras man=2 dist=500 roadLen=17"),
+            first,
+        )
+        assertTrue(traced { naviPost("450 м", "Поверните направо") }.isEmpty())
+        assertEquals(1, traced { naviPost("450 м", "Тверская", ongoing = false) }.size)
+    }
+
+    @Test
+    fun `a post the hub does not take is traced as empty`() {
+        val lines = traced { naviPost("Навигатор", "") }
+        assertEquals(
+            listOf("navi notif posted: pkg=ru.yandex.yandexnavi id=1 ongoing=true channel=null kind=empty man=0 dist=0 roadLen=0"),
+            lines,
+        )
+    }
+
+    @Test
+    fun `a navigator removal is traced on the lane`() {
+        assertEquals(listOf("navi notif removed: pkg=ru.yandex.yandexnavi id=1"),
+            traced { service.onNotificationRemoved(sbn("ru.yandex.yandexnavi", Notification())) })
+    }
+
+    @Test
+    fun `a media post or removal is not traced`() {
+        val media = Notification().apply { category = Notification.CATEGORY_TRANSPORT }
+        assertTrue(traced { service.onNotificationRemoved(sbn("ru.yandex.yandexnavi", media)) }.isEmpty())
+        assertTrue(traced { service.onNotificationPosted(sbn("ru.yandex.yandexnavi", media)) }.isEmpty())
+    }
+
+    @Test
+    fun `no street or title goes into a trace line`() {
+        val lines = traced { naviPost("500 м", "Тверская") }
+        lines.forEach { assertFalse(it, "Тверская" in it || "500 м" in it) }
+        assertTrue(lines.single(), lines.single().endsWith("roadLen=8"))
+    }
+
     // -- unknown-maneuver log (lane thread) --
 
     private fun postAndRun(pkg: String, title: String, text: String): List<String> {
