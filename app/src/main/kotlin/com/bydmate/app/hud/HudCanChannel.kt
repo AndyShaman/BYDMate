@@ -69,13 +69,18 @@ class HudCanChannel(private val helper: HelperClient) {
 
     /** OpenBYD's sendRestRouteInfo raw part, in its order: mileage, hours, minutes, seconds 0, the
      *  arrival minute; each write's raw status. */
-    suspend fun rest(r: Rest): List<Int?> = writeRest(r.mileageM.toInt(), r.hours, r.minutes, r.arriveMinute)
+    suspend fun rest(r: Rest): List<Int?> =
+        listOf(helper.writeStatus(DEV, FID_REST_MILEAGE_M, r.mileageM.toInt())) + writeRestTime(r.hours, r.minutes, r.arriveMinute)
 
-    /** Blanks what [rest] wrote the way OpenBYD's turnOffNavi does: mileage -1, the others 0. */
-    suspend fun clearRest(): List<Int?> = writeRest(MILEAGE_NONE, 0, 0, 0)
+    /** Blanks what [rest] wrote the way OpenBYD's turnOffNavi does: mileage -1, the others 0. A car
+     *  that refuses the -1 gets 0 in the same clear, so the clear cannot stay owed for good. */
+    suspend fun clearRest(): List<Int?> {
+        val mileage = helper.writeStatus(DEV, FID_REST_MILEAGE_M, MILEAGE_NONE)
+            .let { rc -> if (rc != null && rc < 0) helper.writeStatus(DEV, FID_REST_MILEAGE_M, 0) else rc }
+        return listOf(mileage) + writeRestTime(0, 0, 0)
+    }
 
-    private suspend fun writeRest(mileage: Int, hours: Int, minutes: Int, arriveMinute: Int): List<Int?> = listOf(
-        helper.writeStatus(DEV, FID_REST_MILEAGE_M, mileage),
+    private suspend fun writeRestTime(hours: Int, minutes: Int, arriveMinute: Int): List<Int?> = listOf(
         helper.writeStatus(DEV, FID_REST_HOURS, hours),
         helper.writeStatus(DEV, FID_REST_MINUTES, minutes),
         helper.writeStatus(DEV, FID_REST_SECONDS, 0),

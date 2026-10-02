@@ -320,7 +320,6 @@ class HudWayChannels(
                 false
             }
             clear = if (ok) "ok" else "refused"
-            if (ok) prefs.edit().remove(KEY_CAN_LEFT).remove(KEY_REST_LEFT).apply()
         }
         var stopped: Map<Long, Int> = emptyMap()
         val bridge = gateway
@@ -414,12 +413,13 @@ class HudWayChannels(
             return HudCanChannel.Rest(hours, minutes, totalDistM.toLong().coerceIn(0L, MAX_REST_MILEAGE_M), arrive)
         }
 
-        /** Blanks the CAN fields with the SDK's invalid distance 0, then way 3's rest of route when
-         *  it may be up; true when every write was accepted. */
+        /** Blanks the CAN fields with the SDK's invalid distance 0, then way 3's rest of route, each
+         *  only under its own marker and each marker forgotten on its own accepted clear; true when
+         *  neither is left. */
         private suspend fun clearCan(can: HudCanChannel, prefs: SharedPreferences): Boolean {
-            val guidance = cleared(can.clear())
-            if (!prefs.contains(KEY_REST_LEFT)) return guidance
-            return can.clearRest().all(::accepted) && guidance
+            if (prefs.contains(KEY_CAN_LEFT) && cleared(can.clear())) prefs.edit().remove(KEY_CAN_LEFT).apply()
+            if (prefs.contains(KEY_REST_LEFT) && can.clearRest().all(::accepted)) prefs.edit().remove(KEY_REST_LEFT).apply()
+            return !prefs.contains(KEY_CAN_LEFT) && !prefs.contains(KEY_REST_LEFT)
         }
 
         /** A clear the car took: all four writes accepted. The HUD check drops its marker on it too. */
@@ -438,7 +438,6 @@ class HudWayChannels(
                 if (it is CancellationException) throw it
                 false
             }
-            if (ok) prefs.edit().remove(KEY_CAN_LEFT).remove(KEY_REST_LEFT).apply()
             log("hud way: leftover can clear=${if (ok) "ok" else "refused"}")
             Trace.event(TraceArea.HUD, "way-leftover", "what" to "can", "ok" to ok)
             return ok
