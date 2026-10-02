@@ -33,6 +33,7 @@ class NavA11yFeedNoGuidanceTraceTest {
     private val walks get() = lines.filter { it.startsWith("nav tree [no-guidance]:") }
     private val againLines get() = lines.filter { it.startsWith("guidance read again") }
     private val notFoundLines get() = lines.filter { it == "timer read: navigator window not found" }
+    private val windowLines get() = lines.filter { it.startsWith("no-guidance window:") }
 
     @Before fun installSink() {
         NavA11yFeed.enabled = false   // a fresh episode
@@ -49,7 +50,7 @@ class NavA11yFeedNoGuidanceTraceTest {
     @Test fun `a lost guidance logs the window, the counts and one id walk`() {
         armGuidance()
         val root = emptyGuidanceRoot()
-        timerRead(root, T0 + 1_000, navWindows = 2)
+        timerRead(root, T0 + 1_000, windows = listOf(emptyGuidanceRoot(), emptyGuidanceRoot(windowId = 9)))
         assertEquals(
             listOf("no-guidance read: src=timer display=? window=7 type=1 active=true focused=false navWindows=2 " +
                 "nodes=2 ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1]"),
@@ -66,7 +67,7 @@ class NavA11yFeedNoGuidanceTraceTest {
     @Test @Config(sdk = [32])
     fun `the display is read where the window info has one`() {
         armGuidance()
-        timerRead(emptyGuidanceRoot(displayId = 2), T0 + 1_000, navWindows = 1)
+        timerRead(emptyGuidanceRoot(displayId = 2), T0 + 1_000)
         assertTrue(readLines.single(), " display=2 window=7 " in readLines.single())
     }
 
@@ -75,7 +76,7 @@ class NavA11yFeedNoGuidanceTraceTest {
         val root = emptyGuidanceRoot()
         every { root.window } returns null
         every { root.windowId } throws IllegalStateException("stale")
-        timerRead(root, T0 + 1_000, navWindows = null)
+        timerRead(root, T0 + 1_000, windows = null)
         assertTrue(readLines.single(),
             readLines.single().startsWith("no-guidance read: src=timer display=? window=? type=? active=? focused=? navWindows=? "))
     }
@@ -137,6 +138,53 @@ class NavA11yFeedNoGuidanceTraceTest {
         assertEquals(500, s.distanceMeters)
     }
 
+    @Test fun `every navigator window gets a line, the one that was read is marked`() {
+        armGuidance()
+        val read = emptyGuidanceRoot(windowId = 7)
+        val windows = listOf(emptyGuidanceRoot(windowId = 7), widgetsRoot(windowId = 9))
+        timerRead(read, T0 + 1_000, windows = windows)
+        assertTrue(readLines.single(), " navWindows=2 " in readLines.single())
+        assertEquals(
+            listOf(
+                "no-guidance window: display=? window=7 type=1 active=true focused=false read=true " +
+                    "ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1]",
+                "no-guidance window: display=? window=9 type=1 active=false focused=false read=false " +
+                    "ids[maneuver=1 distance=1 metrics=1 nextstreet=1 status=0 eta=0]",
+            ),
+            windowLines,
+        )
+        // The window lines follow the read line, before the id walk.
+        assertEquals(readLines.single(), lines[lines.indexOf(windowLines.first()) - 1])
+        lines.forEach { assertFalse(it, "Ленина" in it || "Маршрут" in it) }
+        windows.forEach { verify(exactly = 1) { it.recycle() } }
+        verify(exactly = 1) { read.recycle() }
+        issued.forEach { verify(exactly = 1) { it.recycle() } }
+    }
+
+    @Test fun `one navigator window, one window line`() {
+        armGuidance()
+        timerRead(emptyGuidanceRoot(), T0 + 1_000)
+        assertEquals(1, windowLines.size)
+        assertTrue(windowLines.single(), " read=true " in windowLines.single())
+    }
+
+    @Test fun `an unreadable window list writes the read line and no window line`() {
+        armGuidance()
+        timerRead(emptyGuidanceRoot(), T0 + 1_000, windows = null)
+        assertEquals(1, readLines.size)
+        assertTrue(readLines.single(), " navWindows=? " in readLines.single())
+        assertTrue(windowLines.isEmpty())
+    }
+
+    @Test fun `at most 6 window lines, every window recycled`() {
+        armGuidance()
+        val windows = (1..8).map { emptyGuidanceRoot(windowId = 10 + it) }
+        timerRead(emptyGuidanceRoot(), T0 + 1_000, windows = windows)
+        assertTrue(readLines.single(), " navWindows=8 " in readLines.single())
+        assertEquals(6, windowLines.size)
+        windows.forEach { verify(exactly = 1) { it.recycle() } }
+    }
+
     /** Active a11y guidance in the hub (500 m ahead) at [atMs]. */
     private fun armGuidance(atMs: Long = T0) {
         NavA11yFeed.enabled = true
@@ -144,9 +192,14 @@ class NavA11yFeedNoGuidanceTraceTest {
             NavGuidanceHub.Source.A11Y, nowMs = atMs)
     }
 
-    private fun timerRead(root: AccessibilityNodeInfo?, atMs: Long, navWindows: Int? = 1) {
+    /** [windows]: the navigator window roots the service lists, null when the list is unreadable. */
+    private fun timerRead(
+        root: AccessibilityNodeInfo?,
+        atMs: Long,
+        windows: List<AccessibilityNodeInfo>? = listOf(emptyGuidanceRoot()),
+    ) {
         NavA11yFeed.lastProcessMs = 0L
-        NavA11yFeed.onTimer(service(root, navWindows), atMs)
+        NavA11yFeed.onTimer(service(root, windows), atMs)
     }
 
     private fun eventRead(root: AccessibilityNodeInfo) {
@@ -154,33 +207,49 @@ class NavA11yFeedNoGuidanceTraceTest {
         val event = mockk<AccessibilityEvent>(relaxed = true)
         every { event.eventType } returns AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         every { event.packageName } returns PKG
-        NavA11yFeed.onEvent(service(root, 1), event)
+        NavA11yFeed.onEvent(service(root, listOf(emptyGuidanceRoot())), event)
     }
 
-    private fun service(root: AccessibilityNodeInfo?, navWindows: Int?) = mockk<SteeringWheelKeyService> {
-        every { findNavigatorRoot() } returns root
-        every { countNavigatorWindows() } returns navWindows
-    }
+    private fun service(root: AccessibilityNodeInfo?, windows: List<AccessibilityNodeInfo>?) =
+        mockk<SteeringWheelKeyService> {
+            every { findNavigatorRoot() } returns root
+            every { navigatorWindowRoots() } returns windows
+        }
 
     /** A navigator window whose guidance widgets are there but blank: the parse reads no guidance. */
-    private fun emptyGuidanceRoot(displayId: Int? = null): AccessibilityNodeInfo {
+    private fun emptyGuidanceRoot(displayId: Int? = null, windowId: Int = 7): AccessibilityNodeInfo {
         val status = node(id = "status_panel_text", text = "Маршрут")
         val root = node(id = "root_container", children = listOf(status))
-        every { root.packageName } returns PKG
-        every { root.windowId } returns 7
-        val window = mockk<AccessibilityWindowInfo>(relaxed = true)
-        every { window.type } returns AccessibilityWindowInfo.TYPE_APPLICATION
-        every { window.isActive } returns true
-        every { window.isFocused } returns false
-        // getDisplayId() exists from API 30 on, so it is stubbed only where the test runs there.
-        if (displayId != null) every { window.displayId } returns displayId
-        every { root.window } returns window
-        every { root.findAccessibilityNodeInfosByViewId(any()) } answers { emptyList() }
+        withWindow(root, windowId, active = true, displayId = displayId)
         lookup(root, "image_maneuverballoon_maneuver") { descNode("") }
         lookup(root, "text_maneuverballoon_distance") { textNode("") }
         lookup(root, "status_panel_text") { textNode("Маршрут") }
         lookup(root, "textview_eta_time") { textNode("12:30") }
         return root
+    }
+
+    /** A second navigator window that does hold the guidance widgets. */
+    private fun widgetsRoot(windowId: Int): AccessibilityNodeInfo {
+        val root = node(id = "root_container")
+        withWindow(root, windowId, active = false, displayId = null)
+        lookup(root, "image_maneuverballoon_maneuver") { descNode("Поверните направо") }
+        lookup(root, "text_maneuverballoon_distance") { textNode("300") }
+        lookup(root, "text_maneuverballoon_metrics") { textNode("м") }
+        lookup(root, "text_nextstreet") { textNode("Ленина") }
+        return root
+    }
+
+    private fun withWindow(root: AccessibilityNodeInfo, windowId: Int, active: Boolean, displayId: Int?) {
+        every { root.packageName } returns PKG
+        every { root.windowId } returns windowId
+        val window = mockk<AccessibilityWindowInfo>(relaxed = true)
+        every { window.type } returns AccessibilityWindowInfo.TYPE_APPLICATION
+        every { window.isActive } returns active
+        every { window.isFocused } returns false
+        // getDisplayId() exists from API 30 on, so it is stubbed only where the test runs there.
+        if (displayId != null) every { window.displayId } returns displayId
+        every { root.window } returns window
+        every { root.findAccessibilityNodeInfosByViewId(any()) } answers { emptyList() }
     }
 
     private fun guidanceRoot(): AccessibilityNodeInfo {

@@ -25,6 +25,8 @@ object NavA11yFeed {
      *  alternate codes faster than the driver passes intersections. */
     private const val TREE_DUMP_MIN_INTERVAL_MS = 30_000L
     private const val NO_MANEUVER = Int.MIN_VALUE
+    /** Navigator windows described per no-guidance streak, so a stray window list stays short. */
+    private const val TRACE_MAX_WINDOWS = 6
     /** A standing car changes nothing on screen, so no events come and the hub would expire
      *  the maneuver (MANEUVER_TIMEOUT_MS) while the navigator still shows it: the window is
      *  re-read when no read happened for this long, looked at on the same period. */
@@ -264,16 +266,36 @@ object NavA11yFeed {
         service: SteeringWheelKeyService,
     ) {
         if (!noGuidanceTrace.startsStreak(nowMs) { NavGuidanceHub.snapshot(nowMs).active }) return
-        runCatching {
-            val navWindows = runCatching { service.countNavigatorWindows() }.getOrNull()
-            val ids = StringBuilder()
-            val budget = intArrayOf(TREE_DUMP_MAX_NODES)
-            appendIds(root, ids, budget)
-            val walked = TREE_DUMP_MAX_NODES - budget[0]
-            val nodes = if (budget[0] <= 0) "$walked+" else "$walked"
-            traceSink("no-guidance read: src=$src ${NavA11yExtractor.windowFacts(root)} " +
-                "navWindows=${navWindows ?: "?"} nodes=$nodes ${NavA11yExtractor.countIds(root)}")
-            if (noGuidanceTrace.takeDump(nowMs)) traceSink("nav tree [no-guidance]:${ids.take(TREE_DUMP_MAX_CHARS)}")
+        val windows = runCatching { service.navigatorWindowRoots() }.getOrNull()
+        try {
+            runCatching {
+                val ids = StringBuilder()
+                val budget = intArrayOf(TREE_DUMP_MAX_NODES)
+                appendIds(root, ids, budget)
+                val walked = TREE_DUMP_MAX_NODES - budget[0]
+                val nodes = if (budget[0] <= 0) "$walked+" else "$walked"
+                traceSink("no-guidance read: src=$src ${NavA11yExtractor.windowFacts(root)} " +
+                    "navWindows=${windows?.size ?: "?"} nodes=$nodes ${NavA11yExtractor.countIds(root)}")
+                traceWindows(root, windows.orEmpty())
+                if (noGuidanceTrace.takeDump(nowMs)) traceSink("nav tree [no-guidance]:${ids.take(TREE_DUMP_MAX_CHARS)}")
+            }
+        } finally {
+            @Suppress("DEPRECATION")
+            windows?.forEach { runCatching { it.recycle() } }
+        }
+    }
+
+    /** One line per Navigator window (at most [TRACE_MAX_WINDOWS]): the guidance widgets may
+     *  live in another window than the one [SteeringWheelKeyService.findNavigatorRoot] handed
+     *  to the read (issue #199). [read] and [windows] stay the caller's. */
+    private fun traceWindows(read: AccessibilityNodeInfo, windows: List<AccessibilityNodeInfo>) {
+        val readId = runCatching { read.windowId }.getOrNull()
+        for (window in windows.take(TRACE_MAX_WINDOWS)) {
+            runCatching {
+                val isRead = readId != null && runCatching { window.windowId }.getOrNull() == readId
+                traceSink("no-guidance window: ${NavA11yExtractor.windowFacts(window)} read=$isRead " +
+                    NavA11yExtractor.countIds(window))
+            }
         }
     }
 
