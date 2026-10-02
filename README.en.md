@@ -37,6 +37,16 @@ All core features (trips, charges, automations, local insights, offline voice ag
 
 ## What's New
 
+The main changes in version 3.19.6.
+
+**Yandex track on the cluster.** The track title and artist from Yandex Music and from the music in Yandex Navigator (Alice) are shown on the music card on the cluster; the car used to leave that card blank. Turned on with the “Yandex track on the cluster” switch in **Settings → Display**, off by default. Thanks to @vladh91 for this contribution. Not checked on cars in its final form yet.
+
+**HUD, way 3 gives the car more.** Besides the arrow, the meters and the street it now sends the remaining time and distance to the end of the route and the arrival time, and it sends the arrow, the meters and the street by a second path as well. If way 2 shows the meters and the street on the glass but no arrow, try way 3. Ways 1 and 2 did not change. Not checked on cars yet.
+
+**HUD understands more maneuvers.** Navigator hints in English, the roundabout exit number in words (“second exit”), “sharp left”, “slight right” and others. Maneuvers the app understood before are read the same way.
+
+**HUD holds the hint longer.** If the app stops seeing the hint in the Navigator window for a while, the glass no longer goes dark after 10 seconds: it waits up to a minute and a half. After a route is cancelled, the last distance and street may stay on the glass for the same time. On cars without Google services the Navigator notification “Install Google Play services” no longer turns the HUD on without a route.
+
 The main changes in version 3.19.5.
 
 **New automation actions.** “Close app” closes the chosen app completely; a route or music in it that is not saved will be lost. “Media: play” and “Media: pause” resume or pause what is playing in a player that is already running. If no player is running, put “Launch app” before this step. One rule now holds up to 20 actions.
@@ -322,7 +332,7 @@ If the car has a factory head-up display, BYDMate draws Yandex Navigator guidanc
 
 Enable it in **Settings → Display**, section "HUD (head-up display)": the "Navigation on HUD" toggle and, separately, "Speed sign under the arrow". The way of drawing on the glass is chosen there too: Way 1 is the default, Ways 2 and 3 are for cars where the glass is empty in Way 1. Guidance travels over the HUD's own factory channel, so a car equipped with a head-up display is required. If the car has no such channel, the app says so in Settings and does not enable the feature.
 
-**What the app changes in the car.** In Way 1, nothing: hints go over the HUD's own channel. In Ways 2 and 3, while "Navigation on HUD" is on and the navigator is guiding a route, BYDMate turns on the car's navigation mode and writes the arrow, the meters and the street to the navigation card on the cluster. Once the route ends, the way is changed or the toggle is off, everything returns to how it was. With the toggle off, the app does not touch anything in the car.
+**What the app changes in the car.** In Way 1, nothing: hints go over the HUD's own channel. In Ways 2 and 3, while "Navigation on HUD" is on and the navigator is guiding a route, BYDMate turns on the car's navigation mode and writes the arrow, the meters and the street to the navigation card on the cluster. In Way 3 the remaining time and distance to the end of the route and the arrival time go there too. Once the route ends, the way is changed or the toggle is off, everything returns to how it was. With the toggle off, the app does not touch anything in the car.
 
 **If nothing shows up on the glass.** Open **Settings → Service & Data**, "Data" section, and tap **"Start"** next to the "HUD check" line. The car needs to be parked, with no route running in the navigator. The check takes about two minutes and shows the numbers 111, 222, 333 and 444 on the glass one after another, each by its own way. At the end it asks which number you saw and sets the right way itself. If the glass showed nothing, record a log with the log recording button and send it in a GitHub issue along with your car model.
 
