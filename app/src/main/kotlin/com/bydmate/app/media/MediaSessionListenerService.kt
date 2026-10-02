@@ -90,13 +90,18 @@ class MediaSessionListenerService : NotificationListenerService() {
             // on the lane; the raw-text holder clears right away as before.
             // Null lane (onDestroy teardown race): still clear the holder.
             val l = lane
-            val pkg = sbn.packageName
-            val id = sbn.id
-            val trace = if (isMediaNotification(sbn.notification)) null else Runnable {
-                if (naviNotifGate.takeRemoval(System.currentTimeMillis())) {
-                    naviNotifSink(NaviNotifTraceGate.removedLine(pkg, id))
+            // Field trace (#199), gated here so a suppressed removal enqueues nothing; built in
+            // its own runCatching so a notification it cannot read only loses the line.
+            val trace = if (l == null) null else runCatching {
+                if (isMediaNotification(sbn.notification) ||
+                    !naviNotifGate.takeRemoval(System.currentTimeMillis())
+                ) return@runCatching null
+                val line = NaviNotifTraceGate.removedLine(sbn.packageName, sbn.id)
+                Runnable {
+                    naviNotifGate.removalWritten()
+                    naviNotifSink(line)
                 }
-            }
+            }.getOrNull()
             if (l != null) {
                 l.onRemoved(
                     legacyClear = Runnable { NaviRouteHolder.clear(sbn.packageName) },
@@ -200,9 +205,10 @@ class MediaSessionListenerService : NotificationListenerService() {
     private fun tracePost(n: Notification, pkg: String, id: Int, kind: String, update: NavGuidanceHub.RichUpdate?) {
         val ongoing = (n.flags and Notification.FLAG_ONGOING_EVENT) != 0
         val man = update?.maneuverGaode ?: 0
-        if (!naviNotifGate.takePost(NaviNotifTraceGate.postKey(id, ongoing, kind, man), System.currentTimeMillis())) return
+        val skippedChanges = naviNotifGate.takePost(
+            NaviNotifTraceGate.postKey(id, ongoing, kind, man), System.currentTimeMillis()) ?: return
         naviNotifSink(NaviNotifTraceGate.postLine(pkg, id, ongoing, n.channelId, kind, man,
-            update?.distanceMeters ?: 0, update?.road?.length ?: 0))
+            update?.distanceMeters ?: 0, update?.road?.length ?: 0, skippedChanges))
     }
 
     private fun smallIconName(n: Notification, resolveName: (Int) -> String?): String =

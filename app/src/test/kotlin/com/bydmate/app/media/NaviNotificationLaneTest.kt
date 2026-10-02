@@ -99,6 +99,12 @@ class NaviNotificationLaneTest {
     }
 
     @Test
+    fun `a removal trace is enqueued after the deactivate check and the legacy clear`() {
+        lane.onRemoved(Runnable { exec.events.add("clear") }, trace = Runnable { })
+        assertEquals(listOf("schedule", "clear", "enqueue"), exec.events)
+    }
+
+    @Test
     fun `removal after shutdown does not throw and legacy clear still runs`() {
         exec.rejectAll = true
         var cleared = false

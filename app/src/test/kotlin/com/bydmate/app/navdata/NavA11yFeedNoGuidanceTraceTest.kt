@@ -30,7 +30,7 @@ class NavA11yFeedNoGuidanceTraceTest {
     private val issued = mutableListOf<AccessibilityNodeInfo>()
 
     private val readLines get() = lines.filter { it.startsWith("no-guidance read:") }
-    private val walks get() = lines.filter { it.startsWith("nav tree [no-guidance]:") }
+    private val walks get() = lines.filter { it.startsWith("nav tree [no-guidance") }
     private val againLines get() = lines.filter { it.startsWith("guidance read again") }
     private val notFoundLines get() = lines.filter { it == "timer read: navigator window not found" }
     private val windowLines get() = lines.filter { it.startsWith("no-guidance window:") }
@@ -53,10 +53,11 @@ class NavA11yFeedNoGuidanceTraceTest {
         timerRead(root, T0 + 1_000, windows = listOf(emptyGuidanceRoot(), emptyGuidanceRoot(windowId = 9)))
         assertEquals(
             listOf("no-guidance read: src=timer display=? window=7 type=1 active=true focused=false navWindows=2 " +
-                "nodes=2 ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1]"),
+                "skipped=0 ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1]"),
             readLines,
         )
         assertEquals(1, walks.size)
+        assertTrue(walks.single(), walks.single().startsWith("nav tree [no-guidance nodes=2]:"))
         assertTrue(walks.single(), " status_panel_text:t7" in walks.single())
         // No screen text in any new line: the status panel and the ETA carry the route.
         lines.forEach { assertFalse(it, "Маршрут" in it || "12:30" in it) }
@@ -117,6 +118,10 @@ class NavA11yFeedNoGuidanceTraceTest {
         NavA11yFeed.lastProcessMs = 0L
         eventRead(emptyGuidanceRoot())
         assertTrue(lines.isEmpty())
+        // Control: the same read with a route guided is traced.
+        armGuidance(System.currentTimeMillis())
+        eventRead(emptyGuidanceRoot())
+        assertEquals(1, readLines.size)
     }
 
     @Test fun `a missing navigator window on a timer read is said once until a window is found`() {
@@ -132,10 +137,56 @@ class NavA11yFeedNoGuidanceTraceTest {
     @Test fun `a traced read leaves the hub as it was`() {
         armGuidance()
         timerRead(emptyGuidanceRoot(), T0 + 1_000)
+        assertEquals(1, readLines.size)
         val s = NavGuidanceHub.snapshot(T0 + 15_000)
         assertTrue(s.active)
         assertEquals(T0, s.lastUpdateMs)
         assertEquals(500, s.distanceMeters)
+    }
+
+    @Test fun `the trace reads the route state without writing it`() {
+        // Guidance 95 s old with a camera: snapshot() would expire it. A traced read in between
+        // must leave the stored state exactly as a run without that read does.
+        fun run(withRead: Boolean): NavGuidanceHub.Snapshot {
+            NavGuidanceHub.reset()
+            NavA11yFeed.enabled = false
+            NavA11yFeed.enabled = true
+            val now = System.currentTimeMillis()
+            NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+                maneuverGaode = 2, distanceMeters = 500, road = "x",
+                cameraAlert = "camera", cameraDistanceMeters = 300), nowMs = now - 95_000)
+            if (withRead) eventRead(emptyGuidanceRoot())
+            NavGuidanceHub.update(NavGuidance(distanceMeters = 400), NavGuidanceHub.Source.A11Y, nowMs = now + 1_000)
+            return NavGuidanceHub.snapshot(now + 1_000)
+        }
+        val without = run(withRead = false)
+        val with = run(withRead = true)
+        assertEquals(1, readLines.size)
+        assertEquals(without, with)
+        assertEquals("camera", with.cameraAlert)
+    }
+
+    @Test fun `flapping guidance writes at most one start line per 5 s and one walk`() {
+        armGuidance()
+        for (k in 1..40) {
+            val root = if (k % 2 == 1) emptyGuidanceRoot() else guidanceRoot()
+            timerRead(root, T0 + k * 500L)
+        }
+        assertEquals(4, readLines.size)
+        assertEquals(listOf("0", "4", "4", "4"), readLines.map { it.substringAfter(" skipped=").substringBefore(' ') })
+        assertEquals(4, againLines.size)
+        assertEquals(1, walks.size)
+    }
+
+    @Test fun `the id walk does not run inside its 60 s floor`() {
+        armGuidance()
+        timerRead(emptyGuidanceRoot(), T0 + 1_000)
+        timerRead(guidanceRoot(), T0 + 6_000)
+        val second = emptyGuidanceRoot()
+        timerRead(second, T0 + 11_000)
+        assertEquals(2, readLines.size)
+        assertEquals(1, walks.size)
+        verify(exactly = 0) { second.getChild(any()) }
     }
 
     @Test fun `every navigator window gets a line, the one that was read is marked`() {
