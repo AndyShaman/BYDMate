@@ -82,6 +82,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Pokrętło głośności na kierownicy</string>
     <string name="settings_knob_play_pause_desc">Naciśnięcie wstrzymuje i wznawia odtwarzanie zamiast przełączać źródło dźwięku. Potrzebne po aktualizacji oprogramowania, w której naciśnięcie zaczęło zmieniać źródło.</string>
+    <string name="settings_cluster_music_card_title">Utwór z Yandex na zegarach</string>
+    <string name="settings_cluster_music_card_desc">Pokazuje tytuł i wykonawcę z Yandex Navigator (Alice) i Yandex Music na karcie muzyki na zegarach. Fabryczne oprogramowanie wypełnia ją tylko dla własnych odtwarzaczy i Bluetooth.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Przywracaj ADB po restarcie</string>

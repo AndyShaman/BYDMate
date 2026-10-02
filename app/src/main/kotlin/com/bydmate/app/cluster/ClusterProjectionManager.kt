@@ -101,6 +101,8 @@ object ClusterProjectionManager {
     const val KEY_MIRROR_ENABLED = "mirror_enabled"
     // Read by SteeringWheelKeyService: volume-knob press = play/pause instead of source switch.
     const val KEY_KNOB_PLAY_PAUSE = "knob_play_pause"
+    // Read by ClusterMusicBridge: mirror Yandex music onto the instrument's music card.
+    const val KEY_CLUSTER_MUSIC_CARD = "cluster_music_card"
     // Steering-wheel keycode that toggles projection. Default = right star (DEFAULT_TRIGGER_KEYCODE).
     // Stored independently of the master switch so the choice survives turning the feature off.
     const val KEY_TRIGGER_KEYCODE = "trigger_keycode"

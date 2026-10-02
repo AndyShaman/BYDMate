@@ -362,6 +362,8 @@ class LogRecorder internal constructor(
             "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*",
             // Amap-channel wave: notification lane + parser tags.
             "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*",
+            // Cluster music card: what the bridge decided and wrote.
+            "ClusterMusicBridge:*",
             // Blindspot wave: AVM camera probe. FidPush carries the daemon's push
             // subscription (register results, events) and the app's apply lines.
             "FidPush:*", "TechPanel:*", "CameraProbe:*", "BlindSpot:*", "CameraMonitor:*",
