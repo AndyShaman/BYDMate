@@ -85,13 +85,7 @@ object NaviRichPostProcessor {
         val road = extractRoad(title, text)
         val etaSeconds = parseEtaSeconds(extraSubText ?: "")
 
-        if (smallIconName == "notifications_app_logo" ||
-            (distanceMeters == 0 && road.contains("навигатор", ignoreCase = true))
-        ) return null
-        // Neither a distance nor a maneuver: a service notice, not guidance. Its title would
-        // otherwise become the road and start guidance without a route (#198: "Установите
-        // сервисы Google Play" on a car without Google services).
-        if (distanceMeters == 0 && maneuver == 0) return null
+        if (isIdleOrNotice(smallIconName, distanceMeters, maneuver, road)) return null
 
         val mergeManeuver = if (isMaps && hubHasKnownManeuver) 0 else maneuver
         val mergeRoad = if (road.isNotEmpty() && road != "Навигатор запущен") road else ""
@@ -106,6 +100,13 @@ object NaviRichPostProcessor {
             applyCamera = false,
         )
     }
+
+    /** An idle stub (app-logo icon, or no distance with a "навигатор" road) or a service notice:
+     *  neither a distance nor a maneuver, whose title would otherwise become the road and start
+     *  guidance without a route (#198: "Установите сервисы Google Play" without Google services). */
+    private fun isIdleOrNotice(smallIconName: String, distanceMeters: Int, maneuver: Int, road: String): Boolean =
+        smallIconName == "notifications_app_logo" ||
+            (distanceMeters == 0 && (maneuver == 0 || road.contains("навигатор", ignoreCase = true)))
 
     internal fun parseEtaSeconds(s: String): Int {
         if (s.isBlank()) return 0
