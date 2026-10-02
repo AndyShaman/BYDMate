@@ -2,7 +2,6 @@ package com.bydmate.app.media
 
 import android.content.ComponentName
 import android.content.Context
-import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -70,13 +69,6 @@ class ClusterMusicBridge @Inject constructor(
     @Volatile private var job: Job? = null
     @Volatile private var ensureAccess: (suspend (String) -> Unit)? = null
     private val access = ClusterMusicAccess(ACCESS_RETRY_MS)
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-
-    /** BYD's `AudioManager.getCurrentAudioFocusPackage()`, absent from stock Android; null when missing. */
-    private val focusPackageMethod = runCatching { AudioManager::class.java.getMethod("getCurrentAudioFocusPackage") }
-        .onFailure { Log.w(TAG, "no getCurrentAudioFocusPackage on this firmware, deciding by sessions only") }
-        .getOrNull()
-    private var lastFocusPackage: String? = null
     private var wasEnabled = false
     private var lastFids: ClusterMusicFids? = null
     private var fidsLogged = false
@@ -202,20 +194,7 @@ class ClusterMusicBridge @Inject constructor(
                 durationMs = md?.getLong(MediaMetadata.METADATA_KEY_DURATION),
             )
         }
-        return ClusterMusicCard.decide(sessions, focusPackage())
-    }
-
-    /** The audio-focus owner, the stock controller's own signal; null when this firmware can't say. */
-    private fun focusPackage(): String? {
-        val method = focusPackageMethod ?: return null
-        val focus = runCatching { method.invoke(audioManager) as? String }
-            .onFailure { Log.w(TAG, "getCurrentAudioFocusPackage failed: ${it.message}") }
-            .getOrNull()
-        if (focus != lastFocusPackage) {
-            Log.i(TAG, "focus ${focus?.ifEmpty { "none" }}")
-            lastFocusPackage = focus
-        }
-        return focus
+        return ClusterMusicCard.decide(sessions)
     }
 
     private fun report(outcome: Outcome, target: Target?, reason: String? = null) {

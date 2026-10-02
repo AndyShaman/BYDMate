@@ -59,7 +59,7 @@ object ClusterMusicCard {
         /** A source package owns playback: the card should say this. */
         data class Show(val card: Card) : Target
 
-        /** Another app holds focus or is playing: the stock controller owns the card, hands off. */
+        /** Another app is playing: the stock controller owns the card, hands off. */
         data class OtherPlaying(val packageName: String) : Target
 
         /** Nobody is playing and no source session has a track: nothing of ours belongs there. */
@@ -67,31 +67,16 @@ object ClusterMusicCard {
     }
 
     /**
-     * Picks the playback owner.
-     *
-     * [focusPackage] is the audio-focus owner (`AudioManager.getCurrentAudioFocusPackage()`, the
-     * same signal the stock controller decides by), null or empty when unknown. A known non-source
-     * owner is [Target.OtherPlaying] whatever the sessions say: the FM tuner plays through
-     * `com.byd.mediacenter` without a playing session, so sessions alone would let a paused Yandex
-     * session put its card back over the radio. A source owner narrows the choice to its own sessions.
-     *
-     * Without a focus owner, it falls back to the sessions ([sessions] in the system's priority
-     * order): the first one that is playing or buffering, else the first paused one. A source
-     * package becomes [Target.Show]; any other playing app is [Target.OtherPlaying], so a paused
-     * Yandex session never outranks the stock player or Bluetooth that is actually playing. A
-     * paused non-source owner, a stopped source or an untitled one is [Target.Idle].
+     * Picks the playback owner across *all* sessions ([sessions] in the system's priority order):
+     * the first one that is playing or buffering, else the first paused one. A source package
+     * becomes [Target.Show]; any other playing app is [Target.OtherPlaying], so a paused Yandex
+     * session never outranks the stock player or Bluetooth that is actually playing. A paused
+     * non-source owner, a stopped source or an untitled one is [Target.Idle].
      */
-    fun decide(
-        sessions: List<SessionSnapshot>,
-        focusPackage: String? = null,
-        sources: List<String> = SOURCE_PACKAGES,
-    ): Target {
-        val focus = focusPackage?.takeIf { it.isNotEmpty() }
-        if (focus != null && focus !in sources) return Target.OtherPlaying(focus)
-        val candidates = if (focus != null) sessions.filter { it.packageName == focus } else sessions
-        val playing = candidates.firstOrNull { it.playbackState == PB_PLAYING || it.playbackState == PB_BUFFERING }
+    fun decide(sessions: List<SessionSnapshot>, sources: List<String> = SOURCE_PACKAGES): Target {
+        val playing = sessions.firstOrNull { it.playbackState == PB_PLAYING || it.playbackState == PB_BUFFERING }
         if (playing != null && playing.packageName !in sources) return Target.OtherPlaying(playing.packageName)
-        val owner = playing ?: candidates.firstOrNull { it.playbackState == PB_PAUSED }
+        val owner = playing ?: sessions.firstOrNull { it.playbackState == PB_PAUSED }
         if (owner == null || owner.packageName !in sources || owner.title.isNullOrBlank()) return Target.Idle
         return Target.Show(
             Card(
