@@ -1,5 +1,6 @@
 package com.bydmate.app.navdata
 
+import android.os.Build
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Extracts guidance widgets from a Navigator a11y tree into NavGuidance.
@@ -11,6 +12,16 @@ object NavA11yExtractor {
 
     /** The maneuver image; read by the parse and by [probeManeuver]. */
     private const val MANEUVER_ID = "image_maneuverballoon_maneuver"
+    private const val DISTANCE_ID = "text_maneuverballoon_distance"
+    private const val METRICS_ID = "text_maneuverballoon_metrics"
+    private const val NEXT_STREET_ID = "text_nextstreet"
+    private const val STATUS_ID = "status_panel_text"
+    private const val ETA_TIME_ID = "textview_eta_time"
+    /** The widgets the parse decides guidance by, counted by [countIds] under these names. */
+    private val TRACED_IDS = listOf(
+        "maneuver" to MANEUVER_ID, "distance" to DISTANCE_ID, "metrics" to METRICS_ID,
+        "nextstreet" to NEXT_STREET_ID, "status" to STATUS_ID, "eta" to ETA_TIME_ID,
+    )
 
     sealed class ReadResult {
         object NotNavigator : ReadResult()
@@ -27,11 +38,11 @@ object NavA11yExtractor {
         val raw = NavGuidanceParser.RawFields(
             maneuverDesc = descOf(root, "$pkg:id/$MANEUVER_ID"),
             exitNumber = textOf(root, "$pkg:id/exit_number_text"),
-            distance = textOf(root, "$pkg:id/text_maneuverballoon_distance"),
-            distanceUnit = textOf(root, "$pkg:id/text_maneuverballoon_metrics"),
-            nextStreet = textOf(root, "$pkg:id/text_nextstreet"),
-            statusPanel = textOf(root, "$pkg:id/status_panel_text"),
-            etaTime = descOrTextOf(root, "$pkg:id/textview_eta_time"),
+            distance = textOf(root, "$pkg:id/$DISTANCE_ID"),
+            distanceUnit = textOf(root, "$pkg:id/$METRICS_ID"),
+            nextStreet = textOf(root, "$pkg:id/$NEXT_STREET_ID"),
+            statusPanel = textOf(root, "$pkg:id/$STATUS_ID"),
+            etaTime = descOrTextOf(root, "$pkg:id/$ETA_TIME_ID"),
             etaDistance = textOf(root, "$pkg:id/textview_eta_distance"),
             speedLimit = textOf(root, "$pkg:id/text_speedlimit"),
         )
@@ -55,6 +66,38 @@ object NavA11yExtractor {
         } finally {
             @Suppress("DEPRECATION")
             nodes.forEach { runCatching { it.recycle() } }
+        }
+    }
+
+    /** The window [root] is drawn in, for the no-guidance log: display (API 30+), window id,
+     *  type and its active/focused flags; `?` for what cannot be read. [root] stays the caller's. */
+    internal fun windowFacts(root: AccessibilityNodeInfo): String {
+        val windowId = runCatching { root.windowId }.getOrNull()
+        val window = runCatching { root.window }.getOrNull()
+        try {
+            val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                runCatching { window?.displayId }.getOrNull()
+            } else null
+            val type = runCatching { window?.type }.getOrNull()
+            val active = runCatching { window?.isActive }.getOrNull()
+            val focused = runCatching { window?.isFocused }.getOrNull()
+            return "display=${display ?: "?"} window=${windowId ?: "?"} type=${type ?: "?"} " +
+                "active=${active ?: "?"} focused=${focused ?: "?"}"
+        } finally {
+            @Suppress("DEPRECATION")
+            runCatching { window?.recycle() }
+        }
+    }
+
+    /** How many nodes carry each id the parse decides guidance by, for the no-guidance log:
+     *  counts only, `?` for a lookup that threw. The nodes are recycled; [root] stays the caller's. */
+    internal fun countIds(root: AccessibilityNodeInfo): String {
+        val pkg = runCatching { root.packageName?.toString() }.getOrNull()
+        return TRACED_IDS.joinToString(" ", prefix = "ids[", postfix = "]") { (name, id) ->
+            val nodes = runCatching { root.findAccessibilityNodeInfosByViewId("$pkg:id/$id") }.getOrNull()
+            @Suppress("DEPRECATION")
+            nodes?.forEach { runCatching { it.recycle() } }
+            "$name=${nodes?.size ?: "?"}"
         }
     }
 
