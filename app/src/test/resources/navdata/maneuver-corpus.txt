@@ -1,0 +1,1016 @@
+   
+ TO 
+ to 
+) || LOWER.CONTAINS(
+) || lower.contains(
+), 
+, 
+1-Й
+1-Й СЪЕЗД
+1-й
+1-й съезд
+10-Й
+10-Й СЪЕЗД
+10-й
+10-й съезд
+10TH
+10TH EXIT
+10th
+10th exit
+11-Й СЪЕЗД
+11-й съезд
+11TH EXIT
+11th exit
+1ST
+1ST EXIT
+1st
+1st exit
+2-Й
+2-Й ПОВОРОТ
+2-Й СЪЕЗД
+2-й
+2-й поворот
+2-й съезд
+2ND
+2ND EXIT
+2nd
+2nd exit
+3-Й
+3-Й СЪЕЗД
+3-й
+3-й съезд
+3RD
+3RD EXIT
+3rd
+3rd exit
+4-Й
+4-Й СЪЕЗД
+4-й
+4-й съезд
+4TH
+4TH EXIT
+4th
+4th exit
+5-Й
+5-Й СЪЕЗД
+5-й
+5-й съезд
+5TH
+5TH EXIT
+5th
+5th exit
+6-Й
+6-Й СЪЕЗД
+6-й
+6-й съезд
+6TH
+6TH EXIT
+6th
+6th exit
+7-Й
+7-Й СЪЕЗД
+7-й
+7-й съезд
+7TH
+7TH EXIT
+7th
+7th exit
+8-Й
+8-Й СЪЕЗД
+8-й
+8-й съезд
+8TH
+8TH EXIT
+8th
+8th exit
+9-Й
+9-Й СЪЕЗД
+9-й
+9-й съезд
+9TH
+9TH EXIT
+9th
+9th exit
+>>>
+AHEAD
+ARRIVE AT DESTINATION
+AT THE ROUNDABOUT, TAKE THE 2ND EXIT
+Ahead
+Arrive at destination
+At the roundabout, take the 2nd exit
+BEAR LEFT
+BEAR RIGHT
+BOARD THE FERRY
+Bear left
+Bear right
+Board the ferry
+CIRCULAR
+COMPLETED
+CONTINUE
+CONTINUE STRAIGHT
+Circular
+Completed
+Continue
+Continue straight
+DESTINATION
+DONE
+DRIVE STRAIGHT
+Destination
+Done
+Drive straight
+EIGHTH
+EIGHTH EXIT
+END OF ROUTE
+ENTER THE ROUNDABOUT
+ENTER THE TUNNEL
+EXIT 1
+EXIT 10
+EXIT 2
+EXIT 3
+EXIT 4
+EXIT 5
+EXIT 6
+EXIT 7
+EXIT 8
+EXIT 9
+EXIT FERRY
+EXIT LEFT
+EXIT RIGHT
+EXIT THE FERRY
+EXIT THE ROUNDABOUT
+EXIT TO LEF
+EXIT TO LEFT
+EXIT TO RIGH
+EXIT TO RIGHT
+EXIT TO THE LEF
+EXIT TO THE LEFT
+EXIT TO THE RIGH
+EXIT TO THE RIGHT
+EXIT_LEFT
+EXIT_RIGHT
+Eighth
+Eighth exit
+End of route
+Enter the roundabout
+Enter the tunnel
+Exit 1
+Exit 10
+Exit 2
+Exit 3
+Exit 4
+Exit 5
+Exit 6
+Exit 7
+Exit 8
+Exit 9
+Exit ferry
+Exit left
+Exit right
+Exit the ferry
+Exit the roundabout
+Exit to lef
+Exit to left
+Exit to righ
+Exit to right
+Exit to the lef
+Exit to the left
+Exit to the righ
+Exit to the right
+Exit_left
+Exit_right
+FERRY
+FERRY TRANSFER
+FIFTH
+FIFTH EXIT
+FINISH
+FIRST
+FIRST EXIT
+FORK LEFT
+FORK RIGHT
+FORK_LEFT
+FORK_RIGHT
+FORWARD
+FOURTH
+FOURTH EXIT
+Ferry
+Ferry transfer
+Fifth
+Fifth exit
+Finish
+First
+First exit
+Fork left
+Fork right
+Fork_left
+Fork_right
+Forward
+Fourth
+Fourth exit
+GO STRAIGHT
+GO STRAIGHT AHEAD
+Go straight
+Go straight ahead
+HARD LEFT
+HARD_LEFT
+HARD_RIGHT
+HARD_TURN_LEFT
+HARD_TURN_RIGHT
+Hard left
+Hard_left
+Hard_right
+Hard_turn_left
+Hard_turn_right
+INTERMEDIATE
+INTERMEDIATE POINT
+Intermediate
+Intermediate point
+KEEP LEFT
+KEEP RIGHT
+KOLCO
+KONEC
+KRUG
+KRUTO_LEVO
+KRUTO_LEVYJ
+KRUTO_PRAVO
+KRUTO_PRAVYJ
+Keep left
+Keep right
+Kolco
+Konec
+Krug
+Kruto_levo
+Kruto_levyj
+Kruto_pravo
+Kruto_pravyj
+LEAVE THE ROUNDABOUT
+LEFT
+LEVO
+LEVYJ
+LINKS HALTEN
+Leave the roundabout
+Left
+Levo
+Levyj
+Links halten
+MAKE A U-TURN
+MAKE A U-TURN TO THE RIGHT
+Make a U-turn
+Make a U-turn to the right
+Make a u-turn
+Make a u-turn to the right
+NINTH
+NINTH EXIT
+NOTIFICATION_ARRIVE_SDL
+NOTIFICATION_BOARD_FERRY_SDL
+NOTIFICATION_ENTER_ROUNDABOUT_SDL
+NOTIFICATION_EXIT_LEFT_SDL
+NOTIFICATION_EXIT_RIGHT_SDL
+NOTIFICATION_FERRY_SDL
+NOTIFICATION_FINISH_SDL
+NOTIFICATION_FORK_LEFT_SDL
+NOTIFICATION_FORK_RIGHT_SDL
+NOTIFICATION_GO_AHEAD_SDL
+NOTIFICATION_HARD_LEFT_SDL
+NOTIFICATION_HARD_RIGHT_SDL
+NOTIFICATION_LEAVE_FERRY_SDL
+NOTIFICATION_LEAVE_ROUNDABOUT_SDL
+NOTIFICATION_LEFT_SDL
+NOTIFICATION_RIGHT_SDL
+NOTIFICATION_SLIGHT_LEFT_SDL
+NOTIFICATION_SLIGHT_RIGHT_SDL
+NOTIFICATION_STRAIGHT_SDL
+NOTIFICATION_UTURN_LEFT_SDL
+NOTIFICATION_UTURN_RIGHT_SDL
+NOTIFICATION_UTURN_SDL
+Ninth
+Ninth exit
+Notification_arrive_sdl
+Notification_board_ferry_sdl
+Notification_enter_roundabout_sdl
+Notification_exit_left_sdl
+Notification_exit_right_sdl
+Notification_ferry_sdl
+Notification_finish_sdl
+Notification_fork_left_sdl
+Notification_fork_right_sdl
+Notification_go_ahead_sdl
+Notification_hard_left_sdl
+Notification_hard_right_sdl
+Notification_leave_ferry_sdl
+Notification_leave_roundabout_sdl
+Notification_left_sdl
+Notification_right_sdl
+Notification_slight_left_sdl
+Notification_slight_right_sdl
+Notification_straight_sdl
+Notification_uturn_left_sdl
+Notification_uturn_right_sdl
+Notification_uturn_sdl
+POLULEVO
+POLUPRAVO
+POLU_LEVO
+POLU_PRAVO
+PRAVO
+PRAVYJ
+PRIBYTIE
+PRYAMO
+Polu_levo
+Polu_pravo
+Polulevo
+Polupravo
+Pravo
+Pravyj
+Pribytie
+Pryamo
+RAZVOROT
+RECHTS ABBIEGEN
+RECHTS ABBIEGEN AUF BAKER AVENIDA
+RECHTS ABBIEGEN AUF BAKER STRASSE
+RIGHT
+ROUNDABOUT
+ROUNDABOUT, THIRD EXIT
+ROUTE COMPLETED
+ROUTE ENDED
+Razvorot
+Rechts abbiegen
+Rechts abbiegen auf Baker Avenida
+Rechts abbiegen auf Baker Strasse
+Rechts abbiegen auf baker avenida
+Rechts abbiegen auf baker strasse
+Right
+Roundabout
+Roundabout, third exit
+Route completed
+Route ended
+SECOND
+SECOND EXIT
+SEVENTH
+SEVENTH EXIT
+SHARP LEFT
+SHARP RIGHT
+SIXTH
+SIXTH EXIT
+SLIGHT LEFT
+SLIGHT RIGHT
+SLIGHT_LEFT
+SLIGHT_RIGHT
+STRAIGHT
+Second
+Second exit
+Seventh
+Seventh exit
+Sharp left
+Sharp right
+Sixth
+Sixth exit
+Slight left
+Slight right
+Slight_left
+Slight_right
+Straight
+TAKE EXIT 2
+TAKE THE 11TH EXIT
+TAKE THE 2ND EXIT
+TAKE THE SECOND EXIT
+TAKE_LEFT
+TAKE_RIGHT
+TENTH
+TENTH EXIT
+THIRD
+THIRD EXIT
+TRAFFIC CIRCLE
+TUNNEL
+TURN AROUND
+TURN BACK
+TURN LEFT
+TURN LEFT ONTO MAIN STREET
+TURN RIGHT
+TURN RIGHT ONTO BAKER AVENUE
+TURN RIGHT ONTO BAKER STREET
+TURN_BACK
+TURN_BACK_LEFT
+TURN_BACK_RIGHT
+Take exit 2
+Take the 11th exit
+Take the 2nd exit
+Take the second exit
+Take_left
+Take_right
+Tenth
+Tenth exit
+Third
+Third exit
+Traffic circle
+Tunnel
+Turn around
+Turn back
+Turn left
+Turn left onto Main Street
+Turn left onto main street
+Turn right
+Turn right onto Baker Avenue
+Turn right onto Baker Street
+Turn right onto baker avenue
+Turn right onto baker street
+Turn_back
+Turn_back_left
+Turn_back_right
+U TURN
+U turn
+U-TURN
+U-TURN LEFT
+U-TURN RIGHT
+U-turn
+U-turn left
+U-turn right
+UTURN
+UTURN_LEFT
+UTURN_RIGHT
+Uturn
+Uturn_left
+Uturn_right
+VEER LEFT
+VEER RIGHT
+VETVLENIE_LEVO
+VETVLENIE_PRAVO
+VIA POINT
+VPERED
+Veer left
+Veer right
+Vetvlenie_levo
+Vetvlenie_pravo
+Via point
+Vpered
+WAY POINT
+WAYPOINT
+Way point
+Waypoint
+X
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+Xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+YOU HAVE ARRIVED
+You have arrived
+board the ferry
+circular
+completed
+done
+drive straight
+eighth
+eighth exit
+end of route
+exit 1
+exit 10
+exit 2
+exit 3
+exit 4
+exit 5
+exit 6
+exit 7
+exit 8
+exit 9
+exit ferry
+exit left
+exit right
+exit the ferry
+exit to lef
+exit to left
+exit to righ
+exit to right
+exit to the lef
+exit to the left
+exit to the righ
+exit to the right
+exit_left
+exit_right
+ferry
+ferry transfer
+fifth
+fifth exit
+finish
+first
+first exit
+fork_left
+fork_right
+forward
+fourth
+fourth exit
+go straight
+hard_left
+hard_right
+hard_turn_left
+hard_turn_right
+intermediate
+keep left
+keep right
+kolco
+konec
+krug
+kruto_levo
+kruto_levyj
+kruto_pravo
+kruto_pravyj
+left
+levo
+levyj
+make a u-turn
+ninth
+ninth exit
+notification_arrive_sdl
+notification_board_ferry_sdl
+notification_enter_roundabout_sdl
+notification_exit_left_sdl
+notification_exit_right_sdl
+notification_ferry_sdl
+notification_finish_sdl
+notification_fork_left_sdl
+notification_fork_right_sdl
+notification_go_ahead_sdl
+notification_hard_left_sdl
+notification_hard_right_sdl
+notification_leave_ferry_sdl
+notification_leave_roundabout_sdl
+notification_left_sdl
+notification_right_sdl
+notification_slight_left_sdl
+notification_slight_right_sdl
+notification_straight_sdl
+notification_uturn_left_sdl
+notification_uturn_right_sdl
+notification_uturn_sdl
+polu_levo
+polu_pravo
+polulevo
+polupravo
+pravo
+pravyj
+pribytie
+pryamo
+razvorot
+right
+roundabout
+route completed
+second
+second exit
+seventh
+seventh exit
+sharp left
+sharp right
+sixth
+sixth exit
+slight left
+slight right
+slight_left
+slight_right
+straight
+take_left
+take_right
+tenth
+tenth exit
+third
+third exit
+turn back
+turn left
+turn right
+turn_back
+turn_back_left
+turn_back_right
+u-turn
+u-turn left
+u-turn right
+uturn
+uturn_left
+uturn_right
+veer left
+veer right
+vetvlenie_levo
+vetvlenie_pravo
+vpered
+way point
+waypoint
+x
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ВОЙДИТЕ В КОЛЬЦО
+ВОСЬМОЙ
+ВТОРОЙ
+ВТОРОЙ СЪЕЗД
+ВЪЕЗД НА ПАРОМ
+ВЪЕЗЖАЙТЕ НА КОЛЬЦО
+ВЫ ПРИБЫЛИ
+ВЫЕЗД С КОЛЬЦА
+ВЫЕЗД С КОЛЬЦА 1-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 10-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 2-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 3-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 4-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 5-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 6-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 7-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 8-Й СЪЕЗД
+ВЫЕЗД С КОЛЬЦА 9-Й СЪЕЗД
+ВЫЕЗД С ПАРОМА
+ВЫЕЗЖАЙТЕ ИЗ КОЛЬЦА
+Войдите в кольцо
+Восьмой
+Второй
+Второй съезд
+Въезд на паром
+Въезжайте на кольцо
+Вы прибыли
+Выезд с кольца
+Выезд с кольца 1-й съезд
+Выезд с кольца 10-й съезд
+Выезд с кольца 2-й съезд
+Выезд с кольца 3-й съезд
+Выезд с кольца 4-й съезд
+Выезд с кольца 5-й съезд
+Выезд с кольца 6-й съезд
+Выезд с кольца 7-й съезд
+Выезд с кольца 8-й съезд
+Выезд с кольца 9-й съезд
+Выезд с парома
+Выезжайте из кольца
+ДВИГАЙТЕСЬ
+ДВИГАЙТЕСЬ ПРЯМО
+ДЕВЯТЫЙ
+ДЕРЖИТЕСЬ ЛЕВЕЕ
+ДЕРЖИТЕСЬ ПРАВЕЕ
+ДЕРЖИТЕСЬ СЕРЕДИНЫ
+ДЕСЯТЫЙ
+ДО КОНЦА МАРШРУТА
+ДОСТИГНУТ
+Двигайтесь
+Двигайтесь прямо
+Девятый
+Держитесь левее
+Держитесь правее
+Держитесь середины
+Десятый
+До конца маршрута
+Достигнут
+ЕЗЖАЙТЕ ПРЯМО
+Езжайте прямо
+КОЛЬЦ
+КОЛЬЦЕВАЯ РАЗВЯЗКА
+КОЛЬЦЕВОЕ
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 1-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 10-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 2-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 3-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 4-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 5-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 6-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 7-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 8-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 9-Й СЪЕЗД
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ, ВТОРОЙ СЪЕЗД
+КОЛЬЦО
+КОНЕЦ МАРШРУТА
+КОНЕЧНАЯ
+КРУГ
+КРУГОВ
+КРУГОВОЕ
+КРУГОВОЕ ДВИЖЕНИЕ
+КРУТО
+КРУТО ВЛЕВО
+КРУТО ВПРАВО
+КРУТО НАЛЕВО
+КРУТО НАПРАВО
+КРУТО ПОВЕРНИТЕ НАЛЕВО
+КРУТО ПОВЕРНИТЕ НАПРАВО
+Кольц
+Кольцевая развязка
+Кольцевое
+Кольцевое движение
+Кольцевое движение 1-й съезд
+Кольцевое движение 10-й съезд
+Кольцевое движение 2-й съезд
+Кольцевое движение 3-й съезд
+Кольцевое движение 4-й съезд
+Кольцевое движение 5-й съезд
+Кольцевое движение 6-й съезд
+Кольцевое движение 7-й съезд
+Кольцевое движение 8-й съезд
+Кольцевое движение 9-й съезд
+Кольцевое движение, второй съезд
+Кольцо
+Конец маршрута
+Конечная
+Круг
+Кругов
+Круговое
+Круговое движение
+Круто
+Круто влево
+Круто вправо
+Круто налево
+Круто направо
+Круто поверните налево
+Круто поверните направо
+ЛЕВ
+ЛЕВЕЕ
+ЛЕВЫЙ
+ЛЕВЯ
+Лев
+Левее
+Левый
+Левя
+МАРШРУТ ЗАВЕРШЁН
+МАРШРУТ ОКОНЧЕН
+Маршрут завершён
+Маршрут окончен
+НАЛЕВО
+НАПРАВА
+НАПРАВО
+Налево
+Направа
+Направо
+ОҢҒА БҰРЫЛЫҢЫЗ
+Оңға бұрылыңыз
+ПАВЯРНІЦЕ НАПРАВА
+ПАРОМ
+ПАРОМ ЧЕРЕЗ ЧАС
+ПЕРВЫЙ
+ПЕРЕСАДКА НА ПАРОМ
+ПЛАВН
+ПЛАВНО ВЛЕВО
+ПЛАВНО ВПРАВО
+ПЛАВНО НАЛЕВО
+ПЛАВНО НАПРАВО
+ПЛАВНЫЙ ПОВОРОТ НАЛЕВО
+ПЛАВНЫЙ ПОВОРОТ НАПРАВО
+ПЛАТНЫЙ УЧАСТОК
+ПЛАТНЫЙ\u00A0УЧАСТОК
+ПОВЕРНИТЕ ЛЕВЕЕ
+ПОВЕРНИТЕ НАЛЕВО
+ПОВЕРНИТЕ НАЛЕВО 2-Й ПОВОРОТ
+ПОВЕРНИТЕ НАПРАВО
+ПОВЕРНИТЕ НАПРАВО 2-Й ПОВОРОТ
+ПОВЕРНИТЕ НАПРАВО НА УЛИЦУ ЛЕНИНА
+ПОВЕРНИТЕ ПРАВЕЕ
+ПОВОРОТ НАЛЕВО
+ПОВОРОТ НАПРАВО
+ПРАВ
+ПРАВЕЕ
+ПРАВО РУЛЯ
+ПРАВЫЙ
+ПРИБЫТИЕ
+ПРОДОЛЖАЙТЕ
+ПРОДОЛЖАЙТЕ ДВИЖЕНИЕ ПРЯМО
+ПРОДОЛЖАЙТЕ ПРЯМО
+ПРОДОЛЖИТЬ
+ПРОМЕЖУТОЧНАЯ ТОЧКА
+ПРОМЕЖУТОЧНАЯ\u00A0ТОЧКА
+ПРЯМО
+ПЯТЫЙ
+Павярніце направа
+Паром
+Паром через час
+Первый
+Пересадка на паром
+Плавн
+Плавно влево
+Плавно вправо
+Плавно налево
+Плавно направо
+Плавный поворот налево
+Плавный поворот направо
+Платный участок
+Платный\u00A0участок
+Поверните левее
+Поверните налево
+Поверните налево 2-й поворот
+Поверните направо
+Поверните направо 2-й поворот
+Поверните направо на улицу Ленина
+Поверните направо на улицу ленина
+Поверните правее
+Поворот налево
+Поворот направо
+Прав
+Правее
+Право руля
+Правый
+Прибытие
+Продолжайте
+Продолжайте движение прямо
+Продолжайте прямо
+Продолжить
+Промежуточная точка
+Промежуточная\u00A0точка
+Прямо
+Пятый
+РАЗВЕРНИТЕСЬ
+РАЗВЕРНИТЕСЬ НАЛЕВО
+РАЗВЕРНИТЕСЬ НАПРАВО
+РАЗВОР
+РАЗВОРАЧИВАЙТЕСЬ
+РАЗВОРОТ
+РАЗВОРОТ НАЛЕВО
+РАЗВОРОТ НАПРАВО
+РЕЗК
+РЕЗКИЙ ПОВОРОТ НАЛЕВО
+РЕЗКИЙ ПОВОРОТ НАПРАВО
+РЕЗКИЙ\u00A0ПОВОРОТ\u00A0НАЛЕВО
+РЕЗКО ВЛЕВО
+РЕЗКО ВПРАВО
+РЕЗКО НАЛЕВО
+РЕЗКО НАПРАВО
+Развернитесь
+Развернитесь налево
+Развернитесь направо
+Развор
+Разворачивайтесь
+Разворот
+Разворот налево
+Разворот направо
+Резк
+Резкий поворот налево
+Резкий поворот направо
+Резкий\u00A0поворот\u00A0налево
+Резко влево
+Резко вправо
+Резко налево
+Резко направо
+СВЕРНИТЕ НАЛЕВО
+СВЕРНИТЕ НАПРАВО
+СЕДЬМОЙ
+СЪЕЗД 1
+СЪЕЗД 10
+СЪЕЗД 2
+СЪЕЗД 3
+СЪЕЗД 4
+СЪЕЗД 5
+СЪЕЗД 6
+СЪЕЗД 7
+СЪЕЗД 8
+СЪЕЗД 9
+СЪЕЗД НА ПАРОМ
+СЪЕЗД С КОЛЬЦА
+СЪЕЗД С ПАРОМА
+СЪЕЗД ЧЕРЕЗ 300 М
+СЪЕЗД\u00A0С\u00A0КОЛЬЦА
+СЪЕЗЖАЙТЕ С КОЛЬЦА
+Сверните налево
+Сверните направо
+Седьмой
+Съезд 1
+Съезд 10
+Съезд 2
+Съезд 3
+Съезд 4
+Съезд 5
+Съезд 6
+Съезд 7
+Съезд 8
+Съезд 9
+Съезд на паром
+Съезд с кольца
+Съезд с парома
+Съезд через 300 м
+Съезд\u00A0с\u00A0кольца
+Съезжайте с кольца
+ТОННЕЛЬ
+ТРЕТИЙ
+ТРЕТИЙ СЪЕЗД С КОЛЬЦА
+ТУННЕЛЬ
+Тоннель
+Третий
+Третий съезд с кольца
+Туннель
+УЛИЦА ЛЕНИНА
+Улица ленина
+ЧЕТВЁРТЫЙ
+ЧЕТВЕРТЫЙ
+Четвертый
+Четвёртый
+ШЕСТОЙ
+Шестой
+войдите в кольцо
+восьмой
+второй
+второй съезд
+въезд на паром
+въезжайте на кольцо
+вы прибыли
+выезд с кольца
+выезд с кольца 1-й съезд
+выезд с кольца 10-й съезд
+выезд с кольца 2-й съезд
+выезд с кольца 3-й съезд
+выезд с кольца 4-й съезд
+выезд с кольца 5-й съезд
+выезд с кольца 6-й съезд
+выезд с кольца 7-й съезд
+выезд с кольца 8-й съезд
+выезд с кольца 9-й съезд
+выезд с парома
+выезжайте из кольца
+двигайтесь
+двигайтесь прямо
+девятый
+держитесь левее
+держитесь правее
+десятый
+до конца маршрута
+достигнут
+езжайте прямо
+кольц
+кольцевое
+кольцевое движение
+кольцевое движение 1-й съезд
+кольцевое движение 10-й съезд
+кольцевое движение 2-й съезд
+кольцевое движение 3-й съезд
+кольцевое движение 4-й съезд
+кольцевое движение 5-й съезд
+кольцевое движение 6-й съезд
+кольцевое движение 7-й съезд
+кольцевое движение 8-й съезд
+кольцевое движение 9-й съезд
+кольцо
+конец маршрута
+конечная
+круг
+кругов
+круговое
+круговое движение
+круто
+круто налево
+круто направо
+круто поверните налево
+круто поверните направо
+лев
+левее
+левый
+левя
+маршрут завершён
+маршрут окончен
+налево
+направо
+паром
+паром через час
+первый
+пересадка на паром
+плавн
+плавно налево
+плавно направо
+плавный поворот налево
+плавный поворот направо
+платный участок
+платный\u00A0участок
+поверните левее
+поверните налево
+поверните налево 2-й поворот
+поверните направо
+поверните направо 2-й поворот
+поверните правее
+поворот налево
+поворот направо
+прав
+правее
+правый
+прибытие
+продолжайте
+продолжайте прямо
+продолжить
+промежуточная точка
+прямо
+пятый
+развернитесь
+развернитесь налево
+развернитесь направо
+развор
+разворот
+разворот налево
+разворот направо
+резк
+резкий поворот налево
+резкий поворот направо
+резко налево
+резко направо
+сверните налево
+сверните направо
+седьмой
+съезд 1
+съезд 10
+съезд 2
+съезд 3
+съезд 4
+съезд 5
+съезд 6
+съезд 7
+съезд 8
+съезд 9
+съезд на паром
+съезд с кольца
+съезд с парома
+съезд через 300 м
+съезжайте с кольца
+тоннель
+третий
+туннель
+улица Ленина
+четвертый
+четвёртый
+шестой

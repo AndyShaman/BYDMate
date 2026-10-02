@@ -1,0 +1,1017 @@
+# phrase	a11y code	notification code: what the parser gave before the competitors' dictionaries (2026-10-02, ebae6b2b)
+   	0	0
+ TO 	0	0
+ to 	0	0
+) || LOWER.CONTAINS(	0	0
+) || lower.contains(	0	0
+), 	0	0
+, 	0	0
+1-Й	0	0
+1-Й СЪЕЗД	25	0
+1-й	0	0
+1-й съезд	25	0
+10-Й	0	0
+10-Й СЪЕЗД	34	0
+10-й	0	0
+10-й съезд	34	0
+10TH	0	0
+10TH EXIT	0	0
+10th	0	0
+10th exit	0	0
+11-Й СЪЕЗД	24	0
+11-й съезд	24	0
+11TH EXIT	0	0
+11th exit	0	0
+1ST	0	0
+1ST EXIT	0	0
+1st	0	0
+1st exit	0	0
+2-Й	0	0
+2-Й ПОВОРОТ	0	0
+2-Й СЪЕЗД	26	0
+2-й	0	0
+2-й поворот	0	0
+2-й съезд	26	0
+2ND	0	0
+2ND EXIT	0	0
+2nd	0	0
+2nd exit	0	0
+3-Й	0	0
+3-Й СЪЕЗД	27	0
+3-й	0	0
+3-й съезд	27	0
+3RD	0	0
+3RD EXIT	0	0
+3rd	0	0
+3rd exit	0	0
+4-Й	0	0
+4-Й СЪЕЗД	28	0
+4-й	0	0
+4-й съезд	28	0
+4TH	0	0
+4TH EXIT	0	0
+4th	0	0
+4th exit	0	0
+5-Й	0	0
+5-Й СЪЕЗД	29	0
+5-й	0	0
+5-й съезд	29	0
+5TH	0	0
+5TH EXIT	0	0
+5th	0	0
+5th exit	0	0
+6-Й	0	0
+6-Й СЪЕЗД	30	0
+6-й	0	0
+6-й съезд	30	0
+6TH	0	0
+6TH EXIT	0	0
+6th	0	0
+6th exit	0	0
+7-Й	0	0
+7-Й СЪЕЗД	31	0
+7-й	0	0
+7-й съезд	31	0
+7TH	0	0
+7TH EXIT	0	0
+7th	0	0
+7th exit	0	0
+8-Й	0	0
+8-Й СЪЕЗД	32	0
+8-й	0	0
+8-й съезд	32	0
+8TH	0	0
+8TH EXIT	0	0
+8th	0	0
+8th exit	0	0
+9-Й	0	0
+9-Й СЪЕЗД	33	0
+9-й	0	0
+9-й съезд	33	0
+9TH	0	0
+9TH EXIT	0	0
+9th	0	0
+9th exit	0	0
+>>>	11	0
+AHEAD	0	0
+ARRIVE AT DESTINATION	0	0
+AT THE ROUNDABOUT, TAKE THE 2ND EXIT	0	0
+Ahead	0	0
+Arrive at destination	0	0
+At the roundabout, take the 2nd exit	0	0
+BEAR LEFT	0	0
+BEAR RIGHT	0	0
+BOARD THE FERRY	0	0
+Bear left	0	0
+Bear right	0	0
+Board the ferry	0	0
+CIRCULAR	0	0
+COMPLETED	0	0
+CONTINUE	0	0
+CONTINUE STRAIGHT	0	0
+Circular	0	0
+Completed	0	0
+Continue	0	0
+Continue straight	0	0
+DESTINATION	0	0
+DONE	0	0
+DRIVE STRAIGHT	0	0
+Destination	0	0
+Done	0	0
+Drive straight	0	0
+EIGHTH	0	0
+EIGHTH EXIT	0	0
+END OF ROUTE	0	0
+ENTER THE ROUNDABOUT	0	0
+ENTER THE TUNNEL	0	0
+EXIT 1	0	0
+EXIT 10	0	0
+EXIT 2	0	0
+EXIT 3	0	0
+EXIT 4	0	0
+EXIT 5	0	0
+EXIT 6	0	0
+EXIT 7	0	0
+EXIT 8	0	0
+EXIT 9	0	0
+EXIT FERRY	0	0
+EXIT LEFT	0	0
+EXIT RIGHT	0	0
+EXIT THE FERRY	0	0
+EXIT THE ROUNDABOUT	0	0
+EXIT TO LEF	0	0
+EXIT TO LEFT	0	0
+EXIT TO RIGH	0	0
+EXIT TO RIGHT	0	0
+EXIT TO THE LEF	0	0
+EXIT TO THE LEFT	0	0
+EXIT TO THE RIGH	0	0
+EXIT TO THE RIGHT	0	0
+EXIT_LEFT	0	0
+EXIT_RIGHT	0	0
+Eighth	0	0
+Eighth exit	0	0
+End of route	0	0
+Enter the roundabout	0	0
+Enter the tunnel	0	0
+Exit 1	0	0
+Exit 10	0	0
+Exit 2	0	0
+Exit 3	0	0
+Exit 4	0	0
+Exit 5	0	0
+Exit 6	0	0
+Exit 7	0	0
+Exit 8	0	0
+Exit 9	0	0
+Exit ferry	0	0
+Exit left	0	0
+Exit right	0	0
+Exit the ferry	0	0
+Exit the roundabout	0	0
+Exit to lef	0	0
+Exit to left	0	0
+Exit to righ	0	0
+Exit to right	0	0
+Exit to the lef	0	0
+Exit to the left	0	0
+Exit to the righ	0	0
+Exit to the right	0	0
+Exit_left	0	0
+Exit_right	0	0
+FERRY	0	0
+FERRY TRANSFER	0	0
+FIFTH	0	0
+FIFTH EXIT	0	0
+FINISH	0	0
+FIRST	0	0
+FIRST EXIT	0	0
+FORK LEFT	0	0
+FORK RIGHT	0	0
+FORK_LEFT	0	0
+FORK_RIGHT	0	0
+FORWARD	0	0
+FOURTH	0	0
+FOURTH EXIT	0	0
+Ferry	0	0
+Ferry transfer	0	0
+Fifth	0	0
+Fifth exit	0	0
+Finish	0	0
+First	0	0
+First exit	0	0
+Fork left	0	0
+Fork right	0	0
+Fork_left	0	0
+Fork_right	0	0
+Forward	0	0
+Fourth	0	0
+Fourth exit	0	0
+GO STRAIGHT	0	0
+GO STRAIGHT AHEAD	0	0
+Go straight	0	0
+Go straight ahead	0	0
+HARD LEFT	0	0
+HARD_LEFT	0	0
+HARD_RIGHT	0	0
+HARD_TURN_LEFT	0	0
+HARD_TURN_RIGHT	0	0
+Hard left	0	0
+Hard_left	0	0
+Hard_right	0	0
+Hard_turn_left	0	0
+Hard_turn_right	0	0
+INTERMEDIATE	0	0
+INTERMEDIATE POINT	0	0
+Intermediate	0	0
+Intermediate point	0	0
+KEEP LEFT	0	0
+KEEP RIGHT	0	0
+KOLCO	0	0
+KONEC	0	0
+KRUG	0	0
+KRUTO_LEVO	0	0
+KRUTO_LEVYJ	0	0
+KRUTO_PRAVO	0	0
+KRUTO_PRAVYJ	0	0
+Keep left	0	0
+Keep right	0	0
+Kolco	0	0
+Konec	0	0
+Krug	0	0
+Kruto_levo	0	0
+Kruto_levyj	0	0
+Kruto_pravo	0	0
+Kruto_pravyj	0	0
+LEAVE THE ROUNDABOUT	0	0
+LEFT	0	0
+LEVO	0	0
+LEVYJ	0	0
+LINKS HALTEN	0	0
+Leave the roundabout	0	0
+Left	0	0
+Levo	0	0
+Levyj	0	0
+Links halten	0	0
+MAKE A U-TURN	9	0
+MAKE A U-TURN TO THE RIGHT	9	0
+Make a U-turn	9	0
+Make a U-turn to the right	9	0
+Make a u-turn	9	0
+Make a u-turn to the right	9	0
+NINTH	0	0
+NINTH EXIT	0	0
+NOTIFICATION_ARRIVE_SDL	0	0
+NOTIFICATION_BOARD_FERRY_SDL	0	0
+NOTIFICATION_ENTER_ROUNDABOUT_SDL	0	0
+NOTIFICATION_EXIT_LEFT_SDL	0	0
+NOTIFICATION_EXIT_RIGHT_SDL	0	0
+NOTIFICATION_FERRY_SDL	0	0
+NOTIFICATION_FINISH_SDL	0	0
+NOTIFICATION_FORK_LEFT_SDL	0	0
+NOTIFICATION_FORK_RIGHT_SDL	0	0
+NOTIFICATION_GO_AHEAD_SDL	0	0
+NOTIFICATION_HARD_LEFT_SDL	0	0
+NOTIFICATION_HARD_RIGHT_SDL	0	0
+NOTIFICATION_LEAVE_FERRY_SDL	0	0
+NOTIFICATION_LEAVE_ROUNDABOUT_SDL	0	0
+NOTIFICATION_LEFT_SDL	0	0
+NOTIFICATION_RIGHT_SDL	0	0
+NOTIFICATION_SLIGHT_LEFT_SDL	0	0
+NOTIFICATION_SLIGHT_RIGHT_SDL	0	0
+NOTIFICATION_STRAIGHT_SDL	0	0
+NOTIFICATION_UTURN_LEFT_SDL	0	0
+NOTIFICATION_UTURN_RIGHT_SDL	0	0
+NOTIFICATION_UTURN_SDL	0	0
+Ninth	0	0
+Ninth exit	0	0
+Notification_arrive_sdl	0	0
+Notification_board_ferry_sdl	0	0
+Notification_enter_roundabout_sdl	0	0
+Notification_exit_left_sdl	0	0
+Notification_exit_right_sdl	0	0
+Notification_ferry_sdl	0	0
+Notification_finish_sdl	0	0
+Notification_fork_left_sdl	0	0
+Notification_fork_right_sdl	0	0
+Notification_go_ahead_sdl	0	0
+Notification_hard_left_sdl	0	0
+Notification_hard_right_sdl	0	0
+Notification_leave_ferry_sdl	0	0
+Notification_leave_roundabout_sdl	0	0
+Notification_left_sdl	0	0
+Notification_right_sdl	0	0
+Notification_slight_left_sdl	0	0
+Notification_slight_right_sdl	0	0
+Notification_straight_sdl	0	0
+Notification_uturn_left_sdl	0	0
+Notification_uturn_right_sdl	0	0
+Notification_uturn_sdl	0	0
+POLULEVO	0	0
+POLUPRAVO	0	0
+POLU_LEVO	0	0
+POLU_PRAVO	0	0
+PRAVO	0	0
+PRAVYJ	0	0
+PRIBYTIE	0	0
+PRYAMO	0	0
+Polu_levo	0	0
+Polu_pravo	0	0
+Polulevo	0	0
+Polupravo	0	0
+Pravo	0	0
+Pravyj	0	0
+Pribytie	0	0
+Pryamo	0	0
+RAZVOROT	0	0
+RECHTS ABBIEGEN	0	0
+RECHTS ABBIEGEN AUF BAKER AVENIDA	0	0
+RECHTS ABBIEGEN AUF BAKER STRASSE	0	0
+RIGHT	0	0
+ROUNDABOUT	0	0
+ROUNDABOUT, THIRD EXIT	0	0
+ROUTE COMPLETED	0	0
+ROUTE ENDED	0	0
+Razvorot	0	0
+Rechts abbiegen	0	0
+Rechts abbiegen auf Baker Avenida	0	0
+Rechts abbiegen auf Baker Strasse	0	0
+Rechts abbiegen auf baker avenida	0	0
+Rechts abbiegen auf baker strasse	0	0
+Right	0	0
+Roundabout	0	0
+Roundabout, third exit	0	0
+Route completed	0	0
+Route ended	0	0
+SECOND	0	0
+SECOND EXIT	0	0
+SEVENTH	0	0
+SEVENTH EXIT	0	0
+SHARP LEFT	0	0
+SHARP RIGHT	0	0
+SIXTH	0	0
+SIXTH EXIT	0	0
+SLIGHT LEFT	0	0
+SLIGHT RIGHT	0	0
+SLIGHT_LEFT	0	0
+SLIGHT_RIGHT	0	0
+STRAIGHT	0	0
+Second	0	0
+Second exit	0	0
+Seventh	0	0
+Seventh exit	0	0
+Sharp left	0	0
+Sharp right	0	0
+Sixth	0	0
+Sixth exit	0	0
+Slight left	0	0
+Slight right	0	0
+Slight_left	0	0
+Slight_right	0	0
+Straight	0	0
+TAKE EXIT 2	0	0
+TAKE THE 11TH EXIT	0	0
+TAKE THE 2ND EXIT	0	0
+TAKE THE SECOND EXIT	0	0
+TAKE_LEFT	0	0
+TAKE_RIGHT	0	0
+TENTH	0	0
+TENTH EXIT	0	0
+THIRD	0	0
+THIRD EXIT	0	0
+TRAFFIC CIRCLE	0	0
+TUNNEL	0	0
+TURN AROUND	0	0
+TURN BACK	0	0
+TURN LEFT	0	0
+TURN LEFT ONTO MAIN STREET	0	0
+TURN RIGHT	0	0
+TURN RIGHT ONTO BAKER AVENUE	0	0
+TURN RIGHT ONTO BAKER STREET	0	0
+TURN_BACK	0	0
+TURN_BACK_LEFT	0	0
+TURN_BACK_RIGHT	0	0
+Take exit 2	0	0
+Take the 11th exit	0	0
+Take the 2nd exit	0	0
+Take the second exit	0	0
+Take_left	0	0
+Take_right	0	0
+Tenth	0	0
+Tenth exit	0	0
+Third	0	0
+Third exit	0	0
+Traffic circle	0	0
+Tunnel	0	0
+Turn around	0	0
+Turn back	0	0
+Turn left	0	0
+Turn left onto Main Street	0	0
+Turn left onto main street	0	0
+Turn right	0	0
+Turn right onto Baker Avenue	0	0
+Turn right onto Baker Street	0	0
+Turn right onto baker avenue	0	0
+Turn right onto baker street	0	0
+Turn_back	0	0
+Turn_back_left	0	0
+Turn_back_right	0	0
+U TURN	0	0
+U turn	0	0
+U-TURN	9	0
+U-TURN LEFT	9	0
+U-TURN RIGHT	9	0
+U-turn	9	0
+U-turn left	9	0
+U-turn right	9	0
+UTURN	0	0
+UTURN_LEFT	0	0
+UTURN_RIGHT	0	0
+Uturn	0	0
+Uturn_left	0	0
+Uturn_right	0	0
+VEER LEFT	0	0
+VEER RIGHT	0	0
+VETVLENIE_LEVO	0	0
+VETVLENIE_PRAVO	0	0
+VIA POINT	0	0
+VPERED	0	0
+Veer left	0	0
+Veer right	0	0
+Vetvlenie_levo	0	0
+Vetvlenie_pravo	0	0
+Via point	0	0
+Vpered	0	0
+WAY POINT	0	0
+WAYPOINT	0	0
+Way point	0	0
+Waypoint	0	0
+X	0	0
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	0	0
+Xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0	0
+YOU HAVE ARRIVED	0	0
+You have arrived	0	0
+board the ferry	0	0
+circular	0	0
+completed	0	0
+done	0	0
+drive straight	0	0
+eighth	0	0
+eighth exit	0	0
+end of route	0	0
+exit 1	0	0
+exit 10	0	0
+exit 2	0	0
+exit 3	0	0
+exit 4	0	0
+exit 5	0	0
+exit 6	0	0
+exit 7	0	0
+exit 8	0	0
+exit 9	0	0
+exit ferry	0	0
+exit left	0	0
+exit right	0	0
+exit the ferry	0	0
+exit to lef	0	0
+exit to left	0	0
+exit to righ	0	0
+exit to right	0	0
+exit to the lef	0	0
+exit to the left	0	0
+exit to the righ	0	0
+exit to the right	0	0
+exit_left	0	0
+exit_right	0	0
+ferry	0	0
+ferry transfer	0	0
+fifth	0	0
+fifth exit	0	0
+finish	0	0
+first	0	0
+first exit	0	0
+fork_left	0	0
+fork_right	0	0
+forward	0	0
+fourth	0	0
+fourth exit	0	0
+go straight	0	0
+hard_left	0	0
+hard_right	0	0
+hard_turn_left	0	0
+hard_turn_right	0	0
+intermediate	0	0
+keep left	0	0
+keep right	0	0
+kolco	0	0
+konec	0	0
+krug	0	0
+kruto_levo	0	0
+kruto_levyj	0	0
+kruto_pravo	0	0
+kruto_pravyj	0	0
+left	0	0
+levo	0	0
+levyj	0	0
+make a u-turn	9	0
+ninth	0	0
+ninth exit	0	0
+notification_arrive_sdl	0	0
+notification_board_ferry_sdl	0	46
+notification_enter_roundabout_sdl	0	13
+notification_exit_left_sdl	0	7
+notification_exit_right_sdl	0	8
+notification_ferry_sdl	0	46
+notification_finish_sdl	0	48
+notification_fork_left_sdl	0	3
+notification_fork_right_sdl	0	4
+notification_go_ahead_sdl	0	0
+notification_hard_left_sdl	0	7
+notification_hard_right_sdl	0	8
+notification_leave_ferry_sdl	0	0
+notification_leave_roundabout_sdl	0	24
+notification_left_sdl	0	1
+notification_right_sdl	0	2
+notification_slight_left_sdl	0	3
+notification_slight_right_sdl	0	4
+notification_straight_sdl	0	11
+notification_uturn_left_sdl	0	9
+notification_uturn_right_sdl	0	10
+notification_uturn_sdl	0	0
+polu_levo	0	0
+polu_pravo	0	0
+polulevo	0	0
+polupravo	0	0
+pravo	0	0
+pravyj	0	0
+pribytie	0	0
+pryamo	0	0
+razvorot	0	0
+right	0	0
+roundabout	0	0
+route completed	0	0
+second	0	0
+second exit	0	0
+seventh	0	0
+seventh exit	0	0
+sharp left	0	0
+sharp right	0	0
+sixth	0	0
+sixth exit	0	0
+slight left	0	0
+slight right	0	0
+slight_left	0	0
+slight_right	0	0
+straight	0	0
+take_left	0	0
+take_right	0	0
+tenth	0	0
+tenth exit	0	0
+third	0	0
+third exit	0	0
+turn back	0	0
+turn left	0	0
+turn right	0	0
+turn_back	0	0
+turn_back_left	0	0
+turn_back_right	0	0
+u-turn	9	0
+u-turn left	9	0
+u-turn right	9	0
+uturn	0	0
+uturn_left	0	0
+uturn_right	0	0
+veer left	0	0
+veer right	0	0
+vetvlenie_levo	0	0
+vetvlenie_pravo	0	0
+vpered	0	0
+way point	0	0
+waypoint	0	0
+x	0	0
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0	0
+ВОЙДИТЕ В КОЛЬЦО	13	0
+ВОСЬМОЙ	0	0
+ВТОРОЙ	0	0
+ВТОРОЙ СЪЕЗД	0	0
+ВЪЕЗД НА ПАРОМ	46	0
+ВЪЕЗЖАЙТЕ НА КОЛЬЦО	13	0
+ВЫ ПРИБЫЛИ	48	0
+ВЫЕЗД С КОЛЬЦА	24	0
+ВЫЕЗД С КОЛЬЦА 1-Й СЪЕЗД	25	0
+ВЫЕЗД С КОЛЬЦА 10-Й СЪЕЗД	34	0
+ВЫЕЗД С КОЛЬЦА 2-Й СЪЕЗД	26	0
+ВЫЕЗД С КОЛЬЦА 3-Й СЪЕЗД	27	0
+ВЫЕЗД С КОЛЬЦА 4-Й СЪЕЗД	28	0
+ВЫЕЗД С КОЛЬЦА 5-Й СЪЕЗД	29	0
+ВЫЕЗД С КОЛЬЦА 6-Й СЪЕЗД	30	0
+ВЫЕЗД С КОЛЬЦА 7-Й СЪЕЗД	31	0
+ВЫЕЗД С КОЛЬЦА 8-Й СЪЕЗД	32	0
+ВЫЕЗД С КОЛЬЦА 9-Й СЪЕЗД	33	0
+ВЫЕЗД С ПАРОМА	11	0
+ВЫЕЗЖАЙТЕ ИЗ КОЛЬЦА	24	0
+Войдите в кольцо	13	0
+Восьмой	0	0
+Второй	0	0
+Второй съезд	0	0
+Въезд на паром	46	0
+Въезжайте на кольцо	13	0
+Вы прибыли	48	0
+Выезд с кольца	24	0
+Выезд с кольца 1-й съезд	25	0
+Выезд с кольца 10-й съезд	34	0
+Выезд с кольца 2-й съезд	26	0
+Выезд с кольца 3-й съезд	27	0
+Выезд с кольца 4-й съезд	28	0
+Выезд с кольца 5-й съезд	29	0
+Выезд с кольца 6-й съезд	30	0
+Выезд с кольца 7-й съезд	31	0
+Выезд с кольца 8-й съезд	32	0
+Выезд с кольца 9-й съезд	33	0
+Выезд с парома	11	0
+Выезжайте из кольца	24	0
+ДВИГАЙТЕСЬ	11	0
+ДВИГАЙТЕСЬ ПРЯМО	11	0
+ДЕВЯТЫЙ	0	0
+ДЕРЖИТЕСЬ ЛЕВЕЕ	3	0
+ДЕРЖИТЕСЬ ПРАВЕЕ	4	0
+ДЕРЖИТЕСЬ СЕРЕДИНЫ	0	0
+ДЕСЯТЫЙ	0	0
+ДО КОНЦА МАРШРУТА	48	0
+ДОСТИГНУТ	48	0
+Двигайтесь	11	0
+Двигайтесь прямо	11	0
+Девятый	0	0
+Держитесь левее	3	0
+Держитесь правее	4	0
+Держитесь середины	0	0
+Десятый	0	0
+До конца маршрута	48	0
+Достигнут	48	0
+ЕЗЖАЙТЕ ПРЯМО	11	0
+Езжайте прямо	11	0
+КОЛЬЦ	0	0
+КОЛЬЦЕВАЯ РАЗВЯЗКА	0	0
+КОЛЬЦЕВОЕ	13	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ	13	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 1-Й СЪЕЗД	25	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 10-Й СЪЕЗД	34	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 2-Й СЪЕЗД	26	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 3-Й СЪЕЗД	27	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 4-Й СЪЕЗД	28	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 5-Й СЪЕЗД	29	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 6-Й СЪЕЗД	30	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 7-Й СЪЕЗД	31	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 8-Й СЪЕЗД	32	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ 9-Й СЪЕЗД	33	0
+КОЛЬЦЕВОЕ ДВИЖЕНИЕ, ВТОРОЙ СЪЕЗД	13	0
+КОЛЬЦО	13	0
+КОНЕЦ МАРШРУТА	48	0
+КОНЕЧНАЯ	48	0
+КРУГ	0	0
+КРУГОВ	0	0
+КРУГОВОЕ	13	0
+КРУГОВОЕ ДВИЖЕНИЕ	13	0
+КРУТО	0	0
+КРУТО ВЛЕВО	0	0
+КРУТО ВПРАВО	0	0
+КРУТО НАЛЕВО	1	0
+КРУТО НАПРАВО	2	0
+КРУТО ПОВЕРНИТЕ НАЛЕВО	1	0
+КРУТО ПОВЕРНИТЕ НАПРАВО	2	0
+Кольц	0	0
+Кольцевая развязка	0	0
+Кольцевое	13	0
+Кольцевое движение	13	0
+Кольцевое движение 1-й съезд	25	0
+Кольцевое движение 10-й съезд	34	0
+Кольцевое движение 2-й съезд	26	0
+Кольцевое движение 3-й съезд	27	0
+Кольцевое движение 4-й съезд	28	0
+Кольцевое движение 5-й съезд	29	0
+Кольцевое движение 6-й съезд	30	0
+Кольцевое движение 7-й съезд	31	0
+Кольцевое движение 8-й съезд	32	0
+Кольцевое движение 9-й съезд	33	0
+Кольцевое движение, второй съезд	13	0
+Кольцо	13	0
+Конец маршрута	48	0
+Конечная	48	0
+Круг	0	0
+Кругов	0	0
+Круговое	13	0
+Круговое движение	13	0
+Круто	0	0
+Круто влево	0	0
+Круто вправо	0	0
+Круто налево	1	0
+Круто направо	2	0
+Круто поверните налево	1	0
+Круто поверните направо	2	0
+ЛЕВ	0	0
+ЛЕВЕЕ	3	0
+ЛЕВЫЙ	1	0
+ЛЕВЯ	0	0
+Лев	0	0
+Левее	3	0
+Левый	1	0
+Левя	0	0
+МАРШРУТ ЗАВЕРШЁН	48	0
+МАРШРУТ ОКОНЧЕН	48	0
+Маршрут завершён	48	0
+Маршрут окончен	48	0
+НАЛЕВО	1	0
+НАПРАВА	0	0
+НАПРАВО	2	0
+Налево	1	0
+Направа	0	0
+Направо	2	0
+ОҢҒА БҰРЫЛЫҢЫЗ	0	0
+Оңға бұрылыңыз	0	0
+ПАВЯРНІЦЕ НАПРАВА	0	0
+ПАРОМ	46	0
+ПАРОМ ЧЕРЕЗ ЧАС	46	0
+ПЕРВЫЙ	0	0
+ПЕРЕСАДКА НА ПАРОМ	46	0
+ПЛАВН	0	0
+ПЛАВНО ВЛЕВО	0	0
+ПЛАВНО ВПРАВО	0	0
+ПЛАВНО НАЛЕВО	3	0
+ПЛАВНО НАПРАВО	4	0
+ПЛАВНЫЙ ПОВОРОТ НАЛЕВО	3	0
+ПЛАВНЫЙ ПОВОРОТ НАПРАВО	4	0
+ПЛАТНЫЙ УЧАСТОК	0	0
+ПЛАТНЫЙ\u00A0УЧАСТОК	0	0
+ПОВЕРНИТЕ ЛЕВЕЕ	3	0
+ПОВЕРНИТЕ НАЛЕВО	1	0
+ПОВЕРНИТЕ НАЛЕВО 2-Й ПОВОРОТ	1	0
+ПОВЕРНИТЕ НАПРАВО	2	0
+ПОВЕРНИТЕ НАПРАВО 2-Й ПОВОРОТ	2	0
+ПОВЕРНИТЕ НАПРАВО НА УЛИЦУ ЛЕНИНА	2	0
+ПОВЕРНИТЕ ПРАВЕЕ	4	0
+ПОВОРОТ НАЛЕВО	1	0
+ПОВОРОТ НАПРАВО	2	0
+ПРАВ	0	0
+ПРАВЕЕ	4	0
+ПРАВО РУЛЯ	0	0
+ПРАВЫЙ	2	0
+ПРИБЫТИЕ	48	0
+ПРОДОЛЖАЙТЕ	11	0
+ПРОДОЛЖАЙТЕ ДВИЖЕНИЕ ПРЯМО	11	0
+ПРОДОЛЖАЙТЕ ПРЯМО	11	0
+ПРОДОЛЖИТЬ	11	0
+ПРОМЕЖУТОЧНАЯ ТОЧКА	45	0
+ПРОМЕЖУТОЧНАЯ\u00A0ТОЧКА	45	0
+ПРЯМО	11	0
+ПЯТЫЙ	0	0
+Павярніце направа	0	0
+Паром	46	0
+Паром через час	46	0
+Первый	0	0
+Пересадка на паром	46	0
+Плавн	0	0
+Плавно влево	0	0
+Плавно вправо	0	0
+Плавно налево	3	0
+Плавно направо	4	0
+Плавный поворот налево	3	0
+Плавный поворот направо	4	0
+Платный участок	0	0
+Платный\u00A0участок	0	0
+Поверните левее	3	0
+Поверните налево	1	0
+Поверните налево 2-й поворот	1	0
+Поверните направо	2	0
+Поверните направо 2-й поворот	2	0
+Поверните направо на улицу Ленина	2	0
+Поверните направо на улицу ленина	2	0
+Поверните правее	4	0
+Поворот налево	1	0
+Поворот направо	2	0
+Прав	0	0
+Правее	4	0
+Право руля	0	0
+Правый	2	0
+Прибытие	48	0
+Продолжайте	11	0
+Продолжайте движение прямо	11	0
+Продолжайте прямо	11	0
+Продолжить	11	0
+Промежуточная точка	45	0
+Промежуточная\u00A0точка	45	0
+Прямо	11	0
+Пятый	0	0
+РАЗВЕРНИТЕСЬ	9	0
+РАЗВЕРНИТЕСЬ НАЛЕВО	9	0
+РАЗВЕРНИТЕСЬ НАПРАВО	10	0
+РАЗВОР	0	0
+РАЗВОРАЧИВАЙТЕСЬ	0	0
+РАЗВОРОТ	9	0
+РАЗВОРОТ НАЛЕВО	9	0
+РАЗВОРОТ НАПРАВО	10	0
+РЕЗК	0	0
+РЕЗКИЙ ПОВОРОТ НАЛЕВО	7	0
+РЕЗКИЙ ПОВОРОТ НАПРАВО	8	0
+РЕЗКИЙ\u00A0ПОВОРОТ\u00A0НАЛЕВО	7	0
+РЕЗКО ВЛЕВО	0	0
+РЕЗКО ВПРАВО	0	0
+РЕЗКО НАЛЕВО	7	0
+РЕЗКО НАПРАВО	8	0
+Развернитесь	9	0
+Развернитесь налево	9	0
+Развернитесь направо	10	0
+Развор	0	0
+Разворачивайтесь	0	0
+Разворот	9	0
+Разворот налево	9	0
+Разворот направо	10	0
+Резк	0	0
+Резкий поворот налево	7	0
+Резкий поворот направо	8	0
+Резкий\u00A0поворот\u00A0налево	7	0
+Резко влево	0	0
+Резко вправо	0	0
+Резко налево	7	0
+Резко направо	8	0
+СВЕРНИТЕ НАЛЕВО	1	0
+СВЕРНИТЕ НАПРАВО	2	0
+СЕДЬМОЙ	0	0
+СЪЕЗД 1	0	0
+СЪЕЗД 10	0	0
+СЪЕЗД 2	0	0
+СЪЕЗД 3	0	0
+СЪЕЗД 4	0	0
+СЪЕЗД 5	0	0
+СЪЕЗД 6	0	0
+СЪЕЗД 7	0	0
+СЪЕЗД 8	0	0
+СЪЕЗД 9	0	0
+СЪЕЗД НА ПАРОМ	46	0
+СЪЕЗД С КОЛЬЦА	24	0
+СЪЕЗД С ПАРОМА	11	0
+СЪЕЗД ЧЕРЕЗ 300 М	0	0
+СЪЕЗД\u00A0С\u00A0КОЛЬЦА	24	0
+СЪЕЗЖАЙТЕ С КОЛЬЦА	24	0
+Сверните налево	1	0
+Сверните направо	2	0
+Седьмой	0	0
+Съезд 1	0	0
+Съезд 10	0	0
+Съезд 2	0	0
+Съезд 3	0	0
+Съезд 4	0	0
+Съезд 5	0	0
+Съезд 6	0	0
+Съезд 7	0	0
+Съезд 8	0	0
+Съезд 9	0	0
+Съезд на паром	46	0
+Съезд с кольца	24	0
+Съезд с парома	11	0
+Съезд через 300 м	0	0
+Съезд\u00A0с\u00A0кольца	24	0
+Съезжайте с кольца	24	0
+ТОННЕЛЬ	49	0
+ТРЕТИЙ	0	0
+ТРЕТИЙ СЪЕЗД С КОЛЬЦА	24	0
+ТУННЕЛЬ	49	0
+Тоннель	49	0
+Третий	0	0
+Третий съезд с кольца	24	0
+Туннель	49	0
+УЛИЦА ЛЕНИНА	0	0
+Улица ленина	0	0
+ЧЕТВЁРТЫЙ	0	0
+ЧЕТВЕРТЫЙ	0	0
+Четвертый	0	0
+Четвёртый	0	0
+ШЕСТОЙ	0	0
+Шестой	0	0
+войдите в кольцо	13	0
+восьмой	0	0
+второй	0	0
+второй съезд	0	0
+въезд на паром	46	0
+въезжайте на кольцо	13	0
+вы прибыли	48	0
+выезд с кольца	24	0
+выезд с кольца 1-й съезд	25	0
+выезд с кольца 10-й съезд	34	0
+выезд с кольца 2-й съезд	26	0
+выезд с кольца 3-й съезд	27	0
+выезд с кольца 4-й съезд	28	0
+выезд с кольца 5-й съезд	29	0
+выезд с кольца 6-й съезд	30	0
+выезд с кольца 7-й съезд	31	0
+выезд с кольца 8-й съезд	32	0
+выезд с кольца 9-й съезд	33	0
+выезд с парома	11	0
+выезжайте из кольца	24	0
+двигайтесь	11	0
+двигайтесь прямо	11	0
+девятый	0	0
+держитесь левее	3	0
+держитесь правее	4	0
+десятый	0	0
+до конца маршрута	48	0
+достигнут	48	0
+езжайте прямо	11	0
+кольц	0	0
+кольцевое	13	0
+кольцевое движение	13	0
+кольцевое движение 1-й съезд	25	0
+кольцевое движение 10-й съезд	34	0
+кольцевое движение 2-й съезд	26	0
+кольцевое движение 3-й съезд	27	0
+кольцевое движение 4-й съезд	28	0
+кольцевое движение 5-й съезд	29	0
+кольцевое движение 6-й съезд	30	0
+кольцевое движение 7-й съезд	31	0
+кольцевое движение 8-й съезд	32	0
+кольцевое движение 9-й съезд	33	0
+кольцо	13	0
+конец маршрута	48	0
+конечная	48	0
+круг	0	0
+кругов	0	0
+круговое	13	0
+круговое движение	13	0
+круто	0	0
+круто налево	1	0
+круто направо	2	0
+круто поверните налево	1	0
+круто поверните направо	2	0
+лев	0	0
+левее	3	0
+левый	1	0
+левя	0	0
+маршрут завершён	48	0
+маршрут окончен	48	0
+налево	1	0
+направо	2	0
+паром	46	0
+паром через час	46	0
+первый	0	0
+пересадка на паром	46	0
+плавн	0	0
+плавно налево	3	0
+плавно направо	4	0
+плавный поворот налево	3	0
+плавный поворот направо	4	0
+платный участок	0	0
+платный\u00A0участок	0	0
+поверните левее	3	0
+поверните налево	1	0
+поверните налево 2-й поворот	1	0
+поверните направо	2	0
+поверните направо 2-й поворот	2	0
+поверните правее	4	0
+поворот налево	1	0
+поворот направо	2	0
+прав	0	0
+правее	4	0
+правый	2	0
+прибытие	48	0
+продолжайте	11	0
+продолжайте прямо	11	0
+продолжить	11	0
+промежуточная точка	45	0
+прямо	11	0
+пятый	0	0
+развернитесь	9	0
+развернитесь налево	9	0
+развернитесь направо	10	0
+развор	0	0
+разворот	9	0
+разворот налево	9	0
+разворот направо	10	0
+резк	0	0
+резкий поворот налево	7	0
+резкий поворот направо	8	0
+резко налево	7	0
+резко направо	8	0
+сверните налево	1	0
+сверните направо	2	0
+седьмой	0	0
+съезд 1	0	0
+съезд 10	0	0
+съезд 2	0	0
+съезд 3	0	0
+съезд 4	0	0
+съезд 5	0	0
+съезд 6	0	0
+съезд 7	0	0
+съезд 8	0	0
+съезд 9	0	0
+съезд на паром	46	0
+съезд с кольца	24	0
+съезд с парома	11	0
+съезд через 300 м	0	0
+съезжайте с кольца	24	0
+тоннель	49	0
+третий	0	0
+туннель	49	0
+улица Ленина	0	0
+четвертый	0	0
+четвёртый	0	0
+шестой	0	0
