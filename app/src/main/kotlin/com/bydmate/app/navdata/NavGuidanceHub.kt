@@ -13,7 +13,8 @@ import android.util.Log
  *  - speed limit has its own 30 s freshness (a limit sign must not outlive its road);
  *  - the maneuver has its own 30 s freshness (a passed turn must not outlive its balloon);
  *  - a Navigator-window read WITHOUT guidance widgets ends nothing, as in the donor: on some
- *    cars the window loses its widgets mid-route (issue #199), so only silence ends a route. */
+ *    cars the window loses its widgets mid-route (issue #199), so only silence ends a route;
+ *  - a read whose widgets are there but carry no text keeps the route alive (keepAlive). */
 object NavGuidanceHub {
     private const val TAG = "NavGuidanceHub"
     const val ACTIVE_TIMEOUT_MS = 90_000L
@@ -169,6 +170,16 @@ object NavGuidanceHub {
                 else -> rich.cameraIconPng ?: prev.cameraIconPng
             },
         )
+    }
+
+    /** A Navigator window still shows the guidance widgets but they carry no text (issue #199,
+     *  the donor counts such a read as guidance): refreshes the liveness of a route that is
+     *  active and not yet expired; never starts or revives one, and touches no other field. */
+    @Synchronized
+    fun keepAlive(nowMs: Long = System.currentTimeMillis()) {
+        val s = current
+        if (!s.active || nowMs - s.lastUpdateMs > ACTIVE_TIMEOUT_MS) return
+        current = s.copy(lastUpdateMs = nowMs)
     }
 
     /** Donor removal grace: called by the notification lane's deactivate check when

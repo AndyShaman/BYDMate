@@ -103,6 +103,23 @@ class NavGuidanceHubTest {
         assertFalse(NavGuidanceHub.snapshot(nowMs = 3001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
+    @Test fun `keepAlive refreshes only the liveness of an active route`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 250, road = "ул. А", limit = 60), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        val before = NavGuidanceHub.snapshot(nowMs = 1000)
+        NavGuidanceHub.keepAlive(nowMs = 5000)
+        assertEquals(before.copy(lastUpdateMs = 5000), NavGuidanceHub.snapshot(nowMs = 5000))
+    }
+
+    @Test fun `keepAlive neither starts nor revives a route`() {
+        NavGuidanceHub.keepAlive(nowMs = 1000)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 1000).active)
+        assertEquals(0L, NavGuidanceHub.snapshot(nowMs = 1000).lastUpdateMs)
+        NavGuidanceHub.update(data(gaode = 2, dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        // Stored as active, but older than the active timeout: expires as it would without the call.
+        NavGuidanceHub.keepAlive(nowMs = 2001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 2001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
+    }
+
     @Test fun `reset clears everything`() {
         NavGuidanceHub.update(data(gaode = 2, dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 1000)
         NavGuidanceHub.reset()

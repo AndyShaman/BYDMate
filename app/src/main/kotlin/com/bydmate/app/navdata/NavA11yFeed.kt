@@ -131,9 +131,10 @@ object NavA11yFeed {
         }
     }
 
-    /** Reads a reachable navigator [root] into the hub and recycles it: widgets present =
-     *  guidance; a navigator without them changes nothing in the hub (issue #199), it is only
-     *  traced. True when guidance was read.
+    /** Reads a reachable navigator [root] into the hub and recycles it: widgets with text =
+     *  guidance; widgets without text only keep the route alive, as in the donor; a navigator
+     *  without them changes nothing (issue #199). Both of the latter are traced. True when
+     *  guidance was read.
      *  [src] and [service] only feed the no-guidance trace. */
     private fun readWindow(
         root: AccessibilityNodeInfo,
@@ -152,7 +153,9 @@ object NavA11yFeed {
                     true
                 }
                 is NavA11yExtractor.ReadResult.NoGuidance -> {
-                    traceNoGuidance(root, nowMs, src, service)
+                    val kept = NavA11yExtractor.hasGuidanceNodes(root)
+                    if (kept) NavGuidanceHub.keepAlive(nowMs)
+                    traceNoGuidance(root, nowMs, src, service, kept)
                     false
                 }
                 is NavA11yExtractor.ReadResult.NotNavigator -> false
@@ -259,19 +262,21 @@ object NavA11yFeed {
     /** Issue #199: a window read without guidance that starts a streak while a route is guided
      *  logs what the read saw (window, navigator windows, widget counts, no text), at most once
      *  per 5 s, then the id walk with its node count behind its own 60 s floor. The route state
-     *  is read without expiries, so the trace writes nothing into the hub. [root] is the caller's. */
+     *  is read without expiries, so the trace writes nothing into the hub. [kept]: the read kept
+     *  the route alive (widgets without text). [root] is the caller's. */
     private fun traceNoGuidance(
         root: AccessibilityNodeInfo,
         nowMs: Long,
         src: String,
         service: SteeringWheelKeyService,
+        kept: Boolean,
     ) {
         val skipped = noGuidanceTrace.startStreak(nowMs) { NavGuidanceHub.isActiveNow() } ?: return
         val windows = runCatching { service.navigatorWindowRoots() }.getOrNull()
         try {
             runCatching {
                 traceSink("no-guidance read: src=$src ${NavA11yExtractor.windowFacts(root)} " +
-                    "navWindows=${windows?.size ?: "?"} skipped=$skipped ${NavA11yExtractor.countIds(root)}")
+                    "navWindows=${windows?.size ?: "?"} skipped=$skipped kept=$kept ${NavA11yExtractor.countIds(root)}")
                 traceWindows(root, windows.orEmpty())
                 if (!noGuidanceTrace.takeDump(nowMs)) return@runCatching
                 val ids = StringBuilder()

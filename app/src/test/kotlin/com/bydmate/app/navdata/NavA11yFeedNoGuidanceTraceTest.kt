@@ -53,7 +53,7 @@ class NavA11yFeedNoGuidanceTraceTest {
         timerRead(root, T0 + 1_000, windows = listOf(emptyGuidanceRoot(), emptyGuidanceRoot(windowId = 9)))
         assertEquals(
             listOf("no-guidance read: src=timer display=? window=7 type=1 active=true focused=false navWindows=2 " +
-                "skipped=0 ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1]"),
+                "skipped=0 kept=true ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1]"),
             readLines,
         )
         assertEquals(1, walks.size)
@@ -136,8 +136,9 @@ class NavA11yFeedNoGuidanceTraceTest {
 
     @Test fun `a traced read leaves the hub as it was`() {
         armGuidance()
-        timerRead(emptyGuidanceRoot(), T0 + 1_000)
+        timerRead(noWidgetsRoot(), T0 + 1_000)
         assertEquals(1, readLines.size)
+        assertTrue(readLines.single(), " kept=false " in readLines.single())
         val s = NavGuidanceHub.snapshot(T0 + 15_000)
         assertTrue(s.active)
         assertEquals(T0, s.lastUpdateMs)
@@ -155,9 +156,11 @@ class NavA11yFeedNoGuidanceTraceTest {
             NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
                 maneuverGaode = 2, distanceMeters = 500, road = "x",
                 cameraAlert = "camera", cameraDistanceMeters = 300), nowMs = now - 95_000)
-            if (withRead) eventRead(emptyGuidanceRoot())
+            if (withRead) eventRead(noWidgetsRoot())
             NavGuidanceHub.update(NavGuidance(distanceMeters = 400), NavGuidanceHub.Source.A11Y, nowMs = now + 1_000)
-            return NavGuidanceHub.snapshot(now + 1_000)
+            // Times relative to this run's clock, so the two runs compare across a millisecond tick.
+            val s = NavGuidanceHub.snapshot(now + 1_000)
+            return s.copy(maneuverGaodeMs = s.maneuverGaodeMs - now, lastUpdateMs = s.lastUpdateMs - now)
         }
         val without = run(withRead = false)
         val with = run(withRead = true)
@@ -276,6 +279,13 @@ class NavA11yFeedNoGuidanceTraceTest {
         lookup(root, "text_maneuverballoon_distance") { textNode("") }
         lookup(root, "status_panel_text") { textNode("Маршрут") }
         lookup(root, "textview_eta_time") { textNode("12:30") }
+        return root
+    }
+
+    /** A navigator window without any guidance widget (another screen of the Navigator). */
+    private fun noWidgetsRoot(): AccessibilityNodeInfo {
+        val root = node(id = "root_container")
+        withWindow(root, windowId = 7, active = true, displayId = null)
         return root
     }
 
