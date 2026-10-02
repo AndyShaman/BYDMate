@@ -46,6 +46,9 @@ class ClusterMusicSync(private val port: Port) {
 
     /** Set while the helper is unreachable: no new card attempt before this time. */
     private var retryAt: Long? = null
+
+    /** Set while a clear found the helper unreachable: no new clear attempt from a poll before this time. */
+    private var clearRetryAt: Long? = null
     private var lastWriteAt = 0L
     private var progressSent: Int? = null
     private var clearAttempts = 0
@@ -65,24 +68,28 @@ class ClusterMusicSync(private val port: Port) {
         stillWanted: () -> Boolean = { true },
     ): Outcome {
         if (fids == null) return Outcome.NONE
-        if (!wanted) return if (dirty) clear(fids) else Outcome.NONE
-        return when (target) {
-            // Another app plays: the stock controller rewrites the card on the focus change. Ours is gone.
-            is Target.OtherPlaying -> if (dirty || shown != null) Outcome.HANDED_OFF.also { forget() } else Outcome.NONE
-            Target.Idle -> if (dirty) clear(fids) else Outcome.NONE
-            is Target.Show -> if (refused) Outcome.NONE else show(fids, target.card, nowMs, stillWanted)
-        }
+        // Another app plays: the stock controller rewrites the card on the focus change. Ours is
+        // gone, with the switch on or off.
+        if (target is Target.OtherPlaying) return handOff()
+        if (!wanted || target !is Target.Show) return if (dirty) clear(fids, nowMs) else Outcome.NONE
+        return if (refused) Outcome.NONE else show(fids, target.card, nowMs, stillWanted)
     }
 
     /**
      * Last clear before the bridge stops: one attempt, whatever the retry budget says, so a stop
-     * never leaves our text behind when the helper can still take it.
+     * never leaves our text behind when the helper can still take it. [target] is the owner read
+     * right before the stop: a card another player took is forgotten, not cleared.
      */
-    suspend fun release(fids: ClusterMusicFids?): Outcome {
-        if (fids == null || !dirty) return Outcome.NONE
+    suspend fun release(fids: ClusterMusicFids?, target: Target = Target.Idle): Outcome {
+        if (fids == null) return Outcome.NONE
+        if (target is Target.OtherPlaying) return handOff()
+        if (!dirty) return Outcome.NONE
         clearAttempts = 0
-        return clear(fids)
+        return clear(fids, nowMs = null)
     }
+
+    private fun handOff(): Outcome =
+        if (dirty || shown != null) Outcome.HANDED_OFF.also { forget() } else Outcome.NONE
 
     private suspend fun show(fids: ClusterMusicFids, card: Card, nowMs: Long, stillWanted: () -> Boolean): Outcome {
         // Every helper call is logged by HelperClient: a dead daemon is retried at the re-assert pace.
@@ -134,6 +141,7 @@ class ClusterMusicSync(private val port: Port) {
         if (!stillWanted()) { shown = null; return Outcome.ABORTED }
         shown = card
         clearAttempts = 0
+        clearRetryAt = null
         return Outcome.SHOWN
     }
 
@@ -162,18 +170,25 @@ class ClusterMusicSync(private val port: Port) {
         return true
     }
 
-    /** What the stock sender sends when a source goes away: stopped, blank name and singer, empty bar. */
-    private suspend fun clear(fids: ClusterMusicFids): Outcome {
+    /**
+     * What the stock sender sends when a source goes away: stopped, blank name and singer, empty bar.
+     * A poll's clear ([nowMs] set) that found the helper unreachable waits [REASSERT_MS] before the
+     * next attempt, so the budget outlasts a daemon restart; [release] passes null and always tries.
+     */
+    private suspend fun clear(fids: ClusterMusicFids, nowMs: Long?): Outcome {
         if (clearAttempts >= MAX_CLEAR_ATTEMPTS) return Outcome.NONE
+        val retryAt = clearRetryAt
+        if (nowMs != null && retryAt != null && nowMs < retryAt) return Outcome.NONE
         clearAttempts++
-        val required = ok(port.writeInt(fids.instrumentDev, fids.state, ClusterMusicCard.MUSIC_STOPPED)) and
-            ok(port.writeBuffer(fids.instrumentDev, fids.info, ClusterMusicCard.encode("")))
+        val state = port.writeInt(fids.instrumentDev, fids.state, ClusterMusicCard.MUSIC_STOPPED)
+        val info = port.writeBuffer(fids.instrumentDev, fids.info, ClusterMusicCard.encode(""))
         writeSinger(fids, "")
         fids.progress?.let { port.writeInt(fids.instrumentDev, it, 0) }
-        if (required) {
+        if (ok(state) && ok(info)) {
             forget()
             return Outcome.CLEARED
         }
+        if (nowMs != null && (state == null || info == null)) clearRetryAt = nowMs + REASSERT_MS
         return if (clearAttempts >= MAX_CLEAR_ATTEMPTS) Outcome.CLEAR_GAVE_UP else Outcome.CLEAR_FAILED
     }
 
@@ -188,11 +203,15 @@ class ClusterMusicSync(private val port: Port) {
         dirty = false
         progressSent = null
         clearAttempts = 0
+        clearRetryAt = null
     }
 
     companion object {
         const val REASSERT_MS = 10_000L
-        /** ~30 s of polls; after that the clear is dropped and logged instead of hammering a dead helper. */
+        /**
+         * ~30 s of polls for a refusing car, ~200 s for an unreachable helper (one attempt per
+         * [REASSERT_MS]); after that the clear is dropped and logged instead of hammering a dead helper.
+         */
         const val MAX_CLEAR_ATTEMPTS = 20
         /** Refused required writes in a row before the card is off until restart. */
         const val MAX_WRITE_REFUSALS = 3
