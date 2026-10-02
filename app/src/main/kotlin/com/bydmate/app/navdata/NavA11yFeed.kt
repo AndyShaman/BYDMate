@@ -257,27 +257,29 @@ object NavA11yFeed {
     }
 
     /** Issue #199: a window read without guidance that starts a streak while a route is guided
-     *  logs what the read saw (window, navigator windows, node and widget counts, no text), then
-     *  the id walk behind its own 60 s floor. [root] is the caller's. */
+     *  logs what the read saw (window, navigator windows, widget counts, no text), at most once
+     *  per 5 s, then the id walk with its node count behind its own 60 s floor. The route state
+     *  is read without expiries, so the trace writes nothing into the hub. [root] is the caller's. */
     private fun traceNoGuidance(
         root: AccessibilityNodeInfo,
         nowMs: Long,
         src: String,
         service: SteeringWheelKeyService,
     ) {
-        if (!noGuidanceTrace.startsStreak(nowMs) { NavGuidanceHub.snapshot(nowMs).active }) return
+        val skipped = noGuidanceTrace.startStreak(nowMs) { NavGuidanceHub.isActiveNow() } ?: return
         val windows = runCatching { service.navigatorWindowRoots() }.getOrNull()
         try {
             runCatching {
+                traceSink("no-guidance read: src=$src ${NavA11yExtractor.windowFacts(root)} " +
+                    "navWindows=${windows?.size ?: "?"} skipped=$skipped ${NavA11yExtractor.countIds(root)}")
+                traceWindows(root, windows.orEmpty())
+                if (!noGuidanceTrace.takeDump(nowMs)) return@runCatching
                 val ids = StringBuilder()
                 val budget = intArrayOf(TREE_DUMP_MAX_NODES)
                 appendIds(root, ids, budget)
                 val walked = TREE_DUMP_MAX_NODES - budget[0]
                 val nodes = if (budget[0] <= 0) "$walked+" else "$walked"
-                traceSink("no-guidance read: src=$src ${NavA11yExtractor.windowFacts(root)} " +
-                    "navWindows=${windows?.size ?: "?"} nodes=$nodes ${NavA11yExtractor.countIds(root)}")
-                traceWindows(root, windows.orEmpty())
-                if (noGuidanceTrace.takeDump(nowMs)) traceSink("nav tree [no-guidance]:${ids.take(TREE_DUMP_MAX_CHARS)}")
+                traceSink("nav tree [no-guidance nodes=$nodes]:${ids.take(TREE_DUMP_MAX_CHARS)}")
             }
         } finally {
             @Suppress("DEPRECATION")

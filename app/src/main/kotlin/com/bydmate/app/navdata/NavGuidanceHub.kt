@@ -101,6 +101,10 @@ object NavGuidanceHub {
         return s
     }
 
+    /** The stored active flag as it is, without applying any expiry: for field diagnostics that
+     *  must not write hub state the way [snapshot] does. */
+    fun isActiveNow(): Boolean = current.active
+
     @Synchronized
     fun update(data: NavGuidance, source: Source, nowMs: Long = System.currentTimeMillis()) {
         val prev = current
