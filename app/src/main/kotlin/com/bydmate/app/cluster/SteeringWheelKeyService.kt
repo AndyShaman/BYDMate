@@ -218,17 +218,16 @@ class SteeringWheelKeyService : AccessibilityService() {
         return null
     }
 
-    /** How many windows on all displays have a Navigator root, for the no-guidance log;
-     *  null when the window list cannot be read. */
-    fun countNavigatorWindows(): Int? {
+    /** Roots of every window on all displays that belongs to the Navigator, for the no-guidance
+     *  log; null when the window list cannot be read. Caller must recycle every returned node. */
+    fun navigatorWindowRoots(): List<android.view.accessibility.AccessibilityNodeInfo>? {
         val windowList = allWindows() ?: return null
-        return windowList.count { window ->
-            val root = runCatching { window.root }.getOrNull() ?: return@count false
-            try {
-                root.packageName?.toString() in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES
-            } finally {
-                @Suppress("DEPRECATION") runCatching { root.recycle() }
-            }
+        return windowList.mapNotNull { window ->
+            val root = runCatching { window.root }.getOrNull() ?: return@mapNotNull null
+            val pkg = runCatching { root.packageName?.toString() }.getOrNull()
+            if (pkg in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return@mapNotNull root
+            @Suppress("DEPRECATION") runCatching { root.recycle() }
+            null
         }
     }
 
