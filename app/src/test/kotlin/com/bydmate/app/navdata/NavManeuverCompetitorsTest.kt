@@ -100,6 +100,36 @@ class NavManeuverCompetitorsTest {
         assertEquals(24, gaode("Take the 11th exit"))
     }
 
+    @Test fun `the exit number comes from the exit itself, not from a distance before it`() {
+        assertEquals(26, gaode("Через 5 км второй съезд"))
+        assertEquals(29, gaode("через 2 км пятый съезд"))
+        assertEquals(26, gaode("In 300 m take the 2nd exit"))
+        assertEquals(27, gaode("In 2 km take the third exit"))
+        assertEquals(26, gaode("In 5 km take exit 2"))
+        // A distance and no exit: what it read before.
+        assertEquals(0, gaode("Через 5 км держитесь середины"))
+        assertEquals(11, gaode("In 500 m continue straight"))
+        assertEquals(0, gaode("Через 3 км съезд"))
+    }
+
+    @Test fun `stems inside other words are not maneuvers`() {
+        assertEquals(0, gaode("Улица Кольцова"))
+        assertEquals(0, gaode("Резкое исправление маршрута"))
+        assertEquals(0, gaode("Улица Левашова"))
+        assertEquals(0, gaode("Проспект Правды"))
+        assertEquals(0, gaode("Плавникова улица"))
+        assertEquals(0, gaode("Крутоярская улица"))
+        assertEquals(0, gaode("Съездовская линия"))
+        assertEquals(0, gaode("Улица Кругова"))
+        assertEquals(0, gaode("Bearing Street"))
+        assertEquals(0, gaode("Copyright"))
+        assertEquals(0, gaode("Leftover lane"))
+        assertEquals(0, gaode("Brighton Road"))
+        assertEquals(0, gaode("Hardware Street"))
+        assertEquals(0, gaode("Exiting soon"))
+        assertEquals(0, gaode("Unfinished business"))
+    }
+
     @Test fun `Russian variants OpenBYD reads and our tables did not`() {
         assertEquals(7, gaode("Круто влево"))
         assertEquals(8, gaode("Резко вправо"))
