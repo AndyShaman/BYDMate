@@ -1,0 +1,13 @@
+# Way 3 route shaped like the #269 Sea Lion 06 log (3.19.4, 2026-10-01): the arrow value 2 held
+# while the distance falls 40, 30, 20, 10, the next maneuver at 1500 m on a new road, the distance
+# falling again, then the arrow changing. Road names, remaining distance and time are made up (the
+# log has no rest-of-route data and its road names are personal data).
+# gaode	distance_m	road	total_m	eta_s
+2	40	Road One Street	5200	620
+2	30	Road One Street	5190	620
+2	20	Road One Street	5180	610
+2	10	Road One Street	5170	600
+2	1500	Second Avenue	5160	600
+2	1400	Second Avenue	5060	580
+2	1400	Second Avenue	5060	580
+1	200	Third Lane	3600	420

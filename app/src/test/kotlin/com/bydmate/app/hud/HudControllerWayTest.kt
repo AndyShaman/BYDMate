@@ -417,6 +417,19 @@ class HudControllerWayTest {
         c.setEnabled(false)
     }
 
+    @Test fun `a crash-left rest of route of way 3 is blanked with HUD off`() {
+        car()
+        prefs().edit().putBoolean(HudWayChannels.KEY_REST_LEFT, true).commit()
+        val c = controller()
+        c.startIfEnabled()
+        awaitTrue { !prefs().contains(HudWayChannels.KEY_REST_LEFT) }
+        val restClear = listOf(
+            HudCanChannel.FID_REST_MILEAGE_M to -1, HudCanChannel.FID_REST_HOURS to 0, HudCanChannel.FID_REST_MINUTES to 0,
+            HudCanChannel.FID_REST_SECONDS to 0, HudCanChannel.FID_ARRIVE_MINUTE to 0,
+        ).map { (fid, v) -> "set 1007/$fid=$v" }
+        assertEquals(canClear + restClear, snapshot())
+    }
+
     @Test fun `a crash-left family is stopped on the new binding`() {
         car()
         prefs().edit().putBoolean(HudController.KEY_ENABLED, true).putLong(HudWayChannels.KEY_LMCN_LEFT, 1_234_567_890L).commit()
