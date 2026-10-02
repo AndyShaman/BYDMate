@@ -63,7 +63,7 @@ object NaviRichPostProcessor {
     /**
      * EXTRAS_FALLBACK outcome: no RemoteViews. Returns null for idle stubs
      * (app-logo icon, or zero distance with a "навигатор" road) and for service notices
-     * (neither a distance nor a maneuver). Camera untouched
+     * (no distance in the text at all and no maneuver). Camera untouched
      * (applyCamera=false - extras carry no camera). Maps rule R2-1: while the hub
      * already holds a known maneuver, a Maps extras maneuver is dropped.
      */
@@ -81,11 +81,12 @@ object NaviRichPostProcessor {
         val maneuverFromText = NavManeuverCodes.richPhraseGaode("$title $text")
         val maneuver = if (maneuverFromText == 0) NavManeuverCodes.richIconNameGaode(smallIconName)
             else maneuverFromText
-        val distanceMeters = parseDistance(text) ?: parseDistance(title) ?: 0
+        val parsedDistance = parseDistance(text) ?: parseDistance(title)
+        val distanceMeters = parsedDistance ?: 0
         val road = extractRoad(title, text)
         val etaSeconds = parseEtaSeconds(extraSubText ?: "")
 
-        if (isIdleOrNotice(smallIconName, distanceMeters, maneuver, road)) return null
+        if (isIdleOrNotice(smallIconName, distanceMeters, parsedDistance != null, maneuver, road)) return null
 
         val mergeManeuver = if (isMaps && hubHasKnownManeuver) 0 else maneuver
         val mergeRoad = if (road.isNotEmpty() && road != "Навигатор запущен") road else ""
@@ -101,12 +102,19 @@ object NaviRichPostProcessor {
         )
     }
 
-    /** An idle stub (app-logo icon, or no distance with a "навигатор" road) or a service notice:
-     *  neither a distance nor a maneuver, whose title would otherwise become the road and start
-     *  guidance without a route (#198: "Установите сервисы Google Play" without Google services). */
-    private fun isIdleOrNotice(smallIconName: String, distanceMeters: Int, maneuver: Int, road: String): Boolean =
-        smallIconName == "notifications_app_logo" ||
-            (distanceMeters == 0 && (maneuver == 0 || road.contains("навигатор", ignoreCase = true)))
+    /** An idle stub (app-logo icon, or a zero distance with a "навигатор" road) or a service
+     *  notice: no distance in the text at all ("0 м" is one) and no maneuver, whose title would
+     *  otherwise become the road and start guidance without a route (#198: "Установите сервисы
+     *  Google Play" without Google services). */
+    private fun isIdleOrNotice(
+        smallIconName: String,
+        distanceMeters: Int,
+        hasDistance: Boolean,
+        maneuver: Int,
+        road: String,
+    ): Boolean = smallIconName == "notifications_app_logo" ||
+        (distanceMeters == 0 && road.contains("навигатор", ignoreCase = true)) ||
+        (!hasDistance && maneuver == 0)
 
     internal fun parseEtaSeconds(s: String): Int {
         if (s.isBlank()) return 0

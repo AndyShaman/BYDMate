@@ -187,13 +187,17 @@ object NavA11yFeed {
      *  carries a live source node whose parent chain reaches the window root.
      *  ONLY a positive guidance read is accepted — that root may be a sub-window (balloon,
      *  dialog) where missing widgets say nothing about the route, so this path only adds
-     *  data. Returns true when the hub was fed. */
+     *  data; widgets without text keep an active route alive, as in [readWindow]. Returns
+     *  true when the hub was fed. */
     private fun readViaEventSource(event: AccessibilityEvent?, nowMs: Long): Boolean {
         val root = climbToWindowRoot(runCatching { event?.source }.getOrNull()) ?: return false
         try {
             // read() re-checks the package: the climb can land in a host window that merely
             // embeds the Navigator, and a foreign root reads as NotNavigator.
             val result = NavA11yExtractor.read(root)
+            if (result is NavA11yExtractor.ReadResult.NoGuidance && NavA11yExtractor.hasGuidanceNodes(root)) {
+                NavGuidanceHub.keepAlive(nowMs)
+            }
             if (result !is NavA11yExtractor.ReadResult.Guidance) return false
             NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
             dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)

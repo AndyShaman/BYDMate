@@ -85,6 +85,16 @@ class NaviRichPostProcessorTest {
     }
 
     @Test
+    fun `a parsed distance of 0 m with a street is still guidance`() {
+        // What buildExtrasFallback returned for this post before the #198 rule.
+        assertEquals(
+            NavGuidanceHub.RichUpdate(maneuverGaode = 0, distanceMeters = 0, road = "Тверская",
+                etaSeconds = 0, totalDistMeters = 0, maneuverPng = null, applyCamera = false),
+            NaviRichPostProcessor.buildExtrasFallback("0 м", "Тверская", null, "", false, false),
+        )
+    }
+
+    @Test
     fun `fallback maneuver from text then icon`() {
         val fromText = NaviRichPostProcessor.buildExtrasFallback(
             "Поверните направо", "Тверская", null, "", false, false)!!
