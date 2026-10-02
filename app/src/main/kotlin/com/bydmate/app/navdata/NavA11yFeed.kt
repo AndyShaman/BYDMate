@@ -84,12 +84,10 @@ object NavA11yFeed {
         timerKeptAlive = false
         // An unreachable window says NOTHING about the route: the navigator may be
         // minimized, covered by another pane, or projected onto a private VirtualDisplay
-        // while guidance keeps running (field-confirmed, issue #144). Only a REACHABLE
-        // window without guidance widgets means "route ended", so this branch must
-        // neither arm nor cancel the no-guidance streak. A navigator that really closed
-        // is still caught reader-side: an armed streak expires in snapshot(),
-        // ACTIVE_TIMEOUT_MS drops active when no source refreshes, MANEUVER_TIMEOUT_MS
-        // expires the arrow, and the notification lane's removal grace deactivates too.
+        // while guidance keeps running (field-confirmed, issue #144). A navigator that
+        // really closed is caught reader-side: ACTIVE_TIMEOUT_MS drops active when no
+        // source refreshes, MANEUVER_TIMEOUT_MS expires the arrow, and the notification
+        // lane's removal grace deactivates too.
         val root = runCatching { service.findNavigatorRoot() }.getOrNull()
             ?: run {
                 val readViaSource = readViaEventSource(event, nowMs)
@@ -132,7 +130,8 @@ object NavA11yFeed {
     }
 
     /** Reads a reachable navigator [root] into the hub and recycles it: widgets present =
-     *  guidance, a navigator without them = route ended. True when guidance was read.
+     *  guidance; a navigator without them changes nothing in the hub (issue #199), it is only
+     *  traced. True when guidance was read.
      *  [src] and [service] only feed the no-guidance trace. */
     private fun readWindow(
         root: AccessibilityNodeInfo,
@@ -151,7 +150,6 @@ object NavA11yFeed {
                     true
                 }
                 is NavA11yExtractor.ReadResult.NoGuidance -> {
-                    NavGuidanceHub.markNoGuidance(nowMs)
                     traceNoGuidance(root, nowMs, src, service)
                     false
                 }
@@ -183,9 +181,8 @@ object NavA11yFeed {
      *  PRIVATE VirtualDisplay on DiLink 5.1, field-confirmed issue #134): the event still
      *  carries a live source node whose parent chain reaches the window root.
      *  ONLY a positive guidance read is accepted — that root may be a sub-window (balloon,
-     *  dialog) where missing widgets say nothing about the route, so this path may add
-     *  data but must never end guidance (no markNoGuidance here). Returns true when the
-     *  hub was fed. */
+     *  dialog) where missing widgets say nothing about the route, so this path only adds
+     *  data. Returns true when the hub was fed. */
     private fun readViaEventSource(event: AccessibilityEvent?, nowMs: Long): Boolean {
         val root = climbToWindowRoot(runCatching { event?.source }.getOrNull()) ?: return false
         try {
@@ -259,8 +256,7 @@ object NavA11yFeed {
 
     /** Issue #199: a window read without guidance that starts a streak while a route is guided
      *  logs what the read saw (window, navigator windows, node and widget counts, no text), then
-     *  the id walk behind its own 60 s floor. Called after markNoGuidance, so the route state
-     *  read here cannot end guidance ahead of it. [root] is the caller's. */
+     *  the id walk behind its own 60 s floor. [root] is the caller's. */
     private fun traceNoGuidance(
         root: AccessibilityNodeInfo,
         nowMs: Long,

@@ -12,8 +12,8 @@ import android.util.Log
  *  - active expires 90 s after the last update of any source;
  *  - speed limit has its own 30 s freshness (a limit sign must not outlive its road);
  *  - the maneuver has its own 30 s freshness (a passed turn must not outlive its balloon);
- *  - a successful Navigator-window read WITHOUT guidance widgets is an explicit
- *    "route ended" signal: 10 s of that deactivates the snapshot (markNoGuidance). */
+ *  - a Navigator-window read WITHOUT guidance widgets ends nothing, as in the donor: on some
+ *    cars the window loses its widgets mid-route (issue #199), so only silence ends a route. */
 object NavGuidanceHub {
     private const val TAG = "NavGuidanceHub"
     const val ACTIVE_TIMEOUT_MS = 90_000L
@@ -24,7 +24,6 @@ object NavGuidanceHub {
      *  only when it parsed a maneuver AND a11y is not fresher - so the donor's window
      *  would drop the arrow during an a11y blind spell. 30 s, same as the speed limit. */
     const val MANEUVER_TIMEOUT_MS = 30_000L
-    const val NO_GUIDANCE_DEACTIVATE_MS = 10_000L
     const val A11Y_PRIORITY_MS = 10_000L
 
     enum class Source { A11Y, NOTIFICATION }
@@ -64,7 +63,6 @@ object NavGuidanceHub {
     )
 
     @Volatile private var current = Snapshot()
-    @Volatile private var noGuidanceSinceMs = 0L
     @Volatile private var lastA11yMs = 0L
 
     /** Returns a deactivated copy with PNG/camera fields cleared. Used in all places
@@ -87,15 +85,6 @@ object NavGuidanceHub {
             current = s
             Log.i(TAG, "guidance inactive: no source updated for ${ACTIVE_TIMEOUT_MS / 1000}s")
         }
-        // A started no-guidance streak expires by TIME, not by a second event: after a
-        // route ends the Navigator may go silent (window closed, no more a11y events),
-        // so the deadline must fire from the reader side (Codex audit fix 2).
-        if (s.active && noGuidanceSinceMs != 0L && nowMs - noGuidanceSinceMs >= NO_GUIDANCE_DEACTIVATE_MS) {
-            s = deactivated(s)
-            current = s
-            noGuidanceSinceMs = 0L
-            Log.i(TAG, "guidance inactive: route ended (no-guidance deadline)")
-        }
         if (s.speedLimit > 0 && nowMs - s.speedLimitMs > SPEED_LIMIT_TIMEOUT_MS) {
             s = s.copy(speedLimit = 0)
             current = s
@@ -114,7 +103,6 @@ object NavGuidanceHub {
 
     @Synchronized
     fun update(data: NavGuidance, source: Source, nowMs: Long = System.currentTimeMillis()) {
-        noGuidanceSinceMs = 0L
         val prev = current
         if (!prev.active) Log.i(TAG, "guidance active (source=$source)")
         current = prev.copy(
@@ -135,8 +123,7 @@ object NavGuidanceHub {
     /**
      * Rich notification entry (spec §6). While an a11y update is fresher than
      * A11Y_PRIORITY_MS the guidance fields are ignored (a11y wins the field race),
-     * but side effects ALWAYS apply: active=true, lastUpdateMs, no-guidance streak
-     * reset, camera merge. Camera two-stage rule mirrors the donor listener:
+     * but side effects ALWAYS apply: active=true, lastUpdateMs, camera merge. Camera two-stage rule mirrors the donor listener:
      * alert replaces; empty alert clears distance/icon; non-empty keeps prev gaps.
      */
     @Synchronized
@@ -145,13 +132,12 @@ object NavGuidanceHub {
         // no navigation payload at all (extras fallback returns an all-empty RichUpdate).
         // Activating the hub on that carries no maneuver/distance, so displayDistance()
         // clamps 0 up to its 11 m floor and the HUD flashes a bogus "11m". A truly empty
-        // update must be a no-op: leave active/lastUpdateMs/noGuidanceSinceMs untouched.
+        // update must be a no-op: leave active/lastUpdateMs untouched.
         if (rich.maneuverGaode == 0 && rich.distanceMeters == 0 && rich.road.isEmpty() &&
             rich.etaSeconds == 0 && rich.totalDistMeters == 0 && rich.cameraAlert.isEmpty()
         ) {
             return
         }
-        noGuidanceSinceMs = 0L
         val prev = current
         if (!prev.active) Log.i(TAG, "guidance active (source=NOTIFICATION)")
         val a11yFresh = lastA11yMs != 0L && nowMs - lastA11yMs <= A11Y_PRIORITY_MS
@@ -190,26 +176,12 @@ object NavGuidanceHub {
         if (!s.active) return
         if (nowMs - s.lastUpdateMs < ACTIVE_TIMEOUT_MS) return
         current = deactivated(s)
-        noGuidanceSinceMs = 0L
         Log.i(TAG, "guidance inactive: notification removed, grace expired")
-    }
-
-    @Synchronized
-    fun markNoGuidance(nowMs: Long = System.currentTimeMillis()) {
-        val s = current
-        if (!s.active) { noGuidanceSinceMs = 0L; return }
-        if (noGuidanceSinceMs == 0L) { noGuidanceSinceMs = nowMs; return }
-        if (nowMs - noGuidanceSinceMs >= NO_GUIDANCE_DEACTIVATE_MS) {
-            current = deactivated(s)
-            noGuidanceSinceMs = 0L
-            Log.i(TAG, "guidance inactive: route ended (no-guidance streak)")
-        }
     }
 
     @Synchronized
     fun reset() {
         current = Snapshot()
-        noGuidanceSinceMs = 0L
         lastA11yMs = 0L
     }
 }

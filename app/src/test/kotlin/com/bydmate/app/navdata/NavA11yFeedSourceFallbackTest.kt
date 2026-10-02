@@ -46,10 +46,9 @@ class NavA11yFeedSourceFallbackTest {
         val t0 = armedGuidance()
         deliver(sourceNode = descendantOf(navigatorRoot(PKG, withGuidance = false)))
         // The source root may be a sub-window (balloon, dialog) — missing widgets there
-        // say nothing about the route, so the 10 s no-guidance deadline must NOT arm.
+        // say nothing about the route, so they must not end guidance.
         assertTrue(NavGuidanceHub.snapshot(t0 + 1_000).active)
-        assertTrue(NavGuidanceHub.snapshot(
-            t0 + NavGuidanceHub.NO_GUIDANCE_DEACTIVATE_MS + 5_000).active)
+        assertTrue(NavGuidanceHub.snapshot(t0 + 15_000).active)
         // A genuinely closed navigator is still caught by source silence.
         assertFalse(NavGuidanceHub.snapshot(
             t0 + NavGuidanceHub.ACTIVE_TIMEOUT_MS + 1_000).active)
@@ -108,8 +107,7 @@ class NavA11yFeedSourceFallbackTest {
     }
 
     private fun assertGuidanceUndisturbed(t0: Long) {
-        assertTrue(NavGuidanceHub.snapshot(
-            t0 + NavGuidanceHub.NO_GUIDANCE_DEACTIVATE_MS + 5_000).active)
+        assertTrue(NavGuidanceHub.snapshot(t0 + 15_000).active)
         assertEquals(500, NavGuidanceHub.snapshot(t0 + 1_000).distanceMeters)
     }
 

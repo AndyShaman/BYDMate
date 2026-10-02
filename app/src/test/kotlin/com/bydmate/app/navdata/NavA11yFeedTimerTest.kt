@@ -58,12 +58,14 @@ class NavA11yFeedTimerTest {
         assertEquals(now, NavA11yFeed.lastProcessMs)
     }
 
-    @Test fun `a timer read of a navigator without guidance widgets ends guidance`() {
+    @Test fun `a timer read of a navigator without guidance widgets neither ends nor refreshes guidance`() {
         val t0 = armedGuidance()
         NavA11yFeed.enabled = true
         NavA11yFeed.lastProcessMs = 0L
-        NavA11yFeed.onTimer(service(navigatorRoot(withGuidance = false)), t0)
-        assertFalse(NavGuidanceHub.snapshot(t0 + NavGuidanceHub.NO_GUIDANCE_DEACTIVATE_MS).active)
+        NavA11yFeed.onTimer(service(navigatorRoot(withGuidance = false)), t0 + 1_000)
+        assertTrue(NavGuidanceHub.snapshot(t0 + 15_000).active)
+        assertEquals(t0, NavGuidanceHub.snapshot(t0 + 15_000).lastUpdateMs)
+        assertFalse(NavGuidanceHub.snapshot(t0 + NavGuidanceHub.ACTIVE_TIMEOUT_MS + 1).active)
     }
 
     @Test fun `an unreachable window on a timer read says nothing`() {
@@ -71,7 +73,7 @@ class NavA11yFeedTimerTest {
         NavA11yFeed.enabled = true
         NavA11yFeed.lastProcessMs = 0L
         NavA11yFeed.onTimer(service(null), t0 + 1_000)
-        assertTrue(NavGuidanceHub.snapshot(t0 + NavGuidanceHub.NO_GUIDANCE_DEACTIVATE_MS + 5_000).active)
+        assertTrue(NavGuidanceHub.snapshot(t0 + 15_000).active)
         assertEquals(500, NavGuidanceHub.snapshot(t0 + 1_000).distanceMeters)
     }
 
