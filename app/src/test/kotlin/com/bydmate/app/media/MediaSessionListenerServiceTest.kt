@@ -165,6 +165,18 @@ class MediaSessionListenerServiceTest {
         assertTrue(lines.single(), lines.single().endsWith("roadLen=8"))
     }
 
+    @Test
+    fun `issue 198 the Google Play services notice does not start guidance`() {
+        val n = Notification()
+        n.extras.putString(Notification.EXTRA_TITLE, "Установите сервисы Google Play")
+        n.extras.putString(Notification.EXTRA_TEXT, "Для работы приложения \"Яндекс Навигатор\" требуется")
+        service.onNotificationPosted(sbn("ru.yandex.yandexnavi", n))
+        exec.executed.forEach { it.run() }
+        val s = NavGuidanceHub.snapshot()
+        assertFalse(s.active)
+        assertEquals("", s.road)
+    }
+
     // -- unknown-maneuver log (lane thread) --
 
     private fun postAndRun(pkg: String, title: String, text: String): List<String> {

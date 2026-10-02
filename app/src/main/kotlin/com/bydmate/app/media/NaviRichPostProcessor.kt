@@ -62,7 +62,8 @@ object NaviRichPostProcessor {
 
     /**
      * EXTRAS_FALLBACK outcome: no RemoteViews. Returns null for idle stubs
-     * (app-logo icon, or zero distance with a "навигатор" road). Camera untouched
+     * (app-logo icon, or zero distance with a "навигатор" road) and for service notices
+     * (neither a distance nor a maneuver). Camera untouched
      * (applyCamera=false - extras carry no camera). Maps rule R2-1: while the hub
      * already holds a known maneuver, a Maps extras maneuver is dropped.
      */
@@ -87,6 +88,10 @@ object NaviRichPostProcessor {
         if (smallIconName == "notifications_app_logo" ||
             (distanceMeters == 0 && road.contains("навигатор", ignoreCase = true))
         ) return null
+        // Neither a distance nor a maneuver: a service notice, not guidance. Its title would
+        // otherwise become the road and start guidance without a route (#198: "Установите
+        // сервисы Google Play" on a car without Google services).
+        if (distanceMeters == 0 && maneuver == 0) return null
 
         val mergeManeuver = if (isMaps && hubHasKnownManeuver) 0 else maneuver
         val mergeRoad = if (road.isNotEmpty() && road != "Навигатор запущен") road else ""
