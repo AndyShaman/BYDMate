@@ -100,11 +100,12 @@ class ClusterMusicBridge @Inject constructor(
             running.cancelAndJoin()
             val outcome = withTimeoutOrNull(STOP_CLEAR_TIMEOUT_MS) {
                 mutex.withLock {
-                    val owner = ownerBeforeClear()
-                    var result = sync.release(lastFids, owner)
+                    // The owner is read again before every attempt: another player may take
+                    // the card while a failed clear waits for its retry.
+                    var result = sync.release(lastFids, ownerBeforeClear())
                     while (result == Outcome.CLEAR_FAILED) {
                         delay(POLL_MS)
-                        result = sync.release(lastFids, owner)
+                        result = sync.release(lastFids, ownerBeforeClear())
                     }
                     wasEnabled = false
                     access.onSwitch(false)
