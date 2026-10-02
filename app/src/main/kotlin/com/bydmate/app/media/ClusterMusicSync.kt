@@ -12,10 +12,11 @@ import com.bydmate.app.media.ClusterMusicCard.Target
  * (anything was attempted since the last confirmed clear). A failed clear therefore stays owed
  * and is retried on the next step, up to [MAX_CLEAR_ATTEMPTS].
  *
- * A car that refuses a required fid (negative status) [MAX_WRITE_REFUSALS] times in a row turns
- * the card off until the process restarts ([refused]), so it can't flood the diagnostics log. An
- * unreachable helper (null) is not a refusal: the daemon may still be starting, so those writes
- * keep being retried, but only the first failure of a streak is reported.
+ * A car that refuses a required fid (negative status) [MAX_WRITE_REFUSALS] times in a row gets no
+ * new card until the process restarts ([refused]), so it can't flood the diagnostics log; a clear
+ * still owed for our card and a hand-off are handled as before. An unreachable helper (null) is
+ * not a refusal: the daemon may still be starting, so the card is retried, but no sooner than
+ * [REASSERT_MS] after the failed attempt, and only the first failure of a streak is reported.
  */
 class ClusterMusicSync(private val port: Port) {
 
@@ -39,10 +40,12 @@ class ClusterMusicSync(private val port: Port) {
     var dirty = false
         private set
 
-    /** True once the car refused the card [MAX_WRITE_REFUSALS] times: off until the process restarts. */
+    /** True once the car refused the card [MAX_WRITE_REFUSALS] times: no new show until the process restarts. */
     var refused = false
         private set
 
+    /** Set while the helper is unreachable: no new card attempt before this time. */
+    private var retryAt: Long? = null
     private var lastWriteAt = 0L
     private var progressSent: Int? = null
     private var clearAttempts = 0
@@ -61,13 +64,13 @@ class ClusterMusicSync(private val port: Port) {
         nowMs: Long,
         stillWanted: () -> Boolean = { true },
     ): Outcome {
-        if (fids == null || refused) return Outcome.NONE
+        if (fids == null) return Outcome.NONE
         if (!wanted) return if (dirty) clear(fids) else Outcome.NONE
         return when (target) {
             // Another app plays: the stock controller rewrites the card on the focus change. Ours is gone.
             is Target.OtherPlaying -> if (dirty || shown != null) Outcome.HANDED_OFF.also { forget() } else Outcome.NONE
             Target.Idle -> if (dirty) clear(fids) else Outcome.NONE
-            is Target.Show -> show(fids, target.card, nowMs, stillWanted)
+            is Target.Show -> if (refused) Outcome.NONE else show(fids, target.card, nowMs, stillWanted)
         }
     }
 
@@ -82,9 +85,11 @@ class ClusterMusicSync(private val port: Port) {
     }
 
     private suspend fun show(fids: ClusterMusicFids, card: Card, nowMs: Long, stillWanted: () -> Boolean): Outcome {
+        // Every helper call is logged by HelperClient: a dead daemon is retried at the re-assert pace.
+        retryAt?.let { if (nowMs < it) return Outcome.NONE }
         val newTrack = shown?.steady() != card.steady()
         if (newTrack || nowMs - lastWriteAt >= REASSERT_MS) {
-            val outcome = writeCard(fids, card, newTrack, stillWanted)
+            val outcome = writeCard(fids, card, newTrack, nowMs, stillWanted)
             if (outcome != Outcome.SHOWN) return outcome
             lastWriteAt = nowMs
             if (!newTrack) return Outcome.REASSERTED
@@ -97,7 +102,13 @@ class ClusterMusicSync(private val port: Port) {
         }
     }
 
-    private suspend fun writeCard(fids: ClusterMusicFids, card: Card, newTrack: Boolean, stillWanted: () -> Boolean): Outcome {
+    private suspend fun writeCard(
+        fids: ClusterMusicFids,
+        card: Card,
+        newTrack: Boolean,
+        nowMs: Long,
+        stillWanted: () -> Boolean,
+    ): Outcome {
         dirty = true
         val writes = buildList<suspend () -> Int?> {
             add { port.writeInt(fids.instrumentDev, fids.source, ClusterMusicCard.SOURCE_THIRD_PARTY) }
@@ -107,10 +118,11 @@ class ClusterMusicSync(private val port: Port) {
         for (write in writes) {
             if (!stillWanted()) { shown = null; return Outcome.ABORTED }
             val status = write()
-            if (!ok(status)) return failed(status)
+            if (!ok(status)) return failed(status, nowMs)
         }
         refusals = 0
         failing = false
+        retryAt = null
         // Optional fids: best effort, a failure doesn't hold the card back.
         if (stillWanted()) writeSinger(fids, card.artist)
         if (newTrack && stillWanted()) {
@@ -126,8 +138,9 @@ class ClusterMusicSync(private val port: Port) {
     }
 
     /** A required write failed: count refusals toward [refused], report only a streak's first failure. */
-    private fun failed(status: Int?): Outcome {
+    private fun failed(status: Int?, nowMs: Long): Outcome {
         shown = null
+        retryAt = if (status == null) nowMs + REASSERT_MS else null
         if (status != null) {
             refusals++
             if (refusals >= MAX_WRITE_REFUSALS) {

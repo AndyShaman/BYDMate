@@ -162,7 +162,6 @@ class ClusterMusicSyncTest {
         assertTrue(port.writes.isEmpty())
     }
 
-    // Review point 5: a new track without duration zeroes the bar and the clock.
     // Review point 5: a new track without duration empties the bar.
     @Test fun `new track with unknown progress writes an empty bar`() = runTest {
         val port = FakePort()
@@ -193,8 +192,8 @@ class ClusterMusicSyncTest {
         assertEquals(setOf(11, 12, 13, 14, 21), port.writes.map { it.first }.toSet())
     }
 
-    // Second review point 1: a car that refuses the card is left alone until restart.
-    @Test fun `refused writes stop the card until restart`() = runTest {
+    // Second review point 1: a car that refuses the card gets no new show until restart.
+    @Test fun `refused writes stop new shows until restart`() = runTest {
         val port = FakePort { fid -> if (fid == 13) -1 else 1 }
         val sync = ClusterMusicSync(port)
         assertEquals(Outcome.WRITE_FAILED, sync.step(true, fids, Target.Show(card()), 0))
@@ -204,7 +203,86 @@ class ClusterMusicSyncTest {
         port.clearTakes()
         port.status = { 1 }
         assertEquals(Outcome.NONE, sync.step(true, fids, Target.Show(card()), 4_500))
-        assertEquals(Outcome.NONE, sync.step(false, fids, Target.Idle, 6_000))
+        assertEquals(Outcome.NONE, sync.step(true, fids, Target.Show(card(title = "Next")), 6_000))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    /** Card A on the cluster, then the car refuses source for track B until [ClusterMusicSync.refused]. */
+    private suspend fun refusedAfterShown(port: FakePort): ClusterMusicSync {
+        val sync = ClusterMusicSync(port)
+        assertEquals(Outcome.SHOWN, sync.step(true, fids, Target.Show(card(title = "A")), 0))
+        port.status = { fid -> if (fid == 13) -1 else 1 }
+        repeat(ClusterMusicSync.MAX_WRITE_REFUSALS) { sync.step(true, fids, Target.Show(card(title = "B")), (it + 1) * 1_500L) }
+        assertTrue(sync.refused)
+        port.clearTakes()
+        return sync
+    }
+
+    // Codex finding 2: the refusal blocks new shows, not the clear we owe for card A.
+    @Test fun `disabling after a refusal still clears our card`() = runTest {
+        val port = FakePort()
+        val sync = refusedAfterShown(port)
+        assertEquals(Outcome.CLEARED, sync.step(false, fids, Target.Idle, 6_000))
+        assertEquals(listOf(" "), port.valuesFor(11))
+        assertFalse(sync.dirty)
+    }
+
+    @Test fun `playback stopping after a refusal still clears our card`() = runTest {
+        val port = FakePort()
+        val sync = refusedAfterShown(port)
+        assertEquals(Outcome.CLEARED, sync.step(true, fids, Target.Idle, 6_000))
+        assertEquals(listOf(ClusterMusicCard.MUSIC_STOPPED), port.valuesFor(12))
+        assertFalse(sync.dirty)
+    }
+
+    @Test fun `a clear owed after a refusal keeps its attempt budget`() = runTest {
+        val port = FakePort()
+        val sync = refusedAfterShown(port)
+        port.status = { -1 }
+        var last = Outcome.NONE
+        repeat(ClusterMusicSync.MAX_CLEAR_ATTEMPTS) { last = sync.step(false, fids, Target.Idle, 6_000 + it * 1_500L) }
+        assertEquals(Outcome.CLEAR_GAVE_UP, last)
+        port.clearTakes()
+        assertEquals(Outcome.NONE, sync.step(false, fids, Target.Idle, 100_000))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    @Test fun `another player after a refusal forgets our card without clearing it`() = runTest {
+        val port = FakePort()
+        val sync = refusedAfterShown(port)
+        assertEquals(Outcome.HANDED_OFF, sync.step(true, fids, Target.OtherPlaying("com.byd.mediacenter"), 6_000))
+        assertTrue(port.writes.isEmpty())
+        assertFalse(sync.dirty)
+        assertNull(sync.shown)
+    }
+
+    @Test fun `stopping after another player took the card writes nothing`() = runTest {
+        val port = FakePort()
+        val sync = refusedAfterShown(port)
+        sync.step(true, fids, Target.OtherPlaying("com.byd.mediacenter"), 6_000)
+        assertEquals(Outcome.NONE, sync.release(fids))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    @Test fun `stopping after a refusal clears the card that is still ours`() = runTest {
+        val port = FakePort()
+        val sync = refusedAfterShown(port)
+        assertEquals(Outcome.CLEARED, sync.release(fids))
+        assertEquals(listOf(" "), port.valuesFor(11))
+    }
+
+    // A Navigator voice prompt over Yandex Music: the music session keeps playing, so the card
+    // is neither cleared nor written again.
+    @Test fun `a navigator voice prompt over yandex music neither clears nor rewrites the card`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        val music = ClusterMusicCard.SessionSnapshot("ru.yandex.music", 3, "Song", "A")
+        val prompt = ClusterMusicCard.SessionSnapshot("ru.yandex.yandexnavi", null, null, null)
+        assertEquals(Outcome.SHOWN, sync.step(true, fids, ClusterMusicCard.decide(listOf(music)), 0))
+        port.clearTakes()
+        assertEquals(Outcome.NONE, sync.step(true, fids, ClusterMusicCard.decide(listOf(prompt, music)), 1_500))
+        assertEquals(Outcome.NONE, sync.step(true, fids, ClusterMusicCard.decide(listOf(prompt, music)), 3_000))
+        assertEquals(Outcome.NONE, sync.step(true, fids, ClusterMusicCard.decide(listOf(music)), 4_500))
         assertTrue(port.writes.isEmpty())
     }
 
@@ -225,8 +303,30 @@ class ClusterMusicSyncTest {
     @Test fun `an unreachable helper is retried quietly and never refuses`() = runTest {
         val sync = ClusterMusicSync(FakePort { null })
         assertEquals(Outcome.WRITE_FAILED, sync.step(true, fids, Target.Show(card()), 0))
-        repeat(10) { assertEquals(Outcome.RETRYING, sync.step(true, fids, Target.Show(card()), (it + 1) * 1_500L)) }
+        repeat(10) {
+            val outcome = sync.step(true, fids, Target.Show(card()), (it + 1) * 1_500L)
+            assertTrue(outcome == Outcome.RETRYING || outcome == Outcome.NONE)
+        }
         assertFalse(sync.refused)
+    }
+
+    /** What the bridge logs: [ClusterMusicBridge] stays silent on these. */
+    private fun reported(outcomes: List<Outcome>) =
+        outcomes.filterNot { it in setOf(Outcome.NONE, Outcome.TICKED, Outcome.REASSERTED, Outcome.RETRYING) }
+
+    // Codex finding 3: every attempt costs HelperClient log lines, so a dead helper is retried
+    // at the re-assert pace, not on every poll, and the outage is logged once.
+    @Test fun `an unreachable helper is retried at the re-assert pace with one outage line`() = runTest {
+        val port = FakePort { null }
+        val sync = ClusterMusicSync(port)
+        val outcomes = (0L..60_000L step 1_500L).map { sync.step(true, fids, Target.Show(card()), it) }
+        assertTrue("attempts ${port.valuesFor(13).size}", port.valuesFor(13).size <= 7)
+        assertEquals(listOf(Outcome.WRITE_FAILED), reported(outcomes))
+
+        port.status = { 1 }
+        val after = (61_500L..90_000L step 1_500L).map { sync.step(true, fids, Target.Show(card()), it) }
+        assertEquals(listOf(Outcome.SHOWN), reported(after))
+        assertEquals(card(), sync.shown)
     }
 
     @Test fun `the card is re-asserted after the interval`() = runTest {

@@ -1412,6 +1412,30 @@ private fun DisplaySection() {
     }
 
     BlindSpotCard()
+
+    // Instrument music card: mirrors Yandex music, which the stock controller leaves blank.
+    // ClusterMusicBridge reads the flag on every poll, so no restart is needed.
+    var clusterMusicCard by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_CLUSTER_MUSIC_CARD, false))
+    }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+            SettingToggleRow(
+                title = stringResource(R.string.settings_cluster_music_card_title),
+                traceId = "cluster_music_card",
+                description = stringResource(R.string.settings_cluster_music_card_desc),
+                checked = clusterMusicCard,
+                onCheckedChange = {
+                    clusterMusicCard = it
+                    prefs.edit().putBoolean(ClusterProjectionManager.KEY_CLUSTER_MUSIC_CARD, it).apply()
+                },
+            )
+        }
+    }
 }
 
 /**
@@ -2172,30 +2196,6 @@ private fun ServiceSection(
                         ClusterProjectionManager.enableStarControl(
                             clusterEntryPoint.helperClient(), clusterEntryPoint.helperBootstrap())
                     }
-                },
-            )
-        }
-    }
-
-    // Instrument music card: mirrors Yandex music, which the stock controller leaves blank.
-    // ClusterMusicBridge reads the flag on every poll, so no restart is needed.
-    var clusterMusicCard by remember {
-        mutableStateOf(clusterPrefs.getBoolean(ClusterProjectionManager.KEY_CLUSTER_MUSIC_CARD, false))
-    }
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-            SettingToggleRow(
-                title = stringResource(R.string.settings_cluster_music_card_title),
-                traceId = "cluster_music_card",
-                description = stringResource(R.string.settings_cluster_music_card_desc),
-                checked = clusterMusicCard,
-                onCheckedChange = {
-                    clusterMusicCard = it
-                    clusterPrefs.edit().putBoolean(ClusterProjectionManager.KEY_CLUSTER_MUSIC_CARD, it).apply()
                 },
             )
         }
