@@ -1,5 +1,6 @@
 package com.bydmate.app.navdata
 
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.bydmate.app.cluster.SteeringWheelKeyService
 import io.mockk.every
@@ -57,6 +58,36 @@ class NavGuidanceIssue199Test {
         assertFalse(NavGuidanceHub.snapshot(T0 + NavGuidanceHub.ACTIVE_TIMEOUT_MS + 1).active)
     }
 
+    @Test fun `issue 199 guidance widgets with empty text keep the route alive, fields untouched`() {
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 800, road = "Ленина"),
+            NavGuidanceHub.Source.A11Y, nowMs = T0)
+        for (t in T0 + 5_000..T0 + 120_000 step 5_000) timerRead(blankWidgetsRoot(), t)
+        val s = NavGuidanceHub.snapshot(T0 + 120_000)
+        assertTrue(s.active)
+        assertEquals(T0 + 120_000, s.lastUpdateMs)
+        assertEquals(800, s.distanceMeters)
+        assertEquals("Ленина", s.road)
+        assertEquals(T0, s.maneuverGaodeMs)
+        // The arrow keeps its own 30 s freshness: an empty read does not refresh it.
+        assertEquals(0, s.maneuverGaode)
+        // Once such reads stop, the route expires 90 s after the last one.
+        assertFalse(NavGuidanceHub.snapshot(T0 + 120_000 + NavGuidanceHub.ACTIVE_TIMEOUT_MS + 1).active)
+    }
+
+    @Test fun `issue 199 guidance widgets with empty text do not start a route`() {
+        val event = AccessibilityEvent.obtain().apply {
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            packageName = PKG
+        }
+        NavA11yFeed.lastProcessMs = 0L
+        NavA11yFeed.onEvent(mockk<SteeringWheelKeyService>(relaxed = true) {
+            every { findNavigatorRoot() } returns blankWidgetsRoot()
+        }, event)
+        val s = NavGuidanceHub.snapshot()
+        assertFalse(s.active)
+        assertEquals(0L, s.lastUpdateMs)
+    }
+
     private fun timerRead(root: AccessibilityNodeInfo, atMs: Long) {
         NavA11yFeed.lastProcessMs = 0L
         NavA11yFeed.onTimer(mockk<SteeringWheelKeyService> { every { findNavigatorRoot() } returns root }, atMs)
@@ -72,6 +103,16 @@ class NavGuidanceIssue199Test {
             every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_metrics") } returns
                 listOf(textNode("м"))
         }
+        return root
+    }
+
+    /** The maneuver balloon is in the tree, its icon and distance carry no text (the Han log). */
+    private fun blankWidgetsRoot(): AccessibilityNodeInfo {
+        val root = navigatorRoot(withGuidance = false)
+        every { root.findAccessibilityNodeInfosByViewId("$PKG:id/image_maneuverballoon_maneuver") } answers
+            { listOf(mockk<AccessibilityNodeInfo>(relaxed = true) { every { contentDescription } returns "" }) }
+        every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_distance") } answers
+            { listOf(textNode("")) }
         return root
     }
 

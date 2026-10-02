@@ -69,6 +69,19 @@ object NavA11yExtractor {
         }
     }
 
+    /** The donor's guidance test: a node with the maneuver icon, maneuver distance or next street
+     *  id exists, whatever its text. For a read the parse found no guidance in; the nodes are
+     *  recycled, [root] stays the caller's. */
+    internal fun hasGuidanceNodes(root: AccessibilityNodeInfo): Boolean {
+        val pkg = runCatching { root.packageName?.toString() }.getOrNull() ?: return false
+        return listOf(MANEUVER_ID, DISTANCE_ID, NEXT_STREET_ID).any { id ->
+            val nodes = runCatching { root.findAccessibilityNodeInfosByViewId("$pkg:id/$id") }.getOrNull()
+            @Suppress("DEPRECATION")
+            nodes?.forEach { runCatching { it.recycle() } }
+            !nodes.isNullOrEmpty()
+        }
+    }
+
     /** The window [root] is drawn in, for the no-guidance log: display (API 30+), window id,
      *  type and its active/focused flags; `?` for what cannot be read. [root] stays the caller's. */
     internal fun windowFacts(root: AccessibilityNodeInfo): String {
