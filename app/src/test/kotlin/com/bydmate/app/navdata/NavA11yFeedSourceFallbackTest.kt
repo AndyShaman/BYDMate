@@ -97,6 +97,50 @@ class NavA11yFeedSourceFallbackTest {
         verify(exactly = 0) { event.source }
     }
 
+    @Test fun `source root with guidance widgets without text keeps the route alive, fields untouched`() {
+        // Issue #199 on the only read path of a projected Navigator: the route was last updated
+        // 85 s ago, a source read finds the widgets with no text.
+        val t0 = System.currentTimeMillis() - 85_000
+        NavGuidanceHub.reset()
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 500, road = "Ленина"),
+            NavGuidanceHub.Source.A11Y, nowMs = t0)
+        deliver(sourceNode = descendantOf(blankWidgetsRoot()))
+        val s = NavGuidanceHub.snapshot(t0 + NavGuidanceHub.ACTIVE_TIMEOUT_MS + 30_000)
+        assertTrue(s.active)
+        assertTrue(s.lastUpdateMs >= t0 + 85_000)
+        assertEquals(500, s.distanceMeters)
+        assertEquals("Ленина", s.road)
+        assertEquals(t0, s.maneuverGaodeMs)
+    }
+
+    @Test fun `source root without guidance widgets does not keep the route alive`() {
+        val t0 = System.currentTimeMillis() - 85_000
+        NavGuidanceHub.reset()
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 500),
+            NavGuidanceHub.Source.A11Y, nowMs = t0)
+        deliver(sourceNode = descendantOf(navigatorRoot(PKG, withGuidance = false)))
+        assertEquals(t0, NavGuidanceHub.snapshot(t0 + 1_000).lastUpdateMs)
+        assertFalse(NavGuidanceHub.snapshot(t0 + NavGuidanceHub.ACTIVE_TIMEOUT_MS + 1).active)
+    }
+
+    @Test fun `source root with guidance widgets without text does not start a route`() {
+        NavGuidanceHub.reset()
+        val root = blankWidgetsRoot()
+        deliver(sourceNode = descendantOf(root))
+        assertFalse(NavGuidanceHub.snapshot().active)
+        verify(exactly = 1) { root.recycle() }
+    }
+
+    /** The maneuver balloon is in the tree, its icon and distance carry no text (the Han log). */
+    private fun blankWidgetsRoot(): AccessibilityNodeInfo {
+        val root = navigatorRoot(PKG, withGuidance = false)
+        every { root.findAccessibilityNodeInfosByViewId("$PKG:id/image_maneuverballoon_maneuver") } answers
+            { listOf(mockk<AccessibilityNodeInfo>(relaxed = true) { every { contentDescription } returns "" }) }
+        every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_distance") } answers
+            { listOf(textNode("")) }
+        return root
+    }
+
     /** Active a11y guidance in the hub; returns its timestamp. */
     private fun armedGuidance(): Long {
         NavGuidanceHub.reset()
