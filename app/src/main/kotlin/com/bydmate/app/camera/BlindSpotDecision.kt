@@ -41,12 +41,13 @@ const val BLIND_SPOT_WARM_HYSTERESIS_KMH = 5
  *
  * The factory 360 view owns the screen while it is up (it pops up on its own below 15 km/h and
  * goes away above 30 km/h on some cars), so our windows would only overlap it: they go down for
- * as long as it is in the foreground. The camera stays warm through it, so the blinker that is
- * still on when the 360 closes brings the view back on the next tick.
+ * as long as it is in the foreground, and the camera goes cold with them. A warm camera under it
+ * kept two previews streaming and the 360 stuttered until BYDMate was killed (tester dump
+ * 2026-10-03); once the 360 is gone the camera warms again by the speed rule, as after reverse.
  */
 fun decideBlindSpot(input: BlindSpotInput): BlindSpotDecision {
     val speed = input.speedKmh
-    val warm = !input.gearIsReverse && speed != null &&
+    val warm = !input.gearIsReverse && !input.nativeCameraForeground && speed != null &&
         speed >= input.thresholdKmh - BLIND_SPOT_WARM_HYSTERESIS_KMH
     val show = when {
         input.gearIsReverse -> BlindSpotSide.NONE
