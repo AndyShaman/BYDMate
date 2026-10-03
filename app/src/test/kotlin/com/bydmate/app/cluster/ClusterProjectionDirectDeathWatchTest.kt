@@ -3,19 +3,19 @@ package com.bydmate.app.cluster
 import android.content.Context
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
-import com.bydmate.app.data.vehicle.ClusterWmDiag
 import com.bydmate.app.data.vehicle.DensityResult
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.SplitTaskState
-import com.bydmate.app.helper.ClusterDisplayDiag
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.helper.WINDOWING_MODE_FREEFORM
 import com.bydmate.app.helper.WINDOWING_MODE_FULLSCREEN
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
+import io.mockk.confirmVerified
 import io.mockk.mockk
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlinx.coroutines.Job
@@ -41,7 +41,7 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  * sees a live task and the client has already reported OK. Covers the post-move death watch
  * armed by `tryDirectProjection`:
  *   - task alive ON THE CLUSTER → no relaunch, no loss line;
- *   - first healthy check → the activity configuration is read once (journal + dump capture);
+ *   - healthy watch → no helper call besides the task reads;
  *   - daemon unreachable (null state) → same silence: a dead channel is not a dead app;
  *   - task gone → exactly one born-on-display relaunch + journal line;
  *   - task alive on the MAIN display → the same recovery (the system restarts a killed app
@@ -298,39 +298,24 @@ class ClusterProjectionDirectDeathWatchTest {
     }
 
     /**
-     * The dump reads the activity configuration only after the projection is off, so the watch
-     * takes it once while the app is live on the cluster: one journal line with the densities and
-     * the verbatim answer kept for the next dump.
+     * A healthy watch costs the car nothing but the task reads: the helper's binder channel is
+     * shared (the blind-spot camera reads its telemetry through it), so a diagnostic call here
+     * would hold it for seconds on every send.
      *
-     * Anti-vacuity: dropping the capture leaves no journal line and an empty capture; capturing on
-     * every healthy check gives 3 daemon calls.
+     * Anti-vacuity: any extra helper call in the healthy path (the wm-config capture of 95d9c739
+     * was one) fails confirmVerified.
      */
     @Test
-    fun `first healthy check captures the activity configuration once`() {
+    fun `healthy watch makes no helper call but the task reads`() {
         val helper = directProjectionHelper()
         coEvery { helper.getTaskState(NAVI_PACKAGE) } returns liveTask()
-        coEvery { helper.clusterWmDiag(NAVI_PACKAGE) } returns ClusterWmDiag(
-            emptyList(),
-            listOf(
-                "$NAVI_PACKAGE/.core.NavigatorActivity dpi=160 raw=\"mOverrideConfig={sw330dp w614dp 160dpi}\"",
-                ClusterDisplayDiag.RAW_PREFIX + "mGlobalConfig={sw450dp w800dp 240dpi}",
-                ClusterDisplayDiag.RAW_PREFIX + "mOverrideConfig={sw330dp w614dp 160dpi}",
-            ),
-        )
 
         projectDirect(helper)
+        clearMocks(helper, answers = false, recordedCalls = true, childMocks = false, exclusionRules = false)
         shadowOf(Looper.getMainLooper()).idleFor(3 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
 
-        coVerify(exactly = 1) { helper.clusterWmDiag(NAVI_PACKAGE) }
-        assertTrue(
-            "the densities must be journaled: $journalDump",
-            journalHas("direct: wm config pkg=$NAVI_PACKAGE task=42 display=${clusterDisplayId()} " +
-                "activity=[$NAVI_PACKAGE/.core.NavigatorActivity dpi=160] " +
-                "mGlobalConfig=[dpi=240 sw=450 w=800] mOverrideConfig=[dpi=160 sw=330 w=614]"),
-        )
-        val capture = ClusterProjectionManager.wmConfigCapture(context)
-        assertTrue("header: $capture", capture.first().startsWith("$NAVI_PACKAGE task=42 display="))
-        assertTrue("verbatim lines: $capture", capture.contains(ClusterDisplayDiag.RAW_PREFIX + "mGlobalConfig={sw450dp w800dp 240dpi}"))
+        coVerify(exactly = 3) { helper.getTaskState(NAVI_PACKAGE) }
+        confirmVerified(helper)
     }
 
     // --- helpers ---

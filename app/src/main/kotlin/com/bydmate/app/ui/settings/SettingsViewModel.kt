@@ -2179,14 +2179,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                         wmDiag.taskConfig.forEach { appendLine("  $it") }
                     }
                 }
-                // The same readback taken WHILE the last direct projection was live (the block
-                // above runs with the projection off): which density the app really received.
-                val wmCapture = cpm.wmConfigCapture(appContext)
-                if (wmCapture.isEmpty()) appendLine("wm capture: (none)")
-                else {
-                    appendLine("wm capture: ${wmCapture.first()}")
-                    wmCapture.drop(1).forEach { appendLine("  $it") }
-                }
                 val daemonPick = daemonDisplays?.let {
                     com.bydmate.app.cluster.pickClusterFromDaemon(it, preferFullDisplay)
                 }

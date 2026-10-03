@@ -405,28 +405,4 @@ class ClusterDisplayDiagTest {
             .sumOf { it.length - ClusterDisplayDiag.RAW_PREFIX.length }
         assertEquals(ClusterDisplayDiag.MAX_RAW_BLOCK, raw)
     }
-
-    @Test
-    fun `digest lists the densities and widths of every configuration`() {
-        val digest = ClusterDisplayDiag.taskConfigDigest(
-            ClusterDisplayDiag.taskConfigLines(aosp12FormatSample, "ru.yandex.yandexnavi"),
-        )
-        assertEquals(
-            listOf(
-                "activity" to "ru.yandex.yandexnavi/.core.NavigatorActivity dpi=160",
-                "mGlobalConfig" to "dpi=240 sw=450 w=800",
-                "mOverrideConfig" to "dpi=160 sw=330 w=614",
-                "CurrentConfiguration" to "dpi=160 sw=330 w=614",
-            ),
-            digest,
-        )
-    }
-
-    @Test
-    fun `digest of the Android 10 blob reads the record's own configuration`() {
-        val digest = ClusterDisplayDiag.taskConfigDigest(
-            ClusterDisplayDiag.taskConfigLines(ACTIVITIES, "ru.yandex.yandexnavi"),
-        )
-        assertEquals("mLastReportedConfiguration" to "dpi=160 sw=360 w=960", digest[1])
-    }
 }
