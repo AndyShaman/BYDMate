@@ -24,7 +24,6 @@ import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.SplitTaskState
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
-import com.bydmate.app.helper.ClusterDisplayDiag
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.split.DisabledSplitPreferences
 import com.bydmate.app.split.SplitFreeformVerdict
@@ -174,12 +173,6 @@ object ClusterProjectionManager {
     // 1: two-strike probe (3.19.6 latched on one loss and stamped the versionCode; those verdicts
     // are wiped once by the first read under this generation).
     const val DENSITY_PROBE_GENERATION = 1
-
-    // Last activity configuration read during a direct projection (diagnostics only). A file of
-    // its own: the backup carries a whitelist of prefs files, so this one never leaves the car.
-    private const val WM_CAPTURE_PREFS = "cluster_wm_capture"
-    private const val KEY_WM_CAPTURE = "last"
-    private const val WM_CAPTURE_MAX_CHARS = 1536
 
     // WindowConfiguration windowing mode (android.app; hidden constant, stable since API 28).
     private const val WINDOWING_MODE_FULLSCREEN = 1
@@ -1584,8 +1577,7 @@ object ClusterProjectionManager {
      * that writes it. [applyModeLocked] cancels the watch on every mode transition.
      *
      * Healthy fleet (Leopard 3, where the navigator survives the move): three
-     * [HelperClient.getTaskState] reads, plus one read-only [captureWmConfig] on the first healthy
-     * check — no daemon writes.
+     * [HelperClient.getTaskState] reads and nothing else — no journal lines, no daemon writes.
      *
      * The watch doubles as the probe behind [densityUnsafe]: when [densityApplied] is non-zero the
      * scale override is a suspect for the death (#121), but one loss is no proof — on some cars the
@@ -1603,7 +1595,6 @@ object ClusterProjectionManager {
             var density = densityApplied
             var strikes = 0
             var nativeRelaunched = false
-            var configCaptured = false
             var checksLeft = DIRECT_DEATH_CHECKS
             while (checksLeft > 0) {
                 checksLeft--
@@ -1619,15 +1610,7 @@ object ClusterProjectionManager {
                     // first task regardless of display, so a task the system auto-restarted on the
                     // main screen (taskId > 0, displayId 0) would otherwise mask the death and leave
                     // the cluster empty for the rest of the session.
-                    if (state.taskId > 0 && state.displayId == displayId) {
-                        // Outside the lock: two bounded dumpsys calls must not hold up a setMode.
-                        // A child of the watch, so the same cancel ends it.
-                        if (!configCaptured) {
-                            configCaptured = true
-                            launch { captureWmConfig(context, helper, pkg, state.taskId, displayId) }
-                        }
-                        return@withLock
-                    }
+                    if (state.taskId > 0 && state.displayId == displayId) return@withLock
                     strikes++
                     val what = traceDirectLoss(pkg, displayId, state, strikes, density)
                     if (nativeRelaunched) {
@@ -1674,41 +1657,6 @@ object ClusterProjectionManager {
             }
         }
     }
-
-    /**
-     * Which density the projected activity really runs at, read while it is on the cluster: the
-     * dump's own readback runs after the projection is off, and an app can render large although
-     * the display took the override. Read-only, once per send; one journal line, one trace event,
-     * and the verbatim answer kept in [WM_CAPTURE_PREFS] (not in the backup) for the next dump.
-     */
-    private suspend fun captureWmConfig(
-        context: Context, helper: HelperClient, pkg: String, taskId: Int, displayId: Int,
-    ) {
-        val diag = runCatching { helper.clusterWmDiag(pkg) }.getOrNull()
-        if (diag == null) {
-            log("direct: wm config pkg=$pkg (daemon unavailable)")
-            return
-        }
-        val digest = ClusterDisplayDiag.taskConfigDigest(diag.taskConfig)
-        log("direct: wm config pkg=$pkg task=$taskId display=$displayId " +
-            digest.joinToString(" ") { (k, v) -> "$k=[$v]" }.ifEmpty { "(no answer)" })
-        // The component is in the journal line; a trace value holds 80 characters, keep the dpi.
-        val byKey = digest.toMap()
-        Trace.event(TraceArea.SCREEN, "cluster-wm-config", "pkg" to pkg, "task" to taskId,
-            "display" to displayId, "activity" to byKey["activity"]?.substringAfter(' '),
-            "global" to byKey["mGlobalConfig"],
-            "override" to (byKey["mOverrideConfig"] ?: byKey["mLastReportedConfiguration"]))
-        val at = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-        context.getSharedPreferences(WM_CAPTURE_PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_WM_CAPTURE, ("$pkg task=$taskId display=$displayId at $at\n" +
-                diag.taskConfig.joinToString("\n")).take(WM_CAPTURE_MAX_CHARS))
-            .apply()
-    }
-
-    /** The last [captureWmConfig] answer, header line first, for the diagnostic dump. */
-    fun wmConfigCapture(context: Context): List<String> =
-        context.getSharedPreferences(WM_CAPTURE_PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_WM_CAPTURE, null)?.lines().orEmpty()
 
     private fun ownsDirectSession(pkg: String, displayId: Int): Boolean =
         currentMode == ClusterMode.FULLSCREEN && projectedPackage == pkg && directDisplayId == displayId

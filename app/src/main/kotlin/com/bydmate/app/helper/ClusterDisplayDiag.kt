@@ -107,8 +107,6 @@ internal object ClusterDisplayDiag {
     private val CONFIG_KEY = Regex("""^\s*([A-Za-z]*Config[A-Za-z]*)=\{""")
 
     private val CONFIG_DPI = Regex("""(\d+)dpi""")
-    private val CONFIG_SW = Regex("""\bsw(\d+)dp""")
-    private val CONFIG_W = Regex("""\bw(\d+)dp""")
     private val CONFIG_DISPLAY_ID = Regex("""\b(?:mDisplayId|displayId)=(\d+)""")
 
     /**
@@ -352,23 +350,6 @@ internal object ClusterDisplayDiag {
             left -= line.length
         }
         return out
-    }
-
-    /**
-     * Journal digest of a [taskConfigLines] answer: the first record's component, dpi and display,
-     * then dpi/sw/w of every configuration line of its raw block (or of the record's own
-     * configuration line when the blob layout gave no block). Each pair is a label and its value.
-     */
-    fun taskConfigDigest(taskConfig: List<String>): List<Pair<String, String>> {
-        val record = taskConfig.firstOrNull { !it.startsWith(RAW_PREFIX) } ?: return emptyList()
-        val configs = taskConfig.filter { it.startsWith(RAW_PREFIX) }.map { it.removePrefix(RAW_PREFIX) }
-            .ifEmpty { listOf(record.substringAfter(" raw=\"", "").removeSuffix("\"")) }
-        return listOf("activity" to record.substringBefore(" raw=\"")) + configs.mapNotNull { line ->
-            val key = CONFIG_KEY.find(line)?.groupValues?.get(1) ?: return@mapNotNull null
-            key to "dpi=${CONFIG_DPI.find(line)?.groupValues?.get(1) ?: "?"} " +
-                "sw=${CONFIG_SW.find(line)?.groupValues?.get(1) ?: "?"} " +
-                "w=${CONFIG_W.find(line)?.groupValues?.get(1) ?: "?"}"
-        }
     }
 
     /** How far past an ActivityRecord we look for its configuration line. AOSP Q prints the
