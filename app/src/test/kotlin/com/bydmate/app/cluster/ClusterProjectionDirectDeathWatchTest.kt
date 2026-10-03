@@ -3,6 +3,7 @@ package com.bydmate.app.cluster
 import android.content.Context
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.vehicle.DensityResult
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
@@ -12,6 +13,7 @@ import com.bydmate.app.helper.WINDOWING_MODE_FREEFORM
 import com.bydmate.app.helper.WINDOWING_MODE_FULLSCREEN
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.mockk
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlinx.coroutines.Job
@@ -42,7 +44,8 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  *   - task alive on the MAIN display → the same recovery (the system restarts a killed app
  *     there, and a display-blind liveness check would report it as a healthy projection);
  *   - setMode(OFF) before the first tick → the watch is cancelled, no relaunch;
- *   - loss again after the relaunch → journaled, no second relaunch.
+ *   - loss again after the relaunch → journaled, no second relaunch (native density);
+ *   - with a scaled density: second loss → relaunch at native, third loss → journaled.
  *
  * Test mechanics (same shape as [ClusterProjectionSendFailureTest]):
  *   idle → CPM coroutine runs until withContext(IO) for the write-ahead marker;
@@ -246,6 +249,47 @@ class ClusterProjectionDirectDeathWatchTest {
         coVerify(exactly = 2) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
         assertTrue(
             "the second loss must be journaled: $journalDump",
+            journalHas("born-on-display relaunch did not hold (died post-move)"),
+        )
+    }
+
+    /**
+     * With the scale applied, one loss is not a verdict (#134: the move alone can kill the app), so
+     * the first relaunch keeps the density, and a second loss gets a second relaunch — at the
+     * native density this time. A third loss is journaled and ends the watch.
+     *
+     * Anti-vacuity: the native rule (no second relaunch) gives 2 launches; dropping the reset gives
+     * no density-0 call between the second and third launch.
+     */
+    @Test
+    fun `with a scaled density the second loss relaunches at native`() {
+        context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putInt(ClusterProjectionManager.KEY_SCALE_PCT, 80).commit()
+        val helper = directProjectionHelper()
+        coEvery { helper.setDisplayDensity(any(), any()) } returns DensityResult(true)
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } returns deadTask()
+
+        ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap())
+        // A scaled send settles 150 ms before the launch, so this wait has to move the clock.
+        val shadow = shadowOf(Looper.getMainLooper())
+        for (attempt in 0 until 40) {
+            shadow.idle()
+            if (ClusterProjectionManager.currentMode == ClusterMode.FULLSCREEN) break
+            shadow.idleFor(150, MILLISECONDS)
+            Thread.sleep(25)
+        }
+        assertEquals(ClusterMode.FULLSCREEN, ClusterProjectionManager.currentMode)
+        shadow.idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerifyOrder {
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+            helper.setDisplayDensity(clusterDisplayId(), 0)
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+        }
+        coVerify(exactly = 3) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        assertTrue(
+            "the third loss must be journaled: $journalDump",
             journalHas("born-on-display relaunch did not hold (died post-move)"),
         )
     }
