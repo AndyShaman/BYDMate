@@ -6,6 +6,7 @@ import com.bydmate.app.media.ClusterMusicCard.Target
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ClusterMusicCardTest {
@@ -151,5 +152,55 @@ class ClusterMusicCardTest {
         val a = shown(listOf(SessionSnapshot(navi, playing, "Song", "A", 10_000, 214_000)))!!
         val b = shown(listOf(SessionSnapshot(navi, playing, "Song", "A", 12_000, 214_000)))!!
         assertEquals(a.steady(), b.steady())
+    }
+
+    // Issue #96 (v3.19.6, DiLink 5.0): a radio app plays; whenever its stream is briefly neither
+    // playing nor paused, the old paused Yandex session took the card. The fixture is the bridge's
+    // log of that drive: each `target other:` is the radio playing, each `target show` followed by
+    // a paused card is the radio between states, each playing card is a source playing again.
+    @Test fun `issue 96 a paused yandex session never takes the card from a player that just played`() {
+        val lines = requireNotNull(javaClass.classLoader?.getResource("media/issue96-paused-yandex-over-radio.txt"))
+            .readText().lines().filter { it.contains("ClusterMusicBridge") }
+        val stale = SessionSnapshot(navi, paused, "Old", "A")
+        var lastOwner: String? = null
+        var foreign: String? = null
+        var betweenStates = 0
+        lines.forEachIndexed { i, line ->
+            val sessions = when {
+                "target other:" in line -> {
+                    foreign = line.substringAfter("target other:").trim()
+                    listOf(SessionSnapshot(foreign!!, playing, "Radio", null), stale)
+                }
+                line.endsWith("target show") && lines.getOrNull(i + 1)?.contains("state=2") == true -> {
+                    val pkg = foreign ?: return@forEachIndexed
+                    betweenStates++
+                    listOf(SessionSnapshot(pkg, stopped, "Radio", null), stale)
+                }
+                "card <-" in line && "state=1" in line -> {
+                    foreign = null
+                    listOf(stale.copy(playbackState = playing))
+                }
+                else -> return@forEachIndexed
+            }
+            val target = ClusterMusicCard.decide(sessions, lastOwner = lastOwner)
+            if (foreign != null) {
+                assertTrue("${line.take(18)}: $target after $foreign played", target !is Target.Show)
+            }
+            lastOwner = ClusterMusicCard.nextOwner(target, lastOwner)
+        }
+        // The three radio gaps of the log: 12:13:25, :30 and :36.
+        assertEquals(3, betweenStates)
+    }
+
+    // Issue #96, 12:13:49 -> 12:13:58: the source that played pauses, then the system lists an
+    // older paused source session first; the card stays on the one that played.
+    @Test fun `issue 96 a paused source keeps the card when an older paused source moves up`() {
+        val a = SessionSnapshot("ru.yandex.music", playing, "New", "A")
+        val b = SessionSnapshot(navi, paused, "Old", "B")
+        val first = ClusterMusicCard.decide(listOf(a, b))
+        assertEquals("New", (first as Target.Show).card.title)
+        val owner = ClusterMusicCard.nextOwner(first, null)
+        val card = (ClusterMusicCard.decide(listOf(b, a.copy(playbackState = paused)), lastOwner = owner) as? Target.Show)?.card
+        assertEquals(Card("New", "A", ClusterMusicCard.MUSIC_PAUSED), card)
     }
 }
