@@ -16,12 +16,15 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
-import com.bydmate.app.BuildConfig
 import com.bydmate.app.R
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.data.vehicle.SplitTaskState
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.helper.ClusterDisplayDiag
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.split.DisabledSplitPreferences
 import com.bydmate.app.split.SplitFreeformVerdict
@@ -39,6 +42,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The cluster surface one projection attempt targets, and how it was found.
@@ -157,10 +163,17 @@ object ClusterProjectionManager {
 
     // Per-package verdict "this app dies when the cluster display carries a non-native density"
     // (#121, 2GIS/Qt), learned from behaviour by the post-launch death watch — never a package
-    // list. Stamped with the app versionCode so a build that changes how the density is applied
-    // re-probes instead of inheriting an old verdict.
+    // list. Stamped with [DENSITY_PROBE_GENERATION], not the versionCode: a verdict survives app
+    // updates (an app that truly cannot take the density pays its probe deaths once), and only a
+    // build that changes how the density is applied bumps the generation to re-probe everything.
+    // Every key of the verdict (generation stamp, why) shares the prefix, so the wipe and the
+    // backup exclusion cover them all.
     const val KEY_DENSITY_UNSAFE_PREFIX = "direct_density_unsafe_"
-    const val KEY_DENSITY_UNSAFE_VERSION = "direct_density_unsafe_version"
+    const val KEY_DENSITY_UNSAFE_GENERATION = KEY_DENSITY_UNSAFE_PREFIX + "generation"
+    private const val KEY_DENSITY_UNSAFE_WHY_PREFIX = KEY_DENSITY_UNSAFE_PREFIX + "why_"
+    // 1: two-strike probe (3.19.6 latched on one loss and stamped the versionCode; those verdicts
+    // are wiped once by the first read under this generation).
+    const val DENSITY_PROBE_GENERATION = 1
 
     // WindowConfiguration windowing mode (android.app; hidden constant, stable since API 28).
     private const val WINDOWING_MODE_FULLSCREEN = 1
@@ -1548,7 +1561,7 @@ object ClusterProjectionManager {
      * cluster and its process dies a few seconds later — long after [HelperClient.launchFreeform]
      * answered OK, so the daemon's own relaunch-once check (2GIS fix, commit 527682c2) has already
      * run and seen a live task. This watch polls the task for a short window afterwards and, when
-     * the cluster has lost it, relaunches it ONCE through that same call: with no live task left,
+     * the cluster has lost it, relaunches it through that same call: with no live task left,
      * the daemon's resolveOrLaunchTask starts the app with `--windowingMode 5 --display N`, so it
      * is BORN on the cluster display and the killing cross-display move never happens.
      *
@@ -1557,7 +1570,8 @@ object ClusterProjectionManager {
      * healthy projection while the cluster stays empty (Codex audit). Both cases take the same
      * recovery, with their own journal wording.
      *
-     * One relaunch only — a second loss is journaled and the watch ends, no retry loop.
+     * At the native density one relaunch only — a second loss is journaled and the watch ends,
+     * no retry loop.
      *
      * The caller holds [mutex]; each check takes it too, so a concurrent setMode is serialized
      * against a relaunch instead of racing it, and the state guard is read under the same lock
@@ -1567,8 +1581,11 @@ object ClusterProjectionManager {
      * [HelperClient.getTaskState] reads and nothing else — no journal lines, no daemon writes.
      *
      * The watch doubles as the probe behind [densityUnsafe]: when [densityApplied] is non-zero the
-     * scale override is a suspect for the death (#121), so the recovery drops it to the native
-     * density first and the package is latched density-unsafe for later sends.
+     * scale override is a suspect for the death (#121), but one loss is no proof — on some cars the
+     * move itself kills the app whatever the density (#134). So the first loss relaunches at the
+     * same density; a second loss drops it to the native one and latches the package. Every
+     * relaunch after a scaled loss gets a full set of checks again, so a loss seen on the last
+     * check is not left unwatched. Worst case: three sets of checks and two relaunches.
      */
     private fun armDirectDeathWatch(
         context: Context, helper: HelperClient, pkg: String, displayId: Int, bounds: IntArray,
@@ -1576,8 +1593,12 @@ object ClusterProjectionManager {
     ) {
         directDeathWatchJob?.cancel()
         directDeathWatchJob = scope.launch {
-            var relaunched = false
-            repeat(DIRECT_DEATH_CHECKS) {
+            var density = densityApplied
+            var strikes = 0
+            var nativeRelaunched = false
+            var checksLeft = DIRECT_DEATH_CHECKS
+            while (checksLeft > 0) {
+                checksLeft--
                 delay(DIRECT_DEATH_CHECK_INTERVAL_MS)
                 mutex.withLock {
                     // Anything but our own live direct session ends the watch: an OFF, a rebuild or
@@ -1592,26 +1613,34 @@ object ClusterProjectionManager {
                     // main screen (taskId > 0, displayId 0) would otherwise mask the death and leave
                     // the cluster empty for the rest of the session.
                     if (state.taskId > 0 && state.displayId == displayId) return@withLock
-                    val what = if (state.taskId > 0) "fled to display ${state.displayId}" else "died post-move"
-                    if (relaunched) {
+                    strikes++
+                    val what = traceDirectLoss(pkg, displayId, state, strikes, density)
+                    if (nativeRelaunched) {
                         Log.w(TAG, "direct projection: relaunched $pkg $what again; giving up")
                         log("direct: born-on-display relaunch did not hold ($what) pkg=$pkg display=$displayId")
                         return@launch
                     }
-                    relaunched = true
                     Log.w(TAG, "direct projection: $pkg $what; relaunching on display $displayId")
                     log("direct task $what; relaunching on display $displayId (pkg=$pkg)")
-                    // The scale override was the one non-standard thing about this launch: drop it
-                    // BEFORE the relaunch (which must run at the native density to stand a chance)
-                    // and remember it for this package.
-                    if (densityApplied != 0) {
+                    val scaledLoss = density != 0
+                    if (scaledLoss && strikes == 1) {
+                        log("direct: dpi=$density kept for the relaunch (first loss of $pkg)")
+                    } else if (scaledLoss) {
+                        // The second loss in a row under the scale override: drop it BEFORE the
+                        // relaunch (which must run at the native density to stand a chance) and
+                        // remember it for this package.
                         val resetOk = runCatching { helper.setDisplayDensity(displayId, 0) }
                             .getOrNull()?.ok == true
                         if (resetOk) directDensityApplied = 0
-                        markDensityUnsafe(context, pkg)
+                        markDensityUnsafe(context, pkg, "$what on display $displayId")
+                        Trace.event(TraceArea.SCREEN, "cluster-density-unsafe", "pkg" to pkg,
+                            "dpi" to density, "loss" to what, "reset" to resetOk)
                         log("direct: density reset to native before relaunch ok=$resetOk; " +
-                            "$pkg marked density-unsafe (dpi=$densityApplied, $what)")
+                            "$pkg marked density-unsafe (dpi=$density, $what, second loss)")
+                        density = 0
                     }
+                    // Once true the next loss returns above, so a plain assignment is enough.
+                    nativeRelaunched = density == 0
                     // With no task left this births the app on the cluster display; with a task that
                     // fled to the main screen it moves that task back — the same operation project()
                     // performs on every star press, so a healthy machine sees nothing new here.
@@ -1622,9 +1651,22 @@ object ClusterProjectionManager {
                         HelperBinderProtocol.PANE_TYPE_STANDARD,
                     )
                     log("direct: recovery relaunch result=$result")
+                    // A loss under the scale is watched for a full set again: the relaunched app may
+                    // die as well, and that second loss is the verdict. The native path keeps the
+                    // checks it has left, as before.
+                    if (scaledLoss) checksLeft = DIRECT_DEATH_CHECKS
                 }
             }
         }
+    }
+
+    /** Trace event of one loss seen by the death watch (the cluster journal keeps 30 lines only);
+     *  returns the journal wording of the loss. */
+    private fun traceDirectLoss(pkg: String, displayId: Int, state: SplitTaskState, strike: Int, density: Int): String {
+        val fled = state.taskId > 0
+        Trace.event(TraceArea.SCREEN, "cluster-loss", "pkg" to pkg, "loss" to if (fled) "fled" else "died",
+            "to" to state.displayId.takeIf { fled }, "display" to displayId, "strike" to strike, "dpi" to density)
+        return if (fled) "fled to display ${state.displayId}" else "died post-move"
     }
 
     /** Settle after a density change before the launch, as BYD DashCast does it. */
@@ -1663,30 +1705,46 @@ object ClusterProjectionManager {
      * Learned from behaviour, never a package list: the firmware and the app both vary across the
      * fleet, and a car where 2GIS survives keeps its scale.
      *
-     * Both loss shapes latch it. The death watch reads a task that fled to the main display as a
+     * Both loss shapes count. The death watch reads a task that fled to the main display as a
      * death too (the system restarts a killed foreground app there), and the two are not
      * distinguishable from here — the conservative reading costs that package its scale, the
-     * optimistic one costs the user a navigator that keeps dying.
+     * optimistic one costs the user a navigator that keeps dying. It takes two losses in a row
+     * under the override, though: one can be the move itself (#134).
      */
     private fun densityUnsafe(context: Context, pkg: String): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getInt(KEY_DENSITY_UNSAFE_VERSION, -1) != BuildConfig.VERSION_CODE) {
-            val stale = prefs.all.keys.filter { it.startsWith(KEY_DENSITY_UNSAFE_PREFIX) }
-            prefs.edit()
-                .apply { stale.forEach { remove(it) } }
-                .putInt(KEY_DENSITY_UNSAFE_VERSION, BuildConfig.VERSION_CODE)
-                .apply()
-            return false
-        }
+        if (!densityProbeGenerationCurrent(prefs)) return false
         return prefs.getBoolean(KEY_DENSITY_UNSAFE_PREFIX + pkg, false)
     }
 
-    private fun markDensityUnsafe(context: Context, pkg: String) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_DENSITY_UNSAFE_VERSION, BuildConfig.VERSION_CODE)
+    /** Wipes every verdict key written under another generation (or under the versionCode stamp
+     *  of 3.19.6 and earlier) and stamps the current one. False when it had to wipe. */
+    private fun densityProbeGenerationCurrent(prefs: SharedPreferences): Boolean {
+        if (prefs.getInt(KEY_DENSITY_UNSAFE_GENERATION, -1) == DENSITY_PROBE_GENERATION) return true
+        val stale = prefs.all.keys.filter { it.startsWith(KEY_DENSITY_UNSAFE_PREFIX) }
+        prefs.edit()
+            .apply { stale.forEach { remove(it) } }
+            .putInt(KEY_DENSITY_UNSAFE_GENERATION, DENSITY_PROBE_GENERATION)
+            .apply()
+        if (stale.isNotEmpty()) log("direct: density verdicts of an earlier probe wiped (${stale.size} keys)")
+        return false
+    }
+
+    /** [why] = the loss and the display; the time is added here. Both go to the dump. */
+    private fun markDensityUnsafe(context: Context, pkg: String, why: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        densityProbeGenerationCurrent(prefs)
+        val at = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+        prefs.edit()
             .putBoolean(KEY_DENSITY_UNSAFE_PREFIX + pkg, true)
+            .putString(KEY_DENSITY_UNSAFE_WHY_PREFIX + pkg, "$why, $at")
             .apply()
     }
+
+    /** Why and when [pkg] was latched density-unsafe, for the diagnostic dump; null if unknown. */
+    fun densityUnsafeReason(context: Context, pkg: String): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_DENSITY_UNSAFE_WHY_PREFIX + pkg, null)
 
     /** Packages currently latched as density-unsafe, for the diagnostic dump. */
     fun densityUnsafePackages(context: Context): List<String> =

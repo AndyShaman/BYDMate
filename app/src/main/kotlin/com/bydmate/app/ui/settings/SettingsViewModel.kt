@@ -2098,13 +2098,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     "target=${clusterPrefs.getString(cpm.KEY_TARGET_PACKAGE, "(default)")}")
                 // #121: the density override carries the scale in direct mode, and apps latched by
                 // the death watch as dying on a non-native density are sent at the panel's own
-                // density instead — their scale slider is inert.
+                // density instead — their scale slider is inert. Each with why and when it latched.
                 val densityUnsafe = cpm.densityUnsafePackages(appContext)
                 appendLine("density: " + when (diag.directDensityDpi) {
                     -1 -> "(not set this session)"
                     0 -> "native"
                     else -> "${diag.directDensityDpi} dpi"
-                } + " unsafe=" + if (densityUnsafe.isEmpty()) "(none)" else densityUnsafe.joinToString())
+                } + " unsafe=" + if (densityUnsafe.isEmpty()) "(none)" else densityUnsafe.joinToString { pkg ->
+                    "$pkg (${cpm.densityUnsafeReason(appContext, pkg) ?: "no reason recorded"})"
+                })
                 appendLine("vd: id=${diag.vdDisplayId} overlay_attached=${diag.overlayAttached} " +
                     "direct_display=${diag.directDisplayId} " +
                     "direct_marker=${clusterPrefs.getInt(cpm.KEY_DIRECT_DISPLAY_ID, -1)}")
