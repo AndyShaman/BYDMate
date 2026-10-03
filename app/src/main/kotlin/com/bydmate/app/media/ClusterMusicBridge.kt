@@ -73,6 +73,8 @@ class ClusterMusicBridge @Inject constructor(
     private var lastFids: ClusterMusicFids? = null
     private var fidsLogged = false
     private var lastTargetKind: String? = null
+    /** [ClusterMusicCard.nextOwner] carried between polls; process memory only. */
+    private var lastOwner: String? = null
 
     /**
      * [ensureAccess] re-arms notification-listener access (TrackingService's GrantSelfHeal); it runs
@@ -131,16 +133,21 @@ class ClusterMusicBridge @Inject constructor(
             report(sync.step(false, fids, ownerBeforeClear(), SystemClock.elapsedRealtime()), null)
             return
         }
-        val target = readTarget() ?: return
+        val sessions = readSessions() ?: return
+        val target = ClusterMusicCard.decide(sessions, lastOwner = lastOwner)
         val kind = when (target) {
             is Target.Show -> "show"
             is Target.OtherPlaying -> "other:${target.packageName}"
             Target.Idle -> "idle"
         }
         if (kind != lastTargetKind) {
-            Log.i(TAG, "target $kind")
+            // Package and PlaybackState only: users post these logs in public issues.
+            val states = sessions.take(MAX_LOGGED_SESSIONS).joinToString(" ") { "${it.packageName}:${it.playbackState}" }
+            Log.i(TAG, "target $kind sessions=[$states] owner=$lastOwner")
+            Trace.event(TraceArea.CAR, "cluster_music", "target" to kind, "sessions" to states, "owner" to lastOwner)
             lastTargetKind = kind
         }
+        lastOwner = ClusterMusicCard.nextOwner(target, lastOwner)
         val outcome = sync.step(true, fids, target, SystemClock.elapsedRealtime()) { enabled() && job?.isActive == true }
         report(outcome, target)
     }
@@ -175,11 +182,14 @@ class ClusterMusicBridge @Inject constructor(
         }.getOrNull() ?: Target.Idle
     }
 
+    private suspend fun readTarget(rearm: Boolean): Target? =
+        readSessions(rearm)?.let { ClusterMusicCard.decide(it, lastOwner = lastOwner) }
+
     /**
      * Null when the sessions can't be read: without listener access the poll decides nothing.
      * [rearm] false (the feature is off or stopping) skips re-arming the access.
      */
-    private suspend fun readTarget(rearm: Boolean = true): Target? {
+    private suspend fun readSessions(rearm: Boolean = true): List<ClusterMusicCard.SessionSnapshot>? {
         val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
         val controllers = try {
             msm.getActiveSessions(ComponentName(context, MediaSessionListenerService::class.java))
@@ -193,7 +203,7 @@ class ClusterMusicBridge @Inject constructor(
         }
         access.onGranted()
         val now = SystemClock.elapsedRealtime()
-        val sessions = controllers.map {
+        return controllers.map {
             val md = it.metadata
             val pb = it.playbackState
             ClusterMusicCard.SessionSnapshot(
@@ -211,7 +221,6 @@ class ClusterMusicBridge @Inject constructor(
                 durationMs = md?.getLong(MediaMetadata.METADATA_KEY_DURATION),
             )
         }
-        return ClusterMusicCard.decide(sessions)
     }
 
     private fun report(outcome: Outcome, target: Target?, reason: String? = null) {
@@ -219,8 +228,9 @@ class ClusterMusicBridge @Inject constructor(
             Outcome.NONE, Outcome.TICKED, Outcome.REASSERTED, Outcome.RETRYING -> return
             Outcome.SHOWN -> {
                 // Lengths only: users post these logs in public issues.
-                val card = (target as? Target.Show)?.card
-                Log.i(TAG, "card <- title(${card?.title?.length}) artist(${card?.artist?.length}) " +
+                val show = target as? Target.Show
+                val card = show?.card
+                Log.i(TAG, "card <- ${show?.packageName} title(${card?.title?.length}) artist(${card?.artist?.length}) " +
                     "state=${card?.musicState} progress=${card?.progress ?: "no duration"}")
             }
             Outcome.REFUSED -> Log.w(TAG, "card off until restart: the car refused it ${ClusterMusicSync.MAX_WRITE_REFUSALS} times")
@@ -236,5 +246,7 @@ class ClusterMusicBridge @Inject constructor(
         const val STOP_CLEAR_TIMEOUT_MS = 5_000L
         /** Spacing of the access re-arm while getActiveSessions keeps refusing. */
         const val ACCESS_RETRY_MS = 60_000L
+        /** Sessions listed in the target-change log line. */
+        private const val MAX_LOGGED_SESSIONS = 6
     }
 }
