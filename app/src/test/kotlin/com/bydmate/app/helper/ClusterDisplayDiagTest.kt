@@ -352,4 +352,81 @@ class ClusterDisplayDiagTest {
             ClusterDisplayDiag.taskConfigLines(many, "ru.yandex.yandexnavi").size,
         )
     }
+
+    /**
+     * NOT a device capture: hand-built from the AOSP 12 `ActivityRecord.dump` /
+     * `MergedConfiguration.dump` code, because the real output of an Android 12 head unit has never
+     * been seen (a tester's DiLink 5.0 dump gave `dpi=? raw="mLastReportedConfigurations:"`).
+     * A reference line comes first, then the history entry; the header is followed by the two
+     * configuration lines instead of the Android 10 blob.
+     */
+    private val aosp12FormatSample = """
+        Display #4 (activities from top to bottom):
+          * Task{8f1 #68 type=standard A=10123:ru.yandex.yandexnavi U=0 visible=true mode=freeform}
+            mResumedActivity: ActivityRecord{77aa u0 ru.yandex.yandexnavi/.core.NavigatorActivity t68}
+            * Hist #0: ActivityRecord{77aa u0 ru.yandex.yandexnavi/.core.NavigatorActivity t68}
+              packageName=ru.yandex.yandexnavi processName=ru.yandex.yandexnavi
+              intent={act=android.intent.action.MAIN cmp=ru.yandex.yandexnavi/.core.NavigatorActivity}
+              mLastReportedConfigurations:
+               mGlobalConfig={1.0 ?mcc?mnc [ru_RU] ldltr sw450dp w800dp h450dp 240dpi lrg land car finger}
+               mOverrideConfig={1.0 ?mcc?mnc [ru_RU] ldltr sw330dp w614dp h330dp 160dpi lrg land car finger winConfig={ mBounds=Rect(1306, 0 - 1920, 660) mWindowingMode=freeform mDisplayRotation=ROTATION_0}}
+              CurrentConfiguration={1.0 ?mcc?mnc [ru_RU] ldltr sw330dp w614dp h330dp 160dpi lrg land car finger}
+              taskDescription: label="Navigator" icon=null
+    """.trimIndent()
+
+    @Test
+    fun `nav task config reads the AOSP 12 layout and skips reference lines`() {
+        val lines = ClusterDisplayDiag.taskConfigLines(aosp12FormatSample, "ru.yandex.yandexnavi")
+        val records = lines.filter { !it.startsWith(ClusterDisplayDiag.RAW_PREFIX) }
+        assertEquals("only the history entry is a record: $lines", 1, records.size)
+        assertTrue(
+            "the override dpi is what the activity received: ${records[0]}",
+            records[0].startsWith("ru.yandex.yandexnavi/.core.NavigatorActivity dpi=160 "),
+        )
+        assertEquals(
+            listOf("mGlobalConfig=", "mOverrideConfig=", "CurrentConfiguration="),
+            lines.filter { it.startsWith(ClusterDisplayDiag.RAW_PREFIX) }
+                .map { it.removePrefix(ClusterDisplayDiag.RAW_PREFIX).substringBefore('{') },
+        )
+        assertFalse(
+            "only configuration lines may leave the car: $lines",
+            lines.any { "intent=" in it || "taskDescription" in it || "packageName=" in it },
+        )
+    }
+
+    @Test
+    fun `nav task config caps the raw block`() {
+        val long = "  mLastReportedConfigurations:\n" +
+            (1..10).joinToString("\n") { "   mGlobalConfig={1.0 ${"x".repeat(400)} 240dpi}" }
+        val lines = ClusterDisplayDiag.taskConfigLines(
+            "* Hist #0: ActivityRecord{1 u0 pkg/.A t1}\n$long", "pkg",
+        )
+        val raw = lines.filter { it.startsWith(ClusterDisplayDiag.RAW_PREFIX) }
+            .sumOf { it.length - ClusterDisplayDiag.RAW_PREFIX.length }
+        assertEquals(ClusterDisplayDiag.MAX_RAW_BLOCK, raw)
+    }
+
+    @Test
+    fun `digest lists the densities and widths of every configuration`() {
+        val digest = ClusterDisplayDiag.taskConfigDigest(
+            ClusterDisplayDiag.taskConfigLines(aosp12FormatSample, "ru.yandex.yandexnavi"),
+        )
+        assertEquals(
+            listOf(
+                "activity" to "ru.yandex.yandexnavi/.core.NavigatorActivity dpi=160",
+                "mGlobalConfig" to "dpi=240 sw=450 w=800",
+                "mOverrideConfig" to "dpi=160 sw=330 w=614",
+                "CurrentConfiguration" to "dpi=160 sw=330 w=614",
+            ),
+            digest,
+        )
+    }
+
+    @Test
+    fun `digest of the Android 10 blob reads the record's own configuration`() {
+        val digest = ClusterDisplayDiag.taskConfigDigest(
+            ClusterDisplayDiag.taskConfigLines(ACTIVITIES, "ru.yandex.yandexnavi"),
+        )
+        assertEquals("mLastReportedConfiguration" to "dpi=160 sw=360 w=960", digest[1])
+    }
 }
