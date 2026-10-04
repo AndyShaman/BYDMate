@@ -78,8 +78,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Steering wheel volume knob</string>
     <string name="settings_knob_play_pause_desc">Pressing the knob pauses and resumes playback instead of switching the audio source. Needed after the firmware update that made the press change the source.</string>
-    <string name="settings_cluster_music_card_title">Yandex track on the cluster</string>
-    <string name="settings_cluster_music_card_desc">Shows the title and artist from Yandex Navigator (Alice) and Yandex Music on the instrument cluster music card. The stock firmware fills it only for its own players and Bluetooth.</string>
+    <string name="settings_cluster_music_card_title">Track on the cluster</string>
+    <string name="settings_cluster_music_card_desc">Shows the title and artist on the instrument cluster music card for players the stock firmware leaves out: Yandex Navigator (Alice), Yandex Music, Spotify, internet radio and others. The firmware fills it itself for its own players and Bluetooth.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Restore ADB after a reboot</string>

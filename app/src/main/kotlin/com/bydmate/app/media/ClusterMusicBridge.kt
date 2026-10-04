@@ -31,8 +31,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Mirrors Yandex Navigator's Alice music and Yandex Music onto the instrument cluster's music card,
- * which the stock controller leaves blank for them. It writes the fids the stock MediaInfoSender
+ * Mirrors the track of any player the stock controller leaves out (Yandex Navigator's Alice music,
+ * Yandex Music, Spotify, internet radio...) onto the instrument cluster's music card, which it
+ * leaves blank for them. It writes the fids the stock MediaInfoSender
  * writes for whitelisted apps, resolved from this firmware's catalog ([ClusterMusicFids]), through
  * the shell-uid helper: the app uid is refused these writes, as for
  * [com.bydmate.app.hud.HudCanChannel]'s road name.
@@ -73,6 +74,9 @@ class ClusterMusicBridge @Inject constructor(
     private var lastFids: ClusterMusicFids? = null
     private var fidsLogged = false
     private var lastTargetKind: String? = null
+
+    /** The package the last poll gave the card to; it keeps the card while nobody plays. */
+    private var lastOwner: String? = null
 
     /**
      * [ensureAccess] re-arms notification-listener access (TrackingService's GrantSelfHeal); it runs
@@ -133,7 +137,7 @@ class ClusterMusicBridge @Inject constructor(
         }
         val target = readTarget() ?: return
         val kind = when (target) {
-            is Target.Show -> "show"
+            is Target.Show -> "show:${target.packageName}"
             is Target.OtherPlaying -> "other:${target.packageName}"
             Target.Idle -> "idle"
         }
@@ -211,7 +215,13 @@ class ClusterMusicBridge @Inject constructor(
                 durationMs = md?.getLong(MediaMetadata.METADATA_KEY_DURATION),
             )
         }
-        return ClusterMusicCard.decide(sessions)
+        val target = ClusterMusicCard.decide(sessions, lastOwner)
+        when (target) {
+            is Target.Show -> lastOwner = target.packageName
+            is Target.OtherPlaying -> lastOwner = target.packageName
+            Target.Idle -> Unit
+        }
+        return target
     }
 
     private fun report(outcome: Outcome, target: Target?, reason: String? = null) {
