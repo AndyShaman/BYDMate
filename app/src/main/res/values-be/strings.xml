@@ -82,8 +82,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Кола гучнасці на рулі</string>
     <string name="settings_knob_play_pause_desc">Націсканне ставіць на паўзу і працягвае прайграванне, а не пераключае крыніцу гуку. Патрэбна пасля абнаўлення прашыўкі, дзе націсканне стала мяняць крыніцу.</string>
-    <string name="settings_cluster_music_card_title">Трэк Яндэкса на прыборцы</string>
-    <string name="settings_cluster_music_card_desc">Паказвае назву і выканаўцу з Яндэкс Навігатара (Аліса) і Яндэкс Музыкі ў картцы музыкі на прыборцы. Штатная прашыўка запаўняе яе толькі для сваіх плэераў і Bluetooth.</string>
+    <string name="settings_cluster_music_card_title">Трэк на прыборцы</string>
+    <string name="settings_cluster_music_card_desc">Паказвае назву і выканаўцу ў картцы музыкі на прыборцы для плэераў, якія штатная прашыўка прапускае: Яндэкс Навігатар (Аліса), Яндэкс Музыка, Spotify, інтэрнэт-радыё і іншыя. Свае плэеры і Bluetooth прашыўка запаўняе сама.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Аднаўляць ADB пасля перазагрузкі</string>

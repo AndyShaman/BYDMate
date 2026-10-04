@@ -79,8 +79,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Botão giratório de volume no volante</string>
     <string name="settings_knob_play_pause_desc">Pressionar pausa e retoma a reprodução em vez de trocar a fonte de áudio. Necessário após a atualização de firmware em que o toque passou a mudar a fonte.</string>
-    <string name="settings_cluster_music_card_title">Faixa do Yandex no painel</string>
-    <string name="settings_cluster_music_card_desc">Mostra o título e o artista do Yandex Navigator (Alice) e do Yandex Music no cartão de música do painel de instrumentos. O firmware de fábrica só o preenche para os próprios reprodutores e Bluetooth.</string>
+    <string name="settings_cluster_music_card_title">Faixa no painel</string>
+    <string name="settings_cluster_music_card_desc">Mostra o título e o artista no cartão de música do painel de instrumentos para os reprodutores que o firmware de fábrica ignora: Yandex Navigator (Alice), Yandex Music, Spotify, rádio pela internet e outros. Para os próprios reprodutores e o Bluetooth, o firmware preenche-o sozinho.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Restaurar o ADB após reiniciar</string>
