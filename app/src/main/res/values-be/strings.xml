@@ -2107,4 +2107,10 @@
     <string name="auto_ui_test_park">Не выканана: правіла працуе толькі на паркоўцы. Уключыце P.</string>
     <string name="auto_ui_confirm_rule">Правіла «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Адменіцца праз %1$d с</string>
+    <!-- play_audio automation action -->
+    <string name="automation_action_play_audio">Прайграць гук</string>
+    <string name="auto_act_play_audio">Прайграць гук</string>
+    <string name="automation_play_audio_label">Націсніце, каб выбраць аўдыяфайл…</string>
+    <string name="auto_msg_play_audio_empty">Дзеянне #%1$d: аўдыяфайл не выбраны</string>
+    <string name="dispatch_play_audio_failed">Не ўдалося прайграць аўдыя</string>
 </resources>

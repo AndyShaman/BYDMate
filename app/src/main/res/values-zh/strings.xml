@@ -2069,4 +2069,10 @@
     <string name="auto_ui_test_park">未执行：此规则仅在驻车时生效，请挂入 P 挡。</string>
     <string name="auto_ui_confirm_rule">规则「%1$s」</string>
     <string name="auto_ui_confirm_countdown">%1$d 秒后取消</string>
+    <!-- play_audio automation action -->
+    <string name="automation_action_play_audio">播放声音</string>
+    <string name="auto_act_play_audio">播放声音</string>
+    <string name="automation_play_audio_label">点按以选择音频文件…</string>
+    <string name="auto_msg_play_audio_empty">操作 #%1$d：未选择音频文件</string>
+    <string name="dispatch_play_audio_failed">无法播放音频</string>
 </resources>

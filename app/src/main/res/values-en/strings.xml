@@ -1955,4 +1955,10 @@
     <string name="auto_ui_test_park">Not run: this rule works only when parked. Shift to P.</string>
     <string name="auto_ui_confirm_rule">Rule «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Cancels in %1$d s</string>
+    <!-- play_audio automation action -->
+    <string name="automation_action_play_audio">Play sound</string>
+    <string name="auto_act_play_audio">Play sound</string>
+    <string name="automation_play_audio_label">Tap to choose an audio file…</string>
+    <string name="auto_msg_play_audio_empty">Action #%1$d: no audio file selected</string>
+    <string name="dispatch_play_audio_failed">Could not play audio</string>
 </resources>

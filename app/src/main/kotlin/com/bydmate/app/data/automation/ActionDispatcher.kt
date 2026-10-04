@@ -7,7 +7,10 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.net.Uri
@@ -310,6 +313,10 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             "pause" -> R.string.automation_action_media_pause
             else -> null
         }
+
+        /** The content URI of a "play_audio" action, or null when none was picked. Pure -- unit-testable. */
+        internal fun playAudioUri(payload: String?): String? =
+            runCatching { JSONObject(payload ?: "{}").optString("uri").trim() }.getOrNull()?.ifEmpty { null }
 
         /**
          * Outcome of resolving a "toggle" against the live state: either the concrete
@@ -625,6 +632,52 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }.isSuccess
     }
 
+    /**
+     * Test seam -- play a sound file (its content:// URI as a string) through a short-lived
+     * MediaPlayer; true once playback actually started. Takes the raw string, not a parsed Uri,
+     * so the dispatch path is unit-testable without Android's Uri.parse. The default holds the
+     * real player; tests override it.
+     */
+    internal var playAudioFile: (String) -> Boolean = { uri -> playViaMediaPlayer(uri) }
+
+    /**
+     * Plays [uriString] (a persisted content:// grant from the picker) and hands audio focus
+     * back the instant the clip ends or errors, so a one-shot sound never leaves the car's
+     * audio ducked. TRANSIENT_MAY_DUCK lowers the current source instead of stopping it -- the
+     * same courtesy the voice orb uses -- and the system auto-restores it on abandon. prepare()
+     * is synchronous: a bad/unreadable URI throws here and is cleaned up, not leaked.
+     */
+    private fun playViaMediaPlayer(uriString: String): Boolean {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val attrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build()
+        val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(attrs)
+            .build()
+        val player = MediaPlayer()
+        val cleanup = {
+            runCatching { player.release() }
+            runCatching { audio.abandonAudioFocusRequest(focus) }
+            Unit
+        }
+        return runCatching {
+            audio.requestAudioFocus(focus)
+            player.setAudioAttributes(attrs)
+            player.setDataSource(context, Uri.parse(uriString))
+            player.setOnCompletionListener { cleanup() }
+            player.setOnErrorListener { _, _, _ -> cleanup(); true }
+            player.prepare()
+            player.start()
+            true
+        }.getOrElse {
+            Log.e(TAG, "play_audio failed: ${it.javaClass.simpleName}")
+            cleanup()
+            false
+        }
+    }
+
     init {
         createUserChannels()
     }
@@ -644,6 +697,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
             "media_key" -> dispatchMediaKey(action)
+            "play_audio" -> dispatchPlayAudio(action)
             "sentry" -> dispatchSentry(action)
             "hotspot" -> dispatchHotspot(action)
             "cluster_projection" -> dispatchClusterProjection(action)
@@ -687,6 +741,23 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         Log.i(TAG, "media key ${action.payload} -> ${target.packageName} ok=$ok")
         return if (ok) DispatchResult(true)
         else DispatchResult(false, appStrings.get(R.string.dispatch_media_key_failed, target.packageName))
+    }
+
+    // --- play audio (user-picked sound file) ---
+
+    /**
+     * "play_audio": play a user-picked sound file (a persisted content:// URI) through a
+     * short-lived, ducking MediaPlayer. Distinct from "speak", which synthesizes text --
+     * this plays an existing file verbatim. A missing URI or a player that refused to start
+     * is a failed step.
+     */
+    private fun dispatchPlayAudio(action: ActionDef): DispatchResult {
+        val uri = playAudioUri(action.payload)
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_play_audio_failed))
+        val ok = playAudioFile(uri)
+        Log.i(TAG, "play_audio ok=$ok")
+        return if (ok) DispatchResult(true)
+        else DispatchResult(false, appStrings.get(R.string.dispatch_play_audio_failed))
     }
 
     // --- sentry mode (Settings.Global via helper daemon) ---

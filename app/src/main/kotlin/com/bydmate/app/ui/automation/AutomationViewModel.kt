@@ -721,6 +721,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             is ActionValidationError.SentryInvalid -> ctx.getString(R.string.auto_msg_sentry_invalid, err.index)
             is ActionValidationError.HotspotInvalid -> ctx.getString(R.string.auto_msg_hotspot_invalid, err.index)
             is ActionValidationError.MediaKeyInvalid -> ctx.getString(R.string.auto_msg_media_key_invalid, err.index)
+            is ActionValidationError.PlayAudioUriEmpty -> ctx.getString(R.string.auto_msg_play_audio_empty, err.index)
             is ActionValidationError.SpeakTextEmpty -> ctx.getString(R.string.auto_msg_speak_text_empty, err.index)
             is ActionValidationError.AgentQueryPromptEmpty -> ctx.getString(R.string.auto_msg_agent_query_prompt_empty, err.index)
             is ActionValidationError.SplitScreenNarrowEmpty -> ctx.getString(R.string.auto_msg_split_narrow_empty, err.index)
@@ -1769,6 +1770,28 @@ fun ActionDef.speakText(): String = try {
 
 fun ActionDef.withSpeakText(text: String): ActionDef = copy(
     payload = org.json.JSONObject().apply { put("text", text) }.toString()
+)
+
+// --- Play audio helpers: play a user-picked sound file (persisted content:// URI) ---
+
+fun newPlayAudioAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.appLocalizedContext().getString(R.string.auto_act_play_audio),
+    kind = "play_audio",
+    payload = """{"uri":"","name":""}"""
+)
+
+fun ActionDef.playAudioUri(): String =
+    runCatching { org.json.JSONObject(payload ?: "{}").optString("uri") }.getOrDefault("")
+
+fun ActionDef.playAudioName(): String =
+    runCatching { org.json.JSONObject(payload ?: "{}").optString("name") }.getOrDefault("")
+
+fun ActionDef.withPlayAudio(uri: String, name: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("uri", uri)
+        put("name", name)
+    }.toString()
 )
 
 // --- Agent query helpers (v3.6) ---
