@@ -1713,6 +1713,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 collected.set(collected.get().copy(steeringHeat = steeringHeat))
                 val windows = runCatching { helper.readBatch(WindowDiagnostics.batchItems()) }.getOrNull()
                 collected.set(collected.get().copy(windows = windows))
+                val hud = runCatching { helper.readBatch(HudDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(hud = hud))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
@@ -1725,6 +1727,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         val seats: List<Pair<Int, Int>>?,
         val steeringHeat: List<Pair<Int, Int>>? = null,
         val windows: List<Pair<Int, Int>>? = null,
+        val hud: List<Pair<Int, Int>>? = null,
     )
 
     /** Liveness and the seat, steering heat and window fid snapshots under ONE shared budget. */
@@ -2008,6 +2011,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 }
             } catch (e: Exception) { appendLine("(failed to gather displays: ${e.message})") }
 
+            // The daemon sections come from one detached probe (see gatherHelperDiagnostics).
+            val helperDiag = gatherHelperDiagnostics()
+
             appendLine("--- hud ---")
             try {
                 // Mirrors the Settings HUD row: enabled pref, probe verdict, live status.
@@ -2041,6 +2047,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("someip_fire_rc=${someIp?.fireCounts()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeFires(it) } ?: "n/a"}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
                 appendLine("hub_snapshot=${com.bydmate.app.navdata.NavGuidanceHub.snapshot()}")
+                // The car's own «Опц. содержимое → Навигация» gate (#269), read only.
+                HudDiagnostics.format(helperDiag.hud).forEach { appendLine(it) }
                 // What each channel actually carried at every maneuver change (#94): the
                 // SOME/IP arrow field next to the Amap icon, on one timeline.
                 val maneuvers = com.bydmate.app.hud.HudManeuverJournal(hudPrefs).lines()
@@ -2278,9 +2286,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     appendLine("$pkg: $state")
                 }
             } catch (e: Exception) { appendLine("(failed to gather assistant package state: ${e.message})") }
-
-            // Both daemon sections come from one detached probe (see gatherHelperDiagnostics).
-            val helperDiag = gatherHelperDiagnostics()
 
             appendLine("--- helper daemon ---")
             try {

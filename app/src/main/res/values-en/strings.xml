@@ -1526,7 +1526,7 @@
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">Split screen</string>
     <string name="settings_split_enable_title">Split screen 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">Two freeform windows: one at one-third of the screen, the other at two-thirds. Off by default.</string>
+    <string name="settings_split_enable_desc">Two freeform windows: one at one-third of the screen, the other at two-thirds. Off by default. The built-in split button still splits the screen in half.</string>
     <string name="settings_split_clear_pair_title">Reset last pair</string>
     <string name="settings_split_clear_pair_desc">Clear the saved app pair. The next launch will open the picker.</string>
     <string name="settings_split_pair_cleared">Pair cleared</string>
