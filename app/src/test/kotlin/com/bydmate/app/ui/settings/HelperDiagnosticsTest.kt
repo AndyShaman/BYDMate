@@ -60,4 +60,15 @@ class HelperDiagnosticsTest {
         )
         assertEquals(listOf("(unavailable)"), WindowDiagnostics.format(null))
     }
+
+    @Test fun `hud gate fids are printed with their device and fid`() {
+        assertEquals(
+            listOf(
+                "dynamic_navi_function_set[dev=1023 fid=1276174394]=1",
+                "dynamic_navi_function_status[dev=1023 fid=951058472]=(status=-10011)",
+            ),
+            HudDiagnostics.format(listOf(0 to 1, -10011 to 0)),
+        )
+        assertEquals(listOf("(unavailable)"), HudDiagnostics.format(null))
+    }
 }
