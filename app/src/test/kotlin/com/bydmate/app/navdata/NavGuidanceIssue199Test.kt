@@ -116,6 +116,18 @@ class NavGuidanceIssue199Test {
         assertEquals(400, s.distanceMeters)
     }
 
+    @Test fun `issue 199 the balloon's exit number is not carried into the second layout read`() {
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 1, distanceMeters = 900), NavGuidanceHub.Source.A11Y, nowMs = T0)
+        val root = gapRoot()
+        every { root.findAccessibilityNodeInfosByViewId("$PKG:id/exit_number_text") } answers
+            { listOf(textNode("3")) }
+        secondLayout(root, desc = "Поверните направо", distance = "150", unit = "м")
+        timerRead(root, T0 + 5_000)
+        val s = NavGuidanceHub.snapshot(T0 + 5_000)
+        assertEquals(NavManeuverCodes.GAODE_RIGHT, s.maneuverGaode)
+        assertEquals(150, s.distanceMeters)
+    }
+
     @Test fun `issue 199 the upcoming maneuver alone is not read as the next one`() {
         NavGuidanceHub.update(NavGuidance(maneuverGaode = 1, distanceMeters = 900), NavGuidanceHub.Source.A11Y, nowMs = T0)
         val root = gapRoot()
