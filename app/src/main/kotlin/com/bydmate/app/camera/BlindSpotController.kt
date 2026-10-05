@@ -119,7 +119,8 @@ fun blindSpotClusterDisplay(context: Context): Display? {
  * screen. Without a projection display the left view falls back to a second main-screen window,
  * mirrored across the right one. Two opt-ins move them: both on the main screen (#183), or both
  * on the cluster (#240), where the right camera gets a second cluster window of the same geometry.
- * Reverse gear closes everything: the factory rear view owns the screens there.
+ * Reverse gear closes everything: the factory rear view owns the screens there. So does the
+ * factory 360 view for as long as it is in the foreground.
  *
  * Threading: window work runs on Main, every vendor-stack call runs on a private
  * single camera thread ([cameraDispatcher]) because open/close block for hundreds of
@@ -393,11 +394,11 @@ class BlindSpotController @Inject constructor(
         val nativeCameraForeground = cameraStateMonitor.active.value
         if (nativeCameraForeground != lastNativeCameraForeground) {
             lastNativeCameraForeground = nativeCameraForeground
-            val verb = if (nativeCameraForeground) "hidden" else "released"
+            val verb = if (nativeCameraForeground) "closed" else "may warm again"
             Log.i(TAG, "native camera foreground=$nativeCameraForeground: blind-spot $verb")
             Trace.event(TraceArea.CAMERA, "native-360", "on" to nativeCameraForeground)
             clusterJournal.append(
-                "camera: native 360 ${if (nativeCameraForeground) "up, hide" else "down, release"}"
+                "camera: native 360 ${if (nativeCameraForeground) "up, close" else "down, may warm again"}"
             )
         }
         val decision = decideBlindSpot(
@@ -413,6 +414,12 @@ class BlindSpotController @Inject constructor(
 
         if (gearIsReverse) {
             if (anythingUp()) awaitTeardown("reverse")
+            return
+        }
+        // The factory 360 owns the screen like reverse does, and a camera kept warm under it
+        // streams two previews nobody sees: the 360 stuttered (tester dump 2026-10-03).
+        if (nativeCameraForeground) {
+            if (anythingUp()) awaitTeardown("native 360")
             return
         }
 

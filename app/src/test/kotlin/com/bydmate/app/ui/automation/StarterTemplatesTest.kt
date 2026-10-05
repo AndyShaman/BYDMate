@@ -26,6 +26,27 @@ class StarterTemplatesTest {
         assertTrue(CommandTranslator.resolve(action.command).isNotEmpty())
     }
 
+    @Test fun `winter start and summer cooling wait for the BYDMate start, only the sunshade for gear D`() {
+        for (lang in listOf("ru", "be", "en", "pl", "pt", "zh")) {
+            val triggers = starterTemplates(lang).flatMap { TriggerDef.listFromJson(it.triggers) }
+            assertTrue(lang, triggers.none { it.param == "PowerState" })
+        }
+        val ru = starterTemplates("ru")
+        fun lastTrigger(name: String) = TriggerDef.listFromJson(ru.single { it.name == name }.triggers).last()
+        for (name in listOf("Зимний старт", "Летнее охлаждение")) {
+            val start = lastTrigger(name)
+            assertEquals(name, "service_start", start.kind)
+            assertEquals(name, "Запуск BYDMate", start.displayName)
+        }
+        assertEquals("ExtTemp", TriggerDef.listFromJson(ru.single { it.name == "Зимний старт" }.triggers).first().param)
+        assertEquals("InsideTemp", TriggerDef.listFromJson(ru.single { it.name == "Летнее охлаждение" }.triggers).first().param)
+        val gear = lastTrigger("Шторка при движении")
+        assertEquals("Gear", gear.param)
+        assertEquals("4", gear.value)
+        assertEquals("Передача = D", gear.displayName)
+        assertTrue(TRIGGER_PARAMS.none { it.param == "PowerState" })
+    }
+
     @Test fun `the rule name follows the language`() {
         assertTrue(starterTemplates("en").any { it.name == "ECO at low SOC" })
         assertTrue(starterTemplates("zh").any { it.name == "低电量ECO" })

@@ -574,7 +574,6 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         "ExtTemp" -> data.exteriorTemp?.toDouble()
         "InsideTemp" -> data.insideTemp?.toDouble()
         "ChargingStatus" -> data.chargingStatus?.toDouble()
-        "PowerState" -> data.powerState?.toDouble()
         "Gear" -> data.gear?.toDouble()
         "ACStatus" -> data.acStatus?.toDouble()
         "ACTemp" -> data.acTemp?.toDouble()

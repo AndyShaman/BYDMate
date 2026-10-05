@@ -82,8 +82,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Pokrętło głośności na kierownicy</string>
     <string name="settings_knob_play_pause_desc">Naciśnięcie wstrzymuje i wznawia odtwarzanie zamiast przełączać źródło dźwięku. Potrzebne po aktualizacji oprogramowania, w której naciśnięcie zaczęło zmieniać źródło.</string>
-    <string name="settings_cluster_music_card_title">Utwór z Yandex na zegarach</string>
-    <string name="settings_cluster_music_card_desc">Pokazuje tytuł i wykonawcę z Yandex Navigator (Alice) i Yandex Music na karcie muzyki na zegarach. Fabryczne oprogramowanie wypełnia ją tylko dla własnych odtwarzaczy i Bluetooth.</string>
+    <string name="settings_cluster_music_card_title">Utwór na zegarach</string>
+    <string name="settings_cluster_music_card_desc">Pokazuje tytuł i wykonawcę na karcie muzyki na zegarach dla odtwarzaczy, które fabryczne oprogramowanie pomija: Yandex Navigator (Alice), Yandex Music, Spotify, radio internetowe i inne. Własne odtwarzacze i Bluetooth oprogramowanie wypełnia samo.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Przywracaj ADB po restarcie</string>
@@ -1095,12 +1095,9 @@
     <string name="auto_enum_closed_f">Zamknięta</string>
     <string name="auto_enum_closed_m">Zamknięty</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">Śnieg</string>
@@ -1129,7 +1126,6 @@
     <string name="auto_param_drivemode">Tryb jazdy</string>
     <string name="auto_param_soc">SOC</string>
     <string name="auto_param_chargingstatus">Status ładowania</string>
-    <string name="auto_param_powerstate">Zasilanie</string>
     <string name="auto_param_voltage12v">Akumulator 12V</string>
     <string name="auto_param_mincellvoltage">Min. napięcie ogniwa</string>
     <string name="auto_param_maxcellvoltage">Maks. napięcie ogniwa</string>
@@ -1683,7 +1679,7 @@
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">Podział ekranu</string>
     <string name="settings_split_enable_title">Podział ekranu 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">Dwa okna freeform: jedno na jedną trzecią ekranu, drugie na dwie trzecie. Domyślnie wyłączone.</string>
+    <string name="settings_split_enable_desc">Dwa okna freeform: jedno na jedną trzecią ekranu, drugie na dwie trzecie. Domyślnie wyłączone. Fabryczny przycisk podziału nadal dzieli ekran na pół.</string>
     <string name="settings_split_clear_pair_title">Zresetuj ostatnią parę</string>
     <string name="settings_split_clear_pair_desc">Usuń zapisaną parę aplikacji. Następne uruchomienie otworzy okno wyboru.</string>
     <string name="settings_split_pair_cleared">Para zresetowana</string>
@@ -1825,6 +1821,7 @@
     <string name="automation_import_pick_empty">Brak plików bydmate_rule_*.json w folderze Download</string>
     <string name="automation_import_invalid">Nie udało się odczytać pliku: to nie jest automatyzacja BYDMate</string>
     <string name="automation_import_newer_version">Automatyzacja z nowszej wersji, zaktualizuj aplikację</string>
+    <string name="automation_import_power_off_only">Ta automatyzacja mogła zadziałać tylko przy wyłączonym samochodzie, takiego warunku już nie ma</string>
     <string name="automation_import_preview_title">Sprawdź automatyzację</string>
     <string name="automation_import_conditions">Warunki</string>
     <string name="automation_import_actions">Akcje</string>

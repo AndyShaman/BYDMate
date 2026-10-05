@@ -78,8 +78,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Steering wheel volume knob</string>
     <string name="settings_knob_play_pause_desc">Pressing the knob pauses and resumes playback instead of switching the audio source. Needed after the firmware update that made the press change the source.</string>
-    <string name="settings_cluster_music_card_title">Yandex track on the cluster</string>
-    <string name="settings_cluster_music_card_desc">Shows the title and artist from Yandex Navigator (Alice) and Yandex Music on the instrument cluster music card. The stock firmware fills it only for its own players and Bluetooth.</string>
+    <string name="settings_cluster_music_card_title">Track on the cluster</string>
+    <string name="settings_cluster_music_card_desc">Shows the title and artist on the instrument cluster music card for players the stock firmware leaves out: Yandex Navigator (Alice), Yandex Music, Spotify, internet radio and others. The firmware fills it itself for its own players and Bluetooth.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Restore ADB after a reboot</string>
@@ -943,12 +943,9 @@
     <string name="auto_enum_closed_f">Closed</string>
     <string name="auto_enum_closed_m">Closed</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">SNOW</string>
@@ -977,7 +974,6 @@
     <string name="auto_param_drivemode">Drive Mode</string>
     <string name="auto_param_soc">SOC</string>
     <string name="auto_param_chargingstatus">Charging Status</string>
-    <string name="auto_param_powerstate">Power State</string>
     <string name="auto_param_voltage12v">12V Battery</string>
     <string name="auto_param_mincellvoltage">Min Cell Voltage</string>
     <string name="auto_param_maxcellvoltage">Max Cell Voltage</string>
@@ -1530,7 +1526,7 @@
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">Split screen</string>
     <string name="settings_split_enable_title">Split screen 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">Two freeform windows: one at one-third of the screen, the other at two-thirds. Off by default.</string>
+    <string name="settings_split_enable_desc">Two freeform windows: one at one-third of the screen, the other at two-thirds. Off by default. The built-in split button still splits the screen in half.</string>
     <string name="settings_split_clear_pair_title">Reset last pair</string>
     <string name="settings_split_clear_pair_desc">Clear the saved app pair. The next launch will open the picker.</string>
     <string name="settings_split_pair_cleared">Pair cleared</string>
@@ -1673,6 +1669,7 @@
     <string name="automation_import_pick_empty">No bydmate_rule_*.json files in the Download folder</string>
     <string name="automation_import_invalid">Could not read the file: it is not a BYDMate automation</string>
     <string name="automation_import_newer_version">This automation comes from a newer version, please update the app</string>
+    <string name="automation_import_power_off_only">This automation could only fire with the car off, and that condition no longer exists</string>
     <string name="automation_import_preview_title">Check the automation</string>
     <string name="automation_import_conditions">Conditions</string>
     <string name="automation_import_actions">Actions</string>

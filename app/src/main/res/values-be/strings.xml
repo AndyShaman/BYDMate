@@ -82,8 +82,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Кола гучнасці на рулі</string>
     <string name="settings_knob_play_pause_desc">Націсканне ставіць на паўзу і працягвае прайграванне, а не пераключае крыніцу гуку. Патрэбна пасля абнаўлення прашыўкі, дзе націсканне стала мяняць крыніцу.</string>
-    <string name="settings_cluster_music_card_title">Трэк Яндэкса на прыборцы</string>
-    <string name="settings_cluster_music_card_desc">Паказвае назву і выканаўцу з Яндэкс Навігатара (Аліса) і Яндэкс Музыкі ў картцы музыкі на прыборцы. Штатная прашыўка запаўняе яе толькі для сваіх плэераў і Bluetooth.</string>
+    <string name="settings_cluster_music_card_title">Трэк на прыборцы</string>
+    <string name="settings_cluster_music_card_desc">Паказвае назву і выканаўцу ў картцы музыкі на прыборцы для плэераў, якія штатная прашыўка прапускае: Яндэкс Навігатар (Аліса), Яндэкс Музыка, Spotify, інтэрнэт-радыё і іншыя. Свае плэеры і Bluetooth прашыўка запаўняе сама.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Аднаўляць ADB пасля перазагрузкі</string>
@@ -1095,12 +1095,9 @@
     <string name="auto_enum_closed_f">Зачынена</string>
     <string name="auto_enum_closed_m">Зачынены</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">Снег</string>
@@ -1129,7 +1126,6 @@
     <string name="auto_param_drivemode">Рэжым ваджэння</string>
     <string name="auto_param_soc">SOC</string>
     <string name="auto_param_chargingstatus">Статус зарадкі</string>
-    <string name="auto_param_powerstate">Сілкаванне</string>
     <string name="auto_param_voltage12v">12V акумулятар</string>
     <string name="auto_param_mincellvoltage">Мін. напружанне ячэйкі</string>
     <string name="auto_param_maxcellvoltage">Макс. напружанне ячэйкі</string>
@@ -1683,7 +1679,7 @@
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">Падзел экрана</string>
     <string name="settings_split_enable_title">Падзел экрана 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">Два freeform-акны: адно на трэць экрана, другое на дзве трэці. Па змаўчанні выключана.</string>
+    <string name="settings_split_enable_desc">Два freeform-акны: адно на трэць экрана, другое на дзве трэці. Па змаўчанні выключана. Штатная кнопка падзелу па-ранейшаму дзеліць экран напалову.</string>
     <string name="settings_split_clear_pair_title">Скінуць апошнюю пару</string>
     <string name="settings_split_clear_pair_desc">Выдаліць захаваную пару праграм. Наступны запуск адкрые пікер.</string>
     <string name="settings_split_pair_cleared">Пара скінута</string>
@@ -1825,6 +1821,7 @@
     <string name="automation_import_pick_empty">У папцы Download няма файлаў bydmate_rule_*.json</string>
     <string name="automation_import_invalid">Не ўдалося прачытаць файл: гэта не аўтаматызацыя BYDMate</string>
     <string name="automation_import_newer_version">Аўтаматызацыя з больш новай версіі, абнавіце праграму</string>
+    <string name="automation_import_power_off_only">Гэтая аўтаматызацыя магла спрацаваць толькі на выключанай машыне, такой умовы больш няма</string>
     <string name="automation_import_preview_title">Праверце аўтаматызацыю</string>
     <string name="automation_import_conditions">Умовы</string>
     <string name="automation_import_actions">Дзеянні</string>

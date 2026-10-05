@@ -66,6 +66,17 @@ class ClusterMusicSyncTest {
         assertTrue(port.writes.isEmpty())
     }
 
+    // Issue #96: after a hand-off, a paused source no longer takes the card (Idle); that writes nothing.
+    @Test fun `idle after a hand-off writes nothing`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card()), 0)
+        sync.step(true, fids, Target.OtherPlaying("com.ilv.vradio"), 1_500)
+        port.clearTakes()
+        assertEquals(Outcome.NONE, sync.step(true, fids, Target.Idle, 3_000))
+        assertTrue(port.writes.isEmpty())
+    }
+
     @Test fun `idle after our card clears it`() = runTest {
         val port = FakePort()
         val sync = ClusterMusicSync(port)

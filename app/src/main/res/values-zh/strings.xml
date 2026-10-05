@@ -800,8 +800,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">方向盘音量旋钮</string>
     <string name="settings_knob_play_pause_desc">按下旋钮暂停和继续播放，而不是切换音源。固件更新后按下变为切换音源时需要开启。</string>
-    <string name="settings_cluster_music_card_title">仪表显示 Yandex 曲目</string>
-    <string name="settings_cluster_music_card_desc">在仪表盘音乐卡片上显示 Yandex 导航（Alice）和 Yandex 音乐的歌名与歌手。原厂固件只为自带播放器和蓝牙填写该卡片。</string>
+    <string name="settings_cluster_music_card_title">仪表显示曲目</string>
+    <string name="settings_cluster_music_card_desc">为原厂固件不支持的播放器在仪表盘音乐卡片上显示歌名与歌手：Yandex 导航（Alice）、Yandex 音乐、Spotify、网络电台等。原厂播放器和蓝牙由固件自行填写。</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">重启后恢复 ADB</string>
@@ -1022,12 +1022,9 @@
     <string name="auto_enum_closed_f">关闭</string>
     <string name="auto_enum_closed_m">关闭</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">雪地</string>
@@ -1056,7 +1053,6 @@
     <string name="auto_param_drivemode">整车运行模式</string>
     <string name="auto_param_soc">电量百分比</string>
     <string name="auto_param_chargingstatus">充电状态</string>
-    <string name="auto_param_powerstate">电源状态</string>
     <string name="auto_param_voltage12v">蓄电池电压</string>
     <string name="auto_param_mincellvoltage">单体最低电压</string>
     <string name="auto_param_maxcellvoltage">单体最高电压</string>
@@ -1645,7 +1641,7 @@
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">分屏</string>
     <string name="settings_split_enable_title">分屏 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">两个自由窗口：一个占三分之一，另一个占三分之二。默认关闭。</string>
+    <string name="settings_split_enable_desc">两个自由窗口：一个占三分之一，另一个占三分之二。默认关闭。车机自带的分屏按钮仍然是对半分屏。</string>
     <string name="settings_split_clear_pair_title">重置上次应用对</string>
     <string name="settings_split_clear_pair_desc">清除保存的应用对，下次启动时将打开选择器。</string>
     <string name="settings_split_pair_cleared">应用对已重置</string>
@@ -1787,6 +1783,7 @@
     <string name="automation_import_pick_empty">Download 文件夹中没有 bydmate_rule_*.json 文件</string>
     <string name="automation_import_invalid">无法读取文件：这不是 BYDMate 自动化</string>
     <string name="automation_import_newer_version">该自动化来自更新的版本，请更新应用</string>
+    <string name="automation_import_power_off_only">该自动化只能在车辆熄火时触发，此条件已不再提供</string>
     <string name="automation_import_preview_title">检查自动化</string>
     <string name="automation_import_conditions">条件</string>
     <string name="automation_import_actions">动作</string>

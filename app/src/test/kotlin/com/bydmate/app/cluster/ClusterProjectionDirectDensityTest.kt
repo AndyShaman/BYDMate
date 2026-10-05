@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlinx.coroutines.Job
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -44,7 +45,11 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  *     cleared on that branch, so boot recovery would never reset it);
  *   - an in-place resize → bounds only, no density call under the live window;
  *   - a task already on the cluster display → density left untouched;
- *   - a death after a non-native density → reset, relaunch at native, package latched;
+ *   - one death after a non-native density → relaunch at the same density, nothing latched;
+ *   - two deaths in a row → reset, relaunch at native, package latched (with why and when);
+ *   - a death on the last check → the relaunched app is still watched;
+ *   - a death at the native density → one relaunch, no latch, as before;
+ *   - a marker latched by an earlier build → wiped once (tester's car, [FIXTURE]);
  *   - a latched package → no density call at all on later sends.
  *
  * Test mechanics mirror [ClusterProjectionDirectDeathWatchTest] / [ClusterProjectionSendFailureTest]:
@@ -274,36 +279,173 @@ class ClusterProjectionDirectDensityTest {
     }
 
     /**
-     * #121 is "dies a few seconds after launch at ANY non-native dpi", so the safe ORDER is not a
-     * proof of safety — the density is a probe. A death after a non-native density drops the
-     * override, relaunches at the native one and latches the package.
+     * One death after a scaled send is not proof that the density killed the app: on some cars the
+     * cross-display move itself kills it whatever the density (#134, Sea Lion 07). A single loss
+     * therefore keeps the scale: the relaunch runs at the same density and nothing is latched
+     * (tester's car, 3.19.6: one loss latched the player for good, see [FIXTURE]).
      *
-     * Anti-vacuity: dropping the reset from the death watch leaves the relaunch running at the
-     * scaled density → the ordered verification finds no reset and fails.
+     * Anti-vacuity: the one-strike shape (reset + latch on the first loss) makes both the
+     * exactly-0 reset count and the latch assertion fail.
      */
     @Test
-    fun `death after a non-native density resets it and latches the package`() {
+    fun `one death after a scaled send neither latches the package nor resets the density`() {
         setScalePct(80)
+        var launches = 0
         val helper = directProjectionHelper()
-        coEvery { helper.getTaskState(NAVI_PACKAGE) } returns deadTask()
+        coEvery {
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+        } answers { launches++; FreeformLaunchResult.OK }
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } answers {
+            when (launches) {
+                0 -> taskOnMainScreen()
+                1 -> deadTask()
+                else -> taskOnCluster()
+            }
+        }
 
         projectDirect(helper)
-        shadowOf(Looper.getMainLooper()).idleFor(WATCH_INTERVAL_MS + 100, MILLISECONDS)
+        shadowOf(Looper.getMainLooper()).idleFor(4 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerify(exactly = 2) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.setDisplayDensity(addedDisplayId, 0) }
+        assertFalse("one loss must not latch the package: $journalDump", densityUnsafeFlag())
+    }
+
+    /**
+     * Two losses in a row with the scale applied: the second one is the verdict. The override is
+     * dropped BEFORE the second relaunch (which must run at the native density) and the package is
+     * latched, with why and when.
+     *
+     * Anti-vacuity: latching on the first loss puts the reset ahead of the second launch → the
+     * ordered verification fails; never latching fails the flag assertion.
+     */
+    @Test
+    fun `two deaths in a row latch the package and reset the density before the second relaunch`() {
+        setScalePct(80)
+        var launches = 0
+        val helper = directProjectionHelper()
+        coEvery {
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+        } answers { launches++; FreeformLaunchResult.OK }
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } answers {
+            when (launches) {
+                0 -> taskOnMainScreen()
+                1, 2 -> deadTask()
+                else -> taskOnCluster()
+            }
+        }
+
+        projectDirect(helper)
+        shadowOf(Looper.getMainLooper()).idleFor(6 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
 
         coVerifyOrder {
             helper.setDisplayDensity(addedDisplayId, match { it > 0 })
             helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
             helper.setDisplayDensity(addedDisplayId, 0)
             helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
         }
-        assertTrue(
-            "the package must be latched density-unsafe: ${densityUnsafeFlag()}",
-            densityUnsafeFlag(),
-        )
+        coVerify(exactly = 3) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        assertTrue("the package must be latched density-unsafe", densityUnsafeFlag())
         assertTrue(
             "the latch must be journaled: $journalDump",
             journalHas("$NAVI_PACKAGE marked density-unsafe"),
         )
+        val reason = ClusterProjectionManager.densityUnsafeReason(context, NAVI_PACKAGE).orEmpty()
+        assertTrue("the marker must say why and where: $reason", reason.startsWith("died post-move on display $addedDisplayId, "))
+        assertEquals(
+            "the dump list must stay packages only",
+            listOf(NAVI_PACKAGE), ClusterProjectionManager.densityUnsafePackages(context),
+        )
+    }
+
+    /**
+     * A loss seen on the LAST check used to relaunch the app and end the watch in the same breath,
+     * so nobody looked at the relaunched app. With a scaled density every relaunch gets a full set
+     * of checks again.
+     *
+     * Anti-vacuity: running the relaunch inside the same three checks (the old shape) never sees
+     * the second loss → 2 launches instead of 3.
+     */
+    @Test
+    fun `a death on the third check keeps the relaunched app watched`() {
+        setScalePct(80)
+        var launches = 0
+        var watchReads = 0
+        val helper = directProjectionHelper()
+        coEvery {
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+        } answers { launches++; FreeformLaunchResult.OK }
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } answers {
+            if (launches == 0) taskOnMainScreen()
+            else if (++watchReads <= 2) taskOnCluster() else deadTask()
+        }
+
+        projectDirect(helper)
+        shadowOf(Looper.getMainLooper()).idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerify(exactly = 3) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        assertTrue("the second loss must latch: $journalDump", densityUnsafeFlag())
+        assertTrue(
+            "the third loss must end the watch: $journalDump",
+            journalHas("born-on-display relaunch did not hold (died post-move)"),
+        )
+    }
+
+    /**
+     * Native density (scale 100%): the death watch is exactly what it was — one relaunch within the
+     * same checks, no density call besides the pre-launch reset, no latch.
+     *
+     * Anti-vacuity: extending the strikes to native sends gives a third launch; latching on a native
+     * death fails the flag assertion.
+     */
+    @Test
+    fun `a death at the native density keeps the one-relaunch behaviour`() {
+        setScalePct(100)
+        val helper = directProjectionHelper()
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } returns deadTask()
+
+        projectDirect(helper)
+        shadowOf(Looper.getMainLooper()).idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerify(exactly = 2) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { helper.setDisplayDensity(addedDisplayId, 0) }
+        assertFalse("a native death must not latch: $journalDump", densityUnsafeFlag())
+    }
+
+    /**
+     * The tester's car ([FIXTURE]): a marker latched under 3.19.6 kept ru.auto.music at the native
+     * density on every send. This build bumps the probe generation, so that old marker is wiped
+     * once and the scale reaches the player again.
+     *
+     * Anti-vacuity: keeping the VERSION_CODE stamp (or no wipe at all) honours the old marker →
+     * the fixture's "density skipped" line comes back and the density count fails.
+     */
+    @Test
+    fun `a marker latched by an earlier build is wiped once`() {
+        val fixture = requireNotNull(javaClass.classLoader?.getResource(FIXTURE)).readText()
+        assertTrue(
+            "the fixture must show the symptom",
+            fixture.contains("direct: density skipped for $MUSIC_PACKAGE"),
+        )
+        setScalePct(50)
+        context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putString(ClusterProjectionManager.KEY_TARGET_PACKAGE, MUSIC_PACKAGE)
+            // What 3.19.6 left behind: the marker stamped with its own versionCode.
+            .putInt("direct_density_unsafe_version", BuildConfig.VERSION_CODE)
+            .putBoolean(ClusterProjectionManager.KEY_DENSITY_UNSAFE_PREFIX + MUSIC_PACKAGE, true)
+            .commit()
+        val helper = directProjectionHelper()
+        coEvery { helper.getTaskState(MUSIC_PACKAGE) } returns taskOnMainScreen()
+
+        projectDirect(helper)
+
+        coVerify(exactly = 1) { helper.setDisplayDensity(addedDisplayId, match { it > 0 }) }
+        assertFalse(
+            "the old marker must not skip the density: $journalDump",
+            journalHas("direct: density skipped for $MUSIC_PACKAGE"),
+        )
+        assertEquals(emptyList<String>(), ClusterProjectionManager.densityUnsafePackages(context))
     }
 
     /**
@@ -512,11 +654,14 @@ class ClusterProjectionDirectDensityTest {
         context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(ClusterProjectionManager.KEY_DENSITY_UNSAFE_PREFIX + NAVI_PACKAGE, false)
 
-    /** Latches the verdict as a previous session would have, stamped with the current build. */
+    /** Latches the verdict as a previous session would have, stamped with the current probe generation. */
     private fun latchDensityUnsafe() {
         context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putInt(ClusterProjectionManager.KEY_DENSITY_UNSAFE_VERSION, BuildConfig.VERSION_CODE)
+            .putInt(
+                ClusterProjectionManager.KEY_DENSITY_UNSAFE_GENERATION,
+                ClusterProjectionManager.DENSITY_PROBE_GENERATION,
+            )
             .putBoolean(ClusterProjectionManager.KEY_DENSITY_UNSAFE_PREFIX + NAVI_PACKAGE, true)
             .commit()
     }
@@ -597,5 +742,9 @@ class ClusterProjectionDirectDensityTest {
 
         /** Mirrors ClusterProjectionManager.DIRECT_DEATH_CHECK_INTERVAL_MS (private). */
         const val WATCH_INTERVAL_MS = 2000L
+
+        /** Cluster journal of a tester's dump (3.19.6, DiLink 5.0): the player latched for good. */
+        const val FIXTURE = "native-stack-fixtures/cluster-density-latched-xp-20261003.txt"
+        const val MUSIC_PACKAGE = "ru.auto.music"
     }
 }
