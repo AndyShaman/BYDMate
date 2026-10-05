@@ -943,12 +943,9 @@
     <string name="auto_enum_closed_f">Closed</string>
     <string name="auto_enum_closed_m">Closed</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">SNOW</string>
@@ -977,7 +974,6 @@
     <string name="auto_param_drivemode">Drive Mode</string>
     <string name="auto_param_soc">SOC</string>
     <string name="auto_param_chargingstatus">Charging Status</string>
-    <string name="auto_param_powerstate">Power State</string>
     <string name="auto_param_voltage12v">12V Battery</string>
     <string name="auto_param_mincellvoltage">Min Cell Voltage</string>
     <string name="auto_param_maxcellvoltage">Max Cell Voltage</string>
@@ -1673,6 +1669,7 @@
     <string name="automation_import_pick_empty">No bydmate_rule_*.json files in the Download folder</string>
     <string name="automation_import_invalid">Could not read the file: it is not a BYDMate automation</string>
     <string name="automation_import_newer_version">This automation comes from a newer version, please update the app</string>
+    <string name="automation_import_power_off_only">This automation could only fire with the car off, and that condition no longer exists</string>
     <string name="automation_import_preview_title">Check the automation</string>
     <string name="automation_import_conditions">Conditions</string>
     <string name="automation_import_actions">Actions</string>

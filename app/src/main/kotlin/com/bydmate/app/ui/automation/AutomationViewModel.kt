@@ -20,6 +20,7 @@ import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
+import com.bydmate.app.data.automation.PowerStateRuleMigration
 import com.bydmate.app.data.automation.RuleDraftValidator
 import com.bydmate.app.data.automation.RuleInserts
 import com.bydmate.app.data.automation.RuleJournal
@@ -144,7 +145,6 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("TurnSignal", "转向灯", R.string.auto_param_turnsignal, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_turn_off, "2" to R.string.auto_enum_turn_left, "4" to R.string.auto_enum_turn_right, "6" to R.string.auto_enum_turn_hazard)),
         TriggerParamOption("SOC", "电量百分比", R.string.auto_param_soc, R.string.auto_cat_energy, R.string.auto_unit_percent),
         TriggerParamOption("ChargingStatus", "充电状态", R.string.auto_param_chargingstatus, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_none, "1" to R.string.auto_enum_connected, "2" to R.string.auto_enum_charging)),
-        TriggerParamOption("PowerState", "电源状态", R.string.auto_param_powerstate, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_code_off, "1" to R.string.auto_enum_code_on, "2" to R.string.auto_enum_code_drive)),
         TriggerParamOption("Voltage12V", "蓄电池电压", R.string.auto_param_voltage12v, R.string.auto_cat_energy, R.string.auto_unit_volt),
         TriggerParamOption("MinCellVoltage", "单体最低电压", R.string.auto_param_mincellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
         TriggerParamOption("MaxCellVoltage", "单体最高电压", R.string.auto_param_maxcellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
@@ -1128,7 +1128,16 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             }
             when (parsed) {
                 is RuleParseResult.Ok -> {
-                    val draft = withContext(ioDispatcher) { importDraft(parsed.rule, places, lc) }.copy(token = ++draftToken)
+                    // A file from before the PowerState condition was removed: converted like a saved rule.
+                    val triggers = PowerStateRuleMigration.convert(
+                        parsed.rule.triggerLogic, parsed.rule.triggers, PowerStateRuleMigration.labels(context),
+                    )
+                    if (triggers == null) {
+                        _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_power_off_only)) }
+                        return@launch
+                    }
+                    val rule = parsed.rule.copy(triggers = triggers)
+                    val draft = withContext(ioDispatcher) { importDraft(rule, places, lc) }.copy(token = ++draftToken)
                     _uiState.update { it.copy(importFiles = null, importError = null, importDraft = draft) }
                 }
                 RuleParseResult.NewerVersion ->
@@ -1297,8 +1306,8 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             triggers = TriggerDef.listToJson(listOf(
                 TriggerDef("ExtTemp", "车外温度", "<", "0",
                     tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
-                TriggerDef("PowerState", "电源状态", "==", "2",
-                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+                TriggerDef("Gear", "档位", "==", "4",
+                    tName("档位 = D", "Gear = D", "Передача = D"))
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("主驾座椅加热2档",
@@ -1327,8 +1336,8 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             triggers = TriggerDef.listToJson(listOf(
                 TriggerDef("InsideTemp", "车内温度", ">", "30",
                     tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
-                TriggerDef("PowerState", "电源状态", "==", "2",
-                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+                TriggerDef("Gear", "档位", "==", "4",
+                    tName("档位 = D", "Gear = D", "Передача = D"))
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("主驾座椅通风1档",
@@ -1343,8 +1352,8 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             enabled = false,
             triggerLogic = "AND",
             triggers = TriggerDef.listToJson(listOf(
-                TriggerDef("PowerState", "电源状态", "==", "2",
-                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+                TriggerDef("Gear", "档位", "==", "4",
+                    tName("档位 = D", "Gear = D", "Передача = D"))
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("遮阳帘打开",

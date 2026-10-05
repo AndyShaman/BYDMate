@@ -24,6 +24,7 @@ import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -118,6 +119,31 @@ class AgentToolsAutomationEnumTest {
     @Test fun numeric_param_value_passes_through_unchanged() = runTest {
         val t = savedTrigger("""{"kind":"param","param":"Speed","operator":">","value":"60"}""")
         assertEquals("60", t.value)
+    }
+
+    @Test fun power_state_is_not_offered_to_the_agent() = runTest {
+        val schemas = tools().schemas().toString()
+        assertFalse(schemas.contains("PowerState"))
+        assertFalse(schemas.contains("DRIVE"))
+    }
+
+    @Test fun power_state_drive_from_the_agent_is_stored_as_gear_D() = runTest {
+        val t = savedTrigger("""{"kind":"param","param":"PowerState","operator":"==","value":"DRIVE"}""")
+        assertEquals("Gear", t.param)
+        assertEquals("4", t.value)
+    }
+
+    @Test fun power_state_on_from_the_agent_is_stored_as_the_app_start() = runTest {
+        val t = savedTrigger("""{"kind":"param","param":"PowerState","operator":"==","value":"1"}""")
+        assertEquals("service_start", t.kind)
+    }
+
+    @Test fun power_state_off_from_the_agent_is_rejected_and_nothing_is_inserted() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs("""{"kind":"param","param":"PowerState","operator":"==","value":"OFF"}"""))))
+        assertTrue("expected error, got $out", out.has("error"))
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 
     @Test fun unknown_enum_value_is_rejected_and_nothing_is_inserted() = runTest {

@@ -26,6 +26,21 @@ class StarterTemplatesTest {
         assertTrue(CommandTranslator.resolve(action.command).isNotEmpty())
     }
 
+    @Test fun `the driving templates wait for gear D, no template uses the removed power condition`() {
+        for (lang in listOf("ru", "be", "en", "pl", "pt", "zh")) {
+            val triggers = starterTemplates(lang).flatMap { TriggerDef.listFromJson(it.triggers) }
+            assertTrue(lang, triggers.none { it.param == "PowerState" })
+        }
+        val ru = starterTemplates("ru")
+        for (name in listOf("Зимний старт", "Летнее охлаждение", "Шторка при движении")) {
+            val gear = TriggerDef.listFromJson(ru.single { it.name == name }.triggers).last()
+            assertEquals(name, "Gear", gear.param)
+            assertEquals(name, "4", gear.value)
+            assertEquals(name, "Передача = D", gear.displayName)
+        }
+        assertTrue(TRIGGER_PARAMS.none { it.param == "PowerState" })
+    }
+
     @Test fun `the rule name follows the language`() {
         assertTrue(starterTemplates("en").any { it.name == "ECO at low SOC" })
         assertTrue(starterTemplates("zh").any { it.name == "低电量ECO" })

@@ -14,6 +14,7 @@ import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.ConfirmOverlayManager
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.automation.PlaceGeometry
+import com.bydmate.app.data.automation.PowerStateRuleMigration
 import com.bydmate.app.data.automation.RuleDraftValidator
 import com.bydmate.app.data.automation.RuleInserts
 import com.bydmate.app.data.automation.TriggerValidationError
@@ -1041,7 +1042,6 @@ class AgentTools @Inject constructor(
         // The old dev=1006 fid (d.driveMode) stays 3/NORMAL for sand/mud/mountain/smart (live L3
         // 2026-09-27); driveModeName reads the real target mode and falls back to it on failure.
         putIf("drive_mode", driveModeName(d.driveMode))
-        putIf("power_state", when (d.powerState) { 0 -> "OFF"; 1 -> "ON"; 2 -> "DRIVE"; else -> null })
         putIf("work_mode", when (d.workMode) { 0 -> "STOP"; 1 -> "EV"; 2 -> "FORCED_EV"; 3 -> "HEV"; else -> null })
         putIf("light_low_beam_on", d.lightLow?.let { it == 1 })
         putIf("light_high_beam_on", d.lightHigh?.let { it == 1 })
@@ -2572,6 +2572,7 @@ class AgentTools @Inject constructor(
         return when (kind) {
             "param" -> {
                 val paramArg = t.optString("param").trim()
+                if (paramArg.equals(PowerStateRuleMigration.PARAM, ignoreCase = true)) return powerStateTrigger(t)
                 val option = TRIGGER_PARAMS.firstOrNull { it.param.equals(paramArg, ignoreCase = true) }
                     ?: return Built.Error("неизвестный параметр триггера: $paramArg")
                 val operator = t.optString("operator").trim()
@@ -2680,6 +2681,26 @@ class AgentTools @Inject constructor(
             }
             else -> Built.Error("недопустимый тип триггера: $kind")
         }
+    }
+
+    /** The removed PowerState condition, converted the way a saved rule is: ON is the app start,
+     *  DRIVE is gear D, anything else could fire only with the car off and is refused. */
+    private fun powerStateTrigger(t: JSONObject): Built<TriggerDef> {
+        val value = when (val raw = t.optString("value").trim().uppercase()) {
+            "ON" -> "1"
+            "DRIVE" -> "2"
+            "OFF" -> "0"
+            else -> raw
+        }
+        val legacy = TriggerDef(
+            param = PowerStateRuleMigration.PARAM, chineseName = "", operator = t.optString("operator").trim(),
+            value = value, displayName = "",
+        )
+        val converted = PowerStateRuleMigration.convert("AND", listOf(legacy), AGENT_POWER_LABELS)
+            ?: return Built.Error(
+                "условия PowerState нет: на выключенной машине правило не сработает. " +
+                    "При включении машины: kind=service_start; в движении: param=Gear, value=4")
+        return Built.Value(converted.single())
     }
 
     private suspend fun buildAction(a: JSONObject): Built<ActionDef> {
@@ -2943,6 +2964,8 @@ class AgentTools @Inject constructor(
         private const val SEARCH_ERROR = """{"error":"поиск недоступен"}"""
         private const val MAX_AUTOMATIONS = 50
         private const val MAX_DELAY_MS = 60_000
+        // The display names buildTrigger gives a service_start and a Gear == 4 trigger.
+        private val AGENT_POWER_LABELS = PowerStateRuleMigration.Labels("Запуск приложения", "Gear == D")
         private const val MAX_PLACES = 50
         private const val BAD_ARGS_ERROR = """{"error":"некорректные аргументы"}"""
         private const val CALL_CONTACT_FAILED = """{"error":"не удалось позвонить"}"""
