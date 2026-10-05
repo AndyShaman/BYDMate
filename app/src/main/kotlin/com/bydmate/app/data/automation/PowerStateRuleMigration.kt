@@ -18,8 +18,8 @@ import javax.inject.Singleton
  *
  * The app starts after the car is powered and a condition already true at the first check does
  * not fire, so ON never fired; OFF cannot fire (the app dies with the car); DRIVE fired only by
- * race. ON becomes «Запуск BYDMate», DRIVE becomes «Передача = D», and a rule that could fire
- * only with the car off is removed. Same shape as [TrunkRuleMigration], with its own done-flag;
+ * race. ON and DRIVE become «Запуск BYDMate» (DRIVE in «Шторка при движении» becomes
+ * «Передача = D»), and a rule that could fire only with the car off is removed. Same shape as [TrunkRuleMigration], with its own done-flag;
  * the flag travels with the rules in a backup, so an older archive restored is converted again.
  */
 @Singleton
@@ -43,7 +43,7 @@ class PowerStateRuleMigration @Inject constructor(
                     val triggers = TriggerDef.listFromJson(rule.triggers)
                     // An unparseable list comes back empty: writing it back would destroy it.
                     if (triggers.none { it.isPowerState() }) continue
-                    val converted = convert(rule.triggerLogic, triggers, labels)
+                    val converted = convert(rule.triggerLogic, triggers, labels, isSunshadeTemplate(rule.name))
                     if (converted == null) {
                         ruleDao.delete(rule)
                         removed++
@@ -75,6 +75,12 @@ class PowerStateRuleMigration @Inject constructor(
         private const val GEAR = "Gear"
         private const val GEAR_D = "4"
 
+        /** «Шторка при движении» in every language the starter templates name it in. */
+        private val SUNSHADE_TEMPLATE_NAMES = setOf("行驶开遮阳帘", "Sunshade while driving", "Шторка при движении")
+
+        /** The one starter template whose DRIVE really meant driving: it keeps waiting for gear D. */
+        fun isSunshadeTemplate(name: String): Boolean = name.trim() in SUNSHADE_TEMPLATE_NAMES
+
         private fun TriggerDef.isPowerState(): Boolean = kind == "param" && param == PARAM
 
         private fun TriggerDef.isPowerStateEquals(code: String): Boolean =
@@ -94,13 +100,14 @@ class PowerStateRuleMigration @Inject constructor(
 
         /**
          * [triggers] of a rule with [logic] and no PowerState left, or null when the rule could
-         * never fire and is to be removed. ON becomes the BYDMate start and DRIVE gear D, each
-         * dropped when the rule already has it (ON is dropped from a one-shot rule too: an event
-         * cannot join a one-shot moment, and the app running already means the car is on). Any
+         * never fire and is to be removed. ON and DRIVE become the BYDMate start, DRIVE becomes
+         * gear D instead when [driveIsGear]; each is dropped when the rule already has it (the
+         * start is dropped from a one-shot rule too: an event cannot join a one-shot moment, and
+         * the app running already means the car is on). Any
          * other PowerState condition removes an AND rule and drops out of an OR rule. Without a
          * PowerState trigger the same list comes back.
          */
-        fun convert(logic: String, triggers: List<TriggerDef>, labels: Labels): List<TriggerDef>? {
+        fun convert(logic: String, triggers: List<TriggerDef>, labels: Labels, driveIsGear: Boolean): List<TriggerDef>? {
             if (triggers.none { it.isPowerState() }) return triggers
             val result = mutableListOf<TriggerDef>()
             for (t in triggers) {
@@ -108,14 +115,14 @@ class PowerStateRuleMigration @Inject constructor(
                 val kept = triggers + result
                 val next = when {
                     !t.isPowerState() -> t
-                    t.isPowerStateEquals(ON) -> TriggerDef(
-                        param = "ServiceStart", chineseName = "服务启动", operator = "==", value = "true",
-                        displayName = labels.serviceStart, kind = "service_start",
-                    ).takeUnless { kept.any { it.kind == "service_start" || it.kind == OneShotTrigger.KIND } }
-                    t.isPowerStateEquals(DRIVE) -> TriggerDef(
+                    t.isPowerStateEquals(DRIVE) && driveIsGear -> TriggerDef(
                         param = GEAR, chineseName = "档位", operator = "==", value = GEAR_D,
                         displayName = labels.gearDrive,
                     ).takeUnless { kept.any { it.isGearD() } }
+                    t.isPowerStateEquals(ON) || t.isPowerStateEquals(DRIVE) -> TriggerDef(
+                        param = "ServiceStart", chineseName = "服务启动", operator = "==", value = "true",
+                        displayName = labels.serviceStart, kind = "service_start",
+                    ).takeUnless { kept.any { it.kind == "service_start" || it.kind == OneShotTrigger.KIND } }
                     logic == "OR" -> null
                     else -> return null
                 }

@@ -24,8 +24,8 @@ import org.robolectric.annotation.Config
 
 /**
  * The «Питание» condition is gone: the app starts after the car is powered, so ON never fired,
- * OFF cannot fire and DRIVE fired only by race. Saved rules move to «Запуск BYDMate» (ON) and
- * «Передача = D» (DRIVE); a rule that needed the car off is removed.
+ * OFF cannot fire and DRIVE fired only by race. Saved rules move to «Запуск BYDMate» (ON and
+ * DRIVE; «Шторка при движении» alone to «Передача = D»); a rule that needed the car off is removed.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
@@ -62,7 +62,10 @@ class PowerStateRuleMigrationTest {
     )
 
     private fun convert(logic: String, vararg triggers: TriggerDef) =
-        PowerStateRuleMigration.convert(logic, triggers.toList(), labels)
+        PowerStateRuleMigration.convert(logic, triggers.toList(), labels, driveIsGear = false)
+
+    private fun convertSunshade(logic: String, vararg triggers: TriggerDef) =
+        PowerStateRuleMigration.convert(logic, triggers.toList(), labels, driveIsGear = true)
 
     // --- the pure conversion ---
 
@@ -81,8 +84,23 @@ class PowerStateRuleMigrationTest {
         assertEquals(listOf(serviceStart), out)
     }
 
-    @Test fun `DRIVE becomes gear D`() {
+    @Test fun `DRIVE becomes the BYDMate start trigger`() {
         val out = convert("AND", power("2"))!!.single()
+
+        assertEquals("service_start", out.kind)
+        assertEquals("Запуск BYDMate", out.displayName)
+    }
+
+    @Test fun `DRIVE next to an existing start trigger is just dropped`() {
+        assertEquals(listOf(serviceStart), convert("AND", serviceStart, power("2")))
+    }
+
+    @Test fun `ON and DRIVE in one rule give one start trigger`() {
+        assertEquals(listOf("service_start"), convert("AND", power("1"), power("2"))!!.map { it.kind })
+    }
+
+    @Test fun `DRIVE in the sunshade template becomes gear D`() {
+        val out = convertSunshade("AND", power("2"))!!.single()
 
         assertEquals("param", out.kind)
         assertEquals("Gear", out.param)
@@ -92,31 +110,40 @@ class PowerStateRuleMigrationTest {
         assertEquals("Передача = D", out.displayName)
     }
 
-    @Test fun `winter start keeps its temperature and gets gear D`() {
+    @Test fun `winter start keeps its temperature and gets the BYDMate start`() {
         val out = convert("AND", param("ExtTemp", "0", "<"), power("2"))!!
 
-        assertEquals(listOf("ExtTemp", "Gear"), out.map { it.param })
-        assertEquals(listOf("<", "=="), out.map { it.operator })
-        assertEquals(listOf("0", "4"), out.map { it.value })
+        assertEquals(listOf("ExtTemp", "ServiceStart"), out.map { it.param })
+        assertEquals(listOf("param", "service_start"), out.map { it.kind })
+        assertEquals("0", out[0].value)
     }
 
-    @Test fun `summer cooling keeps its cabin temperature and gets gear D`() {
+    @Test fun `summer cooling keeps its cabin temperature and gets the BYDMate start`() {
         val out = convert("AND", param("InsideTemp", "30", ">"), power("2"))!!
 
-        assertEquals(listOf("InsideTemp", "Gear"), out.map { it.param })
-        assertEquals(listOf("30", "4"), out.map { it.value })
+        assertEquals(listOf("InsideTemp", "ServiceStart"), out.map { it.param })
+        assertEquals("30", out[0].value)
     }
 
-    @Test fun `DRIVE next to an existing gear D is just dropped`() {
+    @Test fun `only the sunshade template names count, in every language`() {
+        for (name in listOf("Шторка при движении", "Sunshade while driving", "行驶开遮阳帘", " Шторка при движении ")) {
+            assertEquals(name, true, PowerStateRuleMigration.isSunshadeTemplate(name))
+        }
+        for (name in listOf("Летнее охлаждение", "Зимний старт", "Шторка", "")) {
+            assertEquals(name, false, PowerStateRuleMigration.isSunshadeTemplate(name))
+        }
+    }
+
+    @Test fun `DRIVE in the sunshade template next to an existing gear D is just dropped`() {
         val gearD = param("Gear", "4")
-        val out = convert("AND", gearD, power("2"))!!
+        val out = convertSunshade("AND", gearD, power("2"))!!
 
         assertEquals(listOf(gearD), out)
     }
 
-    @Test fun `DRIVE next to another gear condition still adds gear D`() {
+    @Test fun `DRIVE in the sunshade template next to another gear condition still adds gear D`() {
         val notP = param("Gear", "1", "!=")
-        val out = convert("AND", notP, power("2"))!!
+        val out = convertSunshade("AND", notP, power("2"))!!
 
         assertEquals(listOf("1", "4"), out.map { it.value })
     }
@@ -160,15 +187,17 @@ class PowerStateRuleMigrationTest {
     @Test fun `a rule without PowerState comes back as it is`() {
         val triggers = listOf(param("Speed", "100", ">"), serviceStart)
 
-        assertSame(triggers, PowerStateRuleMigration.convert("AND", triggers, labels))
+        assertSame(triggers, PowerStateRuleMigration.convert("AND", triggers, labels, driveIsGear = false))
     }
 
     // --- the one-shot pass over saved rules ---
 
-    private suspend fun insert(logic: String, vararg triggers: TriggerDef): Long =
+    private suspend fun insert(logic: String, vararg triggers: TriggerDef): Long = insertNamed("rule", logic, *triggers)
+
+    private suspend fun insertNamed(name: String, logic: String, vararg triggers: TriggerDef): Long =
         ruleDao.insert(
             RuleEntity(
-                name = "rule", triggerLogic = logic, triggers = TriggerDef.listToJson(triggers.toList()),
+                name = name, triggerLogic = logic, triggers = TriggerDef.listToJson(triggers.toList()),
                 actions = """[{"command":"车窗关闭","displayName":"x","kind":"param"}]""",
                 enabled = true, cooldownSeconds = 123, fireOncePerTrip = true, requirePark = true,
             )
@@ -179,16 +208,22 @@ class PowerStateRuleMigrationTest {
     @Test fun `saved rules are converted or removed, everything else of a rule stays`() = runTest {
         val music = insert("AND", power("1"))
         val winter = insert("AND", param("ExtTemp", "0", "<"), power("2"))
+        val summer = insertNamed("Летнее охлаждение", "AND", param("InsideTemp", "30", ">"), power("2"))
+        val sunshade = insertNamed("Шторка при движении", "AND", power("2"))
         val offOnly = insert("AND", param("SOC", "20", "<"), power("0"))
         val untouched = insert("AND", param("Speed", "100", ">"))
         val before = ruleDao.getById(winter)!!
 
-        assertEquals(3, migration().runOnce())
+        assertEquals(5, migration().runOnce())
 
         assertEquals("service_start", TriggerDef.listFromJson(ruleDao.getById(music)!!.triggers).single().kind)
         val after = ruleDao.getById(winter)!!
-        assertEquals(listOf("ExtTemp", "Gear"), TriggerDef.listFromJson(after.triggers).map { it.param })
+        assertEquals(listOf("ExtTemp", "ServiceStart"), TriggerDef.listFromJson(after.triggers).map { it.param })
         assertEquals(before.copy(triggers = after.triggers), after)
+        assertEquals(listOf("param", "service_start"), TriggerDef.listFromJson(ruleDao.getById(summer)!!.triggers).map { it.kind })
+        val gear = TriggerDef.listFromJson(ruleDao.getById(sunshade)!!.triggers).single()
+        assertEquals("Gear", gear.param)
+        assertEquals("4", gear.value)
         assertNull(ruleDao.getById(offOnly))
         assertEquals("Speed", TriggerDef.listFromJson(ruleDao.getById(untouched)!!.triggers).single().param)
         coVerify(exactly = 1) { settings.setPowerStateRuleMigrationDone() }

@@ -2683,8 +2683,8 @@ class AgentTools @Inject constructor(
         }
     }
 
-    /** The removed PowerState condition, converted the way a saved rule is: ON is the app start,
-     *  DRIVE is gear D, anything else could fire only with the car off and is refused. */
+    /** The removed PowerState condition, converted the way a saved rule is: ON and DRIVE are the
+     *  app start, anything else could fire only with the car off and is refused. */
     private fun powerStateTrigger(t: JSONObject): Built<TriggerDef> {
         val value = when (val raw = t.optString("value").trim().uppercase()) {
             "ON" -> "1"
@@ -2696,10 +2696,10 @@ class AgentTools @Inject constructor(
             param = PowerStateRuleMigration.PARAM, chineseName = "", operator = t.optString("operator").trim(),
             value = value, displayName = "",
         )
-        val converted = PowerStateRuleMigration.convert("AND", listOf(legacy), AGENT_POWER_LABELS)
+        val converted = PowerStateRuleMigration.convert("AND", listOf(legacy), AGENT_POWER_LABELS, driveIsGear = false)
             ?: return Built.Error(
                 "условия PowerState нет: на выключенной машине правило не сработает. " +
-                    "При включении машины: kind=service_start; в движении: param=Gear, value=4")
+                    "При включении машины: kind=service_start; при движении: param=Gear, value=4")
         return Built.Value(converted.single())
     }
 

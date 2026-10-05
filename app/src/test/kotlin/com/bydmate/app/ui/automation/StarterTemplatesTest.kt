@@ -26,18 +26,24 @@ class StarterTemplatesTest {
         assertTrue(CommandTranslator.resolve(action.command).isNotEmpty())
     }
 
-    @Test fun `the driving templates wait for gear D, no template uses the removed power condition`() {
+    @Test fun `winter start and summer cooling wait for the BYDMate start, only the sunshade for gear D`() {
         for (lang in listOf("ru", "be", "en", "pl", "pt", "zh")) {
             val triggers = starterTemplates(lang).flatMap { TriggerDef.listFromJson(it.triggers) }
             assertTrue(lang, triggers.none { it.param == "PowerState" })
         }
         val ru = starterTemplates("ru")
-        for (name in listOf("Зимний старт", "Летнее охлаждение", "Шторка при движении")) {
-            val gear = TriggerDef.listFromJson(ru.single { it.name == name }.triggers).last()
-            assertEquals(name, "Gear", gear.param)
-            assertEquals(name, "4", gear.value)
-            assertEquals(name, "Передача = D", gear.displayName)
+        fun lastTrigger(name: String) = TriggerDef.listFromJson(ru.single { it.name == name }.triggers).last()
+        for (name in listOf("Зимний старт", "Летнее охлаждение")) {
+            val start = lastTrigger(name)
+            assertEquals(name, "service_start", start.kind)
+            assertEquals(name, "Запуск BYDMate", start.displayName)
         }
+        assertEquals("ExtTemp", TriggerDef.listFromJson(ru.single { it.name == "Зимний старт" }.triggers).first().param)
+        assertEquals("InsideTemp", TriggerDef.listFromJson(ru.single { it.name == "Летнее охлаждение" }.triggers).first().param)
+        val gear = lastTrigger("Шторка при движении")
+        assertEquals("Gear", gear.param)
+        assertEquals("4", gear.value)
+        assertEquals("Передача = D", gear.displayName)
         assertTrue(TRIGGER_PARAMS.none { it.param == "PowerState" })
     }
 

@@ -1131,6 +1131,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                     // A file from before the PowerState condition was removed: converted like a saved rule.
                     val triggers = PowerStateRuleMigration.convert(
                         parsed.rule.triggerLogic, parsed.rule.triggers, PowerStateRuleMigration.labels(context),
+                        driveIsGear = PowerStateRuleMigration.isSunshadeTemplate(parsed.rule.name),
                     )
                     if (triggers == null) {
                         _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_power_off_only)) }
@@ -1306,8 +1307,8 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             triggers = TriggerDef.listToJson(listOf(
                 TriggerDef("ExtTemp", "车外温度", "<", "0",
                     tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
-                TriggerDef("Gear", "档位", "==", "4",
-                    tName("档位 = D", "Gear = D", "Передача = D"))
+                TriggerDef("ServiceStart", "服务启动", "==", "true",
+                    tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"), kind = "service_start")
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("主驾座椅加热2档",
@@ -1336,8 +1337,8 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             triggers = TriggerDef.listToJson(listOf(
                 TriggerDef("InsideTemp", "车内温度", ">", "30",
                     tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
-                TriggerDef("Gear", "档位", "==", "4",
-                    tName("档位 = D", "Gear = D", "Передача = D"))
+                TriggerDef("ServiceStart", "服务启动", "==", "true",
+                    tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"), kind = "service_start")
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("主驾座椅通风1档",
