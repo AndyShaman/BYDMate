@@ -36,6 +36,9 @@ internal object ClusterDisplayDiag {
     const val MAX_WM_LINE = 200
     const val MAX_WM_DISPLAYS = 6
     const val MAX_TASK_CONFIGS = 2
+    /** Marks the verbatim configuration lines in a [taskConfigLines] answer. */
+    const val RAW_PREFIX = "raw| "
+    const val MAX_RAW_BLOCK = 1500
     const val MAX_SURFACE_FLINGER_LINES = 6
     const val MAX_BYD_PROPS = 3
 
@@ -95,6 +98,13 @@ internal object ClusterDisplayDiag {
     /** `* ActivityRecord{a1b2c3 u0 pkg/.Cls t4075}` — the brace body, up to the closing brace or
      *  the end of a truncated line. */
     private val ACTIVITY_RECORD = Regex("""ActivityRecord\{([^}\n]*)""")
+
+    /** What may stand before `ActivityRecord{` on a history entry: nothing, `*`, or `* Hist #N:`.
+     *  Anything else (`mResumedActivity: `, `topResumedActivity=`) is a reference to an entry. */
+    private val HISTORY_ENTRY_PREFIX = Regex("""\*?\s*(Hist\s*#\d+:)?""")
+
+    /** A configuration line of an ActivityRecord: `mGlobalConfig={…}`, `CurrentConfiguration={…}`. */
+    private val CONFIG_KEY = Regex("""^\s*([A-Za-z]*Config[A-Za-z]*)=\{""")
 
     private val CONFIG_DPI = Regex("""(\d+)dpi""")
     private val CONFIG_DISPLAY_ID = Regex("""\b(?:mDisplayId|displayId)=(\d+)""")
@@ -249,22 +259,41 @@ internal object ClusterDisplayDiag {
      * the `mLastReportedConfiguration={…}` line that carries the blob. A record without a dpi
      * token is reported as `dpi=?` rather than dropped. No record for [pkg] → a single
      * `(no ActivityRecord for <pkg>)` line, so the dump says which package was looked for.
+     *
+     * Only history entries count toward [max]; a reference such as `mResumedActivity:
+     * ActivityRecord{…}` is skipped. When the header is followed by configuration lines instead of
+     * the blob (the AOSP 12 layout: `mGlobalConfig={…}`, `mOverrideConfig={…}`), the dpi is read
+     * from those, the override first, and the first such record also carries the lines themselves
+     * as [RAW_PREFIX] entries (at most [MAX_RAW_BLOCK] characters): that layout has never been
+     * captured on a car, so the next dump shows it verbatim. Configuration lines only.
      */
     fun taskConfigLines(raw: String, pkg: String, max: Int = MAX_TASK_CONFIGS): List<String> {
         val lines = raw.lines()
         val out = ArrayList<String>(max)
+        var records = 0
+        var rawEmitted = false
         for ((index, line) in lines.withIndex()) {
-            if (out.size >= max) break
+            if (records >= max) break
             val body = ACTIVITY_RECORD.find(line)?.groupValues?.get(1) ?: continue
+            if (!HISTORY_ENTRY_PREFIX.matches(line.substringBefore("ActivityRecord{").trim())) continue
             val component = body.split(' ').firstOrNull { it.contains('/') } ?: continue
             if (pkg.isEmpty() || !component.startsWith("$pkg/")) continue
-            val config = configLineFor(lines, index)
+            records++
+            val block = configBlockFor(lines, index)
+            val config = block?.let { b ->
+                b.firstOrNull { it.contains("mOverrideConfig") && CONFIG_DPI.containsMatchIn(it) }
+                    ?: b.firstOrNull { CONFIG_DPI.containsMatchIn(it) }
+            } ?: configLineFor(lines, index)
             val dpi = config?.let { CONFIG_DPI.find(it)?.groupValues?.get(1) } ?: "?"
             val displayId = CONFIG_DISPLAY_ID.find(config ?: "")?.groupValues?.get(1)
                 ?: CONFIG_DISPLAY_ID.find(line)?.groupValues?.get(1)
             out += component + " dpi=" + dpi +
                 (displayId?.let { " display=$it" } ?: "") +
                 " raw=\"" + (config?.trim()?.take(MAX_WM_LINE) ?: "(no config line)") + "\""
+            if (block != null && !rawEmitted) {
+                rawEmitted = true
+                out += capRawBlock(block).map { RAW_PREFIX + it }
+            }
         }
         return out.ifEmpty { listOf("(no ActivityRecord for ${pkg.ifEmpty { "(unknown)" }})") }
     }
@@ -285,6 +314,42 @@ internal object ClusterDisplayDiag {
             i++
         }
         return fallback
+    }
+
+    /** The configuration lines after a bare `mLastReportedConfigurations:` header of the record at
+     *  [start], trimmed; null when the record has the blob line ([configLineFor] reads that) or no
+     *  header, or when nothing configuration-like follows the header. */
+    private fun configBlockFor(lines: List<String>, start: Int): List<String>? {
+        var header = -1
+        var i = start + 1
+        while (i < lines.size && i <= start + CONFIG_LOOKAHEAD) {
+            val line = lines[i]
+            if (line.contains("ActivityRecord{")) break
+            if (line.contains("mLastReportedConfiguration")) {
+                if (line.contains("{")) return null
+                if (header < 0) header = i
+            }
+            i++
+        }
+        if (header < 0) return null
+        i = header + 1
+        val block = ArrayList<String>()
+        while (i < lines.size && CONFIG_KEY.containsMatchIn(lines[i])) {
+            block += lines[i].trim()
+            i++
+        }
+        return block.ifEmpty { null }
+    }
+
+    private fun capRawBlock(block: List<String>): List<String> {
+        val out = ArrayList<String>()
+        var left = MAX_RAW_BLOCK
+        for (line in block) {
+            if (left <= 0) break
+            out += line.take(left)
+            left -= line.length
+        }
+        return out
     }
 
     /** How far past an ActivityRecord we look for its configuration line. AOSP Q prints the

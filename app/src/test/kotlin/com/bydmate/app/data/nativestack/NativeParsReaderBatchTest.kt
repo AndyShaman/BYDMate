@@ -586,6 +586,26 @@ class NativeParsReaderBatchTest {
         assertNull(data.inverterTempRear)
     }
 
+    /**
+     * Hybrid dump 2026-10-04: the rear inverter fid answers 202 parked at 9 °C outside. That is
+     * outside the envelope a temperature can be in, so the snapshot holds null («—»), while the
+     * rear motor's real 12 °C passes. The remaining-energy fid's flat 0.0 reaches the snapshot
+     * as read; whether it is a reading is the screen's call, it needs the SoC beside it.
+     */
+    @Test
+    fun `hybrid dump drops the 202 degree inverter and keeps the real readings`() = runTest {
+        val data = HybridTechFixture.snapshot()
+
+        assertEquals(39, data.soc)
+        assertEquals(12, data.motorTempRear)
+        assertNull(data.motorTempFront)
+        assertNull(data.inverterTempFront)
+        assertNull(data.inverterTempRear)
+        assertEquals(602, data.hvVoltage)
+        assertEquals(18360, data.insulationKohm)
+        assertEquals(0.0, data.batteryRemainKwh!!, 0.0)
+    }
+
     /** A wrong-transact sentinel must null the field, and with no current there is no power. */
     @Test
     fun `tech panel sentinels null the fields and suppress battery power`() = runTest {

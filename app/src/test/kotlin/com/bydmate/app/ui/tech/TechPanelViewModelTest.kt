@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.tech
 
+import com.bydmate.app.data.nativestack.HybridTechFixture
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.domain.battery.AvgSoc
@@ -213,6 +214,51 @@ class TechPanelViewModelTest {
         liveDataFlow().value = diParsData(soc = 95)
         testDispatcher.scheduler.advanceUntilIdle()
         assertNull(vm.uiState.value.remainKwh)
+    }
+
+    /**
+     * Hybrid dump 2026-10-04: SoC 39% and the remaining-energy fid answers 0.0, never pushing an
+     * event. A pack holding charge cannot be empty, so the row is «—»; the rear inverter's 202 °C
+     * is «—» too, the rear motor's real 12 °C stays.
+     */
+    @Test
+    fun `hybrid dump shows a dash for zero remaining energy and the impossible inverter temp`() = runTest {
+        val vm = buildViewModel(capacityKwh = 31.8)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        liveDataFlow().value = HybridTechFixture.snapshot()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(39, state.soc)
+        assertNull(state.remainKwh)
+        assertNull(state.inverterTempRear)
+        assertEquals(12, state.motorTempRear)
+        assertTrue(state.showBatteryNow)
+    }
+
+    /** Leopard 3, 2026-09-23 on the car: SoC 63%, the BMS reports 42.9 kWh — shown as is. */
+    @Test
+    fun `a real remaining energy still reaches the battery card`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        liveDataFlow().value = diParsData(soc = 63).copy(batteryRemainKwh = 42.9)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(42.9, vm.uiState.value.remainKwh!!, 0.001)
+    }
+
+    /** At SoC 0 an empty pack is the truth, so 0 kWh is a reading, not a placeholder. */
+    @Test
+    fun `zero remaining energy at zero SoC is shown as zero`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        liveDataFlow().value = diParsData(soc = 0).copy(batteryRemainKwh = 0.0)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(0.0, vm.uiState.value.remainKwh!!, 0.0)
     }
 
     /**

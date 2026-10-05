@@ -3,6 +3,7 @@ package com.bydmate.app.cluster
 import android.content.Context
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.vehicle.DensityResult
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
@@ -10,8 +11,11 @@ import com.bydmate.app.data.vehicle.SplitTaskState
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.helper.WINDOWING_MODE_FREEFORM
 import com.bydmate.app.helper.WINDOWING_MODE_FULLSCREEN
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
+import io.mockk.confirmVerified
 import io.mockk.mockk
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlinx.coroutines.Job
@@ -36,13 +40,15 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  * successful cross-display move, so the daemon-side relaunch-once check (2GIS fix, 527682c2)
  * sees a live task and the client has already reported OK. Covers the post-move death watch
  * armed by `tryDirectProjection`:
- *   - task alive ON THE CLUSTER → the watch is silent (no relaunch, no journal line);
+ *   - task alive ON THE CLUSTER → no relaunch, no loss line;
+ *   - healthy watch → no helper call besides the task reads;
  *   - daemon unreachable (null state) → same silence: a dead channel is not a dead app;
  *   - task gone → exactly one born-on-display relaunch + journal line;
  *   - task alive on the MAIN display → the same recovery (the system restarts a killed app
  *     there, and a display-blind liveness check would report it as a healthy projection);
  *   - setMode(OFF) before the first tick → the watch is cancelled, no relaunch;
- *   - loss again after the relaunch → journaled, no second relaunch.
+ *   - loss again after the relaunch → journaled, no second relaunch (native density);
+ *   - with a scaled density: second loss → relaunch at native, third loss → journaled.
  *
  * Test mechanics (same shape as [ClusterProjectionSendFailureTest]):
  *   idle → CPM coroutine runs until withContext(IO) for the write-ahead marker;
@@ -92,7 +98,7 @@ class ClusterProjectionDirectDeathWatchTest {
 
     /**
      * Healthy fleet (Leopard 3): the task survives the move AND stays on the cluster display, so
-     * the watch reads it and stops there — no second launchFreeform, nothing in the field journal.
+     * the watch reads it and stops there — no second launchFreeform, no loss in the field journal.
      *
      * The stubbed state carries the cluster display id ([addedDisplayId], the display
      * resolveClusterDisplay picks by name): "alive" is alive on the cluster, so a state with any
@@ -248,6 +254,68 @@ class ClusterProjectionDirectDeathWatchTest {
             "the second loss must be journaled: $journalDump",
             journalHas("born-on-display relaunch did not hold (died post-move)"),
         )
+    }
+
+    /**
+     * With the scale applied, one loss is not a verdict (#134: the move alone can kill the app), so
+     * the first relaunch keeps the density, and a second loss gets a second relaunch — at the
+     * native density this time. A third loss is journaled and ends the watch.
+     *
+     * Anti-vacuity: the native rule (no second relaunch) gives 2 launches; dropping the reset gives
+     * no density-0 call between the second and third launch.
+     */
+    @Test
+    fun `with a scaled density the second loss relaunches at native`() {
+        context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putInt(ClusterProjectionManager.KEY_SCALE_PCT, 80).commit()
+        val helper = directProjectionHelper()
+        coEvery { helper.setDisplayDensity(any(), any()) } returns DensityResult(true)
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } returns deadTask()
+
+        ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap())
+        // A scaled send settles 150 ms before the launch, so this wait has to move the clock.
+        val shadow = shadowOf(Looper.getMainLooper())
+        for (attempt in 0 until 40) {
+            shadow.idle()
+            if (ClusterProjectionManager.currentMode == ClusterMode.FULLSCREEN) break
+            shadow.idleFor(150, MILLISECONDS)
+            Thread.sleep(25)
+        }
+        assertEquals(ClusterMode.FULLSCREEN, ClusterProjectionManager.currentMode)
+        shadow.idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerifyOrder {
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+            helper.setDisplayDensity(clusterDisplayId(), 0)
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+        }
+        coVerify(exactly = 3) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        assertTrue(
+            "the third loss must be journaled: $journalDump",
+            journalHas("born-on-display relaunch did not hold (died post-move)"),
+        )
+    }
+
+    /**
+     * A healthy watch costs the car nothing but the task reads: the helper's binder channel is
+     * shared (the blind-spot camera reads its telemetry through it), so a diagnostic call here
+     * would hold it for seconds on every send.
+     *
+     * Anti-vacuity: any extra helper call in the healthy path (the wm-config capture of 95d9c739
+     * was one) fails confirmVerified.
+     */
+    @Test
+    fun `healthy watch makes no helper call but the task reads`() {
+        val helper = directProjectionHelper()
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } returns liveTask()
+
+        projectDirect(helper)
+        clearMocks(helper, answers = false, recordedCalls = true, childMocks = false, exclusionRules = false)
+        shadowOf(Looper.getMainLooper()).idleFor(3 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerify(exactly = 3) { helper.getTaskState(NAVI_PACKAGE) }
+        confirmVerified(helper)
     }
 
     // --- helpers ---

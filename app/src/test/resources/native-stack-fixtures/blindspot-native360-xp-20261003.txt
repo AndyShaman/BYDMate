@@ -1,0 +1,38 @@
+# Tester dump, BYDMate 3.19.6 (code 499), DiLink 5.0, 2026-10-03: the factory 360 view stutters while
+# driving, killing BYDMate cures it. Only our camera lines are kept. Blind-spot threshold was 0, both
+# cameras on the cluster. Trace (14:39): the camera is opened 0.2 s after the native 360 came up and stays
+# open under it; only reverse closes it.
+14:39:13.858 camera armed on=false reason=reverse speed=0 gear=2 #6259
+14:39:16.233 camera avm-repeat type=1003 name=first-frame n=1 #6264
+14:39:16.233 camera close reason=disarmed result=clean #6265
+14:39:29.023 camera armed on=true reason=ok speed=0 gear=4 #6267
+14:39:29.049 camera native-360 on=true #6268
+14:39:29.251 camera open ok=true id=3 indexes=2,3 #6269
+14:39:29.281 camera avm-event type=1003 name=first-frame arg1=0 arg2=0 #6270
+14:39:32.651 camera avm-repeat type=1003 name=first-frame n=1 #6272
+14:39:32.651 camera close reason=reverse result=clean #6273
+14:39:34.572 camera armed on=false reason=reverse speed=1 gear=2 #6274
+14:39:51.202 camera armed on=true reason=ok speed=0 gear=1 #6277
+14:39:52.683 camera native-360 on=false #6278
+14:39:54.940 camera open ok=true id=3 indexes=2,3 #6280
+14:39:54.951 camera avm-event type=1003 name=first-frame arg1=0 arg2=0 #6281
+# Logcat (19:03): the same with the 360 up for 16 s: "hidden", yet open(3) with both previews, warm.
+10-03 19:03:30.440 I/BlindSpot(23776): armed=true reason=ok speed=0 gear=4
+10-03 19:03:30.440 I/BlindSpot(23776): fast loop start
+10-03 19:03:30.441 I/Trace   (23776): camera armed on=true reason=ok speed=0 gear=4 #6623
+10-03 19:03:30.469 I/BlindSpot(23776): native camera foreground=true: blind-spot hidden
+10-03 19:03:30.470 I/Trace   (23776): camera native-360 on=true #6624
+10-03 19:03:30.557 I/BlindSpot(23776): cluster window attached rotated=false
+10-03 19:03:30.649 I/BlindSpot(23776): cluster-right window attached rotated=false
+10-03 19:03:30.649 I/BlindSpot(23776): windows: left=cluster right=cluster reason=both_on_cluster
+10-03 19:03:30.787 I/CameraProbe(23776): open(3) ok: android.hardware.AVMCamera@c9e5dcc
+10-03 19:03:30.799 I/CameraProbe(23776): addPreviewSurface=true setPreviewSurface=true index=2
+10-03 19:03:30.830 I/CameraProbe(23776): addPreviewSurface=true setPreviewSurface=true index=3
+10-03 19:03:30.836 I/CameraProbe(23776): startPreview=true indexes=2, 3
+10-03 19:03:30.837 I/CameraProbe(23776): avm event type=1003 arg1=0 arg2=0
+10-03 19:03:30.837 I/Trace   (23776): camera open ok=true id=3 indexes=2,3 #6625
+10-03 19:03:30.837 I/Trace   (23776): camera avm-event type=1003 name=first-frame arg1=0 arg2=0 #6626
+10-03 19:03:30.863 I/BlindSpot(23776): camera warm on indexes 2, 3
+10-03 19:03:30.973 I/CameraProbe(23776): avm event type=1003 arg1=0 arg2=0
+10-03 19:03:46.099 I/BlindSpot(23776): native camera foreground=false: blind-spot released
+10-03 19:03:46.101 I/Trace   (23776): camera native-360 on=false #6635

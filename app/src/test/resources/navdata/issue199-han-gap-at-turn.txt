@@ -1,0 +1,15 @@
+# Issue #199, Han 2024 (DiLink 5.0, firmware 20240324), BYDMate 3.19.6, way 2, log 2026-10-03.
+# The Navigator is projected on the cluster (display 2, 1920x720 @320 dpi). Its maneuver balloon is
+# read at 2800 m, vanishes from the window about 1100 m before the right turn (the no-guidance read
+# finds none of the balloon ids, only the status panel and the eta), the arrow expires 30 s later and
+# goes out as 0 while the driver signals and turns right; the balloon comes back only after the turn,
+# already with the next maneuver. Lines verbatim from the log, nav tree walks left out.
+10-03 15:10:08.592 I/NavA11yFeed(12371): guidance read again after 47078 ms (src=event)
+10-03 15:10:08.711 I/HudPushLoop(12371): frame gaode=2 dist=2800m rc=1 sent=2204 amap=true
+10-03 15:11:29.763 I/NavA11yFeed(12371): no-guidance read: src=event display=2 window=257 type=1 active=false focused=false navWindows=1 skipped=0 kept=false ids[maneuver=0 distance=0 metrics=0 nextstreet=0 status=1 eta=1]
+10-03 15:11:59.142 I/NavGuidanceHub(12371): maneuver expired: no maneuver read for 30s
+10-03 15:11:59.154 I/HudPushLoop(12371): frame gaode=0 dist=1100m rc=0 sent=2552 amap=true
+10-03 15:12:05.345 I/Trace   (12371): car    turn from=off to=right #1668
+10-03 15:12:16.724 I/NavA11yFeed(12371): guidance read again after 47040 ms (src=event)
+10-03 15:12:16.975 I/HudPushLoop(12371): frame gaode=2 dist=3000m rc=1 sent=2609 amap=true
+10-03 15:12:28.676 I/Trace   (12371): car    turn from=right to=off #1669

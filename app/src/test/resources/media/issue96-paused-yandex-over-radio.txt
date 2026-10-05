@@ -1,0 +1,29 @@
+# Issue #96, app v3.19.6, DiLink 5.0: the ClusterMusicBridge logcat lines between 12:13:02 and
+# 12:14:21, copied verbatim from the user's dump (titles and artists are logged as lengths only).
+# A radio app plays; whenever its stream is briefly neither playing nor paused, an old paused
+# Yandex session took the card (target show, state=2). At 12:13:58 the card flips between two
+# paused source sessions because the system reordered them.
+10-03 12:13:02.141 I/ClusterMusicBridge( 5296): target show
+10-03 12:13:02.167 I/ClusterMusicBridge( 5296): card <- title(4) artist(5) state=1 progress=30
+10-03 12:13:08.363 I/ClusterMusicBridge( 5296): card <- title(4) artist(5) state=2 progress=32
+10-03 12:13:16.201 I/ClusterMusicBridge( 5296): target other:com.ilv.vradio
+10-03 12:13:16.201 I/ClusterMusicBridge( 5296): card handed_off
+10-03 12:13:25.389 I/ClusterMusicBridge( 5296): target show
+10-03 12:13:25.411 I/ClusterMusicBridge( 5296): card <- title(4) artist(5) state=2 progress=32
+10-03 12:13:28.496 I/ClusterMusicBridge( 5296): target other:com.ilv.vradio
+10-03 12:13:28.496 I/ClusterMusicBridge( 5296): card handed_off
+10-03 12:13:30.011 I/ClusterMusicBridge( 5296): target show
+10-03 12:13:30.042 I/ClusterMusicBridge( 5296): card <- title(4) artist(5) state=2 progress=32
+10-03 12:13:34.657 I/ClusterMusicBridge( 5296): target other:com.ilv.vradio
+10-03 12:13:34.657 I/ClusterMusicBridge( 5296): card handed_off
+10-03 12:13:36.182 I/ClusterMusicBridge( 5296): target show
+10-03 12:13:36.202 I/ClusterMusicBridge( 5296): card <- title(4) artist(5) state=2 progress=32
+10-03 12:13:49.097 I/ClusterMusicBridge( 5296): card <- title(9) artist(6) state=1 progress=0
+10-03 12:13:56.902 I/ClusterMusicBridge( 5296): card <- title(9) artist(6) state=2 progress=3
+10-03 12:13:58.455 I/ClusterMusicBridge( 5296): card <- title(4) artist(5) state=2 progress=32
+10-03 12:14:03.155 I/ClusterMusicBridge( 5296): target other:ru.auto.music
+10-03 12:14:03.155 I/ClusterMusicBridge( 5296): card handed_off
+10-03 12:14:12.310 I/ClusterMusicBridge( 5296): target idle
+10-03 12:14:16.936 I/ClusterMusicBridge( 5296): target show
+10-03 12:14:16.963 I/ClusterMusicBridge( 5296): card <- title(4) artist(5) state=1 progress=33
+10-03 12:14:21.538 I/ClusterMusicBridge( 5296): card <- title(4) artist(5) state=2 progress=34

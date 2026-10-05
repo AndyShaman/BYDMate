@@ -20,6 +20,7 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.decideLanguage
 import com.bydmate.app.data.automation.DriveModeRuleMigration
+import com.bydmate.app.data.automation.PowerStateRuleMigration
 import com.bydmate.app.data.automation.TrunkRuleMigration
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.remote.InsightsManager
@@ -56,6 +57,7 @@ class BYDMateApp : Application(), Configuration.Provider {
     @Inject lateinit var splitOverlayController: com.bydmate.app.split.SplitOverlayController
     @Inject lateinit var driveModeRuleMigration: DriveModeRuleMigration
     @Inject lateinit var trunkRuleMigration: TrunkRuleMigration
+    @Inject lateinit var powerStateRuleMigration: PowerStateRuleMigration
     @Inject lateinit var traceJournal: TraceJournal
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -112,6 +114,8 @@ class BYDMateApp : Application(), Configuration.Provider {
             driveModeRuleMigration.runOnce()
             // One-shot: revive Trunk rules saved against the old "0" = closed code.
             trunkRuleMigration.runOnce()
+            // One-shot: move rules off the removed PowerState condition.
+            powerStateRuleMigration.runOnce()
             // One-time cleanup of existing duplicates from v2.0.0
             historyImporter.cleanupDuplicates()
             // Only sync if setup is completed (prevents duplicates during first wizard run)

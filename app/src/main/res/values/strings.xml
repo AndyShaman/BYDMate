@@ -82,8 +82,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Колёсико громкости на руле</string>
     <string name="settings_knob_play_pause_desc">Нажатие ставит на паузу и продолжает воспроизведение, а не переключает источник звука. Нужно после обновления прошивки, где нажатие стало менять источник.</string>
-    <string name="settings_cluster_music_card_title">Трек Яндекса на приборке</string>
-    <string name="settings_cluster_music_card_desc">Показывает название и исполнителя из Яндекс Навигатора (Алиса) и Яндекс Музыки в карточке музыки на приборке. Штатная прошивка заполняет её только для своих плееров и Bluetooth.</string>
+    <string name="settings_cluster_music_card_title">Трек на приборке</string>
+    <string name="settings_cluster_music_card_desc">Показывает название и исполнителя в карточке музыки на приборке для плееров, которые штатная прошивка пропускает: Яндекс Навигатор (Алиса), Яндекс Музыка, Spotify, интернет-радио и другие. Свои плееры и Bluetooth прошивка заполняет сама.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Восстанавливать ADB после перезагрузки</string>
@@ -1099,12 +1099,9 @@
     <string name="auto_enum_closed_f">Закрыта</string>
     <string name="auto_enum_closed_m">Закрыт</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">Снег</string>
@@ -1133,7 +1130,6 @@
     <string name="auto_param_drivemode">Режим вождения</string>
     <string name="auto_param_soc">SOC</string>
     <string name="auto_param_chargingstatus">Статус зарядки</string>
-    <string name="auto_param_powerstate">Питание</string>
     <string name="auto_param_voltage12v">12V аккумулятор</string>
     <string name="auto_param_mincellvoltage">Мин. напряжение ячейки</string>
     <string name="auto_param_maxcellvoltage">Макс. напряжение ячейки</string>
@@ -1687,7 +1683,7 @@
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">Разделение экрана</string>
     <string name="settings_split_enable_title">Разделение экрана 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">Два freeform-окна: одно на треть экрана, другое на две трети. По умолчанию выключено.</string>
+    <string name="settings_split_enable_desc">Два freeform-окна: одно на треть экрана, другое на две трети. По умолчанию выключено. Штатная кнопка разделения по-прежнему делит экран пополам.</string>
     <string name="settings_split_clear_pair_title">Сбросить последнюю пару</string>
     <string name="settings_split_clear_pair_desc">Удалить сохранённую пару приложений. Следующий запуск откроет пикер.</string>
     <string name="settings_split_pair_cleared">Пара сброшена</string>
@@ -1840,6 +1836,7 @@
     <string name="automation_import_pick_empty">В папке Download нет файлов bydmate_rule_*.json</string>
     <string name="automation_import_invalid">Не удалось прочитать файл: это не автоматизация BYDMate</string>
     <string name="automation_import_newer_version">Автоматизация из более новой версии, обновите приложение</string>
+    <string name="automation_import_power_off_only">Эта автоматизация могла сработать только на выключенной машине, такого условия больше нет</string>
     <string name="automation_import_preview_title">Проверьте автоматизацию</string>
     <string name="automation_import_conditions">Условия</string>
     <string name="automation_import_actions">Действия</string>

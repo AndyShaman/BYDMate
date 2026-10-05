@@ -37,11 +37,14 @@ class BlindSpotDecisionTest {
         assertFalse(d.cameraWarm)
     }
 
-    /** The factory 360 owns the screen while it is up; our windows would only overlap it. */
-    @Test fun `native 360 in the foreground hides the window but keeps the camera warm`() {
+    /**
+     * The factory 360 owns the screen while it is up, and a warm camera under it streams two
+     * previews nobody sees: the 360 stuttered until BYDMate was killed (tester dump 2026-10-03).
+     */
+    @Test fun `native 360 in the foreground hides the window and cools the camera`() {
         val d = decideBlindSpot(input(blink = 2).copy(nativeCameraForeground = true))
         assertEquals(BlindSpotSide.NONE, d.show)
-        assertTrue("camera must stay warm so the view returns instantly", d.cameraWarm)
+        assertFalse("camera must not stream under the factory 360", d.cameraWarm)
     }
 
     /** The very same tick without the 360 shows the side, so only the 360 held it back. */

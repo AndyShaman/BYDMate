@@ -1713,6 +1713,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 collected.set(collected.get().copy(steeringHeat = steeringHeat))
                 val windows = runCatching { helper.readBatch(WindowDiagnostics.batchItems()) }.getOrNull()
                 collected.set(collected.get().copy(windows = windows))
+                val hud = runCatching { helper.readBatch(HudDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(hud = hud))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
@@ -1725,6 +1727,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         val seats: List<Pair<Int, Int>>?,
         val steeringHeat: List<Pair<Int, Int>>? = null,
         val windows: List<Pair<Int, Int>>? = null,
+        val hud: List<Pair<Int, Int>>? = null,
     )
 
     /** Liveness and the seat, steering heat and window fid snapshots under ONE shared budget. */
@@ -2098,13 +2101,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     "target=${clusterPrefs.getString(cpm.KEY_TARGET_PACKAGE, "(default)")}")
                 // #121: the density override carries the scale in direct mode, and apps latched by
                 // the death watch as dying on a non-native density are sent at the panel's own
-                // density instead — their scale slider is inert.
+                // density instead — their scale slider is inert. Each with why and when it latched.
                 val densityUnsafe = cpm.densityUnsafePackages(appContext)
                 appendLine("density: " + when (diag.directDensityDpi) {
                     -1 -> "(not set this session)"
                     0 -> "native"
                     else -> "${diag.directDensityDpi} dpi"
-                } + " unsafe=" + if (densityUnsafe.isEmpty()) "(none)" else densityUnsafe.joinToString())
+                } + " unsafe=" + if (densityUnsafe.isEmpty()) "(none)" else densityUnsafe.joinToString { pkg ->
+                    "$pkg (${cpm.densityUnsafeReason(appContext, pkg) ?: "no reason recorded"})"
+                })
                 appendLine("vd: id=${diag.vdDisplayId} overlay_attached=${diag.overlayAttached} " +
                     "direct_display=${diag.directDisplayId} " +
                     "direct_marker=${clusterPrefs.getInt(cpm.KEY_DIRECT_DISPLAY_ID, -1)}")
@@ -2283,6 +2288,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             appendLine("--- helper daemon ---")
             try {
                 appendLine("alive: ${helperDiag.alive?.toString() ?: "(unknown — probe timed out)"}")
+                // The car's own «Опц. содержимое → Навигация» gate (#269), read only.
+                appendLine("hud_navi_gate:")
+                HudDiagnostics.format(helperDiag.hud).forEach { appendLine(it) }
                 // How the daemon is reachable: a registered service name, or the Binder it
                 // broadcast to us on firmwares that refuse addService (#64/#148).
                 val registered = com.bydmate.app.data.vehicle.helperServiceBinder() != null
