@@ -31,8 +31,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Mirrors Yandex Navigator's Alice music and Yandex Music onto the instrument cluster's music card,
- * which the stock controller leaves blank for them. It writes the fids the stock MediaInfoSender
+ * Mirrors the track of any player the stock controller leaves out (Yandex Navigator's Alice music,
+ * Yandex Music, Spotify, internet radio...) onto the instrument cluster's music card, which it
+ * leaves blank for them. It writes the fids the stock MediaInfoSender
  * writes for whitelisted apps, resolved from this firmware's catalog ([ClusterMusicFids]), through
  * the shell-uid helper: the app uid is refused these writes, as for
  * [com.bydmate.app.hud.HudCanChannel]'s road name.
@@ -136,7 +137,7 @@ class ClusterMusicBridge @Inject constructor(
         val sessions = readSessions() ?: return
         val target = ClusterMusicCard.decide(sessions, lastOwner = lastOwner)
         val kind = when (target) {
-            is Target.Show -> "show"
+            is Target.Show -> "show:${target.packageName}"
             is Target.OtherPlaying -> "other:${target.packageName}"
             Target.Idle -> "idle"
         }
