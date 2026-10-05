@@ -423,11 +423,18 @@ class TelegramReportBuilderTest {
         )
     }
 
-    @Test fun `a counter that is not there, never reset or empty is skipped`() {
+    @Test fun `a never reset counter is shown for all time, as on the dashboard`() {
+        val allTime = counter1.copy(resetTs = 0L)
+        val lines = build(fields = setOf(ReportField.TRIP1), inputs = inputs(trip1 = allTime)).text.lines()
+        assertEquals("🔁 <b>TRIP 1</b> за всё время", lines[2])
+        assertEquals(lines.drop(3), build(fields = setOf(ReportField.TRIP1), inputs = inputs(trip1 = counter1)).text.lines().drop(3))
+    }
+
+    @Test fun `a counter that is not there or empty is skipped`() {
         val cases = listOf(
             null,
-            counter1.copy(resetTs = 0L),
             counter1.copy(km = 0.0),
+            counter1.copy(resetTs = 0L, km = 0.0),
         )
         for (c in cases) {
             val report = build(fields = setOf(ReportField.SOC, ReportField.TRIP1, ReportField.TRIP2), inputs = inputs(trip1 = c))
