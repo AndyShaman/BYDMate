@@ -2011,9 +2011,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 }
             } catch (e: Exception) { appendLine("(failed to gather displays: ${e.message})") }
 
-            // The daemon sections come from one detached probe (see gatherHelperDiagnostics).
-            val helperDiag = gatherHelperDiagnostics()
-
             appendLine("--- hud ---")
             try {
                 // Mirrors the Settings HUD row: enabled pref, probe verdict, live status.
@@ -2047,8 +2044,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("someip_fire_rc=${someIp?.fireCounts()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeFires(it) } ?: "n/a"}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
                 appendLine("hub_snapshot=${com.bydmate.app.navdata.NavGuidanceHub.snapshot()}")
-                // The car's own «Опц. содержимое → Навигация» gate (#269), read only.
-                HudDiagnostics.format(helperDiag.hud).forEach { appendLine(it) }
                 // What each channel actually carried at every maneuver change (#94): the
                 // SOME/IP arrow field next to the Amap icon, on one timeline.
                 val maneuvers = com.bydmate.app.hud.HudManeuverJournal(hudPrefs).lines()
@@ -2287,9 +2282,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 }
             } catch (e: Exception) { appendLine("(failed to gather assistant package state: ${e.message})") }
 
+            // Both daemon sections come from one detached probe (see gatherHelperDiagnostics).
+            val helperDiag = gatherHelperDiagnostics()
+
             appendLine("--- helper daemon ---")
             try {
                 appendLine("alive: ${helperDiag.alive?.toString() ?: "(unknown — probe timed out)"}")
+                // The car's own «Опц. содержимое → Навигация» gate (#269), read only.
+                appendLine("hud_navi_gate:")
+                HudDiagnostics.format(helperDiag.hud).forEach { appendLine(it) }
                 // How the daemon is reachable: a registered service name, or the Binder it
                 // broadcast to us on firmwares that refuse addService (#64/#148).
                 val registered = com.bydmate.app.data.vehicle.helperServiceBinder() != null
