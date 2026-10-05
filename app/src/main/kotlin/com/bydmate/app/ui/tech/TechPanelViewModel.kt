@@ -151,6 +151,14 @@ data class TechPanelUiState(
  */
 internal fun rpmForDisplay(raw: Int?): Int? = raw?.let { if (it in -1..0) 0 else it }
 
+/**
+ * Some cars never fill the remaining-energy fid and answer a flat 0 (a hybrid at SoC 39%, no push
+ * event in 12 minutes). A pack that still holds charge cannot be empty, so 0 next to a SoC above
+ * zero is "no data" and renders as «—». Nothing is derived from SoC in its place.
+ */
+internal fun remainKwhForDisplay(remainKwh: Double?, soc: Int?): Double? =
+    remainKwh?.takeUnless { it <= 0.0 && soc != null && soc > 0 }
+
 @HiltViewModel
 class TechPanelViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
@@ -209,7 +217,7 @@ class TechPanelViewModel @Inject constructor(
                         it.copy(
                             autoserviceOnline = connected,
                             soc = data?.soc,
-                            remainKwh = data?.batteryRemainKwh,
+                            remainKwh = remainKwhForDisplay(data?.batteryRemainKwh, data?.soc),
                             batTemp = data?.avgBatTemp,
                             hvVoltage = data?.hvVoltage,
                             powerKw = data?.power,

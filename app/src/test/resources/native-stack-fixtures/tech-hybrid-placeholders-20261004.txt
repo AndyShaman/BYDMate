@@ -1,0 +1,43 @@
+# Hybrid (31.8 kWh pack, fuel tank, mileage_hev/ev split), DiLink 5.0 build 20260608, BYDMate 3.19.6,
+# user dump 2026-10-04. The «Техника» screen showed «Остаток 0,0 кВт·ч» at SoC 39%: the remaining
+# energy fid 882901008 answers a flat 0.0 and never pushes an event. The rear inverter fid answers
+# 202 (°C, INT_RAW) parked at 9 °C outside. Kept: the header, the live snapshot, the hybrid probe,
+# the push rows of the fids involved and the raw `tech:` lines (AC switched on between the 2nd and
+# 3rd line). VIN and coordinates are not part of this excerpt.
+app: com.bydmate.app v3.19.6 (code=499)
+device: BYD AUTO DiLink5.0 For BYD AUTO
+android: 12 (SDK 32)
+fingerprint: BYD-AUTO/DiLink5.0/DiLink5.0:12/SKQ1.230128.001/eng.build.20260608.155945:user/release-keys
+battery_capacity: raw="31.8" parsed=31.8
+--- live snapshot ---
+age_s=3 gear=1 speed=0 powerState=2 soc=39 trunk=0 frontTrunk=0 insideTemp=23 exteriorTemp=9 remainKwh=0.0
+charge gun=1 bms=15 chargerConnect=0 connectIndicator=2
+--- hybrid probe ---
+engine_rpm[dev=1012 fid=339738642 tx=5]=8191
+engine_power[dev=1012 fid=339738656 tx=5]=0
+coolant_temp[dev=1012 fid=1320181824 tx=5]=65535
+oil_level[dev=1012 fid=89129016 tx=5]=22
+fuel_percent[dev=1014 fid=1246785600 tx=5]=25
+fuel_range_km[dev=1014 fid=1246773304 tx=5]=303
+fuel_instant[dev=1014 fid=1246760996 tx=7]=0
+fuel_total[dev=1014 fid=1246760976 tx=7]=1153403290
+fuel_avg_phm[dev=1014 fid=1246785552 tx=7]=1086534451
+mileage_hev[dev=1014 fid=1246773264 tx=5]=12679
+mileage_ev[dev=1014 fid=1246773284 tx=5]=12111
+fuel_tank_cap[dev=1001 fid=1336934422 tx=5]=65535
+soc 1246777400 dev=1014 OK events=0 last=0 age=-s
+batteryRemainKwh 882901008 dev=1005 OK events=0 last=0 age=-s
+motorTempFront 1154482192 dev=1039 OK events=0 last=0 age=-s
+motorTempRear 1155530768 dev=1039 OK events=0 last=0 age=-s
+inverterTempFront 1154482184 dev=1039 OK events=0 last=0 age=-s
+inverterTempRear 1155530760 dev=1039 OK events=0 last=0 age=-s
+poll≠push: batteryRemainKwh(882901008) poll=0.0 events=0 since=12m
+10-04 20:49:19.318 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=18360 mF=-40 mR=12 iF=-40 iR=202 V=602 I=0.5 chg=192 dis=53 tmax=54 tmin=52 rF=-1 rR=0 comp=0 ac=0 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
+10-04 20:49:24.941 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=18360 mF=-40 mR=12 iF=-40 iR=202 V=602 I=0.5 chg=192 dis=53 tmax=54 tmin=52 rF=-1 rR=1 comp=0 ac=0 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
+10-04 20:49:30.087 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=18831 mF=-40 mR=12 iF=-40 iR=202 V=601 I=2.899994 chg=192 dis=53 tmax=54 tmin=52 rF=-1 rR=0 comp=416 ac=1 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
+10-04 20:49:35.132 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=18831 mF=-40 mR=12 iF=-40 iR=202 V=600 I=3.0 chg=192 dis=53 tmax=54 tmin=52 rF=-1 rR=1 comp=1376 ac=1 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
+10-04 20:49:40.177 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=18901 mF=-40 mR=12 iF=-40 iR=202 V=600 I=4.0 chg=192 dis=53 tmax=54 tmin=52 rF=-1 rR=0 comp=2272 ac=1 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
+10-04 20:49:45.216 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=18901 mF=-40 mR=12 iF=-40 iR=202 V=599 I=4.3000183 chg=191 dis=53 tmax=54 tmin=52 rF=-1 rR=0 comp=2208 ac=1 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
+10-04 20:49:50.289 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=19054 mF=-40 mR=12 iF=-40 iR=202 V=599 I=4.5 chg=191 dis=53 tmax=54 tmin=52 rF=-1 rR=1 comp=2400 ac=1 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
+10-04 20:49:55.330 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=19054 mF=-40 mR=12 iF=-40 iR=202 V=599 I=4.399994 chg=191 dis=53 tmax=54 tmin=52 rF=0 rR=1 comp=2368 ac=1 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
+10-04 20:50:00.367 I/TechPanel( 8740): tech: soc=39.0 remain=0.0 ins=19054 mF=-40 mR=12 iF=-40 iR=202 V=599 I=4.3000183 chg=191 dis=53 tmax=54 tmin=52 rF=0 rR=0 comp=2304 ac=1 tyT=6/6/5/5 acc=0 brk=0 cF=0.0 cR=0.0 gun=1 bms=15 chgConn=0 chgInd=2 split=-
