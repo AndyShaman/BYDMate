@@ -7,13 +7,30 @@ package com.bydmate.app.media
  * Background: the stock `com.byd.mediacontroller` fills the card (INSTRUMENT_MUSIC_INFO_SET and
  * friends) only for a hard-coded whitelist of Chinese players, BYD's own player and Bluetooth.
  * Any other audio-focus owner gets `sendBlackThirdPartyAppMediaInfo()`: source 26, state 2 and a
- * blank name. Yandex Navigator's in-app music (Alice) and Yandex Music are not whitelisted, so the
- * card stays empty while they play.
+ * blank name. Yandex Navigator's in-app music (Alice), Yandex Music, Spotify, internet radio and
+ * every other app outside that list leave the card empty while they play, so any of them is a source.
  */
 object ClusterMusicCard {
 
-    /** Packages whose MediaSession is mirrored onto the card. */
-    val SOURCE_PACKAGES = listOf("ru.yandex.yandexnavi", "ru.yandex.music")
+    /**
+     * Packages the stock controller fills the card for itself (`MediaTaskManager.mWhiteListPackageNames`
+     * in DiLink 5.0's MediaController) and the ones it ignores as focus noise (calls, Bluetooth, the
+     * system). These are never mirrored: the stock card is already right for them.
+     */
+    val STOCK_PACKAGES = setOf(
+        "com.byd.mediacenter", "com.byd.videoplay", "com.byd.videoplay.fse", "com.byd.videoplay.hd",
+        "com.byd.videoplay.youku", "com.byd.videoplay.youku.fse", "com.byd.synclink",
+        "com.tencent.qqmusiccar", "com.tencent.qqmusic", "com.tencent.qqmusictv",
+        "com.netease.cloudmusic.iot", "com.netease.cloudmusic.tv",
+        "com.ximalaya.ting.android", "com.ximalaya.ting.android.car.byd", "bubei.tingshu.hd",
+        "com.kugou.android", "com.kugou.android.auto", "cn.kuwo.kwmusiccar", "cn.kuwo.player",
+        "cn.wenyu.bodian", "app.podcast.cosmos", "cmgyunting.vehicleplayer.cnr", "com.huawei.dmsdpdevice",
+        "android", "com.android.bluetooth", "com.android.server.telecom",
+    )
+
+    /** An app whose MediaSession is mirrored onto the card: anything the stock controller leaves blank. */
+    fun isSource(packageName: String): Boolean =
+        packageName !in STOCK_PACKAGES && !packageName.startsWith("com.byd.")
 
     // PlaybackState.STATE_* as literals (android.jar members are stubs on the JVM).
     private const val PB_PAUSED = 2
@@ -68,26 +85,28 @@ object ClusterMusicCard {
 
     /**
      * Picks the playback owner across *all* sessions ([sessions] in the system's priority order):
-     * the first one that is playing or buffering, else a paused one. A source package becomes
-     * [Target.Show]; any other playing app is [Target.OtherPlaying], so a paused Yandex session
-     * never outranks the stock player or Bluetooth that is actually playing. A paused non-source
-     * owner, a stopped source or an untitled one is [Target.Idle].
+     * the first one that is playing or buffering. A source package becomes [Target.Show]; any other
+     * playing app is [Target.OtherPlaying], so a paused source session never outranks the stock
+     * player or Bluetooth that is actually playing.
      *
-     * With nobody playing, [lastOwner] (see [nextOwner]) picks the paused one (#96): after another
-     * app played, a paused source doesn't take the card while that app's stream is between states;
-     * after a source played, its own paused session keeps the card however the system reorders the
-     * list. Unknown (null) falls back to the first paused session.
+     * With nobody playing, [lastOwner] (see [nextOwner]) decides (#96). A non-source last owner
+     * keeps the card [Target.Idle]: a paused source doesn't take it while the stock player's stream
+     * is between states. A source last owner keeps the card while its titled session is still there,
+     * whatever state it reports: internet radio drops out of "playing" for a moment while it
+     * rebuffers, and the system reorders paused sessions; handing the card to an older paused one
+     * then would flip it back and forth. Without such a session the first paused one decides.
+     * A non-source owner or an untitled one is [Target.Idle].
      */
     fun decide(
         sessions: List<SessionSnapshot>,
-        sources: List<String> = SOURCE_PACKAGES,
         lastOwner: String? = null,
+        isSource: (String) -> Boolean = ::isSource,
     ): Target {
         val playing = sessions.firstOrNull { it.playbackState == PB_PLAYING || it.playbackState == PB_BUFFERING }
-        if (playing != null && playing.packageName !in sources) return Target.OtherPlaying(playing.packageName)
-        if (playing == null && lastOwner != null && lastOwner !in sources) return Target.Idle
-        val owner = playing ?: pausedOwner(sessions, lastOwner)
-        if (owner == null || owner.packageName !in sources || owner.title.isNullOrBlank()) return Target.Idle
+        if (playing != null && !isSource(playing.packageName)) return Target.OtherPlaying(playing.packageName)
+        if (playing == null && lastOwner != null && !isSource(lastOwner)) return Target.Idle
+        val owner = playing ?: idleOwner(sessions, lastOwner)
+        if (owner == null || !isSource(owner.packageName) || owner.title.isNullOrBlank()) return Target.Idle
         return Target.Show(
             Card(
                 title = owner.title.trim(),
@@ -99,19 +118,19 @@ object ClusterMusicCard {
         )
     }
 
-    /** The last owner's titled paused session wherever it stands, else the first paused one. */
-    private fun pausedOwner(sessions: List<SessionSnapshot>, lastOwner: String?): SessionSnapshot? =
-        sessions.firstOrNull { it.packageName == lastOwner && it.playbackState == PB_PAUSED && !it.title.isNullOrBlank() }
+    /** The last owner's titled session wherever it stands, in any state, else the first paused one. */
+    private fun idleOwner(sessions: List<SessionSnapshot>, lastOwner: String?): SessionSnapshot? =
+        sessions.firstOrNull { it.packageName == lastOwner && !it.title.isNullOrBlank() }
             ?: sessions.firstOrNull { it.playbackState == PB_PAUSED }
 
     /**
-     * The package that last actually owned playback, after [target]: another app that plays, or a
-     * source whose titled card is playing. Paused, idle and untitled sessions leave it as it was.
+     * The package that owns the card after [target]: another app that plays, or the source the card
+     * shows. Idle leaves it as it was.
      */
-    fun nextOwner(target: Target, lastOwner: String?): String? = when {
-        target is Target.OtherPlaying -> target.packageName
-        target is Target.Show && target.card.musicState == MUSIC_PLAYING -> target.packageName
-        else -> lastOwner
+    fun nextOwner(target: Target, lastOwner: String?): String? = when (target) {
+        is Target.OtherPlaying -> target.packageName
+        is Target.Show -> target.packageName
+        Target.Idle -> lastOwner
     }
 
     /** The bar value as the stock OtherClient rounds it: position / duration * 100, clamped. */
