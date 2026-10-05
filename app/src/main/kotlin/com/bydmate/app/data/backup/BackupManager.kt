@@ -138,6 +138,7 @@ class BackupManager(
                 AutomationEngine.KEY_SERVICE_START_LAST_SEEN_ELAPSED,
                 AutomationEngine.KEY_SERVICE_START_LAST_SEEN_UPTIME,
                 AutomationEngine.KEY_SERVICE_START_CAR_OFF,
+                AutomationEngine.KEY_SERVICE_START_SELF_RESTART_ELAPSED,
             ),
             // Media volume saved while the voice agent speaks: another car would get it raised
             // back to the source device's level.
