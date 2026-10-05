@@ -53,7 +53,7 @@ class NavA11yFeedNoGuidanceTraceTest {
         timerRead(root, T0 + 1_000, windows = listOf(emptyGuidanceRoot(), emptyGuidanceRoot(windowId = 9)))
         assertEquals(
             listOf("no-guidance read: src=timer display=? window=7 type=1 active=true focused=false navWindows=2 " +
-                "skipped=0 kept=true ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1]"),
+                "skipped=0 kept=true ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1 next=0 nextdist=0 upcoming=0]"),
             readLines,
         )
         assertEquals(1, walks.size)
@@ -201,9 +201,9 @@ class NavA11yFeedNoGuidanceTraceTest {
         assertEquals(
             listOf(
                 "no-guidance window: display=? window=7 type=1 active=true focused=false read=true " +
-                    "ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1]",
+                    "ids[maneuver=1 distance=1 metrics=0 nextstreet=0 status=1 eta=1 next=0 nextdist=0 upcoming=0]",
                 "no-guidance window: display=? window=9 type=1 active=false focused=false read=false " +
-                    "ids[maneuver=1 distance=1 metrics=1 nextstreet=1 status=0 eta=0]",
+                    "ids[maneuver=1 distance=1 metrics=1 nextstreet=1 status=0 eta=0 next=0 nextdist=0 upcoming=0]",
             ),
             windowLines,
         )

@@ -1,6 +1,7 @@
 package com.bydmate.app.navdata
 
 import android.os.Build
+import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Extracts guidance widgets from a Navigator a11y tree into NavGuidance.
@@ -9,6 +10,8 @@ import android.view.accessibility.AccessibilityNodeInfo
  *  recycled after reading: the a11y feed fires many times per second and the framework
  *  node pool is finite on DiLink (Codex fix 5). */
 object NavA11yExtractor {
+    private const val TAG = "NavA11yExtractor"
+    @Volatile private var readingSecondLayout = false
 
     /** The maneuver image; read by the parse and by [probeManeuver]. */
     private const val MANEUVER_ID = "image_maneuverballoon_maneuver"
@@ -17,10 +20,19 @@ object NavA11yExtractor {
     private const val NEXT_STREET_ID = "text_nextstreet"
     private const val STATUS_ID = "status_panel_text"
     private const val ETA_TIME_ID = "textview_eta_time"
+    /** The Navigator's second guidance layout (ids as Denza Lab reads them on a projected Navigator):
+     *  issue #199, on the Han cluster the balloon leaves the window about a kilometre before a turn. */
+    private const val NEXT_MANEUVER_ID = "next_maneuver_image"
+    private const val NEXT_DISTANCE_ID = "next_maneuver_distance_value"
+    private const val NEXT_UNIT_ID = "next_maneuver_distance_unit"
+    /** Same layout family; whether it is the next maneuver or the one after is unknown, so it is
+     *  only counted, never read. */
+    private const val UPCOMING_ID = "next_upcoming_maneuver"
     /** The widgets the parse decides guidance by, counted by [countIds] under these names. */
     private val TRACED_IDS = listOf(
         "maneuver" to MANEUVER_ID, "distance" to DISTANCE_ID, "metrics" to METRICS_ID,
         "nextstreet" to NEXT_STREET_ID, "status" to STATUS_ID, "eta" to ETA_TIME_ID,
+        "next" to NEXT_MANEUVER_ID, "nextdist" to NEXT_DISTANCE_ID, "upcoming" to UPCOMING_ID,
     )
 
     sealed class ReadResult {
@@ -46,8 +58,26 @@ object NavA11yExtractor {
             etaDistance = textOf(root, "$pkg:id/textview_eta_distance"),
             speedLimit = textOf(root, "$pkg:id/text_speedlimit"),
         )
-        val parsed = NavGuidanceParser.parse(raw) ?: return ReadResult.NoGuidance
+        // The second layout is read only when the balloon gave nothing: where the balloon is
+        // on screen, the read is the same as before it.
+        NavGuidanceParser.parse(raw)?.let {
+            noteLayout(secondLayout = false)
+            return ReadResult.Guidance(it)
+        }
+        val parsed = NavGuidanceParser.parse(raw.copy(
+            maneuverDesc = descOf(root, "$pkg:id/$NEXT_MANEUVER_ID"),
+            distance = textOf(root, "$pkg:id/$NEXT_DISTANCE_ID"),
+            distanceUnit = textOf(root, "$pkg:id/$NEXT_UNIT_ID"),
+        )) ?: return ReadResult.NoGuidance
+        noteLayout(secondLayout = true)
         return ReadResult.Guidance(parsed)
+    }
+
+    /** One log line per switch between the balloon and the second layout, never per read. */
+    private fun noteLayout(secondLayout: Boolean) {
+        if (secondLayout == readingSecondLayout) return
+        readingSecondLayout = secondLayout
+        Log.i(TAG, if (secondLayout) "guidance read from the second layout" else "guidance read from the balloon again")
     }
 
     /** Raw view of the maneuver image for the unknown-maneuver log: how many nodes carry its id,
@@ -74,7 +104,7 @@ object NavA11yExtractor {
      *  recycled, [root] stays the caller's. */
     internal fun hasGuidanceNodes(root: AccessibilityNodeInfo): Boolean {
         val pkg = runCatching { root.packageName?.toString() }.getOrNull() ?: return false
-        return listOf(MANEUVER_ID, DISTANCE_ID, NEXT_STREET_ID).any { id ->
+        return listOf(MANEUVER_ID, DISTANCE_ID, NEXT_STREET_ID, NEXT_MANEUVER_ID, NEXT_DISTANCE_ID).any { id ->
             val nodes = runCatching { root.findAccessibilityNodeInfosByViewId("$pkg:id/$id") }.getOrNull()
             @Suppress("DEPRECATION")
             nodes?.forEach { runCatching { it.recycle() } }
