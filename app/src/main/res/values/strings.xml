@@ -1592,7 +1592,7 @@
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Слепые зоны</string>
     <string name="settings_blindspot_title">Камера по поворотнику</string>
-    <string name="settings_blindspot_desc">Левый поворотник - левая камера на приборке, правый - окошко на главном экране. По умолчанию выключено. Штатная кнопка разделения по-прежнему делит экран пополам.</string>
+    <string name="settings_blindspot_desc">Левый поворотник - левая камера на приборке, правый - окошко на главном экране. По умолчанию выключено.</string>
     <string name="settings_blindspot_threshold_title">Порог скорости</string>
     <string name="settings_blindspot_threshold_desc">Ниже этой скорости камера не показывается</string>
     <string name="settings_blindspot_pip_width_title">Ширина окошка</string>
