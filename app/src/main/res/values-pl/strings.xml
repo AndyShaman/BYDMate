@@ -1095,12 +1095,9 @@
     <string name="auto_enum_closed_f">Zamknięta</string>
     <string name="auto_enum_closed_m">Zamknięty</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">Śnieg</string>
@@ -1129,7 +1126,6 @@
     <string name="auto_param_drivemode">Tryb jazdy</string>
     <string name="auto_param_soc">SOC</string>
     <string name="auto_param_chargingstatus">Status ładowania</string>
-    <string name="auto_param_powerstate">Zasilanie</string>
     <string name="auto_param_voltage12v">Akumulator 12V</string>
     <string name="auto_param_mincellvoltage">Min. napięcie ogniwa</string>
     <string name="auto_param_maxcellvoltage">Maks. napięcie ogniwa</string>
@@ -1825,6 +1821,7 @@
     <string name="automation_import_pick_empty">Brak plików bydmate_rule_*.json w folderze Download</string>
     <string name="automation_import_invalid">Nie udało się odczytać pliku: to nie jest automatyzacja BYDMate</string>
     <string name="automation_import_newer_version">Automatyzacja z nowszej wersji, zaktualizuj aplikację</string>
+    <string name="automation_import_power_off_only">Ta automatyzacja mogła zadziałać tylko przy wyłączonym samochodzie, takiego warunku już nie ma</string>
     <string name="automation_import_preview_title">Sprawdź automatyzację</string>
     <string name="automation_import_conditions">Warunki</string>
     <string name="automation_import_actions">Akcje</string>

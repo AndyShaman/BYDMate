@@ -453,10 +453,10 @@ class AgentToolsReadTest {
         assertFalse(out.has("cell_voltage_min_v"))
     }
 
-    @Test fun `power state and work mode mapped to labels`() = runTest {
+    @Test fun `work mode mapped to a label, power state not reported`() = runTest {
         every { gate.vehicleSnapshot() } returns snapshot(powerState = 2, workMode = 1)
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
-        assertEquals("DRIVE", out.getString("power_state"))
+        assertFalse(out.has("power_state"))
         assertEquals("EV", out.getString("work_mode"))
     }
 

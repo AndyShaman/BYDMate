@@ -1022,12 +1022,9 @@
     <string name="auto_enum_closed_f">关闭</string>
     <string name="auto_enum_closed_m">关闭</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">雪地</string>
@@ -1056,7 +1053,6 @@
     <string name="auto_param_drivemode">整车运行模式</string>
     <string name="auto_param_soc">电量百分比</string>
     <string name="auto_param_chargingstatus">充电状态</string>
-    <string name="auto_param_powerstate">电源状态</string>
     <string name="auto_param_voltage12v">蓄电池电压</string>
     <string name="auto_param_mincellvoltage">单体最低电压</string>
     <string name="auto_param_maxcellvoltage">单体最高电压</string>
@@ -1787,6 +1783,7 @@
     <string name="automation_import_pick_empty">Download 文件夹中没有 bydmate_rule_*.json 文件</string>
     <string name="automation_import_invalid">无法读取文件：这不是 BYDMate 自动化</string>
     <string name="automation_import_newer_version">该自动化来自更新的版本，请更新应用</string>
+    <string name="automation_import_power_off_only">该自动化只能在车辆熄火时触发，此条件已不再提供</string>
     <string name="automation_import_preview_title">检查自动化</string>
     <string name="automation_import_conditions">条件</string>
     <string name="automation_import_actions">动作</string>

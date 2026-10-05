@@ -1095,12 +1095,9 @@
     <string name="auto_enum_closed_f">Зачынена</string>
     <string name="auto_enum_closed_m">Зачынены</string>
     <string name="auto_enum_code_d">D</string>
-    <string name="auto_enum_code_drive">DRIVE</string>
     <string name="auto_enum_code_eco">ECO</string>
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
-    <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
     <string name="auto_enum_code_snow">Снег</string>
@@ -1129,7 +1126,6 @@
     <string name="auto_param_drivemode">Рэжым ваджэння</string>
     <string name="auto_param_soc">SOC</string>
     <string name="auto_param_chargingstatus">Статус зарадкі</string>
-    <string name="auto_param_powerstate">Сілкаванне</string>
     <string name="auto_param_voltage12v">12V акумулятар</string>
     <string name="auto_param_mincellvoltage">Мін. напружанне ячэйкі</string>
     <string name="auto_param_maxcellvoltage">Макс. напружанне ячэйкі</string>
@@ -1825,6 +1821,7 @@
     <string name="automation_import_pick_empty">У папцы Download няма файлаў bydmate_rule_*.json</string>
     <string name="automation_import_invalid">Не ўдалося прачытаць файл: гэта не аўтаматызацыя BYDMate</string>
     <string name="automation_import_newer_version">Аўтаматызацыя з больш новай версіі, абнавіце праграму</string>
+    <string name="automation_import_power_off_only">Гэтая аўтаматызацыя магла спрацаваць толькі на выключанай машыне, такой умовы больш няма</string>
     <string name="automation_import_preview_title">Праверце аўтаматызацыю</string>
     <string name="automation_import_conditions">Умовы</string>
     <string name="automation_import_actions">Дзеянні</string>
