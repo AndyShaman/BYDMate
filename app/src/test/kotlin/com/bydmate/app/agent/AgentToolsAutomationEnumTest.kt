@@ -127,10 +127,9 @@ class AgentToolsAutomationEnumTest {
         assertFalse(schemas.contains("DRIVE"))
     }
 
-    @Test fun power_state_drive_from_the_agent_is_stored_as_gear_D() = runTest {
+    @Test fun power_state_drive_from_the_agent_is_stored_as_the_app_start() = runTest {
         val t = savedTrigger("""{"kind":"param","param":"PowerState","operator":"==","value":"DRIVE"}""")
-        assertEquals("Gear", t.param)
-        assertEquals("4", t.value)
+        assertEquals("service_start", t.kind)
     }
 
     @Test fun power_state_on_from_the_agent_is_stored_as_the_app_start() = runTest {

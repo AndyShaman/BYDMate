@@ -194,9 +194,10 @@ class AutomationRuleShareViewModelTest {
         coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 
-    /** The speed fixture with its triggers replaced by [triggers] under [logic]. */
-    private fun powerStateFile(logic: String, triggers: String): File {
+    /** The speed fixture named [name] with its triggers replaced by [triggers] under [logic]. */
+    private fun powerStateFile(logic: String, triggers: String, name: String = "Navi"): File {
         val text = requireNotNull(javaClass.classLoader?.getResource("rule-share/bydmate_rule_speed.json")).readText()
+            .replace(""""name": "Navi"""", """"name": "$name"""")
             .replace(""""trigger_logic": "OR"""", """"trigger_logic": "$logic"""")
             .replace(
                 """{"param":"Speed","chineseName":"车速","operator":">","value":"7","displayName":"Скорость","kind":"param"}""",
@@ -208,13 +209,21 @@ class AutomationRuleShareViewModelTest {
     private fun powerState(value: String) =
         """{"param":"PowerState","chineseName":"电源状态","operator":"==","value":"$value","displayName":"Питание","kind":"param"}"""
 
-    @Test fun `an imported PowerState DRIVE condition comes in as gear D`() {
+    @Test fun `an imported PowerState DRIVE condition comes in as the BYDMate start`() {
         val vm = vm()
         vm.importFile(powerStateFile("AND", """{"param":"ExtTemp","chineseName":"车外温度","operator":"<","value":"0","displayName":"t","kind":"param"},""" + powerState("2")))
 
         val triggers = requireNotNull(vm.uiState.value.importDraft).rule.triggers
-        assertEquals(listOf("ExtTemp", "Gear"), triggers.map { it.param })
-        assertEquals("4", triggers[1].value)
+        assertEquals(listOf("param", "service_start"), triggers.map { it.kind })
+    }
+
+    @Test fun `an imported sunshade template with PowerState DRIVE comes in as gear D`() {
+        val vm = vm()
+        vm.importFile(powerStateFile("AND", powerState("2"), name = "Sunshade while driving"))
+
+        val trigger = requireNotNull(vm.uiState.value.importDraft).rule.triggers.single()
+        assertEquals("Gear", trigger.param)
+        assertEquals("4", trigger.value)
     }
 
     @Test fun `an imported PowerState ON condition comes in as the BYDMate start`() {
