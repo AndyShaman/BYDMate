@@ -70,8 +70,6 @@ class PowerStateRuleMigration @Inject constructor(
     companion object {
         private const val TAG = "PowerStateRuleMigration"
         const val PARAM = "PowerState"
-        private const val ON = "1"
-        private const val DRIVE = "2"
         private const val GEAR = "Gear"
         private const val GEAR_D = "4"
 
@@ -83,8 +81,20 @@ class PowerStateRuleMigration @Inject constructor(
 
         private fun TriggerDef.isPowerState(): Boolean = kind == "param" && param == PARAM
 
-        private fun TriggerDef.isPowerStateEquals(code: String): Boolean =
-            isPowerState() && operator == "==" && value.trim() == code
+        /** The PowerState codes (0 OFF, 1 ON, 2 DRIVE) this trigger's predicate is true for. */
+        private fun TriggerDef.powerStateCodes(): Set<Int> {
+            val v = value.trim().toIntOrNull() ?: return emptySet()
+            val holds: (Int) -> Boolean = when (operator) {
+                "==" -> { c -> c == v }
+                "!=" -> { c -> c != v }
+                ">" -> { c -> c > v }
+                ">=" -> { c -> c >= v }
+                "<" -> { c -> c < v }
+                "<=" -> { c -> c <= v }
+                else -> return emptySet()
+            }
+            return setOf(0, 1, 2).filterTo(mutableSetOf(), holds)
+        }
 
         private fun TriggerDef.isGearD(): Boolean =
             kind == "param" && param == GEAR && operator == "==" && value.trim() == GEAR_D
@@ -100,12 +110,13 @@ class PowerStateRuleMigration @Inject constructor(
 
         /**
          * [triggers] of a rule with [logic] and no PowerState left, or null when the rule could
-         * never fire and is to be removed. ON and DRIVE become the BYDMate start, DRIVE becomes
-         * gear D instead when [driveIsGear]; each is dropped when the rule already has it (the
-         * start is dropped from a one-shot rule too: an event cannot join a one-shot moment, and
-         * the app running already means the car is on). Any
-         * other PowerState condition removes an AND rule and drops out of an OR rule. Without a
-         * PowerState trigger the same list comes back.
+         * never fire and is to be removed. A PowerState condition that can hold while the car is
+         * on (true for ON or DRIVE: `== 1`, `!= 0`, `> 0`, ...) becomes the BYDMate start, or
+         * gear D instead when [driveIsGear] and it holds for DRIVE only; each is dropped when the
+         * rule already has it (the start is dropped from a one-shot rule too: an event cannot
+         * join a one-shot moment, and the app running already means the car is on). A condition
+         * true only for OFF (or for no code) removes an AND rule and drops out of an OR rule.
+         * Without a PowerState trigger the same list comes back.
          */
         fun convert(logic: String, triggers: List<TriggerDef>, labels: Labels, driveIsGear: Boolean): List<TriggerDef>? {
             if (triggers.none { it.isPowerState() }) return triggers
@@ -113,13 +124,14 @@ class PowerStateRuleMigration @Inject constructor(
             for (t in triggers) {
                 // Checked against the whole rule: a duplicate may also come later in the list.
                 val kept = triggers + result
+                val codes = if (t.isPowerState()) t.powerStateCodes() else emptySet()
                 val next = when {
                     !t.isPowerState() -> t
-                    t.isPowerStateEquals(DRIVE) && driveIsGear -> TriggerDef(
+                    codes == setOf(2) && driveIsGear -> TriggerDef(
                         param = GEAR, chineseName = "档位", operator = "==", value = GEAR_D,
                         displayName = labels.gearDrive,
                     ).takeUnless { kept.any { it.isGearD() } }
-                    t.isPowerStateEquals(ON) || t.isPowerStateEquals(DRIVE) -> TriggerDef(
+                    1 in codes || 2 in codes -> TriggerDef(
                         param = "ServiceStart", chineseName = "服务启动", operator = "==", value = "true",
                         displayName = labels.serviceStart, kind = "service_start",
                     ).takeUnless { kept.any { it.kind == "service_start" || it.kind == OneShotTrigger.KIND } }
