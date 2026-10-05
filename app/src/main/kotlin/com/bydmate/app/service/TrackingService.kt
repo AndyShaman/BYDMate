@@ -2083,7 +2083,10 @@ class TrackingService : Service(), LocationListener {
                     // The force-stop kills this process: write the line to disk before asking.
                     Trace.event(TraceArea.APP, "a11y-recovery-force-stop", "reason" to reason, "streak" to streak)
                     Trace.flushBlocking(A11Y_RECOVERY_TRACE_FLUSH_MS)
+                    automationEngine.markSelfRestart()
                     helperClient.recoverAccessibilityService()
+                    // Still alive: the force-stop did not happen, the next process is a real start.
+                    automationEngine.clearSelfRestartMark()
                 } else {
                     Log.w(TAG, "star a11y recovery: skipped, could not persist the rate-limit mark")
                     Trace.event(TraceArea.APP, "a11y-recovery-refused", "cause" to "mark_not_saved")

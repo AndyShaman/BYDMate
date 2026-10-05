@@ -75,6 +75,14 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         internal const val KEY_SERVICE_START_LAST_SEEN_UPTIME = "service_start_last_seen_uptime"
         internal const val KEY_SERVICE_START_CAR_OFF = "service_start_car_off"
 
+        // Android 10 a11y recovery force-stops our own process after service_start fired, and
+        // RECOVER_START brings a new one back (11-44 s on Atto 3 logs). The dying process stores
+        // its elapsedRealtime here; the next process skips service_start once if it starts within
+        // SELF_RESTART_MAX_GAP_MS of it. 120 s is about 3x the slowest restart seen; the restarted
+        // process consumes the mark, so a later car start never sees it.
+        internal const val KEY_SERVICE_START_SELF_RESTART_ELAPSED = "service_start_self_restart_elapsed"
+        const val SELF_RESTART_MAX_GAP_MS = 120_000L
+
         // Steering-wheel key trigger: manual only, like button_press. Fires from
         // the a11y key filter through onSteeringKey(), never from the poll.
         const val TRIGGER_KIND_STEERING_KEY = "steering_key"
@@ -222,9 +230,48 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             }
             return false
         }
+        if (restartedBySelf()) {
+            // Fired and expired: the start already fired in the process our recovery killed.
+            serviceStartFiredAt = elapsedMs() - SERVICE_START_WINDOW_MS - 1
+            return false
+        }
         serviceStartFiredAt = elapsedMs()
         Log.i(TAG, "service_start: fired (new process, screen on)")
         return true
+    }
+
+    /** Reads and clears the self-restart mark; true when this process is our a11y recovery restart. */
+    private fun restartedBySelf(): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.contains(KEY_SERVICE_START_SELF_RESTART_ELAPSED)) return false
+        val markedAt = prefs.getLong(KEY_SERVICE_START_SELF_RESTART_ELAPSED, 0L)
+        prefs.edit().remove(KEY_SERVICE_START_SELF_RESTART_ELAPSED).apply()
+        val gap = elapsedMs() - markedAt
+        if (gap < 0 || gap > SELF_RESTART_MAX_GAP_MS) {
+            Log.i(TAG, "service_start: self-restart mark ignored, gap=${gap}ms")
+            return false
+        }
+        Log.i(TAG, "service_start: suppressed, our own a11y recovery restart ${gap}ms ago")
+        return true
+    }
+
+    /**
+     * Called right before the a11y recovery force-stops this process: if service_start already
+     * fired here, the restarted process must not fire it again. Written synchronously, the process
+     * is about to die.
+     */
+    fun markSelfRestart() {
+        if (serviceStartFiredAt == null) return
+        val now = elapsedMs()
+        val saved = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putLong(KEY_SERVICE_START_SELF_RESTART_ELAPSED, now).commit()
+        Log.i(TAG, "service_start: self-restart mark written at elapsed=$now saved=$saved")
+    }
+
+    /** The recovery call returned, so this process survived: the next one is a real start. */
+    fun clearSelfRestartMark() {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .remove(KEY_SERVICE_START_SELF_RESTART_ELAPSED).commit()
     }
 
     // Called every 3s from TrackingService poll loop.
