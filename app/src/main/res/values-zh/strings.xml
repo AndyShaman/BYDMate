@@ -1645,7 +1645,7 @@
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">分屏</string>
     <string name="settings_split_enable_title">分屏 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">两个自由窗口：一个占三分之一，另一个占三分之二。默认关闭。</string>
+    <string name="settings_split_enable_desc">两个自由窗口：一个占三分之一，另一个占三分之二。默认关闭。车机自带的分屏按钮仍然是对半分屏。</string>
     <string name="settings_split_clear_pair_title">重置上次应用对</string>
     <string name="settings_split_clear_pair_desc">清除保存的应用对，下次启动时将打开选择器。</string>
     <string name="settings_split_pair_cleared">应用对已重置</string>
