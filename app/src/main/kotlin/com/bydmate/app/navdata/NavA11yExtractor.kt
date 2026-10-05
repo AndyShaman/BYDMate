@@ -64,7 +64,9 @@ object NavA11yExtractor {
             noteLayout(secondLayout = false)
             return ReadResult.Guidance(it)
         }
+        // exitNumber is the balloon's: dropped, or a stale one turns the turn into a roundabout exit.
         val parsed = NavGuidanceParser.parse(raw.copy(
+            exitNumber = null,
             maneuverDesc = descOf(root, "$pkg:id/$NEXT_MANEUVER_ID"),
             distance = textOf(root, "$pkg:id/$NEXT_DISTANCE_ID"),
             distanceUnit = textOf(root, "$pkg:id/$NEXT_UNIT_ID"),
