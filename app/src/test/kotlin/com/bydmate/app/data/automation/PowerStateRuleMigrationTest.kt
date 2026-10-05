@@ -152,10 +152,35 @@ class PowerStateRuleMigrationTest {
         assertNull(convert("AND", param("SOC", "20", "<"), power("0")))
     }
 
-    @Test fun `any other PowerState condition in an AND rule deletes the rule`() {
-        assertNull(convert("AND", power("2", "!=")))
-        assertNull(convert("AND", power("1", ">")))
+    @Test fun `a PowerState condition that cannot hold with the car on deletes an AND rule`() {
         assertNull(convert("AND", power("3")))
+        assertNull(convert("AND", power("abc")))
+        assertNull(convert("AND", power("1", "~")))
+        assertNull(convert("AND", power("0")))
+    }
+
+    @Test fun `a PowerState condition that can hold with the car on becomes the start trigger`() {
+        val soc = param("SOC", "20", "<")
+        for ((op, v) in listOf("!=" to "0", "!=" to "1", "!=" to "2", ">" to "0", ">=" to "1", "<" to "2", "<=" to "1")) {
+            val out = convert("AND", soc, power(v, op))!!
+            assertEquals("$op $v", listOf("param", "service_start"), out.map { it.kind })
+        }
+    }
+
+    @Test fun `a not-OFF condition in the sunshade template becomes the start trigger, not gear D`() {
+        val out = convertSunshade("AND", power("0", "!="))!!.single()
+
+        assertEquals("service_start", out.kind)
+    }
+
+    @Test fun `DRIVE in the sunshade template still becomes gear D`() {
+        assertEquals("Gear", convertSunshade("AND", power("2")).orEmpty().single().param)
+    }
+
+    @Test fun `an OR rule with a below-ON condition drops the trigger`() {
+        val soc = param("SOC", "20", "<")
+
+        assertEquals(listOf(soc), convert("OR", soc, power("1", "<")))
     }
 
     @Test fun `OFF in an OR rule is dropped and the other trigger stays`() {
