@@ -79,4 +79,9 @@ class NavGuidanceParserTest {
         assertEquals("exit:2",
             NavGuidanceParser.parse(raw(maneuverDesc = "Поверните направо", exitNumber = "2"))!!.maneuverRaw)
     }
+
+    @Test fun `only a next street counts as one, the status panel fallback does not`() {
+        assertEquals(true, NavGuidanceParser.parse(raw(maneuverDesc = ">>>", nextStreet = "ул. Ленина", statusPanel = "ул. Качаны"))!!.roadIsNextStreet)
+        assertEquals(false, NavGuidanceParser.parse(raw(maneuverDesc = ">>>", statusPanel = "ул. Качаны"))!!.roadIsNextStreet)
+    }
 }

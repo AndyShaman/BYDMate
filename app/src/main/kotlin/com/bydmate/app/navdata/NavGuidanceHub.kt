@@ -114,7 +114,7 @@ object NavGuidanceHub {
 
     @Synchronized
     fun update(data: NavGuidance, source: Source, nowMs: Long = System.currentTimeMillis()) {
-        val prev = dropOnStreetChange(current, data.maneuverGaode, data.road, source)
+        val prev = dropOnStreetChange(current, data.maneuverGaode, if (data.roadIsNextStreet) data.road else "", source)
         if (!prev.active) Log.i(TAG, "guidance active (source=$source)")
         current = prev.copy(
             active = true,
@@ -186,7 +186,8 @@ object NavGuidanceHub {
     /** #294: a held maneuver belongs to the next street it was read with. A read that names
      *  another street and carries no maneuver of its own means that turn is behind: the arrow
      *  goes now instead of after [MANEUVER_TIMEOUT_MS]. Without a street on either side nothing
-     *  is known and the arrow stays, as on cars whose reads carry it only now and then (#198). */
+     *  is known and the arrow stays, as on cars whose reads carry it only now and then (#198);
+     *  callers pass "" for a road that is only the current-street fallback. */
     private fun dropOnStreetChange(prev: Snapshot, maneuverGaode: Int, road: String, source: Source): Snapshot {
         if (maneuverGaode > 0 || prev.maneuverGaode <= 0) return prev
         val street = road.trim()
