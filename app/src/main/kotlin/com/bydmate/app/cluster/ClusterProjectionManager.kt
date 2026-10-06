@@ -1730,6 +1730,7 @@ object ClusterProjectionManager {
                             HelperBinderProtocol.PANE_TYPE_STANDARD,
                         )
                         log("direct: return result=$result")
+                        if (result == FreeformLaunchResult.OK) placedTaskId = taskOnCluster(helper, pkg, displayId) ?: placedTaskId
                         checksLeft = DIRECT_DEATH_CHECKS
                         return@withLock
                     }
@@ -1772,6 +1773,9 @@ object ClusterProjectionManager {
                         HelperBinderProtocol.PANE_TYPE_STANDARD,
                     )
                     log("direct: recovery relaunch result=$result")
+                    // The relaunch may have made a new task: it is the placed one from now on, or a
+                    // move of it before the next check would be read against the dead task's id.
+                    if (result == FreeformLaunchResult.OK) placedTaskId = taskOnCluster(helper, pkg, displayId) ?: placedTaskId
                     // A loss under the scale is watched for a full set again: the relaunched app may
                     // die as well, and that second loss is the verdict. The native path keeps the
                     // checks it has left, as before.
@@ -1780,6 +1784,10 @@ object ClusterProjectionManager {
             }
         }
     }
+
+    /** Id of [pkg]'s task when it is on [displayId], else null (elsewhere, gone or no answer). */
+    private suspend fun taskOnCluster(helper: HelperClient, pkg: String, displayId: Int): Int? =
+        helper.getTaskState(pkg)?.takeIf { it.taskId > 0 && it.displayId == displayId }?.taskId
 
     private fun ownsDirectSession(pkg: String, displayId: Int): Boolean =
         currentMode == ClusterMode.FULLSCREEN && projectedPackage == pkg && directDisplayId == displayId
