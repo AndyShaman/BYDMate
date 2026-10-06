@@ -28,5 +28,12 @@ internal object HudDiagnostics {
         }
     }
 
+    /** The trace form of the same read: `<set>/<status>`, each the value, `e<status>` for an
+     *  autoservice error, `na` without an answer. */
+    fun gate(readings: List<Pair<Int, Int>>?): String = FIDS.indices.joinToString("/") { i ->
+        val (status, value) = readings?.takeIf { it.size == FIDS.size }?.get(i) ?: return@joinToString "na"
+        if (status == 0) value.toString() else "e$status"
+    }
+
     private const val TX_GET_INT = 5
 }

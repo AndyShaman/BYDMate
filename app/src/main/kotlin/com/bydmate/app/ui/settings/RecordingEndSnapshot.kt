@@ -47,7 +47,8 @@ class RecordingEndSnapshot @Inject constructor(
                     "can_accepted=${diag?.canAccepted ?: 0} can_refused=${diag?.canRefused ?: 0} " +
                     "amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}",
             ) + HudDiagnostics.format(helper.readBatch(HudDiagnostics.batchItems())).map { "hud fid: $it" } +
-                "hub_snapshot=${RecordingDumpFormat.hubSnapshot(NavGuidanceHub.snapshot())}"
+                "hub_snapshot=${RecordingDumpFormat.hubSnapshot(NavGuidanceHub.snapshot())}" +
+                "route_summary: ${NavGuidanceHub.routeSummary()}"
         }
         part(out, "maneuvers") {
             val prefs = appContext.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)

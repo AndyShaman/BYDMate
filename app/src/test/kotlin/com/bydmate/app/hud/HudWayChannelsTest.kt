@@ -15,6 +15,7 @@ import io.mockk.every
 import io.mockk.mockk
 import java.util.TimeZone
 import kotlin.random.Random
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -347,6 +348,21 @@ class HudWayChannelsTest {
         assertTrue(calls.contains("set $dist=16777214"))
     }
 
+    @Test fun `way 2 lifts 1 to 10 m to 11 m like the SOME IP frame and keeps the unknown 0 (#294)`() = runTest {
+        val c = channels(2)
+        route(dist = 3)
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.contains("set $dist=11"))
+        calls.clear()
+        route(dist = 0)
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.contains("set $dist=0"))
+        calls.clear()
+        route(dist = 12)
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.contains("set $dist=12"))
+    }
+
     // --- way 3: the LAUNCHER_MAP_CN family on top ---
 
     private val starts = HudLauncherMapCnFrames.SERVICE_IDS.map { "start 0x${it.toString(16)}" }
@@ -370,6 +386,22 @@ class HudWayChannelsTest {
         expected.zip(sent).forEach { (e, a) -> assertTrue(e.payload.contentEquals(a.second)) }
         // CAN too, as in way 2.
         assertTrue(calls.contains("set $dist=300"))
+    }
+
+    @Test fun `way 3 lifts 1 to 10 m to 11 m in its maneuver frame and keeps 0 as it is (#294)`() = runTest {
+        val sent = mutableListOf<Pair<Long, ByteArray>>()
+        every { gateway.fireEvent(any(), any()) } answers { sent += firstArg<Long>() to secondArg<ByteArray>(); 0 }
+        val c = channels(3)
+        val routeId = HudLauncherMapCnFrames.newRouteId(Random(3))
+        fun frames(dist: Int, counter: Int) =
+            HudLauncherMapCnFrames.update(2, dist, 12_000, 800, HudLauncherMapCnFrames.Position(53.9, 27.56), routeId, counter, 1_700_000_000_000L)
+        route(dist = 4)
+        c.tick(active = true)
+        route(dist = 0)
+        c.tick(active = true)
+        val expected = frames(11, 0) + frames(0, 1)
+        assertEquals(expected.map { it.topic }, sent.map { it.first })
+        expected.zip(sent).forEach { (e, a) -> assertTrue(e.payload.contentEquals(a.second)) }
     }
 
     @Test fun `way 3 looks up the position at the route start and then every 5 s, not every tick`() = runTest {
@@ -715,7 +747,7 @@ class HudWayChannelsTest {
             g(2, 40) + rd("Road One Street") + restCalls(0, 10, 5_200, 23) +
                 g(2, 30) + restCalls(0, 10, 5_190, 23) +
                 g(2, 20) + restCalls(0, 10, 5_180, 23) +
-                g(2, 10) + restCalls(0, 10, 5_170, 23) +
+                g(2, 11) + restCalls(0, 10, 5_170, 23) +   // 10 m read, lifted to the glass floor (#294)
                 g(2, 1_500) + rd("Second Avenue") + restCalls(0, 10, 5_160, 23) +
                 g(2, 1_400) + restCalls(0, 9, 5_060, 22) +
                 g(1, 200) + rd("Third Lane") + restCalls(0, 7, 3_600, 20) +
@@ -906,5 +938,47 @@ class HudWayChannelsTest {
         c.tick(active = true)
         c.tick(active = false)
         (lines + trace.events()).forEach { assertFalse(it, it.contains("53.9") || it.contains("27.56")) }
+    }
+
+    // --- trace audit: the readback and the road's script ---
+
+    @Test fun `one CAN readback per route, after its first turn kind other than 0, off the tick`() = runTest {
+        coEvery { helper.readBatch(any()) } answers { calls += "read"; listOf(0 to 2, 0 to 300) }
+        val c = channels(2).apply { readbackScope = this@runTest }
+        route(gaode = 0)
+        c.tick(active = true)
+        runCurrent()
+        assertEquals(0, calls.count { it == "read" })
+        route(gaode = 2, dist = 300)
+        c.tick(active = true)
+        assertEquals("the tick does not wait for the read", 0, calls.count { it == "read" })
+        runCurrent()
+        assertEquals(1, calls.count { it == "read" })
+        route(gaode = 5, dist = 200)
+        c.tick(active = true)
+        runCurrent()
+        assertEquals(1, calls.count { it == "read" })
+        val readback = trace.events().single { it.contains("can-readback") }
+        assertTrue(readback, readback.contains("fid=TURN_KIND wrote=2 read=2 dist_wrote=300 dist_read=300"))
+        c.tick(active = false)                      // the route ends (its clear reads back on its own)
+        route(gaode = 3, dist = 100)
+        c.tick(active = true)
+        runCurrent()
+        assertEquals(2, trace.events().count { it.contains("can-readback") })
+    }
+
+    @Test fun `the CAN road's script class is traced when it changes, never the name`() = runTest {
+        val c = channels(2)
+        route(road = "Main St")
+        c.tick(active = true)
+        route(road = "Second St")                   // same class: no line
+        c.tick(active = true)
+        route(road = "")
+        c.tick(active = true)
+        val roads = trace.events().filter { it.contains(" road ") }
+        assertEquals(2, roads.size)
+        assertTrue(roads[0], roads[0].contains("road chan=can script=latin len=7"))
+        assertTrue(roads[1], roads[1].contains("road chan=can script=empty len=0"))
+        assertFalse(roads.any { it.contains("Main") || it.contains("Second") })
     }
 }

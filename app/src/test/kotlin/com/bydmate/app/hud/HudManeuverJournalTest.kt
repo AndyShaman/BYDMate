@@ -38,8 +38,8 @@ class HudManeuverJournalTest {
             PackageInfo().apply { packageName = "com.byd.amapservice" })
     }
 
-    private fun guidance(gaode: Int, distance: Int = 250) = NavGuidanceHub.update(
-        NavGuidance(maneuverGaode = gaode, distanceMeters = distance, road = "A", speedLimit = 0),
+    private fun guidance(gaode: Int, distance: Int = 250, road: String = "A", raw: String = "desc:x") = NavGuidanceHub.update(
+        NavGuidance(maneuverGaode = gaode, distanceMeters = distance, road = road, speedLimit = 0, maneuverRaw = raw),
         NavGuidanceHub.Source.A11Y, nowMs = clock,
     )
 
@@ -47,26 +47,29 @@ class HudManeuverJournalTest {
         journal().append(
             maneuverGaode = 13, distanceMeters = 400, f28 = 0,
             amapIcon = 11, roundaboutNum = null, suppressArrow = false,
+            source = "a11y", raw = "desc:Поверните налево",
         )
         assertTrue(
             journal().lines().single()
-                .endsWith("gaode=13 dist=400m f28=0 amap=11 suppress=false"))
+                .endsWith("gaode=13 dist=400m f28=0 amap=11 suppress=false src=a11y raw=\"desc:Поверните налево\""))
     }
 
     @Test fun `numbered roundabout maneuver is recorded next to the enter icon`() {
         journal().append(
             maneuverGaode = 27, distanceMeters = 120, f28 = 0,
             amapIcon = 11, roundaboutNum = 3, suppressArrow = false,
+            source = "notification", raw = "res:ic_roundabout",
         )
-        assertTrue(journal().lines().single().endsWith("f28=0 amap=11 rab=3 suppress=false"))
+        assertTrue(journal().lines().single().endsWith("f28=0 amap=11 rab=3 suppress=false src=notification raw=\"res:ic_roundabout\""))
     }
 
     @Test fun `a silent amap channel is visible as off`() {
         journal().append(
             maneuverGaode = 2, distanceMeters = 90, f28 = 2,
             amapIcon = null, roundaboutNum = null, suppressArrow = true,
+            source = "a11y", raw = "",
         )
-        assertTrue(journal().lines().single().endsWith("f28=2 amap=off suppress=true"))
+        assertTrue(journal().lines().single().endsWith("f28=2 amap=off suppress=true src=a11y raw=\"\""))
     }
 
     @Test fun `ring drops the oldest entries past the cap`() {
@@ -76,6 +79,7 @@ class HudManeuverJournalTest {
             j.append(
                 maneuverGaode = i, distanceMeters = 100, f28 = 1,
                 amapIcon = 9, roundaboutNum = null, suppressArrow = false,
+                source = "a11y", raw = "",
             )
         }
         val lines = j.lines()
@@ -103,8 +107,8 @@ class HudManeuverJournalTest {
         // f28 = the SOME/IP arrow, amap = the broadcast icon: approaching the third exit of a
         // roundabout the arrow field is blank (99) while the Amap channel carries
         // ROUNDABOUT_ENTER (11) plus exit 3 — exactly the comparison #94 needs.
-        assertTrue(lines[0].endsWith("gaode=2 dist=250m f28=2 amap=3 suppress=false"))
-        assertTrue(lines[1].endsWith("gaode=27 dist=300m f28=99 amap=11 rab=3 suppress=false"))
+        assertTrue(lines[0].endsWith("gaode=2 dist=250m f28=2 amap=3 suppress=false src=a11y raw=\"desc:x\""))
+        assertTrue(lines[1].endsWith("gaode=27 dist=300m f28=99 amap=11 rab=3 suppress=false src=a11y raw=\"desc:x\""))
     }
 
     @Test fun `camera takeover is recorded as a suppression change of the same maneuver`() {
@@ -124,7 +128,7 @@ class HudManeuverJournalTest {
 
         val lines = journal().lines()
         assertEquals(2, lines.size)
-        assertTrue(lines[1].endsWith("f28=0 amap=off suppress=true"))
+        assertTrue(lines[1].endsWith("f28=0 amap=off suppress=true src=a11y raw=\"desc:x\""))
     }
 
     @Test fun `a new guidance session re-records its first maneuver`() {
@@ -139,5 +143,20 @@ class HudManeuverJournalTest {
         guidance(gaode = 2)
         loop.tick(wasActive = false)
         assertEquals(2, journal().lines().size)
+    }
+
+    @Test fun `push loop records where the maneuver came from and a drop on a street change (#294)`() {
+        val loop = HudPushLoop(FakeSink(), nowMsProvider = { clock }, maneuvers = journal())
+
+        guidance(gaode = 2, raw = "desc:Поверните направо")
+        loop.tick(wasActive = false)
+        // The next read names another street and carries no maneuver: the arrow goes at once.
+        NavGuidanceHub.update(NavGuidance(distanceMeters = 800, road = "B"), NavGuidanceHub.Source.A11Y, nowMs = clock)
+        loop.tick(wasActive = true)
+
+        val lines = journal().lines()
+        assertEquals(2, lines.size)
+        assertTrue(lines[0], lines[0].endsWith("gaode=2 dist=250m f28=2 amap=off suppress=false src=a11y raw=\"desc:Поверните направо\""))
+        assertTrue(lines[1], lines[1].endsWith("gaode=0 dist=800m f28=0 amap=off suppress=false src=none raw=\"\""))
     }
 }

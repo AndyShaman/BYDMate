@@ -174,6 +174,7 @@ class MediaSessionListenerService : NotificationListenerService() {
             if (!NaviRichNotificationParser.hasNaviSignal(rich)) {
                 Log.d(TAG, "rich parse: stub notification, skipped")
                 tracePost(notification, pkg, id, "stub", null)
+                NavGuidanceHub.countNotifEmpty()
                 return
             }
             lane?.markGuidancePosted()
@@ -196,6 +197,7 @@ class MediaSessionListenerService : NotificationListenerService() {
             hubHasKnownManeuver = hubHasKnownManeuver,
         ) ?: run {
             tracePost(notification, pkg, id, "empty", null)
+            NavGuidanceHub.countNotifEmpty()
             return
         }
         lane?.markGuidancePosted()

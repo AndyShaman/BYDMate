@@ -2065,6 +2065,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("someip_fire_rc=${someIp?.fireCounts()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeFires(it) } ?: "n/a"}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
                 appendLine("hub_snapshot=${RecordingDumpFormat.hubSnapshot(com.bydmate.app.navdata.NavGuidanceHub.snapshot())}")
+                // The current route's counters, or the last route's (the route-summary trace line).
+                appendLine("route_summary: ${com.bydmate.app.navdata.NavGuidanceHub.routeSummary()}")
                 // What each channel actually carried at every maneuver change (#94): the
                 // SOME/IP arrow field next to the Amap icon, on one timeline.
                 val maneuvers = com.bydmate.app.hud.HudManeuverJournal(hudPrefs).lines()
