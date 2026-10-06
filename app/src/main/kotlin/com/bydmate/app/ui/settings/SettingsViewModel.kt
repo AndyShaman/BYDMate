@@ -1718,6 +1718,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 collected.set(collected.get().copy(windows = windows))
                 val hud = runCatching { helper.readBatch(HudDiagnostics.batchItems()) }.getOrNull()
                 collected.set(collected.get().copy(hud = hud))
+                val hudSwitch = runCatching { helper.readBatch(HudDiagnostics.switchBatchItems()) }.getOrNull()
+                collected.set(collected.get().copy(hudSwitch = hudSwitch))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
@@ -1731,6 +1733,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         val steeringHeat: List<Pair<Int, Int>>? = null,
         val windows: List<Pair<Int, Int>>? = null,
         val hud: List<Pair<Int, Int>>? = null,
+        val hudSwitch: List<Pair<Int, Int>>? = null,
     )
 
     /** Liveness and the seat, steering heat and window fid snapshots under ONE shared budget. */
@@ -2320,6 +2323,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 // The car's own «Опц. содержимое → Навигация» gate (#269), read only.
                 appendLine("hud_navi_gate:")
                 HudDiagnostics.format(helperDiag.hud).forEach { appendLine(it) }
+                // The HUD master switch (#292) and the HUD type, read only.
+                appendLine(HudDiagnostics.switchLine(helperDiag.hudSwitch))
                 // How the daemon is reachable: a registered service name, or the Binder it
                 // broadcast to us on firmwares that refuse addService (#64/#148).
                 val registered = com.bydmate.app.data.vehicle.helperServiceBinder() != null

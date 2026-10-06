@@ -1091,6 +1091,9 @@
     <string name="auto_act_steering_heat_on">Aquec. volante lig.</string>
     <string name="auto_act_steering_heat_off">Aquec. volante desl.</string>
     <string name="steering_heat_not_equipped">Este carro não tem aquecimento do volante</string>
+    <string name="auto_act_hud_on">HUD: ligar</string>
+    <string name="auto_act_hud_off">HUD: desligar</string>
+    <string name="hud_not_equipped">Este carro não tem HUD</string>
     <string name="auto_act_ambient_light_on">Luz ambiente lig.</string>
     <string name="auto_act_ambient_light_off">Luz ambiente desl.</string>
     <string name="auto_act_drl_on">DRL lig.</string>

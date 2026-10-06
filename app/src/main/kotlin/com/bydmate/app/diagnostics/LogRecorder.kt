@@ -515,7 +515,7 @@ class LogRecorder internal constructor(
             // rule confirm overlay, the autostart worker, the crash log and the listener grant.
             "NavA11yExtractor:*", "HudAmapBroadcaster:*", "ClusterFrameUi7:*", "ClusterProbe:*",
             "Split37Engine:*", "NativeSplitLauncher:*", "HudTextSanitizer:*", "KnobPlayPause:*",
-            "SteeringHeatChannel:*", "NetworkAvailMon:*", "ConfirmOverlay:*", "ServiceStartWorker:*",
+            "SteeringHeatChannel:*", "HudSwitchChannel:*", "NetworkAvailMon:*", "ConfirmOverlay:*", "ServiceStartWorker:*",
             "CrashLog:*", "MediaSessionGrant:*",
             // The event journal: one line per user action, decision and failure, by=#id links.
             "Trace:*"

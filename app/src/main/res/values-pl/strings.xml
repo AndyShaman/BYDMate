@@ -1250,6 +1250,9 @@
     <string name="auto_act_steering_heat_on">Podgrzewanie kierownicy wł.</string>
     <string name="auto_act_steering_heat_off">Podgrzewanie kierownicy wył.</string>
     <string name="steering_heat_not_equipped">Ten samochód nie ma podgrzewania kierownicy</string>
+    <string name="auto_act_hud_on">HUD: włącz</string>
+    <string name="auto_act_hud_off">HUD: wyłącz</string>
+    <string name="hud_not_equipped">Ten samochód nie ma HUD</string>
     <string name="auto_act_ambient_light_on">Oświetlenie ambient wł.</string>
     <string name="auto_act_ambient_light_off">Oświetlenie ambient wył.</string>
     <string name="auto_act_drl_on">Światła dzienne wł.</string>
