@@ -7,6 +7,7 @@ import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.HudNaviReply
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.navdata.NavGuidance
 import com.bydmate.app.navdata.NavGuidanceHub
@@ -26,6 +27,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -37,6 +39,8 @@ class HudControllerTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val helperClient = mockk<HelperClient>(relaxed = true)
     private val helperBootstrap = mockk<HelperBootstrap>(relaxed = true)
+
+    @get:Rule val trace = TraceRecorder()
 
     private fun controller(bridge: HudSomeIpBridge? = null): HudController =
         HudController(context, helperClient, helperBootstrap).apply {
@@ -250,6 +254,41 @@ class HudControllerTest {
         coVerify(exactly = 1) { helperClient.hudNaviStatus(2) }
         coVerify(exactly = 0) { helperClient.hudNaviStatus(4) }
         c.setEnabled(false)
+    }
+
+    // --- status lines (trace audit) ---
+
+    @Test fun `a failed gateway start is a status line with its step and rc`() {
+        installSomeIp()
+        coEvery { helperBootstrap.ensureRunning() } returns true
+        val bridge = mockk<HudSomeIpBridge>(relaxed = true)
+        coEvery { bridge.bind() } returns true
+        every { bridge.startService(any()) } returns -2
+        val c = controller(bridge)
+        c.setEnabled(true)
+        assertEquals(HudController.Status.BIND_FAILED, c.status.value)
+        val status = trace.events().filter { it.contains(" status ") }
+        assertEquals(2, status.size)
+        assertTrue(status[0], status[0].contains("status to=connecting #"))
+        assertTrue(status[1], status[1].contains("status to=bind_failed step=start_service rc=-2 #"))
+    }
+
+    @Test fun `the output on and off are status lines, the way goes to the route summary`() {
+        installSomeIp()
+        coEvery { helperBootstrap.ensureRunning() } returns true
+        val c = controller(connectedBridge())
+        c.setEnabled(true)
+        assertEquals(HudController.MODE_GLASS_ONLY, NavGuidanceHub.hudWay)
+        c.setEnabled(false)
+        awaitTrue { c.status.value == HudController.Status.OFF }
+        assertEquals(0, NavGuidanceHub.hudWay)
+        val status = trace.events().filter { it.contains(" status ") }.map { it.substringAfter("status ").substringBefore(" #") }
+        assertEquals(listOf("to=connecting", "to=on rc=0", "to=off"), status)
+    }
+
+    @Test fun `a service stop with the output already off writes no status line`() {
+        controller().stop()
+        assertTrue(trace.events().none { it.contains(" status ") })
     }
 
     private fun awaitTrue(timeoutMs: Long = 5_000, cond: () -> Boolean) {
