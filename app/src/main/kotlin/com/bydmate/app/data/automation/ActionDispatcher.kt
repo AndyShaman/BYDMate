@@ -369,11 +369,12 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             else -> resolveLocksToggle(value)   // TOGGLE_LOCKS -- the only target left
         }
 
-        /** Why a param dispatch failed, as the step reason, always in the app language. Only the
-         *  steering heat channel reports NotEquipped (see VehicleWriteError). The raw error
+        /** Why a param dispatch failed, as the step reason, always in the app language. Besides
+         *  drive mode, the steering heat and HUD channels report NotEquipped. The raw error
          *  (`value=-10011 sentinel returned` and the like) stays in the log only. */
         internal fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when {
             err is VehicleWriteError && DriveMode.ofAction(err.action) != null -> driveModeFailureReason(err, strings)
+            err is VehicleWriteError.NotEquipped && err.action.startsWith("hud_") -> strings.get(R.string.hud_not_equipped)
             err is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
             err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
                 stuckWindowsReason(err.stuckPanes, strings)

@@ -71,6 +71,11 @@ class CommandTranslatorTest {
         assertEquals(CommandTranslator.Resolved("steering_heat_off", 1), one("关闭方向盘加热"))
     }
 
+    @Test fun `hud commands map to the switch values`() {
+        assertEquals(CommandTranslator.Resolved("hud_on", 1), one("打开抬头显示"))
+        assertEquals(CommandTranslator.Resolved("hud_off", 2), one("关闭抬头显示"))
+    }
+
     @Test fun `drive mode commands map to their dev 1023 values`() {
         val expected = mapOf(
             "ECO模式" to ("drive_mode_eco" to 2),

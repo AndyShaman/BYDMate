@@ -169,6 +169,17 @@ class ActionDispatcherFailureLocaleTest {
         }
     }
 
+    // ── HUD (#292) ─────────────────────────────────────────────────────────────
+
+    @Test fun `a car without a HUD says so in the app language`() = runTest {
+        coEvery { vehicleApi.dispatch(any()) } returns Result.failure(VehicleWriteError.NotEquipped("hud_off"))
+        val off = ActionDef(command = "关闭抬头显示", displayName = "x", kind = "param")
+        lang("ru")
+        assertEquals("На этой машине нет HUD", reason(off))
+        lang("en")
+        assertEquals("This car has no HUD", reason(off))
+    }
+
     @Test fun `a terrain mode at unknown speed is refused before the car is asked`() = runTest {
         lang("ru")
         dispatcher.readSpeedNow = { null }

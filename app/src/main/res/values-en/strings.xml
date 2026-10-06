@@ -1098,6 +1098,9 @@
     <string name="auto_act_steering_heat_on">Steering Wheel Heat On</string>
     <string name="auto_act_steering_heat_off">Steering Wheel Heat Off</string>
     <string name="steering_heat_not_equipped">This car has no steering wheel heating</string>
+    <string name="auto_act_hud_on">HUD: on</string>
+    <string name="auto_act_hud_off">HUD: off</string>
+    <string name="hud_not_equipped">This car has no HUD</string>
     <string name="auto_act_ambient_light_on">Ambient Light On</string>
     <string name="auto_act_ambient_light_off">Ambient Light Off</string>
     <string name="auto_act_drl_on">DRL On</string>

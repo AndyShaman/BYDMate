@@ -90,6 +90,9 @@ object VoiceCatalog {
         VoiceCommandSpec(OFF, LIGHT_DRL) { "关闭日行灯" },
         VoiceCommandSpec(ON, LIGHT_INTERIOR) { "打开车内灯" },
         VoiceCommandSpec(OFF, LIGHT_INTERIOR) { "关闭车内灯" },
+        // HUD master switch
+        VoiceCommandSpec(ON, HUD) { "打开抬头显示" },
+        VoiceCommandSpec(OFF, HUD) { "关闭抬头显示" },
         // Locks — "запри"/"отопри" via the door/lock synonyms ("замок", "двери").
         VoiceCommandSpec(ON, LOCK) { "车门上锁" },
         VoiceCommandSpec(OFF, LOCK) { "车门解锁" },
