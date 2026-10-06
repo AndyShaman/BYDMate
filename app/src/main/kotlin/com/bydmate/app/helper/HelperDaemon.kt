@@ -2862,6 +2862,9 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
         packageName, windowingMode = null, displayId = displayId, activityType = ACTIVITY_TYPE_STANDARD,
     )
     if (taskId <= 0) return false
+    // #288: a task inside a native split pane may not follow the root-task move; remember where
+    // it started so [splitFallbackCore] can check it.
+    val before = taskModeState(taskId)
     // Each redirect op is best-effort, mirroring CarControlImpl (every reflective call there returns
     // a status string and swallows its own exception). resizeTask in particular throws "not allowed"
     // on a fullscreen task — that must NOT abort the move/focus or bubble up as a launchAndForce
@@ -2887,6 +2890,14 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
     // whose process is dying can still be listed by getTasks with a stale baseActivity and hide the
     // death from the check below.
     Thread.sleep(500L)
+    val placed = splitFallbackCore(
+        taskId, displayId, before,
+        stateOf = { ti -> taskModeState(ti) },
+        resolveComponent = { resolveLaunchComponent(packageName) },
+        shell = amShell,
+        sleep = { Thread.sleep(it) },
+    )
+    if (!placed) return false
     // App died during the move (2GIS/Qt) → relaunch ONCE born on the display; no retry loop.
     if (findTaskId(packageName) <= 0) {
         val rebornId = resolveOrLaunchTask(
@@ -2899,6 +2910,68 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
     return true
 }
 
+/**
+ * True when a task that sat in a native split pane ([before]) is still alive off [displayId] after
+ * the move ([after]). Fullscreen or unknown [before] is never a fallback case; a null [after]
+ * (task gone) is left to the liveness check.
+ */
+internal fun needsSplitFallback(before: TaskModeState?, after: TaskModeState?, displayId: Int): Boolean =
+    before != null && before.windowingMode in SPLIT_WINDOWING_MODES &&
+        after != null && after.displayId != displayId
+
+/**
+ * #288: a navigator pulled back into the native 50/50 split lives in a split pane (mode 3/4), and
+ * moveRootTaskToDisplay leaves it there without a word, so the cluster stayed dark while the
+ * launch reported success. When [before] is a split pane and the task is still off [displayId],
+ * the light pullback's `am start` (mode+display on the EXISTING task, task id kept) is aimed at
+ * the target display and the task is read back with the same settle budget. Returns false only
+ * when that fallback ran and the task did not arrive; any other start returns true untouched.
+ */
+@Suppress("LongParameterList") // every system touch is injected so tests pin the sequence
+internal fun splitFallbackCore(
+    taskId: Int,
+    displayId: Int,
+    before: TaskModeState?,
+    stateOf: (Int) -> TaskModeState?,
+    resolveComponent: () -> String?,
+    shell: (String, List<String>) -> String,
+    sleep: (Long) -> Unit,
+): Boolean {
+    if (before == null || before.windowingMode !in SPLIT_WINDOWING_MODES) return true
+    val after = stateOf(taskId)
+    if (!needsSplitFallback(before, after, displayId)) {
+        android.util.Log.i("bydmate_helper", "launchAndForce split: task=$taskId from=$before moved state=$after")
+        return true
+    }
+    val component = resolveComponent()
+    if (component == null) {
+        android.util.Log.w("bydmate_helper", "launchAndForce split: task=$taskId state=$after no launcher component")
+        return false
+    }
+    android.util.Log.i(
+        "bydmate_helper",
+        "launchAndForce split: task=$taskId from=$before still state=$after → am start display=$displayId",
+    )
+    val out = runCatching {
+        shell("am start --windowingMode $WINDOWING_MODE_FULLSCREEN --display $displayId -n \"\$1\"", listOf(component))
+    }.getOrElse { "Exception ${it.message}" }
+    if (out.contains("Error") || out.contains("Exception")) {
+        android.util.Log.w("bydmate_helper", "launchAndForce split: task=$taskId am failed: ${out.take(120)}")
+        return false
+    }
+    var last: TaskModeState? = null
+    repeat(PULLBACK_READS) {
+        sleep(PULLBACK_POLL_MS)
+        last = stateOf(taskId)
+        if (last?.displayId == displayId) {
+            android.util.Log.i("bydmate_helper", "launchAndForce split: task=$taskId fallback ok state=$last")
+            return true
+        }
+    }
+    android.util.Log.w("bydmate_helper", "launchAndForce split: task=$taskId fallback failed state=$last")
+    return false
+}
+
 /** Status codes for [launchFreeformCore] / TX_LAUNCH_FREEFORM. */
 internal object FreeformResultCodes {
     const val OK = 0
@@ -2909,6 +2982,8 @@ internal object FreeformResultCodes {
 // WindowConfiguration windowing modes (android.app; hidden constants, stable since API 28).
 internal const val WINDOWING_MODE_FULLSCREEN = 1
 internal const val WINDOWING_MODE_FREEFORM = 5
+// Native split panes (SPLIT_SCREEN_PRIMARY / SECONDARY).
+internal val SPLIT_WINDOWING_MODES = setOf(3, 4)
 
 /** Settle budget of the light fullscreen pull-back: [PULLBACK_READS] reads, one per pause. */
 internal const val PULLBACK_POLL_MS = 300L

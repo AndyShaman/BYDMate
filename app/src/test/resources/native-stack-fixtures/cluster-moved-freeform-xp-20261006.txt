@@ -1,0 +1,47 @@
+# Tester dump, BYDMate 3.19.8 (code 501), DiLink 5.0, 2026-10-06: ru.auto.music projected in the
+# direct transport, split off. Started from scratch by the projection key, the player's task is
+# placed on the cluster (verify: task_display=4 wm=5) and a few seconds later the SAME task sits on
+# the main display, still freeform (the daemon's pullback reads task=54 windowingMode=5 displayId=0):
+# a move, not a death. 3.19.8 counted it as a density strike, latched the player density-unsafe
+# after two of them (reason "fled to display 0") and left the moved task as a piece of window on
+# the main screen. Cluster journal 16:20:15-16:22:41, then the trace and daemon lines of the same span.
+2026-10-06 16:20:15 setMode OFF -> FULLSCREEN (reason=star_key split=off navi_wm=none)
+2026-10-06 16:20:15 transport=direct display=4 "shared_fission_bg_XDJAScreenProjection_1" 1920x660 dpi=320 prefer_full=false
+2026-10-06 16:20:15 direct: density scale=50% dpi=160 display=4 ok=true readback=[Physical density: 320; Override density: 160] (before launch)
+2026-10-06 16:20:17 direct OK: ru.auto.music display=4 bounds=[1306,0,1920,660] dpi=320
+2026-10-06 16:20:17 projection active: pkg=ru.auto.music direct display=4
+2026-10-06 16:20:19 verify after_ms=2000 direct display=4 task_display=4 wm=5 overlay=false split=off
+2026-10-06 16:20:23 direct task fled to display 0; relaunching on display 4 (pkg=ru.auto.music)
+2026-10-06 16:20:23 direct: dpi=160 kept for the relaunch (first loss of ru.auto.music)
+2026-10-06 16:20:24 direct: recovery relaunch result=OK
+2026-10-06 16:20:26 direct task fled to display 0; relaunching on display 4 (pkg=ru.auto.music)
+2026-10-06 16:20:26 direct: density reset to native before relaunch ok=true; ru.auto.music marked density-unsafe (dpi=160, fled to display 0, second loss)
+2026-10-06 16:20:26 direct: recovery relaunch result=OK
+2026-10-06 16:20:59 setMode FULLSCREEN -> OFF (reason=star_key)
+2026-10-06 16:20:59 pullback: task=41 already home (display 0, fullscreen), skipping restore (pkg=ru.auto.music)
+2026-10-06 16:20:59 pullback: density reset ok=true display=4 readback=[Physical density: 320]
+2026-10-06 16:21:06 setMode OFF -> FULLSCREEN (reason=star_key split=off navi_wm=1 navi_display=0)
+2026-10-06 16:21:06 transport=direct display=4 "shared_fission_bg_XDJAScreenProjection_1" 1920x660 dpi=320 prefer_full=false
+2026-10-06 16:21:06 direct: density skipped for ru.auto.music (died after non-native dpi earlier)
+2026-10-06 16:21:06 direct OK: ru.auto.music display=4 bounds=[1306,0,1920,660] dpi=320
+2026-10-06 16:21:06 projection active: pkg=ru.auto.music direct display=4
+2026-10-06 16:21:08 verify after_ms=2000 direct display=4 task_display=4 wm=5 overlay=false split=off
+2026-10-06 16:21:23 setMode FULLSCREEN -> OFF (reason=star_key)
+2026-10-06 16:21:26 pullback: task recreated by setMode: 41 -> 46 (pkg=ru.auto.music)
+2026-10-06 16:21:26 pullback: density reset ok=true display=4 readback=[Physical density: 320]
+2026-10-06 16:22:16 setMode OFF -> FULLSCREEN (reason=star_key split=off navi_wm=none)
+2026-10-06 16:22:16 transport=direct display=4 "shared_fission_bg_XDJAScreenProjection_1" 1920x660 dpi=320 prefer_full=false
+2026-10-06 16:22:16 direct: density skipped for ru.auto.music (died after non-native dpi earlier)
+2026-10-06 16:22:18 direct OK: ru.auto.music display=4 bounds=[1306,0,1920,660] dpi=320
+2026-10-06 16:22:18 projection active: pkg=ru.auto.music direct display=4
+2026-10-06 16:22:20 verify after_ms=2000 direct display=4 task_display=4 wm=5 overlay=false split=off
+2026-10-06 16:22:24 direct task fled to display 0; relaunching on display 4 (pkg=ru.auto.music)
+2026-10-06 16:22:25 direct: recovery relaunch result=OK
+2026-10-06 16:22:38 setMode FULLSCREEN -> OFF (reason=star_key)
+2026-10-06 16:22:40 pullback: task recreated by setMode: 54 -> 55 (pkg=ru.auto.music)
+2026-10-06 16:22:41 pullback: density reset ok=true display=4 readback=[Physical density: 320]
+16:20:23.719 screen cluster-loss pkg=ru.auto.music loss=fled to=0 display=4 strike=1 dpi=160
+16:20:26.257 screen cluster-loss pkg=ru.auto.music loss=fled to=0 display=4 strike=2 dpi=160
+16:20:26.469 screen cluster-density-unsafe pkg=ru.auto.music dpi=160 loss=fled_to_display_0 reset=true
+16:22:24.570 screen cluster-loss pkg=ru.auto.music loss=fled to=0 display=4 strike=1 dpi=0
+16:22:39.947 bydmate_helper: pullback light path failed: task=54 state=TaskModeState(windowingMode=5, displayId=0) -> remove+relaunch

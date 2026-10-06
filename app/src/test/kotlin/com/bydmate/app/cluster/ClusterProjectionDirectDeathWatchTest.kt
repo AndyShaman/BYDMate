@@ -282,12 +282,14 @@ class ClusterProjectionDirectDeathWatchTest {
             Thread.sleep(25)
         }
         assertEquals(ClusterMode.FULLSCREEN, ClusterProjectionManager.currentMode)
+        // Read while the projection is live: the third loss ends it and clears the display id.
+        val display = clusterDisplayId()
         shadow.idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
 
         coVerifyOrder {
             helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
             helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
-            helper.setDisplayDensity(clusterDisplayId(), 0)
+            helper.setDisplayDensity(display, 0)
             helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
         }
         coVerify(exactly = 3) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
@@ -318,6 +320,85 @@ class ClusterProjectionDirectDeathWatchTest {
         confirmVerified(helper)
     }
 
+    /**
+     * Tester's car (3.19.8, cold start): the placed task is moved to the main screen and stays
+     * freeform there. It goes back to the cluster at most twice; when it leaves a third time the
+     * projection ends honestly: the task is restored fullscreen on the main screen and the state
+     * is OFF, instead of a piece of window on the main screen under an "active" projection.
+     *
+     * Anti-vacuity: no cap keeps returning it (more than 3 launches); ending without the pullback
+     * leaves no fullscreen restore; ending without the failure path leaves FULLSCREEN.
+     */
+    @Test
+    fun `a moved task is returned at most twice, then the projection ends on the main screen`() {
+        val helper = directProjectionHelper()
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } returns movedTask()
+        coEvery { helper.getTaskId(NAVI_PACKAGE) } returns 42
+
+        projectDirect(helper)
+        shadowOf(Looper.getMainLooper()).idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerify(exactly = 3) {
+            helper.launchFreeform(
+                NAVI_PACKAGE, any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD,
+            )
+        }
+        coVerify(exactly = 1) { helper.setTaskWindowingMode(42, WINDOWING_MODE_FULLSCREEN, any()) }
+        assertEquals(ClusterMode.OFF, ClusterProjectionManager.currentMode)
+        assertEquals(-1, clusterDisplayId())
+        assertTrue(
+            "the return must be journaled: $journalDump",
+            journalHas("returning it to display"),
+        )
+        assertTrue(
+            "the honest end must be journaled: $journalDump",
+            journalHas("did not stay on display"),
+        )
+    }
+
+    /**
+     * One return that holds: the projection stays active and nothing is pulled back.
+     *
+     * Anti-vacuity: ending on the first move pulls the task back and switches OFF.
+     */
+    @Test
+    fun `a moved task that stays after the return keeps the projection`() {
+        var launches = 0
+        val helper = directProjectionHelper()
+        coEvery {
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+        } answers { launches++; FreeformLaunchResult.OK }
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } answers {
+            if (launches <= 1) movedTask() else liveTask()
+        }
+
+        projectDirect(helper)
+        shadowOf(Looper.getMainLooper()).idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerify(exactly = 2) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), WINDOWING_MODE_FULLSCREEN, any()) }
+        assertEquals(ClusterMode.FULLSCREEN, ClusterProjectionManager.currentMode)
+    }
+
+    /**
+     * The existing give-up branch (the born-on-display relaunch did not hold) ends the same honest
+     * way: the projection is OFF, not "active" with an empty cluster.
+     *
+     * Anti-vacuity: a log-only give-up leaves FULLSCREEN.
+     */
+    @Test
+    fun `a relaunch that does not hold switches the projection off`() {
+        val helper = directProjectionHelper()
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } returns deadTask()
+
+        projectDirect(helper)
+        shadowOf(Looper.getMainLooper()).idleFor(3 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerify(exactly = 2) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        assertEquals(ClusterMode.OFF, ClusterProjectionManager.currentMode)
+        assertEquals(-1, clusterDisplayId())
+    }
+
     // --- helpers ---
 
     private fun directProjectionHelper(): HelperClient = mockk<HelperClient>(relaxed = true).also {
@@ -340,6 +421,9 @@ class ClusterProjectionDirectDeathWatchTest {
 
     /** Alive, but fullscreen on the main display: the system restarted it there after the death. */
     private fun fledTask() = SplitTaskState(42, WINDOWING_MODE_FULLSCREEN, 0, 0, 1920, 1200, displayId = 0)
+
+    /** The placed task itself, still freeform, moved to the main display (tester, 3.19.8). */
+    private fun movedTask() = SplitTaskState(42, WINDOWING_MODE_FREEFORM, 1306, 0, 1920, 660, displayId = 0)
 
     /** Drives a successful direct projection and returns once the manager reports FULLSCREEN. */
     private fun projectDirect(helper: HelperClient) {

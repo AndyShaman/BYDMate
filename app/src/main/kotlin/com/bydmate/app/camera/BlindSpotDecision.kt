@@ -22,15 +22,17 @@ data class BlindSpotInput(
 
 data class BlindSpotDecision(
     val show: BlindSpotSide,
-    /** Keep the AVM camera open (previews bound, windows at alpha 0) so a show is instant. */
+    /** A turn signal asks for a view: open the AVM camera (or keep it open). The camera is opened
+     *  on demand, never ahead of a signal; once this goes false the controller closes it after
+     *  its cool-down, so a blinker pulled again inside it reuses the open camera. */
     val cameraWarm: Boolean,
 )
 
 /** Beyond this the telemetry is not trusted and both windows go down. */
 const val BLIND_SPOT_WATCHDOG_MS = 750L
 
-/** The camera stays warm this far below the show threshold, so slowing down does not
- *  flap the open/close of the vendor stack. */
+/** The fast loop is armed this far below the show threshold, so slowing down does not
+ *  flap the loop on and off. */
 const val BLIND_SPOT_WARM_HYSTERESIS_KMH = 5
 
 /**
@@ -43,24 +45,33 @@ const val BLIND_SPOT_WARM_HYSTERESIS_KMH = 5
  * goes away above 30 km/h on some cars), so our windows would only overlap it: they go down for
  * as long as it is in the foreground, and the camera goes cold with them. A warm camera under it
  * kept two previews streaming and the 360 stuttered until BYDMate was killed (tester dump
- * 2026-10-03); once the 360 is gone the camera warms again by the speed rule, as after reverse.
+ * 2026-10-03); once the 360 is gone a held blinker opens the camera again, as after reverse.
+ *
+ * The camera is wanted only while a single-side turn signal is on at speed: holding it open
+ * ahead of time at every speed above the threshold loaded the head unit (a tester's lagged with
+ * our camera running alongside other video). Stale telemetry does not cool it — that is the
+ * watchdog's job in the controller.
  */
 fun decideBlindSpot(input: BlindSpotInput): BlindSpotDecision {
     val speed = input.speedKmh
     val warm = !input.gearIsReverse && !input.nativeCameraForeground && speed != null &&
-        speed >= input.thresholdKmh - BLIND_SPOT_WARM_HYSTERESIS_KMH
+        speed >= input.thresholdKmh && blindSpotSignalSide(input.blink) != BlindSpotSide.NONE
     val show = when {
         input.gearIsReverse -> BlindSpotSide.NONE
         input.telemetryAgeMs > BLIND_SPOT_WATCHDOG_MS -> BlindSpotSide.NONE
         input.nativeCameraForeground -> BlindSpotSide.NONE
         speed == null || speed < input.thresholdKmh -> BlindSpotSide.NONE
-        // Anything outside the two single-side masks (off, hazard, the transient 9 seen on
-        // the push channel) means "no blind-spot view".
-        input.blink == BLINK_LEFT -> BlindSpotSide.LEFT
-        input.blink == BLINK_RIGHT -> BlindSpotSide.RIGHT
-        else -> BlindSpotSide.NONE
+        else -> blindSpotSignalSide(input.blink)
     }
     return BlindSpotDecision(show, warm)
+}
+
+/** The side a turn-signal mask asks for. Anything outside the two single-side masks (off,
+ *  hazard, the transient 9 seen on the push channel) means "no blind-spot view". */
+fun blindSpotSignalSide(blink: Int?): BlindSpotSide = when (blink) {
+    BLINK_LEFT -> BlindSpotSide.LEFT
+    BLINK_RIGHT -> BlindSpotSide.RIGHT
+    else -> BlindSpotSide.NONE
 }
 
 private const val BLINK_LEFT = 2

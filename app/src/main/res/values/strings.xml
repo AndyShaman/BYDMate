@@ -1254,6 +1254,9 @@
     <string name="auto_act_steering_heat_on">Подогрев руля вкл</string>
     <string name="auto_act_steering_heat_off">Подогрев руля выкл</string>
     <string name="steering_heat_not_equipped">На этой машине нет подогрева руля</string>
+    <string name="auto_act_hud_on">HUD: включить</string>
+    <string name="auto_act_hud_off">HUD: выключить</string>
+    <string name="hud_not_equipped">На этой машине нет HUD</string>
     <string name="auto_act_ambient_light_on">Амбиент вкл</string>
     <string name="auto_act_ambient_light_off">Амбиент выкл</string>
     <string name="auto_act_drl_on">ДХО вкл</string>
