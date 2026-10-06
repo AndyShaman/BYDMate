@@ -1,5 +1,8 @@
 package com.bydmate.app.cluster
 
+import com.bydmate.app.data.vehicle.SplitTaskState
+import com.bydmate.app.helper.SPLIT_WINDOWING_MODES
+
 /** Default projection target. The actual package is user-selectable in settings (KEY_TARGET_PACKAGE). */
 const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
 
@@ -189,3 +192,20 @@ fun pickProjectionDisplayName(names: List<String>, preferFull: Boolean): String?
         ?: names.firstOrNull { it.endsWith(other) }
         ?: names.firstOrNull()
 }
+
+/**
+ * #288: why a VD projection that started from a native split pane (mode 3/4 in [before]) is not
+ * active — null when [after] shows the task on [vdId], and always null for any other start
+ * (fullscreen, no task, unknown state), which keeps today's outcome there. A silent daemon
+ * ([after] null) is not proof of a miss either; the post-projection verify line reports it.
+ */
+internal fun splitPlacementFailure(before: SplitTaskState?, after: SplitTaskState?, vdId: Int): String? {
+    if (!inSplitPane(before) || after == null) return null
+    if (after.taskId <= 0) return "split: task=none"
+    if (after.displayId == vdId) return null
+    return "split: task_display=${after.displayId} wm=${after.windowingMode}"
+}
+
+/** The task lives in a native split pane (mode 3/4). */
+internal fun inSplitPane(state: SplitTaskState?): Boolean =
+    state != null && state.taskId > 0 && state.windowingMode in SPLIT_WINDOWING_MODES

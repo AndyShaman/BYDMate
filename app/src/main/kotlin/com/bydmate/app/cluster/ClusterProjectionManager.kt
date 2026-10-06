@@ -426,6 +426,12 @@ object ClusterProjectionManager {
         }
     }
 
+    /** One task read; null when the daemon could not answer. */
+    private suspend fun readTaskState(helper: HelperClient, pkg: String): SplitTaskState? =
+        runCatching { helper.getTaskState(pkg) }
+            .onFailure { if (it is CancellationException) throw it }
+            .getOrNull()
+
     private fun verifyLine(afterMs: Long, where: String, state: SplitTaskState?): String {
         val task = when {
             state == null -> "task=unknown"
@@ -1407,10 +1413,21 @@ object ClusterProjectionManager {
             // task-transition phase (see SSM.DEPARTURE_GRACE_MS invariant KDoc for derivation).
             onBeforeClusterSend?.invoke(pkg)
             placementAttempted = true
+            // #288: where the task starts from; only a native split pane gets the check below.
+            val before = readTaskState(helper, pkg)
             val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
                 Log.e(TAG, "launchAndForce failed")
                 log("vd: launchAndForce failed pkg=$pkg vd=$id (task never appeared on the cluster)")
+                onClusterSendFailed?.invoke(pkg)
+                hideOverlay(helper); return "projection"
+            }
+            val splitMiss = splitPlacementFailure(
+                before, if (inSplitPane(before)) readTaskState(helper, pkg) else null, id,
+            )
+            if (splitMiss != null) {
+                Log.e(TAG, "launchAndForce left the task off the VD ($splitMiss)")
+                log("vd: launchAndForce ok but task not on vd=$id pkg=$pkg $splitMiss")
                 onClusterSendFailed?.invoke(pkg)
                 hideOverlay(helper); return "projection"
             }
