@@ -203,6 +203,22 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
+    /** Show the widget only over the home screen (launcher); hide it in every other app. */
+    fun isHomeOnly(): Boolean = prefs.getBoolean(KEY_HOME_ONLY, false)
+
+    fun setHomeOnly(homeOnly: Boolean) {
+        prefs.edit().putBoolean(KEY_HOME_ONLY, homeOnly).apply()
+    }
+
+    fun homeOnlyFlow(): Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == KEY_HOME_ONLY) trySend(isHomeOnly())
+        }
+        trySend(isHomeOnly())
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     /**
      * Packages the widget hides itself over, chosen by the user in Settings.
      * SharedPreferences hands out its own live Set instance — copy on read and
@@ -253,6 +269,7 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_BUTTONS_ENABLED = "widget_buttons_enabled"
         const val KEY_HIDE_ON_YOUTUBE = "widget_hide_on_youtube"
         const val KEY_HIDE_IN_APPS = "widget_hide_in_apps"
+        const val KEY_HOME_ONLY = "widget_home_only"
         const val KEY_BUTTON_ICON_PREFIX = "widget_button_icon_"
         fun buttonIconKey(number: Int): String = "$KEY_BUTTON_ICON_PREFIX$number"
         const val DEFAULT_LEFT_TAP_APP_PKG = "ru.yandex.yandexnavi"

@@ -104,7 +104,10 @@ class HudAmapBroadcaster(private val context: Context) {
         if (s.maneuverGaode in 25..34) {
             intent.putExtra("ROUNG_ABOUT_NUM", s.maneuverGaode - 24)
         }
-        intent.putExtra("SEG_REMAIN_DIS", s.distanceMeters)
+        // 1..10 m lifted to the glass floor (below it the glass draws "现在", #294); 0 = unknown stays.
+        val segDis = if (s.distanceMeters in 1 until HudProtobufBuilder.MIN_DISTANCE_METERS)
+            HudProtobufBuilder.MIN_DISTANCE_METERS else s.distanceMeters
+        intent.putExtra("SEG_REMAIN_DIS", segDis)
         intent.putExtra("NEXT_ROAD_NAME", s.road)
         intent.putExtra("ROUTE_REMAIN_DIS", routeRemDis)
         intent.putExtra("ROUTE_REMAIN_TIME", routeRemTime)
@@ -112,7 +115,7 @@ class HudAmapBroadcaster(private val context: Context) {
         val segAuto = if (s.distanceMeters >= 1000) {
             String.format("%.1f km", s.distanceMeters / 1000.0f)
         } else {
-            "${s.distanceMeters} m"
+            "$segDis m"
         }
         intent.putExtra("SEG_REMAIN_DIS_AUTO", segAuto)
         // ROUTE_REMAIN_DIS_AUTO: donor :243-249 (only when route distance is known)

@@ -37,10 +37,11 @@ class ScreenTraceTest {
 
     // --- Field log 28.09: the camera app's parking radar overlay read as the camera ---
 
-    @Test fun `an overlay window of the camera app is recorded as ignored and the widget stays`() {
+    @Test fun `an overlay window of the camera app is recorded as ignored once per run and the widget stays`() {
         repeat(3) { monitor.onForegroundHint(CAMERA, RADAR_OVERLAY) }
 
-        assertEquals(listOf("screen hint-ignored pkg=$CAMERA class=$RADAR_OVERLAY #1 (x3)"), trace.events())
+        // One line, no repeat counter: the overlay firing on every gesture used to fill the ring.
+        assertEquals(listOf("screen hint-ignored pkg=$CAMERA class=$RADAR_OVERLAY #1"), trace.events())
         assertFalse(monitor.active.value)
         assertNull(widgetHideReason())
     }

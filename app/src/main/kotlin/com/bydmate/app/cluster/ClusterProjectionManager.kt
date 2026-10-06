@@ -99,6 +99,8 @@ object ClusterProjectionManager {
     // how often. The reported death happens a few seconds after the move, i.e. after the daemon
     // has already answered OK (see [armDirectDeathWatch]).
     private const val DIRECT_DEATH_CHECK_INTERVAL_MS = 2000L
+    /** When the one post-projection check looks at the cluster. */
+    private const val VERIFY_AFTER_MS = 3_000L
     private const val DIRECT_DEATH_CHECKS = 3
 
     const val PREFS_NAME = "cluster_projection"
@@ -322,6 +324,8 @@ object ClusterProjectionManager {
 
     private fun log(payload: String) {
         journal?.append(payload)
+        // The journal keeps 30 lines in prefs; the trace puts them on the shared timeline (#288).
+        Trace.journal(TraceArea.CLUSTER, payload)
     }
 
     /** Live projection state for the diagnostic dump. Read lock-free, like [isProjectionActive]:
@@ -383,10 +387,53 @@ object ClusterProjectionManager {
                     return@withLock
                 }
                 Log.i(TAG, "setMode: $currentMode -> $mode")
-                log("setMode $currentMode -> $mode (reason=$reason)")
+                log("setMode $currentMode -> $mode (reason=$reason${moveContext(appContext, mode, helper)})")
                 applyModeLocked(appContext, mode, helper, bootstrap)
             }
         }
+    }
+
+    /**
+     * What the projection starts from (#288, #259): whether split is on and the windowing mode and
+     * display of the navigator's task before it moves. Empty for OFF: one task read per press.
+     */
+    private suspend fun moveContext(context: Context, mode: ClusterMode, helper: HelperClient): String {
+        if (mode != ClusterMode.FULLSCREEN) return ""
+        val split = if (splitPreferences.isFeatureEnabled()) "on" else "off"
+        val state = runCatching { helper.getTaskState(targetPackage(context)) }
+            .onFailure { if (it is CancellationException) throw it }
+            .getOrNull()
+        val task = if (state == null || state.taskId <= 0) "navi_wm=none"
+                   else "navi_wm=${state.windowingMode} navi_display=${state.displayId}"
+        return " split=$split $task"
+    }
+
+    /**
+     * One look at a VirtualDisplay projection [VERIFY_AFTER_MS] after it went active (#288: the
+     * journal says active, the cluster stays dark): where the projected task really is and in
+     * which windowing mode. Skipped when the projection already ended or changed hands. A direct
+     * projection gets the same line from its death watch's first read (no read of its own).
+     */
+    private fun scheduleVerify(helper: HelperClient, pkg: String?, vdId: Int) {
+        val target = pkg ?: return
+        scope.launch {
+            delay(VERIFY_AFTER_MS)
+            if (currentMode != ClusterMode.FULLSCREEN || projectedPackage != target) return@launch
+            val state = runCatching { helper.getTaskState(target) }
+                .onFailure { if (it is CancellationException) throw it }
+                .getOrNull()
+            log(verifyLine(VERIFY_AFTER_MS, "vd=$vdId", state))
+        }
+    }
+
+    private fun verifyLine(afterMs: Long, where: String, state: SplitTaskState?): String {
+        val task = when {
+            state == null -> "task=unknown"
+            state.taskId <= 0 -> "task=none"
+            else -> "task_display=${state.displayId} wm=${state.windowingMode}"
+        }
+        val split = if (splitPreferences.isFeatureEnabled()) "on" else "off"
+        return "verify after_ms=$afterMs $where $task overlay=${overlayView != null} split=$split"
     }
 
     /**
@@ -885,6 +932,7 @@ object ClusterProjectionManager {
                     log("projection active: pkg=$projectedPackage " +
                         if (directDisplayId != -1) "direct display=$directDisplayId"
                         else "vd=$remoteDisplayId")
+                    if (directDisplayId == -1) scheduleVerify(helper, projectedPackage, remoteDisplayId)
                 } else {
                     // projection failed: keep state honest. project() already tore down the
                     // overlay/VD on its failure paths; make sure Navi is back on the main screen.
@@ -1577,7 +1625,7 @@ object ClusterProjectionManager {
      * that writes it. [applyModeLocked] cancels the watch on every mode transition.
      *
      * Healthy fleet (Leopard 3, where the navigator survives the move): three
-     * [HelperClient.getTaskState] reads and nothing else — no journal lines, no daemon writes.
+     * [HelperClient.getTaskState] reads and nothing else — one verify line, no daemon writes.
      *
      * The watch doubles as the probe behind [densityUnsafe]: when [densityApplied] is non-zero the
      * scale override is a suspect for the death (#121), but one loss is no proof — on some cars the
@@ -1595,6 +1643,7 @@ object ClusterProjectionManager {
             var density = densityApplied
             var strikes = 0
             var nativeRelaunched = false
+            var verified = false
             var checksLeft = DIRECT_DEATH_CHECKS
             while (checksLeft > 0) {
                 checksLeft--
@@ -1606,6 +1655,11 @@ object ClusterProjectionManager {
                     // The channel the split watchdog reads tasks with: null = the daemon could not
                     // answer, and an unreachable daemon must not be read as a lost projection.
                     val state = helper.getTaskState(pkg) ?: return@withLock
+                    // The first answer doubles as the post-projection check (#288).
+                    if (!verified) {
+                        verified = true
+                        log(verifyLine(DIRECT_DEATH_CHECK_INTERVAL_MS, "direct display=$displayId", state))
+                    }
                     // Alive ON THE CLUSTER, not just alive: the daemon answers with the package's
                     // first task regardless of display, so a task the system auto-restarted on the
                     // main screen (taskId > 0, displayId 0) would otherwise mask the death and leave

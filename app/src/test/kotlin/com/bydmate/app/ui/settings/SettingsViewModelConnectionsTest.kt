@@ -311,6 +311,8 @@ class SettingsViewModelConnectionsTest {
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
             telegramReporter = mockk(relaxed = true),
+            clusterMusicBridge = mockk(relaxed = true),
+            vehicleWriteLogDao = mockk(relaxed = true),
         )
     }
 

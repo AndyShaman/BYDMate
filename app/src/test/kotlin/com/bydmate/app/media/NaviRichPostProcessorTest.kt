@@ -134,4 +134,27 @@ class NaviRichPostProcessorTest {
         const val GPS_NOTICE_TITLE = "Установите сервисы Google Play"
         const val GPS_NOTICE_TEXT = "Для работы приложения \"Яндекс Навигатор\" требуется"
     }
+
+    // -- #294: the raw input behind the maneuver --
+
+    @Test
+    fun `rich raw input is the icon resource, or the instruction head when no icon mapped`() {
+        val byIcon = NaviRichPostProcessor.buildRichUpdate(
+            NaviRichNotificationParser.RichNaviInfo(maneuverGaode = 2, maneuverRes = "ic_right"), null, null, null)
+        assertEquals("res:ic_right", byIcon.maneuverRaw)
+        val byText = NaviRichPostProcessor.buildRichUpdate(
+            NaviRichNotificationParser.RichNaviInfo(instruction = "Поверните направо на улицу Ленина"), null, null, null)
+        assertEquals("text:key=поверните направо", byText.maneuverRaw)
+    }
+
+    @Test
+    fun `extras raw input is the text when a phrase matched, else the small icon`() {
+        val byText = NaviRichPostProcessor.buildExtrasFallback(
+            "300 м", "Поверните направо", null, "ic_nav", isMaps = false, hubHasKnownManeuver = false)!!
+        assertEquals("text:key=поверните направо", byText.maneuverRaw)
+        val byIcon = NaviRichPostProcessor.buildExtrasFallback(
+            "300 м", "Main St", null, "notification_left_sdl", isMaps = false, hubHasKnownManeuver = false)!!
+        assertEquals(1, byIcon.maneuverGaode)
+        assertEquals("icon:notification_left_sdl", byIcon.maneuverRaw)
+    }
 }

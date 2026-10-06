@@ -99,6 +99,11 @@ class HudWayChannels(
     private var lastPosition = HudLauncherMapCnFrames.Position.DEFAULT
     private var positionAgeMs = 0L
     private var retryWaitMs = 0L
+    /** The one CAN readback of a route is still to come; [readbackScope] runs it off the tick. */
+    private var readbackDue = false
+    internal var readbackScope: CoroutineScope? = null
+    /** Script class of the last road name written this route (#269); traced when it changes. */
+    private var roadScript: String? = null
 
     private val lmcn: Boolean get() = way >= HudController.MODE_LMCN && gateway != null
     /** Way 3: OpenBYD's SDK calls and rest of route on top of way 2's writes. */
@@ -112,6 +117,7 @@ class HudWayChannels(
     fun start(scope: CoroutineScope, held: () -> Boolean = { false }, closed: Boolean = false, active: () -> Boolean) {
         if (job?.isActive == true) return
         this.held = held
+        readbackScope = scope
         if (closed) closing = true
         job = scope.launch {
             while (isActive) {
@@ -185,6 +191,8 @@ class HudWayChannels(
         sdkRefused = 0
         sdkAbsent = 0
         sdkOff.clear()
+        readbackDue = true
+        roadScript = null
         val bridge = gateway
         lmcnRoute = false
         if (lmcn && bridge != null) {
@@ -212,7 +220,7 @@ class HudWayChannels(
     private suspend fun writeCan(s: NavGuidanceHub.Snapshot) {
         guidanceWaitMs = (guidanceWaitMs - PERIOD_MS).coerceAtLeast(0L)
         roadWaitMs = (roadWaitMs - PERIOD_MS).coerceAtLeast(0L)
-        val guidance = turnKind(s.maneuverGaode) to s.distanceMeters.coerceIn(0, MAX_DISTANCE_M)
+        val guidance = turnKind(s.maneuverGaode) to canDistance(s.distanceMeters)
         val road = roadMemo?.takeIf { it.first == s.road }?.second
             ?: roadName(s.road).also { roadMemo = s.road to it }
         val guidanceDue = guidance != lastGuidance && guidanceWaitMs == 0L
@@ -227,12 +235,42 @@ class HudWayChannels(
         if (guidanceDue) {
             if (can.guidance(guidance.first, guidance.second).map(::count).all { it }) lastGuidance = guidance
             else guidanceWaitMs = RETRY_MS
+            if (guidance.first != 0) readBack(guidance)
             sdk(HudSdkCall.Guidance(guidance.first, guidance.second))
         }
         if (roadDue) {
+            traceRoadScript(road)
             if (count(can.road(road))) lastRoad = road else roadWaitMs = RETRY_MS
             sdk(HudSdkCall.PathName(road))
         }
+    }
+
+    /** Once per route, after its first turn kind other than 0 went out: what TURN_KIND and the
+     *  distance read back (#269: the CAN accepted, no arrow; #294: kind 0). Launched on its own,
+     *  so the tick never waits on the read. */
+    private fun readBack(wrote: Pair<Int, Int>) {
+        if (!readbackDue) return
+        val scope = readbackScope ?: return
+        readbackDue = false
+        scope.launch {
+            val (kind, dist) = runCatching { can.readGuidance() }.getOrElse {
+                if (it is CancellationException) throw it
+                HudArming.FidRead(null) to HudArming.FidRead(null)
+            }
+            log("hud way: can readback turn_kind wrote=${wrote.first} read=$kind dist wrote=${wrote.second} read=$dist")
+            Trace.event(
+                TraceArea.HUD, "can-readback", "fid" to "TURN_KIND", "wrote" to wrote.first, "read" to kind.toString(),
+                "dist_wrote" to wrote.second, "dist_read" to dist.toString(),
+            )
+        }
+    }
+
+    /** The script class of the road name the CAN carries, traced when it changes within a route. */
+    private fun traceRoadScript(road: String) {
+        val script = HudRoadScript.classify(road)
+        if (script == roadScript) return
+        roadScript = script
+        Trace.event(TraceArea.HUD, "road", "chan" to "can", "script" to script, "len" to road.trim().length)
     }
 
     /** Way 3: OpenBYD's sendRestRouteInfo when hours, minutes or mileage change, only while both the
@@ -297,7 +335,7 @@ class HudWayChannels(
         }
         positionAgeMs += PERIOD_MS
         HudLauncherMapCnFrames.update(
-            iconId = openBydIcon(s.maneuverGaode), distanceM = s.distanceMeters, remainDistanceM = s.totalDistMeters,
+            iconId = openBydIcon(s.maneuverGaode), distanceM = glassDistance(s.distanceMeters), remainDistanceM = s.totalDistMeters,
             remainTimeS = s.etaSeconds, position = lastPosition, routeId = routeId, counter = counter, nowMs = nowMs(),
         ).forEach { e -> countFire(e.topic, fire(bridge, e)) }
         counter = (counter + 1) and COUNTER_MASK
@@ -393,6 +431,14 @@ class HudWayChannels(
         /** Our slight right is 4, OpenBYD's and the stock adapter's is 5 (their 4 is a slight left). */
         internal fun openBydIcon(iconId: Int): Int =
             if (iconId == NavManeuverCodes.GAODE_SLIGHT_RIGHT) OPENBYD_SLIGHT_RIGHT else iconId
+
+        /** The distance as the instrument takes it: in range, 1..10 m lifted to the glass floor
+         *  (below it the glass draws "现在", #294); 0 stays the SDK's invalid distance. */
+        internal fun canDistance(distanceM: Int): Int = glassDistance(distanceM.coerceIn(0, MAX_DISTANCE_M))
+
+        /** A known 1..10 m lifted to the glass floor; 0 and anything else go out as they are. */
+        internal fun glassDistance(distanceM: Int): Int =
+            if (distanceM in 1 until HudProtobufBuilder.MIN_DISTANCE_METERS) HudProtobufBuilder.MIN_DISTANCE_METERS else distanceM
 
         /** The road name as the instrument takes it: in Latin ([HudTextSanitizer], trimmed), capped
          *  after that, a space when empty (the car rejects an empty buffer). */

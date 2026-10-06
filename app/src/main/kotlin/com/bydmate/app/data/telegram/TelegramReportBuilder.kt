@@ -268,13 +268,15 @@ object TelegramReportBuilder {
     /**
      * The dashboard counter [field] (TRIP1 or TRIP2): «🔁 <b>TRIP 1</b> с 25.09», then «412 км за 9 ч 20 мин»
      * and «Расход 21,4 кВт·ч/100 км» indented, consumption as the counter's popup counts it (all kWh over
-     * the km). Null for a counter never reset or with no kilometers.
+     * the km). A counter never reset reads «за всё время», as its dashboard button does. Null for a
+     * counter with no kilometers.
      */
     private fun counterBlock(field: ReportField, inputs: ReportInputs, strings: ReportStrings): String? {
         val counter = if (field == ReportField.TRIP1) inputs.trip1 else inputs.trip2
-        val c = counter?.takeIf { it.resetTs > 0L && it.km > 0.0 } ?: return null
+        val c = counter?.takeIf { it.km > 0.0 } ?: return null
         val consumption = c.kwh.takeIf { it > 0.0 && c.km >= MIN_LIVE_CONSUMPTION_KM }?.let { it / c.km * 100.0 }
-        val since = text(strings, R.string.tg_report_counter_since, formatDate(c.resetTs))
+        val since = if (c.resetTs <= 0L) text(strings, R.string.dashboard_trip_since_all_time)
+        else text(strings, R.string.tg_report_counter_since, formatDate(c.resetTs))
         val title = "🔁 ${bold(escape(text(strings, field.labelRes)))} ${escape(since)}"
         return tripLines(title, c.km, consumption, c.drivingMs.takeIf { it > 0L }, strings)
     }

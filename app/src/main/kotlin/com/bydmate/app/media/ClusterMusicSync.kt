@@ -17,20 +17,51 @@ import com.bydmate.app.media.ClusterMusicCard.Target
  * still owed for our card and a hand-off are handled as before. An unreachable helper (null) is
  * not a refusal: the daemon may still be starting, so the card is retried, but no sooner than
  * [REASSERT_MS] after the failed attempt, and only the first failure of a streak is reported.
+ *
+ * [ui7] (platformized firmware) writes [ClusterMusicCard.SOURCE_OTHERS] instead of
+ * [ClusterMusicCard.SOURCE_THIRD_PARTY]: that cluster renders only the former, and the stock
+ * firmware puts the latter back on its own ~10 s timer, which blanks the card. [watch] reads the
+ * source back while our card is shown and rewrites the card as soon as it changed. Other firmware
+ * never reads and keeps the source and write sequence it always had.
  */
-class ClusterMusicSync(private val port: Port) {
+@Suppress("TooManyFunctions") // one per transition: show, re-assert, watch, tick, clear, hand-off
+class ClusterMusicSync(private val port: Port, private val ui7: Boolean = false) {
 
-    /** The helper's raw writes: status 1 real, 0 no-op, <0 error, null daemon unreachable. */
+    /**
+     * The helper's raw writes: status 1 real, 0 no-op, <0 error, null daemon unreachable.
+     * [readInt] is a getInt with sentinels already filtered, null when it can't be read; only
+     * [watch] reads.
+     */
     interface Port {
         suspend fun writeInt(dev: Int, fid: Int, value: Int): Int?
         suspend fun writeBuffer(dev: Int, fid: Int, bytes: ByteArray): Int?
+        suspend fun readInt(dev: Int, fid: Int): Int?
     }
 
     /** What a [step] did, for the bridge's log and trace. [RETRYING] and [NONE] are not reported. */
     enum class Outcome {
         NONE, SHOWN, REASSERTED, TICKED, WRITE_FAILED, RETRYING, REFUSED, ABORTED,
         CLEARED, CLEAR_FAILED, CLEAR_GAVE_UP, HANDED_OFF,
+        /** [watch]: the firmware changed the source, the whole card was rewritten. */
+        SOURCE_REASSERTED,
+        /** [watch]: the source read failed; reported once per streak. */
+        READ_FAILED,
     }
+
+    /** The music-source code this firmware's cluster renders. */
+    val sourceCode: Int = if (ui7) ClusterMusicCard.SOURCE_OTHERS else ClusterMusicCard.SOURCE_THIRD_PARTY
+
+    /** Rewrites by [watch] since the process started, for the log and the dump. */
+    @Volatile var sourceReasserts = 0
+        private set
+
+    /** Last value [watch] read from the source fid; null before the first successful read. */
+    @Volatile var lastSourceRead: Int? = null
+        private set
+
+    /** The nowMs of [lastSourceRead]. */
+    @Volatile var lastSourceReadAt = 0L
+        private set
 
     /** Last card the cluster confirmed; null when nothing of ours is known to be there. */
     var shown: Card? = null
@@ -54,6 +85,10 @@ class ClusterMusicSync(private val port: Port) {
     private var clearAttempts = 0
     private var refusals = 0
     private var failing = false
+
+    /** Set after a failed source read: [watch] reads again no sooner than this. */
+    private var readRetryAt: Long? = null
+    private var readFailing = false
 
     /**
      * One poll. [wanted] is the switch; [fids] null means this firmware can't take the card, so
@@ -88,6 +123,60 @@ class ClusterMusicSync(private val port: Port) {
         return clear(fids, nowMs = null)
     }
 
+    /**
+     * UI7 only, about once a second while our card is shown: reads the source fid and, when the
+     * firmware changed it, rewrites the whole card at once. [current] re-reads the owner right
+     * before the rewrite (null = unreadable): a source that took the card since the last poll is
+     * shown, another player gets the poll's hand-off, and Idle is left to the poll's clear, so
+     * nothing is written over a player that is not ours. A failed read waits [REASSERT_MS]; a failed
+     * rewrite drops [shown], so the watch goes quiet and the poll's retries and refusal budget
+     * take over as for any other write.
+     */
+    suspend fun watch(
+        fids: ClusterMusicFids?,
+        nowMs: Long,
+        current: suspend () -> Target?,
+        stillWanted: () -> Boolean = { true },
+    ): Outcome {
+        if (!ui7 || fids == null || refused) return Outcome.NONE
+        if (!stillWanted()) return Outcome.NONE
+        val shownCard = shown ?: return Outcome.NONE
+        readRetryAt?.let { if (nowMs < it) return Outcome.NONE }
+        val source = port.readInt(fids.instrumentDev, fids.source)
+        if (source == null) {
+            readRetryAt = nowMs + REASSERT_MS
+            if (readFailing) return Outcome.NONE
+            readFailing = true
+            return Outcome.READ_FAILED
+        }
+        readRetryAt = null
+        readFailing = false
+        lastSourceRead = source
+        lastSourceReadAt = nowMs
+        if (source == sourceCode) return Outcome.NONE
+        return rewrite(fids, shownCard, current(), nowMs, stillWanted)
+    }
+
+    /** [watch]'s answer to a changed source, by the owner read right before it. */
+    private suspend fun rewrite(
+        fids: ClusterMusicFids,
+        shownCard: Card,
+        target: Target?,
+        nowMs: Long,
+        stillWanted: () -> Boolean,
+    ): Outcome {
+        val card = when (target) {
+            is Target.Show -> target.card
+            is Target.OtherPlaying -> return handOff()
+            Target.Idle, null -> return Outcome.NONE
+        }
+        val outcome = writeCard(fids, card, shownCard.steady() != card.steady(), nowMs, stillWanted)
+        if (outcome != Outcome.SHOWN) return outcome
+        lastWriteAt = nowMs
+        sourceReasserts++
+        return Outcome.SOURCE_REASSERTED
+    }
+
     private fun handOff(): Outcome =
         if (dirty || shown != null) Outcome.HANDED_OFF.also { forget() } else Outcome.NONE
 
@@ -118,7 +207,7 @@ class ClusterMusicSync(private val port: Port) {
     ): Outcome {
         dirty = true
         val writes = buildList<suspend () -> Int?> {
-            add { port.writeInt(fids.instrumentDev, fids.source, ClusterMusicCard.SOURCE_THIRD_PARTY) }
+            add { port.writeInt(fids.instrumentDev, fids.source, sourceCode) }
             add { port.writeInt(fids.instrumentDev, fids.state, card.musicState) }
             add { port.writeBuffer(fids.instrumentDev, fids.info, ClusterMusicCard.encode(card.title)) }
         }
@@ -215,6 +304,32 @@ class ClusterMusicSync(private val port: Port) {
         const val MAX_CLEAR_ATTEMPTS = 20
         /** Refused required writes in a row before the card is off until restart. */
         const val MAX_WRITE_REFUSALS = 3
+    }
+}
+
+/**
+ * Who owns the card across polls and watch reads: [ClusterMusicCard.nextOwner] of every target
+ * the bridge acts on, so a player the watch showed keeps the card at the next poll. Process memory only.
+ */
+class ClusterMusicOwner {
+    @Volatile var lastOwner: String? = null
+        private set
+
+    /** The last target as `show:pkg`, `other:pkg` or `idle`, for the log and the dump. */
+    @Volatile var lastTargetKind: String? = null
+        private set
+
+    /** Records [target]; returns its kind when it differs from the previous one, else null. */
+    fun observe(target: Target): String? {
+        val kind = when (target) {
+            is Target.Show -> "show:${target.packageName}"
+            is Target.OtherPlaying -> "other:${target.packageName}"
+            Target.Idle -> "idle"
+        }
+        val changed = kind != lastTargetKind
+        lastTargetKind = kind
+        lastOwner = ClusterMusicCard.nextOwner(target, lastOwner)
+        return kind.takeIf { changed }
     }
 }
 
