@@ -57,7 +57,7 @@ class VehicleApiHudTest {
     }
 
     @Test fun `a car without a HUD fails with NotEquipped and writes nothing`() = runTest {
-        for (config in listOf(65535L, 0L, -10011L)) {
+        for (config in listOf(65535L, 0L)) {
             audit.clear()
             coEvery { helper.read(1023, 951058453, any()) } returns config
             val err = impl.dispatch("关闭抬头显示").exceptionOrNull()
@@ -68,9 +68,14 @@ class VehicleApiHudTest {
     }
 
     @Test fun `an unreadable config writes nothing and is not called a missing HUD`() = runTest {
-        coEvery { helper.read(1023, 951058453, any()) } returns null
-        val err = impl.dispatch("关闭抬头显示").exceptionOrNull()
-        assertTrue("got $err", err is VehicleWriteError.HelperUnreachable)
+        // No answer, "not initialized" and the autoservice error codes say nothing about the HUD.
+        for (config in listOf(null, 1048575L, -10011L, -10013L)) {
+            audit.clear()
+            coEvery { helper.read(1023, 951058453, any()) } returns config
+            val err = impl.dispatch("关闭抬头显示").exceptionOrNull()
+            assertTrue("config=$config got $err", err is VehicleWriteError.HelperUnreachable)
+            assertEquals("verdict=config unreadable", verdictRow().error)
+        }
         coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
     }
 
