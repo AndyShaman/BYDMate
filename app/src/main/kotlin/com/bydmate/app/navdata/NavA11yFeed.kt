@@ -46,6 +46,8 @@ object NavA11yFeed {
                 timerKeptAlive = false
                 resetTimer(start = true)
             }
+            // A blind spell does not outlive the feed it was seen by.
+            if (value != field) NavGuidanceHub.a11yBlind(false)
             field = value
             if (!value) resetTimer(start = false)
         }
@@ -97,10 +99,12 @@ object NavA11yFeed {
                     if (!sourceFallbackWorking) {
                         sourceFallbackWorking = true
                         Log.i(TAG, "navigator window hidden; guidance read via event source")
+                        NavGuidanceHub.a11yBlind(false, nowMs)
                     }
                 } else if (rootReachable || sourceFallbackWorking) {
                     sourceFallbackWorking = false
                     Log.w(TAG, "Navigator events flowing but window unreachable (a11y feed blind)")
+                    NavGuidanceHub.a11yBlind(true, nowMs)
                 }
                 rootReachable = false
                 return
@@ -109,6 +113,7 @@ object NavA11yFeed {
             rootReachable = true
             sourceFallbackWorking = false
             Log.i(TAG, "Navigator window reachable again")
+            NavGuidanceHub.a11yBlind(false, nowMs)
         }
         readWindow(root, nowMs, "event", service)
     }
@@ -154,6 +159,7 @@ object NavA11yFeed {
                 }
                 is NavA11yExtractor.ReadResult.NoGuidance -> {
                     val kept = NavA11yExtractor.hasGuidanceNodes(root)
+                    NavGuidanceHub.countA11yNoGuidance()
                     if (kept) NavGuidanceHub.keepAlive(nowMs)
                     traceNoGuidance(root, nowMs, src, service, kept)
                     false
