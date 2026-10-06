@@ -673,8 +673,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      * Sends PLAY or PAUSE to the session the volume-knob press would pick. Only a running player
      * is reached: no session is a failed step, with no AudioManager fallback, because on V1.6 a
      * global media key lets com.byd.mediacenter switch the audio source.
-     * The stock mediacenter keeps a session in NONE/STOPPED while nothing plays, and play/pause to
-     * it starts Kuwo (#275), so that session is not a candidate; STOPPED sessions of other players
+     * The stock mediacenter keeps a session in NONE/STOPPED (or with no state) while nothing plays,
+     * and play/pause to it starts Kuwo (#275), so that session is not a candidate; STOPPED sessions of other players
      * stay, some of them resume from STOPPED.
      */
     private fun dispatchMediaKey(action: ActionDef): DispatchResult {
@@ -685,7 +685,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val controllers = all.filterNot { c ->
             val state = c.playbackState?.state
             c.packageName == MEDIACENTER_PKG &&
-                (state == PlaybackState.STATE_NONE || state == PlaybackState.STATE_STOPPED)
+                (state == null || state == PlaybackState.STATE_NONE || state == PlaybackState.STATE_STOPPED)
         }
         val index = KnobPlayPause.pickTarget(
             controllers.map { KnobPlayPause.SessionSnapshot(it.packageName, it.playbackState?.state) })
