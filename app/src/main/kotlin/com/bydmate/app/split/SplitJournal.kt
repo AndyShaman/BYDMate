@@ -1,6 +1,8 @@
 package com.bydmate.app.split
 
 import android.content.Context
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,6 +49,8 @@ class SplitJournalImpl(
 
     @Synchronized
     override fun append(payload: String) {
+        // Same line on the trace timeline, next to the cluster and the screen it shares (#288, #284).
+        Trace.journal(TraceArea.SPLIT, payload)
         val ts = SimpleDateFormat(TS_FORMAT, Locale.US).format(Date(now()))
         val lines = read().toMutableList()
 

@@ -453,13 +453,6 @@ private fun BatterySection(
             SettingHint(stringResource(R.string.settings_battery_capacity_desc))
             SettingDivider()
             SettingChipRow(
-                title = stringResource(R.string.settings_app_currency_label),
-                options = SettingsRepository.CURRENCIES.map { it.code },
-                selectedIndex = SettingsRepository.CURRENCIES.indexOfFirst { it.code == state.currency }.coerceAtLeast(0),
-                onSelect = { idx -> viewModel.saveCurrency(SettingsRepository.CURRENCIES[idx].code) },
-            )
-            SettingDivider()
-            SettingChipRow(
                 title = stringResource(R.string.settings_charge_connector_label),
                 description = stringResource(R.string.settings_charge_connector_desc),
                 options = ChargeConnector.entries.map { it.label },
@@ -826,6 +819,8 @@ private fun WidgetSection() {
     )
     val hideOnYoutube by prefs.hideOnYoutubeFlow()
         .collectAsStateWithLifecycle(initialValue = prefs.isHideOnYoutube())
+    val homeOnly by prefs.homeOnlyFlow()
+        .collectAsStateWithLifecycle(initialValue = prefs.isHomeOnly())
     val hideInApps by prefs.hideInAppsFlow()
         .collectAsStateWithLifecycle(initialValue = prefs.getHideInApps())
     var showLeftTapPicker by remember { mutableStateOf(false) }
@@ -871,6 +866,13 @@ private fun WidgetSection() {
                 description = stringResource(R.string.settings_widget_hide_youtube_description),
                 checked = hideOnYoutube,
                 onCheckedChange = { prefs.setHideOnYoutube(it) },
+            )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_widget_home_only_label),
+                traceId = "widget_home_only",
+                description = stringResource(R.string.settings_widget_home_only_description),
+                checked = homeOnly,
+                onCheckedChange = { prefs.setHomeOnly(it) },
             )
             SettingValueRow(
                 title = stringResource(R.string.settings_widget_hide_apps_label),
@@ -3183,6 +3185,14 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 selectedIndex = if (state.units == "km") 0 else 1,
                 onSelect = { idx -> viewModel.saveUnits(if (idx == 0) "km" else "miles") },
             )
+            SettingDivider()
+            SettingChipRow(
+                title = stringResource(R.string.settings_app_currency_label),
+                options = SettingsRepository.CURRENCIES.map { it.code },
+                selectedIndex = SettingsRepository.CURRENCIES.indexOfFirst { it.code == state.currency }.coerceAtLeast(0),
+                onSelect = { idx -> viewModel.saveCurrency(SettingsRepository.CURRENCIES[idx].code) },
+            )
+            SettingDivider()
             SettingChipRow(
                 title = stringResource(R.string.settings_map_tile_source_label),
                 options = listOf("OpenStreetMap", "Amap"),

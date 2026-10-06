@@ -7,16 +7,19 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -25,6 +28,15 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * The `--- end snapshot ---` section a finished recording closes with: the counters and journal
+ * tails as they stand at the end, so a recording started before the drive does not leave only
+ * the zeros of its header (#198). [sinceMs] is when the recording started.
+ */
+fun interface EndSnapshotSource {
+    suspend fun lines(sinceMs: Long): List<String>
+}
 
 /**
  * Owns the logcat recording started from Settings: the process, the file and the
@@ -41,13 +53,14 @@ class LogRecorder internal constructor(
     // Seams for tests: the production limits are unreachable in a unit test.
     private val autoStopMs: Long = LOG_MAX_DURATION_MS,
     private val maxSizeBytes: Long = LOG_MAX_SIZE_BYTES,
+    private val endSnapshot: EndSnapshotSource? = null,
     // Seam for tests; production spawns real logcat processes. Last, so callers can
     // pass it as a trailing lambda.
     private val exec: (Array<String>) -> Process,
 ) {
     @Inject
-    constructor(@ApplicationContext appContext: Context) :
-        this(appContext, exec = { Runtime.getRuntime().exec(it) })
+    constructor(@ApplicationContext appContext: Context, endSnapshot: EndSnapshotSource) :
+        this(appContext, endSnapshot = endSnapshot, exec = { Runtime.getRuntime().exec(it) })
 
     /** What a finished recording left behind, for the status line. */
     data class Stopped(val path: String, val sizeKb: Long)
@@ -73,7 +86,7 @@ class LogRecorder internal constructor(
     val state: StateFlow<State> = _state.asStateFlow()
 
     /** Everything one recording owns; replaced as a whole, never mutated piecemeal. */
-    private class Session(val process: Process, val file: File) {
+    private class Session(val process: Process, val file: File, val startedAtMs: Long) {
         var pipeJob: Job? = null
         var autoStopJob: Job? = null
 
@@ -126,11 +139,10 @@ class LogRecorder internal constructor(
             // instead of being buried in logcat noise.
             headerWriter(target)
 
-            // Clear logcat buffer and start continuous recording
-            exec(arrayOf("logcat", "-c")).waitFor()
-
-            proc = exec(LOGCAT_ARGS)
+            // The buffer is kept, not cleared: the minutes before the button press hold the
+            // failure the user is about to report (#288). -T replays them from the buffer.
             val startedAtMs = System.currentTimeMillis()
+            proc = exec(startArgs(startedAtMs))
             published = publishSession(proc, target, startedAtMs, autoStopMs)
             rememberPending(target, startedAtMs)
             return StartResult.Started(target)
@@ -138,7 +150,7 @@ class LogRecorder internal constructor(
             // Same single exit path: a failure mid-start leaves neither a live
             // logcat nor a "recording" state behind.
             val started = published
-            if (started != null) teardownLocked(started) else proc?.let { destroyQuietly(it) }
+            if (started != null) teardownLocked(started, endSection = false) else proc?.let { destroyQuietly(it) }
             return StartResult.Failed(e.message ?: "?")
         }
     }
@@ -154,7 +166,7 @@ class LogRecorder internal constructor(
         startedAtMs: Long,
         autoStopIn: Long,
     ): Session {
-        val current = Session(proc, target)
+        val current = Session(proc, target, startedAtMs)
         session = current
         _state.value = State(
             isRecording = true,
@@ -268,7 +280,11 @@ class LogRecorder internal constructor(
      * still the current one is torn down, so a self-terminating pipe and a
      * concurrent stop() cannot both kill (or double-report) it.
      */
-    private fun teardownLocked(current: Session, keepPending: Boolean = false): Stopped? {
+    private suspend fun teardownLocked(
+        current: Session,
+        keepPending: Boolean = false,
+        endSection: Boolean = !keepPending,
+    ): Stopped? {
         if (session !== current) return null
         session = null
         // The user, the auto-stop and the size limit end the recording for good. A pipe
@@ -278,6 +294,10 @@ class LogRecorder internal constructor(
         current.autoStopJob?.cancel()
         current.pipeJob?.cancel()
         destroyQuietly(current.process)
+        // Only a recording that ends for good gets the end section. NonCancellable: the
+        // auto-stop runs this from the very job it just cancelled, and a caller leaving
+        // (Settings closed) must not cut the section in half.
+        if (endSection) withContext(NonCancellable) { appendEndSnapshot(current) }
 
         val stopped = Stopped(
             path = current.file.absolutePath,
@@ -285,6 +305,26 @@ class LogRecorder internal constructor(
         )
         _state.value = State(lastStopped = stopped)
         return stopped
+    }
+
+    /** Appends the end section once the pipe has let go of the file. */
+    private suspend fun appendEndSnapshot(current: Session) {
+        val source = endSnapshot ?: return
+        // The pipe closes (and flushes) its writer once the destroyed logcat hits EOF.
+        withTimeoutOrNull(PIPE_CLOSE_TIMEOUT_MS) { current.pipeJob?.join() }
+        val lines = try {
+            withTimeoutOrNull(END_SNAPSHOT_BUDGET_MS) { source.lines(current.startedAtMs) }
+                ?: listOf("(timed out)")
+        } catch (e: Exception) {
+            listOf("(failed: ${e.javaClass.simpleName})")
+        }
+        try {
+            FileOutputStream(current.file, /* append = */ true).bufferedWriter().use { writer ->
+                writer.write("--- end snapshot ---")
+                writer.newLine()
+                lines.forEach { writer.write(it); writer.newLine() }
+            }
+        } catch (_: Exception) {}
     }
 
     private fun destroyQuietly(proc: Process) {
@@ -299,24 +339,63 @@ class LogRecorder internal constructor(
 
     // Pipes logcat to file with a size limit; blocking, runs as a job on the IO scope.
     // Opened in append mode so the diagnostic header is preserved instead of overwritten.
+    // Lines go out in batches (PipeFlushPolicy) and the file system is asked the size once per
+    // batch, not per line: a flush and a stat per line were the recording's own load on the unit.
     private fun pipeToFile(proc: Process, target: File, current: Session) {
+        val lock = Any()
+        val policy = PipeFlushPolicy()
+        var closed = false
+        // Chars between flushes (a lower bound: Cyrillic or CJK take 2-3 bytes each), the file's
+        // real length after every flush, the idle one included. Guarded by [lock].
+        var size = target.length()
         try {
             proc.inputStream.bufferedReader().use { reader ->
-                FileOutputStream(target, /* append = */ true)
-                    .bufferedWriter().use { writer ->
+                val writer = FileOutputStream(target, /* append = */ true).bufferedWriter()
+                // A quiet logcat must not keep its last lines in memory: they are the ones a
+                // user pulling the file mid-recording needs.
+                val idleFlusher = scope.launch {
+                    while (isActive) {
+                        delay(PipeFlushPolicy.MAX_DELAY_MS)
+                        synchronized(lock) {
+                            if (!closed && policy.dueIdle(System.currentTimeMillis())) {
+                                runCatching { writer.flush() }
+                                policy.flushed()
+                                size = target.length()
+                            }
+                        }
+                    }
+                }
+                try {
                     var line = reader.readLine()
                     while (line != null && session === current) {
-                        // Stop if file exceeds size limit
-                        if (target.length() > maxSizeBytes) {
-                            current.endedByLimit = true
-                            writer.write("--- LOG STOPPED: file size limit reached (50 MB) ---")
-                            writer.newLine()
-                            break
+                        if (LogcatLineFilter.keep(line)) {
+                            // Stop if file exceeds size limit
+                            if (synchronized(lock) { size > maxSizeBytes }) {
+                                current.endedByLimit = true
+                                synchronized(lock) {
+                                    writer.write("--- LOG STOPPED: file size limit reached (50 MB) ---")
+                                    writer.newLine()
+                                }
+                                break
+                            }
+                            synchronized(lock) {
+                                writer.write(line)
+                                writer.newLine()
+                                size += line.length + 1
+                                if (policy.onLine(System.currentTimeMillis())) {
+                                    writer.flush()
+                                    policy.flushed()
+                                    size = target.length()
+                                }
+                            }
                         }
-                        writer.write(line)
-                        writer.newLine()
-                        writer.flush()
                         line = reader.readLine()
+                    }
+                } finally {
+                    idleFlusher.cancel()
+                    synchronized(lock) {
+                        closed = true
+                        runCatching { writer.close() }
                     }
                 }
             }
@@ -327,11 +406,24 @@ class LogRecorder internal constructor(
         private const val LOG_MAX_DURATION_MS = 2 * 60 * 60 * 1000L // 2 hours auto-stop
         private const val LOG_MAX_SIZE_BYTES = 50 * 1024 * 1024L // 50 MB max
         private const val PROCESS_EXIT_TIMEOUT_MS = 500L // grace period before destroyForcibly
+        private const val PIPE_CLOSE_TIMEOUT_MS = 2_000L
+        // The end section reads a few journals and in-memory counters; it must not hold the
+        // recorder lock (and the next start) for long.
+        private const val END_SNAPSHOT_BUDGET_MS = 3_000L
+        // How far back a fresh recording replays the logcat buffer (the buffer itself is the
+        // real limit: ~256 KB on DiLink).
+        private const val PRE_ROLL_MS = 15 * 60 * 1000L
 
         // Survives process death so a recording interrupted by ignition-off resumes.
         private const val PREFS_NAME = "log_recorder"
         private const val KEY_FILE_PATH = "file_path"
         private const val KEY_STARTED_AT_MS = "started_at_ms"
+
+        /** A fresh recording: [LOGCAT_ARGS] replaying the buffer from [PRE_ROLL_MS] before [nowMs]. */
+        internal fun startArgs(nowMs: Long): Array<String> {
+            val since = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US).format(Date(nowMs - PRE_ROLL_MS))
+            return arrayOf("logcat", "-v", "time", "-T", since) + LOGCAT_ARGS.copyOfRange(3, LOGCAT_ARGS.size)
+        }
 
         private val LOGCAT_ARGS = arrayOf(
             "logcat", "-v", "time",
@@ -417,6 +509,14 @@ class LogRecorder internal constructor(
             // clients behind where_am_i and find_chargers (per-server failures and answers),
             // plus the two Belarus charger sources ahead of Overpass.
             "AgentTools:*", "SettlementSearch:*", "ChargerSearchClient:*", "BetaMapClient:*", "MalankaGateway:*",
+            // Log audit 2026-10-06: tags that wrote only to logcat - the second guidance layout,
+            // Amap broadcast failures, the cluster frame and probe, the split engines, the
+            // HUD text transliterator, the knob, steering heat, the network edge monitor, the
+            // rule confirm overlay, the autostart worker, the crash log and the listener grant.
+            "NavA11yExtractor:*", "HudAmapBroadcaster:*", "ClusterFrameUi7:*", "ClusterProbe:*",
+            "Split37Engine:*", "NativeSplitLauncher:*", "HudTextSanitizer:*", "KnobPlayPause:*",
+            "SteeringHeatChannel:*", "NetworkAvailMon:*", "ConfirmOverlay:*", "ServiceStartWorker:*",
+            "CrashLog:*", "MediaSessionGrant:*",
             // The event journal: one line per user action, decision and failure, by=#id links.
             "Trace:*"
         )

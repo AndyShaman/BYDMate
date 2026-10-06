@@ -92,6 +92,8 @@ class SteeringWheelKeyService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val isDown = event.action == KeyEvent.ACTION_DOWN
+        val firstDown = isDown && event.repeatCount == 0
+        if (firstDown) keyCounters.onPress(event.keyCode)
         learnVerdict(event, isDown)?.let { return it }
         // Voice check: runs after learn-mode, before star decision. Returns true only when voice is
         // enabled and the configured voice key is pressed (isDown). Non-voice keys fall through.
@@ -139,13 +141,20 @@ class SteeringWheelKeyService : AccessibilityService() {
                 steeringKeyDecision(event.keyCode, isDown, TrackingService.steeringKeyAssigned(event.keyCode))
             ) {
                 SteeringKeyDecision.FIRE -> {
-                    TrackingService.fireSteeringKey(event.keyCode) { matched ->
-                        Log.d(TAG, "steering key ${event.keyCode}: $matched rule(s)")
+                    if (firstDown) keyCounters.onMatched()
+                    // The rules it runs trace their own lines, linked to this press by by=#id.
+                    val keyId = traceId(event, "automation")
+                    TrackingService.fireSteeringKey(event.keyCode, keyId) { matched ->
+                        Log.i(TAG, "steering key ${event.keyCode}: $matched rule(s)")
                     }
-                    traced(event, "automation")
+                    true
                 }
                 SteeringKeyDecision.CONSUME -> true
-                SteeringKeyDecision.PASS_THROUGH -> traced(event, "pass", consumed = false)
+                // Counted, not traced: the volume keys alone wrote hundreds of lines a day.
+                SteeringKeyDecision.PASS_THROUGH -> {
+                    if (firstDown) keyCounters.onPassed()
+                    false
+                }
             }
         }
     }
@@ -186,14 +195,19 @@ class SteeringWheelKeyService : AccessibilityService() {
 
     /** Trace of a key press and what it did, once per press: only the first DOWN is written, so
      *  UP edges and auto-repeats (a held key, the volume knob) stay out of the journal, and keys that
-     *  type text never are. Returns
-     *  [consumed], the filter's verdict. */
-    private fun traced(event: KeyEvent, action: String, consumed: Boolean = true): Boolean {
+     *  type text never are. Returns true: every traced key is consumed. */
+    private fun traced(event: KeyEvent, action: String): Boolean {
+        traceId(event, action)
+        return true
+    }
+
+    /** [traced] that returns the event id (0 when nothing was written), for the rules a key fires. */
+    private fun traceId(event: KeyEvent, action: String): Long =
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && isTraceableKey(event.keyCode)) {
             Trace.event(TraceArea.USER, "key", "code" to event.keyCode, "action" to action)
+        } else {
+            0L
         }
-        return consumed
-    }
 
     private fun entryPoint(): ClusterEntryPoint =
         cachedEntryPoint ?: EntryPointAccessors
@@ -261,16 +275,20 @@ class SteeringWheelKeyService : AccessibilityService() {
 
     override fun onInterrupt() { /* no-op */ }
 
+    // The framework letting go of the service is the other half of a11y-connected: without it a
+    // dump showing a11y_connected=false next to an enabled setting has no moment to point at (#262).
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
         isConnected = false
-        Log.d(TAG, "unbound; star key filter inactive")
+        Log.i(TAG, "unbound; star key filter inactive")
+        Trace.event(TraceArea.APP, "a11y-unbound")
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         instance = null
         isConnected = false
+        Trace.event(TraceArea.APP, "a11y-destroyed")
         super.onDestroy()
     }
 
@@ -307,5 +325,8 @@ class SteeringWheelKeyService : AccessibilityService() {
 
         /** Last captured key while learning; null = nothing captured yet. */
         val capturedKey = MutableStateFlow<CaptureResult?>(null)
+
+        /** Process-wide key counters, for the steering key dump section and the end snapshot. */
+        val keyCounters = KeyCounters()
     }
 }

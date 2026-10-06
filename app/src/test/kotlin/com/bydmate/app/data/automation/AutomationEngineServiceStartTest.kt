@@ -32,7 +32,14 @@ import org.robolectric.shadows.ShadowLog
 @Config(sdk = [33])
 class AutomationEngineServiceStartTest {
 
-    private class HeadUnit(var elapsed: Long = 3_600_000L, var screenOn: Boolean = true)
+    // Wall time keeps running across a reboot while elapsed restarts: wallOffset models that.
+    private class HeadUnit(
+        var elapsed: Long = 3_600_000L,
+        var screenOn: Boolean = true,
+        var wallOffset: Long = 1_700_000_000_000L,
+    ) {
+        val wall get() = elapsed + wallOffset
+    }
 
     private fun paramTrigger(param: String, op: String, value: String) = TriggerDef(
         param = param, chineseName = "", operator = op, value = value, displayName = param
@@ -71,6 +78,7 @@ class AutomationEngineServiceStartTest {
             appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()),
         )
         engine.elapsedMs = { unit.elapsed }
+        engine.nowMs = { unit.wall }
         engine.interactiveProvider = { unit.screenOn }
         return engine to ruleDao
     }
@@ -189,5 +197,132 @@ class AutomationEngineServiceStartTest {
         unit.screenOn = true
         engine.evaluate(diParsData(soc = 50), null)
         assertEquals("service_start: interactive=true fired=true", engine.serviceStartDumpLine())
+    }
+
+    // Android 10 a11y recovery (Atto 3): the app force-stops itself and RECOVER_START brings a new
+    // process 11-44 s later. That process is the same car start, not a new one.
+
+    @Test fun `service_start does not fire in the process our a11y recovery restarted`() = runBlocking {
+        val unit = HeadUnit()
+        val (first, firstDao) = engine(unit)
+        first.evaluate(diParsData(soc = 50), null)
+        unit.elapsed += 13_000L
+        first.markSelfRestart()
+
+        unit.elapsed += 30_000L
+        val (second, secondDao) = engine(unit)
+        second.evaluate(diParsData(soc = 50), null)
+        unit.elapsed += 3_000L
+        second.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 1) { firstDao.updateLastTriggered(1, any()) }
+        coVerify(exactly = 0) { secondDao.updateLastTriggered(any(), any()) }
+        assertEquals(1, engineLogs().count { it.startsWith("service_start: self-restart mark written") })
+        assertEquals(1, engineLogs().count { it.startsWith("service_start: suppressed, our own a11y recovery restart") })
+        assertEquals("service_start: interactive=true fired=true", second.serviceStartDumpLine())
+    }
+
+    @Test fun `service_start fires when the self-restart mark is older than the bound`() = runBlocking {
+        val unit = HeadUnit()
+        val (first, _) = engine(unit)
+        first.evaluate(diParsData(soc = 50), null)
+        first.markSelfRestart()
+
+        unit.elapsed += AutomationEngine.SELF_RESTART_MAX_GAP_MS + 1L
+        val (second, secondDao) = engine(unit)
+        second.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 1) { secondDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `service_start fires when the clock went backwards after the mark (real reboot)`() = runBlocking {
+        val unit = HeadUnit()
+        val (first, _) = engine(unit)
+        first.evaluate(diParsData(soc = 50), null)
+        first.markSelfRestart()
+
+        val (second, secondDao) = engine(HeadUnit(elapsed = 20_000L))
+        second.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 1) { secondDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `service_start self-restart mark is consumed by the first check`() = runBlocking {
+        val unit = HeadUnit()
+        val (first, _) = engine(unit)
+        first.evaluate(diParsData(soc = 50), null)
+        first.markSelfRestart()
+
+        unit.elapsed += 5_000L
+        val (second, secondDao) = engine(unit)
+        second.evaluate(diParsData(soc = 50), null)
+        // A later process within the bound, with no recovery in between: a real start.
+        unit.elapsed += 5_000L
+        val (third, thirdDao) = engine(unit)
+        third.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 0) { secondDao.updateLastTriggered(any(), any()) }
+        coVerify(exactly = 1) { thirdDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `service_start self-restart before any fire writes no mark`() = runBlocking {
+        val unit = HeadUnit(screenOn = false)
+        val (first, _) = engine(unit)
+        first.evaluate(diParsData(soc = 50), null)
+        first.markSelfRestart()
+
+        unit.elapsed += 20_000L
+        unit.screenOn = true
+        val (second, secondDao) = engine(unit)
+        second.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 1) { secondDao.updateLastTriggered(1, any()) }
+        assertEquals(0, engineLogs().count { it.startsWith("service_start: self-restart mark written") })
+    }
+
+    @Test fun `service_start fires when a reboot makes the elapsed gap look like a restart`() = runBlocking {
+        val unit = HeadUnit(elapsed = 45_000L)
+        val (first, _) = engine(unit)
+        first.evaluate(diParsData(soc = 50), null)
+        first.markSelfRestart()
+
+        // Reboot: elapsed starts over (20 s after the mark's value), wall time moved 90 s.
+        val rebooted = HeadUnit(elapsed = 65_000L, wallOffset = unit.wall + 90_000L - 65_000L)
+        val (second, secondDao) = engine(rebooted)
+        second.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 1) { secondDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `service_start self-restart is judged at process start, not at screen wake`() = runBlocking {
+        val unit = HeadUnit()
+        val (first, _) = engine(unit)
+        first.evaluate(diParsData(soc = 50), null)
+        first.markSelfRestart()
+
+        // The recovery process arrives 30 s later with the screen off; the screen wakes at 130 s.
+        unit.elapsed += 30_000L
+        unit.screenOn = false
+        val (second, secondDao) = engine(unit)
+        second.evaluate(diParsData(soc = 50), null)
+        unit.elapsed += 100_000L
+        unit.screenOn = true
+        second.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 0) { secondDao.updateLastTriggered(any(), any()) }
+    }
+
+    @Test fun `service_start fires when the recovery call returned and the process lived on`() = runBlocking {
+        val unit = HeadUnit()
+        val (first, _) = engine(unit)
+        first.evaluate(diParsData(soc = 50), null)
+        first.markSelfRestart()
+        first.clearSelfRestartMark()
+
+        unit.elapsed += 10_000L
+        val (second, secondDao) = engine(unit)
+        second.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 1) { secondDao.updateLastTriggered(1, any()) }
     }
 }

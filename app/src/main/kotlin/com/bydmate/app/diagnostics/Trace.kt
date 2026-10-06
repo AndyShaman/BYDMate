@@ -7,7 +7,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 
 /** Where an event comes from: the first column of a trace line. */
 enum class TraceArea {
-    USER, VOICE, AGENT, NET, WIDGET, SCREEN, APP, HUD, CAMERA, CAR;
+    USER, VOICE, AGENT, NET, WIDGET, SCREEN, APP, HUD, CAMERA, CAR, CLUSTER, AUTO, SPLIT;
 
     internal val label: String = name.lowercase().padEnd(LABEL_WIDTH)
 }
@@ -51,6 +51,13 @@ object Trace {
     }
 
     private val HTTP_STATUS = Regex("""\bHTTP (\d{3})\b""")
+
+    /** One line of a free-text journal (cluster, split) on the trace timeline: its first word is
+     *  the event, the rest one `d=` value, sanitized and capped like any other. */
+    fun journal(area: TraceArea, payload: String): Long {
+        val rest = payload.substringAfter(' ', "").trim()
+        return event(area, payload.substringBefore(' '), "d" to rest.ifEmpty { null })
+    }
 
     /** Model and speech calls are many per turn: only a failed one or one slower than this is
      *  worth a line. */

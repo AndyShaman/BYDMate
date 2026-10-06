@@ -68,6 +68,9 @@ class CameraStateMonitor @Inject constructor(
     // Last ignored "package/class", so a popup firing on every gesture leaves one line per run.
     // a11y thread only.
     private var lastIgnoredHint: String? = null
+    // Last package the trace named as the foreground. Unlike lastForegroundPkg it survives
+    // stop()/start(), so a poller restart does not write the same app again.
+    @Volatile private var lastTracedPkg: String? = null
 
     fun start() {
         if (job?.isActive == true) return
@@ -113,9 +116,10 @@ class CameraStateMonitor @Inject constructor(
         if (packageName == context.packageName || packageName in HINT_IGNORED_PACKAGES) return
         if (packageName.contains(INPUT_METHOD_MARKER)) return
         if (!isActivity(packageName, className)) {
-            Trace.event(TraceArea.SCREEN, "hint-ignored", "pkg" to packageName, "class" to className)
             val key = "$packageName/$className"
+            // Same dedup as the log line: a popup firing on every gesture is one event per run.
             if (key != lastIgnoredHint) {
+                Trace.event(TraceArea.SCREEN, "hint-ignored", "pkg" to packageName, "class" to className)
                 Log.i(TAG, "foreground hint ignored: $packageName class=$className (not an activity)")
             }
             lastIgnoredHint = key
@@ -125,6 +129,7 @@ class CameraStateMonitor @Inject constructor(
         // Before publish(): the widget reads it as the cause of the hide or show that follows.
         lastForegroundTraceId = Trace.event(TraceArea.SCREEN, "foreground", "pkg" to packageName,
             "class" to className, "src" to "a11y")
+        lastTracedPkg = packageName
         publish()
         lastIgnoredHint = null
         Log.i(TAG, "foreground hint: $packageName class=$className (a11y)")
@@ -169,7 +174,11 @@ class CameraStateMonitor @Inject constructor(
             val latest = latestResumed(usm, beginTs, now + 1)
             if (latest != null && acceptForeground(latest.first, latest.second)) {
                 Log.i(TAG, "foreground: ${latest.first} (poll)")
-                lastForegroundTraceId = Trace.event(TraceArea.SCREEN, "foreground", "pkg" to latest.first, "src" to "poll")
+                // A restart of the poller forgets the foreground and re-reads the same app: not a change.
+                if (latest.first != lastTracedPkg) {
+                    lastForegroundTraceId = Trace.event(TraceArea.SCREEN, "foreground", "pkg" to latest.first, "src" to "poll")
+                    lastTracedPkg = latest.first
+                }
             }
             // No new events => keep prior foreground (camera still on, etc.).
             // Forward through start() ensures the very first call has lastEventTs=0,

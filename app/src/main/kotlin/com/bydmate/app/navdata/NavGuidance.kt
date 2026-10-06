@@ -8,6 +8,11 @@ data class NavGuidance(
     val etaSeconds: Int = 0,
     val totalDistMeters: Int = 0,
     val speedLimit: Int = 0,
+    /** What the maneuver code was read from, for the field journal (#294). */
+    val maneuverRaw: String = "",
+    /** False when [road] is a fallback (the current street), not the street after the maneuver:
+     *  such a road never drops a held maneuver (#294). */
+    val roadIsNextStreet: Boolean = true,
 )
 
 /** Pure parsers: raw Navigator widget strings -> NavGuidance. Shared by the a11y
@@ -35,13 +40,21 @@ object NavGuidanceParser {
     fun parse(raw: RawFields): NavGuidance? {
         val guidanceVisible = raw.maneuverDesc != null || raw.distance != null || raw.nextStreet != null
         if (!guidanceVisible) return null
+        val maneuverGaode = resolveManeuver(raw)
         return NavGuidance(
-            maneuverGaode = resolveManeuver(raw),
+            maneuverGaode = maneuverGaode,
             distanceMeters = resolveDistance(raw.distance, raw.distanceUnit),
             road = raw.nextStreet ?: raw.statusPanel ?: "",
             etaSeconds = resolveEta(raw.etaTime),
             totalDistMeters = parseDistanceText(raw.etaDistance),
             speedLimit = raw.speedLimit?.trim()?.toIntOrNull() ?: 0,
+            maneuverRaw = when {
+                maneuverGaode == 0 -> ""
+                // The parsed number only: the widget's text may carry more than it.
+                exitNumberOf(raw) != null -> NavManeuverRaw.name("exit", exitNumberOf(raw).toString())
+                else -> NavManeuverRaw.text("desc", raw.maneuverDesc)
+            },
+            roadIsNextStreet = raw.nextStreet != null,
         )
     }
 
@@ -58,12 +71,15 @@ object NavGuidanceParser {
     private fun resolveManeuver(raw: RawFields): Int {
         // A numbered exit (1..10) is a sufficient roundabout signal even when the balloon
         // desc says "Поверните направо" (Yandex does that on small roundabouts).
-        val exitNum = raw.exitNumber?.let { Regex("""\d+""").find(it)?.value }?.toIntOrNull()
+        val exitNum = exitNumberOf(raw)
         // AutoNavi CCW_N_EXIT = 24+N (right-hand traffic); flat 24 only when the
         // exit number is missing or out of the 1..10 icon range.
         if (exitNum != null) return if (exitNum in 1..10) NavManeuverCodes.GAODE_ROUNDABOUT_EXIT + exitNum else NavManeuverCodes.GAODE_ROUNDABOUT_EXIT
         return NavManeuverCodes.fromA11yDescription(raw.maneuverDesc)
     }
+
+    private fun exitNumberOf(raw: RawFields): Int? =
+        raw.exitNumber?.let { Regex("""\d+""").find(it)?.value }?.toIntOrNull()
 
     private fun resolveDistance(distance: String?, unit: String?): Int {
         val rawText = distance?.trim() ?: return 0
@@ -82,4 +98,27 @@ object NavGuidanceParser {
         ETA_MIN.find(s)?.let { return (it.groupValues[1].toIntOrNull() ?: 0) * 60 }
         return 0
     }
+}
+
+/** The raw input behind a maneuver code, as the field journal records it (#294): "kind:value",
+ *  short enough for one journal line and without the street a screen text may go on with. */
+object NavManeuverRaw {
+    const val MAX_CHARS = 40
+    private val SPACES = Regex("""[\s\p{Z}]+""")
+    private val EDGE_PUNCT = Regex("""^\p{Punct}+|\p{Punct}+$""")
+
+    /** From a screen text: the table entry it matched (`key=`), else its words masked (the
+     *  maneuver vocabulary kept lowercased, every other word `*`) and its length. */
+    fun text(kind: String, text: String?): String {
+        if (text == null) return name(kind, null)
+        NavManeuverCodes.matchedPhrase(text)?.let { return name(kind, "key=$it") }
+        val masked = text.split(SPACES).filter { it.isNotEmpty() }.joinToString(" ") { word ->
+            word.lowercase().replace(EDGE_PUNCT, "").takeIf(NavManeuverCodes::isVocabularyWord) ?: "*"
+        }
+        val tail = " len=${text.length}"
+        return "$kind:${masked.take(MAX_CHARS - kind.length - 1 - tail.length)}$tail"
+    }
+
+    /** From a resource or icon name, capped at [MAX_CHARS]. */
+    fun name(kind: String, name: String?): String = "$kind:$name".take(MAX_CHARS)
 }

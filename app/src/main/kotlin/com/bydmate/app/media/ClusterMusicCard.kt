@@ -45,6 +45,12 @@ object ClusterMusicCard {
     /** The instrument's music-source code for an unlisted third-party app. */
     const val SOURCE_THIRD_PARTY = 26
 
+    /**
+     * MUSIC_SOURCE_OTHERS. The cluster of platformized (UI7) firmware leaves the card blank for
+     * [SOURCE_THIRD_PARTY] and renders the text for this one (Leopard 3, build 20260514).
+     */
+    const val SOURCE_OTHERS = 11
+
     /** The stock sender caps the buffer at 255 bytes; one less keeps UTF-16 units whole. */
     const val MAX_TEXT_BYTES = 254
 

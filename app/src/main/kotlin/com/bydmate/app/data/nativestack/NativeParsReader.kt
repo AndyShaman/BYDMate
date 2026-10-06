@@ -45,8 +45,8 @@ class NativeParsReader @Inject constructor(
      */
     @Volatile private var lastDriveMode: Int? = null
 
-    /** Keeps the raw tech-panel line to one per 5 s on the 1 s DRIVE cadence. */
-    private val techLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(5_000L)
+    /** Keeps the raw tech-panel line to one a minute on the 1 s DRIVE cadence (~700 an hour at 5 s). */
+    private val techLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(60_000L)
 
     /**
      * One snapshot of [FidAddresses] per fetch. The global table is @Volatile and the

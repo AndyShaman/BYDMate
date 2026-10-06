@@ -7,6 +7,8 @@ import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.HudNaviReply
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.navdata.NavGuidanceHub
+import com.bydmate.app.ui.settings.HudDiagnostics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -319,27 +321,41 @@ class HudArming(
         }
     }
 
-    /** One loop step; true when it armed or re-checked, which restarts the check clock. */
+    /** One loop step; true when it armed or re-checked, which restarts the check clock. Not
+     *  [owned] = the HUD check paused the product arming, which reads as no guidance. */
     private suspend fun tick(guided: Boolean, checkDue: Boolean, owned: Boolean): Boolean = when {
-        guided && !armed -> { onArm(arm()); true }
+        guided && !armed -> { val r = arm(); onArm(r, readGate()); true }
         guided && checkDue -> { onRecheck(recheck()); true }
-        !guided && armed -> { runBeforeDisarm(); onDisarm(disarm()); false }
+        !guided && armed -> {
+            runBeforeDisarm()
+            val r = disarm()
+            if (owned) onDisarm(r, REASON_GUIDANCE_OFF, NavGuidanceHub.lastOffTraceId) else onDisarm(r, REASON_PAUSED)
+            false
+        }
         !guided && checkDue && owned && layoutWaits() -> { runBeforeDisarm(); retryDeferred(); true }
         else -> false
     }
 
-    /** Stops the loop; a session still armed is disarmed before this returns. */
-    suspend fun stop() {
+    /** Stops the loop; a session still armed is disarmed before this returns, logged with [reason]. */
+    suspend fun stop(reason: String = REASON_SERVICE_STOP) {
         job?.cancelAndJoin()
         job = null
         if (armed) {
             withContext(NonCancellable) {
                 runBeforeDisarm()
-                runCatching { onDisarm(disarm()) }
+                runCatching { onDisarm(disarm(), reason) }
                     .onFailure { Log.w(TAG, "hud disarm: failed: ${it.javaClass.simpleName}") }
             }
         }
     }
+
+    /** The car's own HUD navigation gate (#269, the dump's hud_navi_gate), read once per arm for
+     *  its line; `na` when the read fails. */
+    private suspend fun readGate(): String = runCatching { HudDiagnostics.gate(helper.readBatch(HudDiagnostics.batchItems())) }
+        .getOrElse {
+            if (it is CancellationException) throw it
+            "na"
+        }
 
     /** A failing hook never keeps the status up. */
     private suspend fun runBeforeDisarm() {
@@ -350,13 +366,13 @@ class HudArming(
         }
     }
 
-    private fun onArm(r: ArmReport) {
+    private fun onArm(r: ArmReport, gate: String) {
         deferredDone = false
         rearms = 0
         lastRearm = null
         sameRearms = 0
-        log("hud arm: ${r.describe()} asfound=${asFound ?: "na"}")
-        traceArm("arm", r)
+        log("hud arm: ${r.describe()} asfound=${asFound ?: "na"} gate=$gate")
+        traceArm("arm", r, gate)
     }
 
     /** Re-arms are logged collapsed: a line when the values that triggered one change. */
@@ -372,29 +388,32 @@ class HudArming(
         traceArm("rearm", r)
     }
 
-    private fun onDisarm(r: DisarmReport) {
-        log("hud disarm: ${r.describe()} rearms=$rearms")
-        traceDisarm("disarm", r)
+    /** [by]: the trace event that caused the disarm (the hub's guidance-off), 0 = none. */
+    private fun onDisarm(r: DisarmReport, reason: String, by: Long = 0L) {
+        log("hud disarm: ${r.describe()} rearms=$rearms reason=$reason")
+        traceDisarm("disarm", r, reason, by)
     }
 
-    /** The trace twin of an arm line; the HUD check writes its own under another name. */
-    internal fun traceArm(what: String, r: ArmReport) {
+    /** The trace twin of an arm line; the HUD check writes its own under another name. [gate]: the
+     *  car's navigation gate, read on a product arm only. */
+    internal fun traceArm(what: String, r: ArmReport, gate: String? = null) {
         Trace.event(
             TraceArea.HUD, what, "via" to r.via, "navi" to rc(r.naviRc),
             "screen" to if (r.screenSkipped) "skipped" else rc(r.screenRc),
             "can" to rc(r.canNaviRc), "isa" to rc(r.isaRc),
             "rb-navi" to r.navi.toString(), "rb-screen" to r.screen.toString(),
-            "rb-can" to r.canNavi.toString(), "rb-isa" to r.isa.toString(),
+            "rb-can" to r.canNavi.toString(), "rb-isa" to r.isa.toString(), "gate" to gate,
         )
     }
 
-    internal fun traceDisarm(what: String, r: DisarmReport) {
+    internal fun traceDisarm(what: String, r: DisarmReport, reason: String? = null, by: Long = 0L) {
         Trace.event(
             TraceArea.HUD, what, "via" to r.via, "navi" to rc(r.naviRc), "screen" to (r.asFound ?: "na"),
             "screen-rc" to r.screenWord(), "ok" to r.ok, "rearms" to rearms,
             "can" to rc(r.canNaviRc), "isa" to rc(r.isaRc),
             "rb-navi" to r.navi.toString(), "rb-screen" to r.screen.toString(),
-            "rb-can" to r.canNavi.toString(), "rb-isa" to r.isa.toString(),
+            "rb-can" to r.canNavi.toString(), "rb-isa" to r.isa.toString(), "reason" to reason,
+            by = by,
         )
     }
 
@@ -421,6 +440,13 @@ class HudArming(
         const val VIA_FID = "fid"
         private const val REASON_LEFTOVER = "leftover"
         private const val REASON_DEFERRED = "deferred"
+        // Why a product session was disarmed, for its line.
+        const val REASON_GUIDANCE_OFF = "guidance-off"
+        const val REASON_PAUSED = "paused"
+        const val REASON_HUD_OFF = "hud-off"
+        const val REASON_SERVICE_STOP = "service-stop"
+        const val REASON_BINDING_LOST = "binding-lost"
+        const val REASON_WAY_CHANGE = "way-change"
 
         const val POLL_MS = 1_000L
         const val CHECK_PERIOD_MS = 5_000L
