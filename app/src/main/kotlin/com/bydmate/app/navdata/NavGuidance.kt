@@ -10,6 +10,9 @@ data class NavGuidance(
     val speedLimit: Int = 0,
     /** What the maneuver code was read from, for the field journal (#294). */
     val maneuverRaw: String = "",
+    /** False when [road] is a fallback (the current street), not the street after the maneuver:
+     *  such a road never drops a held maneuver (#294). */
+    val roadIsNextStreet: Boolean = true,
 )
 
 /** Pure parsers: raw Navigator widget strings -> NavGuidance. Shared by the a11y
@@ -50,6 +53,7 @@ object NavGuidanceParser {
                 exitNumberOf(raw) != null -> NavManeuverRaw.text("exit", raw.exitNumber)
                 else -> NavManeuverRaw.text("desc", raw.maneuverDesc)
             },
+            roadIsNextStreet = raw.nextStreet != null,
         )
     }
 

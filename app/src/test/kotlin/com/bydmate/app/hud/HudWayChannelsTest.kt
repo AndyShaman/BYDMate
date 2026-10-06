@@ -387,6 +387,22 @@ class HudWayChannelsTest {
         assertTrue(calls.contains("set $dist=300"))
     }
 
+    @Test fun `way 3 lifts 1 to 10 m to 11 m in its maneuver frame and keeps 0 as it is (#294)`() = runTest {
+        val sent = mutableListOf<Pair<Long, ByteArray>>()
+        every { gateway.fireEvent(any(), any()) } answers { sent += firstArg<Long>() to secondArg<ByteArray>(); 0 }
+        val c = channels(3)
+        val routeId = HudLauncherMapCnFrames.newRouteId(Random(3))
+        fun frames(dist: Int, counter: Int) =
+            HudLauncherMapCnFrames.update(2, dist, 12_000, 800, HudLauncherMapCnFrames.Position(53.9, 27.56), routeId, counter, 1_700_000_000_000L)
+        route(dist = 4)
+        c.tick(active = true)
+        route(dist = 0)
+        c.tick(active = true)
+        val expected = frames(11, 0) + frames(0, 1)
+        assertEquals(expected.map { it.topic }, sent.map { it.first })
+        expected.zip(sent).forEach { (e, a) -> assertTrue(e.payload.contentEquals(a.second)) }
+    }
+
     @Test fun `way 3 looks up the position at the route start and then every 5 s, not every tick`() = runTest {
         var lookups = 0
         val c = HudWayChannels(3, HudCanChannel(helper), gateway, prefs) {

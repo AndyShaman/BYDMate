@@ -371,4 +371,13 @@ class NavGuidanceHubTest {
         assertTrue(long.startsWith("res:xxx"))
         assertEquals("icon:", NavManeuverRaw.name("icon", ""))
     }
+
+    @Test fun `a current-street fallback without a maneuver keeps the held arrow`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(NavGuidance(distanceMeters = 250, road = "ул. Б", roadIsNextStreet = false),
+            NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals("ул. Б", s.road)   // what is displayed does not change
+    }
 }
