@@ -4,6 +4,7 @@ import android.graphics.Rect
 import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.Parcel
+import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import java.io.ByteArrayOutputStream
@@ -602,6 +603,8 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     @Volatile private var lastSource: String? = null
     /** The daemon binder the trace last reported, so it records a change, not every lookup. */
     @Volatile private var tracedBinder: IBinder? = null
+    /** Which write lines reach logcat: every sparse write, a streaming fid once a minute. */
+    private val writeLogGate = WriteLogGate()
 
     /** Test seam: invoked right before every attempt to acquire [mutex] in [transactParsed],
      *  i.e. right before the write path takes the lock — lets a test observe "about to enter the
@@ -650,7 +653,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         // 0 = accepted no-op (fid ineffective on this trim), <0 = error, null =
         // daemon unreachable. INFO so a "green" automation that physically did
         // nothing (no-op) is distinguishable from one that actually moved the actuator.
-        Log.i(TAG, "write dev=$dev fid=$fid value=$value status=$status accepted=${status != null && writeAccepted(status)}")
+        // Streaming writers (music card progress, HUD guidance) get a line a minute (WriteLogGate).
+        val accepted = status != null && writeAccepted(status)
+        writeLogGate.onWrite("$dev:$fid", status, accepted, SystemClock.elapsedRealtime())?.let { quiet ->
+            Log.i(TAG, "write dev=$dev fid=$fid value=$value status=$status accepted=$accepted" +
+                if (quiet > 0) " (+$quiet unlogged)" else "")
+        }
         return status
     }
 
@@ -1215,7 +1223,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         }?.first
         // Same raw autoservice status convention as writeStatus, forwarded untouched; null also
         // covers a daemon too old to know TX_WRITE_BUFFER (transact returns false).
-        Log.i(TAG, "writeBuffer dev=$dev fid=$fid bytes=${bytes.size} status=$status accepted=${status != null && writeAccepted(status)}")
+        val accepted = status != null && writeAccepted(status)
+        writeLogGate.onWrite("buf:$dev:$fid", status, accepted, SystemClock.elapsedRealtime())?.let { quiet ->
+            Log.i(TAG, "writeBuffer dev=$dev fid=$fid bytes=${bytes.size} status=$status accepted=$accepted" +
+                if (quiet > 0) " (+$quiet unlogged)" else "")
+        }
         return status
     }
 

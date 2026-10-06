@@ -65,18 +65,20 @@ class LogRecorderTest {
     private val spawned = CopyOnWriteArrayList<Array<String>>()
     private val processes = CopyOnWriteArrayList<FakeProcess>()
 
-    /** Only the recording processes; `logcat -c` is spawned and waited for, never destroyed. */
+    /** The recording processes (every spawn is one since the start stopped clearing the buffer). */
     private val recordings: List<FakeProcess>
         get() = processes.filter { it.args.size > 2 }
 
     private fun recorder(
         autoStopMs: Long = 2 * 60 * 60 * 1000L,
         maxSizeBytes: Long = 50 * 1024 * 1024L,
+        endSnapshot: EndSnapshotSource? = null,
         stdout: () -> InputStream = { OpenStream() },
     ): LogRecorder = LogRecorder(
         ApplicationProvider.getApplicationContext<Context>(),
         autoStopMs,
         maxSizeBytes,
+        endSnapshot,
     ) { args ->
         spawned += args
         val stream = if (args.size > 2) stdout() else ByteArrayInputStream(ByteArray(0))
@@ -104,17 +106,19 @@ class LogRecorderTest {
         assertTrue(result is LogRecorder.StartResult.Started)
         val file = (result as LogRecorder.StartResult.Started).file
         assertTrue(file.readText().startsWith("header"))
-        // logcat -c, then the recording process itself.
-        assertEquals(2, spawned.size)
-        assertEquals(listOf("logcat", "-c"), spawned[0].toList())
-        assertTrue(spawned[1].contains("BootReceiver:*"))
+        // The recording process alone: the buffer is no longer cleared first.
+        assertEquals(1, spawned.size)
+        assertTrue(spawned[0].contains("BootReceiver:*"))
         // #180: the "decode rejected" line lives on this tag.
-        assertTrue(spawned[1].contains("NativeParsReader:*"))
+        assertTrue(spawned[0].contains("NativeParsReader:*"))
         // Voice speed wave: TTS source + synth time, LLM retries, token usage lines.
-        assertTrue(spawned[1].contains("TtsRouter:*"))
-        assertTrue(spawned[1].contains("LlmAgentBackend:*"))
-        assertTrue(spawned[1].contains("OpenRouterClient:*"))
-        assertTrue(spawned[1].contains("HttpPrewarm:*"))
+        assertTrue(spawned[0].contains("TtsRouter:*"))
+        assertTrue(spawned[0].contains("LlmAgentBackend:*"))
+        assertTrue(spawned[0].contains("OpenRouterClient:*"))
+        assertTrue(spawned[0].contains("HttpPrewarm:*"))
+        // Log audit 2026-10-06: a sample of the tags that wrote only to logcat.
+        assertTrue(spawned[0].contains("NavA11yExtractor:*"))
+        assertTrue(spawned[0].contains("MediaSessionGrant:*"))
 
         val state = recorder.state.value
         assertTrue(state.isRecording)
@@ -133,8 +137,8 @@ class LogRecorderTest {
         val second = recorder.startWithHeader("overwritten\n")
 
         assertEquals(LogRecorder.StartResult.AlreadyRecording, second)
-        // No second logcat, and the buffer of the running one was not cleared again.
-        assertEquals(2, spawned.size)
+        // No second logcat.
+        assertEquals(1, spawned.size)
         assertEquals(1, recordings.size)
         assertEquals(firstPath, recorder.state.value.filePath)
         assertTrue((first as LogRecorder.StartResult.Started).file.readText().startsWith("header"))
@@ -187,7 +191,7 @@ class LogRecorderTest {
         val restarted = recorder.startWithHeader()
 
         assertTrue(restarted is LogRecorder.StartResult.Started)
-        assertEquals(4, spawned.size)
+        assertEquals(2, spawned.size)
         assertTrue(recorder.state.value.isRecording)
 
         recorder.stop()
@@ -467,11 +471,87 @@ class LogRecorderTest {
         assertFalse(recorder.resumeIfPending())
 
         // Still the same session: no extra logcat, no resume marker in the file.
-        assertEquals(2, spawned.size)
+        assertEquals(1, spawned.size)
         assertEquals(1, recordings.size)
         assertEquals(running, recorder.state.value)
         assertFalse(started.file.readText().contains("LOG RESUMED"))
 
         recorder.stop()
+    }
+
+    @Test
+    fun `a fresh start replays the buffer from 15 minutes back instead of clearing it`() {
+        val now = java.util.Calendar.getInstance().apply { set(2026, 9, 6, 12, 30, 15); set(java.util.Calendar.MILLISECOND, 250) }
+        val args = LogRecorder.startArgs(now.timeInMillis)
+
+        assertEquals(listOf("logcat", "-v", "time", "-T", "10-06 12:15:15.250", "-s", "BootReceiver:*"), args.take(7))
+        assertFalse(args.contains("-c"))
+    }
+
+    @Test
+    fun `foreign ActivityManager lines never reach the file`() = runTest {
+        val lines = listOf(
+            "10-05 15:56:25.574 W/ActivityManager( 1116): Unable to start service Intent { act=com.byd.autovoice.ttsshow }",
+            "10-05 15:56:25.600 I/ActivityManager( 1116): Force stopping com.bydmate.app appid=10099 user=0",
+            "10-05 15:56:25.700 I/HudPushLoop( 4321): frame sent",
+        )
+        val recorder = recorder(stdout = { ByteArrayInputStream(lines.joinToString("\n", postfix = "\n").toByteArray()) })
+        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+
+        recorder.awaitStopped()
+
+        val text = started.file.readText()
+        assertFalse(text.contains("autovoice"))
+        assertTrue(text.contains("Force stopping com.bydmate.app"))
+        assertTrue(text.contains("frame sent"))
+    }
+
+    @Test
+    fun `stop closes the file with the end snapshot after the recorded lines`() = runTest {
+        var since = 0L
+        val recorder = recorder(
+            endSnapshot = { sinceMs -> since = sinceMs; listOf("hud: frames_sent=42") },
+            stdout = { ByteArrayInputStream("10-05 15:56:25.700 I/HudPushLoop( 4321): frame sent\n".toByteArray()) },
+        )
+        // A pipe at EOF stops on its own and keeps the recording pending: no end section yet.
+        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+        recorder.awaitStopped()
+        assertFalse(started.file.readText().contains("--- end snapshot ---"))
+
+        val open = recorder(endSnapshot = { sinceMs -> since = sinceMs; listOf("hud: frames_sent=42") })
+        val second = open.startWithHeader() as LogRecorder.StartResult.Started
+        open.stop()
+
+        val text = second.file.readText()
+        assertTrue(text.endsWith("--- end snapshot ---\nhud: frames_sent=42\n"))
+        assertEquals(open.state.value.lastStopped!!.path, second.file.absolutePath)
+        assertTrue(since > 0L)
+    }
+
+    @Test
+    fun `the size limit also closes the file with the end snapshot`() = runTest {
+        val line = "x".repeat(200)
+        val recorder = recorder(
+            maxSizeBytes = 2048L,
+            endSnapshot = { listOf("end") },
+            stdout = { ByteArrayInputStream((line + "\n").repeat(500).toByteArray()) },
+        )
+        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+
+        recorder.awaitStopped()
+
+        val text = started.file.readText()
+        assertTrue(text.indexOf("LOG STOPPED") < text.indexOf("--- end snapshot ---"))
+        assertTrue(text.endsWith("--- end snapshot ---\nend\n"))
+    }
+
+    @Test
+    fun `a failing end snapshot still leaves a closed file`() = runTest {
+        val recorder = recorder(endSnapshot = { throw IllegalStateException("boom") })
+        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+
+        recorder.stop()
+
+        assertTrue(started.file.readText().endsWith("--- end snapshot ---\n(failed: IllegalStateException)\n"))
     }
 }

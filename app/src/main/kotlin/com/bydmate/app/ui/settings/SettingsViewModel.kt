@@ -368,6 +368,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val appStrings: AppStrings,
     private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter,
     private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge,
+    private val vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao,
 ) : ViewModel() {
 
     /** ADB control-channel verdict for the line under the ADB-restore toggle. */
@@ -1687,6 +1688,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         /** Shared budget for the daemon-backed dump sections (liveness + seat, steering heat and window reads).
          *  The dump must not hang on a wedged daemon. */
         private const val HELPER_DIAG_BUDGET_MS = 3_000L
+        private const val VEHICLE_WRITES_IN_DUMP = 40
 
         /**
          * A binder transact is a blocking call: wrapping it in withTimeoutOrNull here would not
@@ -1797,6 +1799,20 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("font_scale: ${localePreferences.getFontScale()}")
             } catch (e: Exception) {
                 appendLine("(failed to gather app/device metadata: ${e.message})")
+            }
+            try {
+                val pm = appContext.packageManager
+                appendLine(RecordingDumpFormat.appVersionsLine { pkg ->
+                    try {
+                        val pi = pm.getPackageInfo(pkg, 0)
+                        pi.versionName to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pi.longVersionCode
+                        else @Suppress("DEPRECATION") pi.versionCode.toLong()
+                    } catch (_: PackageManager.NameNotFoundException) {
+                        null
+                    }
+                })
+            } catch (e: Exception) {
+                appendLine("(failed to gather app versions: ${e.message})")
             }
 
             appendLine("--- settings ---")
@@ -2048,7 +2064,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("someip_services=${someIp?.startedServices()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeServices(it) } ?: "n/a"}")
                 appendLine("someip_fire_rc=${someIp?.fireCounts()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeFires(it) } ?: "n/a"}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
-                appendLine("hub_snapshot=${com.bydmate.app.navdata.NavGuidanceHub.snapshot()}")
+                appendLine("hub_snapshot=${RecordingDumpFormat.hubSnapshot(com.bydmate.app.navdata.NavGuidanceHub.snapshot())}")
                 // The current route's counters, or the last route's (the route-summary trace line).
                 appendLine("route_summary: ${com.bydmate.app.navdata.NavGuidanceHub.routeSummary()}")
                 // What each channel actually carried at every maneuver change (#94): the
@@ -2264,6 +2280,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     com.bydmate.app.cluster.ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
                 appendLine("mirror_enabled: ${clusterPrefs.getBoolean(
                     com.bydmate.app.cluster.ClusterProjectionManager.KEY_MIRROR_ENABLED, false)}")
+                appendLine(com.bydmate.app.cluster.SteeringWheelKeyService.keyCounters.line())
             } catch (e: Exception) { appendLine("(failed to gather steering key state: ${e.message})") }
 
             appendLine("--- autostart ---")
@@ -2428,6 +2445,12 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                         "chat=${chatId?.let { "…" + it.toString().takeLast(4) } ?: "(none)"}"
                 )
                 telegramReporter.diagnosticsLines().forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
+            appendLine("--- vehicle writes ---")
+            try {
+                RecordingDumpFormat.vehicleWriteLines(vehicleWriteLogDao.getLatest(VEHICLE_WRITES_IN_DUMP))
+                    .forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             appendLine("--- fid push ---")

@@ -263,7 +263,7 @@ class PushStateTraceTest {
         assertTrue(lines.any { it.startsWith("turnSignal $TURN dev=1004 OK") })
         assertTrue(lines.any { it.startsWith("lane-change-gray $LANE_GRAY dev=1038 $FID_PUSH_NOT_IN_FEATURE_MAP") })
         assertEquals(listOf(FidPushEvent(TURN, 2, 0.0, 0L, receivedAtMs = received.single().receivedAtMs)), received)
-        assertEquals(listOf("car turn to=left"), changes())
+        assertEquals(listOf("car turn side=left"), changes())
     }
 
     // --- trace ---
@@ -314,7 +314,7 @@ class PushStateTraceTest {
         )
     }
 
-    @Test fun `turn signal transitions are traced by side, the held mask is not`() = runTest {
+    @Test fun `turn signal uses are traced by side, the held mask and the off are not`() = runTest {
         channel.resubscribe("binder accepted") { CATALOG }
 
         push(TURN to 1)
@@ -325,17 +325,38 @@ class PushStateTraceTest {
         push(TURN to 9)
         push(TURN to 1)
 
+        // A switch of side ends the running use; the last one ends only once the lamp stayed
+        // dark (TurnSeries, the timer this test does not wait for).
         assertEquals(
             listOf(
-                "car turn to=off",
-                "car turn from=off to=left",
-                "car turn from=left to=right",
-                "car turn from=right to=hazard",
-                "car turn from=hazard to=9",
-                "car turn from=9 to=off",
+                "car turn side=left",
+                "car turn-end side=left blinks=1",
+                "car turn side=right",
+                "car turn-end side=right blinks=1",
+                "car turn side=hazard",
+                "car turn-end side=hazard blinks=1",
+                "car turn side=9",
             ),
-            changes(),
+            changes().map { it.replace(MS, "") },
         )
+    }
+
+    @Test fun `a blinking signal is one start and one end`() {
+        var now = 0L
+        val timers = mutableListOf<() -> Unit>()
+        val states = PushStateTrace(clock = { now }, schedule = { _, block -> timers += block })
+
+        states.onEvent(TURN, "turnSignal", 2)
+        repeat(3) {
+            now += 400; states.onEvent(TURN, "turnSignal", 1)
+            now += 400; states.onEvent(TURN, "turnSignal", 2)
+        }
+        now += 400; states.onEvent(TURN, "turnSignal", 1)
+        // The timers of the short dark phases find the lamp lit again; the last one ends the use.
+        now += 1_500
+        timers.forEach { it() }
+
+        assertEquals(listOf("car turn side=left", "car turn-end side=left blinks=4 ms=2800"), events())
     }
 
     @Test fun `other push fields are not traced`() = runTest {
@@ -348,6 +369,7 @@ class PushStateTraceTest {
 
     private companion object {
         val ID = Regex(" #\\d+")
+        val MS = Regex(" ms=\\d+")
 
         val SPACES = Regex(" +")
         val TURN = FidMap.byField.getValue("turnSignal").fid

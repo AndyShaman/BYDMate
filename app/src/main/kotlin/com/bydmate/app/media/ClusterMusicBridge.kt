@@ -93,6 +93,8 @@ class ClusterMusicBridge @Inject constructor(
     /** Last outcome other than NONE / TICKED and when, for the dump. */
     @Volatile private var lastOutcome: Outcome? = null
     @Volatile private var lastOutcomeAt = 0L
+    /** Outcome and reason of the last cluster_music outcome line in the trace. */
+    @Volatile private var lastTracedOutcome: String? = null
 
     /**
      * [ensureAccess] re-arms notification-listener access (TrackingService's GrantSelfHeal); it runs
@@ -291,6 +293,14 @@ class ClusterMusicBridge @Inject constructor(
             Outcome.REFUSED -> Log.w(TAG, "card off until restart: the car refused it ${ClusterMusicSync.MAX_WRITE_REFUSALS} times")
             else -> Log.i(TAG, "card ${outcome.name.lowercase()}${reason?.let { " ($it)" } ?: ""}")
         }
+        traceOnChange(outcome, reason)
+    }
+
+    /** Only a change of outcome: every new track is another "shown", a hundred lines a drive. */
+    private fun traceOnChange(outcome: Outcome, reason: String?) {
+        val key = "${outcome.name}|$reason"
+        if (key == lastTracedOutcome) return
+        lastTracedOutcome = key
         Trace.event(TraceArea.CAR, "cluster_music", "outcome" to outcome.name.lowercase(), "reason" to reason)
     }
 
