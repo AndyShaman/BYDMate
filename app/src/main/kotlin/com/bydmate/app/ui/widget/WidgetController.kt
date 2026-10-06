@@ -761,7 +761,10 @@ object WidgetController {
     /** Raw HOME-intent query, no caching or tracing; also read by the diagnostics dump. */
     fun queryHomePackages(context: Context): Set<String> = try {
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        context.packageManager.queryIntentActivities(intent, 0)
+        val all = context.packageManager.queryIntentActivities(intent, 0)
+        // AOSP Settings registers FallbackHome (priority -1000) as a HOME activity; it is not a
+        // launcher, so skip negative-priority entries unless nothing else is left.
+        (all.filter { it.priority >= 0 }.ifEmpty { all })
             .mapNotNull { it.activityInfo?.packageName }
             .toSet()
     } catch (e: Exception) {
