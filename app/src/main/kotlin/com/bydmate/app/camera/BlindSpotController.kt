@@ -109,9 +109,11 @@ fun blindSpotClusterDisplay(context: Context): Display? {
  *
  * The main poll (1 s) only arms the pipeline: once the car is near the speed threshold a fast
  * loop takes over and reads blink/speed/gear through the daemon every 150 ms, because a turn
- * signal that shows up a second late is useless. The camera is opened warm (both previews
- * bound, both windows parked off screen) while the car is moving, so a show is one
- * updateViewLayout rather than a vendor-stack open. Hiding moves the window off screen rather
+ * signal that shows up a second late is useless. The camera is opened on demand, when a turn
+ * signal asks for a view (both previews bound at once, the other window parked off screen), and
+ * closed once no signal has wanted it for [COOL_DOWN_MS]: a blinker pulled again inside that
+ * reuses the open camera, and a show is then one updateViewLayout. Holding it open at every
+ * speed above the threshold loaded the head unit. Hiding moves the window off screen rather
  * than dropping its alpha, so the vendor keeps filling a live surface.
  *
  * Left goes on the cluster (that is where the driver looks before a left lane change), in the
@@ -211,6 +213,9 @@ class BlindSpotController @Inject constructor(
 
     private var windowsAttachedAt = 0L
     private var cameraOpenedAt = 0L
+    /** Whether the last tick's decision wanted the camera; its rising edge is a show request. */
+    private var cameraWanted = false
+    private val showLog = BlindSpotShowLog()
     private var coolingSince = 0L
     private var tearingDown = false
 
@@ -427,13 +432,22 @@ class BlindSpotController @Inject constructor(
         // Edge, not level — otherwise a held blinker would retry the camera every tick.
         backoff.request(decision.show)
 
+        // Looked up once the loop is armed rather than on the first blinker, so the first show
+        // of the drive does not wait for the vendor lookup on top of the open.
+        if (!discovered) discoverCamera()
+
+        val askedSide = blindSpotSignalSide(sample?.blink)
+        if (decision.cameraWarm && !cameraWanted) showLog.requested(askedSide, cameraOpen, now)
+        cameraWanted = decision.cameraWarm
+
         if (decision.cameraWarm) {
             coolingSince = 0L
             ensureWarm(now)
         } else {
             if (coolingSince == 0L) coolingSince = now
             if (now - coolingSince >= COOL_DOWN_MS && anythingUp()) {
-                awaitTeardown("cold for ${COOL_DOWN_MS / 1000} s")
+                val why = if (askedSide == BlindSpotSide.NONE) "signal off" else "below speed"
+                awaitTeardown("$why for ${COOL_DOWN_MS / 1000} s")
             }
         }
 
@@ -455,9 +469,7 @@ class BlindSpotController @Inject constructor(
         // DiLink 4.0, 2026-09-18 — BmmCameraInfo missing) must not get windows that nothing will
         // ever draw into, flashing on every blinker tick.
         if (!discovered || (probe.cameraId < 0 && now - probe.lastDiscoverAt >= REDISCOVER_MS)) {
-            discovered = true
-            withContext(cameraDispatcher()) { probe.discover() }
-            Log.i(TAG, "camera discover: id=${probe.cameraId} " + probe.discoverJournal.joinToString(" | "))
+            discoverCamera()
         }
         if (probe.cameraId < 0) {
             // Wait out the rest of the lookup interval, not a fresh one: a blinker pulled again
@@ -509,6 +521,10 @@ class BlindSpotController @Inject constructor(
             if (now - cameraOpenedAt >= FIRST_FRAME_TIMEOUT_MS) failCamera("no frame", now)
             return
         }
+        if (showLog.awaitingFrame) {
+            val window = if (showLog.side == BlindSpotSide.RIGHT) pipWindow else clusterWindow
+            showLog.firstFrame(window?.validFrameAt?.takeIf { it > 0L } ?: now, cameraOpenedAt)
+        }
 
         // The vendor stream can go quiet while the camera stays open (field 2026-08-25): the
         // TextureView keeps the last buffer, so every following blinker shows a frozen picture.
@@ -524,6 +540,12 @@ class BlindSpotController @Inject constructor(
                 shownSide == BlindSpotSide.RIGHT, it.hasValidFrame, maxOf(it.lastFrameAt, shownAt), now)
         } ?: false
         if (clusterStalled || pipStalled) failCamera("frame stall", now)
+    }
+
+    private suspend fun discoverCamera() {
+        discovered = true
+        withContext(cameraDispatcher()) { probe.discover() }
+        Log.i(TAG, "camera discover: id=${probe.cameraId} " + probe.discoverJournal.joinToString(" | "))
     }
 
     private suspend fun failCamera(reason: String, now: Long) {
@@ -859,7 +881,12 @@ class BlindSpotController @Inject constructor(
         if (!anythingUp()) return
         if (tearingDown) return
         tearingDown = true
-        Log.i(TAG, "teardown: $reason")
+        val openFor = if (cameraOpen) {
+            " (camera open ${(SystemClock.elapsedRealtime() - cameraOpenedAt) / 1000.0} s)"
+        } else {
+            ""
+        }
+        Log.i(TAG, "teardown: $reason$openFor")
         try {
             // Camera first: nothing may write into a surface that is about to be released.
             if (cameraOpen) {
@@ -893,6 +920,9 @@ class BlindSpotController @Inject constructor(
             windowsAttachedAt = 0L
             cameraOpenedAt = 0L
             coolingSince = 0L
+            // The next signal is a fresh request, whatever closed this one.
+            cameraWanted = false
+            showLog.reset()
             tearingDown = false
         }
     }
@@ -936,6 +966,10 @@ class BlindSpotController @Inject constructor(
 
         /** elapsedRealtime of the last surface update; read from the fast loop, written on Main. */
         @Volatile var lastFrameAt = 0L
+            private set
+
+        /** elapsedRealtime of the first honest frame ([hasValidFrame]); 0 until there is one. */
+        @Volatile var validFrameAt = 0L
             private set
 
         private var shownX = 0
@@ -1080,6 +1114,7 @@ class BlindSpotController @Inject constructor(
             wm = null
             frames = 0
             lastFrameAt = 0L
+            validFrameAt = 0L
             shown = false
             Log.i(TAG, "$label window removed")
             return true
@@ -1090,7 +1125,10 @@ class BlindSpotController @Inject constructor(
             surface = Surface(texture)
             frames = 0
             lastFrameAt = 0L
+            validFrameAt = 0L
             applyCrop(width, height)
+            // The camera is opened on demand, and this surface is what the open waits for.
+            wake.trySend(Unit)
         }
 
         override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {
@@ -1108,8 +1146,9 @@ class BlindSpotController @Inject constructor(
         }
 
         override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {
-            if (frames < 2) frames++
-            lastFrameAt = SystemClock.elapsedRealtime()
+            val now = SystemClock.elapsedRealtime()
+            if (frames < 2 && ++frames == 2) validFrameAt = now
+            lastFrameAt = now
         }
 
         /** True while this window shows the picture turned a quarter-turn (#207). */
