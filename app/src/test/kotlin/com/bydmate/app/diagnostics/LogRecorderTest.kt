@@ -236,6 +236,24 @@ class LogRecorderTest {
     }
 
     @Test
+    fun `size limit counts the bytes of Cyrillic lines, not their chars`() = runTest {
+        val line = "ж".repeat(100) // 200 bytes in UTF-8
+        val limit = 128 * 1024L
+        val recorder = recorder(
+            maxSizeBytes = limit,
+            stdout = { ByteArrayInputStream((line + "\n").repeat(3000).toByteArray()) },
+        )
+        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+
+        recorder.awaitStopped()
+
+        assertTrue(started.file.readText().contains("LOG STOPPED: file size limit reached"))
+        // At most one batch past the limit; counting chars would let it reach twice the limit.
+        val batch = PipeFlushPolicy.MAX_LINES * (line.toByteArray().size + 1)
+        assertTrue("length=${started.file.length()}", started.file.length() < limit + batch + 1024)
+    }
+
+    @Test
     fun `auto stop fires at the deadline`() = runTest {
         val recorder = recorder(autoStopMs = 50L)
         val started = recorder.startWithHeader() as LogRecorder.StartResult.Started

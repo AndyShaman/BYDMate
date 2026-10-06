@@ -103,13 +103,22 @@ object NavGuidanceParser {
  *  short enough for one journal line and without the street a screen text may go on with. */
 object NavManeuverRaw {
     const val MAX_CHARS = 40
-    /** Words of a screen text kept: the maneuver phrase comes first, a street may follow. */
-    private const val TEXT_WORDS = 4
+    /** Words of an unmatched screen text kept: a street may follow the maneuver words. */
+    private const val TEXT_WORDS = 2
+    private const val HEAD_CHARS = 20
     private val SPACES = Regex("""[\s\p{Z}]+""")
+    /** Words a street name follows: nothing from one of them on is kept. */
+    private val SEPARATORS = setOf("на", "в", "по", "onto", "on", "to", "into")
 
-    /** From a screen text: its first words only, capped at [MAX_CHARS]. */
-    fun text(kind: String, text: String?): String =
-        name(kind, text?.split(SPACES)?.filter { it.isNotEmpty() }?.take(TEXT_WORDS)?.joinToString(" "))
+    /** From a screen text: the table entry it matched (`key=`), else its first words up to a
+     *  separator and its length; never the user text after them. */
+    fun text(kind: String, text: String?): String {
+        if (text == null) return name(kind, null)
+        NavManeuverCodes.matchedPhrase(text)?.let { return name(kind, "key=$it") }
+        val head = text.split(SPACES).filter { it.isNotEmpty() }
+            .takeWhile { it.lowercase() !in SEPARATORS }.take(TEXT_WORDS).joinToString(" ")
+        return name(kind, "${head.take(HEAD_CHARS)} len=${text.length}")
+    }
 
     /** From a resource or icon name, capped at [MAX_CHARS]. */
     fun name(kind: String, name: String?): String = "$kind:$name".take(MAX_CHARS)
