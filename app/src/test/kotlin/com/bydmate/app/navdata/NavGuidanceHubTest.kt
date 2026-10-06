@@ -375,11 +375,16 @@ class NavGuidanceHubTest {
         assertEquals("desc:key=>>>", NavManeuverRaw.text("desc", ">>>"))
     }
 
-    @Test fun `an unmatched raw text keeps two words before a separator and its length`() {
-        assertEquals("text:Следуйте маршруту len=33", NavManeuverRaw.text("text", "Следуйте маршруту до улицы Ленина"))
-        assertEquals("text:Езжайте len=21", NavManeuverRaw.text("text", "Езжайте по Тверской 5"))
-        assertEquals("text: len=13", NavManeuverRaw.text("text", "Onto Main St."))
-        assertEquals("exit:2 len=1", NavManeuverRaw.text("exit", "2"))
+    @Test fun `an unmatched raw text keeps only maneuver vocabulary, every other word is a star`() {
+        assertEquals("text:* * * len=18", NavManeuverRaw.text("text", "Езжайте к Тверской"))
+        val ru = NavManeuverRaw.text("text", "Съезжайте на Тверскую")
+        assertEquals("text:съезжайте на * len=21", ru)
+        assertFalse(ru, "Тверск" in ru)
+        val en = NavManeuverRaw.text("text", "Turn onto Main St.")
+        assertEquals("text:turn * * * len=18", en)
+        assertFalse(en, "Main" in en)
+        val long = NavManeuverRaw.text("text", "один два три четыре пять шесть семь восемь девять десять")
+        assertTrue(long, long.length <= NavManeuverRaw.MAX_CHARS && long.endsWith(" len=56"))
     }
 
     @Test fun `an icon raw keeps its resource name`() {
@@ -406,5 +411,14 @@ class NavGuidanceHubTest {
         s = NavGuidanceHub.snapshot(nowMs = 3000)
         assertEquals(2, s.maneuverGaode)
         assertEquals("ул. А", s.road)
+    }
+
+    @Test fun `a new maneuver read with a fallback street forgets the old next street`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 1, distanceMeters = 500, road = "ул. Б", roadIsNextStreet = false),
+            NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        // Its next street was unknown: the first genuine one belongs to it, nothing is dropped.
+        NavGuidanceHub.update(data(dist = 400, road = "ул. Б"), NavGuidanceHub.Source.A11Y, nowMs = 3000)
+        assertEquals(1, NavGuidanceHub.snapshot(nowMs = 3000).maneuverGaode)
     }
 }

@@ -42,7 +42,7 @@ class RecordingEndSnapshot @Inject constructor(
         val out = mutableListOf<String>()
         out += "timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}"
         part(out, "hud") {
-            val diag = hudController.diag()
+            val diag = hudController.counters()
             listOf(
                 "hud: status=${hudController.status.value} mode=${hudController.mode()} " +
                     "frames_sent=${diag?.framesSent ?: 0} last_frame_ts=${diag?.lastFrameTs ?: 0} " +

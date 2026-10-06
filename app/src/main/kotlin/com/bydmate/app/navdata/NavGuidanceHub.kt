@@ -234,11 +234,11 @@ object NavGuidanceHub {
      *  goes now instead of after [MANEUVER_TIMEOUT_MS]. Without a street on either side nothing
      *  is known and the arrow stays, as on cars whose reads carry it only now and then (#198);
      *  callers pass "" for a road that is only the current-street fallback. Records [road] as the
-     *  next street the next read is compared with. */
+     *  next street the next read is compared with; a new maneuver takes its own, "" when unknown. */
     private fun dropOnStreetChange(prev: Snapshot, maneuverGaode: Int, road: String, source: Source): Snapshot {
         val street = road.trim()
         val held = nextStreet
-        if (street.isNotEmpty()) nextStreet = street
+        if (maneuverGaode > 0 || street.isNotEmpty()) nextStreet = street
         if (maneuverGaode > 0 || prev.maneuverGaode <= 0) return prev
         if (street.isEmpty() || held.isEmpty() || street == held) return prev
         Log.i(TAG, "maneuver dropped: next street changed without a maneuver " +

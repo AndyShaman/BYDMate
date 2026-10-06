@@ -482,4 +482,23 @@ object NavManeuverCodes {
         return DICTIONARY_PATTERNS.mapNotNull { it.find(norm)?.value }.distinct()
             .takeIf { it.isNotEmpty() }?.joinToString("+")
     }
+
+    /** The words of the dictionary patterns above, their regex forms spelled out. */
+    private val PATTERN_WORDS = listOf(
+        "left", "right", "slight", "slightly", "bear", "keep", "fork", "veer", "exit", "sharp", "sharply", "hard",
+        "u-turn", "u", "turn", "uturn", "around", "back", "arrive", "arrived", "arriving", "arrival", "destination",
+        "route", "ended", "finish", "finished", "completed", "end", "of", "done", "waypoint", "waypoints", "via",
+        "point", "way", "intermediate", "straight", "continue", "ahead", "forward", "the", "ferry", "leave",
+        "roundabout", "traffic", "circle", "circular", "tunnel", "number",
+        "влево", "вправо", "лево", "право", "левый", "левая", "правый", "правая", "плавно", "резко", "круто",
+        "кольца", "кольцевая", "круговая", "разворачивайтесь", "съезд", "съезда", "№",
+    )
+
+    /** Every word our tables and patterns read a maneuver from, lowercased: the only words of an
+     *  unmatched text the field journal keeps. */
+    private val VOCABULARY: Set<String> = (RU_PHRASES.keys + A11Y_ONLY_PHRASES + WORD_BOUNDARY_PHRASES.keys +
+        RICH_WORD_BOUNDARY.keys + OPENBYD_EXACT.keys + PHRASES.values)
+        .flatMap { it.split(' ') }.toSet() + ORDINAL_NUMBER.keys + PATTERN_WORDS
+
+    fun isVocabularyWord(word: String): Boolean = word in VOCABULARY
 }
