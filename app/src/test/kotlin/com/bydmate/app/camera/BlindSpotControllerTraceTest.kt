@@ -127,7 +127,8 @@ class BlindSpotControllerTraceTest {
     @Test fun `windows whose surface never arrives are given up with the reason, and the factory view is traced`() {
         prefs.edit().putBoolean(BlindSpotPreferences.KEY_ENABLED, true).commit()
         coEvery { helper.readBatch(any()) } answers {
-            listOf(0 to 1, 0 to java.lang.Float.floatToRawIntBits(40f), 0 to 4, 0 to 0, 0 to 0)
+            // Left blinker held: the camera, and with it the windows, only come up on a signal.
+            listOf(0 to 2, 0 to java.lang.Float.floatToRawIntBits(40f), 0 to 4, 0 to 0, 0 to 0)
         }
         controller.start(scope)
         poll(speed = 40, gear = 4)
