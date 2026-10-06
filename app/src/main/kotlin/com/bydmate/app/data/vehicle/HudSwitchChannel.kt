@@ -1,6 +1,7 @@
 package com.bydmate.app.data.vehicle
 
 import android.util.Log
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -14,8 +15,9 @@ fun interface HudReader {
 /**
  * HUD master switch on/off (#292), the stock settings' write (1 = on, 2 = off). Not validated on
  * a car with a HUD, so the status feedback decides:
- *  - config read failed                 → UNREACHABLE, nothing written
- *  - config not 1 (W-HUD) or 2 (AR-HUD) → NOT_EQUIPPED, nothing written
+ *  - config read failed or a read error  → UNREACHABLE, nothing written
+ *    (1048575 not initialized, -10011/-10013)
+ *  - config not 1 (W-HUD) or 2 (AR-HUD) → NOT_EQUIPPED, nothing written (65535 on a car without one)
  *  - status == requested                → OK
  *  - the opposite status (1↔2)          → NO_EFFECT
  *  - a failed read or any other value   → UNCONFIRMED
@@ -43,7 +45,10 @@ class HudSwitchChannel(
         val want = if (on) STATE_ON else STATE_OFF
         val config = read(WriteAllowlist.HUD_CONFIG_FID)
         if (config == null || config !in HUD_TYPES) {
-            val outcome = if (config == null) Outcome(Result.UNREACHABLE, "config unreadable", false, null)
+            // 65535 (no CAN link) is how a car without a HUD answers; the other sentinels are read errors.
+            val unreadable = config == null ||
+                (config != SentinelDecoder.FEATURE_LINK_ERROR && SentinelDecoder.decodeInt(config) == null)
+            val outcome = if (unreadable) Outcome(Result.UNREACHABLE, "config unreadable", false, null)
                 else Outcome(Result.NOT_EQUIPPED, "no hud", false, null)
             Log.i(TAG, "Hud: want=$want config=${render(config)} -> ${outcome.verdict}, nothing written")
             return outcome

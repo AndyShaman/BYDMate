@@ -96,11 +96,13 @@ class BlindSpotControllerOnDemandTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
-    /** Ticks the loop, handing every attached window the surface and the frames Robolectric never draws. */
-    private fun ticks(n: Int) = repeat(n) {
-        textureViews().forEach { view ->
-            val listener = view.surfaceTextureListener ?: return@forEach
+    /** Ticks the loop, handing every attached window the surface and the frames Robolectric never
+     *  draws; frames go only to the windows whose attach index [framesTo] accepts. */
+    private fun ticks(n: Int, framesTo: (Int) -> Boolean = { true }) = repeat(n) {
+        textureViews().forEachIndexed { i, view ->
+            val listener = view.surfaceTextureListener ?: return@forEachIndexed
             if (fed.add(view)) listener.onSurfaceTextureAvailable(SurfaceTexture(0), 1280, 480)
+            if (!framesTo(i)) return@forEachIndexed
             val texture = SurfaceTexture(0)
             listener.onSurfaceTextureUpdated(texture)
             listener.onSurfaceTextureUpdated(texture)
@@ -136,6 +138,17 @@ class BlindSpotControllerOnDemandTest {
         val lines = events()
         assertTrue(lines.toString(), lines.any { it == "camera open-request side=left" })
         assertTrue(lines.toString(), lines.any { it.startsWith("camera first-frame side=left ms=") })
+    }
+
+    @Test fun `a frame on the left window is no first frame of the right side`() {
+        blink = BLINK_RIGHT
+        // Windows attach in order: the left one first, the right one second.
+        ticks(WARM_TICKS, framesTo = { it == 0 })
+        assertEquals(listOf(OPEN), cameraEvents())
+        assertTrue(events().toString(), events().none { it.startsWith("camera first-frame") })
+
+        ticks(2)
+        assertTrue(events().toString(), events().any { it.startsWith("camera first-frame side=right ms=") })
     }
 
     @Test fun `no turn signal at speed keeps the camera closed`() {
