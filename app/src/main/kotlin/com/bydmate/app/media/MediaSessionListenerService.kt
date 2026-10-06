@@ -4,6 +4,8 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.navdata.NavGuidanceHub
 import com.bydmate.app.navdata.NavPackages
 import com.bydmate.app.navdata.UnknownManeuverGate
@@ -16,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
  *  RemoteViews parser (donor port: cameras, maneuver PNGs, minimized-window guidance).
  *  No other package's notifications are read or stored. Listener access is self-granted
  *  through the helper daemon (see MediaSessionGrant). */
+@Suppress("TooManyFunctions") // framework callbacks plus the pure parsing helpers they share
 class MediaSessionListenerService : NotificationListenerService() {
 
     companion object {
@@ -46,6 +49,20 @@ class MediaSessionListenerService : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         lane = NaviNotificationLane()
+    }
+
+    // Bound and live, or let go by the framework: without these a HUD with no notification
+    // guidance (#199) cannot tell a disconnected listener from a quiet navigator.
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.i(TAG, "listener connected")
+        Trace.event(TraceArea.HUD, "notif-listener", "state" to "connected")
+    }
+
+    override fun onListenerDisconnected() {
+        Log.i(TAG, "listener disconnected")
+        Trace.event(TraceArea.HUD, "notif-listener", "state" to "disconnected")
+        super.onListenerDisconnected()
     }
 
     override fun onDestroy() {

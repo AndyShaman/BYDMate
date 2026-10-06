@@ -27,6 +27,7 @@ import com.bydmate.app.R
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.telegram.withReportRuleName
+import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -58,6 +60,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         private const val CONFIRM_CHANNEL_ID = "bydmate_automation_confirm"
         private const val CONFIRM_TIMEOUT_MS = 30_000L
         private const val NOTIF_BASE_ID = 5000
+        // Trace `src=` of the edges that do not come from a manual trigger kind.
+        private const val SRC_POLL = "poll"
+        private const val SRC_VOICE = "voice"
 
         const val ACTION_CONFIRM = "com.bydmate.app.AUTOMATION_CONFIRM"
         const val ACTION_CANCEL = "com.bydmate.app.AUTOMATION_CANCEL"
@@ -386,6 +391,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                     // Audit point 1: a condition already true when first seen is only remembered.
                     if (previous == null && matched && firstCheckLogged.add(rule.id)) {
                         Log.i(TAG, "rule ${rule.id} '${rule.name}': already true at first check, remembered without firing")
+                        AutoTrace.edge(rule.id, EdgeOutcome.SEED_FIRST_CHECK, SRC_POLL)
                     }
                     // null = first observation, hash mismatch = rule just edited —
                     // either way seed only, do not fire on a synthetic transition.
@@ -398,12 +404,14 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 val lastFired = rule.lastTriggeredAt ?: 0L
                 if (now - lastFired < rule.cooldownSeconds * 1000L) {
                     logSkip(rule, "cooldown", "${rule.cooldownSeconds}s, last ${(now - lastFired) / 1000}s ago")
+                    AutoTrace.edge(rule.id, EdgeOutcome.SKIP_COOLDOWN, SRC_POLL)
                     continue
                 }
 
                 // Park-only rule
                 if (rule.requirePark && data.gear != 1) {
                     logSkip(rule, "park only", "gear=${data.gear}")
+                    AutoTrace.edge(rule.id, EdgeOutcome.SKIP_PARK, SRC_POLL)
                     continue
                 }
 
@@ -411,6 +419,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 if (rule.fireOncePerTrip && tripStartedAt != null &&
                     lastFiredTripByRule[rule.id] == tripStartedAt) {
                     logSkip(rule, "once per trip", "trip=$tripStartedAt")
+                    AutoTrace.edge(rule.id, EdgeOutcome.SKIP_ONCE, SRC_POLL)
                     continue
                 }
 
@@ -434,9 +443,11 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 val snapshot = buildSnapshot(triggers, data)
 
                 if (rule.confirmBeforeExecute) {
-                    confirmThenRun(rule, actions, snapshot, now)
+                    val edgeId = AutoTrace.edge(rule.id, EdgeOutcome.CONFIRM, SRC_POLL)
+                    confirmThenRun(rule, actions, snapshot, now, edgeId)
                 } else {
-                    scope.launch { executeAndLog(rule, actions, snapshot, data) }
+                    val edgeId = AutoTrace.edge(rule.id, EdgeOutcome.FIRE, SRC_POLL)
+                    scope.launch { executeAndLog(rule, actions, snapshot, data, edgeId) }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error evaluating rule '${rule.name}': ${e.message}")
@@ -489,6 +500,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
         val now = System.currentTimeMillis()
         val data = TrackingService.lastData.value
+        // The press itself (a key's trace line), when the caller runs us under it.
+        val pressId = Trace.cause()
         for (rule in matching) {
             try {
                 // Honor requirePark even on the manual path. Reuse the engine's
@@ -496,6 +509,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 // is null the park gate is closed (null?.gear != 1 → true).
                 if (rule.requirePark && data?.gear != 1) {
                     journal.parkRequired(rule, JSONObject().put(kind, value).toString(), data?.gear)
+                    AutoTrace.edge(rule.id, EdgeOutcome.SKIP_PARK, kind, by = pressId)
                     continue
                 }
 
@@ -509,11 +523,13 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 ruleDao.updateLastTriggered(rule.id, now)
 
                 if (rule.confirmBeforeExecute) {
-                    confirmThenRun(rule, actions, snapshot, now)
+                    val edgeId = AutoTrace.edge(rule.id, EdgeOutcome.CONFIRM, kind, by = pressId)
+                    confirmThenRun(rule, actions, snapshot, now, edgeId)
                 } else {
+                    val edgeId = AutoTrace.edge(rule.id, EdgeOutcome.FIRE, kind, by = pressId)
                     // Awaited directly (not scope.launch) so the caller's
                     // coroutine observes dispatch completion deterministically.
-                    executeAndLog(rule, actions, snapshot, data)
+                    executeAndLog(rule, actions, snapshot, data, edgeId)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "$kind error for rule '${rule.name}': ${e.message}")
@@ -694,7 +710,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         rule: RuleEntity,
         actions: List<ActionDef>,
         snapshot: String,
-        data: DiParsData?
+        data: DiParsData?,
+        // Trace id of the edge that fired the rule: the cause of its step lines and of what the
+        // vehicle layer traces under them (a write's late check).
+        cause: Long = 0L,
     ): Boolean {
         // One chime per rule firing, regardless of action kinds (per-rule "Выполнять со звуком").
         if (rule.playSound) {
@@ -708,7 +727,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             // Fresh data per step: a pause may lie between the fire and this step. A speed-gated
             // step does not trust it either: the dispatcher reads the speed itself right before.
             val stepData = liveData() ?: data
-            val result = actionDispatcher.dispatch(action.withReportRuleName(rule.name), stepData)
+            val result = withContext(Trace.causedBy(cause)) {
+                actionDispatcher.dispatch(action.withReportRuleName(rule.name), stepData)
+            }
+            AutoTrace.step(rule.id, i + 1, action, result, by = cause)
             Log.i(
                 TAG,
                 "rule ${rule.id} step ${i + 1}/${actions.size} ${action.kind} speed=${stepData?.speed} " +
@@ -752,6 +774,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // requirePark: gear 1 = P.
         if (rule.requirePark && data?.gear != 1) {
             journal.parkRequired(rule, JSONObject().put("voice", true).toString(), data?.gear)
+            AutoTrace.edge(rule.id, EdgeOutcome.SKIP_PARK, SRC_VOICE)
             return VoiceFireResult.ParkRequired
         }
 
@@ -769,7 +792,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val snapshot = JSONObject().put("voice", true).toString()
 
         if (rule.confirmBeforeExecute) {
-            confirmThenRun(rule, actions, snapshot, System.currentTimeMillis())
+            val edgeId = AutoTrace.edge(rule.id, EdgeOutcome.CONFIRM, SRC_VOICE)
+            confirmThenRun(rule, actions, snapshot, System.currentTimeMillis(), edgeId)
             return VoiceFireResult.Confirming
         }
 
@@ -778,7 +802,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // suspend here on the caller's routingJob, the assistant UI disappearing (button tap
         // or timeout) cancels that job mid-sequence, aborting the rule with actions half-run.
         Log.i(TAG, "voice fire: rule=${rule.id} actions=${actions.size} launched in engine scope")
-        scope.launch { executeAndLog(rule, actions, snapshot, data) }
+        val edgeId = AutoTrace.edge(rule.id, EdgeOutcome.FIRE, SRC_VOICE)
+        scope.launch { executeAndLog(rule, actions, snapshot, data, edgeId) }
         return VoiceFireResult.Fired(true)
     }
 
@@ -803,12 +828,12 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
      * allowed. The steps run against the data at confirm time; a cancel or no answer goes to the
      * journal with its reason.
      */
-    private fun confirmThenRun(rule: RuleEntity, actions: List<ActionDef>, snapshot: String, at: Long) {
+    private fun confirmThenRun(rule: RuleEntity, actions: List<ActionDef>, snapshot: String, at: Long, cause: Long) {
         val shown = ConfirmOverlayManager.show(
             context = context,
             ruleName = rule.name,
             actionsSummary = actions.joinToString(", ") { it.displayName },
-            onConfirm = { scope.launch { executeAndLog(rule, actions, snapshot, TrackingService.lastData.value) } },
+            onConfirm = { scope.launch { executeAndLog(rule, actions, snapshot, TrackingService.lastData.value, cause) } },
             onCancel = CancelOrTimeout(
                 onCancel = { scope.launch { journal.cancelled(rule, snapshot, at) } },
                 onTimeout = { scope.launch { journal.timeout(rule, snapshot, at) } },

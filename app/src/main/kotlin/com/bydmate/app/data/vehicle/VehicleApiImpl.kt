@@ -339,7 +339,24 @@ class VehicleApiImpl @Inject constructor(
         if (windowCheck != null) verifyInto?.add(windowCheck)
 
         logSuccess(actionName, entry, value, readback)
+        if (entry.readbackFid == null && windowCheck == null) verifyLate(actionName, entry, value)
         return Result.success(Unit)
+    }
+
+    /**
+     * One read of the written fid [LATE_VERIFY_MS] after a write that has no check of its own
+     * (#267: the hazard reported ok, the lamps stayed dark), as a trace line. Diagnostics only:
+     * fire-and-forget on [readbackScope], so it never delays the caller or a rule's next step,
+     * and its answer changes no verdict.
+     */
+    private suspend fun verifyLate(actionName: String, entry: WriteEntry, value: Int) {
+        val cause = Trace.cause()
+        readbackScope.launch {
+            delay(LATE_VERIFY_MS)
+            val got = runCatching { helper.read(entry.dev, entry.writeFid) }.getOrNull()
+            Trace.event(TraceArea.CAR, "verify", "action" to actionName, "want" to value,
+                "got" to (got?.toString() ?: "null"), "after_ms" to LATE_VERIFY_MS.toInt(), by = cause)
+        }
     }
 
     /**
@@ -943,6 +960,8 @@ class VehicleApiImpl @Inject constructor(
         private const val COMPOSITE_WRITE_STAGGER_MS = 150L
         /** Percent write → 255 reset on the same fid, the stock delay (CarWindowApiImpl delay(300)). */
         private const val PERCENT_RESET_DELAY_MS = 300L
+        /** When a write without a readback is read back once for the trace. */
+        internal const val LATE_VERIFY_MS = 800L
         /** The reset and one retry. */
         private const val PERCENT_RESET_ATTEMPTS = 2
         private val STEERING_HEAT_ACTIONS = setOf("steering_heat_on", "steering_heat_off")
