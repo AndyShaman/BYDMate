@@ -83,6 +83,47 @@ class ActionDispatcherMediaKeyTest {
         verify(exactly = 0) { context.getSystemService(Context.AUDIO_SERVICE) }
     }
 
+    @Test fun `only a stopped mediacenter session is no player, not a wake-up of the stock player`() = runBlocking {
+        dispatcher.activeMediaControllers = { listOf(session("com.byd.mediacenter", 1)) }
+        val r = dispatcher.dispatch(key("pause"), null)
+        assertFalse(r.success)
+        assertEquals("Нет запущенного плеера", r.reason)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test fun `a mediacenter session with state NONE is skipped too`() = runBlocking {
+        dispatcher.activeMediaControllers = { listOf(session("com.byd.mediacenter", 0)) }
+        val r = dispatcher.dispatch(key("play"), null)
+        assertFalse(r.success)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test fun `a stopped mediacenter yields to a paused YouTube Music`() = runBlocking {
+        dispatcher.activeMediaControllers = {
+            listOf(session("com.byd.mediacenter", 1), session("app.morphe.android.apps.youtube.music", 2))
+        }
+        assertTrue(dispatcher.dispatch(key("play"), null).success)
+        assertEquals(listOf("app.morphe.android.apps.youtube.music" to 126), sent)
+    }
+
+    @Test fun `a playing mediacenter still gets the key`() = runBlocking {
+        dispatcher.activeMediaControllers = { listOf(session("com.byd.mediacenter", 3), session("b.paused", 2)) }
+        assertTrue(dispatcher.dispatch(key("pause"), null).success)
+        assertEquals(listOf("com.byd.mediacenter" to 127), sent)
+    }
+
+    @Test fun `a paused mediacenter still gets the key`() = runBlocking {
+        dispatcher.activeMediaControllers = { listOf(session("com.byd.mediacenter", 2)) }
+        assertTrue(dispatcher.dispatch(key("play"), null).success)
+        assertEquals(listOf("com.byd.mediacenter" to 126), sent)
+    }
+
+    @Test fun `a stopped session of another player is kept`() = runBlocking {
+        dispatcher.activeMediaControllers = { listOf(session("com.byd.mediacenter", 1), session("b.stopped", 1)) }
+        assertTrue(dispatcher.dispatch(key("play"), null).success)
+        assertEquals(listOf("b.stopped" to 126), sent)
+    }
+
     @Test fun `a session that refuses the key is a failure`() = runBlocking {
         dispatcher.activeMediaControllers = { listOf(session("a.player", 3)) }
         dispatcher.sendMediaKey = { _, _ -> false }
