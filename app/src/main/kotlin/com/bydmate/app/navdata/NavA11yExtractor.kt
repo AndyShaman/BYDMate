@@ -89,7 +89,7 @@ object NavA11yExtractor {
     }
 
     /** Raw view of the maneuver image for the unknown-maneuver log: how many nodes carry its id,
-     *  and the class and contentDescription head of the one the parse reads (the first non-blank,
+     *  and the class and masked contentDescription of the one the parse reads (the first non-blank,
      *  else the first), then that node's other properties and its first [MAX_PROBE_CHILDREN]
      *  children's (#198: which property, if any, carries the direction). The nodes are recycled;
      *  [root] stays the caller's. */
@@ -102,7 +102,7 @@ object NavA11yExtractor {
             val descs = nodes.map { runCatching { it.contentDescription?.toString() }.getOrNull() }
             val read = descs.indexOfFirst { !it.isNullOrBlank() }.coerceAtLeast(0)
             val cls = runCatching { nodes[read].className?.toString() }.getOrNull()
-            return "found=${nodes.size} class=$cls desc=${UnknownManeuverGate.textHead(descs[read])} " +
+            return "found=${nodes.size} class=$cls desc=${maskValue(descs[read])} " +
                 "node${formatNode(nodeFacts(nodes[read], withDesc = false))} ${probeChildren(nodes[read])}"
         } finally {
             @Suppress("DEPRECATION")
@@ -137,7 +137,7 @@ object NavA11yExtractor {
         val extrasKeys: List<String>,
     )
 
-    /** [withDesc] false for the maneuver node, whose description the line already gives as a head;
+    /** [withDesc] false for the maneuver node, whose description the line already gives;
      *  stateDescription exists from API 30. */
     private fun nodeFacts(node: AccessibilityNodeInfo, withDesc: Boolean): NodeFacts {
         fun read(get: () -> CharSequence?): String? = runCatching { get()?.toString() }.getOrNull()

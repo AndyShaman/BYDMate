@@ -2,6 +2,7 @@ package com.bydmate.app.cluster
 
 import android.content.Context
 import android.os.Looper
+import android.os.SystemClock
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.data.vehicle.DensityResult
@@ -691,6 +692,53 @@ class ClusterProjectionDirectDensityTest {
         shadowOf(Looper.getMainLooper()).idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
 
         assertTrue("two restarts under the scale must latch: $journalDump", densityUnsafeFlag())
+    }
+
+    /**
+     * The task a recovery relaunch put on the cluster is the placed one from then on: when it
+     * moves to the main screen before the next check, still freeform, that is a move, not a second
+     * strike against the dead task's id.
+     *
+     * Anti-vacuity: keeping the id the watch saw before the death (42) counts task 77's move as the
+     * second loss → the density is reset and the package latched.
+     */
+    @Test
+    fun `a move of the task a recovery relaunch placed is no second strike`() {
+        setScalePct(80)
+        var launches = 0
+        var watchReads = 0
+        var relaunchAt = -1L
+        val helper = directProjectionHelper()
+        coEvery {
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
+        } answers {
+            launches++
+            if (launches == 2) relaunchAt = SystemClock.uptimeMillis()
+            FreeformLaunchResult.OK
+        }
+        coEvery { helper.getTaskState(NAVI_PACKAGE) } answers {
+            when {
+                launches == 0 -> taskOnMainScreen()
+                launches == 1 -> if (++watchReads == 1) taskOnCluster() else deadTask()
+                // Task 77 is on the cluster right after the relaunch and on the main screen by
+                // the next check, still freeform.
+                launches == 2 && SystemClock.uptimeMillis() == relaunchAt ->
+                    SplitTaskState(77, WINDOWING_MODE_FREEFORM, 0, 0, 1280, 480, displayId = addedDisplayId)
+                launches == 2 -> SplitTaskState(77, WINDOWING_MODE_FREEFORM, 1306, 0, 1920, 660, displayId = 0)
+                else -> SplitTaskState(77, WINDOWING_MODE_FREEFORM, 0, 0, 1280, 480, displayId = addedDisplayId)
+            }
+        }
+
+        projectDirect(helper)
+        shadowOf(Looper.getMainLooper()).idleFor(10 * WATCH_INTERVAL_MS + 100, MILLISECONDS)
+
+        coVerify(exactly = 3) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.setDisplayDensity(addedDisplayId, 0) }
+        assertFalse("a move of the relaunched task must not latch: $journalDump", densityUnsafeFlag())
+        assertTrue(
+            "the move must be journaled with the new task: $journalDump",
+            journalHas("direct task moved to display 0 (task=77 wm=$WINDOWING_MODE_FREEFORM)"),
+        )
     }
 
     /**

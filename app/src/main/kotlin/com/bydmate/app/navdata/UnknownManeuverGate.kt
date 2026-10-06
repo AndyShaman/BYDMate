@@ -39,9 +39,6 @@ internal class UnknownManeuverGate(private val minIntervalMs: Long) {
         /** Values remembered at once; a navigator that changes its phrases cannot grow the map. */
         const val MAX_VALUES = 16
         private const val MAX_TEXT_CHARS = 120
-        private const val HEAD_WORDS = 4
-        private const val HEAD_CHARS = 48
-        private val SPACES = Regex("""[\s\p{Z}]+""")
 
         /** A route runs with a distance on screen, yet the maneuver code is 0. [guidanceActive]
          *  is read last, so a recognised maneuver costs no route-state read. */
@@ -53,18 +50,6 @@ internal class UnknownManeuverGate(private val minIntervalMs: Long) {
             raw == null -> "null"
             raw.length <= MAX_TEXT_CHARS -> "\"$raw\""
             else -> "\"${raw.take(MAX_TEXT_CHARS)}\"…"
-        }
-
-        /** A screen text for a log line: only its first [HEAD_WORDS] words, at most [HEAD_CHARS]
-         *  chars, then its full length, since the rest may name the route's street. `null`,
-         *  `"" len=0` and a cut (`…` after the closing quote) read apart. */
-        fun textHead(raw: String?): String {
-            if (raw == null) return "null"
-            val words = raw.split(SPACES).filter { it.isNotEmpty() }
-            val joined = words.take(HEAD_WORDS).joinToString(" ")
-            val head = joined.take(HEAD_CHARS)
-            val cut = if (words.size > HEAD_WORDS || joined.length > HEAD_CHARS) "…" else ""
-            return "\"$head\"$cut len=${raw.length}"
         }
     }
 }

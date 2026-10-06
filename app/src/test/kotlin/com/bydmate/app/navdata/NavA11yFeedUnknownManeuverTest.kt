@@ -44,7 +44,7 @@ class NavA11yFeedUnknownManeuverTest {
     @Test fun `an unrecognised maneuver logs its raw node once, with one id walk`() {
         deliverPhrase("Rechts abbiegen")
         assertEquals(
-            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Rechts abbiegen\" len=15$NODE"),
+            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=* len=15$NODE"),
             unknownLines,
         )
         assertEquals(1, zeroWalks.size)
@@ -86,7 +86,7 @@ class NavA11yFeedUnknownManeuverTest {
             listOf(
                 "nav maneuver unknown [a11y]: found=0",
                 "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=null$NODE",
-                "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"\" len=0$NODE",
+                "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=* len=0$NODE",
             ),
             unknownLines,
         )
@@ -96,24 +96,19 @@ class NavA11yFeedUnknownManeuverTest {
     @Test fun `the line shows the node the parse read`() {
         deliver { listOf(maneuverNode(""), maneuverNode("Links halten", cls = "android.view.View")) }
         assertEquals(
-            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=\"Links halten\" len=12" +
+            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=* len=12" +
                 " node{id=image_maneuverballoon_maneuver cls=View order=0 sel=false chk=false extras=[]} children=0",
             unknownLines.single(),
         )
     }
 
-    @Test fun `a long description is cut to its head`() {
-        deliverPhrase("x".repeat(200))
-        assertTrue(unknownLines.single(), unknownLines.single().contains("desc=\"" + "x".repeat(48) + "\"… len=200 node{"))
-    }
-
     @Test fun `a street after the maneuver words stays out of the line`() {
         deliverPhrase("Rechts abbiegen auf Baker Strasse")
         assertEquals(
-            "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Rechts abbiegen auf Baker\"… len=33$NODE",
+            "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=* len=33$NODE",
             unknownLines.single(),
         )
-        assertTrue(lines.none { "Strasse" in it })
+        assertTrue(lines.none { "Baker" in it || "Strasse" in it })
     }
 
     @Test fun `the maneuver node's children are listed, a street masked, a maneuver word kept`() {
@@ -135,7 +130,7 @@ class NavA11yFeedUnknownManeuverTest {
         verify(exactly = 1) { arrow.recycle() }
     }
 
-    @Test fun `phrases with the same head and length are one value`() {
+    @Test fun `phrases with the same mask and length are one value`() {
         deliverPhrase("Rechts abbiegen auf Baker Strasse")
         rewindRateLimit()
         deliverPhrase("Rechts abbiegen auf Baker Avenida")

@@ -523,7 +523,8 @@ class BlindSpotController @Inject constructor(
         }
         if (showLog.awaitingFrame) {
             val window = if (showLog.side == BlindSpotSide.RIGHT) pipWindow else clusterWindow
-            showLog.firstFrame(window?.validFrameAt?.takeIf { it > 0L } ?: now, cameraOpenedAt)
+            // Only a frame of the side asked for ends the measurement; the other window's does not.
+            window?.validFrameAt?.takeIf { it > 0L }?.let { showLog.firstFrame(it, cameraOpenedAt) }
         }
 
         // The vendor stream can go quiet while the camera stays open (field 2026-08-25): the
