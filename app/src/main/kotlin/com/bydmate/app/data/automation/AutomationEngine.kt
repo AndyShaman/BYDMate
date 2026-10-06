@@ -82,6 +82,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // process consumes the mark, so a later car start never sees it.
         internal const val KEY_SERVICE_START_SELF_RESTART_ELAPSED = "service_start_self_restart_elapsed"
         const val SELF_RESTART_MAX_GAP_MS = 120_000L
+        // The mark holds elapsed and wall time; a reboot makes their gaps disagree, so a real
+        // start after a reboot is never taken for our restart.
+        private const val SELF_RESTART_CLOCK_TOLERANCE_MS = 5_000L
 
         // Steering-wheel key trigger: manual only, like button_press. Fires from
         // the a11y key filter through onSteeringKey(), never from the poll.
@@ -134,6 +137,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     // process starts over.
     @Volatile private var serviceStartFiredAt: Long? = null
     @Volatile private var serviceStartWaitLogged = false
+    // Whether this process is our own a11y recovery restart; read once, on the first evaluate.
+    @Volatile private var selfRestartVerdict: Boolean? = null
     private val serviceStartConsumed: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     // evaluate() has two callers (the poll tick and every push event), and its per-rule gates are
     // read-then-write across several steps: cooldown, once-per-trip, service_start consumption,
@@ -220,6 +225,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
      * [evaluateMutex].
      */
     private fun serviceStartWindowOpen(): Boolean {
+        // Judged on the first evaluate of the process, whatever the screen: a recovery process
+        // can come up dark and see the screen only after the mark has aged.
+        val bySelf = selfRestartVerdict ?: restartedBySelf().also { selfRestartVerdict = it }
         val lit = interactiveProvider()
         val firedAt = serviceStartFiredAt
         if (firedAt != null) return lit && elapsedMs() - firedAt <= SERVICE_START_WINDOW_MS
@@ -230,7 +238,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             }
             return false
         }
-        if (restartedBySelf()) {
+        if (bySelf) {
             // Fired and expired: the start already fired in the process our recovery killed.
             serviceStartFiredAt = elapsedMs() - SERVICE_START_WINDOW_MS - 1
             return false
@@ -243,12 +251,19 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     /** Reads and clears the self-restart mark; true when this process is our a11y recovery restart. */
     private fun restartedBySelf(): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (!prefs.contains(KEY_SERVICE_START_SELF_RESTART_ELAPSED)) return false
-        val markedAt = prefs.getLong(KEY_SERVICE_START_SELF_RESTART_ELAPSED, 0L)
+        val raw = prefs.getString(KEY_SERVICE_START_SELF_RESTART_ELAPSED, null) ?: return false
         prefs.edit().remove(KEY_SERVICE_START_SELF_RESTART_ELAPSED).apply()
-        val gap = elapsedMs() - markedAt
-        if (gap < 0 || gap > SELF_RESTART_MAX_GAP_MS) {
-            Log.i(TAG, "service_start: self-restart mark ignored, gap=${gap}ms")
+        val parts = raw.split(',').mapNotNull { it.toLongOrNull() }
+        if (parts.size != 2) {
+            Log.i(TAG, "service_start: self-restart mark ignored, unreadable: $raw")
+            return false
+        }
+        val gap = elapsedMs() - parts[0]
+        val wallGap = nowMs() - parts[1]
+        // After a reboot elapsed restarts and wall time does not, so the two gaps disagree.
+        val agree = abs(gap - wallGap) <= SELF_RESTART_CLOCK_TOLERANCE_MS
+        if (gap !in 0..SELF_RESTART_MAX_GAP_MS || wallGap !in 0..SELF_RESTART_MAX_GAP_MS || !agree) {
+            Log.i(TAG, "service_start: self-restart mark ignored, gap=${gap}ms wallGap=${wallGap}ms")
             return false
         }
         Log.i(TAG, "service_start: suppressed, our own a11y recovery restart ${gap}ms ago")
@@ -264,7 +279,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         if (serviceStartFiredAt == null) return
         val now = elapsedMs()
         val saved = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putLong(KEY_SERVICE_START_SELF_RESTART_ELAPSED, now).commit()
+            .putString(KEY_SERVICE_START_SELF_RESTART_ELAPSED, "$now,${nowMs()}").commit()
         Log.i(TAG, "service_start: self-restart mark written at elapsed=$now saved=$saved")
     }
 
