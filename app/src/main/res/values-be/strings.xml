@@ -1250,6 +1250,9 @@
     <string name="auto_act_steering_heat_on">Падагрэў руля ўкл</string>
     <string name="auto_act_steering_heat_off">Падагрэў руля выкл</string>
     <string name="steering_heat_not_equipped">На гэтай машыне няма падагрэву руля</string>
+    <string name="auto_act_hud_on">HUD: уключыць</string>
+    <string name="auto_act_hud_off">HUD: выключыць</string>
+    <string name="hud_not_equipped">На гэтай машыне няма HUD</string>
     <string name="auto_act_ambient_light_on">Амбіент укл</string>
     <string name="auto_act_ambient_light_off">Амбіент выкл</string>
     <string name="auto_act_drl_on">ДХА ўкл</string>

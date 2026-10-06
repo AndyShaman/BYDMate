@@ -72,6 +72,18 @@ class HelperDiagnosticsTest {
         assertEquals(listOf("(unavailable)"), HudDiagnostics.format(null))
     }
 
+    @Test fun `hud switch state and config share one line`() {
+        assertEquals(
+            "hud_switch: status[dev=1023 fid=951058460]=2 config[dev=1023 fid=951058453]=1",
+            HudDiagnostics.switchLine(listOf(0 to 2, 0 to 1)),
+        )
+        assertEquals(
+            "hud_switch: status[dev=1023 fid=951058460]=(status=-10011) config[dev=1023 fid=951058453]=65535",
+            HudDiagnostics.switchLine(listOf(-10011 to 0, 0 to 65535)),
+        )
+        assertEquals("hud_switch: (unavailable)", HudDiagnostics.switchLine(null))
+    }
+
     @Test fun `hud navi gate in its trace form`() {
         assertEquals("1/e-10011", HudDiagnostics.gate(listOf(0 to 1, -10011 to 0)))
         assertEquals("na/na", HudDiagnostics.gate(null))

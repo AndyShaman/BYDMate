@@ -80,6 +80,9 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // SETTING_PRESELECTED_DRIVING_MODE_SET — the BYD voice assistant's drive mode write.
             // Only the values of [RESTRICTED_VALUES] pass, see there.
             DRIVE_MODE_DEV to DRIVE_MODE_WRITE_FID,
+            // SET_HUD_SWITCH_SET — the HUD master switch (stock settings HudSwitchModel, BYD voice
+            // HeadUpDisplayApiImpl). Only 1 (on) and 2 (off) pass, see [RESTRICTED_VALUES].
+            HUD_DEV to HUD_SWITCH_FID,
         )
 
         /** Drive mode: written and read back on the Setting device (dev=1023). */
@@ -90,6 +93,14 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
          *  modes (live Leopard 3 2026-09-27), so only this fid confirms a write. */
         const val DRIVE_MODE_TARGET_FID = 255852712
 
+        /** HUD master switch (#292): written on the Setting device (dev=1023), 1 = on, 2 = off. */
+        const val HUD_DEV = 1023
+        const val HUD_SWITCH_FID = 1276174371
+        /** SET_HUD_SWITCH_STATUS_FEEDBACK (tx=5): 1 = on, 2 = off, anything else invalid. */
+        const val HUD_SWITCH_STATUS_FID = 951058460
+        /** SET_HUD_CONFIG (tx=5): 1 = W-HUD, 2 = AR-HUD; a car without a HUD reads 65535. */
+        const val HUD_CONFIG_FID = 951058453
+
         /**
          * Carve-outs that open only some values of their fid: an entry on such a fid must be a
          * single value from the set, anything else is dropped at load like a banned dev. The drive
@@ -97,6 +108,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
          */
         val RESTRICTED_VALUES: Map<Pair<Int, Int>, Set<Int>> = mapOf(
             (DRIVE_MODE_DEV to DRIVE_MODE_WRITE_FID) to DriveMode.entries.map { it.value }.toSet(),
+            (HUD_DEV to HUD_SWITCH_FID) to setOf(1, 2),
         )
 
         /** False when [entry] sits on a [RESTRICTED_VALUES] fid with a value outside its set. */
@@ -344,6 +356,11 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // Drive mode rock (8) — BYD voice assistant value, not tried: the Leopard 3 support
             // flag reports it absent. Same dev=1023 carve-out as the validated modes.
             WriteEntry("drive_mode_rock", 1023, 1276260400, null, 8, 8, "drive_mode", false, "byd-sdk autovoice DrivingPatternApiImpl"),
+            // HUD master switch (#292) — dev=1023 carve-out, 1=on, 2=off. No readbackFid: the
+            // status feedback follows the write on CAN with a delay, so [HudSwitchChannel] checks
+            // that a HUD is fitted and reads the status back itself.
+            WriteEntry("hud_on",  1023, 1276174371, null, 1, 1, "hud", false, "byd-sdk carsetting HudSwitchModel + autovoice"),
+            WriteEntry("hud_off", 1023, 1276174371, null, 2, 2, "hud", false, "byd-sdk carsetting HudSwitchModel + autovoice"),
             WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),

@@ -104,29 +104,6 @@ class UnknownManeuverGateTest {
         assertEquals("\"" + "x".repeat(120) + "\"", UnknownManeuverGate.quote("x".repeat(120)))
     }
 
-    @Test fun `a screen text keeps only its head and its length`() {
-        assertEquals("null", UnknownManeuverGate.textHead(null))
-        assertEquals("\"\" len=0", UnknownManeuverGate.textHead(""))
-        assertEquals("\"\" len=2", UnknownManeuverGate.textHead("  "))
-        assertEquals("\"Turn right\" len=10", UnknownManeuverGate.textHead("Turn right"))
-        assertEquals("\"Keep left at the\" len=16", UnknownManeuverGate.textHead("Keep left at the"))
-        assertEquals("\"Turn right onto Baker\"… len=28", UnknownManeuverGate.textHead("Turn right onto Baker Street"))
-        assertEquals("\"" + "x".repeat(48) + "\"… len=200", UnknownManeuverGate.textHead("x".repeat(200)))
-    }
-
-    @Test fun `a street after the maneuver words never gets into the head`() {
-        listOf(
-            "Turn right onto Baker Street",
-            "Turn right onto the Baker Street",
-            "Turn right onto Baker Street",
-            "Turn  right\tonto\nBaker Street",
-        ).forEach { desc ->
-            val head = UnknownManeuverGate.textHead(desc)
-            assertFalse(head, "Street" in head)
-            assertTrue(head, head.endsWith("… len=${desc.length}"))
-        }
-    }
-
     private companion object {
         const val T0 = 1_000_000L
     }

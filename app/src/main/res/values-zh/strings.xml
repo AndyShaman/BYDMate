@@ -1177,6 +1177,9 @@
     <string name="auto_act_steering_heat_on">方向盘加热开</string>
     <string name="auto_act_steering_heat_off">方向盘加热关</string>
     <string name="steering_heat_not_equipped">这辆车没有方向盘加热</string>
+    <string name="auto_act_hud_on">打开抬头显示</string>
+    <string name="auto_act_hud_off">关闭抬头显示</string>
+    <string name="hud_not_equipped">这辆车没有抬头显示</string>
     <string name="auto_act_ambient_light_on">氛围灯开</string>
     <string name="auto_act_ambient_light_off">氛围灯关</string>
     <string name="auto_act_drl_on">日行灯开</string>

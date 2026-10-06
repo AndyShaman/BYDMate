@@ -44,7 +44,8 @@ sealed class VehicleWriteError(
 
     /**
      * The car reports the function as absent (state 0; 65535 = no CAN link is not). Raised by
-     * SteeringHeatChannel and DriveModeChannel (support flag != 0); ActionDispatcher words it
+     * SteeringHeatChannel, DriveModeChannel (support flag != 0) and HudSwitchChannel (no HUD
+     * config); ActionDispatcher words it
      * per action, so a new producer must extend that mapping.
      */
     class NotEquipped(action: String, details: String = "function absent on this car")

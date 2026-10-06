@@ -44,7 +44,7 @@ class NavA11yFeedUnknownManeuverTest {
     @Test fun `an unrecognised maneuver logs its raw node once, with one id walk`() {
         deliverPhrase("Rechts abbiegen")
         assertEquals(
-            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Rechts abbiegen\" len=15"),
+            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=* len=15$NODE"),
             unknownLines,
         )
         assertEquals(1, zeroWalks.size)
@@ -85,8 +85,8 @@ class NavA11yFeedUnknownManeuverTest {
         assertEquals(
             listOf(
                 "nav maneuver unknown [a11y]: found=0",
-                "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=null",
-                "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"\" len=0",
+                "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=null$NODE",
+                "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=* len=0$NODE",
             ),
             unknownLines,
         )
@@ -96,26 +96,41 @@ class NavA11yFeedUnknownManeuverTest {
     @Test fun `the line shows the node the parse read`() {
         deliver { listOf(maneuverNode(""), maneuverNode("Links halten", cls = "android.view.View")) }
         assertEquals(
-            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=\"Links halten\" len=12",
+            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=* len=12" +
+                " node{id=image_maneuverballoon_maneuver cls=View order=0 sel=false chk=false extras=[]} children=0",
             unknownLines.single(),
         )
-    }
-
-    @Test fun `a long description is cut to its head`() {
-        deliverPhrase("x".repeat(200))
-        assertTrue(unknownLines.single(), unknownLines.single().endsWith("desc=\"" + "x".repeat(48) + "\"… len=200"))
     }
 
     @Test fun `a street after the maneuver words stays out of the line`() {
         deliverPhrase("Rechts abbiegen auf Baker Strasse")
         assertEquals(
-            "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=\"Rechts abbiegen auf Baker\"… len=33",
+            "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=* len=33$NODE",
+            unknownLines.single(),
+        )
+        assertTrue(lines.none { "Baker" in it || "Strasse" in it })
+    }
+
+    @Test fun `the maneuver node's children are listed, a street masked, a maneuver word kept`() {
+        val street = propertyNode("$PKG:id/text_street", "android.widget.TextView")
+        every { street.text } returns "Baker Strasse"
+        val arrow = propertyNode(null, "android.widget.ImageView")
+        every { arrow.contentDescription } returns "налево"
+        every { arrow.isSelected } returns true
+        deliver { listOf(maneuverNode(null, children = listOf(street, arrow))) }
+        assertEquals(
+            "nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=null" +
+                " node{id=image_maneuverballoon_maneuver cls=ImageView order=0 sel=false chk=false extras=[]}" +
+                " children=2 [0]{id=text_street cls=TextView text=* len=13 order=0 sel=false chk=false extras=[]}" +
+                " [1]{id=? cls=ImageView desc=\"налево\" len=6 order=0 sel=true chk=false extras=[]}",
             unknownLines.single(),
         )
         assertTrue(lines.none { "Strasse" in it })
+        verify(exactly = 1) { street.recycle() }
+        verify(exactly = 1) { arrow.recycle() }
     }
 
-    @Test fun `phrases with the same head and length are one value`() {
+    @Test fun `phrases with the same mask and length are one value`() {
         deliverPhrase("Rechts abbiegen auf Baker Strasse")
         rewindRateLimit()
         deliverPhrase("Rechts abbiegen auf Baker Avenida")
@@ -210,14 +225,34 @@ class NavA11yFeedUnknownManeuverTest {
         return node
     }
 
-    private fun maneuverNode(desc: String?, cls: String = "android.widget.ImageView"): AccessibilityNodeInfo {
-        val node = mockk<AccessibilityNodeInfo>(relaxed = true)
+    private fun maneuverNode(
+        desc: String?,
+        cls: String = "android.widget.ImageView",
+        children: List<AccessibilityNodeInfo> = emptyList(),
+    ): AccessibilityNodeInfo {
+        val node = propertyNode("$PKG:id/image_maneuverballoon_maneuver", cls)
         every { node.contentDescription } returns desc
+        every { node.childCount } returns children.size
+        children.forEachIndexed { i, child -> every { node.getChild(i) } returns child }
+        return node
+    }
+
+    /** A node whose a11y properties read as absent unless a test sets them. */
+    private fun propertyNode(id: String?, cls: String): AccessibilityNodeInfo {
+        val node = mockk<AccessibilityNodeInfo>(relaxed = true)
+        every { node.viewIdResourceName } returns id
         every { node.className } returns cls
+        every { node.text } returns null
+        every { node.contentDescription } returns null
+        every { node.tooltipText } returns null
+        every { node.hintText } returns null
+        every { node.paneTitle } returns null
+        every { node.extras } returns null
         return node
     }
 
     private companion object {
         const val PKG = "ru.yandex.yandexnavi"
+        const val NODE = " node{id=image_maneuverballoon_maneuver cls=ImageView order=0 sel=false chk=false extras=[]} children=0"
     }
 }

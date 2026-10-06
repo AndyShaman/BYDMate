@@ -306,6 +306,14 @@ rule ambient: подсветку|амбиент|амбиентную подсв�
 <on> (дхо|ходовые огни) => 打开日行灯
 <off> (дхо|ходовые огни) => 关闭日行灯
 
+# ---- HUD -----------------------------------------------------------------------------------
+# Only with a word that names the HUD or the windshield: a bare "проекцию" stays with the agent,
+# which also moves the navigator onto the cluster («проекция на приборку»).
+
+rule hud: hud|худ|проекцию на (стекле|лобовом [стекле])
+<on> <hud> => 打开抬头显示
+<off> <hud> => 关闭抬头显示
+
 # ---- Drive mode ----------------------------------------------------------------------------
 # Terrain modes (snow, sand, mud, mountain, smart) switch only up to 15 km/h: the dispatcher's
 # gate, not the dictionary. A mode without a verb is solo: "выключи X и спортивный режим" must

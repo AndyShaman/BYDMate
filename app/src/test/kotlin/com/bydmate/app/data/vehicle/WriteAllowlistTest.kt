@@ -320,6 +320,41 @@ class WriteAllowlistTest {
         assertEquals(1000, al.find("wheel_heat_off")!!.dev)
     }
 
+    // ── HUD master switch (#292): dev 1023 carve-out for the write fid, values 1 and 2 only ──
+    @Test fun `hud switch write fid is carved out, its status and config fids stay banned`() {
+        assertFalse(WriteAllowlist.isBanned(1023, 1276174371))
+        assertTrue(WriteAllowlist.isBanned(1023, WriteAllowlist.HUD_SWITCH_STATUS_FID))
+        assertTrue(WriteAllowlist.isBanned(1023, WriteAllowlist.HUD_CONFIG_FID))
+    }
+
+    @Test fun `hud entries are dev 1023 unvalidated 1 on and 2 off`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        for ((name, value) in listOf("hud_on" to 1, "hud_off" to 2)) {
+            val e = al.find(name) ?: error("missing $name")
+            assertEquals(1023, e.dev)
+            assertEquals(1276174371, e.writeFid)
+            assertNull("$name is read back by its channel, not inline", e.readbackFid)
+            assertEquals(value, e.valueMin); assertEquals(value, e.valueMax)
+            assertFalse("$name must be unvalidated", e.validated)
+        }
+    }
+
+    @Test fun `no other hud switch value opens up, whatever the source`() {
+        val fixture = """
+            {
+              "hud_any": { "featureId": 1276174371, "deviceType": 1023 },
+              "hud_three": { "featureId": 1276174371, "deviceType": 1023, "value": 3 },
+              "hud_on_competitor": { "featureId": 1276174371, "deviceType": 1023, "value": 1 }
+            }
+        """.trimIndent()
+        val al = WriteAllowlist.loadProduction { fixture }
+        assertNull(al.find("hud_any"))
+        assertNull(al.find("hud_three"))
+        assertNotNull(al.find("hud_on_competitor"))
+        val values = al.allEntries().filter { it.dev == 1023 && it.writeFid == 1276174371 }.map { it.valueMin }.toSet()
+        assertEquals(setOf(1, 2), values)
+    }
+
     // ── Task 4: competitor dev=1001 fallback seat entries in CANDIDATE_UNVALIDATED ──
     @Test fun `seat fallback entries are dev 1001 range 1 to 6 unvalidated`() {
         val al = WriteAllowlist(
@@ -410,7 +445,7 @@ class WriteAllowlistTest {
         assertTrue(WriteAllowlist.isBanned(1006, 734003229))
         assertTrue(WriteAllowlist.isBanned(1006, 555745294))
         val dev1023 = WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS.filter { it.first == 1023 }.map { it.second }.toSet()
-        assertEquals(setOf(1330643002, 1069547536, 850427920, 850427928, 944767029, 1276260400), dev1023)
+        assertEquals(setOf(1330643002, 1069547536, 850427920, 850427928, 944767029, 1276260400, 1276174371), dev1023)
     }
 
     @Test fun `drive mode entries are single allowed values, rock unvalidated`() {

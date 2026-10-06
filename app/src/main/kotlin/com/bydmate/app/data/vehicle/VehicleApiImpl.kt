@@ -56,6 +56,11 @@ class VehicleApiImpl @Inject constructor(
         SteeringHeatReadback { readSteeringHeatState() },
     )
 
+    private val hudSwitchChannel = HudSwitchChannel(
+        SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
+        HudReader { fid -> helper.read(WriteAllowlist.HUD_DEV, fid)?.toInt() },
+    )
+
     private val driveModeChannel = DriveModeChannel(
         DriveModeWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
         DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
@@ -365,6 +370,7 @@ class VehicleApiImpl @Inject constructor(
      */
     private suspend fun channelWrite(action: String): Result<Unit>? = when {
         action in STEERING_HEAT_ACTIONS -> withContext(NonCancellable) { steeringHeat(action) }
+        action in HUD_ACTIONS -> withContext(NonCancellable) { hudSwitch(action) }
         else -> DriveMode.ofAction(action)?.let { mode -> withContext(NonCancellable) { driveMode(mode) } }
     }
 
@@ -388,6 +394,29 @@ class VehicleApiImpl @Inject constructor(
             SteeringHeatChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "helper write not accepted"))
             SteeringHeatChannel.Result.UNCONFIRMED ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+        }
+    }
+
+    /**
+     * HUD on/off through its channel (#292), as the Result dispatch returns. Like the steering
+     * heat verdict row: dev = 1023 when the switch was written (0 = nothing written), readback =
+     * the last status read, error = "verdict=<label>" (also on success).
+     */
+    private suspend fun hudSwitch(action: String): Result<Unit> {
+        val outcome = hudSwitchChannel.actuate(on = action == "hud_on")
+        val entry = allowlist.find(action)
+        logWrite(
+            action, if (outcome.written) WriteAllowlist.HUD_DEV else 0, entry?.writeFid ?: -1, entry?.valueMin ?: -1,
+            outcome.state, outcome.result == HudSwitchChannel.Result.OK, "verdict=${outcome.verdict}", validated = false,
+        )
+        return when (outcome.result) {
+            HudSwitchChannel.Result.OK -> Result.success(Unit)
+            HudSwitchChannel.Result.NOT_EQUIPPED -> Result.failure(VehicleWriteError.NotEquipped(action))
+            HudSwitchChannel.Result.NO_EFFECT -> Result.failure(VehicleWriteError.Unsupported(action))
+            HudSwitchChannel.Result.UNREACHABLE ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
+            HudSwitchChannel.Result.UNCONFIRMED ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
         }
     }
@@ -965,6 +994,7 @@ class VehicleApiImpl @Inject constructor(
         /** The reset and one retry. */
         private const val PERCENT_RESET_ATTEMPTS = 2
         private val STEERING_HEAT_ACTIONS = setOf("steering_heat_on", "steering_heat_off")
+        private val HUD_ACTIONS = setOf("hud_on", "hud_off")
 
         // ── Window readback (write verdict) ────────────────────────────────────
         /** Per attempt; a pane that was commanded starts moving well inside two of these

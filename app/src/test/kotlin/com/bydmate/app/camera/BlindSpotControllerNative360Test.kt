@@ -37,7 +37,7 @@ import java.time.Duration
  * The factory 360 view against our warm camera (tester dump 2026-10-03, fixture
  * blindspot-native360-xp-20261003.txt): the camera was opened 0.2 s after the 360 came up and kept
  * streaming two previews under it, and the 360 stuttered. While the 360 is in the foreground the
- * camera is closed and stays closed; once it is gone the camera warms again by the usual rule.
+ * camera is closed and stays closed; once it is gone the camera opens again for the held blinker.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
@@ -61,8 +61,8 @@ class BlindSpotControllerNative360Test {
         prefs.edit().clear().putBoolean(BlindSpotPreferences.KEY_ENABLED, true).commit()
         android.hardware.AVMCamera.reset()
         coEvery { helper.readBatch(any()) } answers {
-            // Blinker off, 40 km/h, D: inside the warm band, nothing to show.
-            listOf(0 to 1, 0 to java.lang.Float.floatToRawIntBits(40f), 0 to 4, 0 to 0, 0 to 0)
+            // Left blinker held, 40 km/h, D: the camera is wanted unless the 360 is up.
+            listOf(0 to 2, 0 to java.lang.Float.floatToRawIntBits(40f), 0 to 4, 0 to 0, 0 to 0)
         }
         controller = BlindSpotController(
             context, BlindSpotPreferences(context), helper,
@@ -79,7 +79,7 @@ class BlindSpotControllerNative360Test {
 
     private fun events() = trace.events().map { it.replace(ID, "").replace(SPACES, " ") }
 
-    private fun cameraEvents() = events().filter { it.startsWith("camera open") || it.startsWith("camera close") }
+    private fun cameraEvents() = events().filter { it.startsWith("camera open ") || it.startsWith("camera close") }
 
     private fun arm() {
         controller.start(scope)
