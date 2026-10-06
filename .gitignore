@@ -56,3 +56,10 @@ docs/superpowers/**/handoff-*
 
 # Kotlin 2.x compiler daemon working dir (sessions markers, error logs)
 .kotlin/
+
+# Build output of the :bydauto-stubs module (rebuilt by Gradle, was committed by mistake).
+/bydauto-stubs/build
+
+# Owner's private notes, kept out of the public repo.
+PHILOSOPHY.md
+CONTEXT.md
