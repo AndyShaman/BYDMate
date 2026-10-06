@@ -10,6 +10,7 @@ import android.content.Intent
 import android.media.AudioManager
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
@@ -38,6 +39,7 @@ import com.bydmate.app.media.KnobPlayPause
 import com.bydmate.app.media.MediaSessionListenerService
 import com.bydmate.app.navdata.NavPackages
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.split.MEDIACENTER_PKG
 import com.bydmate.app.split.SplitPair
 import com.bydmate.app.split.SplitSessionManager
 import com.bydmate.app.split.SplitSessionState
@@ -671,20 +673,29 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      * Sends PLAY or PAUSE to the session the volume-knob press would pick. Only a running player
      * is reached: no session is a failed step, with no AudioManager fallback, because on V1.6 a
      * global media key lets com.byd.mediacenter switch the audio source.
+     * The stock mediacenter keeps a session in NONE/STOPPED while nothing plays, and play/pause to
+     * it starts Kuwo (#275), so that session is not a candidate; STOPPED sessions of other players
+     * stay, some of them resume from STOPPED.
      */
     private fun dispatchMediaKey(action: ActionDef): DispatchResult {
         val keyCode = mediaKeyCode(action.payload)
             ?: return DispatchResult(false, appStrings.get(R.string.dispatch_media_key_invalid))
-        val controllers = runCatching { activeMediaControllers() }.getOrDefault(emptyList())
+        val all = runCatching { activeMediaControllers() }.getOrDefault(emptyList())
+        val sessions = all.joinToString(" ") { "${it.packageName}:${it.playbackState?.state}" }
+        val controllers = all.filterNot { c ->
+            val state = c.playbackState?.state
+            c.packageName == MEDIACENTER_PKG &&
+                (state == PlaybackState.STATE_NONE || state == PlaybackState.STATE_STOPPED)
+        }
         val index = KnobPlayPause.pickTarget(
             controllers.map { KnobPlayPause.SessionSnapshot(it.packageName, it.playbackState?.state) })
         if (index == null) {
-            Log.w(TAG, "media key ${action.payload}: no media session")
+            Log.w(TAG, "media key ${action.payload}: no media session sessions=[$sessions]")
             return DispatchResult(false, appStrings.get(R.string.dispatch_media_no_session))
         }
         val target = controllers[index]
         val ok = sendMediaKey(target, keyCode)
-        Log.i(TAG, "media key ${action.payload} -> ${target.packageName} ok=$ok")
+        Log.i(TAG, "media key ${action.payload} -> ${target.packageName} ok=$ok sessions=[$sessions]")
         return if (ok) DispatchResult(true)
         else DispatchResult(false, appStrings.get(R.string.dispatch_media_key_failed, target.packageName))
     }
