@@ -1,24 +1,40 @@
 package com.bydmate.app.data.push
 
+import android.os.SystemClock
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Trace lines for the car states the push channel carries that nothing else traces: the turn
  * signal, and the ADAS states around the lane change by turn signal — so a drive where the car
  * reported that lane change unavailable can be laid against our own camera use on one time line.
  * Only a change is a line (the first value after start has no `from`); a sentinel reads `none`.
+ * The turn signal is one start and one end per use ([TurnSeries]), not a line per blink: it
+ * showed the real turn direction in #294, on cars with the blind spots off too.
  *
  * Called on the binder thread that delivers a push packet.
  */
-internal class PushStateTrace {
+internal class PushStateTrace(
+    private val clock: () -> Long = SystemClock::elapsedRealtime,
+    // Asks for [TurnSeries.onTimer] once the lamp may have stayed dark long enough.
+    private val schedule: (delayMs: Long, block: () -> Unit) -> Unit = { delayMs, block ->
+        TIMER_SCOPE.launch { delay(delayMs); block() }
+    },
+) {
 
     /** fid → trace name of the ADAS states in the subscription in force; nothing else is traced as one. */
     @Volatile var adas: Map<Int, String> = emptyMap()
 
     /** Last traced value per fid. */
     private val last = HashMap<Int, String>()
+
+    private val turns = TurnSeries()
 
     /** [field] is the FidMap field the fid belongs to, null for the ADAS states. */
     @Synchronized
@@ -34,9 +50,23 @@ internal class PushStateTrace {
         if (was == value) return
         last[fid] = value
         if (field == TURN_SIGNAL) {
-            Trace.event(TraceArea.CAR, "turn", "from" to was, "to" to value)
+            turns.onValue(value, clock()).forEach(::traceTurn)
+            if (value == TurnSeries.OFF || value == NONE) schedule(TurnSeries.END_AFTER_MS) { endTurnIfDark() }
         } else {
             Trace.event(TraceArea.CAR, "adas", "name" to name, "from" to was, "to" to value)
+        }
+    }
+
+    @Synchronized
+    private fun endTurnIfDark() {
+        turns.onTimer(clock())?.let(::traceTurn)
+    }
+
+    private fun traceTurn(event: TurnSeries.Event) {
+        when (event) {
+            is TurnSeries.Event.Start -> Trace.event(TraceArea.CAR, "turn", "side" to event.side)
+            is TurnSeries.Event.End -> Trace.event(TraceArea.CAR, "turn-end", "side" to event.side,
+                "blinks" to event.blinks, "ms" to event.durationMs)
         }
     }
 
@@ -45,7 +75,9 @@ internal class PushStateTrace {
 
     companion object {
         private const val TURN_SIGNAL = "turnSignal"
-        private const val NONE = "none"
+        private const val NONE = TurnSeries.NONE
+
+        private val TIMER_SCOPE = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
         /** ADAS device: the one bsdLeft/bsdRight are pushed from. */
         const val ADAS_DEVICE = 1038

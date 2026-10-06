@@ -354,7 +354,14 @@ fun main(args: Array<String>) {
                         else { surface.release(); reply?.writeInt(-1); reply?.writeInt(0) }
                         true
                     }.getOrElse { t ->
-                        android.util.Log.w("bydmate_helper", "TX_CREATE_VIRTUAL_DISPLAY failed flags=$logFlags ${logWidth}x$logHeight", t)
+                        // The app asks for a PUBLIC display first and falls back to private flags on
+                        // refusal: that SecurityException is expected, one line instead of a stack.
+                        if (t is SecurityException) {
+                            android.util.Log.w("bydmate_helper", "TX_CREATE_VIRTUAL_DISPLAY: SecurityException " +
+                                "flags=$logFlags ${logWidth}x$logHeight (expected for PUBLIC; app falls back to private flags)")
+                        } else {
+                            android.util.Log.w("bydmate_helper", "TX_CREATE_VIRTUAL_DISPLAY failed flags=$logFlags ${logWidth}x$logHeight", t)
+                        }
                         reply?.writeInt(-1); reply?.writeInt(0); true
                     }
                 }

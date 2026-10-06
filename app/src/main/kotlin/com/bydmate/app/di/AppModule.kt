@@ -409,6 +409,9 @@ object AppModule {
     fun provideVehicleWriteLogDao(db: AppDatabase): VehicleWriteLogDao = db.vehicleWriteLogDao()
 
     @Provides
+    fun provideEndSnapshotSource(impl: com.bydmate.app.ui.settings.RecordingEndSnapshot): com.bydmate.app.diagnostics.EndSnapshotSource = impl
+
+    @Provides
     fun provideTripTombstoneDao(db: AppDatabase): TripTombstoneDao = db.tripTombstoneDao()
 
     @Provides
