@@ -144,14 +144,14 @@ class NaviRichPostProcessorTest {
         assertEquals("res:ic_right", byIcon.maneuverRaw)
         val byText = NaviRichPostProcessor.buildRichUpdate(
             NaviRichNotificationParser.RichNaviInfo(instruction = "Поверните направо на улицу Ленина"), null, null, null)
-        assertEquals("text:Поверните направо на улицу", byText.maneuverRaw)
+        assertEquals("text:key=поверните направо", byText.maneuverRaw)
     }
 
     @Test
     fun `extras raw input is the text when a phrase matched, else the small icon`() {
         val byText = NaviRichPostProcessor.buildExtrasFallback(
             "300 м", "Поверните направо", null, "ic_nav", isMaps = false, hubHasKnownManeuver = false)!!
-        assertEquals("text:300 м Поверните направо", byText.maneuverRaw)
+        assertEquals("text:key=поверните направо", byText.maneuverRaw)
         val byIcon = NaviRichPostProcessor.buildExtrasFallback(
             "300 м", "Main St", null, "notification_left_sdl", isMaps = false, hubHasKnownManeuver = false)!!
         assertEquals(1, byIcon.maneuverGaode)

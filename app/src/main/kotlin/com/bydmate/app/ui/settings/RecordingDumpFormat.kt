@@ -87,11 +87,4 @@ internal object RecordingDumpFormat {
         val shown = if (tail.isEmpty()) line else "$head ok=$tail"
         return shown.substringBefore(" trig=")
     }
-
-    /** The totals of the fid push section, without its row per fid. */
-    fun fidPushTotals(lines: List<String>): List<String> = lines.filter { line ->
-        FID_PUSH_TOTALS.any { line.startsWith(it) }
-    }
-
-    private val FID_PUSH_TOTALS = listOf("no subscription", "subscribed=", "callback:", "delivery:", "resubscribes=")
 }

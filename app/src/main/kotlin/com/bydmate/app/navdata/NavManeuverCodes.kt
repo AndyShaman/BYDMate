@@ -451,4 +451,35 @@ object NavManeuverCodes {
             else -> 0
         }
     }
+
+    // -- the field journal's view of a text (#294): which entry of the tables above it matched --
+
+    /** The a11y description's own phrases that the RU_PHRASES table lacks. */
+    private val A11Y_ONLY_PHRASES = listOf(
+        "промежуточная точка", "съезд с парома", "выезд с парома", "маршрут окончен",
+        "кольцевое", "круговое", "тоннель", "туннель", "продолжайте", "двигайтесь",
+    )
+    private val WORD_KEYS = (WORD_BOUNDARY_PHRASES.keys + RICH_WORD_BOUNDARY.keys).distinct()
+        .map { it to bounded(Regex.escape(it)) }
+    private val DICTIONARY_PATTERNS = RU_EXIT + EN_EXIT + listOf(
+        RU_RING, RU_SMOOTH, RU_SHARP, RU_UTURN, RU_LEFT, RU_RIGHT,
+        EN_FERRY_EXIT, EN_FERRY, EN_RING_EXIT, EN_RING, EN_WAYPOINT, EN_ARRIVE, EN_TUNNEL,
+        EN_UTURN, EN_SLIGHT, EN_SHARP, EN_LEFT, EN_RIGHT, EN_STRAIGHT,
+    )
+
+    /** The table entry a maneuver text matches: a phrase-table key, or the words the dictionary
+     *  patterns took (joined by `+`); never the rest of the text, where a street may follow.
+     *  Null when none matches. */
+    fun matchedPhrase(text: String?): String? {
+        if (text.isNullOrBlank()) return null
+        if (text == ">>>") return text
+        val norm = text.lowercase().trim().replace(' ', ' ').replace(Regex("\\s+"), " ")
+        ROUNDABOUT_EXIT_RE.find(norm)?.let { return it.value }
+        RU_PHRASES.keys.firstOrNull { it in norm }?.let { return it }
+        A11Y_ONLY_PHRASES.firstOrNull { it in norm }?.let { return it }
+        WORD_KEYS.firstOrNull { (_, re) -> re.containsMatchIn(norm) }?.let { return it.first }
+        if (norm in OPENBYD_EXACT || fromNotificationRes(norm) != 0) return norm
+        return DICTIONARY_PATTERNS.mapNotNull { it.find(norm)?.value }.distinct()
+            .takeIf { it.isNotEmpty() }?.joinToString("+")
+    }
 }

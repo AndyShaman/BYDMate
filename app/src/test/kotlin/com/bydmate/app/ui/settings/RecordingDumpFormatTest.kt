@@ -77,16 +77,4 @@ class RecordingDumpFormatTest {
         )
         assertEquals("(journal empty)", RecordingDumpFormat.ruleLineById("(journal empty)"))
     }
-
-    @Test fun `fid push keeps the totals only`() {
-        val lines = listOf(
-            "subscribed=3 ok=3 failed=0",
-            "Speed 123 dev=1 OK events=4 last=5 age=1s",
-            "callback: alive deliver errors=0",
-            "delivery: packets=1 events=2 coalesced=0",
-            "resubscribes=0",
-        )
-
-        assertEquals(lines - lines[1], RecordingDumpFormat.fidPushTotals(lines))
-    }
 }

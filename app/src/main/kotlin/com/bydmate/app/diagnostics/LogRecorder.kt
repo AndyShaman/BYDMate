@@ -339,8 +339,8 @@ class LogRecorder internal constructor(
 
     // Pipes logcat to file with a size limit; blocking, runs as a job on the IO scope.
     // Opened in append mode so the diagnostic header is preserved instead of overwritten.
-    // Lines go out in batches (PipeFlushPolicy) and the size is counted, not asked of the
-    // file system: a flush and a stat per line were the recording's own load on the unit.
+    // Lines go out in batches (PipeFlushPolicy) and the file system is asked the size once per
+    // batch, not per line: a flush and a stat per line were the recording's own load on the unit.
     private fun pipeToFile(proc: Process, target: File, current: Session) {
         val lock = Any()
         val policy = PipeFlushPolicy()
@@ -378,14 +378,15 @@ class LogRecorder internal constructor(
                             synchronized(lock) {
                                 writer.write(line)
                                 writer.newLine()
+                                // Chars between flushes (a lower bound: Cyrillic or CJK take 2-3
+                                // bytes each), the file's real length at every batch flush.
+                                size += line.length + 1
                                 if (policy.onLine(System.currentTimeMillis())) {
                                     writer.flush()
                                     policy.flushed()
+                                    size = target.length()
                                 }
                             }
-                            // Chars, not bytes: the recorded tags write ASCII, and the cap is a
-                            // safety net, not an exact size.
-                            size += line.length + 1
                         }
                         line = reader.readLine()
                     }
@@ -405,7 +406,7 @@ class LogRecorder internal constructor(
         private const val LOG_MAX_SIZE_BYTES = 50 * 1024 * 1024L // 50 MB max
         private const val PROCESS_EXIT_TIMEOUT_MS = 500L // grace period before destroyForcibly
         private const val PIPE_CLOSE_TIMEOUT_MS = 2_000L
-        // The end section reads one daemon batch and a few journals; it must not hold the
+        // The end section reads a few journals and in-memory counters; it must not hold the
         // recorder lock (and the next start) for long.
         private const val END_SNAPSHOT_BUDGET_MS = 3_000L
         // How far back a fresh recording replays the logcat buffer (the buffer itself is the

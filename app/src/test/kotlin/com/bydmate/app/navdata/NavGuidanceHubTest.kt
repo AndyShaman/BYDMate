@@ -363,8 +363,30 @@ class NavGuidanceHubTest {
         assertEquals("res:ic_left", s.maneuverRaw)
     }
 
-    @Test fun `raw texts keep only their first words and every raw value is capped`() {
-        assertEquals("text:Поверните направо на улицу", NavManeuverRaw.text("text", "Поверните  направо на улицу Ленина"))
+    @Test fun `a matched raw text keeps the table key, never the street after it`() {
+        val ru = NavManeuverRaw.text("desc", "Поверните направо на Тверскую")
+        assertEquals("desc:key=поверните направо", ru)
+        assertFalse(ru, "Тверскую" in ru)
+        val en = NavManeuverRaw.text("text", "Turn right onto Main St")
+        assertEquals("text:key=right", en)
+        assertFalse(en, "Main" in en)
+        assertEquals("text:key=sharp+right", NavManeuverRaw.text("text", "Sharp right onto Main St"))
+        assertEquals("desc:key=2-й съезд", NavManeuverRaw.text("desc", "2-й съезд на Ленина"))
+        assertEquals("desc:key=>>>", NavManeuverRaw.text("desc", ">>>"))
+    }
+
+    @Test fun `an unmatched raw text keeps two words before a separator and its length`() {
+        assertEquals("text:Следуйте маршруту len=33", NavManeuverRaw.text("text", "Следуйте маршруту до улицы Ленина"))
+        assertEquals("text:Езжайте len=21", NavManeuverRaw.text("text", "Езжайте по Тверской 5"))
+        assertEquals("text: len=13", NavManeuverRaw.text("text", "Onto Main St."))
+        assertEquals("exit:2 len=1", NavManeuverRaw.text("exit", "2"))
+    }
+
+    @Test fun `an icon raw keeps its resource name`() {
+        assertEquals("res:notification_right_sdl", NavManeuverRaw.name("res", "notification_right_sdl"))
+    }
+
+    @Test fun `raw values are capped`() {
         assertEquals("desc:null", NavManeuverRaw.text("desc", null))
         val long = NavManeuverRaw.name("res", "x".repeat(100))
         assertEquals(NavManeuverRaw.MAX_CHARS, long.length)
@@ -376,8 +398,13 @@ class NavGuidanceHubTest {
         NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
         NavGuidanceHub.update(NavGuidance(distanceMeters = 250, road = "ул. Б", roadIsNextStreet = false),
             NavGuidanceHub.Source.A11Y, nowMs = 2000)
-        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        var s = NavGuidanceHub.snapshot(nowMs = 2000)
         assertEquals(2, s.maneuverGaode)
         assertEquals("ул. Б", s.road)   // what is displayed does not change
+        // The genuine next street comes back: it is the arrow's own street, not a change.
+        NavGuidanceHub.update(data(dist = 200, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 3000)
+        s = NavGuidanceHub.snapshot(nowMs = 3000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals("ул. А", s.road)
     }
 }

@@ -80,6 +80,9 @@ object NavGuidanceHub {
     private var lastNotifMs = 0L
     private val stats = NavRouteStats()
     private var a11yBlindNow = false
+    /** The last genuine next street, apart from the displayed road a current-street fallback
+     *  also overwrites: the street-change drop compares against this one only (#294). */
+    private var nextStreet = ""
 
     /** The HUD way (1..3) the output runs, 0 while it is off: for the route-summary line only. */
     @Volatile var hudWay: Int = 0
@@ -230,11 +233,14 @@ object NavGuidanceHub {
      *  another street and carries no maneuver of its own means that turn is behind: the arrow
      *  goes now instead of after [MANEUVER_TIMEOUT_MS]. Without a street on either side nothing
      *  is known and the arrow stays, as on cars whose reads carry it only now and then (#198);
-     *  callers pass "" for a road that is only the current-street fallback. */
+     *  callers pass "" for a road that is only the current-street fallback. Records [road] as the
+     *  next street the next read is compared with. */
     private fun dropOnStreetChange(prev: Snapshot, maneuverGaode: Int, road: String, source: Source): Snapshot {
-        if (maneuverGaode > 0 || prev.maneuverGaode <= 0) return prev
         val street = road.trim()
-        if (street.isEmpty() || prev.road.isBlank() || street == prev.road.trim()) return prev
+        val held = nextStreet
+        if (street.isNotEmpty()) nextStreet = street
+        if (maneuverGaode > 0 || prev.maneuverGaode <= 0) return prev
+        if (street.isEmpty() || held.isEmpty() || street == held) return prev
         Log.i(TAG, "maneuver dropped: next street changed without a maneuver " +
             "(held=${prev.maneuverGaode} from ${prev.maneuverSource.ifEmpty { "?" }}, read by ${source.label()})")
         if (prev.active) stats.drops++
@@ -342,6 +348,7 @@ object NavGuidanceHub {
         lastNotifMs = 0L
         lastOffTraceId = 0L
         a11yBlindNow = false
+        nextStreet = ""
         stats.reset(0L)
     }
 
