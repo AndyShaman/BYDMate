@@ -819,6 +819,8 @@ private fun WidgetSection() {
     )
     val hideOnYoutube by prefs.hideOnYoutubeFlow()
         .collectAsStateWithLifecycle(initialValue = prefs.isHideOnYoutube())
+    val homeOnly by prefs.homeOnlyFlow()
+        .collectAsStateWithLifecycle(initialValue = prefs.isHomeOnly())
     val hideInApps by prefs.hideInAppsFlow()
         .collectAsStateWithLifecycle(initialValue = prefs.getHideInApps())
     var showLeftTapPicker by remember { mutableStateOf(false) }
@@ -864,6 +866,13 @@ private fun WidgetSection() {
                 description = stringResource(R.string.settings_widget_hide_youtube_description),
                 checked = hideOnYoutube,
                 onCheckedChange = { prefs.setHideOnYoutube(it) },
+            )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_widget_home_only_label),
+                traceId = "widget_home_only",
+                description = stringResource(R.string.settings_widget_home_only_description),
+                checked = homeOnly,
+                onCheckedChange = { prefs.setHomeOnly(it) },
             )
             SettingValueRow(
                 title = stringResource(R.string.settings_widget_hide_apps_label),

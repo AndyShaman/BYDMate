@@ -163,6 +163,8 @@
     <string name="settings_widget_hints">• 长按小组件 - 隐藏至下次打开 BYDMate。\n• 拖到底部垃圾桶 - 完全关闭。\n• 普通点击 - 打开 BYDMate。</string>
     <string name="settings_widget_hide_youtube_label">YouTube 时隐藏</string>
     <string name="settings_widget_hide_youtube_description">YouTube 在屏幕上时按钮面板自动隐藏</string>
+    <string name="settings_widget_home_only_label">仅在主屏幕显示</string>
+    <string name="settings_widget_home_only_description">在其他应用中按钮面板自动隐藏</string>
     <string name="settings_widget_hide_apps_label">在应用中隐藏</string>
     <string name="settings_widget_hide_apps_description">所选应用在屏幕上时按钮面板自动隐藏</string>
     <string name="settings_widget_hide_apps_none">未选择</string>

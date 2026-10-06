@@ -234,6 +234,8 @@
     <string name="settings_widget_hints">- Long tap the widget - hide until BYDMate is opened next time.\n- Drag to the bin at the bottom - turn off completely.\n- Regular tap - open BYDMate.</string>
     <string name="settings_widget_hide_youtube_label">Hide over YouTube</string>
     <string name="settings_widget_hide_youtube_description">The button panel hides while YouTube is on screen</string>
+    <string name="settings_widget_home_only_label">Show only on the home screen</string>
+    <string name="settings_widget_home_only_description">The button panel hides in every other app</string>
     <string name="settings_widget_hide_apps_label">Hide in apps</string>
     <string name="settings_widget_hide_apps_description">The button panel hides while a selected app is on screen</string>
     <string name="settings_widget_hide_apps_none">Not selected</string>

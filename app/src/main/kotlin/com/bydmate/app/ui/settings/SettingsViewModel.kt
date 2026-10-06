@@ -1825,6 +1825,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("adb_verdict: ${adbVerdictMonitor.verdict.value ?: "(none)"}")
                 appendLine("daemon_ever_alive: ${helperBootstrap.daemonEverAlive()}")
                 appendLine(com.bydmate.app.data.backup.PostRestoreCheck.dumpLine(appContext))
+                appendLine(
+                    "widget_home_only=${com.bydmate.app.ui.widget.WidgetPreferences(appContext).isHomeOnly()} " +
+                        "home_packages=${com.bydmate.app.ui.widget.WidgetController.queryHomePackages(appContext)}"
+                )
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")
             }
