@@ -83,6 +83,7 @@ import org.json.JSONObject
 class TrackingService : Service(), LocationListener {
 
     @Inject lateinit var parsReader: ParsReader
+    @Inject lateinit var vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao
     @Inject lateinit var tripTracker: TripTracker
     @Inject lateinit var chargeRepository: ChargeRepository
     @Inject lateinit var tripRepository: com.bydmate.app.data.repository.TripRepository
@@ -229,6 +230,9 @@ class TrackingService : Service(), LocationListener {
     // (exponential backoff). We refuse to send until `now >= iternioCooldownUntilMs`.
     @Volatile private var iternioCooldownUntilMs: Long = 0L
     @Volatile private var iternioConsecutive5xx: Int = 0
+    // Sends between two summary lines, and the 10-min sample of a send's contents.
+    private val iternioTally = com.bydmate.app.data.remote.SendTally()
+    private val iternioLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(com.bydmate.app.data.remote.SendTally.WINDOW_MS)
     // Last cadence state we logged. A trip log has to show the moment the app decided
     // «стоим» — the interval change is otherwise invisible from the outside.
     @Volatile private var lastTelemetryState: IternioIntervalPolicy.TelemetryState? = null
@@ -290,6 +294,7 @@ class TrackingService : Service(), LocationListener {
         private const val NOTIFICATION_ID = 1
         private const val A11Y_ATTEMPTS_ANDROID10 = 2
         private const val A11Y_RECOVERY_TRACE_FLUSH_MS = 500L
+        private const val VEHICLE_WRITE_LOG_KEEP = 500
         private const val CHANNEL_ID = "bydmate_tracking"
         // Opt-in "quiet" channel (IMPORTANCE_MIN): the mandatory foreground notification collapses
         // into the shade's silent list with no status-bar icon. Off by default - existing users keep
@@ -523,13 +528,14 @@ class TrackingService : Service(), LocationListener {
          * Same shape as [fireAutomationButton]; matched count is diagnostics only
          * (the key was already consumed by the time the rules run).
          */
-        fun fireSteeringKey(keyCode: Int, onResult: (matched: Int) -> Unit) {
+        fun fireSteeringKey(keyCode: Int, cause: Long, onResult: (matched: Int) -> Unit) {
             val svc = instance
             if (svc == null) {
                 onResult(0)
                 return
             }
-            svc.serviceScope.launch {
+            // The key press is the cause of every rule line the engine traces for it.
+            svc.serviceScope.launch(Trace.causedBy(cause)) {
                 val matched = try {
                     svc.automationEngine.onSteeringKey(keyCode)
                 } catch (e: Exception) {
@@ -576,6 +582,12 @@ class TrackingService : Service(), LocationListener {
         hudController.startIfEnabled()
         // Rule journal retention: 30 days, 2000 rows.
         serviceScope.launch { automationEngine.pruneJournal() }
+        // Vehicle write audit rows: the newest 500 (the dump shows 40), nothing else bounds them.
+        serviceScope.launch {
+            runCatching { vehicleWriteLogDao.trimTo(VEHICLE_WRITE_LOG_KEEP) }
+                .onSuccess { if (it > 0) Log.i(TAG, "vehicle_write_log trimmed: $it rows") }
+                .onFailure { Log.w(TAG, "vehicle_write_log trim failed: ${it.javaClass.simpleName}") }
+        }
 
         // A daemon can be spawned by any ensureRunning() caller (GrantSelfHeal reassert, Settings,
         // cluster) after the startup resolve already failed with "daemon unreachable" — crazyhack's
@@ -934,7 +946,7 @@ class TrackingService : Service(), LocationListener {
         val applied = com.bydmate.app.data.push.FidPushApplier.patch(
             _lastData, field, event.intValue, event.doubleValue,
         )
-        if (applied && pushLogThrottle.shouldLog(field)) {
+        if (applied && pushLogThrottleFor(field).shouldLog(field)) {
             Log.i("FidPush", "push fid=${event.fid} $field=${event.intValue}/${event.doubleValue} applied")
         }
         if (applied) _lastData.value?.let(beltProbeLog::onSnapshot)
@@ -944,7 +956,7 @@ class TrackingService : Service(), LocationListener {
         if (applied && field in PUSH_EVALUATE_FIELDS) {
             // Throttled on its own key: a window travelling end to end pushes its percent
             // ~100 times, and every one of them does evaluate — only the line is rationed.
-            if (pushLogThrottle.shouldLog("eval:$field")) Log.i("FidPush", "push $field -> evaluate")
+            if (pushLogThrottleFor(field).shouldLog("eval:$field")) Log.i("FidPush", "push $field -> evaluate")
             // Snapshot and session are captured HERE, on the thread that just patched them:
             // the coroutine may start after further pushes landed, and the rule must see the
             // state of its own event, not whatever the snapshot holds by the time it runs.
@@ -961,11 +973,18 @@ class TrackingService : Service(), LocationListener {
     }
 
     /**
-     * One push line per field per second. With every FidMap field subscribed the busy ones
-     * (current, rpm, speed, a window travelling end to end) would otherwise bury the rest of
-     * the log. Only the logging is throttled — every event still patches the snapshot.
+     * One push line per field per second, per minute for a continuous reading (FidPushLogPolicy).
+     * With every FidMap field subscribed the busy ones (current, rpm, speed, a window travelling
+     * end to end) would otherwise bury the rest of the log. Only the logging is throttled — every
+     * event still patches the snapshot.
      */
-    private val pushLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(1_000L)
+    private val pushLogThrottle =
+        com.bydmate.app.data.autoservice.LogThrottle(com.bydmate.app.data.push.FidPushLogPolicy.DISCRETE_WINDOW_MS)
+    private val analogPushLogThrottle =
+        com.bydmate.app.data.autoservice.LogThrottle(com.bydmate.app.data.push.FidPushLogPolicy.ANALOG_WINDOW_MS)
+
+    private fun pushLogThrottleFor(field: String) =
+        if (com.bydmate.app.data.push.FidPushLogPolicy.isAnalog(field)) analogPushLogThrottle else pushLogThrottle
     private val beltProbeLog = BeltProbeLog()
 
     private fun resolveFidCatalog() {
@@ -1279,12 +1298,15 @@ class TrackingService : Service(), LocationListener {
                     // NO position ever goes to ABRP: it merges telemetry position with the GPS it
                     // reads on the head unit itself, and the car marker jumps between the two
                     // sources (ABRP tickets, June 2026). The webhook keeps its own toggle.
-                    // Every real send is logged: without this line a trip log shows nothing
-                    // between two ABRP failures, and «данных нет» has no diagnosis.
-                    Log.i(TAG, "Iternio send: state=$state interval=${intervalSec}s " +
-                        "gear=${data.gear} speed=${data.speed} soc=${data.soc} " +
-                        "hv=${data.hvVoltage ?: "-"}/${data.hvCurrent ?: "-"} " +
-                        "setpoint=${data.acTemp ?: "-"}")
+                    // A sample send every 10 min plus the tally below: without them a trip log shows
+                    // nothing between two ABRP failures, and «данных нет» has no diagnosis. A line
+                    // per send was thousands an hour.
+                    if (iternioLogThrottle.shouldLog("send")) {
+                        Log.i(TAG, "Iternio send: state=$state interval=${intervalSec}s " +
+                            "gear=${data.gear} speed=${data.speed} soc=${data.soc} " +
+                            "hv=${data.hvVoltage ?: "-"}/${data.hvCurrent ?: "-"} " +
+                            "setpoint=${data.acTemp ?: "-"}")
+                    }
                     val sentAtMs = System.currentTimeMillis()
                     iternioTelemetryClient.sendTelemetry(
                         apiKey = apiKey,
@@ -1293,8 +1315,11 @@ class TrackingService : Service(), LocationListener {
                     ).onSuccess {
                         delivered = true
                         iternioConsecutive5xx = 0
-                        Log.i(TAG, "Iternio sent ok ${System.currentTimeMillis() - sentAtMs}ms")
+                        val nowMs = System.currentTimeMillis()
+                        iternioTally.record(true, nowMs - sentAtMs, nowMs)?.let { Log.i(TAG, "Iternio $it") }
                     }.onFailure { e ->
+                        val nowMs = System.currentTimeMillis()
+                        iternioTally.record(false, nowMs - sentAtMs, nowMs)?.let { Log.i(TAG, "Iternio $it") }
                         when (e) {
                             is IternioRateLimitException -> {
                                 // Upstream said wait. Honor Retry-After if present;
