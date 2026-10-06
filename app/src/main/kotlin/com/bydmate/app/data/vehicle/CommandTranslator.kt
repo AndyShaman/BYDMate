@@ -75,7 +75,7 @@ object CommandTranslator {
         // ── Climate ── LIVE_VALIDATED (ac_on/ac_off/ac_cycle_*/ac_auto_*) ──────
         // ac_power fid 501219364: 0=off, 1=on (LIVE 2026-07-03, both directions
         // physically confirmed in-car). 设置温度<N> resolves dynamically over
-        // 16..30 in resolve(), so there are no per-temperature entries here (the
+        // 16..33 in resolve(), so there are no per-temperature entries here (the
         // old 18/20/22/25-only table missed every other value).
         "自动空调"    to Resolved("ac_on",         1),  // LIVE 2026-07-03: ac_power fid, 1=on
         "关闭空调"    to Resolved("ac_off",        0),  // LIVE 2026-07-03: ac_power fid, 0=off
@@ -235,7 +235,8 @@ object CommandTranslator {
         composite[stripped]?.let { return it }
         table[stripped]?.let { return listOf(it) }
         // Dynamic temperature: 设置温度<N> → ac_temp_main, clamped to the validated
-        // 16..30 window (allowlist range-gates it anyway; clamping is friendlier).
+        // 16..33 window (allowlist range-gates it anyway; clamping is friendlier).
+        // 16 is Leopard 3's minimum; 33 is the Seagull maximum (2026-10-06).
         TEMP_REGEX.matchEntire(stripped)?.let { m ->
             val celsius = m.groupValues[1].toInt().coerceIn(TEMP_MIN, TEMP_MAX)
             return listOf(Resolved("ac_temp_main", celsius))
@@ -263,7 +264,7 @@ object CommandTranslator {
     // Dynamic temperature command: 设置温度<N> (e.g. 设置温度24). Range-clamped in resolve().
     private val TEMP_REGEX = Regex("""设置温度(\d+)""")
     private const val TEMP_MIN = 16
-    private const val TEMP_MAX = 30
+    private const val TEMP_MAX = 33
 
     // Dynamic fan speed command: 风量<N> (e.g. 风量3). Range-clamped in resolve().
     private val FAN_REGEX = Regex("""风量(\d+)""")

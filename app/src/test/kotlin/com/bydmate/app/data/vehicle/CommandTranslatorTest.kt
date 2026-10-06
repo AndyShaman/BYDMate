@@ -358,7 +358,7 @@ class CommandTranslatorTest {
         assertTrue(onEntry.validated)
     }
 
-    // ── Temperature: dynamic parse over full 16..30 range ────────────────────
+    // ── Temperature: dynamic parse over full 16..33 range ────────────────────
     @Test fun `set temperature 24 maps to ac_temp_main val 24`() {
         val r = one("设置温度24")
         assertEquals("ac_temp_main", r?.actionName)
@@ -371,11 +371,17 @@ class CommandTranslatorTest {
         assertEquals(16, r?.value)
     }
 
-    // Out-of-range request clamps into the validated 16..30 window.
-    @Test fun `set temperature 35 clamps to ac_temp_main val 30`() {
+    @Test fun `set temperature 33 maps to ac_temp_main val 33`() {
+        val r = one("设置温度33")
+        assertEquals("ac_temp_main", r?.actionName)
+        assertEquals(33, r?.value)
+    }
+
+    // Out-of-range request clamps into the validated 16..33 window.
+    @Test fun `set temperature 35 clamps to ac_temp_main val 33`() {
         val r = one("设置温度35")
         assertEquals("ac_temp_main", r?.actionName)
-        assertEquals(30, r?.value)
+        assertEquals(33, r?.value)
     }
 
     @Test fun `set temperature 5 clamps to ac_temp_main val 16`() {

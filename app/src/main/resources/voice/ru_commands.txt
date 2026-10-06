@@ -237,7 +237,7 @@ rule windshield: лобового [стекла]|переднего стекла
 <on> обдув <windshield> => 吹前挡
 <off> обдув <windshield> => 关闭吹前挡
 
-range temp: 16..30
+range temp: 16..33
 rule deg: градус|градуса|градусов
 <set> температуру [на] {temp} [<deg>] => 设置温度{temp}
 температура [на] {temp} [<deg>] => 设置温度{temp}

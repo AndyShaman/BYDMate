@@ -807,7 +807,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         }
     }
 
-    /** Relative temperature: read the live AC setpoint, step +-1, clamp 16..30,
+    /** Relative temperature: read the live AC setpoint, step +-1, clamp 16..33,
      *  then dispatch as an absolute set. Fail-soft if the setpoint is unknown. */
     private suspend fun dispatchRelativeTemp(sign: Int, transcript: String, decodeMs: Long? = null) {
         val acTemp = gate.vehicleSnapshot()?.acTemp
@@ -820,7 +820,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
             return
         }
-        val target = (acTemp + sign).coerceIn(16, 30)
+        val target = (acTemp + sign).coerceIn(16, 33)
         execute(listOf("设置温度$target"), transcript, decodeMs)
     }
 
