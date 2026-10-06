@@ -15,6 +15,7 @@ import io.mockk.every
 import io.mockk.mockk
 import java.util.TimeZone
 import kotlin.random.Random
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -937,5 +938,47 @@ class HudWayChannelsTest {
         c.tick(active = true)
         c.tick(active = false)
         (lines + trace.events()).forEach { assertFalse(it, it.contains("53.9") || it.contains("27.56")) }
+    }
+
+    // --- trace audit: the readback and the road's script ---
+
+    @Test fun `one CAN readback per route, after its first turn kind other than 0, off the tick`() = runTest {
+        coEvery { helper.readBatch(any()) } answers { calls += "read"; listOf(0 to 2, 0 to 300) }
+        val c = channels(2).apply { readbackScope = this@runTest }
+        route(gaode = 0)
+        c.tick(active = true)
+        runCurrent()
+        assertEquals(0, calls.count { it == "read" })
+        route(gaode = 2, dist = 300)
+        c.tick(active = true)
+        assertEquals("the tick does not wait for the read", 0, calls.count { it == "read" })
+        runCurrent()
+        assertEquals(1, calls.count { it == "read" })
+        route(gaode = 5, dist = 200)
+        c.tick(active = true)
+        runCurrent()
+        assertEquals(1, calls.count { it == "read" })
+        val readback = trace.events().single { it.contains("can-readback") }
+        assertTrue(readback, readback.contains("fid=TURN_KIND wrote=2 read=2 dist_wrote=300 dist_read=300"))
+        c.tick(active = false)                      // the route ends (its clear reads back on its own)
+        route(gaode = 3, dist = 100)
+        c.tick(active = true)
+        runCurrent()
+        assertEquals(2, trace.events().count { it.contains("can-readback") })
+    }
+
+    @Test fun `the CAN road's script class is traced when it changes, never the name`() = runTest {
+        val c = channels(2)
+        route(road = "Main St")
+        c.tick(active = true)
+        route(road = "Second St")                   // same class: no line
+        c.tick(active = true)
+        route(road = "")
+        c.tick(active = true)
+        val roads = trace.events().filter { it.contains(" road ") }
+        assertEquals(2, roads.size)
+        assertTrue(roads[0], roads[0].contains("road chan=can script=latin len=7"))
+        assertTrue(roads[1], roads[1].contains("road chan=can script=empty len=0"))
+        assertFalse(roads.any { it.contains("Main") || it.contains("Second") })
     }
 }

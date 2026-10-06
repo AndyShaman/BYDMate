@@ -39,9 +39,15 @@ class HudCanChannel(private val helper: HelperClient) {
         val aheadRc = helper.writeStatus(DEV, FID_GUIDE_INFO_ROAD_AHEAD, turnKind)
         val distRc = helper.writeStatus(DEV, FID_TURN_DISTANCE_M, distanceM)
         val roadRc = helper.writeBufferStatus(DEV, FID_NEXT_PATHNAME, road.toByteArray(Charsets.UTF_16LE))
+        val (icon, dist) = readGuidance()
+        return Sent(iconRc, aheadRc, distRc, roadRc, icon, dist)
+    }
+
+    /** TURN_KIND and the distance as the instrument holds them, in one daemon round trip. */
+    suspend fun readGuidance(): Pair<HudArming.FidRead, HudArming.FidRead> {
         val replies = helper.readBatch(listOf(BatchReadItem(5, DEV, FID_TURN_KIND), BatchReadItem(5, DEV, FID_TURN_DISTANCE_M)))
         val rb = List(2) { i -> replies?.getOrNull(i)?.let { (st, v) -> HudArming.FidRead(st, v) } ?: HudArming.FidRead(null) }
-        return Sent(iconRc, aheadRc, distRc, roadRc, rb[0], rb[1])
+        return rb[0] to rb[1]
     }
 
     /** OpenBYD's sendSimpleGuidanceInfo: [turnKind] into both icon fids, then the distance; each
