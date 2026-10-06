@@ -253,6 +253,49 @@ class LogRecorderTest {
         assertTrue("length=${started.file.length()}", started.file.length() < limit + batch + 1024)
     }
 
+    /** Stdout that hands out [chunks] one read at a time, pausing [pauseMs] before each but the
+     *  first: a quiet logcat whose lines only the idle flusher pushes to the file. */
+    private class SparseStream(private val chunks: List<ByteArray>, private val pauseMs: Long) : InputStream() {
+        private var index = 0
+        private var pos = 0
+
+        override fun read(): Int {
+            val b = ByteArray(1)
+            return if (read(b, 0, 1) < 0) -1 else b[0].toInt() and 0xFF
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (index >= chunks.size) return -1
+            if (pos == 0 && index > 0) Thread.sleep(pauseMs)
+            val chunk = chunks[index]
+            val n = minOf(len, chunk.size - pos)
+            System.arraycopy(chunk, pos, b, off, n)
+            pos += n
+            if (pos == chunk.size) { index++; pos = 0 }
+            return n
+        }
+    }
+
+    @Test
+    fun `size limit counts the bytes of Cyrillic lines flushed by the idle flusher`() = runTest {
+        val line = "ж".repeat(1000) // 2000 bytes in UTF-8
+        val burst = ((line + "\n").repeat(2)).toByteArray() // well below a batch: only the idle flush writes it
+        val limit = 8 * 1024L
+        val recorder = recorder(
+            maxSizeBytes = limit,
+            stdout = { SparseStream(List(8) { burst }, pauseMs = 2_300L) },
+        )
+        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+
+        withContext(Dispatchers.Default) {
+            withTimeout(30_000) { recorder.state.first { !it.isRecording && it.lastStopped != null } }
+        }
+
+        assertTrue(started.file.readText().contains("LOG STOPPED: file size limit reached"))
+        // At most one burst past the limit; counting chars would let it reach twice the limit.
+        assertTrue("length=${started.file.length()}", started.file.length() < limit + burst.size + 1024)
+    }
+
     @Test
     fun `auto stop fires at the deadline`() = runTest {
         val recorder = recorder(autoStopMs = 50L)

@@ -50,7 +50,8 @@ object NavGuidanceParser {
             speedLimit = raw.speedLimit?.trim()?.toIntOrNull() ?: 0,
             maneuverRaw = when {
                 maneuverGaode == 0 -> ""
-                exitNumberOf(raw) != null -> NavManeuverRaw.text("exit", raw.exitNumber)
+                // The parsed number only: the widget's text may carry more than it.
+                exitNumberOf(raw) != null -> NavManeuverRaw.name("exit", exitNumberOf(raw).toString())
                 else -> NavManeuverRaw.text("desc", raw.maneuverDesc)
             },
             roadIsNextStreet = raw.nextStreet != null,
@@ -103,21 +104,19 @@ object NavGuidanceParser {
  *  short enough for one journal line and without the street a screen text may go on with. */
 object NavManeuverRaw {
     const val MAX_CHARS = 40
-    /** Words of an unmatched screen text kept: a street may follow the maneuver words. */
-    private const val TEXT_WORDS = 2
-    private const val HEAD_CHARS = 20
     private val SPACES = Regex("""[\s\p{Z}]+""")
-    /** Words a street name follows: nothing from one of them on is kept. */
-    private val SEPARATORS = setOf("на", "в", "по", "onto", "on", "to", "into")
+    private val EDGE_PUNCT = Regex("""^\p{Punct}+|\p{Punct}+$""")
 
-    /** From a screen text: the table entry it matched (`key=`), else its first words up to a
-     *  separator and its length; never the user text after them. */
+    /** From a screen text: the table entry it matched (`key=`), else its words masked (the
+     *  maneuver vocabulary kept lowercased, every other word `*`) and its length. */
     fun text(kind: String, text: String?): String {
         if (text == null) return name(kind, null)
         NavManeuverCodes.matchedPhrase(text)?.let { return name(kind, "key=$it") }
-        val head = text.split(SPACES).filter { it.isNotEmpty() }
-            .takeWhile { it.lowercase() !in SEPARATORS }.take(TEXT_WORDS).joinToString(" ")
-        return name(kind, "${head.take(HEAD_CHARS)} len=${text.length}")
+        val masked = text.split(SPACES).filter { it.isNotEmpty() }.joinToString(" ") { word ->
+            word.lowercase().replace(EDGE_PUNCT, "").takeIf(NavManeuverCodes::isVocabularyWord) ?: "*"
+        }
+        val tail = " len=${text.length}"
+        return "$kind:${masked.take(MAX_CHARS - kind.length - 1 - tail.length)}$tail"
     }
 
     /** From a resource or icon name, capped at [MAX_CHARS]. */

@@ -78,6 +78,18 @@ class HudController @Inject constructor(
         private const val STEP_BIND = "bind"
         private const val STEP_START_SERVICE = "start_service"
         private const val STEP_BINDING_LOST = "binding_lost"
+
+        internal fun diagOf(l: HudPushLoop, channels: HudWayChannels?, probeAmap: Boolean): HudDiag = HudDiag(
+            framesSent = l.framesSent,
+            lastFrameTs = l.lastFrameTs,
+            lastRc = l.lastRc,
+            nonZeroRcCount = l.nonZeroRcCount,
+            amapCapable = probeAmap && l.amap?.capable == true,
+            amapFramesSent = l.amap?.framesSent ?: 0,
+            amapStopsSent = l.amap?.stopsSent ?: 0,
+            canAccepted = channels?.canAccepted ?: 0,
+            canRefused = channels?.canRefused ?: 0,
+        )
     }
 
     /** Single lane: stop()/startIfEnabled() launched across a service restart must
@@ -230,19 +242,11 @@ class HudController @Inject constructor(
             }
     }
 
-    fun diag(): HudDiag? = loop?.let { l ->
-        HudDiag(
-            framesSent = l.framesSent,
-            lastFrameTs = l.lastFrameTs,
-            lastRc = l.lastRc,
-            nonZeroRcCount = l.nonZeroRcCount,
-            amapCapable = l.amap?.capable ?: false,
-            amapFramesSent = l.amap?.framesSent ?: 0,
-            amapStopsSent = l.amap?.stopsSent ?: 0,
-            canAccepted = channels?.canAccepted ?: 0,
-            canRefused = channels?.canRefused ?: 0,
-        )
-    }
+    fun diag(): HudDiag? = loop?.let { diagOf(it, channels, probeAmap = true) }
+
+    /** [diag] without amapCapable (left false): its first read is a PackageManager Binder call, which
+     *  the recording's end snapshot must not make. */
+    fun counters(): HudDiag? = loop?.let { diagOf(it, channels, probeAmap = false) }
 
     /** True only when the feature is on AND the gateway probe confirmed support -
      *  the a11y keep-alive gate must not fire on the raw pref (Codex fix 1). */

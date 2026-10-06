@@ -76,8 +76,11 @@ class NavGuidanceParserTest {
     @Test fun `the raw maneuver input is the balloon description, or the exit number when it decides`() {
         assertEquals("desc:key=поверните направо",
             NavGuidanceParser.parse(raw(maneuverDesc = "Поверните направо", distance = "250"))!!.maneuverRaw)
-        assertEquals("exit:2 len=1",
+        assertEquals("exit:2",
             NavGuidanceParser.parse(raw(maneuverDesc = "Поверните направо", exitNumber = "2"))!!.maneuverRaw)
+        // The exit widget's text is never logged, only the number parsed from it.
+        assertEquals("exit:2",
+            NavGuidanceParser.parse(raw(maneuverDesc = "Поверните направо", exitNumber = "2 Тверская"))!!.maneuverRaw)
     }
 
     @Test fun `only a next street counts as one, the status panel fallback does not`() {

@@ -345,6 +345,9 @@ class LogRecorder internal constructor(
         val lock = Any()
         val policy = PipeFlushPolicy()
         var closed = false
+        // Chars between flushes (a lower bound: Cyrillic or CJK take 2-3 bytes each), the file's
+        // real length after every flush, the idle one included. Guarded by [lock].
+        var size = target.length()
         try {
             proc.inputStream.bufferedReader().use { reader ->
                 val writer = FileOutputStream(target, /* append = */ true).bufferedWriter()
@@ -357,17 +360,17 @@ class LogRecorder internal constructor(
                             if (!closed && policy.dueIdle(System.currentTimeMillis())) {
                                 runCatching { writer.flush() }
                                 policy.flushed()
+                                size = target.length()
                             }
                         }
                     }
                 }
                 try {
-                    var size = target.length()
                     var line = reader.readLine()
                     while (line != null && session === current) {
                         if (LogcatLineFilter.keep(line)) {
                             // Stop if file exceeds size limit
-                            if (size > maxSizeBytes) {
+                            if (synchronized(lock) { size > maxSizeBytes }) {
                                 current.endedByLimit = true
                                 synchronized(lock) {
                                     writer.write("--- LOG STOPPED: file size limit reached (50 MB) ---")
@@ -378,8 +381,6 @@ class LogRecorder internal constructor(
                             synchronized(lock) {
                                 writer.write(line)
                                 writer.newLine()
-                                // Chars between flushes (a lower bound: Cyrillic or CJK take 2-3
-                                // bytes each), the file's real length at every batch flush.
                                 size += line.length + 1
                                 if (policy.onLine(System.currentTimeMillis())) {
                                     writer.flush()
