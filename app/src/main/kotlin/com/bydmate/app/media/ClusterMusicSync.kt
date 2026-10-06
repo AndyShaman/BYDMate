@@ -126,15 +126,16 @@ class ClusterMusicSync(private val port: Port, private val ui7: Boolean = false)
     /**
      * UI7 only, about once a second while our card is shown: reads the source fid and, when the
      * firmware changed it, rewrites the whole card at once. [current] re-reads the owner right
-     * before the rewrite and returns null when the card is no longer ours, so a player that took
-     * it since the last poll is never written over. A failed read waits [REASSERT_MS]; a failed
+     * before the rewrite (null = unreadable): a source that took the card since the last poll is
+     * shown, another player gets the poll's hand-off, and Idle is left to the poll's clear, so
+     * nothing is written over a player that is not ours. A failed read waits [REASSERT_MS]; a failed
      * rewrite drops [shown], so the watch goes quiet and the poll's retries and refusal budget
      * take over as for any other write.
      */
     suspend fun watch(
         fids: ClusterMusicFids?,
         nowMs: Long,
-        current: suspend () -> Card?,
+        current: suspend () -> Target?,
         stillWanted: () -> Boolean = { true },
     ): Outcome {
         if (!ui7 || fids == null || refused) return Outcome.NONE
@@ -153,7 +154,22 @@ class ClusterMusicSync(private val port: Port, private val ui7: Boolean = false)
         lastSourceRead = source
         lastSourceReadAt = nowMs
         if (source == sourceCode) return Outcome.NONE
-        val card = current() ?: return Outcome.NONE
+        return rewrite(fids, shownCard, current(), nowMs, stillWanted)
+    }
+
+    /** [watch]'s answer to a changed source, by the owner read right before it. */
+    private suspend fun rewrite(
+        fids: ClusterMusicFids,
+        shownCard: Card,
+        target: Target?,
+        nowMs: Long,
+        stillWanted: () -> Boolean,
+    ): Outcome {
+        val card = when (target) {
+            is Target.Show -> target.card
+            is Target.OtherPlaying -> return handOff()
+            Target.Idle, null -> return Outcome.NONE
+        }
         val outcome = writeCard(fids, card, shownCard.steady() != card.steady(), nowMs, stillWanted)
         if (outcome != Outcome.SHOWN) return outcome
         lastWriteAt = nowMs
@@ -288,6 +304,32 @@ class ClusterMusicSync(private val port: Port, private val ui7: Boolean = false)
         const val MAX_CLEAR_ATTEMPTS = 20
         /** Refused required writes in a row before the card is off until restart. */
         const val MAX_WRITE_REFUSALS = 3
+    }
+}
+
+/**
+ * Who owns the card across polls and watch reads: [ClusterMusicCard.nextOwner] of every target
+ * the bridge acts on, so a player the watch showed keeps the card at the next poll. Process memory only.
+ */
+class ClusterMusicOwner {
+    @Volatile var lastOwner: String? = null
+        private set
+
+    /** The last target as `show:pkg`, `other:pkg` or `idle`, for the log and the dump. */
+    @Volatile var lastTargetKind: String? = null
+        private set
+
+    /** Records [target]; returns its kind when it differs from the previous one, else null. */
+    fun observe(target: Target): String? {
+        val kind = when (target) {
+            is Target.Show -> "show:${target.packageName}"
+            is Target.OtherPlaying -> "other:${target.packageName}"
+            Target.Idle -> "idle"
+        }
+        val changed = kind != lastTargetKind
+        lastTargetKind = kind
+        lastOwner = ClusterMusicCard.nextOwner(target, lastOwner)
+        return kind.takeIf { changed }
     }
 }
 

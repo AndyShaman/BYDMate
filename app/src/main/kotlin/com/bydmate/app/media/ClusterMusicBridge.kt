@@ -89,9 +89,7 @@ class ClusterMusicBridge @Inject constructor(
     private var wasEnabled = false
     @Volatile private var lastFids: ClusterMusicFids? = null
     private var fidsLogged = false
-    @Volatile private var lastTargetKind: String? = null
-    /** [ClusterMusicCard.nextOwner] carried between polls; process memory only. */
-    @Volatile private var lastOwner: String? = null
+    private val owner = ClusterMusicOwner()
     /** Last outcome other than NONE / TICKED and when, for the dump. */
     @Volatile private var lastOutcome: Outcome? = null
     @Volatile private var lastOutcomeAt = 0L
@@ -164,33 +162,35 @@ class ClusterMusicBridge @Inject constructor(
             return
         }
         val sessions = readSessions() ?: return
-        val target = ClusterMusicCard.decide(sessions, lastOwner = lastOwner)
-        val kind = when (target) {
-            is Target.Show -> "show:${target.packageName}"
-            is Target.OtherPlaying -> "other:${target.packageName}"
-            Target.Idle -> "idle"
-        }
-        if (kind != lastTargetKind) {
-            // Package and PlaybackState only: users post these logs in public issues.
-            val states = sessions.take(MAX_LOGGED_SESSIONS).joinToString(" ") { "${it.packageName}:${it.playbackState}" }
-            Log.i(TAG, "target $kind sessions=[$states] owner=$lastOwner")
-            Trace.event(TraceArea.CAR, "cluster_music", "target" to kind, "sessions" to states, "owner" to lastOwner)
-            lastTargetKind = kind
-        }
-        lastOwner = ClusterMusicCard.nextOwner(target, lastOwner)
+        val target = observe(sessions, via = "poll")
         val outcome = sync.step(true, fids, target, SystemClock.elapsedRealtime()) { enabled() && job?.isActive == true }
         report(outcome, target)
     }
 
     /**
+     * Decides the target from [sessions] and records it in [owner], logging a change of target.
+     * The watch goes through here too, so a player it shows owns the card at the next poll.
+     */
+    private fun observe(sessions: List<ClusterMusicCard.SessionSnapshot>, via: String): Target {
+        val previous = owner.lastOwner
+        val target = ClusterMusicCard.decide(sessions, lastOwner = previous)
+        val kind = owner.observe(target) ?: return target
+        // Package and PlaybackState only: users post these logs in public issues.
+        val states = sessions.take(MAX_LOGGED_SESSIONS).joinToString(" ") { "${it.packageName}:${it.playbackState}" }
+        Log.i(TAG, "target $kind sessions=[$states] owner=$previous via=$via")
+        Trace.event(TraceArea.CAR, "cluster_music", "target" to kind, "sessions" to states, "owner" to previous, "via" to via)
+        return target
+    }
+
+    /**
      * UI7 only: one source read while our card is shown, a full rewrite when the firmware changed
-     * it. The owner is read again right before a rewrite: null when a source no longer owns the card.
+     * it. The owner is decided again right before a rewrite, exactly as a poll decides it.
      */
     private suspend fun watchTick() {
         val outcome = sync.watch(
             lastFids,
             SystemClock.elapsedRealtime(),
-            current = { (readTarget(rearm = false) as? Target.Show)?.card },
+            current = { readSessions(rearm = false)?.let { observe(it, via = "watch") } },
         ) { enabled() && job?.isActive == true }
         report(outcome, null, reason = "watch")
     }
@@ -226,7 +226,7 @@ class ClusterMusicBridge @Inject constructor(
     }
 
     private suspend fun readTarget(rearm: Boolean): Target? =
-        readSessions(rearm)?.let { ClusterMusicCard.decide(it, lastOwner = lastOwner) }
+        readSessions(rearm)?.let { ClusterMusicCard.decide(it, lastOwner = owner.lastOwner) }
 
     /**
      * Null when the sessions can't be read: without listener access the poll decides nothing.
@@ -303,7 +303,7 @@ class ClusterMusicBridge @Inject constructor(
             "switch=${if (enabled()) "on" else "off"} running=${job?.isActive == true}",
             "ui7=${if (ui7) "yes" else "no"} source=${sync.sourceCode} watch=${if (ui7) "${WATCH_MS} ms" else "off"}",
             "fids=${lastFids ?: "(unresolved)"}",
-            "owner=${lastOwner ?: "(none)"} target=${lastTargetKind ?: "(none)"} " +
+            "owner=${owner.lastOwner ?: "(none)"} target=${owner.lastTargetKind ?: "(none)"} " +
                 "shown=${sync.shown != null} dirty=${sync.dirty} refused=${sync.refused}",
             "last_outcome=" + (outcome?.let { "${it.name.lowercase()} age=${(now - lastOutcomeAt) / 1_000}s" } ?: "(none)"),
             "source_reasserts=${sync.sourceReasserts} last_source_read=" +

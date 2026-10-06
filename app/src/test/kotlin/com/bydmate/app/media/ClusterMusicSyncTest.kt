@@ -456,7 +456,7 @@ class ClusterMusicSyncTest {
         )
         port.clearTakes()
         port.readValue = 26
-        assertEquals(Outcome.NONE, sync.watch(fids, 1_000, current = { card() }))
+        assertEquals(Outcome.NONE, sync.watch(fids, 1_000, current = { Target.Show(card()) }))
         assertEquals(0, port.reads)
         assertTrue(port.writes.isEmpty())
     }
@@ -467,7 +467,7 @@ class ClusterMusicSyncTest {
         sync.step(true, fids, Target.Show(card()), 0)
         port.clearTakes()
         port.readValue = 26
-        assertEquals(Outcome.SOURCE_REASSERTED, sync.watch(fids, 1_000, current = { card() }))
+        assertEquals(Outcome.SOURCE_REASSERTED, sync.watch(fids, 1_000, current = { Target.Show(card()) }))
         assertEquals(
             listOf(13 to ClusterMusicCard.SOURCE_OTHERS, 12 to ClusterMusicCard.MUSIC_PLAYING, 11 to "Song", 21 to "Artist"),
             port.writes,
@@ -485,7 +485,7 @@ class ClusterMusicSyncTest {
         val sync = ClusterMusicSync(port, ui7 = true)
         sync.step(true, fids, Target.Show(card()), 0)
         port.clearTakes()
-        (1..5).forEach { assertEquals(Outcome.NONE, sync.watch(fids, it * 1_000L, current = { card() })) }
+        (1..5).forEach { assertEquals(Outcome.NONE, sync.watch(fids, it * 1_000L, current = { Target.Show(card()) })) }
         assertEquals(5, port.reads)
         assertTrue(port.writes.isEmpty())
         assertEquals(0, sync.sourceReasserts)
@@ -498,23 +498,85 @@ class ClusterMusicSyncTest {
         port.clearTakes()
         port.readValue = 26
         assertEquals(Outcome.NONE, sync.watch(fids, 1_000, current = { null }))
+        assertEquals(Outcome.NONE, sync.watch(fids, 2_000, current = { Target.Idle }))
         assertTrue(port.writes.isEmpty())
+    }
+
+    // The watch saw another player: the same hand-off the poll does, nothing written over it.
+    @Test fun `ui7 watch hands the card off when another player took it`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port, ui7 = true)
+        sync.step(true, fids, Target.Show(card()), 0)
+        port.clearTakes()
+        port.readValue = 26
+        assertEquals(Outcome.HANDED_OFF, sync.watch(fids, 1_000, current = { Target.OtherPlaying("com.byd.mediacenter") }))
+        assertTrue(port.writes.isEmpty())
+        assertFalse(sync.dirty)
+        assertNull(sync.shown)
+    }
+
+    // Review finding: paused A owns the card, B starts between polls and the firmware flips the
+    // source. The watch shows B; B pauses before the next poll. That poll must keep B, not go back
+    // to A's older track through a stale owner.
+    @Test fun `a player shown by the watch owns the card for the next poll`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port, ui7 = true)
+        val owner = ClusterMusicOwner()
+        val paused = 2
+        val playing = 3
+        fun session(pkg: String, state: Int, title: String) =
+            ClusterMusicCard.SessionSnapshot(pkg, state, title, "Artist")
+        suspend fun poll(sessions: List<ClusterMusicCard.SessionSnapshot>, nowMs: Long): Outcome {
+            val target = ClusterMusicCard.decide(sessions, lastOwner = owner.lastOwner)
+            owner.observe(target)
+            return sync.step(true, fids, target, nowMs)
+        }
+
+        poll(listOf(session("app.a", paused, "Old")), 0)
+        assertEquals("app.a", owner.lastOwner)
+
+        val bPlays = listOf(session("app.a", paused, "Old"), session("app.b", playing, "New"))
+        port.clearTakes()
+        port.readValue = 26
+        val watched = sync.watch(fids, 1_000, current = {
+            ClusterMusicCard.decide(bPlays, lastOwner = owner.lastOwner).also { owner.observe(it) }
+        })
+        assertEquals(Outcome.SOURCE_REASSERTED, watched)
+        assertEquals(listOf("New"), port.valuesFor(11))
+        assertEquals("app.b", owner.lastOwner)
+        assertEquals("show:app.b", owner.lastTargetKind)
+
+        port.clearTakes()
+        poll(listOf(session("app.a", paused, "Old"), session("app.b", paused, "New")), 1_500)
+        assertTrue(port.valuesFor(11).none { it == "Old" })
+        assertEquals("New", sync.shown?.title)
+    }
+
+    @Test fun `the owner reports a target kind only when it changes`() {
+        val owner = ClusterMusicOwner()
+        val show = Target.Show(Card("Song", "Artist", ClusterMusicCard.MUSIC_PLAYING), "app.a")
+        assertEquals("show:app.a", owner.observe(show))
+        assertNull(owner.observe(show))
+        assertEquals("idle", owner.observe(Target.Idle))
+        assertEquals("app.a", owner.lastOwner)
+        assertEquals("other:com.byd.mediacenter", owner.observe(Target.OtherPlaying("com.byd.mediacenter")))
+        assertEquals("com.byd.mediacenter", owner.lastOwner)
     }
 
     @Test fun `ui7 watch stops after a hand-off, a switch-off clear and with nothing shown`() = runTest {
         val port = FakePort()
         val sync = ClusterMusicSync(port, ui7 = true)
-        assertEquals(Outcome.NONE, sync.watch(fids, 0, current = { card() }))
+        assertEquals(Outcome.NONE, sync.watch(fids, 0, current = { Target.Show(card()) }))
         sync.step(true, fids, Target.Show(card()), 0)
         sync.step(true, fids, Target.OtherPlaying("com.byd.mediacenter"), 1_500)
         port.clearTakes()
         port.readValue = 26
-        assertEquals(Outcome.NONE, sync.watch(fids, 2_000, current = { card() }))
+        assertEquals(Outcome.NONE, sync.watch(fids, 2_000, current = { Target.Show(card()) }))
 
         sync.step(true, fids, Target.Show(card()), 3_000)
         sync.step(false, fids, Target.Idle, 4_500)
         port.clearTakes()
-        assertEquals(Outcome.NONE, sync.watch(fids, 5_000, current = { card() }))
+        assertEquals(Outcome.NONE, sync.watch(fids, 5_000, current = { Target.Show(card()) }))
         assertEquals(0, port.reads)
         assertTrue(port.writes.isEmpty())
     }
@@ -525,7 +587,7 @@ class ClusterMusicSyncTest {
         sync.step(true, fids, Target.Show(card()), 0)
         port.clearTakes()
         port.readValue = 26
-        assertEquals(Outcome.NONE, sync.watch(fids, 1_000, current = { card() }, stillWanted = { false }))
+        assertEquals(Outcome.NONE, sync.watch(fids, 1_000, current = { Target.Show(card()) }, stillWanted = { false }))
         assertEquals(0, port.reads)
         assertTrue(port.writes.isEmpty())
     }
@@ -536,13 +598,13 @@ class ClusterMusicSyncTest {
         sync.step(true, fids, Target.Show(card()), 0)
         port.clearTakes()
         port.readValue = null
-        val outage = (1_000L..30_000L step 1_000L).map { sync.watch(fids, it, current = { card() }) }
+        val outage = (1_000L..30_000L step 1_000L).map { sync.watch(fids, it, current = { Target.Show(card()) }) }
         assertEquals(listOf(Outcome.READ_FAILED), reported(outage))
         assertTrue("reads ${port.reads}", port.reads <= 3)
         assertTrue(port.writes.isEmpty())
 
         port.readValue = 26
-        val after = (31_000L..40_000L step 1_000L).map { sync.watch(fids, it, current = { card() }) }
+        val after = (31_000L..40_000L step 1_000L).map { sync.watch(fids, it, current = { Target.Show(card()) }) }
         assertEquals(Outcome.SOURCE_REASSERTED, after.first { it != Outcome.NONE })
     }
 
@@ -552,10 +614,10 @@ class ClusterMusicSyncTest {
         sync.step(true, fids, Target.Show(card()), 0)
         port.status = { null }
         port.readValue = 26
-        assertEquals(Outcome.WRITE_FAILED, sync.watch(fids, 1_000, current = { card() }))
+        assertEquals(Outcome.WRITE_FAILED, sync.watch(fids, 1_000, current = { Target.Show(card()) }))
         port.clearTakes()
         val reads = port.reads
-        (2_000L..9_000L step 1_000L).forEach { assertEquals(Outcome.NONE, sync.watch(fids, it, current = { card() })) }
+        (2_000L..9_000L step 1_000L).forEach { assertEquals(Outcome.NONE, sync.watch(fids, it, current = { Target.Show(card()) })) }
         assertEquals(reads, port.reads)
         assertTrue(port.writes.isEmpty())
     }
@@ -568,14 +630,14 @@ class ClusterMusicSyncTest {
         sync.step(true, fids, Target.Show(card()), 0)
         port.status = { -1 }
         port.readValue = 26
-        assertEquals(Outcome.WRITE_FAILED, sync.watch(fids, 1_000, current = { card() }))
+        assertEquals(Outcome.WRITE_FAILED, sync.watch(fids, 1_000, current = { Target.Show(card()) }))
         val reads = port.reads
-        (2_000L..5_000L step 1_000L).forEach { assertEquals(Outcome.NONE, sync.watch(fids, it, current = { card() })) }
+        (2_000L..5_000L step 1_000L).forEach { assertEquals(Outcome.NONE, sync.watch(fids, it, current = { Target.Show(card()) })) }
         assertEquals(reads, port.reads)
         sync.step(true, fids, Target.Show(card()), 6_000)
         assertEquals(Outcome.REFUSED, sync.step(true, fids, Target.Show(card()), 7_500))
         assertTrue(sync.refused)
-        assertEquals(Outcome.NONE, sync.watch(fids, 10_000, current = { card() }))
+        assertEquals(Outcome.NONE, sync.watch(fids, 10_000, current = { Target.Show(card()) }))
         assertEquals(reads, port.reads)
     }
 }
