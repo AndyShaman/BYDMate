@@ -1129,6 +1129,9 @@
     <string name="auto_act_temp_20c">温度 20°C</string>
     <string name="auto_act_temp_22c">温度 22°C</string>
     <string name="auto_act_temp_25c">温度 25°C</string>
+    <string name="auto_act_temp_28c">温度 28°C</string>
+    <string name="auto_act_temp_30c">温度 30°C</string>
+    <string name="auto_act_temp_33c">温度 33°C</string>
     <string name="auto_act_fan_1">风量 1</string>
     <string name="auto_act_fan_2">风量 2</string>
     <string name="auto_act_fan_3">风量 3</string>

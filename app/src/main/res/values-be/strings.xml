@@ -1202,6 +1202,9 @@
     <string name="auto_act_temp_20c">Тэмп. 20°C</string>
     <string name="auto_act_temp_22c">Тэмп. 22°C</string>
     <string name="auto_act_temp_25c">Тэмп. 25°C</string>
+    <string name="auto_act_temp_28c">Тэмп. 28°C</string>
+    <string name="auto_act_temp_30c">Тэмп. 30°C</string>
+    <string name="auto_act_temp_33c">Тэмп. 33°C</string>
     <string name="auto_act_fan_1">Вентылятар 1</string>
     <string name="auto_act_fan_2">Вентылятар 2</string>
     <string name="auto_act_fan_3">Вентылятар 3</string>

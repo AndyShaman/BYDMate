@@ -1050,6 +1050,9 @@
     <string name="auto_act_temp_20c">Temp 20°C</string>
     <string name="auto_act_temp_22c">Temp 22°C</string>
     <string name="auto_act_temp_25c">Temp 25°C</string>
+    <string name="auto_act_temp_28c">Temp 28°C</string>
+    <string name="auto_act_temp_30c">Temp 30°C</string>
+    <string name="auto_act_temp_33c">Temp 33°C</string>
     <string name="auto_act_fan_1">Fan 1</string>
     <string name="auto_act_fan_2">Fan 2</string>
     <string name="auto_act_fan_3">Fan 3</string>
