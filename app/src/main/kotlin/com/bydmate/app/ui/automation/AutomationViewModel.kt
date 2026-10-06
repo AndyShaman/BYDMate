@@ -298,6 +298,8 @@ val ACTION_COMMANDS = listOf(
         ActionOption("", R.string.toggle_target_hazard, R.string.auto_cat_light, toggleTarget = ActionDispatcher.TOGGLE_HAZARD),
         ActionOption("打开车内灯", R.string.auto_act_interior_light_on, R.string.auto_cat_light),
         ActionOption("关闭车内灯", R.string.auto_act_interior_light_off, R.string.auto_cat_light),
+        ActionOption("打开抬头显示", R.string.auto_act_hud_on, R.string.auto_cat_light),
+        ActionOption("关闭抬头显示", R.string.auto_act_hud_off, R.string.auto_cat_light),
         ActionOption("车门上锁", R.string.auto_act_lock_doors, R.string.auto_cat_locks),
         ActionOption("车门解锁", R.string.auto_act_unlock_doors, R.string.auto_cat_locks),
         ActionOption("", R.string.toggle_target_locks, R.string.auto_cat_locks, toggleTarget = ActionDispatcher.TOGGLE_LOCKS),
