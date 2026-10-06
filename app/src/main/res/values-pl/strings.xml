@@ -248,6 +248,8 @@
     <string name="settings_widget_hints">• Długie dotknięcie widżetu - ukryj do następnego otwarcia BYDMate.\n• Przeciągnij do kosza na dole - wyłącz całkiem.\n• Zwykłe dotknięcie - otwórz BYDMate.</string>
     <string name="settings_widget_hide_youtube_label">Ukrywaj przy YouTube</string>
     <string name="settings_widget_hide_youtube_description">Panel przycisków chowa się, dopóki YouTube jest na ekranie</string>
+    <string name="settings_widget_home_only_label">Pokazuj tylko na ekranie głównym</string>
+    <string name="settings_widget_home_only_description">W innych aplikacjach panel przycisków chowa się sam</string>
     <string name="settings_widget_hide_apps_label">Ukrywaj w aplikacjach</string>
     <string name="settings_widget_hide_apps_description">Panel przycisków chowa się, dopóki wybrana aplikacja jest na ekranie</string>
     <string name="settings_widget_hide_apps_none">Nie wybrano</string>
