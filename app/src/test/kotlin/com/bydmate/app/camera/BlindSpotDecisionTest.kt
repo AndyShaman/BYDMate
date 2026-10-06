@@ -95,9 +95,19 @@ class BlindSpotDecisionTest {
         assertFalse(d.cameraWarm)
     }
 
-    @Test fun `camera stays warm inside the hysteresis band below the threshold`() {
-        assertTrue(decideBlindSpot(input(blink = 1, speedKmh = 15f)).cameraWarm)
-        assertFalse(decideBlindSpot(input(blink = 1, speedKmh = 14.9f)).cameraWarm)
+    /** The camera is opened on demand: speed alone no longer holds it open ahead of a signal. */
+    @Test fun `no turn signal at speed keeps the camera closed`() {
+        assertFalse(decideBlindSpot(input(blink = 1, speedKmh = 80f)).cameraWarm)
+        assertFalse(decideBlindSpot(input(blink = null, speedKmh = 80f)).cameraWarm)
+    }
+
+    @Test fun `hazard lights do not open the camera`() {
+        assertFalse(decideBlindSpot(input(blink = 6)).cameraWarm)
+    }
+
+    @Test fun `a turn signal below the threshold does not open the camera`() {
+        assertFalse(decideBlindSpot(input(blink = 2, speedKmh = 19.9f)).cameraWarm)
+        assertTrue(decideBlindSpot(input(blink = 4, speedKmh = 20f)).cameraWarm)
     }
 }
 
