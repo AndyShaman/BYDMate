@@ -72,4 +72,11 @@ class NavGuidanceParserTest {
         assertEquals(0, NavGuidanceParser.parseDistanceText("скоро"))
         assertEquals(0, NavGuidanceParser.parseDistanceText(null))
     }
+
+    @Test fun `the raw maneuver input is the balloon description, or the exit number when it decides`() {
+        assertEquals("desc:Поверните направо",
+            NavGuidanceParser.parse(raw(maneuverDesc = "Поверните направо", distance = "250"))!!.maneuverRaw)
+        assertEquals("exit:2",
+            NavGuidanceParser.parse(raw(maneuverDesc = "Поверните направо", exitNumber = "2"))!!.maneuverRaw)
+    }
 }

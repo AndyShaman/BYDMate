@@ -102,7 +102,7 @@ class HudPushLoop(
         // the rc flips; a stable maneuver with a stable rc stays silent.
         if (!wasActive || s.maneuverGaode != journalledGaode || rcChanged) {
             Log.i(TAG, "frame gaode=${s.maneuverGaode} dist=${s.distanceMeters}m rc=$rc sent=$framesSent" +
-                " amap=${amap?.capable == true}")
+                " amap=${amap?.capable == true} src=${s.maneuverSource.ifEmpty { "none" }} raw=\"${s.maneuverRaw}\"")
         }
         journalManeuver(s, cameraActive)
         return true
@@ -123,6 +123,8 @@ class HudPushLoop(
             amapIcon = if (amapBroadcasting) HudAmapBroadcaster.gaodeToAmapIcon(s.maneuverGaode) else null,
             roundaboutNum = if (amapBroadcasting && s.maneuverGaode in 25..34) s.maneuverGaode - 24 else null,
             suppressArrow = suppressArrow,
+            source = s.maneuverSource,
+            raw = s.maneuverRaw,
         )
     }
 

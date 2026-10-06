@@ -347,6 +347,21 @@ class HudWayChannelsTest {
         assertTrue(calls.contains("set $dist=16777214"))
     }
 
+    @Test fun `way 2 lifts 1 to 10 m to 11 m like the SOME IP frame and keeps the unknown 0 (#294)`() = runTest {
+        val c = channels(2)
+        route(dist = 3)
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.contains("set $dist=11"))
+        calls.clear()
+        route(dist = 0)
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.contains("set $dist=0"))
+        calls.clear()
+        route(dist = 12)
+        c.tick(active = true)
+        assertTrue(calls.toString(), calls.contains("set $dist=12"))
+    }
+
     // --- way 3: the LAUNCHER_MAP_CN family on top ---
 
     private val starts = HudLauncherMapCnFrames.SERVICE_IDS.map { "start 0x${it.toString(16)}" }
@@ -715,7 +730,7 @@ class HudWayChannelsTest {
             g(2, 40) + rd("Road One Street") + restCalls(0, 10, 5_200, 23) +
                 g(2, 30) + restCalls(0, 10, 5_190, 23) +
                 g(2, 20) + restCalls(0, 10, 5_180, 23) +
-                g(2, 10) + restCalls(0, 10, 5_170, 23) +
+                g(2, 11) + restCalls(0, 10, 5_170, 23) +   // 10 m read, lifted to the glass floor (#294)
                 g(2, 1_500) + rd("Second Avenue") + restCalls(0, 10, 5_160, 23) +
                 g(2, 1_400) + restCalls(0, 9, 5_060, 22) +
                 g(1, 200) + rd("Third Lane") + restCalls(0, 7, 3_600, 20) +

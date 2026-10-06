@@ -284,4 +284,91 @@ class NavGuidanceHubTest {
         assertFalse(s.active)
         assertEquals("", s.cameraAlert)
     }
+
+    // --- #294: a held arrow belongs to its next street ---
+
+    @Test fun `a read with another street and no maneuver drops the held arrow at once`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 2, distanceMeters = 300, road = "ул. А", maneuverPng = byteArrayOf(5)), nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            distanceMeters = 800, road = "ул. Б"), nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(0, s.maneuverGaode)
+        assertNull(s.maneuverPng)
+        assertEquals("", s.maneuverSource)
+        assertEquals("", s.maneuverRaw)
+        assertEquals("ул. Б", s.road)
+        assertEquals(800, s.distanceMeters)
+        assertTrue(s.active)
+    }
+
+    @Test fun `an a11y read with another street and no maneuver drops the held arrow too`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 800, road = "ул. Б"), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        assertEquals(0, NavGuidanceHub.snapshot(nowMs = 2000).maneuverGaode)
+    }
+
+    @Test fun `a read without a street keeps the held arrow (street plus distance cars, #198)`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(distanceMeters = 200), nowMs = 20_000)
+        val s = NavGuidanceHub.snapshot(nowMs = 20_000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals(200, s.distanceMeters)
+    }
+
+    @Test fun `a read with the same street keeps the held arrow`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 250, road = "ул. А "), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        assertEquals(2, NavGuidanceHub.snapshot(nowMs = 2000).maneuverGaode)
+    }
+
+    @Test fun `a street arriving while none was known keeps the held arrow`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 250, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        assertEquals(2, NavGuidanceHub.snapshot(nowMs = 2000).maneuverGaode)
+    }
+
+    @Test fun `a read with another street and its own maneuver replaces the arrow`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(gaode = 1, dist = 900, road = "ул. Б"), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(1, s.maneuverGaode)
+        assertEquals("ул. Б", s.road)
+    }
+
+    @Test fun `a notification ignored behind a fresh a11y read drops nothing`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            distanceMeters = 800, road = "ул. Б"), nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals("ул. А", s.road)
+    }
+
+    // --- #294: where the held maneuver came from ---
+
+    @Test fun `the held maneuver keeps its source and raw input`() {
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, road = "ул. А", maneuverRaw = "desc:Поверните направо"),
+            NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 200), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        var s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals("a11y", s.maneuverSource)
+        assertEquals("desc:Поверните направо", s.maneuverRaw)
+
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 1, maneuverRaw = "res:ic_left"), nowMs = 20_000)
+        s = NavGuidanceHub.snapshot(nowMs = 20_000)
+        assertEquals("notification", s.maneuverSource)
+        assertEquals("res:ic_left", s.maneuverRaw)
+    }
+
+    @Test fun `raw texts keep only their first words and every raw value is capped`() {
+        assertEquals("text:Поверните направо на улицу", NavManeuverRaw.text("text", "Поверните  направо на улицу Ленина"))
+        assertEquals("desc:null", NavManeuverRaw.text("desc", null))
+        val long = NavManeuverRaw.name("res", "x".repeat(100))
+        assertEquals(NavManeuverRaw.MAX_CHARS, long.length)
+        assertTrue(long.startsWith("res:xxx"))
+        assertEquals("icon:", NavManeuverRaw.name("icon", ""))
+    }
 }

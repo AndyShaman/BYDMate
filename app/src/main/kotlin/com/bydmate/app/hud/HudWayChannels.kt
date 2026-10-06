@@ -212,7 +212,7 @@ class HudWayChannels(
     private suspend fun writeCan(s: NavGuidanceHub.Snapshot) {
         guidanceWaitMs = (guidanceWaitMs - PERIOD_MS).coerceAtLeast(0L)
         roadWaitMs = (roadWaitMs - PERIOD_MS).coerceAtLeast(0L)
-        val guidance = turnKind(s.maneuverGaode) to s.distanceMeters.coerceIn(0, MAX_DISTANCE_M)
+        val guidance = turnKind(s.maneuverGaode) to canDistance(s.distanceMeters)
         val road = roadMemo?.takeIf { it.first == s.road }?.second
             ?: roadName(s.road).also { roadMemo = s.road to it }
         val guidanceDue = guidance != lastGuidance && guidanceWaitMs == 0L
@@ -393,6 +393,13 @@ class HudWayChannels(
         /** Our slight right is 4, OpenBYD's and the stock adapter's is 5 (their 4 is a slight left). */
         internal fun openBydIcon(iconId: Int): Int =
             if (iconId == NavManeuverCodes.GAODE_SLIGHT_RIGHT) OPENBYD_SLIGHT_RIGHT else iconId
+
+        /** The distance as the instrument takes it: in range, 1..10 m lifted to the glass floor
+         *  (below it the glass draws "现在", #294); 0 stays the SDK's invalid distance. */
+        internal fun canDistance(distanceM: Int): Int {
+            val d = distanceM.coerceIn(0, MAX_DISTANCE_M)
+            return if (d in 1 until HudProtobufBuilder.MIN_DISTANCE_METERS) HudProtobufBuilder.MIN_DISTANCE_METERS else d
+        }
 
         /** The road name as the instrument takes it: in Latin ([HudTextSanitizer], trimmed), capped
          *  after that, a space when empty (the car rejects an empty buffer). */
