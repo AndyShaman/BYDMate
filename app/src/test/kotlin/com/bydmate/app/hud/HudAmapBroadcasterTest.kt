@@ -243,4 +243,19 @@ class HudAmapBroadcasterTest {
         b.onStop()                                  // and neither must the loop-stop path
         assertEquals(0L, b.stopsSent)
     }
+
+    @Test
+    fun guide_distance_below_11_m_is_lifted_and_unknown_0_kept() {
+        installAmapService()
+        val b = HudAmapBroadcaster(context)
+        b.onSnapshot(snapshot(distanceMeters = 4))
+        var i = shadowApp.broadcastIntents[0]
+        assertEquals(11, i.getIntExtra("SEG_REMAIN_DIS", -99))
+        assertEquals("11 m", i.getStringExtra("SEG_REMAIN_DIS_AUTO"))
+        shadowApp.clearBroadcastIntents()
+        b.onSnapshot(snapshot(distanceMeters = 0))
+        i = shadowApp.broadcastIntents[0]
+        assertEquals(0, i.getIntExtra("SEG_REMAIN_DIS", -99))
+        assertEquals("0 m", i.getStringExtra("SEG_REMAIN_DIS_AUTO"))
+    }
 }

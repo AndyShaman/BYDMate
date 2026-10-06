@@ -2,6 +2,7 @@ package com.bydmate.app.media
 
 import com.bydmate.app.navdata.NavGuidanceHub
 import com.bydmate.app.navdata.NavManeuverCodes
+import com.bydmate.app.navdata.NavManeuverRaw
 
 /**
  * Donor YandexNaviNotificationListener post-processing (lines 65-166) split out as
@@ -57,6 +58,11 @@ object NaviRichPostProcessor {
             cameraDistanceMeters = rich.cameraDistanceM,
             cameraIconPng = rich.cameraIconPng,
             applyCamera = true,
+            maneuverRaw = when {
+                maneuverGaode == 0 -> ""
+                rich.maneuverGaode != null -> NavManeuverRaw.name("res", rich.maneuverRes)
+                else -> NavManeuverRaw.text("text", rich.instruction)
+            },
         )
     }
 
@@ -99,7 +105,15 @@ object NaviRichPostProcessor {
             totalDistMeters = 0,
             maneuverPng = null,
             applyCamera = false,
+            maneuverRaw = extrasRaw(mergeManeuver, maneuverFromText != 0, "$title $text", smallIconName),
         )
+    }
+
+    /** #294 field journal: the extras text when a phrase gave the maneuver, else the small icon. */
+    private fun extrasRaw(maneuver: Int, fromText: Boolean, text: String, smallIconName: String): String = when {
+        maneuver == 0 -> ""
+        fromText -> NavManeuverRaw.text("text", text)
+        else -> NavManeuverRaw.name("icon", smallIconName)
     }
 
     /** An idle stub (app-logo icon, or a zero distance with a "навигатор" road) or a service

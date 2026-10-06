@@ -56,15 +56,6 @@ class RecordingDumpFormatTest {
         assertTrue(text, text.contains("active=true"))
     }
 
-    @Test fun `script names the alphabet a road is written in`() {
-        assertEquals("empty", RecordingDumpFormat.script(" "))
-        assertEquals("latin", RecordingDumpFormat.script("Main St 5"))
-        assertEquals("cyrillic", RecordingDumpFormat.script("пр. Независимости"))
-        assertEquals("mixed", RecordingDumpFormat.script("M1 Москва"))
-        assertEquals("han", RecordingDumpFormat.script("中山路"))
-        assertEquals("digits", RecordingDumpFormat.script("12"))
-    }
-
     @Test fun `since keeps journal lines from the recording's start second on`() {
         val start = fmt.parse("2026-10-06 10:00:05")!!.time + 400
         val lines = listOf(

@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.settings
 
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
+import com.bydmate.app.hud.HudRoadScript
 import com.bydmate.app.navdata.NavGuidanceHub
 import com.bydmate.app.navdata.NavPackages
 import java.text.ParseException
@@ -61,24 +62,7 @@ internal object RecordingDumpFormat {
         var text = s.toString()
         s.maneuverPng?.let { text = text.replace("maneuverPng=${it.contentToString()}", "png=<${it.size} bytes>") }
         s.cameraIconPng?.let { text = text.replace("cameraIconPng=${it.contentToString()}", "cameraIconPng=<${it.size} bytes>") }
-        return text.replace("road=${s.road},", "road_script=${script(s.road)} road_len=${s.road.length},")
-    }
-
-    /** `latin`, `cyrillic`, another script by its block, `mixed`, `digits` (no letters) or `empty`. */
-    fun script(text: String): String {
-        if (text.isBlank()) return "empty"
-        val scripts = text.filter { it.isLetter() }.map {
-            when (Character.UnicodeScript.of(it.code)) {
-                Character.UnicodeScript.LATIN -> "latin"
-                Character.UnicodeScript.CYRILLIC -> "cyrillic"
-                else -> Character.UnicodeScript.of(it.code).name.lowercase()
-            }
-        }.toSet()
-        return when (scripts.size) {
-            0 -> "digits"
-            1 -> scripts.first()
-            else -> "mixed"
-        }
+        return text.replace("road=${s.road},", "road_script=${HudRoadScript.classify(s.road)} road_len=${s.road.length},")
     }
 
     /** Lines of a `yyyy-MM-dd HH:mm:ss ...` journal written at or after [sinceMs]. */

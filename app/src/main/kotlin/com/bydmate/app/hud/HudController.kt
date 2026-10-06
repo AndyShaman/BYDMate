@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.navdata.NavA11yFeed
 import com.bydmate.app.navdata.NavGuidanceHub
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -71,6 +73,11 @@ class HudController @Inject constructor(
         const val MODE_GLASS_ONLY = 1
         const val MODE_NAVI_STATUS = 2
         const val MODE_LMCN = 3
+
+        // Where a bind failed, for the status line.
+        private const val STEP_BIND = "bind"
+        private const val STEP_START_SERVICE = "start_service"
+        private const val STEP_BINDING_LOST = "binding_lost"
     }
 
     /** Single lane: stop()/startIfEnabled() launched across a service restart must
@@ -149,11 +156,12 @@ class HudController @Inject constructor(
             ownerLock.withLock {
                 channels?.stop()
                 channels = null
-                arming?.stop()
+                arming?.stop(HudArming.REASON_WAY_CHANGE)
                 arming = null
             }
             restoreLeftover()
         }
+        NavGuidanceHub.hudWay = mode()
     }
 
     /**
@@ -247,7 +255,7 @@ class HudController @Inject constructor(
             scope.launch { startSequence() }
         } else {
             NavA11yFeed.enabled = false   // stop tree reads immediately; teardown is async
-            scope.launch { stopSequence() }
+            scope.launch { stopSequence(HudArming.REASON_HUD_OFF) }
         }
     }
 
@@ -263,7 +271,7 @@ class HudController @Inject constructor(
     /** TrackingService.onDestroy hook. */
     fun stop() {
         NavA11yFeed.enabled = false
-        scope.launch { stopSequence() }
+        scope.launch { stopSequence(HudArming.REASON_SERVICE_STOP) }
     }
 
     private suspend fun startSequence() = mutex.withLock {
@@ -275,13 +283,13 @@ class HudController @Inject constructor(
         // Probe BEFORE any helper-daemon work: unsupported cars must see zero side effects.
         if (!HudSomeIpBridge.isServicePresent(context.packageManager)) {
             prefs().edit().putBoolean(KEY_SUPPORTED, false).apply()
-            _status.value = Status.UNSUPPORTED
+            setStatus(Status.UNSUPPORTED)
             Log.i(TAG, "SOME/IP gateway absent; HUD output stays unloaded")
             putBackLeftover()
             return
         }
         prefs().edit().putBoolean(KEY_SUPPORTED, true).apply()
-        _status.value = Status.CONNECTING
+        setStatus(Status.CONNECTING)
         // Self-enable the a11y data source via the helper daemon (DiLink has no a11y UI).
         if (helperBootstrap.ensureRunning()) helperClient.enableAccessibilityService()
         // Bind OUTSIDE the mutex: up to ~71 s and must not block toggle-off (Codex fix 2).
@@ -292,13 +300,15 @@ class HudController @Inject constructor(
             try {
                 if (!b.bind()) {
                     b.unbind()
-                    _status.value = Status.BIND_FAILED
+                    Log.w(TAG, "HUD gateway bind failed")
+                    setStatus(Status.BIND_FAILED, STEP_BIND)
                     return@launch
                 }
                 val rc = b.startService(HudSomeIpBridge.SERVICE_ID_NAVI)
                 if (rc < 0) {
                     b.unbind()
-                    _status.value = Status.BIND_FAILED
+                    Log.w(TAG, "HUD gateway startService failed rc=$rc")
+                    setStatus(Status.BIND_FAILED, STEP_START_SERVICE, rc)
                     return@launch
                 }
                 HudIconLoader.init(context)
@@ -320,7 +330,8 @@ class HudController @Inject constructor(
                     }
                 }
                 if (arming == null) restoreLeftover()
-                _status.value = Status.ON
+                NavGuidanceHub.hudWay = mode()
+                setStatus(Status.ON, rc = rc)
                 Log.i(TAG, "HUD output active")
             } catch (ce: CancellationException) {
                 b.unbind()
@@ -378,18 +389,20 @@ class HudController @Inject constructor(
                 loop = null
                 channels?.stop()
                 channels = null
-                arming?.stop()
+                arming?.stop(HudArming.REASON_BINDING_LOST)
                 arming = null
                 // A layout the stop deferred has no loop left to finish it. bridge null = a stop
                 // already ended this session: its late callback starts nothing.
                 if (bridge != null) restoreLeftover()
                 bridge = null   // the bridge already unbound itself in onBindingDied
-                _status.value = Status.BIND_FAILED
+                NavGuidanceHub.hudWay = 0
+                setStatus(Status.BIND_FAILED, STEP_BINDING_LOST)
             }
         }
     }
 
-    private suspend fun stopSequence() {
+    /** [reason]: why the output stops (HUD off or service stop), for the disarm line. */
+    private suspend fun stopSequence(reason: String) {
         NavA11yFeed.enabled = false
         mutex.withLock {
             startJob?.let { it.cancel(); it.join() }
@@ -407,7 +420,7 @@ class HudController @Inject constructor(
             // the layout back, all before the channel goes.
             channels?.stop()
             channels = null
-            arming?.stop()
+            arming?.stop(reason)
             arming = null
             bridge?.let {
                 // Leave the HUD clean before tearing the channel down (Codex fix 4).
@@ -416,8 +429,17 @@ class HudController @Inject constructor(
                 runCatching { it.unbind() }
             }
             bridge = null
-            _status.value = Status.OFF
+            NavGuidanceHub.hudWay = 0
+            setStatus(Status.OFF)
             // NavGuidanceHub is intentionally NOT reset: the voice agent keeps using it.
         }
+    }
+
+    /** The status and its trace line, written on a change only: a service stop with the HUD off
+     *  writes nothing. [step] and [rc]: where a bind failed and what the gateway answered. */
+    private fun setStatus(to: Status, step: String? = null, rc: Int? = null) {
+        if (_status.value == to) return
+        _status.value = to
+        Trace.event(TraceArea.HUD, "status", "to" to to, "step" to step, "rc" to rc)
     }
 }

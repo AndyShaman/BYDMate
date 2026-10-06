@@ -6,7 +6,10 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.HudNaviReply
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.navdata.NavGuidance
+import com.bydmate.app.navdata.NavGuidanceHub
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -18,7 +21,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -33,9 +38,14 @@ class HudArmingTest {
     private val prefs: SharedPreferences = ApplicationProvider.getApplicationContext<Context>()
         .getSharedPreferences("hud_arming_test", Context.MODE_PRIVATE)
 
+    @get:Rule val trace = TraceRecorder()
+
     @Before fun clear() {
         prefs.edit().clear().commit()
+        NavGuidanceHub.reset()
     }
+
+    @After fun resetHub() = NavGuidanceHub.reset()
 
     /** The car as the daemon sees it. [sdk] null = a daemon too old for the SDK call. */
     private class FakeCar {
@@ -552,5 +562,65 @@ class HudArmingTest {
         a.stop()
         assertEquals(4, car.state[HudArming.NAVI])
         assertFalse(a.armed)
+    }
+
+    // --- why it armed and disarmed (trace audit) ---
+
+    @Test fun `the product arm line carries the car's navigation gate, read once per arm`() = runTest {
+        val car = FakeCar()
+        car.state[1023 to 1276174394] = 1
+        car.state[1023 to 951058472] = 2
+        val lines = mutableListOf<String>()
+        val a = arming(car, lines)
+        a.start(backgroundScope) { true }
+        runCurrent()
+        advanceTimeBy(11_000); runCurrent()          // two re-checks: no gate read there
+        assertTrue(lines.first().startsWith("hud arm: ") && lines.first().endsWith(" gate=1/2"))
+        assertTrue(trace.events().single { it.contains(" arm ") }.contains(" gate=1/2 "))
+        coVerify(exactly = 1) { car.helper.readBatch(match { items -> items.any { it.fid == 951058472 } }) }
+        a.stop()
+    }
+
+    @Test fun `a route end disarm says guidance-off and links the hub's guidance-off line`() = runTest {
+        val car = FakeCar()
+        val lines = mutableListOf<String>()
+        var guided = true
+        val a = arming(car, lines)
+        a.start(backgroundScope) { guided }
+        runCurrent()
+        NavGuidanceHub.update(NavGuidance(2, 300, "Main St", 0, 0, 0), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
+        NavGuidanceHub.snapshot(nowMs = 200_000)    // 90 s of silence: the hub ends the route
+        val offId = NavGuidanceHub.lastOffTraceId
+        assertTrue(offId > 0)
+        guided = false
+        advanceTimeBy(1_100); runCurrent()
+        assertTrue(lines.last().endsWith(" reason=guidance-off"))
+        assertTrue(trace.events().single { it.contains(" disarm ") }.let { it.contains(" reason=guidance-off ") && it.endsWith("by=#$offId") })
+        a.stop()
+    }
+
+    @Test fun `a disarm the HUD check's pause brought says paused`() = runTest {
+        val car = FakeCar()
+        val lines = mutableListOf<String>()
+        var paused = false
+        val a = arming(car, lines)
+        a.start(backgroundScope, layoutOwned = { !paused }) { !paused }
+        runCurrent()
+        paused = true
+        advanceTimeBy(1_100); runCurrent()
+        assertTrue(lines.last().endsWith(" reason=paused"))
+        assertFalse(trace.events().single { it.contains(" disarm ") }.contains("by=#"))
+        a.stop()
+    }
+
+    @Test fun `a stop's disarm carries the reason it was given`() = runTest {
+        val car = FakeCar()
+        val lines = mutableListOf<String>()
+        val a = arming(car, lines)
+        a.start(backgroundScope) { true }
+        runCurrent()
+        a.stop(HudArming.REASON_HUD_OFF)
+        assertTrue(lines.last().endsWith(" reason=hud-off"))
+        assertTrue(trace.events().single { it.contains(" disarm ") }.contains(" reason=hud-off "))
     }
 }
