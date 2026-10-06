@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.19.9] - 2026-10-06
+
 ### Новое
 - HUD на лобовом стекле можно включать и выключать из автоматизации (действия «HUD: включить» и «HUD: выключить» в разделе «Свет») и голосом: «включи худ», «выключи худ», «включи проекцию на стекле», «выключи проекцию на лобовом». Работает и на ходу, например чтобы погасить HUD на тёмной дороге или по времени суток. На машине без HUD действие честно сообщит, что HUD нет (#292).
 
@@ -1396,7 +1398,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.19.8...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.19.9...HEAD
+[3.19.9]: https://github.com/AndyShaman/BYDMate/compare/v3.19.8...v3.19.9
 [3.19.8]: https://github.com/AndyShaman/BYDMate/compare/v3.19.7...v3.19.8
 [3.19.7]: https://github.com/AndyShaman/BYDMate/compare/v3.19.6...v3.19.7
 [3.19.6]: https://github.com/AndyShaman/BYDMate/compare/v3.19.5...v3.19.6
