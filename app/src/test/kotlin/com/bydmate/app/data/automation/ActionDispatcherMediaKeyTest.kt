@@ -98,6 +98,13 @@ class ActionDispatcherMediaKeyTest {
         assertTrue(sent.isEmpty())
     }
 
+    @Test fun `a mediacenter session with no state is skipped too`() = runBlocking {
+        dispatcher.activeMediaControllers = { listOf(session("com.byd.mediacenter", null)) }
+        val r = dispatcher.dispatch(key("play"), null)
+        assertFalse(r.success)
+        assertTrue(sent.isEmpty())
+    }
+
     @Test fun `a stopped mediacenter yields to a paused YouTube Music`() = runBlocking {
         dispatcher.activeMediaControllers = {
             listOf(session("com.byd.mediacenter", 1), session("app.morphe.android.apps.youtube.music", 2))
