@@ -102,6 +102,8 @@ object ClusterProjectionManager {
     /** When the one post-projection check looks at the cluster. */
     private const val VERIFY_AFTER_MS = 3_000L
     private const val DIRECT_DEATH_CHECKS = 3
+    /** How many times one projection puts its moved task back on the cluster before giving up. */
+    private const val DIRECT_MOVE_RETURNS = 2
 
     const val PREFS_NAME = "cluster_projection"
     // Master enable for star-controlled projection (settings switch). Read by SteeringWheelKeyService.
@@ -174,10 +176,13 @@ object ClusterProjectionManager {
     private const val KEY_DENSITY_UNSAFE_WHY_PREFIX = KEY_DENSITY_UNSAFE_PREFIX + "why_"
     // 1: two-strike probe (3.19.6 latched on one loss and stamped the versionCode; those verdicts
     // are wiped once by the first read under this generation).
-    const val DENSITY_PROBE_GENERATION = 1
+    // 2: a task moved off the cluster alive and freeform is no strike. Generation-1 verdicts whose
+    // reason is a live task on another display ("fled") are dropped once, "died" ones are kept.
+    const val DENSITY_PROBE_GENERATION = 2
 
-    // WindowConfiguration windowing mode (android.app; hidden constant, stable since API 28).
+    // WindowConfiguration windowing modes (android.app; hidden constants, stable since API 28).
     private const val WINDOWING_MODE_FULLSCREEN = 1
+    private const val WINDOWING_MODE_FREEFORM = 5
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val mutex = Mutex()
@@ -940,20 +945,28 @@ object ClusterProjectionManager {
                         else "vd=$remoteDisplayId")
                     if (directDisplayId == -1) scheduleVerify(helper, projectedPackage, remoteDisplayId)
                 } else {
-                    // projection failed: keep state honest. project() already tore down the
-                    // overlay/VD on its failure paths; make sure Navi is back on the main screen.
-                    Log.e(TAG, "projection failed; falling back to OFF")
-                    log("projection failed ($failure); falling back to OFF")
-                    pullBackToMain(context, helper, focus = true)
-                    projectedPackage = null
-                    sessionPreferFull = null
-                    currentMode = ClusterMode.OFF
-                    lastFailure = failure
-                    frame?.restore(helper, ClusterFrameUi7.Owner.PROJECTION)
-                    if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
+                    // project() already tore down the overlay/VD on its failure paths.
+                    failProjectionLocked(context, helper, failure)
                 }
             }
         }
+    }
+
+    /**
+     * Caller MUST hold [mutex]. Keeps the state honest after a failed projection: the projected
+     * app back on the main screen (fullscreen, through [pullBackToMain]) and the mode OFF. Does
+     * not touch [directDeathWatchJob], so the watch can end its own projection through here.
+     */
+    private suspend fun failProjectionLocked(context: Context, helper: HelperClient, failure: String) {
+        Log.e(TAG, "projection failed; falling back to OFF")
+        log("projection failed ($failure); falling back to OFF")
+        pullBackToMain(context, helper, focus = true)
+        projectedPackage = null
+        sessionPreferFull = null
+        currentMode = ClusterMode.OFF
+        lastFailure = failure
+        frame?.restore(helper, ClusterFrameUi7.Owner.PROJECTION)
+        if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
     }
 
     /**
@@ -1650,7 +1663,16 @@ object ClusterProjectionManager {
      * same density; a second loss drops it to the native one and latches the package. Every
      * relaunch after a scaled loss gets a full set of checks again, so a loss seen on the last
      * check is not left unwatched. Worst case: three sets of checks and two relaunches.
+     *
+     * A third shape is no death at all: the placed task itself (same id), alive and still freeform,
+     * on another display — moved there by the app's own start chain after a cold start (tester's
+     * car, 3.19.8). It is never a strike; the task goes back to the cluster and the checks start
+     * over, at most [DIRECT_MOVE_RETURNS] times per projection. When it does not stay, and when a
+     * born-on-display relaunch does not hold, the projection ends through [failProjectionLocked]:
+     * the task fullscreen on the main screen and the mode OFF, not a piece of window there under a
+     * projection still reported active.
      */
+    @Suppress("LongMethod", "CyclomaticComplexMethod") // one watch loop, one branch per loss shape
     private fun armDirectDeathWatch(
         context: Context, helper: HelperClient, pkg: String, displayId: Int, bounds: IntArray,
         densityApplied: Int,
@@ -1659,8 +1681,11 @@ object ClusterProjectionManager {
         directDeathWatchJob = scope.launch {
             var density = densityApplied
             var strikes = 0
+            var returns = 0
             var nativeRelaunched = false
             var verified = false
+            // Id of the task last seen on the cluster; 0 until one was seen.
+            var placedTaskId = 0
             var checksLeft = DIRECT_DEATH_CHECKS
             while (checksLeft > 0) {
                 checksLeft--
@@ -1681,12 +1706,39 @@ object ClusterProjectionManager {
                     // first task regardless of display, so a task the system auto-restarted on the
                     // main screen (taskId > 0, displayId 0) would otherwise mask the death and leave
                     // the cluster empty for the rest of the session.
-                    if (state.taskId > 0 && state.displayId == displayId) return@withLock
+                    if (state.taskId > 0 && state.displayId == displayId) {
+                        placedTaskId = state.taskId
+                        return@withLock
+                    }
+                    if (isMovedTask(state, placedTaskId)) {
+                        returns++
+                        val what = traceMovedTask(pkg, displayId, state, returns)
+                        if (returns > DIRECT_MOVE_RETURNS) {
+                            Log.w(TAG, "direct projection: $pkg $what again; ending the projection")
+                            log("direct: task did not stay on display $displayId after " +
+                                "$DIRECT_MOVE_RETURNS returns ($what) pkg=$pkg; ending projection")
+                            failProjectionLocked(context, helper, "projection")
+                            return@launch
+                        }
+                        Log.w(TAG, "direct projection: $pkg $what; returning it to display $displayId")
+                        log("direct task $what; returning it to display $displayId " +
+                            "(return $returns of $DIRECT_MOVE_RETURNS, pkg=$pkg)")
+                        // The same task is moved back: the daemon finds it and re-pins it, the call
+                        // project() makes on every star press. Density untouched: a move is no strike.
+                        val result = helper.launchFreeform(
+                            pkg, displayId, bounds[0], bounds[1], bounds[2], bounds[3],
+                            HelperBinderProtocol.PANE_TYPE_STANDARD,
+                        )
+                        log("direct: return result=$result")
+                        checksLeft = DIRECT_DEATH_CHECKS
+                        return@withLock
+                    }
                     strikes++
                     val what = traceDirectLoss(pkg, displayId, state, strikes, density)
                     if (nativeRelaunched) {
                         Log.w(TAG, "direct projection: relaunched $pkg $what again; giving up")
                         log("direct: born-on-display relaunch did not hold ($what) pkg=$pkg display=$displayId")
+                        failProjectionLocked(context, helper, "projection")
                         return@launch
                     }
                     Log.w(TAG, "direct projection: $pkg $what; relaunching on display $displayId")
@@ -1732,6 +1784,15 @@ object ClusterProjectionManager {
     private fun ownsDirectSession(pkg: String, displayId: Int): Boolean =
         currentMode == ClusterMode.FULLSCREEN && projectedPackage == pkg && directDisplayId == displayId
 
+    /**
+     * The placed task itself, alive and freeform, on another display: moved, not dead. A task under
+     * another id than the one seen on the cluster is a new one (the placed task died), and a task
+     * in another mode was restarted or reset by the system — both stay strikes.
+     */
+    private fun isMovedTask(state: SplitTaskState, placedTaskId: Int): Boolean =
+        state.taskId > 0 && state.windowingMode == WINDOWING_MODE_FREEFORM &&
+            (placedTaskId <= 0 || state.taskId == placedTaskId)
+
     /** Trace event of one loss seen by the death watch (the cluster journal keeps 30 lines only);
      *  returns the journal wording of the loss. */
     private fun traceDirectLoss(
@@ -1739,8 +1800,17 @@ object ClusterProjectionManager {
     ): String {
         val fled = state.taskId > 0
         Trace.event(TraceArea.SCREEN, "cluster-loss", "pkg" to pkg, "loss" to if (fled) "fled" else "died",
-            "to" to state.displayId.takeIf { fled }, "display" to displayId, "strike" to strike, "dpi" to density)
+            "to" to state.displayId.takeIf { fled }, "display" to displayId, "task" to state.taskId,
+            "wm" to state.windowingMode, "strike" to strike, "dpi" to density)
         return if (fled) "fled to display ${state.displayId}" else "died post-move"
+    }
+
+    /** Same trace event for a moved task ([isMovedTask]), which is no strike; returns its wording. */
+    private fun traceMovedTask(pkg: String, displayId: Int, state: SplitTaskState, returns: Int): String {
+        Trace.event(TraceArea.SCREEN, "cluster-loss", "pkg" to pkg, "loss" to "moved",
+            "to" to state.displayId, "display" to displayId, "task" to state.taskId,
+            "wm" to state.windowingMode, "return" to returns)
+        return "moved to display ${state.displayId} (task=${state.taskId} wm=${state.windowingMode})"
     }
 
     /** Settle after a density change before the launch, as BYD DashCast does it. */
@@ -1779,35 +1849,48 @@ object ClusterProjectionManager {
      * Learned from behaviour, never a package list: the firmware and the app both vary across the
      * fleet, and a car where 2GIS survives keeps its scale.
      *
-     * Both loss shapes count. The death watch reads a task that fled to the main display as a
-     * death too (the system restarts a killed foreground app there), and the two are not
-     * distinguishable from here — the conservative reading costs that package its scale, the
-     * optimistic one costs the user a navigator that keeps dying. It takes two losses in a row
-     * under the override, though: one can be the move itself (#134).
+     * Death shapes count: a task gone, a new task under another id, or a task in another mode on
+     * another display (the system restarts a killed foreground app there). The placed task moved
+     * away alive and still freeform does not ([armDirectDeathWatch] returns it instead). It takes
+     * two losses in a row under the override, though: one can be the move itself (#134).
      */
     private fun densityUnsafe(context: Context, pkg: String): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (!densityProbeGenerationCurrent(prefs)) return false
+        migrateDensityVerdicts(prefs)
         return prefs.getBoolean(KEY_DENSITY_UNSAFE_PREFIX + pkg, false)
     }
 
-    /** Wipes every verdict key written under another generation (or under the versionCode stamp
-     *  of 3.19.6 and earlier) and stamps the current one. False when it had to wipe. */
-    private fun densityProbeGenerationCurrent(prefs: SharedPreferences): Boolean {
-        if (prefs.getInt(KEY_DENSITY_UNSAFE_GENERATION, -1) == DENSITY_PROBE_GENERATION) return true
-        val stale = prefs.all.keys.filter { it.startsWith(KEY_DENSITY_UNSAFE_PREFIX) }
+    /**
+     * Brings the stored verdicts to [DENSITY_PROBE_GENERATION] and stamps it. From generation 1
+     * only the verdicts whose reason is not a death are dropped: 3.19.7/3.19.8 wrote "fled to
+     * display N" for any live task off the cluster, a moved freeform task included, so those may be
+     * false, while "died post-move" ones are real. Everything else (another generation, or the
+     * versionCode stamp of 3.19.6 and earlier) is wiped whole, as before.
+     */
+    private fun migrateDensityVerdicts(prefs: SharedPreferences) {
+        val generation = prefs.getInt(KEY_DENSITY_UNSAFE_GENERATION, -1)
+        if (generation == DENSITY_PROBE_GENERATION) return
+        val keys = prefs.all.keys.filter { it.startsWith(KEY_DENSITY_UNSAFE_PREFIX) }
+        val stale = if (generation == 1) {
+            keys.filter { it != KEY_DENSITY_UNSAFE_GENERATION && !it.startsWith(KEY_DENSITY_UNSAFE_WHY_PREFIX) }
+                .map { it.removePrefix(KEY_DENSITY_UNSAFE_PREFIX) }
+                // A mark without a reason cannot be told apart: dropped too.
+                .filterNot { prefs.getString(KEY_DENSITY_UNSAFE_WHY_PREFIX + it, null).orEmpty().startsWith("died") }
+                .flatMap { listOf(KEY_DENSITY_UNSAFE_PREFIX + it, KEY_DENSITY_UNSAFE_WHY_PREFIX + it) }
+        } else {
+            keys
+        }
         prefs.edit()
             .apply { stale.forEach { remove(it) } }
             .putInt(KEY_DENSITY_UNSAFE_GENERATION, DENSITY_PROBE_GENERATION)
             .apply()
         if (stale.isNotEmpty()) log("direct: density verdicts of an earlier probe wiped (${stale.size} keys)")
-        return false
     }
 
     /** [why] = the loss and the display; the time is added here. Both go to the dump. */
     private fun markDensityUnsafe(context: Context, pkg: String, why: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        densityProbeGenerationCurrent(prefs)
+        migrateDensityVerdicts(prefs)
         val at = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
         prefs.edit()
             .putBoolean(KEY_DENSITY_UNSAFE_PREFIX + pkg, true)
