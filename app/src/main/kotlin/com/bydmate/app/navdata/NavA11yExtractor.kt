@@ -9,6 +9,7 @@ import android.view.accessibility.AccessibilityNodeInfo
  *  own package), so the prefix is derived from the root node. Every found node is
  *  recycled after reading: the a11y feed fires many times per second and the framework
  *  node pool is finite on DiLink (Codex fix 5). */
+@Suppress("TooManyFunctions") // the parse plus one probe per field-diagnostics log line
 object NavA11yExtractor {
     private const val TAG = "NavA11yExtractor"
     @Volatile private var readingSecondLayout = false
@@ -34,6 +35,11 @@ object NavA11yExtractor {
         "nextstreet" to NEXT_STREET_ID, "status" to STATUS_ID, "eta" to ETA_TIME_ID,
         "next" to NEXT_MANEUVER_ID, "nextdist" to NEXT_DISTANCE_ID, "upcoming" to UPCOMING_ID,
     )
+    /** Children of the maneuver node and extras keys per node the unknown-maneuver probe lists. */
+    private const val MAX_PROBE_CHILDREN = 6
+    private const val MAX_PROBE_EXTRAS = 8
+    private val SPACES = Regex("""[\s\p{Z}]+""")
+    private val EDGE_PUNCT = Regex("""^\p{Punct}+|\p{Punct}+$""")
 
     sealed class ReadResult {
         object NotNavigator : ReadResult()
@@ -84,7 +90,9 @@ object NavA11yExtractor {
 
     /** Raw view of the maneuver image for the unknown-maneuver log: how many nodes carry its id,
      *  and the class and contentDescription head of the one the parse reads (the first non-blank,
-     *  else the first). The nodes are recycled; [root] stays the caller's. */
+     *  else the first), then that node's other properties and its first [MAX_PROBE_CHILDREN]
+     *  children's (#198: which property, if any, carries the direction). The nodes are recycled;
+     *  [root] stays the caller's. */
     internal fun probeManeuver(root: AccessibilityNodeInfo): String {
         val pkg = root.packageName?.toString() ?: return "found=0"
         val nodes = runCatching { root.findAccessibilityNodeInfosByViewId("$pkg:id/$MANEUVER_ID") }
@@ -94,11 +102,84 @@ object NavA11yExtractor {
             val descs = nodes.map { runCatching { it.contentDescription?.toString() }.getOrNull() }
             val read = descs.indexOfFirst { !it.isNullOrBlank() }.coerceAtLeast(0)
             val cls = runCatching { nodes[read].className?.toString() }.getOrNull()
-            return "found=${nodes.size} class=$cls desc=${UnknownManeuverGate.textHead(descs[read])}"
+            return "found=${nodes.size} class=$cls desc=${UnknownManeuverGate.textHead(descs[read])} " +
+                "node${formatNode(nodeFacts(nodes[read], withDesc = false))} ${probeChildren(nodes[read])}"
         } finally {
             @Suppress("DEPRECATION")
             nodes.forEach { runCatching { it.recycle() } }
         }
+    }
+
+    /** `children=N` and the facts of the first [MAX_PROBE_CHILDREN]; each child is recycled. */
+    private fun probeChildren(node: AccessibilityNodeInfo): String {
+        val count = runCatching { node.childCount }.getOrNull() ?: return "children=?"
+        val shown = (0 until minOf(count, MAX_PROBE_CHILDREN)).joinToString(" ") { i ->
+            val child = runCatching { node.getChild(i) }.getOrNull() ?: return@joinToString "[$i]null"
+            try {
+                "[$i]${formatNode(nodeFacts(child, withDesc = true))}"
+            } finally {
+                @Suppress("DEPRECATION")
+                runCatching { child.recycle() }
+            }
+        }
+        return if (shown.isEmpty()) "children=$count" else "children=$count $shown"
+    }
+
+    /** What a node exposes for the probe line; every value is masked by [formatNode]. */
+    internal data class NodeFacts(
+        val viewId: String?,
+        val className: String?,
+        /** Log name -> raw value; null = the property is absent and is left out of the line. */
+        val fields: List<Pair<String, String?>>,
+        val drawingOrder: Int?,
+        val selected: Boolean?,
+        val checked: Boolean?,
+        val extrasKeys: List<String>,
+    )
+
+    /** [withDesc] false for the maneuver node, whose description the line already gives as a head;
+     *  stateDescription exists from API 30. */
+    private fun nodeFacts(node: AccessibilityNodeInfo, withDesc: Boolean): NodeFacts {
+        fun read(get: () -> CharSequence?): String? = runCatching { get()?.toString() }.getOrNull()
+        val state = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) read { node.stateDescription } else null
+        return NodeFacts(
+            viewId = runCatching { node.viewIdResourceName }.getOrNull(),
+            className = read { node.className },
+            fields = listOf(
+                "text" to read { node.text },
+                "desc" to if (withDesc) read { node.contentDescription } else null,
+                "state" to state,
+                "tooltip" to read { node.tooltipText },
+                "hint" to read { node.hintText },
+                "pane" to read { node.paneTitle },
+            ),
+            drawingOrder = runCatching { node.drawingOrder }.getOrNull(),
+            selected = runCatching { node.isSelected }.getOrNull(),
+            checked = runCatching { node.isChecked }.getOrNull(),
+            extrasKeys = runCatching { node.extras?.keySet()?.toList() }.getOrNull().orEmpty(),
+        )
+    }
+
+    /** One node for the probe line: the id without its package, the class without its package,
+     *  each present field masked by [maskValue], `?` for what could not be read. */
+    internal fun formatNode(facts: NodeFacts): String {
+        val fields = facts.fields.filter { it.second != null }
+            .joinToString("") { (name, value) -> " $name=${maskValue(value)}" }
+        val extras = facts.extrasKeys.sorted().take(MAX_PROBE_EXTRAS).joinToString(",")
+        return "{id=${facts.viewId?.substringAfter(":id/") ?: "?"} " +
+            "cls=${facts.className?.substringAfterLast('.') ?: "?"}$fields " +
+            "order=${facts.drawingOrder ?: "?"} sel=${facts.selected ?: "?"} chk=${facts.checked ?: "?"} " +
+            "extras=[$extras]}"
+    }
+
+    /** A node value is kept only when it is made of maneuver vocabulary (a table phrase or only
+     *  vocabulary words), else `*`: any other text may be the route's street. Its length always. */
+    internal fun maskValue(raw: String?): String {
+        if (raw == null) return "null"
+        val words = raw.split(SPACES).filter { it.isNotEmpty() }
+        val vocabulary = NavManeuverCodes.matchedPhrase(raw) == raw.trim().lowercase() ||
+            (words.isNotEmpty() && words.all { NavManeuverCodes.isVocabularyWord(it.lowercase().replace(EDGE_PUNCT, "")) })
+        return if (vocabulary) "\"$raw\" len=${raw.length}" else "* len=${raw.length}"
     }
 
     /** The donor's guidance test: a node with the maneuver icon, maneuver distance or next street
