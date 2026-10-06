@@ -99,6 +99,11 @@ class HudWayChannels(
     private var lastPosition = HudLauncherMapCnFrames.Position.DEFAULT
     private var positionAgeMs = 0L
     private var retryWaitMs = 0L
+    /** The one CAN readback of a route is still to come; [readbackScope] runs it off the tick. */
+    private var readbackDue = false
+    internal var readbackScope: CoroutineScope? = null
+    /** Script class of the last road name written this route (#269); traced when it changes. */
+    private var roadScript: String? = null
 
     private val lmcn: Boolean get() = way >= HudController.MODE_LMCN && gateway != null
     /** Way 3: OpenBYD's SDK calls and rest of route on top of way 2's writes. */
@@ -112,6 +117,7 @@ class HudWayChannels(
     fun start(scope: CoroutineScope, held: () -> Boolean = { false }, closed: Boolean = false, active: () -> Boolean) {
         if (job?.isActive == true) return
         this.held = held
+        readbackScope = scope
         if (closed) closing = true
         job = scope.launch {
             while (isActive) {
@@ -185,6 +191,8 @@ class HudWayChannels(
         sdkRefused = 0
         sdkAbsent = 0
         sdkOff.clear()
+        readbackDue = true
+        roadScript = null
         val bridge = gateway
         lmcnRoute = false
         if (lmcn && bridge != null) {
@@ -227,12 +235,42 @@ class HudWayChannels(
         if (guidanceDue) {
             if (can.guidance(guidance.first, guidance.second).map(::count).all { it }) lastGuidance = guidance
             else guidanceWaitMs = RETRY_MS
+            if (guidance.first != 0) readBack(guidance)
             sdk(HudSdkCall.Guidance(guidance.first, guidance.second))
         }
         if (roadDue) {
+            traceRoadScript(road)
             if (count(can.road(road))) lastRoad = road else roadWaitMs = RETRY_MS
             sdk(HudSdkCall.PathName(road))
         }
+    }
+
+    /** Once per route, after its first turn kind other than 0 went out: what TURN_KIND and the
+     *  distance read back (#269: the CAN accepted, no arrow; #294: kind 0). Launched on its own,
+     *  so the tick never waits on the read. */
+    private fun readBack(wrote: Pair<Int, Int>) {
+        if (!readbackDue) return
+        val scope = readbackScope ?: return
+        readbackDue = false
+        scope.launch {
+            val (kind, dist) = runCatching { can.readGuidance() }.getOrElse {
+                if (it is CancellationException) throw it
+                HudArming.FidRead(null) to HudArming.FidRead(null)
+            }
+            log("hud way: can readback turn_kind wrote=${wrote.first} read=$kind dist wrote=${wrote.second} read=$dist")
+            Trace.event(
+                TraceArea.HUD, "can-readback", "fid" to "TURN_KIND", "wrote" to wrote.first, "read" to kind.toString(),
+                "dist_wrote" to wrote.second, "dist_read" to dist.toString(),
+            )
+        }
+    }
+
+    /** The script class of the road name the CAN carries, traced when it changes within a route. */
+    private fun traceRoadScript(road: String) {
+        val script = HudRoadScript.classify(road)
+        if (script == roadScript) return
+        roadScript = script
+        Trace.event(TraceArea.HUD, "road", "chan" to "can", "script" to script, "len" to road.trim().length)
     }
 
     /** Way 3: OpenBYD's sendRestRouteInfo when hours, minutes or mileage change, only while both the

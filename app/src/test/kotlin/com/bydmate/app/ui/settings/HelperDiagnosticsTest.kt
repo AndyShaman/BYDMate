@@ -71,4 +71,10 @@ class HelperDiagnosticsTest {
         )
         assertEquals(listOf("(unavailable)"), HudDiagnostics.format(null))
     }
+
+    @Test fun `hud navi gate in its trace form`() {
+        assertEquals("1/e-10011", HudDiagnostics.gate(listOf(0 to 1, -10011 to 0)))
+        assertEquals("na/na", HudDiagnostics.gate(null))
+        assertEquals("na/na", HudDiagnostics.gate(listOf(0 to 1)))
+    }
 }
