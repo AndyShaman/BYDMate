@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -34,14 +35,13 @@ import org.robolectric.annotation.Config
 import java.time.Duration
 
 /**
- * The factory 360 view against our warm camera (tester dump 2026-10-03, fixture
- * blindspot-native360-xp-20261003.txt): the camera was opened 0.2 s after the 360 came up and kept
- * streaming two previews under it, and the 360 stuttered. While the 360 is in the foreground the
- * camera is closed and stays closed; once it is gone the camera opens again for the held blinker.
+ * The camera is opened on demand: only when a turn signal asks for a view, never ahead of it at
+ * speed, and closed again once the window has been hidden for the cool-down. A blinker pulled
+ * again inside the cool-down reuses the camera that is still open.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
-class BlindSpotControllerNative360Test {
+class BlindSpotControllerOnDemandTest {
 
     @get:Rule val trace = TraceRecorder()
 
@@ -54,20 +54,29 @@ class BlindSpotControllerNative360Test {
     private val fidPush: FidPushChannel = mockk(relaxed = true) { every { events } returns pushEvents }
     private val scope = CoroutineScope(SupervisorJob())
     private lateinit var controller: BlindSpotController
-    /** Windows already handed a surface; a re-attach after a teardown brings new ones. */
     private val fed = mutableSetOf<TextureView>()
+
+    /** What the fake car answers on the next batch read. */
+    @Volatile private var blink = BLINK_OFF
+    @Volatile private var gear = GEAR_D
 
     @Before fun setUp() {
         prefs.edit().clear().putBoolean(BlindSpotPreferences.KEY_ENABLED, true).commit()
         android.hardware.AVMCamera.reset()
         coEvery { helper.readBatch(any()) } answers {
-            // Left blinker held, 40 km/h, D: the camera is wanted unless the 360 is up.
-            listOf(0 to 2, 0 to java.lang.Float.floatToRawIntBits(40f), 0 to 4, 0 to 0, 0 to 0)
+            listOf(0 to blink, 0 to java.lang.Float.floatToRawIntBits(40f), 0 to gear, 0 to 0, 0 to 0)
         }
         controller = BlindSpotController(
             context, BlindSpotPreferences(context), helper,
             ClusterJournal(context.getSharedPreferences("cluster_journal_test", Context.MODE_PRIVATE)),
             monitor, fidPush,
+        )
+        controller.start(scope)
+        controller.onPollSnapshot(
+            mockk<DiParsData> {
+                every { speed } returns 40
+                every { this@mockk.gear } returns GEAR_D
+            }
         )
     }
 
@@ -81,19 +90,8 @@ class BlindSpotControllerNative360Test {
 
     private fun cameraEvents() = events().filter { it.startsWith("camera open ") || it.startsWith("camera close") }
 
-    private fun arm() {
-        controller.start(scope)
-        controller.onPollSnapshot(
-            mockk<DiParsData> {
-                every { speed } returns 40
-                every { gear } returns 4
-            }
-        )
-    }
-
     private fun idle(step: Duration) {
         shadowOf(Looper.getMainLooper()).idleFor(step)
-        // The vendor calls run on the camera thread; give it a moment to post back to Main.
         Thread.sleep(2)
         shadowOf(Looper.getMainLooper()).idle()
     }
@@ -102,9 +100,7 @@ class BlindSpotControllerNative360Test {
     private fun ticks(n: Int) = repeat(n) {
         textureViews().forEach { view ->
             val listener = view.surfaceTextureListener ?: return@forEach
-            if (fed.add(view)) {
-                listener.onSurfaceTextureAvailable(SurfaceTexture(0), 1280, 480)
-            }
+            if (fed.add(view)) listener.onSurfaceTextureAvailable(SurfaceTexture(0), 1280, 480)
             val texture = SurfaceTexture(0)
             listener.onSurfaceTextureUpdated(texture)
             listener.onSurfaceTextureUpdated(texture)
@@ -126,58 +122,87 @@ class BlindSpotControllerNative360Test {
         else -> emptyList()
     }
 
-    /** The native-360 transitions of the fixture's trace interval, in the order the car sent them. */
-    private fun fixtureNative360Order(): List<Boolean> =
-        requireNotNull(javaClass.classLoader?.getResource(FIXTURE)).readText().lines()
-            .filter { !it.startsWith("#") && !it.contains("I/") && it.contains("camera native-360 on=") }
-            .map { it.substringAfter("on=").substringBefore(' ').toBoolean() }
-
-    @Test fun `the factory 360 closes the warm camera and keeps it closed until it is gone`() {
-        val order = fixtureNative360Order()
-        assertEquals(listOf(true, false), order)
-        arm()
+    private fun openOnLeftSignal() {
+        blink = BLINK_LEFT
         ticks(WARM_TICKS)
-        assertEquals(listOf("camera open ok=true id=7 indexes=2,3"), cameraEvents())
-
-        nativeCamera.value = order[0]
-        ticks(HELD_TICKS)
-        assertEquals(
-            listOf("camera open ok=true id=7 indexes=2,3", "camera close reason=native_360 result=clean"),
-            cameraEvents(),
-        )
-
-        nativeCamera.value = order[1]
-        ticks(WARM_TICKS)
-        assertEquals(
-            listOf(
-                "camera open ok=true id=7 indexes=2,3",
-                "camera close reason=native_360 result=clean",
-                "camera open ok=true id=7 indexes=2,3",
-            ),
-            cameraEvents(),
-        )
+        assertEquals(listOf(OPEN), cameraEvents())
     }
 
-    /** The fixture's own order: armed while the 360 is already up. Nothing opens until it goes. */
-    @Test fun `armed under the factory 360 the camera waits for it to go`() {
-        nativeCamera.value = true
-        arm()
-        ticks(HELD_TICKS)
+    @Test fun `a turn signal at speed opens the camera and traces request and first frame`() {
+        ticks(WARM_TICKS)
         assertEquals(emptyList<String>(), cameraEvents())
 
-        nativeCamera.value = false
+        openOnLeftSignal()
+        val lines = events()
+        assertTrue(lines.toString(), lines.any { it == "camera open-request side=left" })
+        assertTrue(lines.toString(), lines.any { it.startsWith("camera first-frame side=left ms=") })
+    }
+
+    @Test fun `no turn signal at speed keeps the camera closed`() {
+        ticks(IDLE_TICKS)
+        assertEquals(emptyList<String>(), cameraEvents())
+        assertEquals(0, textureViews().size)
+    }
+
+    @Test fun `signal off closes the camera only after the hide delay`() {
+        openOnLeftSignal()
+        blink = BLINK_OFF
+        ticks(BEFORE_DELAY_TICKS)
+        assertEquals(listOf(OPEN), cameraEvents())
+
+        ticks(PAST_DELAY_TICKS)
+        assertEquals(listOf(OPEN, "camera close reason=signal_off_for_10_s result=clean"), cameraEvents())
+    }
+
+    @Test fun `a quick re-signal during the hide delay reuses the open camera`() {
+        openOnLeftSignal()
+        blink = BLINK_OFF
+        ticks(BEFORE_DELAY_TICKS / 2)
+        blink = BLINK_RIGHT
         ticks(WARM_TICKS)
-        assertEquals(listOf("camera open ok=true id=7 indexes=2,3"), cameraEvents())
+
+        assertEquals(listOf(OPEN), cameraEvents())
+        assertTrue(events().toString(), "camera reuse side=right" in events())
+    }
+
+    @Test fun `reverse closes the camera at once`() {
+        openOnLeftSignal()
+        gear = GEAR_R
+        ticks(2)
+        assertEquals(listOf(OPEN, "camera close reason=reverse result=clean"), cameraEvents())
+    }
+
+    @Test fun `the factory 360 closes the camera at once`() {
+        openOnLeftSignal()
+        nativeCamera.value = true
+        ticks(2)
+        assertEquals(listOf(OPEN, "camera close reason=native_360 result=clean"), cameraEvents())
+    }
+
+    @Test fun `the switch going off closes the camera at once`() {
+        openOnLeftSignal()
+        BlindSpotPreferences.setEnabled(prefs, false)
+        ticks(2)
+        assertEquals(listOf(OPEN, "camera close reason=feature_switched_off result=clean"), cameraEvents())
     }
 
     private companion object {
-        const val FIXTURE = "native-stack-fixtures/blindspot-native360-xp-20261003.txt"
+        const val BLINK_OFF = 1
+        const val BLINK_LEFT = 2
+        const val BLINK_RIGHT = 4
+        const val GEAR_D = 4
+        const val GEAR_R = 2
+        const val OPEN = "camera open ok=true id=7 indexes=2,3"
         val ID = Regex(" #\\d+")
         val SPACES = Regex(" +")
         val TICK: Duration = Duration.ofMillis(150)
-        /** Ticks to attach the windows, see the surfaces and open the camera. */
+        /** Ticks to attach the windows, see the surfaces, open the camera and see a frame. */
         const val WARM_TICKS = 6
-        /** 6 s of the 360 held up, well past the old instant reopen. */
-        const val HELD_TICKS = 40
+        /** 12 s at speed without a signal. */
+        const val IDLE_TICKS = 80
+        /** 9 s: inside the 10 s hide delay. */
+        const val BEFORE_DELAY_TICKS = 60
+        /** Another 2 s: past it. */
+        const val PAST_DELAY_TICKS = 14
     }
 }
