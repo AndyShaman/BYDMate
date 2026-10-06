@@ -113,6 +113,9 @@ object WidgetController {
     private lateinit var prefsScaleFlow: kotlinx.coroutines.flow.Flow<Float>
     private lateinit var prefsHideOnYoutubeFlow: kotlinx.coroutines.flow.Flow<Boolean>
     private lateinit var prefsHideInAppsFlow: kotlinx.coroutines.flow.Flow<Set<String>>
+    private lateinit var prefsHomeOnlyFlow: kotlinx.coroutines.flow.Flow<Boolean>
+    // Launcher packages for the "only on the home screen" rule; null until resolved non-empty.
+    @Volatile private var resolvedHomePackages: Set<String>? = null
 
     // Compose state for the widget data
     private var socState = mutableStateOf<Int?>(null)
@@ -164,6 +167,7 @@ object WidgetController {
         prefsScaleFlow = prefs.scaleFlow()
         prefsHideOnYoutubeFlow = prefs.hideOnYoutubeFlow()
         prefsHideInAppsFlow = prefs.hideInAppsFlow()
+        prefsHomeOnlyFlow = prefs.homeOnlyFlow()
         val metrics = viewCtx.resources.displayMetrics
 
         val initialScale = prefs.getScale()
@@ -373,8 +377,11 @@ object WidgetController {
                 TrackingService.youtubeForeground,
                 prefsHideOnYoutubeFlow,
                 TrackingService.foregroundPackage,
-                prefsHideInAppsFlow,
-            ) { cam, yt, hideYt, fgPkg, hideApps -> hideReason(cam, yt, hideYt, fgPkg, hideApps) },
+                combine(prefsHideInAppsFlow, prefsHomeOnlyFlow, ::Pair),
+            ) { cam, yt, hideYt, fgPkg, (hideApps, homeOnly) ->
+                val home = if (homeOnly) homePackagesForWidget(appCtx) else emptySet()
+                hideReason(cam, yt, hideYt, fgPkg, hideApps, homeOnly, home)
+            },
             suppressReasons,
         ) { reason, reasons ->
             reason ?: reasons.takeIf { it.isNotEmpty() }?.let { SUPPRESSED_PREFIX + it.joinToString(",") }
@@ -734,21 +741,57 @@ object WidgetController {
     private val CAR_SETTINGS_PACKAGES = setOf("com.byd.carsettings")
 
     /**
+     * Packages that answer the HOME intent (the car's launcher differs per model, so it is never
+     * hardcoded), plus our own package: the widget never shows over BYDMate except in the settings
+     * preview, and the home-only rule must not take that preview away. Empty when nothing
+     * resolved, which keeps the widget visible; an empty result is retried on the next call.
+     */
+    internal fun homePackagesForWidget(context: Context): Set<String> {
+        resolvedHomePackages?.let { return it }
+        val found = queryHomePackages(context)
+        if (found.isEmpty()) {
+            Log.w(TAG, "home packages: none resolved, home-only rule keeps the widget visible")
+            return emptySet()
+        }
+        Log.i(TAG, "home packages: $found")
+        Trace.event(TraceArea.WIDGET, "home-packages", "pkgs" to found.joinToString(","))
+        return (found + context.packageName).also { resolvedHomePackages = it }
+    }
+
+    /** Raw HOME-intent query, no caching or tracing; also read by the diagnostics dump. */
+    fun queryHomePackages(context: Context): Set<String> = try {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        context.packageManager.queryIntentActivities(intent, 0)
+            .mapNotNull { it.activityInfo?.packageName }
+            .toSet()
+    } catch (e: Exception) {
+        Log.w(TAG, "home packages: query failed: ${e.message}")
+        emptySet()
+    }
+
+    /**
      * Pure visibility decision, unit-tested: camera and car settings always hide, YouTube
      * only by opt-in, plus any package the user put on the "hide in these apps" list.
+     * With [homeOnly] on, any foreground app outside [homePackages] hides it too; an unknown
+     * foreground or an empty (unresolved) launcher set keeps it visible.
      * Returns the reason that fired, or null when the widget should stay visible.
      */
+    @Suppress("LongParameterList") // one flat input per visibility rule, so tests pin each one
     fun hideReason(
         cameraActive: Boolean,
         youtubeForeground: Boolean,
         hideOnYoutube: Boolean,
         foregroundPkg: String?,
         hideInApps: Set<String>,
+        homeOnly: Boolean = false,
+        homePackages: Set<String> = emptySet(),
     ): String? = when {
         cameraActive -> "camera"
         foregroundPkg != null && foregroundPkg in CAR_SETTINGS_PACKAGES -> "car_settings"
         youtubeForeground && hideOnYoutube -> "youtube"
         foregroundPkg != null && foregroundPkg in hideInApps -> "app:$foregroundPkg"
+        homeOnly && foregroundPkg != null && homePackages.isNotEmpty() &&
+            foregroundPkg !in homePackages -> "not_home:$foregroundPkg"
         else -> null
     }
 
