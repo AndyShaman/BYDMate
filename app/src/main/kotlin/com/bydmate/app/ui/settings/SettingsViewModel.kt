@@ -367,6 +367,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val autoBackupScheduler: AutoBackupScheduler,
     private val appStrings: AppStrings,
     private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter,
+    private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge,
 ) : ViewModel() {
 
     /** ADB control-channel verdict for the line under the ADB-restore toggle. */
@@ -2195,6 +2196,11 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 if (clusterJournal.isEmpty()) appendLine("  (empty)")
                 else clusterJournal.forEach { appendLine("  $it") }
             } catch (e: Exception) { appendLine("(failed to gather cluster state: ${e.message})") }
+
+            appendLine("--- cluster music ---")
+            try {
+                clusterMusicBridge.dumpLines().forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("(failed to gather cluster music state: ${e.message})") }
 
             appendLine("--- trip counters ---")
             try {
