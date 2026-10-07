@@ -36,6 +36,7 @@ docs/research/
 docs/superpowers/
 docs/native-data-stack/
 docs/README.md
+docs/DECISIONS.md
 scripts/native-stack/
 screen/
 .superpowers/
