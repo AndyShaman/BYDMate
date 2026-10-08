@@ -98,6 +98,17 @@
     <string name="settings_adb_restore_status_restored">Przywrócono o %1$s</string>
     <string name="settings_adb_restore_status_failed">Błąd: %1$s</string>
     <string name="settings_adb_restore_status_unsupported">Niedostępne na Androidzie 10. Jeśli ADB zniknęło po ponownym uruchomieniu, włącz je ponownie według instrukcji na GitHubie, sekcja „Enable ADB”.</string>
+    <string name="settings_cloud_wifi_title">Chmura BYD przez Wi-Fi</string>
+    <string name="settings_cloud_wifi_desc">Aplikacja BYD na telefonie widzi auto, gdy jest w sieci Wi-Fi. Wymaga oryginalnej chińskiej karty SIM.</string>
+    <string name="settings_cloud_wifi_help_title">Jak działa chmura BYD przez Wi-Fi</string>
+    <string name="settings_cloud_wifi_help_body">Gdy oryginalna chińska karta SIM w aucie nie ma zasięgu, auto nie łączy się z chmurą BYD: nie przychodzą aktualizacje przez internet, nie działają klucz NFC i sterowanie autem z aplikacji BYD na telefonie.\n\nZ tym ustawieniem BYDMate łączy auto z chmurą przez Wi-Fi: domową sieć, hotspot z telefonu lub dowolną inną sieć z internetem.\n\nWarunki:\n\n1. W aucie jest oryginalna chińska karta SIM. Chmura BYD wpuszcza tylko ją.\n\n2. Niektóre auta potrzebują chińskiego VPN na routerze. Ustawia się go na routerze, nie w aplikacji.\n\n3. Jeśli auto ma już własną transmisję danych, nic się nie zmienia: chmura i tak działa.\n\nPo wyłączeniu ustawienia aplikacja przywraca poprzednie ustawienia łączności auta.</string>
+    <string name="settings_cloud_wifi_status_connected">Połączono z chmurą BYD</string>
+    <string name="settings_cloud_wifi_status_own_cellular">Auto ma własną transmisję danych, chmura i tak działa</string>
+    <string name="settings_cloud_wifi_status_waiting">Czekamy na Wi-Fi z internetem</string>
+    <string name="settings_cloud_wifi_status_rejected">Auto nie przyjęło ustawienia łączności</string>
+    <string name="settings_cloud_wifi_status_silent">Chmura BYD nie odpowiedziała. Spróbujemy ponownie przy następnym połączeniu z Wi-Fi</string>
+    <string name="settings_cloud_wifi_status_no_adb">Brak dostępu ADB: włącz ADB, aby korzystać z tego ustawienia</string>
+    <string name="settings_cloud_wifi_status_return_pending">Poprzednie ustawienia łączności jeszcze nie wróciły. Spróbujemy ponownie przy następnym połączeniu z Wi-Fi</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB wyłączone: sterowanie nie działa</string>
     <string name="adb_verdict_off_after_reboot">ADB wyłączyło się po restarcie</string>

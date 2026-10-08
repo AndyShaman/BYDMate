@@ -11,6 +11,7 @@ import com.bydmate.app.camera.blindSpotClusterDisplay
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.data.autoservice.AdbVerdict
+import com.bydmate.app.data.autoservice.CloudOverWifiState
 import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.BackupPart
 import com.bydmate.app.data.charging.ChargeConnector
@@ -2235,6 +2236,15 @@ private fun ServiceSection(
     LaunchedEffect(adbRestoreEnabled) {
         if (adbRestoreEnabled) adbRestore.requestAttempt("settings")
     }
+    // BYD cloud over Wi-Fi (#310), same card. Every step goes through ADB to ourselves.
+    val cloudOverWifi = remember { clusterEntryPoint.cloudOverWifiManager() }
+    var cloudOverWifiEnabled by remember { mutableStateOf(cloudOverWifi.isEnabled()) }
+    var cloudOverWifiHelpOpen by remember { mutableStateOf(false) }
+    val cloudOverWifiState by cloudOverWifi.state.collectAsStateWithLifecycle()
+    val cloudAdbReady = adbVerdict == AdbVerdict.OK || adbVerdict == AdbVerdict.HELPER_DOWN
+    LaunchedEffect(cloudOverWifiEnabled) {
+        if (cloudOverWifiEnabled) cloudOverWifi.requestAttempt("settings")
+    }
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -2280,6 +2290,31 @@ private fun ServiceSection(
                         .padding(bottom = 8.dp),
                 )
             }
+            SettingDivider()
+            SettingToggleRow(
+                title = stringResource(R.string.settings_cloud_wifi_title),
+                traceId = "cloud_over_wifi",
+                description = stringResource(R.string.settings_cloud_wifi_desc),
+                checked = cloudOverWifiEnabled,
+                onCheckedChange = { enabled ->
+                    cloudOverWifiEnabled = enabled
+                    cloudOverWifi.setEnabled(enabled)
+                },
+                // Locked off without ADB; once on, switching off stays possible so the return
+                // of the car's settings can wait for ADB to come back.
+                enabled = cloudOverWifiEnabled || cloudAdbReady,
+                onHelp = { cloudOverWifiHelpOpen = true },
+            )
+            // A known verdict only: while the check runs there is nothing true to say yet.
+            val cloudLockedNoAdb = adbVerdict != null && !cloudAdbReady
+            val cloudStatus = if (!cloudOverWifiEnabled && cloudLockedNoAdb &&
+                cloudOverWifiState == CloudOverWifiState.Disabled
+            ) {
+                stringResource(R.string.settings_cloud_wifi_status_no_adb)
+            } else {
+                cloudOverWifiStatusText(cloudOverWifiState)
+            }
+            cloudStatus?.let { SettingHint(text = it) }
         }
     }
     val dialogVerdict = adbVerdict
@@ -2314,6 +2349,27 @@ private fun ServiceSection(
             },
             confirmButton = {
                 TextButton(onClick = { adbRestoreHelpOpen = false }) {
+                    Text(stringResource(R.string.nav_autostart_dialog_button), color = AccentGreen)
+                }
+            },
+        )
+    }
+    if (cloudOverWifiHelpOpen) {
+        AppAlertDialog(
+            onDismissRequest = { cloudOverWifiHelpOpen = false },
+            containerColor = CardSurface,
+            title = {
+                Text(stringResource(R.string.settings_cloud_wifi_help_title), color = TextPrimary)
+            },
+            text = {
+                Text(
+                    stringResource(R.string.settings_cloud_wifi_help_body),
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { cloudOverWifiHelpOpen = false }) {
                     Text(stringResource(R.string.nav_autostart_dialog_button), color = AccentGreen)
                 }
             },
@@ -4511,4 +4567,16 @@ private fun adbRestoreStatusText(state: AdbRestoreState): String? = when (state)
             .format(java.util.Date(state.atMs)),
     )
     is AdbRestoreState.Failed -> stringResource(R.string.settings_adb_restore_status_failed, state.reason)
+}
+
+@Composable
+private fun cloudOverWifiStatusText(state: CloudOverWifiState): String? = when (state) {
+    CloudOverWifiState.Disabled -> null
+    CloudOverWifiState.NoAdb -> stringResource(R.string.settings_cloud_wifi_status_no_adb)
+    CloudOverWifiState.OwnCellular -> stringResource(R.string.settings_cloud_wifi_status_own_cellular)
+    CloudOverWifiState.WaitingInternet -> stringResource(R.string.settings_cloud_wifi_status_waiting)
+    CloudOverWifiState.ProfileRejected -> stringResource(R.string.settings_cloud_wifi_status_rejected)
+    CloudOverWifiState.CloudSilent -> stringResource(R.string.settings_cloud_wifi_status_silent)
+    CloudOverWifiState.Connected -> stringResource(R.string.settings_cloud_wifi_status_connected)
+    CloudOverWifiState.ReturnPending -> stringResource(R.string.settings_cloud_wifi_status_return_pending)
 }

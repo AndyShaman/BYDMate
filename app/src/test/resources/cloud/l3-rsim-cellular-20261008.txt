@@ -1,0 +1,14 @@
+# Leopard 3 with a re-soldered SIM (rSIM, 25702 / by), read over on-device ADB on 2026-10-08.
+# Values as recorded in memory reference_openwifi_cloud_over_wifi.md; apn1.state was not
+# recorded and is left empty (apn1 is disabled on this car). Format: <command> => <stdout>
+getprop persist.sys.byd.apn_type => double_apn
+getprop ro.build.byd.apn_type => triple_apn
+getprop persist.radio.net.lte.apn1.disable => 1
+getprop net.lte.apn1.state =>
+getprop net.lte.apn3.state => connect
+service call cloudmanager 7 => Result: Parcel(00000000 00000001   '........')
+getprop sys.tcp_step => 6
+getprop sys.tcp_reg_errcode => 1
+getprop persist.sys.cloud.app_reg_status => 2
+getprop gsm.sim.operator.numeric => 25702
+getprop gsm.sim.operator.iso-country => by

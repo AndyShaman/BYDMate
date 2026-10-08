@@ -73,6 +73,42 @@ class AdbOnDeviceClientTest {
     }
 
     @Test
+    fun `exec lets the cloud-over-wifi commands through and nothing around them`() = runTest {
+        val fake = FakeProtocol()
+        val client = newClient(fake)
+        client.connect()
+        val allowed = listOf(
+            "getprop persist.sys.byd.apn_type",
+            "getprop gsm.sim.operator.iso-country",
+            "service call cloudmanager 7",
+            "service call cloudmanager 1 i32 4",
+            "service call cloudmanager 1 i32 -5",
+            "am broadcast --user 0 -a com.byd.action.RADIO_CONFIG -p com.android.phone -f 0x01000000 " +
+                "--es opt_name set_default_data --es apn_type triple_apn",
+        )
+        allowed.forEach { client.exec(it) }
+        assertEquals(allowed, fake.execCalls)
+
+        val refused = listOf(
+            "getprop persist.sys.byd.apn_type; reboot",
+            "getprop ro.serialno",
+            "service call cloudmanager 1 i32 3",
+            "service call cloudmanager 2",
+            "am broadcast --user 0 -a com.byd.action.RADIO_CONFIG -p com.android.phone -f 0x01000000 " +
+                "--es opt_name set_default_data --es apn_type triple_apn; reboot",
+        )
+        refused.forEach { cmd ->
+            try {
+                client.exec(cmd)
+                fail("Expected the write barrier to refuse: $cmd")
+            } catch (e: IllegalArgumentException) {
+                assertTrue(e.message!!.contains("write barrier"))
+            }
+        }
+        assertEquals(allowed, fake.execCalls)
+    }
+
+    @Test
     fun `exec disconnected returns null`() = runTest {
         val client = newClient(FakeProtocol(connectResult = false))
         // Note: not calling connect() — protocol field stays null.

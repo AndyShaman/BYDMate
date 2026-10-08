@@ -98,6 +98,17 @@
     <string name="settings_adb_restore_status_restored">Восстановлено в %1$s</string>
     <string name="settings_adb_restore_status_failed">Ошибка: %1$s</string>
     <string name="settings_adb_restore_status_unsupported">Недоступно на Android 10. Если ADB пропал после перезагрузки, включите его снова по инструкции на GitHub, раздел «Активация ADB».</string>
+    <string name="settings_cloud_wifi_title">Облако BYD через Wi-Fi</string>
+    <string name="settings_cloud_wifi_desc">Приложение BYD на телефоне видит машину, когда она в Wi-Fi. Нужна родная китайская SIM.</string>
+    <string name="settings_cloud_wifi_help_title">Как работает облако BYD через Wi-Fi</string>
+    <string name="settings_cloud_wifi_help_body">Если родная китайская SIM в машине не ловит сеть, машина не связана с облаком BYD: не приходят обновления по воздуху, не работают NFC-ключ и управление машиной из приложения BYD на телефоне.\n\nС этой настройкой BYDMate подключает машину к облаку через Wi-Fi: домашний, раздачу с телефона или любой другой с интернетом.\n\nУсловия:\n\n1. В машине стоит родная китайская SIM. Облако BYD пускает только её.\n\n2. Некоторым машинам нужен китайский VPN на роутере. Он настраивается на роутере, не в приложении.\n\n3. Если у машины уже есть своя мобильная связь, ничего не меняется: облако и так работает.\n\nКогда вы выключаете настройку, приложение возвращает прежние настройки связи машины.</string>
+    <string name="settings_cloud_wifi_status_connected">Подключено к облаку BYD</string>
+    <string name="settings_cloud_wifi_status_own_cellular">У машины своя мобильная связь, облако работает и так</string>
+    <string name="settings_cloud_wifi_status_waiting">Ждём Wi-Fi с интернетом</string>
+    <string name="settings_cloud_wifi_status_rejected">Машина не приняла настройку связи</string>
+    <string name="settings_cloud_wifi_status_silent">Облако BYD не ответило. Попробуем снова при следующем подключении к Wi-Fi</string>
+    <string name="settings_cloud_wifi_status_no_adb">Нет доступа ADB: включите ADB, чтобы пользоваться этой настройкой</string>
+    <string name="settings_cloud_wifi_status_return_pending">Прежние настройки связи пока не вернулись. Попробуем снова при следующем подключении к Wi-Fi</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB не включён: управление не работает</string>
     <string name="adb_verdict_off_after_reboot">ADB отключился после перезагрузки</string>
