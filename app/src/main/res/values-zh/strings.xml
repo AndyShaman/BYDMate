@@ -818,6 +818,17 @@
     <string name="settings_adb_restore_status_restored">已于 %1$s 恢复</string>
     <string name="settings_adb_restore_status_failed">错误：%1$s</string>
     <string name="settings_adb_restore_status_unsupported">Android 10 上不可用。如果重启后 ADB 消失，请按照 GitHub 上的说明重新开启，见“激活 ADB”一节。</string>
+    <string name="settings_cloud_wifi_title">通过 Wi-Fi 连接 BYD 云</string>
+    <string name="settings_cloud_wifi_desc">车辆连上 Wi-Fi 时，手机上的 BYD 应用即可看到车辆。需要原装中国 SIM 卡。</string>
+    <string name="settings_cloud_wifi_help_title">通过 Wi-Fi 连接 BYD 云的工作方式</string>
+    <string name="settings_cloud_wifi_help_body">如果车内原装中国 SIM 卡没有信号，车辆就无法连接 BYD 云：收不到 OTA 升级，NFC 钥匙和手机 BYD 应用远程控制都无法使用。\n\n开启此设置后，BYDMate 会通过 Wi-Fi 把车辆连接到云：家里的网络、手机热点或任何能上网的网络都可以。\n\n条件：\n\n1. 车内装有原装中国 SIM 卡。BYD 云只接受这张卡。\n\n2. 部分车辆需要在路由器上设置中国 VPN。这在路由器上设置，不在应用里。\n\n3. 如果车辆已有自己的移动网络，则不会做任何改动：云本来就能正常工作。\n\n关闭此设置后，应用会恢复车辆原来的网络设置。</string>
+    <string name="settings_cloud_wifi_status_connected">已连接 BYD 云</string>
+    <string name="settings_cloud_wifi_status_own_cellular">车辆有自己的移动网络，云本来就能正常工作</string>
+    <string name="settings_cloud_wifi_status_waiting">正在等待可上网的 Wi-Fi</string>
+    <string name="settings_cloud_wifi_status_rejected">车辆未接受网络设置</string>
+    <string name="settings_cloud_wifi_status_silent">BYD 云没有响应。下次连接 Wi-Fi 时会再试</string>
+    <string name="settings_cloud_wifi_status_no_adb">无法访问 ADB：请先开启 ADB 才能使用此设置</string>
+    <string name="settings_cloud_wifi_status_return_pending">之前的网络设置尚未恢复。下次连接 Wi-Fi 时将再次尝试</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB 未开启：无法控制车辆</string>
     <string name="adb_verdict_off_after_reboot">重启后 ADB 已关闭</string>

@@ -94,6 +94,17 @@
     <string name="settings_adb_restore_status_restored">Restored at %1$s</string>
     <string name="settings_adb_restore_status_failed">Error: %1$s</string>
     <string name="settings_adb_restore_status_unsupported">Not available on Android 10. If ADB is gone after a reboot, turn it on again following the guide on GitHub, section “Enable ADB”.</string>
+    <string name="settings_cloud_wifi_title">BYD cloud over Wi-Fi</string>
+    <string name="settings_cloud_wifi_desc">The BYD phone app sees the car while it is on Wi-Fi. Needs the original Chinese SIM.</string>
+    <string name="settings_cloud_wifi_help_title">How the BYD cloud over Wi-Fi works</string>
+    <string name="settings_cloud_wifi_help_body">When the original Chinese SIM in the car has no network, the car is cut off from the BYD cloud: no over-the-air updates, no NFC key and no control from the BYD phone app.\n\nWith this setting BYDMate connects the car to the cloud over Wi-Fi: your home network, a phone hotspot or any other network with internet.\n\nConditions:\n\n1. The car has its original Chinese SIM. The BYD cloud only lets that SIM in.\n\n2. Some cars need a Chinese VPN on the router. It is set up on the router, not in the app.\n\n3. If the car already has its own mobile data, nothing changes: the cloud works anyway.\n\nWhen you switch the setting off, the app returns the car\'s previous connection settings.</string>
+    <string name="settings_cloud_wifi_status_connected">Connected to the BYD cloud</string>
+    <string name="settings_cloud_wifi_status_own_cellular">The car has its own mobile data, the cloud works anyway</string>
+    <string name="settings_cloud_wifi_status_waiting">Waiting for Wi-Fi with internet</string>
+    <string name="settings_cloud_wifi_status_rejected">The car did not accept the connection setting</string>
+    <string name="settings_cloud_wifi_status_silent">The BYD cloud did not answer. We will try again on the next Wi-Fi connection</string>
+    <string name="settings_cloud_wifi_status_no_adb">No ADB access: turn on ADB to use this setting</string>
+    <string name="settings_cloud_wifi_status_return_pending">The car\'s previous connection settings are not back yet. We will try again next time Wi-Fi connects</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB is off: car control does not work</string>
     <string name="adb_verdict_off_after_reboot">ADB turned off after reboot</string>

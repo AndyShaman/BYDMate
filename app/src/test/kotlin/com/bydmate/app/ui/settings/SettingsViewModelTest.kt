@@ -368,6 +368,7 @@ class SettingsViewModelTest {
                 mockk(relaxed = true),
                 kotlinx.coroutines.test.TestScope(),
             ),
+            cloudOverWifiManager = mockk(relaxed = true),
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
             ruleDao = mockk(relaxed = true),

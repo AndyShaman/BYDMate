@@ -95,6 +95,17 @@
     <string name="settings_adb_restore_status_restored">Restaurado às %1$s</string>
     <string name="settings_adb_restore_status_failed">Erro: %1$s</string>
     <string name="settings_adb_restore_status_unsupported">Indisponível no Android 10. Se o ADB sumiu após reiniciar, ative-o de novo seguindo o guia no GitHub, seção “Enable ADB”.</string>
+    <string name="settings_cloud_wifi_title">Nuvem BYD via Wi-Fi</string>
+    <string name="settings_cloud_wifi_desc">O app BYD no telefone vê o carro quando ele está no Wi-Fi. Precisa do SIM chinês original.</string>
+    <string name="settings_cloud_wifi_help_title">Como funciona a nuvem BYD via Wi-Fi</string>
+    <string name="settings_cloud_wifi_help_body">Quando o SIM chinês original do carro não tem sinal, o carro fica sem ligação à nuvem BYD: não chegam atualizações pelo ar, não funcionam a chave NFC nem o controle do carro pelo app BYD no telefone.\n\nCom esta opção o BYDMate liga o carro à nuvem via Wi-Fi: a rede de casa, o hotspot do telefone ou qualquer outra rede com internet.\n\nCondições:\n\n1. O carro tem o SIM chinês original. A nuvem BYD só aceita esse SIM.\n\n2. Alguns carros precisam de uma VPN chinesa no roteador. Ela é configurada no roteador, não no app.\n\n3. Se o carro já tem dados móveis próprios, nada muda: a nuvem já funciona.\n\nAo desligar a opção, o app devolve as configurações de ligação anteriores do carro.</string>
+    <string name="settings_cloud_wifi_status_connected">Ligado à nuvem BYD</string>
+    <string name="settings_cloud_wifi_status_own_cellular">O carro tem dados móveis próprios, a nuvem já funciona</string>
+    <string name="settings_cloud_wifi_status_waiting">Aguardando Wi-Fi com internet</string>
+    <string name="settings_cloud_wifi_status_rejected">O carro não aceitou a configuração de ligação</string>
+    <string name="settings_cloud_wifi_status_silent">A nuvem BYD não respondeu. Tentaremos de novo na próxima ligação ao Wi-Fi</string>
+    <string name="settings_cloud_wifi_status_no_adb">Sem acesso ADB: ative o ADB para usar esta opção</string>
+    <string name="settings_cloud_wifi_status_return_pending">As definições de ligação anteriores ainda não voltaram. Vamos tentar de novo na próxima ligação ao Wi-Fi</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB desligado: o controle não funciona</string>
     <string name="adb_verdict_off_after_reboot">O ADB desligou após reiniciar</string>

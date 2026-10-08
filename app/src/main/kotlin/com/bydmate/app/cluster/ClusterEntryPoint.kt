@@ -1,6 +1,7 @@
 package com.bydmate.app.cluster
 
 import com.bydmate.app.data.autoservice.AdbRestoreManager
+import com.bydmate.app.data.autoservice.CloudOverWifiManager
 import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
@@ -25,6 +26,7 @@ interface ClusterEntryPoint {
     fun hudController(): HudController
     fun splitPreferences(): SplitPreferences
     fun adbRestoreManager(): AdbRestoreManager
+    fun cloudOverWifiManager(): CloudOverWifiManager
     fun cameraStateMonitor(): CameraStateMonitor
     fun hudCheck(): HudCheck
 }

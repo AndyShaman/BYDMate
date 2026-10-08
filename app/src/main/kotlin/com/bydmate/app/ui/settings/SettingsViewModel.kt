@@ -354,6 +354,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val driverMemory: com.bydmate.app.agent.DriverMemory,
     private val dayMemory: com.bydmate.app.agent.DayMemory,
     private val adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager,
+    private val cloudOverWifiManager: com.bydmate.app.data.autoservice.CloudOverWifiManager,
     private val fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
     private val ruleDao: com.bydmate.app.data.local.dao.RuleDao,
@@ -1841,6 +1842,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                         "trigger=${adbRestoreManager.lastTrigger} retries=${adbRestoreManager.retryCount} " +
                         "write_secure_settings=$secureSettingsGranted"
                 )
+                appendLine(cloudOverWifiManager.dumpLine())
                 appendLine("adb_verdict: ${adbVerdictMonitor.verdict.value ?: "(none)"}")
                 appendLine("daemon_ever_alive: ${helperBootstrap.daemonEverAlive()}")
                 appendLine(com.bydmate.app.data.backup.PostRestoreCheck.dumpLine(appContext))

@@ -129,8 +129,9 @@ class AdbOnDeviceClientImpl @Inject constructor(
     override fun lastConnectFailure(): AdbConnectFailure? = protocol?.lastConnectFailure
 
     override suspend fun exec(cmd: String): String? = withContext(Dispatchers.IO) {
-        // Structural barrier against accidental WRITE — only allow GETs to autoservice.
-        require(cmd.matches(WRITE_BARRIER_REGEX)) {
+        // Structural barrier against accidental WRITE — only allow GETs to autoservice, plus the
+        // fixed cloud-over-Wi-Fi command set the user switches on explicitly.
+        require(cmd.matches(WRITE_BARRIER_REGEX) || cmd.matches(CLOUD_OVER_WIFI_REGEX)) {
             "AdbOnDeviceClient: refused command (write barrier): $cmd"
         }
         val p = protocol ?: return@withContext null
@@ -295,6 +296,19 @@ class AdbOnDeviceClientImpl @Inject constructor(
         // Allow only: service call autoservice <5|7|9> i32 <dev> i32 <fid>
         // Rejects tx=6 (setInt), tx=8 (setBuffer), and arbitrary shell.
         private val WRITE_BARRIER_REGEX = Regex("""^service call autoservice [579] i32 \d+ i32 -?\d+$""")
+
+        // The exact commands of CloudOverWifiManager (#310) and nothing around them: reads of the
+        // listed properties, the cloud status, the cloud start/stop, and the BYD data-profile
+        // broadcast whose profile name is plain [a-z_] (it is read back from the car).
+        private val CLOUD_OVER_WIFI_REGEX = Regex(
+            """^(getprop (persist\.sys\.byd\.apn_type|ro\.build\.byd\.apn_type|""" +
+                """persist\.radio\.net\.lte\.apn1\.disable|net\.lte\.apn[13]\.state|sys\.tcp_step|""" +
+                """sys\.tcp_reg_errcode|persist\.sys\.cloud\.app_reg_status|""" +
+                """gsm\.sim\.operator\.(numeric|iso-country))""" +
+                """|service call cloudmanager (7|1 i32 (4|-5))""" +
+                """|am broadcast --user 0 -a com\.byd\.action\.RADIO_CONFIG -p com\.android\.phone """ +
+                """-f 0x01000000 --es opt_name set_default_data --es apn_type [a-z_]+)$"""
+        )
 
         // Narrow whitelist for the two self-grants — only our own package.
         private val PACKAGE_NAME_REGEX = Regex("""^com\.bydmate\.app$""")
