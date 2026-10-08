@@ -192,7 +192,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             // entirely between two mic frames (see lastSpeakingSeenMs above) would otherwise
             // never get stamped at all, since speaking never reads true on any frame. Only
             // stamp when speak() actually enqueued playback -- see lastSpeakingSeenMs above.
-            val phrase = agentIdentity().persona.spokenPhrase(spoken)
+            val identity = agentIdentity()
+            val phrase = identity.persona.spokenPhrase(spoken, gender = identity.gender)
             if (runCatching { ttsEngine.speak(phrase) }.getOrDefault(false)) {
                 noteOwnSpeech(phrase)
                 didSpeak = true
