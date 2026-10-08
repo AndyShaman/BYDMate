@@ -91,4 +91,38 @@ class AgentPersonaTest {
         assertEquals(default, explicitMale)
         assertTrue(default.startsWith("\nХАРАКТЕР: "))
     }
+
+    private val canonical = listOf("Готово", "Не получилось", "Не понял", "Ошибка")
+    private val masculinePast = Regex("""(?<![А-Яа-яЁё])(Выполнил|Сделал|сделал|Не расслышал|Не понял|Не разобрал|Сам)(?![А-Яа-яЁё])""")
+
+    private fun allSpoken(p: AgentPersona, g: TtsGender): Set<String> =
+        canonical.flatMap { s -> (0 until 200).map { p.spokenPhrase(s, Random(it), g) } }.toSet()
+
+    @Test fun `female gender never speaks a masculine past-tense form`() {
+        for (p in AgentPersona.entries) for (phrase in allSpoken(p, TtsGender.FEMALE)) {
+            assertFalse(phrase, masculinePast.containsMatchIn(phrase))
+        }
+        val snarky = allSpoken(AgentPersona.SNARKY, TtsGender.FEMALE)
+        assertTrue(snarky.containsAll(listOf("Сделала. Чудо, да?", "Ну сделала, сделала.",
+            "Опа, сработало. Сама в шоке.")))
+        assertTrue("Выполнила. Хорошей дороги." in allSpoken(AgentPersona.NAVIGATOR, TtsGender.FEMALE))
+        assertTrue("Не расслышала. Повтори, пожалуйста." in allSpoken(AgentPersona.NAVIGATOR, TtsGender.FEMALE))
+    }
+
+    @Test fun `male gender phrases are unchanged`() {
+        val snarkyDone = setOf("Готово, блин.", "Сделал. Чудо, да?", "Есть. Не благодари.",
+            "Ну сделал, сделал.", "Опа, сработало. Сам в шоке.")
+        val picked = (0 until 200).map { AgentPersona.SNARKY.spokenPhrase("Готово", Random(it), TtsGender.MALE) }
+        assertEquals(snarkyDone, picked.toSet())
+        assertTrue("Выполнил. Хорошей дороги." in allSpoken(AgentPersona.NAVIGATOR, TtsGender.MALE))
+        assertTrue("Не понял, скажи иначе." in allSpoken(AgentPersona.NAVIGATOR, TtsGender.MALE))
+        assertEquals(AgentPersona.NAVIGATOR.spokenPhrase("Готово", Random(3)),
+            AgentPersona.NAVIGATOR.spokenPhrase("Готово", Random(3), TtsGender.MALE))
+    }
+
+    @Test fun `phrases follows gender for the precache`() {
+        assertTrue("Выполнила. Хорошей дороги." in AgentPersona.NAVIGATOR.phrases(TtsGender.FEMALE))
+        assertFalse("Выполнил. Хорошей дороги." in AgentPersona.NAVIGATOR.phrases(TtsGender.FEMALE))
+        assertTrue("Выполнил. Хорошей дороги." in AgentPersona.NAVIGATOR.phrases())
+    }
 }
