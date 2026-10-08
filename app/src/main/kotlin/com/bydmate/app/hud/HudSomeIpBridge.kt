@@ -73,6 +73,11 @@ class HudSomeIpBridge(
          *  cars without the SOME/IP gateway (no factory HUD) take this exit (Codex fix 1). */
         fun isServicePresent(pm: PackageManager): Boolean =
             runCatching { pm.getPackageInfo(PKG, 0) }.isSuccess
+
+        /** Strict probe for the gateway-less cluster path (#301): true only when the package manager
+         *  says the gateway is not installed; a probe that fails for any other reason proves nothing. */
+        fun isServiceConfirmedAbsent(pm: PackageManager): Boolean =
+            runCatching { pm.getPackageInfo(PKG, 0) }.exceptionOrNull() is PackageManager.NameNotFoundException
     }
 
     @Volatile private var serverBinder: IBinder? = null

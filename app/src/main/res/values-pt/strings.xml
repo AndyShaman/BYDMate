@@ -1400,6 +1400,7 @@
     <string name="settings_hud_status_connecting">Conectando ao barramento…</string>
     <string name="settings_hud_status_on">Transmissão para o HUD ativa</string>
     <string name="settings_hud_status_bind_failed">Falha ao conectar ao barramento SOME/IP</string>
+    <string name="settings_hud_status_cluster_only">Este carro não tem HUD: as indicações vão para o cartão de navegação original no painel</string>
     <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
     <string name="settings_hud_mode_title">Método de exibição no para-brisa</string>
     <string name="settings_hud_mode_1">Método 1</string>

@@ -1518,6 +1518,7 @@
     <string name="settings_hud_status_connecting">正在连接总线…</string>
     <string name="settings_hud_status_on">正在向 HUD 传输</string>
     <string name="settings_hud_status_bind_failed">无法连接 SOME/IP 总线</string>
+    <string name="settings_hud_status_cluster_only">此车辆没有 HUD：提示显示在仪表的原厂导航卡片上</string>
     <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口</string>
     <string name="settings_hud_mode_title">挡风玻璃显示方式</string>
     <string name="settings_hud_mode_1">方式 1</string>

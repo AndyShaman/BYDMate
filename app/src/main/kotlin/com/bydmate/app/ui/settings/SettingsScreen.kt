@@ -1331,56 +1331,62 @@ private fun DisplaySection() {
         },
     ) {
         if (hudEnabled) {
-            SettingToggleRow(
-                title = stringResource(R.string.settings_hud_speed_sign_title),
-                traceId = "hud_speed_sign",
-                description = stringResource(R.string.settings_hud_speed_sign_desc),
-                checked = hudSpeedSign,
-                onCheckedChange = {
-                    hudSpeedSign = it
-                    hudController.setSpeedSignEnabled(it)
-                },
-            )
-            SettingDivider()
-            // «Способ вывода на стекло» (#266): way 1 (default) never raises the car's navigation
-            // status, ways 2 and 3 do and add their channels (HudWayChannels).
-            val hudWays = listOf(HudController.MODE_GLASS_ONLY, HudController.MODE_NAVI_STATUS, HudController.MODE_LMCN)
-            SettingChipRow(
-                title = stringResource(R.string.settings_hud_mode_title),
-                options = listOf(
-                    stringResource(R.string.settings_hud_mode_1),
-                    stringResource(R.string.settings_hud_mode_2),
-                    stringResource(R.string.settings_hud_mode_3),
-                ),
-                selectedIndex = hudWays.indexOf(hudMode).coerceAtLeast(0),
-                onSelect = { idx ->
-                    val mode = hudWays[idx]
-                    if (mode != hudMode) {
-                        Trace.event(TraceArea.USER, "choice", "id" to "hud_mode", "mode" to mode)
-                        hudMode = mode
-                        hudController.setMode(mode)
-                    }
-                },
-            )
-            SettingHint(text = stringResource(R.string.settings_hud_mode_1_desc))
-            SettingHint(text = stringResource(R.string.settings_hud_mode_2_desc))
-            HudTrialHint(
-                text = stringResource(R.string.settings_hud_mode_3_desc),
-                tag = stringResource(R.string.settings_hud_mode_trial),
-            )
-            SettingHint(text = stringResource(R.string.settings_hud_mode_pick_hint))
-            SettingDivider()
+            // No gateway (#301): the hints go to the cluster card, the glass settings do not apply.
+            if (hudStatus != HudController.Status.CLUSTER_ONLY) {
+                SettingToggleRow(
+                    title = stringResource(R.string.settings_hud_speed_sign_title),
+                    traceId = "hud_speed_sign",
+                    description = stringResource(R.string.settings_hud_speed_sign_desc),
+                    checked = hudSpeedSign,
+                    onCheckedChange = {
+                        hudSpeedSign = it
+                        hudController.setSpeedSignEnabled(it)
+                    },
+                )
+                SettingDivider()
+                // «Способ вывода на стекло» (#266): way 1 (default) never raises the car's navigation
+                // status, ways 2 and 3 do and add their channels (HudWayChannels).
+                val hudWays = listOf(HudController.MODE_GLASS_ONLY, HudController.MODE_NAVI_STATUS, HudController.MODE_LMCN)
+                SettingChipRow(
+                    title = stringResource(R.string.settings_hud_mode_title),
+                    options = listOf(
+                        stringResource(R.string.settings_hud_mode_1),
+                        stringResource(R.string.settings_hud_mode_2),
+                        stringResource(R.string.settings_hud_mode_3),
+                    ),
+                    selectedIndex = hudWays.indexOf(hudMode).coerceAtLeast(0),
+                    onSelect = { idx ->
+                        val mode = hudWays[idx]
+                        if (mode != hudMode) {
+                            Trace.event(TraceArea.USER, "choice", "id" to "hud_mode", "mode" to mode)
+                            hudMode = mode
+                            hudController.setMode(mode)
+                        }
+                    },
+                )
+                SettingHint(text = stringResource(R.string.settings_hud_mode_1_desc))
+                SettingHint(text = stringResource(R.string.settings_hud_mode_2_desc))
+                HudTrialHint(
+                    text = stringResource(R.string.settings_hud_mode_3_desc),
+                    tag = stringResource(R.string.settings_hud_mode_trial),
+                )
+                SettingHint(text = stringResource(R.string.settings_hud_mode_pick_hint))
+                SettingDivider()
+            }
             SettingStatusRow(
                 title = when (hudStatus) {
                     HudController.Status.ON -> stringResource(R.string.settings_hud_status_on)
                     HudController.Status.UNSUPPORTED -> stringResource(R.string.settings_hud_status_unsupported)
                     HudController.Status.BIND_FAILED -> stringResource(R.string.settings_hud_status_bind_failed)
+                    HudController.Status.CLUSTER_ONLY -> stringResource(R.string.settings_hud_status_cluster_only)
                     else -> stringResource(R.string.settings_hud_status_connecting)
                 },
-                ok = hudStatus == HudController.Status.ON,
+                ok = hudStatus == HudController.Status.ON || hudStatus == HudController.Status.CLUSTER_ONLY,
             )
         }
-        SettingHint(text = stringResource(R.string.settings_hud_hint))
+        if (hudStatus != HudController.Status.CLUSTER_ONLY) {
+            SettingHint(text = stringResource(R.string.settings_hud_hint))
+        }
         // Outside the switch: the check is meant to run with HUD output turned off too.
         SettingDivider()
         HudCheckRow(onWayChosen = { hudMode = it })

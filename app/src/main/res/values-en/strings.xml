@@ -1403,6 +1403,7 @@
     <string name="settings_hud_status_connecting">Connecting to the bus…</string>
     <string name="settings_hud_status_on">Streaming to the HUD</string>
     <string name="settings_hud_status_bind_failed">Could not connect to the SOME/IP bus</string>
+    <string name="settings_hud_status_cluster_only">This car has no HUD: hints go to the stock navigation card on the cluster</string>
     <string name="settings_hud_hint">Requires a trim with the head-up display. Data comes from the Yandex Navigator window</string>
     <string name="settings_hud_mode_title">Glass output method</string>
     <string name="settings_hud_mode_1">Method 1</string>

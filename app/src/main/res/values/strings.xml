@@ -1560,6 +1560,7 @@
     <string name="settings_hud_status_connecting">Подключение к шине…</string>
     <string name="settings_hud_status_on">Передача на HUD активна</string>
     <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
+    <string name="settings_hud_status_cluster_only">HUD в этой машине нет: подсказки идут в штатную карточку навигации на приборке</string>
     <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
     <string name="settings_hud_mode_title">Способ вывода на стекло</string>
     <string name="settings_hud_mode_1">Способ 1</string>
