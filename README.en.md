@@ -419,7 +419,7 @@ The agent has 32 tools. Example phrases:
 | Group | What's available |
 |--------|--------------|
 | Windows | all, front, rear, driver, passenger, rear left and rear right; open, close, halfway, vent, per group and per individual window |
-| Climate | on, off, temperature from 16 to 30 |
+| Climate | on, off, temperature from 16 to 33 |
 | Seat heating | driver and passenger, levels 1-5 and off |
 | Seat ventilation | driver and passenger, levels 1-5 and off |
 | Mirrors | heating on/off |

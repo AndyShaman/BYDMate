@@ -75,7 +75,7 @@ object CommandTranslator {
         // ── Climate ── LIVE_VALIDATED (ac_on/ac_off/ac_cycle_*/ac_auto_*) ──────
         // ac_power fid 501219364: 0=off, 1=on (LIVE 2026-07-03, both directions
         // physically confirmed in-car). 设置温度<N> resolves dynamically over
-        // 16..30 in resolve(), so there are no per-temperature entries here (the
+        // 16..33 in resolve(), so there are no per-temperature entries here (the
         // old 18/20/22/25-only table missed every other value).
         "自动空调"    to Resolved("ac_on",         1),  // LIVE 2026-07-03: ac_power fid, 1=on
         "关闭空调"    to Resolved("ac_off",        0),  // LIVE 2026-07-03: ac_power fid, 0=off
@@ -235,7 +235,8 @@ object CommandTranslator {
         composite[stripped]?.let { return it }
         table[stripped]?.let { return listOf(it) }
         // Dynamic temperature: 设置温度<N> → ac_temp_main, clamped to the validated
-        // 16..30 window (allowlist range-gates it anyway; clamping is friendlier).
+        // 16..33 window (allowlist range-gates it anyway; clamping is friendlier).
+        // 16 is Leopard 3's minimum; 33 is the Seagull maximum (2026-10-06).
         TEMP_REGEX.matchEntire(stripped)?.let { m ->
             val celsius = m.groupValues[1].toInt().coerceIn(TEMP_MIN, TEMP_MAX)
             return listOf(Resolved("ac_temp_main", celsius))
@@ -257,13 +258,20 @@ object CommandTranslator {
             val c = m.groupValues[1].toIntOrNull() ?: return emptyList()
             return fridgeHeat(c.coerceIn(FRIDGE_HEAT_MIN, FRIDGE_HEAT_MAX))
         }
+        // Dynamic window position: <door>打开<N> → window_<door>_pos for the canonical 1..99 only
+        // (the automation level row, step 10). 打开0 / 打开100 are the table's dedicated close /
+        // open fids. No clamp: 打开150 or 打开0100 stay unknown, because the speed gate
+        // (ActionDispatcher.isWindowOpenCommand) does not take them for an open either.
+        WINDOW_POS_REGEX.matchEntire(stripped)?.let { m ->
+            return windowsPct(m.groupValues[2].toInt(), WINDOW_DOORS.getValue(m.groupValues[1]))
+        }
         return emptyList()
     }
 
     // Dynamic temperature command: 设置温度<N> (e.g. 设置温度24). Range-clamped in resolve().
     private val TEMP_REGEX = Regex("""设置温度(\d+)""")
     private const val TEMP_MIN = 16
-    private const val TEMP_MAX = 30
+    private const val TEMP_MAX = 33
 
     // Dynamic fan speed command: 风量<N> (e.g. 风量3). Range-clamped in resolve().
     private val FAN_REGEX = Regex("""风量(\d+)""")
@@ -277,6 +285,10 @@ object CommandTranslator {
     private const val FRIDGE_COOL_MAX = 6
     private const val FRIDGE_HEAT_MIN = 35
     private const val FRIDGE_HEAT_MAX = 50
+
+    // Dynamic per-door window position: 主驾打开30 (door prefix + percent 1..99, no leading zero).
+    private val WINDOW_POS_REGEX = Regex("""(主驾|副驾|后左|后右)打开([1-9]\d?)""")
+    private val WINDOW_DOORS = mapOf("主驾" to "driver", "副驾" to "passenger", "后左" to "rear_left", "后右" to "rear_right")
 
     // Vent = crack windows to this aperture % (validated per-door % path). Small
     // opening for fresh air; tune from user feedback. Stays under the >80 km/h gate.

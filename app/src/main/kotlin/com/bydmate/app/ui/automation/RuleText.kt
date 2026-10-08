@@ -232,7 +232,7 @@ private fun onOffText(nameRes: Int, onRes: Int, offRes: Int, payload: String?, l
 @Suppress("CyclomaticComplexMethod") // one branch per action kind
 internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
     "param" -> ACTION_COMMANDS.firstOrNull { it.toggleTarget == null && it.command == a.command }
-        ?.let { lc.getString(it.nameRes) } ?: a.displayName
+        ?.let { lc.getString(it.nameRes) } ?: levelActionName(a.command, lc) ?: a.displayName
     "toggle" -> a.payload?.let { ActionDispatcher.toggleTargetNameRes(it) }
         ?.let { lc.getString(R.string.auto_ui_act_toggle, lc.getString(it)) } ?: a.displayName
     "delay" -> lc.getString(R.string.auto_ui_act_wait, durationText(a.payload?.toLongOrNull() ?: 1000L, lc))
