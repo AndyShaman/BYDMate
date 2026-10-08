@@ -769,11 +769,11 @@ If a Telegram bot is connected, every copy is sent to your chat with the bot. If
 
 ### How to Connect a Telegram Bot
 
-You need your own bot: copies arrive only for you, in a private chat with your bot.
+You need your own bot: copies arrive only in your chat with the bot or in your group where you added it.
 
 1. In Telegram, open **@BotFather**, send it `/newbot`, and pick a name and address for the bot. BotFather sends back a token, a long string like `123456789:AA...`.
 2. In BYDMate open **Settings → Service & Data → Data**, the **"Telegram bot"** block. Paste the token into the "Bot token" field and tap **"Check"**.
-3. The app shows a short code made of digits. Open the chat with your bot in Telegram and send it this code. You can copy the code with the "Copy code" button.
+3. The app shows a short code made of digits. Open the chat with your bot in Telegram and send it this code. You can copy the code with the "Copy code" button. To get reports and copies in a shared chat, for example for everyone who drives the car, add the bot to your private group and send `/start@your_bot CODE` there.
 4. Go back to BYDMate and tap **"Check"** again. The bot sends a message to the chat, "BYDMate connected. Backups will arrive here.", and the block shows a "Connected" mark with the bot's and chat's name.
 
 Errors show up right under the button: a wrong token, no network, the code has not arrived yet, a file over 50 MB, and others. The "Back" button on the code step returns you to the token, "Disconnect" forgets the bot, and copies stay in Download only.

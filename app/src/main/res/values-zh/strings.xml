@@ -936,7 +936,7 @@
     <string name="settings_tg_backup_step_token">令牌</string>
     <string name="settings_tg_backup_step_code">验证码</string>
     <string name="settings_tg_backup_step_done">完成</string>
-    <string name="settings_tg_backup_code_instruction">在 Telegram 中打开与 @%1$s 的聊天，发送此验证码，然后点击“检查”。</string>
+    <string name="settings_tg_backup_code_instruction">在私聊中把此验证码发送给 @%1$s，或者把机器人加入你的群组，在群里发送 /start@%1$s 加空格再加验证码。然后点击“检查”。</string>
     <string name="settings_tg_backup_copy_code">复制验证码</string>
     <string name="settings_tg_backup_code_copied">验证码已复制</string>
     <string name="settings_tg_backup_code_not_received">尚未收到验证码。请把它发送给机器人，然后再次点击“检查”。</string>

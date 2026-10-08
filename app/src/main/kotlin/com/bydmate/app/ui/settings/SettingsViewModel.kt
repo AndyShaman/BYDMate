@@ -2855,7 +2855,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 _uiState.update { it.copy(tgBackupCode = newBindCode(), tgBackupBotName = botName) }
                 return null
             }
-            telegramBackupSink.findPrivateChat(token, code).getOrElse { return tgBackupError(it) }
+            telegramBackupSink.findLinkChat(token, code).getOrElse { return tgBackupError(it) }
                 ?: return appStrings.get(R.string.settings_tg_backup_code_not_received)
         }
         telegramBackupSink.sendMessage(token, chat.id, appStrings.get(R.string.settings_tg_backup_greeting))

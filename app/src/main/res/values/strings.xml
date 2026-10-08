@@ -1022,7 +1022,7 @@
     <string name="settings_tg_backup_step_token">Токен</string>
     <string name="settings_tg_backup_step_code">Код</string>
     <string name="settings_tg_backup_step_done">Готово</string>
-    <string name="settings_tg_backup_code_instruction">Откройте чат с @%1$s в Telegram, отправьте ему этот код и нажмите «Проверить».</string>
+    <string name="settings_tg_backup_code_instruction">Отправьте этот код боту @%1$s в личный чат или добавьте бота в свою группу и напишите там /start@%1$s и код через пробел. Затем нажмите «Проверить».</string>
     <string name="settings_tg_backup_copy_code">Скопировать код</string>
     <string name="settings_tg_backup_code_copied">Код скопирован</string>
     <string name="settings_tg_backup_code_not_received">Код ещё не пришёл. Отправьте его боту и нажмите «Проверить» снова.</string>
