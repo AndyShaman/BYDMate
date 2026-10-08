@@ -394,7 +394,7 @@ The agent has 32 tools. Example phrases:
 **Navigation and places**
 - "Поехали домой" (Let's go home), "Поехали на работу" (Let's go to work), "Поехали на дачу" (Let's go to the dacha) (saved places). On "поехали" (let's go) the assistant taps "Go" in Yandex Navigator by itself, on "построй маршрут домой" (build a route home) it only builds the route
 - With split screen on, the assistant first collapses it, builds the route, and puts the panes back: otherwise the firmware recreates the Navigator and the route is lost. Requires the BYDMate accessibility service to be on
-- Say "в картах" (in Maps): "поехали домой в картах" (let's go home in Maps), "найди заправку в яндекс картах" (find a gas station in Yandex Maps); the route, search, or point display go to Yandex Maps, without these words the route goes to the navigator chosen in the "Navigator for routes" setting (Settings → Voice agent → Agent), Yandex Navigator by default
+- Say "в картах" (in Maps): "поехали домой в картах" (let's go home in Maps), "найди заправку в яндекс картах" (find a gas station in Yandex Maps); the route, search, or point display go to Yandex Maps, without these words the route goes to the navigator chosen in the "Navigator for routes" setting (Settings → Voice agent → Agent), Yandex Navigator by default; 2GIS, Yandex Maps and Waze are the other choices
 - "Найди зарядки рядом" (Find charging stations nearby)
 - "Хватит ли заряда до Казани?" (Is there enough charge to reach Kazan?), "Сколько ехать до аэропорта?" (How long to the airport?)
 - "Запомни это место как дача" (Remember this place as dacha), "Какие места сохранены?" (What places are saved?)

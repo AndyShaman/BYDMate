@@ -35,6 +35,7 @@ class AgentToolsPlacesTest {
     private val tripDao = mockk<TripDao>(relaxed = true)
     private val chargeDao = mockk<ChargeDao>(relaxed = true)
     private val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        .also { io.mockk.every { it.willOpenPinned(any()) } returns null }
     private val ruleDao = mockk<RuleDao>(relaxed = true)
     private val engine = mockk<AutomationEngine>(relaxed = true)
     private val places = mockk<PlaceRepository>()

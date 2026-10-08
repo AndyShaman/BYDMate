@@ -1421,6 +1421,25 @@ class SettingsViewModelTest {
         )
     }
 
+    /** #305: Waze persists and a fresh view model reads it back. */
+    @Test fun `route navigator waze persists and reads back`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setRouteNavigator("waze")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("waze", vm.uiState.value.routeNavigator)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "waze",
+            ctx.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, "")
+        )
+        val reread = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("waze", reread.uiState.value.routeNavigator)
+    }
+
     /** The dump header must carry the choice: it is the only place a user log shows it. */
     @Test fun `the diagnostic header reports the chosen route navigator`() = runTest {
         val vm = buildViewModel()

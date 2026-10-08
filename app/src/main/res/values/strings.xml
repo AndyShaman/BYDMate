@@ -1448,6 +1448,7 @@
     <string name="settings_route_navigator_yandex">Яндекс Навигатор</string>
     <string name="settings_route_navigator_dgis">2ГИС</string>
     <string name="settings_route_navigator_maps">Яндекс Карты</string>
+    <string name="settings_route_navigator_waze">Waze</string>
     <string name="settings_route_navigator_hint">Какое приложение открывать для маршрутов и поиска на карте</string>
     <string name="settings_agent_memory_title">Память о водителе</string>
     <string name="settings_agent_memory_hint">Агент запоминает имя и устойчивые предпочтения, когда вы ему об этом говорите. Скажите «забудь …», чтобы убрать один факт</string>
@@ -1886,6 +1887,7 @@
     <string name="dispatch_phone_missing">phone не задан</string>
     <string name="dispatch_dgis_fallback">2ГИС не установлен, открыт Яндекс Навигатор</string>
     <string name="dispatch_maps_fallback">Яндекс Карты не установлены, открыт Яндекс Навигатор</string>
+    <string name="dispatch_waze_fallback">Waze не установлен, открыт Яндекс Навигатор</string>
     <string name="dispatch_shortcut_unknown">неизвестный shortcut: %1$s</string>
     <string name="dispatch_coords_missing">lat/lon не заданы</string>
     <string name="dispatch_url_missing">url не задан</string>

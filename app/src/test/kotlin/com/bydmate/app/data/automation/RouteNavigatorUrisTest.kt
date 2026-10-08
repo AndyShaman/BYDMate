@@ -86,4 +86,22 @@ class RouteNavigatorUrisTest {
     @Test fun `maps is a valid settings selection`() {
         assertEquals(RouteNavigatorUris.MAPS, RouteNavigatorUris.normalize(RouteNavigatorUris.MAPS))
     }
+
+    /** #305: Waze is the fourth settings value; its links put the latitude first. */
+    @Test fun `waze is a valid settings selection with its own package`() {
+        assertEquals("waze", RouteNavigatorUris.normalize("waze"))
+        assertEquals("com.waze", RouteNavigatorUris.packageOf("waze"))
+    }
+
+    @Test fun `waze links take the latitude first`() {
+        assertEquals("waze://?ll=57.0,36.0&navigate=yes", RouteNavigatorUris.route("waze", 57.0, 36.0))
+        assertEquals("waze://?ll=55.75,37.62", RouteNavigatorUris.showPoint("waze", 55.75, 37.62, "Кафе"))
+    }
+
+    @Test fun `waze search encodes spaces and cyrillic`() {
+        assertEquals(
+            "waze://?q=%D0%BA%D0%B0%D1%84%D0%B5%20%D1%83%20%D0%B4%D0%BE%D0%BC%D0%B0",
+            RouteNavigatorUris.search("waze", "кафе у дома"),
+        )
+    }
 }

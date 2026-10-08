@@ -42,6 +42,7 @@ class AgentToolsNavigateAppTest {
         every { it.willOpenMaps(any()) } answers {
             firstArg<JSONObject>().optString("app").trim().equals("maps", ignoreCase = true)
         }
+        every { it.willOpenPinned(any()) } returns null
     }
     private val places = mockk<PlaceRepository>(relaxed = true)
 
