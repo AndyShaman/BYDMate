@@ -1,0 +1,89 @@
+# Tester dump, BYDMate 3.19.9 (code 503), DiLink 5.0, 2GIS 7.26, 2026-10-07 (#288): 2GIS projected in
+# the VD transport. An automation rule put 2GIS into a native split pane at 11:51:44 (split journal
+# below); the BYDMate split feature is off. Bad pass (11:55:06, 11:56:20): the task sits in windowing
+# mode 4 on display 0, the daemon's fallback am start places it on the VD (wm=1), 0.1 s later 2GIS
+# dies and restarts, the 3 s verify reads task=none and the projection stays active. The pullback
+# after the good pass (11:55:35, no task before) goes through remove+relaunch and recreates 2GIS in
+# mode 4 on display 0, so the next press repeats the bad pass.
+# Cluster journal 11:55:06-11:56:46, split journal, then the trace, daemon and ActivityManager lines.
+2026-10-07 11:55:06 setMode OFF -> FULLSCREEN (reason=star_key split=off navi_wm=4 navi_display=0)
+2026-10-07 11:55:06 transport=vd display=3 "shared_fission_bg_XDJAScreenProjection_0" 1920x720 dpi=320 prefer_full=true
+2026-10-07 11:55:06 compositor power-up ok=true
+2026-10-07 11:55:06 vd plan: buffer 3310x768 window 1920x446 dpi=320 (native) scale=58%
+2026-10-07 11:55:07 vd created id=10 3310x768@320 PRIVATE (PUBLIC rejected, a11y-invisible)
+2026-10-07 11:55:08 projection active: pkg=ru.dublgis.dgismobile vd=10
+2026-10-07 11:55:11 verify after_ms=3000 vd=10 task=none overlay=true split=off
+2026-10-07 11:55:17 setMode FULLSCREEN -> OFF (reason=star_key)
+2026-10-07 11:55:17 pullback: task ru.dublgis.dgismobile not found (already gone)
+2026-10-07 11:55:17 vd released id=10
+2026-10-07 11:55:35 setMode OFF -> FULLSCREEN (reason=star_key split=off navi_wm=none)
+2026-10-07 11:55:35 transport=vd display=3 "shared_fission_bg_XDJAScreenProjection_0" 1920x720 dpi=320 prefer_full=true
+2026-10-07 11:55:35 compositor power-up ok=true
+2026-10-07 11:55:35 vd plan: buffer 3310x768 window 1920x446 dpi=320 (native) scale=58%
+2026-10-07 11:55:35 vd created id=11 3310x768@320 PRIVATE (PUBLIC rejected, a11y-invisible)
+2026-10-07 11:55:38 projection active: pkg=ru.dublgis.dgismobile vd=11
+2026-10-07 11:55:41 verify after_ms=3000 vd=11 task_display=11 wm=1 overlay=true split=off
+2026-10-07 11:55:48 setMode FULLSCREEN -> OFF (reason=star_key)
+2026-10-07 11:55:51 pullback: task recreated by setMode: 23 -> 24 (pkg=ru.dublgis.dgismobile)
+2026-10-07 11:55:51 vd released id=11
+2026-10-07 11:56:20 setMode OFF -> FULLSCREEN (reason=star_key split=off navi_wm=4 navi_display=0)
+2026-10-07 11:56:20 transport=vd display=3 "shared_fission_bg_XDJAScreenProjection_0" 1920x720 dpi=320 prefer_full=true
+2026-10-07 11:56:20 compositor power-up ok=true
+2026-10-07 11:56:20 vd plan: buffer 3310x768 window 1920x446 dpi=320 (native) scale=58%
+2026-10-07 11:56:20 vd created id=12 3310x768@320 PRIVATE (PUBLIC rejected, a11y-invisible)
+2026-10-07 11:56:22 projection active: pkg=ru.dublgis.dgismobile vd=12
+2026-10-07 11:56:25 verify after_ms=3000 vd=12 task=none overlay=true split=off
+2026-10-07 11:56:46 setMode FULLSCREEN -> OFF (reason=star_key)
+2026-10-07 11:56:46 pullback: task ru.dublgis.dgismobile not found (already gone)
+2026-10-07 11:51:44 native split: mode=TOGGLE_50_50 wide=ru.yandex.music prop[ro.byd.ui.splitscreen]=0 prop[ro.build.baios.supportsplitscreen]=unset filters=0
+2026-10-07 11:51:44 start narrow=ru.dublgis.dgismobile wide=ru.yandex.music side=RIGHT -> native OK
+10-07 11:55:06.731 I/ClusterProjection(18629): setMode: OFF -> FULLSCREEN
+10-07 11:55:06.755 I/Trace   (18629): cluster setMode d=OFF_->_FULLSCREEN_(reason=star_key_split=off_navi_wm=4_navi_display=0) #10237
+10-07 11:55:06.831 I/ClusterProjection(18629): cluster display id=3 "shared_fission_bg_XDJAScreenProjection_0" 1920x720 dpi=320 prefer_full=true candidates=[3:"shared_fission_bg_XDJAScreenProjection_0" 1920x720, 4:"shared_fission_bg_XDJAScreenProjection_1" 1920x720]
+10-07 11:55:06.961 I/ClusterProjection(18629): releasing orphaned VirtualDisplay id=9 from a prior session
+10-07 11:55:06.994 W/bydmate_helper( 6369): TX_CREATE_VIRTUAL_DISPLAY: SecurityException flags=323 3310x768 (expected for PUBLIC; app falls back to private flags)
+10-07 11:55:06.996 W/ClusterProjection(18629): PUBLIC VirtualDisplay rejected; falling back to private flags
+10-07 11:55:07.032 I/ClusterProjection(18629): VirtualDisplay id=10 3310x768@320; launchAndForce ru.dublgis.dgismobile
+10-07 11:55:08.198 I/bydmate_helper( 6369): launchAndForce split: task=22 from=TaskModeState(windowingMode=4, displayId=0) still state=TaskModeState(windowingMode=4, displayId=0) → am start display=10
+10-07 11:55:08.612 I/bydmate_helper( 6369): launchAndForce split: task=22 fallback ok state=TaskModeState(windowingMode=1, displayId=10)
+10-07 11:55:08.720 I/Trace   (18629): cluster projection d=active:_pkg=ru.dublgis.dgismobile_vd=10 #10242
+10-07 11:55:08.774 I/ActivityManager( 1084): Process ru.dublgis.dgismobile (pid 23553) has died: fg  TOP 
+10-07 11:55:08.866 I/ActivityManager( 1084): Start proc 24041:ru.dublgis.dgismobile/u0a102 for null
+10-07 11:55:11.724 I/Trace   (18629): cluster verify d=after_ms=3000_vd=10_task=none_overlay=true_split=off #10244
+10-07 11:55:17.210 I/ClusterProjection(18629): setMode: FULLSCREEN -> OFF
+10-07 11:55:17.211 I/Trace   (18629): cluster setMode d=FULLSCREEN_->_OFF_(reason=star_key) #10246
+10-07 11:55:17.215 I/Trace   (18629): cluster pullback: d=task_ru.dublgis.dgismobile_not_found_(already_gone) #10247
+10-07 11:55:35.286 I/ClusterProjection(18629): setMode: OFF -> FULLSCREEN
+10-07 11:55:35.303 I/Trace   (18629): cluster setMode d=OFF_->_FULLSCREEN_(reason=star_key_split=off_navi_wm=none) #10250
+10-07 11:55:35.337 I/ClusterProjection(18629): cluster display id=3 "shared_fission_bg_XDJAScreenProjection_0" 1920x720 dpi=320 prefer_full=true candidates=[3:"shared_fission_bg_XDJAScreenProjection_0" 1920x720, 4:"shared_fission_bg_XDJAScreenProjection_1" 1920x720]
+10-07 11:55:35.448 I/ClusterProjection(18629): releasing orphaned VirtualDisplay id=10 from a prior session
+10-07 11:55:35.473 W/bydmate_helper( 6369): TX_CREATE_VIRTUAL_DISPLAY: SecurityException flags=323 3310x768 (expected for PUBLIC; app falls back to private flags)
+10-07 11:55:35.473 W/ClusterProjection(18629): PUBLIC VirtualDisplay rejected; falling back to private flags
+10-07 11:55:35.486 I/ClusterProjection(18629): VirtualDisplay id=11 3310x768@320; launchAndForce ru.dublgis.dgismobile
+10-07 11:55:38.281 I/Trace   (18629): cluster projection d=active:_pkg=ru.dublgis.dgismobile_vd=11 #10256
+10-07 11:55:41.291 I/Trace   (18629): cluster verify d=after_ms=3000_vd=11_task_display=11_wm=1_overlay=true_split=off #10257
+10-07 11:55:48.084 I/ClusterProjection(18629): setMode: FULLSCREEN -> OFF
+10-07 11:55:48.088 I/Trace   (18629): cluster setMode d=FULLSCREEN_->_OFF_(reason=star_key) #10259
+10-07 11:55:49.450 I/ActivityManager( 1084): Process ru.dublgis.dgismobile (pid 24041) has died: fg  TOP 
+10-07 11:55:49.704 I/ActivityManager( 1084): Start proc 24488:ru.dublgis.dgismobile/u0a102 for null
+10-07 11:55:50.290 I/bydmate_helper( 6369): pullback light path failed: task=23 state=null → remove+relaunch
+10-07 11:55:50.314 I/ActivityManager( 1084): Killing 23670:ru.dublgis.dgismobile:service/u0a102 (adj 905): remove task
+10-07 11:55:50.317 I/ActivityManager( 1084): Killing 24488:ru.dublgis.dgismobile/u0a102 (adj 905): remove task
+10-07 11:55:50.397 I/ActivityManager( 1084): Start proc 24564:ru.dublgis.dgismobile/u0a102 for null
+10-07 11:55:51.071 I/Trace   (18629): cluster pullback: d=task_recreated_by_setMode:_23_->_24_(pkg=ru.dublgis.dgismobile) #10261
+10-07 11:56:20.276 I/ClusterProjection(18629): setMode: OFF -> FULLSCREEN
+10-07 11:56:20.293 I/Trace   (18629): cluster setMode d=OFF_->_FULLSCREEN_(reason=star_key_split=off_navi_wm=4_navi_display=0) #10266
+10-07 11:56:20.383 I/ClusterProjection(18629): cluster display id=3 "shared_fission_bg_XDJAScreenProjection_0" 1920x720 dpi=320 prefer_full=true candidates=[3:"shared_fission_bg_XDJAScreenProjection_0" 1920x720, 4:"shared_fission_bg_XDJAScreenProjection_1" 1920x720]
+10-07 11:56:20.539 I/ClusterProjection(18629): releasing orphaned VirtualDisplay id=11 from a prior session
+10-07 11:56:20.556 W/bydmate_helper( 6369): TX_CREATE_VIRTUAL_DISPLAY: SecurityException flags=323 3310x768 (expected for PUBLIC; app falls back to private flags)
+10-07 11:56:20.558 W/ClusterProjection(18629): PUBLIC VirtualDisplay rejected; falling back to private flags
+10-07 11:56:20.592 I/ClusterProjection(18629): VirtualDisplay id=12 3310x768@320; launchAndForce ru.dublgis.dgismobile
+10-07 11:56:21.695 I/bydmate_helper( 6369): launchAndForce split: task=24 from=TaskModeState(windowingMode=4, displayId=0) still state=TaskModeState(windowingMode=4, displayId=0) → am start display=12
+10-07 11:56:22.101 I/bydmate_helper( 6369): launchAndForce split: task=24 fallback ok state=TaskModeState(windowingMode=1, displayId=12)
+10-07 11:56:22.287 I/Trace   (18629): cluster projection d=active:_pkg=ru.dublgis.dgismobile_vd=12 #10272
+10-07 11:56:22.306 I/ActivityManager( 1084): Process ru.dublgis.dgismobile (pid 24564) has died: fg  TOP 
+10-07 11:56:22.434 I/ActivityManager( 1084): Start proc 25065:ru.dublgis.dgismobile/u0a102 for null
+10-07 11:56:25.307 I/Trace   (18629): cluster verify d=after_ms=3000_vd=12_task=none_overlay=true_split=off #10273
+10-07 11:56:46.339 I/ClusterProjection(18629): setMode: FULLSCREEN -> OFF
+10-07 11:56:46.339 I/Trace   (18629): cluster setMode d=FULLSCREEN_->_OFF_(reason=star_key) #10275
+10-07 11:56:46.348 I/Trace   (18629): cluster pullback: d=task_ru.dublgis.dgismobile_not_found_(already_gone) #10276

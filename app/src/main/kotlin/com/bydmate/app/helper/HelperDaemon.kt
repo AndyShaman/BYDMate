@@ -3165,7 +3165,10 @@ internal fun setWindowingModeCompat(
             throw IllegalStateException("am stack remove failed: ${removed.take(200)}")
         }
         sleep(500L)
-        val out = shell("am start --display 0 -n \"\$1\"", listOf(component))
+        // Explicit mode (#288): with no --windowingMode the platform resolves the fresh task's
+        // mode from display 0, and a native split still active there takes it into its secondary
+        // pane (wm=4), so the next projection starts from a split pane again.
+        val out = shell("am start --windowingMode $WINDOWING_MODE_FULLSCREEN --display 0 -n \"\$1\"", listOf(component))
         if (out.contains("Error")) throw IllegalStateException("am start fullscreen failed: ${out.take(200)}")
     }
 }
