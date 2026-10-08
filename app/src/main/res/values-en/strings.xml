@@ -867,7 +867,7 @@
     <string name="settings_tg_backup_step_token">Token</string>
     <string name="settings_tg_backup_step_code">Code</string>
     <string name="settings_tg_backup_step_done">Done</string>
-    <string name="settings_tg_backup_code_instruction">Open the chat with @%1$s in Telegram, send it this code and tap “Check”.</string>
+    <string name="settings_tg_backup_code_instruction">Send this code to @%1$s in a private chat, or add the bot to your group and send /start@%1$s followed by the code there. Then tap “Check”.</string>
     <string name="settings_tg_backup_copy_code">Copy code</string>
     <string name="settings_tg_backup_code_copied">Code copied</string>
     <string name="settings_tg_backup_code_not_received">The code has not arrived yet. Send it to the bot and tap “Check” again.</string>

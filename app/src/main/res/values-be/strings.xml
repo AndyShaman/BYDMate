@@ -1018,7 +1018,7 @@
     <string name="settings_tg_backup_step_token">Токен</string>
     <string name="settings_tg_backup_step_code">Код</string>
     <string name="settings_tg_backup_step_done">Гатова</string>
-    <string name="settings_tg_backup_code_instruction">Адкрыйце чат з @%1$s у Telegram, адпраўце яму гэты код і націсніце «Праверыць».</string>
+    <string name="settings_tg_backup_code_instruction">Адпраўце гэты код боту @%1$s у асабісты чат або дадайце бота ў сваю групу і напішыце там /start@%1$s і код праз прабел. Потым націсніце «Праверыць».</string>
     <string name="settings_tg_backup_copy_code">Скапіраваць код</string>
     <string name="settings_tg_backup_code_copied">Код скапіраваны</string>
     <string name="settings_tg_backup_code_not_received">Код яшчэ не прыйшоў. Адпраўце яго боту і націсніце «Праверыць» зноў.</string>

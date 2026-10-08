@@ -860,7 +860,7 @@
     <string name="settings_tg_backup_step_token">Token</string>
     <string name="settings_tg_backup_step_code">Código</string>
     <string name="settings_tg_backup_step_done">Pronto</string>
-    <string name="settings_tg_backup_code_instruction">Abra o chat com @%1$s no Telegram, envie este código e toque em “Verificar”.</string>
+    <string name="settings_tg_backup_code_instruction">Envie este código para @%1$s em um chat privado ou adicione o bot ao seu grupo e envie lá /start@%1$s seguido do código. Depois toque em “Verificar”.</string>
     <string name="settings_tg_backup_copy_code">Copiar código</string>
     <string name="settings_tg_backup_code_copied">Código copiado</string>
     <string name="settings_tg_backup_code_not_received">O código ainda não chegou. Envie-o ao bot e toque em “Verificar” de novo.</string>

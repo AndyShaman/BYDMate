@@ -48,7 +48,7 @@ class TelegramBackupSinkTest {
         assertFalse(error.transient)
     }
 
-    @Test fun `findPrivateChat returns the private chat that sent the code, with its name`() = runTest {
+    @Test fun `findLinkChat returns the private chat that sent the code, with its name`() = runTest {
         server.enqueue(MockResponse().setBody(
             """{"ok":true,"result":[
                 {"update_id":1,"message":{"text":"482913","chat":{"id":111,"type":"private","first_name":"Old"}}},
@@ -59,35 +59,84 @@ class TelegramBackupSinkTest {
             ]}"""
         ))
 
-        assertEquals(TelegramChat(222L, "Andy @andy_s"), sink.findPrivateChat("123:abc", "482913").getOrThrow())
+        assertEquals(TelegramChat(222L, "Andy @andy_s"), sink.findLinkChat("123:abc", "482913").getOrThrow())
         assertEquals(
             "/bot123:abc/getUpdates?offset=-100&limit=100&allowed_updates=%5B%22message%22%5D",
             server.takeRequest().path,
         )
     }
 
-    @Test fun `findPrivateChat is null when no chat sent the code`() = runTest {
+    @Test fun `findLinkChat is null when no chat sent the code`() = runTest {
         server.enqueue(MockResponse().setBody(
             """{"ok":true,"result":[{"update_id":1,"message":{"text":"111111","chat":{"id":7,"type":"private"}}}]}"""
         ))
-        assertNull(sink.findPrivateChat("123:abc", "482913").getOrThrow())
+        assertNull(sink.findLinkChat("123:abc", "482913").getOrThrow())
     }
 
-    @Test fun `findPrivateChat ignores a chat whose latest message is not the code`() = runTest {
+    @Test fun `findLinkChat finds a chat whose code is followed by other messages`() = runTest {
         server.enqueue(MockResponse().setBody(
             """{"ok":true,"result":[
                 {"update_id":1,"message":{"text":"482913","chat":{"id":7,"type":"private","first_name":"A"}}},
                 {"update_id":2,"message":{"text":"hello","chat":{"id":7,"type":"private","first_name":"A"}}}
             ]}"""
         ))
-        assertNull(sink.findPrivateChat("123:abc", "482913").getOrThrow())
+        assertEquals(TelegramChat(7L, "A"), sink.findLinkChat("123:abc", "482913").getOrThrow())
     }
 
-    @Test fun `findPrivateChat name falls back to whichever part exists`() = runTest {
+    @Test fun `findLinkChat finds a group whose code is followed by a service message and other text`() = runTest {
+        server.enqueue(MockResponse().setBody(
+            """{"ok":true,"result":[
+                {"update_id":1,"message":{"text":"/start@MyBot 482913","chat":{"id":-500,"type":"group","title":"Our car"}}},
+                {"update_id":2,"message":{"new_chat_members":[{"id":9,"is_bot":false,"first_name":"B"}],"chat":{"id":-500,"type":"group","title":"Our car"}}},
+                {"update_id":3,"message":{"text":"/help","chat":{"id":-500,"type":"group","title":"Our car"}}}
+            ]}"""
+        ))
+        assertEquals(TelegramChat(-500L, "Our car"), sink.findLinkChat("123:abc", "482913").getOrThrow())
+    }
+
+    @Test fun `findLinkChat name falls back to whichever part exists`() = runTest {
         server.enqueue(MockResponse().setBody(
             """{"ok":true,"result":[{"update_id":1,"message":{"text":"482913","chat":{"id":7,"type":"private","username":"only_nick"}}}]}"""
         ))
-        assertEquals(TelegramChat(7L, "@only_nick"), sink.findPrivateChat("123:abc", "482913").getOrThrow())
+        assertEquals(TelegramChat(7L, "@only_nick"), sink.findLinkChat("123:abc", "482913").getOrThrow())
+    }
+
+    @Test fun `findLinkChat finds a group that sent start with the code, named by its title`() = runTest {
+        server.enqueue(MockResponse().setBody(
+            """{"ok":true,"result":[
+                {"update_id":1,"message":{"text":"/start 482913","chat":{"id":-500,"type":"group","title":"Our car"}}}
+            ]}"""
+        ))
+        assertEquals(TelegramChat(-500L, "Our car"), sink.findLinkChat("123:abc", "482913").getOrThrow())
+    }
+
+    @Test fun `findLinkChat finds a supergroup that sent start addressed to the bot`() = runTest {
+        server.enqueue(MockResponse().setBody(
+            """{"ok":true,"result":[
+                {"update_id":1,"message":{"text":"/start@MyBot 482913","chat":{"id":-1001234,"type":"supergroup","title":"Family"}}}
+            ]}"""
+        ))
+        assertEquals(TelegramChat(-1001234L, "Family"), sink.findLinkChat("123:abc", "482913").getOrThrow())
+    }
+
+    @Test fun `findLinkChat still finds a private chat that sent the plain code`() = runTest {
+        server.enqueue(MockResponse().setBody(
+            """{"ok":true,"result":[
+                {"update_id":1,"message":{"text":"/start 482913","chat":{"id":-500,"type":"group","title":"Old"}}},
+                {"update_id":2,"message":{"text":"482913","chat":{"id":222,"type":"private","first_name":"Andy"}}}
+            ]}"""
+        ))
+        assertEquals(TelegramChat(222L, "Andy"), sink.findLinkChat("123:abc", "482913").getOrThrow())
+    }
+
+    @Test fun `findLinkChat ignores a group that sent another code`() = runTest {
+        server.enqueue(MockResponse().setBody(
+            """{"ok":true,"result":[
+                {"update_id":1,"message":{"text":"/start 111111","chat":{"id":-500,"type":"group","title":"Our car"}}},
+                {"update_id":2,"message":{"text":"/start@MyBot 4829130","chat":{"id":-600,"type":"supergroup","title":"Family"}}}
+            ]}"""
+        ))
+        assertNull(sink.findLinkChat("123:abc", "482913").getOrThrow())
     }
 
     @Test fun `200 with ok false is an error by its error_code`() = runTest {
@@ -111,7 +160,7 @@ class TelegramBackupSinkTest {
             """{"ok":false,"error_code":409,"description":"Conflict: can't use getUpdates method while webhook is active"}"""
         ))
 
-        val error = failureOf(sink.findPrivateChat("123:abc", "482913"))
+        val error = failureOf(sink.findLinkChat("123:abc", "482913"))
         assertEquals(TelegramError.WEBHOOK, error.error)
         assertEquals(409, error.httpCode)
         assertFalse(error.transient)
@@ -133,9 +182,9 @@ class TelegramBackupSinkTest {
         assertFalse(error.transient)
     }
 
-    @Test fun `findPrivateChat is null when nobody wrote to the bot`() = runTest {
+    @Test fun `findLinkChat is null when nobody wrote to the bot`() = runTest {
         server.enqueue(MockResponse().setBody("""{"ok":true,"result":[]}"""))
-        assertNull(sink.findPrivateChat("123:abc", "482913").getOrThrow())
+        assertNull(sink.findLinkChat("123:abc", "482913").getOrThrow())
     }
 
     @Test fun `sendMessage posts chat id and text`() = runTest {
