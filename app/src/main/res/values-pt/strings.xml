@@ -1269,6 +1269,7 @@
     <string name="settings_route_navigator_yandex">Yandex Navigator</string>
     <string name="settings_route_navigator_dgis">2GIS</string>
     <string name="settings_route_navigator_maps">Yandex Maps</string>
+    <string name="settings_route_navigator_waze">Waze</string>
     <string name="settings_route_navigator_hint">Qual aplicativo abre para rotas e busca no mapa</string>
     <string name="settings_agent_memory_title">Memória sobre o motorista</string>
     <string name="settings_agent_memory_hint">O agente memoriza o nome e as preferências constantes quando você lhe diz isso. Diga “esqueça …” para remover um fato</string>
@@ -1715,6 +1716,7 @@
     <string name="dispatch_phone_missing">phone não definido</string>
     <string name="dispatch_dgis_fallback">2GIS não está instalado, foi aberto o Yandex Navigator</string>
     <string name="dispatch_maps_fallback">Yandex Maps não está instalado, foi aberto o Yandex Navigator</string>
+    <string name="dispatch_waze_fallback">Waze não está instalado, foi aberto o Yandex Navigator</string>
     <string name="dispatch_shortcut_unknown">shortcut desconhecido: %1$s</string>
     <string name="dispatch_coords_missing">lat/lon não definidos</string>
     <string name="dispatch_url_missing">url não definida</string>

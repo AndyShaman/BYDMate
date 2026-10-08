@@ -1267,8 +1267,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     }
 
     /**
-     * Which map app routes go to, plus the reason text when 2GIS or Maps was replaced by
-     * Yandex Navigator because it is not installed (#190, #200).
+     * Which map app routes go to, plus the reason text when 2GIS, Maps or Waze was replaced by
+     * Yandex Navigator because it is not installed (#190, #200, #305).
      */
     private fun resolveNavigator(): Pair<String, String?> {
         val chosen = RouteNavigatorUris.normalize(
@@ -1286,6 +1286,12 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         if (mapsFellBack) {
             Log.i(TAG, "navigate: yandex maps not installed, falling back to yandex")
             return RouteNavigatorUris.YANDEX to appStrings.get(R.string.dispatch_maps_fallback)
+        }
+        val wazeFellBack = chosen == RouteNavigatorUris.WAZE &&
+            !isPackageInstalled(RouteNavigatorUris.WAZE_PACKAGE)
+        if (wazeFellBack) {
+            Log.i(TAG, "navigate: waze not installed, falling back to yandex")
+            return RouteNavigatorUris.YANDEX to appStrings.get(R.string.dispatch_waze_fallback)
         }
         return chosen to null
     }
@@ -1358,6 +1364,20 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         isMapsRequest(payload) || resolveNavigator().first == RouteNavigatorUris.MAPS
 
     /**
+     * The package [startNavigate] will pin the intent to for this payload (#305): 2GIS or Waze
+     * chosen and installed. Null when the route goes to Maps, to Yandex Navigator (chosen or as
+     * the fallback), or to the Home/Work shortcut, which always opens Yandex Navigator's own
+     * action. Mirrors [sendNavigateIntent]'s routing exactly, like [willOpenMaps].
+     */
+    fun willOpenPinned(payload: JSONObject): String? {
+        if (isMapsRequest(payload) || payload.optString("shortcut").isNotBlank()) return null
+        val navigator = resolveNavigator().first
+        return if (navigator == RouteNavigatorUris.DGIS || navigator == RouteNavigatorUris.WAZE) {
+            RouteNavigatorUris.packageOf(navigator)
+        } else null
+    }
+
+    /**
      * The app="maps" mirror of [sendNavigateIntent] on Yandex Maps' own yandexmaps:// dialect
      * (#200, from a user patch). URI intents are not package-pinned — the scheme resolves to
      * whichever store variant of Maps is installed.
@@ -1416,8 +1436,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     /**
      * Fires one navigation deep link and journals which app it went to (#190).
      *
-     * The package is pinned for 2GIS only: the Yandex links have always resolved by scheme, and
-     * pinning them now would break any head unit whose navigator ships under another package.
+     * The package is pinned for 2GIS and Waze only: the Yandex links have always resolved by
+     * scheme, and pinning them now would break any head unit whose navigator ships under another
+     * package.
      */
     private fun startNavigate(
         navigator: String, mode: String, uri: String, label: String, fallbackReason: String?,
@@ -1425,8 +1446,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         Log.i(TAG, "navigate: app=$navigator mode=$mode uri=${LinkRedaction.forLog(uri)}")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (navigator == RouteNavigatorUris.DGIS) {
-            intent.setPackage(RouteNavigatorUris.DGIS_PACKAGE)
+        if (navigator == RouteNavigatorUris.DGIS || navigator == RouteNavigatorUris.WAZE) {
+            intent.setPackage(RouteNavigatorUris.packageOf(navigator))
         }
         val result = tryStartActivity(intent, label)
         Log.i(TAG, "navigate: intent sent label=${LinkRedaction.forLog(label)} ok=${result.success}")
