@@ -16,6 +16,7 @@ import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
@@ -30,6 +31,11 @@ class AgentToolsNavigateVerifyTest {
     private val dispatcher = mockk<ActionDispatcher>(relaxed = true)
     private val places = mockk<PlaceRepository>(relaxed = true)
     private val weather = mockk<WeatherClient>(relaxed = true)
+
+    init {
+        // A relaxed mock answers "" for String?, which would read as a pinned navigator.
+        every { dispatcher.willOpenPinned(any()) } returns null
+    }
 
     private fun tools() = AgentTools(
         mockk<VoiceGate>(relaxed = true),
@@ -110,5 +116,63 @@ class AgentToolsNavigateVerifyTest {
         assertTrue(out.has("error"))
         assertTrue(out.getString("error").contains("не вышел на передний план"))
         assertFalse(out.getString("error").contains("адрес не найден"))
+    }
+
+    /** #305: a route pinned to Waze is proven by Waze reaching the front, not the Navigator. */
+    @Test fun `waze route waits for waze`() = runTest {
+        every { dispatcher.willOpenPinned(any()) } returns "com.waze"
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val t = tools().also {
+            it.naviForegroundCheck = { false }
+            it.pinnedForegroundCheck = { _, pkg -> pkg == "com.waze" }
+            it.naviVerifyAttempts = 2
+            it.naviVerifyIntervalMs = 1L
+        }
+        val out = JSONObject(t.execute(call("navigate_to", """{"lat":55.0,"lon":37.0}""")))
+        assertTrue(out.toString(), out.optBoolean("ok"))
+    }
+
+    @Test fun `waze never surfacing names waze in the error`() = runTest {
+        every { dispatcher.willOpenPinned(any()) } returns "com.waze"
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val t = tools().also {
+            it.naviForegroundCheck = { true }
+            it.pinnedForegroundCheck = { _, _ -> false }
+            it.naviVerifyAttempts = 2
+            it.naviVerifyIntervalMs = 1L
+        }
+        val out = JSONObject(t.execute(call("navigate_to", """{"lat":55.0,"lon":37.0}""")))
+        assertTrue(out.has("error"))
+        assertTrue(out.getString("error"), out.getString("error").contains("Waze не вышел на передний план"))
+    }
+
+    /** #190: 2GIS had the same defect - the check now waits for its package as well. */
+    @Test fun `2gis route waits for 2gis`() = runTest {
+        every { dispatcher.willOpenPinned(any()) } returns "ru.dublgis.dgismobile"
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val t = tools().also {
+            it.naviForegroundCheck = { false }
+            it.pinnedForegroundCheck = { _, pkg -> pkg == "ru.dublgis.dgismobile" }
+            it.naviVerifyAttempts = 2
+            it.naviVerifyIntervalMs = 1L
+        }
+        val out = JSONObject(t.execute(call("navigate_to", """{"lat":55.0,"lon":37.0}""")))
+        assertTrue(out.toString(), out.optBoolean("ok"))
+    }
+
+    /** Home/Work always opens Yandex Navigator's own shortcut, so that is what the check waits for. */
+    @Test fun `waze chosen home shortcut waits for the navigator`() = runTest {
+        coEvery { places.getAllSnapshot() } returns emptyList()
+        every { dispatcher.willOpenPinned(match { it.has("shortcut") }) } returns null
+        every { dispatcher.willOpenPinned(match { !it.has("shortcut") }) } returns "com.waze"
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val t = tools().also {
+            it.naviForegroundCheck = { true }
+            it.pinnedForegroundCheck = { _, _ -> throw AssertionError("must wait for the Navigator") }
+            it.naviVerifyAttempts = 1
+            it.naviVerifyIntervalMs = 1L
+        }
+        val out = JSONObject(t.execute(call("navigate_to", """{"destination":"домой"}""")))
+        assertTrue(out.toString(), out.optBoolean("ok"))
     }
 }

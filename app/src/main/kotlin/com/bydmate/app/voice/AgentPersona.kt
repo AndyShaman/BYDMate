@@ -9,8 +9,11 @@ enum class AgentPersona(val id: String) {
 
     /** Maps a canonical terse spoken outcome ("Готово"/"Не получилось"/"Не понял"/"Ошибка")
      *  to a random persona phrase; any other string passes through unchanged. */
-    fun spokenPhrase(spoken: String, random: Random = Random.Default): String =
-        pools(this)[spoken]?.random(random) ?: spoken
+    fun spokenPhrase(
+        spoken: String,
+        random: Random = Random.Default,
+        gender: TtsGender = TtsGender.MALE,
+    ): String = pools(this)[spoken]?.random(random)?.forGender(gender) ?: spoken
 
     /** A random short filler ("Сейчас посмотрю.") spoken while a slow tool call is in flight,
      *  so the driver hears something before the real answer. */
@@ -18,34 +21,42 @@ enum class AgentPersona(val id: String) {
 
     /** Every phrase this persona can speak (outcome pools + fillers), for the online-voice
      *  TTS precache -- nothing here is picked at runtime by index, only by content. */
-    fun phrases(): List<String> = pools(this).values.flatten() + FILLER_POOLS.getValue(this)
+    fun phrases(gender: TtsGender = TtsGender.MALE): List<String> =
+        pools(this).values.flatten().map { it.forGender(gender) } + FILLER_POOLS.getValue(this)
 
     companion object {
         fun fromId(id: String?): AgentPersona = entries.firstOrNull { it.id == id } ?: NAVIGATOR
 
+        /** A spoken phrase with a feminine form; [f] defaults to [m] when no verb is gendered. */
+        private class Phrase(val m: String, val f: String = m) {
+            fun forGender(gender: TtsGender) = if (gender == TtsGender.FEMALE) f else m
+        }
+        private fun ph(vararg phrases: Any): List<Phrase> =
+            phrases.map { if (it is Phrase) it else Phrase(it as String) }
+
         private val SNARKY_POOLS = mapOf(
-            "Готово" to listOf("Готово, блин.", "Сделал. Чудо, да?", "Есть. Не благодари.",
-                "Ну сделал, сделал.", "Опа, сработало. Сам в шоке."),
-            "Не получилось" to listOf("Хрен там. Не вышло.", "Облом. Машина упёрлась.",
+            "Готово" to ph("Готово, блин.", Phrase("Сделал. Чудо, да?", "Сделала. Чудо, да?"), "Есть. Не благодари.",
+                Phrase("Ну сделал, сделал.", "Ну сделала, сделала."), Phrase("Опа, сработало. Сам в шоке.", "Опа, сработало. Сама в шоке.")),
+            "Не получилось" to ph("Хрен там. Не вышло.", "Облом. Машина упёрлась.",
                 "Не вышло, зараза.", "Нет. Просто нет."),
-            "Не понял" to listOf("Чего?", "Это чё было?", "Ещё раз, по-человечески."),
-            "Ошибка" to listOf("Всё сломалось. Красота.", "Опять ошибка. Ну класс."),
+            "Не понял" to ph("Чего?", "Это чё было?", "Ещё раз, по-человечески."),
+            "Ошибка" to ph("Всё сломалось. Красота.", "Опять ошибка. Ну класс."),
         )
         private val NAVIGATOR_POOLS = mapOf(
-            "Готово" to listOf("Готово. Что-нибудь ещё?", "Сделано, командир.",
-                "Выполнил. Хорошей дороги.", "Готово."),
-            "Не получилось" to listOf("Не получилось. Давай попробуем иначе.",
+            "Готово" to ph("Готово. Что-нибудь ещё?", "Сделано, командир.",
+                Phrase("Выполнил. Хорошей дороги.", "Выполнила. Хорошей дороги."), "Готово."),
+            "Не получилось" to ph("Не получилось. Давай попробуем иначе.",
                 "Не вышло, попробуем ещё раз."),
-            "Не понял" to listOf("Не расслышал. Повтори, пожалуйста.", "Не понял, скажи иначе."),
-            "Ошибка" to listOf("Возникла ошибка. Разберёмся.", "Что-то пошло не так."),
+            "Не понял" to ph(Phrase("Не расслышал. Повтори, пожалуйста.", "Не расслышала. Повтори, пожалуйста."), Phrase("Не понял, скажи иначе.", "Не поняла, скажи иначе.")),
+            "Ошибка" to ph("Возникла ошибка. Разберёмся.", "Что-то пошло не так."),
         )
         private val ENGINEER_POOLS = mapOf(
-            "Готово" to listOf("Есть.", "Выполнено.", "Принято. Сделано.", "Готово."),
-            "Не получилось" to listOf("Отказ. Система не ответила.", "Не выполнено."),
-            "Не понял" to listOf("Не разобрал. Повтори.", "Вводная неясна. Повтори."),
-            "Ошибка" to listOf("Сбой. Подробности в журнале.", "Ошибка системы."),
+            "Готово" to ph("Есть.", "Выполнено.", "Принято. Сделано.", "Готово."),
+            "Не получилось" to ph("Отказ. Система не ответила.", "Не выполнено."),
+            "Не понял" to ph(Phrase("Не разобрал. Повтори.", "Не разобрала. Повтори."), "Вводная неясна. Повтори."),
+            "Ошибка" to ph("Сбой. Подробности в журнале.", "Ошибка системы."),
         )
-        private fun pools(p: AgentPersona): Map<String, List<String>> = when (p) {
+        private fun pools(p: AgentPersona): Map<String, List<Phrase>> = when (p) {
             SNARKY -> SNARKY_POOLS
             NAVIGATOR -> NAVIGATOR_POOLS
             ENGINEER -> ENGINEER_POOLS

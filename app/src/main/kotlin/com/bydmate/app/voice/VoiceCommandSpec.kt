@@ -54,7 +54,7 @@ object VoiceCatalog {
         VoiceCommandSpec(ON, AC_AUTO_MODE) { "空调自动" },
         VoiceCommandSpec(ON, AC_FLOW) { "打开空调通风" },
         VoiceCommandSpec(SET, AC_FAN, ValueSpec(1, 7)) { n -> "风量${n}" },
-        VoiceCommandSpec(SET, AC_TEMP, ValueSpec(16, 30)) { n -> "设置温度${n}" },
+        VoiceCommandSpec(SET, AC_TEMP, ValueSpec(16, 33)) { n -> "设置温度${n}" },
         VoiceCommandSpec(ON, AC_RECIRC_INNER) { "内循环" },
         VoiceCommandSpec(ON, AC_RECIRC_OUTER) { "外循环" },
         VoiceCommandSpec(ON, DEFROST_FRONT) { "吹前挡" },

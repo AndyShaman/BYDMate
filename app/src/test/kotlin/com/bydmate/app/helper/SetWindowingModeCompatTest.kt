@@ -68,6 +68,8 @@ class SetWindowingModeCompatTest {
         // The light path runs first, but the default stateOf cannot read the task back — an
         // unconfirmed pullback keeps the legacy remove+relaunch (validated on-car).
         // The plain relaunch must NOT carry --activityType so the task is restored as type=standard.
+        // #288: it does carry --windowingMode 1; without it a native split still active on display 0
+        // took the fresh task into its secondary pane (wm=4) and the next projection failed again.
         run(mode = WINDOWING_MODE_FULLSCREEN, reflectSet = { _, _ -> throw NoSuchMethodException("x") })
         assertEquals(
             listOf(
@@ -79,7 +81,7 @@ class SetWindowingModeCompatTest {
                 "sleep:300",
                 "shell:am stack remove 36",
                 "sleep:500",
-                "shell:am start --display 0 -n ru.yandex.yandexnavi/.core.NavigatorActivity",
+                "shell:am start --windowingMode 1 --display 0 -n ru.yandex.yandexnavi/.core.NavigatorActivity",
             ),
             ops,
         )
@@ -205,13 +207,13 @@ class SetWindowingModeCompatTest {
                 "sleep:300",
                 "shell:am stack remove 36",
                 "sleep:500",
-                "shell:am start --display 0 -n ru.yandex.yandexnavi/.core.NavigatorActivity",
+                "shell:am start --windowingMode 1 --display 0 -n ru.yandex.yandexnavi/.core.NavigatorActivity",
             ),
             ops,
         )
         assertEquals(
             "the light am start must be issued once",
-            1, ops.count { "am start --windowingMode 1" in it },
+            1, ops.takeWhile { "am stack remove" !in it }.count { "am start --windowingMode 1" in it },
         )
         assertEquals("one remove", 1, ops.count { "am stack remove" in it })
     }
@@ -225,12 +227,12 @@ class SetWindowingModeCompatTest {
         )
         assertEquals(
             "the light am start must be issued once",
-            1, ops.count { "am start --windowingMode 1" in it },
+            1, ops.takeWhile { "am stack remove" !in it }.count { "am start --windowingMode 1" in it },
         )
         assertEquals("one remove", 1, ops.count { "am stack remove" in it })
         assertEquals(
             "one fullscreen relaunch",
-            1, ops.count { it == "shell:am start --display 0 -n ru.yandex.yandexnavi/.core.NavigatorActivity" },
+            1, ops.dropWhile { "am stack remove" !in it }.count { it == "shell:am start --windowingMode 1 --display 0 -n ru.yandex.yandexnavi/.core.NavigatorActivity" },
         )
     }
 

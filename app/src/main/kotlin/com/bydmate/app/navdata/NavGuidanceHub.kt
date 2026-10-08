@@ -87,6 +87,9 @@ object NavGuidanceHub {
     /** The HUD way (1..3) the output runs, 0 while it is off: for the route-summary line only. */
     @Volatile var hudWay: Int = 0
 
+    /** [hudWay] label of the gateway-less path (#301, Amap adapter to the cluster card); not a way from settings. */
+    const val WAY_AMAP_CLUSTER = 10
+
     /** Trace id of the last guidance-off line: the cause a disarm that follows it links to. */
     @Volatile var lastOffTraceId: Long = 0L
         private set

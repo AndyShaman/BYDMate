@@ -394,7 +394,7 @@ The agent has 32 tools. Example phrases:
 **Navigation and places**
 - "Поехали домой" (Let's go home), "Поехали на работу" (Let's go to work), "Поехали на дачу" (Let's go to the dacha) (saved places). On "поехали" (let's go) the assistant taps "Go" in Yandex Navigator by itself, on "построй маршрут домой" (build a route home) it only builds the route
 - With split screen on, the assistant first collapses it, builds the route, and puts the panes back: otherwise the firmware recreates the Navigator and the route is lost. Requires the BYDMate accessibility service to be on
-- Say "в картах" (in Maps): "поехали домой в картах" (let's go home in Maps), "найди заправку в яндекс картах" (find a gas station in Yandex Maps); the route, search, or point display go to Yandex Maps, without these words the route goes to the navigator chosen in the "Navigator for routes" setting (Settings → Voice agent → Agent), Yandex Navigator by default
+- Say "в картах" (in Maps): "поехали домой в картах" (let's go home in Maps), "найди заправку в яндекс картах" (find a gas station in Yandex Maps); the route, search, or point display go to Yandex Maps, without these words the route goes to the navigator chosen in the "Navigator for routes" setting (Settings → Voice agent → Agent), Yandex Navigator by default; 2GIS, Yandex Maps and Waze are the other choices
 - "Найди зарядки рядом" (Find charging stations nearby)
 - "Хватит ли заряда до Казани?" (Is there enough charge to reach Kazan?), "Сколько ехать до аэропорта?" (How long to the airport?)
 - "Запомни это место как дача" (Remember this place as dacha), "Какие места сохранены?" (What places are saved?)
@@ -419,7 +419,7 @@ The agent has 32 tools. Example phrases:
 | Group | What's available |
 |--------|--------------|
 | Windows | all, front, rear, driver, passenger, rear left and rear right; open, close, halfway, vent, per group and per individual window |
-| Climate | on, off, temperature from 16 to 30 |
+| Climate | on, off, temperature from 16 to 33 |
 | Seat heating | driver and passenger, levels 1-5 and off |
 | Seat ventilation | driver and passenger, levels 1-5 and off |
 | Mirrors | heating on/off |
@@ -769,11 +769,11 @@ If a Telegram bot is connected, every copy is sent to your chat with the bot. If
 
 ### How to Connect a Telegram Bot
 
-You need your own bot: copies arrive only for you, in a private chat with your bot.
+You need your own bot: copies arrive only in your chat with the bot or in your group where you added it.
 
 1. In Telegram, open **@BotFather**, send it `/newbot`, and pick a name and address for the bot. BotFather sends back a token, a long string like `123456789:AA...`.
 2. In BYDMate open **Settings → Service & Data → Data**, the **"Telegram bot"** block. Paste the token into the "Bot token" field and tap **"Check"**.
-3. The app shows a short code made of digits. Open the chat with your bot in Telegram and send it this code. You can copy the code with the "Copy code" button.
+3. The app shows a short code made of digits. Open the chat with your bot in Telegram and send it this code. You can copy the code with the "Copy code" button. To get reports and copies in a shared chat, for example for everyone who drives the car, add the bot to your private group and send `/start@your_bot CODE` there.
 4. Go back to BYDMate and tap **"Check"** again. The bot sends a message to the chat, "BYDMate connected. Backups will arrive here.", and the block shows a "Connected" mark with the bot's and chat's name.
 
 Errors show up right under the button: a wrong token, no network, the code has not arrived yet, a file over 50 MB, and others. The "Back" button on the code step returns you to the token, "Disconnect" forgets the bot, and copies stay in Download only.

@@ -112,7 +112,7 @@ class RuleTextTest {
     @Test fun `one-shot with a param closes with a comma`() {
         val once = TriggerDef(OneShotTrigger.PARAM, "", "==", "2026-09-30T07:30", "", kind = OneShotTrigger.KIND)
         assertEquals(
-            "30 сентября в 07:30, один раз, и температура снаружи меньше 5 °C: авто AC, темп. 22°C",
+            "30 сентября в 07:30, один раз, и температура снаружи меньше 5 °C: авто AC, температура: 22 °C",
             phrase(listOf(once, param("ExtTemp", "<", "5")), listOf(cmd("自动空调"), cmd("设置温度22"))),
         )
     }
@@ -213,12 +213,12 @@ class RuleTextTest {
         val ok = journalLine(entry(ms(2026, 9, 27, 8, 12), true, snapshot = """{"Gear":1,"Speed":0.0}"""), ctx, now, zone)
         assertEquals("Выполнено", ok.status)
         assertEquals("Сегодня в 08:12", ok.time)
-        assertEquals("Темп. 22°C", ok.what)
+        assertEquals("Температура: 22 °C", ok.what)
         assertEquals("Передача P, скорость 0 км/ч", ok.why)
 
         val err = journalLine(entry(ms(2026, 9, 24, 8, 10), false, reason = "Машина не приняла команду"), ctx, now, zone)
         assertEquals(RuleStatusKind.ERROR, err.kind)
-        assertEquals("Темп. 22°C не выполнено", err.what)
+        assertEquals("Температура: 22 °C не выполнено", err.what)
         assertEquals("Машина не приняла команду", err.why)
 
         val cancelled = journalLine(entry(now, false, "cancelled", "Отменено в окне подтверждения"), ctx, now, zone)

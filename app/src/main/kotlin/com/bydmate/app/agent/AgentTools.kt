@@ -15,6 +15,7 @@ import com.bydmate.app.data.automation.ConfirmOverlayManager
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.automation.PlaceGeometry
 import com.bydmate.app.data.automation.PowerStateRuleMigration
+import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.automation.RuleDraftValidator
 import com.bydmate.app.data.automation.RuleInserts
 import com.bydmate.app.data.automation.TriggerValidationError
@@ -272,6 +273,11 @@ class AgentTools @Inject constructor(
         foregroundPackagesSince(sinceMs).any { it in NavPackages.YANDEX_MAPS }
     }
 
+    /** The same question for a route pinned to 2GIS or Waze (#305): that package, not the Navigator. */
+    internal var pinnedForegroundCheck: (Long, String) -> Boolean = { since, pkg ->
+        pkg in foregroundPackagesSince(since)
+    }
+
     /** Test seam - poll interval for the navigate foreground verification. */
     internal var naviVerifyIntervalMs = 500L
 
@@ -286,9 +292,20 @@ class AgentTools @Inject constructor(
         // The route went to whichever app the payload named or the settings default resolved
         // to (#200), so that is the app whose arrival proves it: waiting for the Navigator on
         // a Maps route (explicit app="maps" or Maps chosen in settings) fails a working route.
+        // The same goes for a route pinned to 2GIS or Waze (#305).
         val maps = actionDispatcher.willOpenMaps(payload)
-        val surfaced = if (maps) mapsForegroundCheck else naviForegroundCheck
-        val appName = if (maps) "Яндекс Карты" else "Навигатор"
+        val pinned = if (maps) null else actionDispatcher.willOpenPinned(payload)
+        val surfaced: (Long) -> Boolean = when {
+            maps -> mapsForegroundCheck
+            pinned != null -> { since -> pinnedForegroundCheck(since, pinned) }
+            else -> naviForegroundCheck
+        }
+        val appName = when {
+            maps -> "Яндекс Карты"
+            pinned == RouteNavigatorUris.DGIS_PACKAGE -> "2ГИС"
+            pinned == RouteNavigatorUris.WAZE_PACKAGE -> "Waze"
+            else -> "Навигатор"
+        }
         val result = actionDispatcher.dispatch(
             ActionDef(command = "", displayName = displayName, kind = "navigate",
                 payload = payload.toString()), data = null)

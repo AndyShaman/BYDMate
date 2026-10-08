@@ -354,6 +354,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val driverMemory: com.bydmate.app.agent.DriverMemory,
     private val dayMemory: com.bydmate.app.agent.DayMemory,
     private val adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager,
+    private val cloudOverWifiManager: com.bydmate.app.data.autoservice.CloudOverWifiManager,
     private val fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
     private val ruleDao: com.bydmate.app.data.local.dao.RuleDao,
@@ -1841,6 +1842,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                         "trigger=${adbRestoreManager.lastTrigger} retries=${adbRestoreManager.retryCount} " +
                         "write_secure_settings=$secureSettingsGranted"
                 )
+                appendLine(cloudOverWifiManager.dumpLine())
                 appendLine("adb_verdict: ${adbVerdictMonitor.verdict.value ?: "(none)"}")
                 appendLine("daemon_ever_alive: ${helperBootstrap.daemonEverAlive()}")
                 appendLine(com.bydmate.app.data.backup.PostRestoreCheck.dumpLine(appContext))
@@ -2067,6 +2069,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("someip_services=${someIp?.startedServices()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeServices(it) } ?: "n/a"}")
                 appendLine("someip_fire_rc=${someIp?.fireCounts()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeFires(it) } ?: "n/a"}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
+                // No gateway (#301): TYPE 0 frames and KILLs to the Amap adapter's cluster card.
+                appendLine(hudController.amapCluster?.let {
+                    "amap_cluster: frames=${it.framesSent} kills=${it.killsSent} last_frame_ts=${it.lastFrameTs}"
+                } ?: "amap_cluster: n/a")
                 appendLine("hub_snapshot=${RecordingDumpFormat.hubSnapshot(com.bydmate.app.navdata.NavGuidanceHub.snapshot())}")
                 // The current route's counters, or the last route's (the route-summary trace line).
                 appendLine("route_summary: ${com.bydmate.app.navdata.NavGuidanceHub.routeSummary()}")
@@ -2855,7 +2861,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 _uiState.update { it.copy(tgBackupCode = newBindCode(), tgBackupBotName = botName) }
                 return null
             }
-            telegramBackupSink.findPrivateChat(token, code).getOrElse { return tgBackupError(it) }
+            telegramBackupSink.findLinkChat(token, code).getOrElse { return tgBackupError(it) }
                 ?: return appStrings.get(R.string.settings_tg_backup_code_not_received)
         }
         telegramBackupSink.sendMessage(token, chat.id, appStrings.get(R.string.settings_tg_backup_greeting))

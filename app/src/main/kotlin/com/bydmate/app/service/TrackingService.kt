@@ -103,6 +103,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var cameraStateMonitor: com.bydmate.app.data.camera.CameraStateMonitor
     @Inject lateinit var adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient
     @Inject lateinit var adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager
+    @Inject lateinit var cloudOverWifiManager: com.bydmate.app.data.autoservice.CloudOverWifiManager
     @Inject lateinit var adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor
     @Inject lateinit var iternioTelemetryClient: IternioTelemetryClient
     @Inject lateinit var webhookTelemetryClient: WebhookTelemetryClient
@@ -1168,7 +1169,9 @@ class TrackingService : Service(), LocationListener {
      * notification — nothing retries. Guidance-active is exactly that moment.
      */
     private fun maybeRearmNotificationListenerGrant(now: Long) {
-        if (!com.bydmate.app.navdata.NavGuidanceHub.snapshot(now).active) return
+        // Without the gateway (#301) a11y stays off, so the hub needs the listener to activate at all.
+        if (!com.bydmate.app.navdata.NavGuidanceHub.snapshot(now).active &&
+            hudController.status.value != com.bydmate.app.hud.HudController.Status.CLUSTER_ONLY) return
         if (now - lastGuidanceGrantRearmTs < GUIDANCE_GRANT_REARM_MS) return
         if (runCatching { notificationListenerGranted() }.getOrDefault(false)) return
         lastGuidanceGrantRearmTs = now
@@ -1859,6 +1862,8 @@ class TrackingService : Service(), LocationListener {
             } catch (e: Exception) {
                 Log.w(TAG, "ADB appop grant failed: ${e.message}")
             }
+            // Cloud over Wi-Fi (#310): the manager gates itself on its toggle.
+            cloudOverWifiManager.requestAttempt("service_start")
         }
         cameraStateMonitor.start()
         serviceScope.launch {
@@ -1906,6 +1911,7 @@ class TrackingService : Service(), LocationListener {
                     runCatching { adbRestoreManager.attemptIfNeeded("wifi_validated") }
                         .onFailure { Log.w(TAG, "ADB restore on validated wifi failed: ${it.message}") }
                 }
+                cloudOverWifiManager.onWifiValidated()
             }
 
             override fun onLost(network: Network) {

@@ -96,6 +96,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.FlowRow
@@ -2595,8 +2597,11 @@ private fun ActionRow(
                     TelegramReportActionControls(
                         action = action, tgBotConnected = tgBotConnected, onUpdate = onUpdate, modifier = fill,
                     )
-                else -> // "param" (default)
-                    ParamActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                else -> { // "param" (default); a graded command is edited as its level row
+                    val level = LevelFamily.of(action.command)
+                    if (level != null) LevelActionControls(action = action, level = level, onUpdate = onUpdate, modifier = fill)
+                    else ParamActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                }
             }
         }
 
@@ -2614,13 +2619,104 @@ private fun ParamActionControls(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lc = context.appLocalizedContext()
+    val entries = remember(lc) { catalogEntries(lc) }
     CatalogDropdown(
-        selected = ACTION_COMMANDS.find { it.command == action.command }?.localizedName(context) ?: action.displayName,
-        items = ACTION_COMMANDS.map { it.localizedName(context) },
-        categories = ACTION_COMMANDS.map { it.localizedCategory(context) },
+        selected = paramSelectedText(action, context),
+        items = entries.map { it.label },
+        categories = entries.map { lc.getString(it.categoryRes) },
         modifier = modifier,
-        onSelect = { idx -> onUpdate(actionDefFor(ACTION_COMMANDS[idx], context)) }
+        onSelect = { idx -> onUpdate(entries[idx].make(context)) }
     )
+}
+
+/** A graded command («Температура: 22 °C»): the catalog dropdown and its level controls in one line. */
+@Composable
+private fun LevelActionControls(
+    action: ActionDef,
+    level: LevelValue,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val lc = LocalContext.current.appLocalizedContext()
+    val family = level.family
+    LevelRow(
+        icon = family.icon,
+        value = level.value,
+        range = family.range,
+        step = family.step,
+        valueText = family.valueText(level.value, lc),
+        onValue = { v -> onUpdate(action.copy(command = family.command(v), displayName = family.displayName(v, lc))) },
+        modifier = modifier,
+    ) {
+        ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/**
+ * One graded value in one line: icon, [header] (name or dropdown), minus, a slider with a tick
+ * per step, plus and the value. Minus and plus are 48 dp and stop at the ends of [range]; the
+ * value keeps a fixed minimum width so the slider does not jump when «выкл» becomes «3».
+ */
+@Composable
+private fun LevelRow(
+    icon: ImageVector,
+    value: Int,
+    range: IntRange,
+    step: Int,
+    valueText: String,
+    onValue: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    header: @Composable () -> Unit,
+) {
+    Row(
+        modifier.heightIn(min = MIN_TOUCH),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { header() }
+        LevelStepButton(Icons.Outlined.Remove, stringResource(R.string.auto_a11y_level_down), value > range.first) {
+            onValue(levelStep(value, range, step, up = false))
+        }
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { v -> levelSnap(v, range, step).let { if (it != value) onValue(it) } },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = ((range.last - range.first) / step - 1).coerceAtLeast(0),
+            modifier = Modifier.weight(LEVEL_SLIDER_WEIGHT),
+        )
+        LevelStepButton(Icons.Outlined.Add, stringResource(R.string.auto_a11y_level_up), value < range.last) {
+            onValue(levelStep(value, range, step, up = true))
+        }
+        Text(
+            valueText,
+            fontSize = EDITOR_TEXT,
+            color = AccentTeal,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            modifier = Modifier.widthIn(min = 64.dp),
+        )
+    }
+}
+
+/** The slider's share next to the name, so a long name does not squeeze it away. */
+private const val LEVEL_SLIDER_WEIGHT = 1.2f
+
+@Composable
+private fun LevelStepButton(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(MIN_TOUCH)
+            .clip(FIELD_SHAPE)
+            .background(CardSurfaceElevated)
+            .border(1.5.dp, CardBorder, FIELD_SHAPE)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, description, tint = if (enabled) AccentGreen else TextMuted, modifier = Modifier.size(24.dp))
+    }
 }
 
 // Delay options, in ms
@@ -2677,37 +2773,16 @@ private fun MediaVolumeActionControls(
     val label = stringResource(R.string.automation_action_media_volume_label)
     val namePrefix = stringResource(R.string.automation_action_media_volume)
 
-    Row(
+    LevelRow(
+        icon = Icons.Outlined.VolumeUp,
+        value = current,
+        range = 0..maxVolume,
+        step = 1,
+        valueText = "$current/$maxVolume",
+        onValue = { lvl -> onUpdate(action.copy(payload = lvl.toString(), displayName = "$namePrefix: $lvl")) },
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            Icons.Outlined.VolumeUp,
-            contentDescription = null,
-            tint = AccentTeal,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(label, fontSize = EDITOR_TEXT, color = TextPrimary)
-        Spacer(Modifier.width(8.dp))
-        Slider(
-            value = current.toFloat(),
-            onValueChange = { v ->
-                val lvl = v.toInt().coerceIn(0, maxVolume)
-                onUpdate(action.copy(payload = lvl.toString(), displayName = "$namePrefix: $lvl"))
-            },
-            valueRange = 0f..maxVolume.toFloat(),
-            steps = (maxVolume - 1).coerceAtLeast(0),
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            "$current/$maxVolume",
-            fontSize = EDITOR_TEXT,
-            color = AccentTeal,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.widthIn(min = 48.dp)
-        )
+        Text(label, fontSize = EDITOR_TEXT, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -3005,26 +3080,15 @@ private object ActionPickerMemory {
     var section = 0
 }
 
-/** The car's catalog sections in the picker's order, then messages, apps, screen, system and waits. */
-private val CATALOG_SECTIONS = listOf(
-    R.string.auto_cat_windows, R.string.auto_cat_climate, R.string.auto_cat_seats, R.string.auto_cat_sunroof,
-    R.string.auto_cat_locks, R.string.auto_cat_body, R.string.auto_cat_light, R.string.auto_cat_mirrors,
-    R.string.auto_cat_drive_mode, R.string.auto_cat_fridge,
-)
-
+/** The car's catalog sections ([catalogSections]), then messages, apps, screen, system and waits. */
 @Composable
 private fun pickerSections(): List<PickerSection> {
     val context = LocalContext.current
     val lc = context.appLocalizedContext()
     return remember(lc) {
-        val catalog = CATALOG_SECTIONS.map { cat ->
-            PickerSection(
-                lc.getString(cat),
-                ACTION_COMMANDS.filter { it.categoryRes == cat }.map { option ->
-                    PickerTile(option.localizedName(lc)) { actionDefFor(option, it) }
-                },
-            )
-        }.filter { it.tiles.isNotEmpty() }
+        val catalog = catalogSections(lc).map { (cat, entries) ->
+            PickerSection(lc.getString(cat), entries.map { entry -> PickerTile(entry.label) { entry.make(it) } })
+        }
         catalog + listOf(
             PickerSection(lc.getString(R.string.auto_ui_section_messages), listOf(
                 PickerTile(lc.getString(R.string.automation_action_notification), needsOverlay = true) { newNotificationAction(it) },

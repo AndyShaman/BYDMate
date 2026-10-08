@@ -39,6 +39,7 @@ class AgentToolsLaunchTest {
     private val tripDao = mockk<TripDao>()
     private val chargeDao = mockk<ChargeDao>()
     private val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        .also { io.mockk.every { it.willOpenPinned(any()) } returns null }
     private val ruleDao = mockk<RuleDao>()
     private val engine = mockk<AutomationEngine>()
     private val places = mockk<PlaceRepository>()

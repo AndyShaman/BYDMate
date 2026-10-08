@@ -653,6 +653,19 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideCloudOverWifiPreferences(
+        @ApplicationContext ctx: Context,
+    ): com.bydmate.app.data.autoservice.CloudOverWifiPreferences =
+        com.bydmate.app.data.autoservice.CloudOverWifiPreferencesImpl(ctx)
+
+    @Provides
+    @Singleton
+    fun provideCloudOverWifiSystem(
+        impl: com.bydmate.app.data.autoservice.AndroidCloudOverWifiSystem,
+    ): com.bydmate.app.data.autoservice.CloudOverWifiSystem = impl
+
+    @Provides
+    @Singleton
     fun provideSplitPreferences(
         @ApplicationContext ctx: Context,
     ): com.bydmate.app.split.SplitPreferences =

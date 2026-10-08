@@ -1,0 +1,82 @@
+# #301 Song Plus (DiLink 3.0, Android 10, BYDMate 3.19.9, Navigator 24.5.1), bydmate_logs_20261008_132856.
+# Section 1: the log's `--- hud ---` section (lines 248-274) as it is: no SOME/IP gateway, the HUD switch on,
+# com.example.amapservice installed.
+--- hud ---
+enabled: true
+supported_pref: false
+status: UNSUPPORTED
+someip_gateway: absent
+speed_sign: true
+mode: 1
+can_accepted=0 can_refused=0 can_left=false lmcn_left=false
+frames_sent=0 last_frame_ts=0
+last_fire_rc=n/a nonzero_rc_count=0
+someip_services=n/a
+someip_fire_rc=n/a
+amap_capable=false amap_frames=0 amap_stops=0
+hub_snapshot=Snapshot(active=false, maneuverGaode=0, maneuverGaodeMs=0, distanceMeters=0, road_script=empty road_len=0, etaSeconds=0, totalDistMeters=0, speedLimit=0, speedLimitMs=0, lastUpdateMs=0, maneuverPng=null, cameraAlert=, cameraDistanceMeters=0, cameraIconPng=null, maneuverSource=, maneuverRaw=)
+route_summary: (no route)
+maneuver history:
+  (none)
+notif_listener_enabled=true
+grant_heal_history:
+2026-10-08 13:28:03 read logs reason=startup tries=1 reasserts=[] granted=true
+2026-10-08 13:28:03 notification listener reason=startup tries=1 reasserts=[] granted=true
+2026-10-08 13:28:03 notification listener reason=cluster-music on tries=1 reasserts=[] granted=true
+2026-10-08 13:28:10 star a11y reason=startup tries=2 reasserts=[true] granted=true
+pkg com.unkwn2.yandexhud: absent
+pkg com.sr.openbyd: absent
+pkg com.byd.amapservice: absent
+pkg com.example.amapservice: 0
+--- route ---
+# Section 2: a route shaped like the log's 10-07 15:34:19-15:46:13 route (620 s, notifications only): 45 reads,
+# 5 of them with a maneuver, the rest maneuver 0; each held maneuver expires 30 s later (three expiries); the
+# last read is the end snapshot's 2070 m, 8000 m, 900 s. Rows are 14 s apart on the test clock. Road names
+# are made up (the log has none and they are personal data). END: silence, the route ends.
+# gaode	distance_m	road	total_m	eta_s
+0	2900	Birch Street	16000	1500
+0	2750	Birch Street	15850	1490
+0	2600	Birch Street	15700	1470
+0	2450	Birch Street	15550	1460
+0	2300	Birch Street	15400	1440
+0	2150	Birch Street	15250	1430
+2	300	Birch Street	15100	1410
+2	150	Birch Street	14950	1400
+0	40	Birch Street	14800	1380
+0	5	Birch Street	14650	1370
+0	1900	Birch Street	14500	1350
+0	1750	Maple Avenue	14350	1340
+0	1600	Maple Avenue	14200	1320
+0	1450	Maple Avenue	14050	1310
+0	1300	Maple Avenue	13900	1290
+0	1150	Maple Avenue	13750	1280
+0	1000	Maple Avenue	13600	1260
+0	850	Maple Avenue	13450	1250
+0	700	Maple Avenue	13300	1230
+1	400	Maple Avenue	13150	1220
+0	250	Maple Avenue	13000	1200
+0	100	Maple Avenue	12850	1190
+0	2400	Maple Avenue	12700	1170
+0	2250	Harbor Road	12550	1160
+0	2100	Harbor Road	12400	1140
+0	1950	Harbor Road	12250	1130
+0	1800	Harbor Road	12100	1110
+0	1650	Harbor Road	11950	1100
+0	1500	Harbor Road	11800	1080
+0	1350	Harbor Road	11650	1070
+0	1200	Harbor Road	11500	1050
+0	1050	Harbor Road	11350	1040
+1	250	Harbor Road	11200	1020
+2	120	Harbor Road	11050	1010
+0	60	Harbor Road	10900	990
+0	20	Harbor Road	10750	980
+0	3200	Harbor Road	10600	960
+0	3050	Quay Street	10450	950
+0	2900	Quay Street	10300	940
+0	2750	Quay Street	10150	930
+0	2600	Quay Street	9800	925
+0	2450	Quay Street	9400	920
+0	2300	Quay Street	9000	915
+0	2200	Quay Street	8500	910
+0	2070	Quay Street	8000	900
+END

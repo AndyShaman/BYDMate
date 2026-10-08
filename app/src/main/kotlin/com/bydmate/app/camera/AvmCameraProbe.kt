@@ -5,9 +5,11 @@ import android.util.Log
 import android.view.Surface
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
+import dalvik.system.PathClassLoader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
 import java.lang.reflect.Proxy
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -42,7 +44,16 @@ internal fun parseCameraTags(raw: Any?): List<String> {
  * The trace gets the camera's lifetime (open, close and why) and the vendor events in between,
  * so the time our process held the camera can be laid against what the car reported.
  */
-class AvmCameraProbe(private val clock: () -> Long = System::currentTimeMillis) {
+class AvmCameraProbe(
+    private val clock: () -> Long = System::currentTimeMillis,
+    /** Class lookup; a null loader means the app's own class path. */
+    private val classLookup: (String, ClassLoader?) -> Class<*> = { name, loader ->
+        if (loader == null) Class.forName(name) else Class.forName(name, true, loader)
+    },
+    private val jarExists: (String) -> Boolean = { File(it).exists() },
+    /** Public API, no optimized dir to provide; the app loader as parent keeps our own classes. */
+    private val jarLoader: (String) -> ClassLoader = { PathClassLoader(it, AvmCameraProbe::class.java.classLoader) },
+) {
     private val _log = MutableStateFlow<List<String>>(emptyList())
     val log: StateFlow<List<String>> = _log.asStateFlow()
     private val stamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
@@ -51,6 +62,13 @@ class AvmCameraProbe(private val clock: () -> Long = System::currentTimeMillis) 
     /** Preview index → surface currently bound to the open camera; close() unbinds every entry. */
     private val bound = linkedMapOf<Int, Surface>()
     var cameraId: Int = -1; private set
+
+    /** Loader of the vendor jar the camera classes came from; null when they are on the class path. */
+    private var cameraLoader: ClassLoader? = null
+
+    /** The jar loader once created: a second one for the same jar would fail to load its native
+     *  libraries (ART binds a library to one loader) and initialise the vendor classes anew. */
+    private var jarClassLoader: ClassLoader? = null
 
     /** Trace of the vendor events of the open session. */
     private val events = AvmEventTrace()
@@ -73,7 +91,16 @@ class AvmCameraProbe(private val clock: () -> Long = System::currentTimeMillis) 
         val note: (String) -> Unit = { line -> journal += line; append(line) }
         lastDiscoverAt = SystemClock.elapsedRealtime()
         try {
-            val info = Class.forName("android.hardware.BmmCameraInfo")
+            val info = try {
+                classLookup(BMM_CAMERA_INFO, null).also { cameraLoader = null }
+            } catch (e: ClassNotFoundException) {
+                val reused = jarClassLoader
+                val loaderOnce: (String) -> ClassLoader = { reused ?: jarLoader(it).also { l -> jarClassLoader = l } }
+                val (jarInfo, loader) =
+                    cameraInfoFromJar(classLookup, jarExists, loaderOnce, reused != null, note) ?: throw e
+                cameraLoader = loader
+                jarInfo
+            }
             val count = info.getMethod("getCameraNumbers").invoke(null)
             note("getCameraNumbers=$count")
             // Tags this firmware names its own cameras with; none when it will not say.
@@ -144,7 +171,7 @@ class AvmCameraProbe(private val clock: () -> Long = System::currentTimeMillis) 
         // A late event after the last close must not count as a repeat in this session.
         events.end()
         return try {
-            val avm = Class.forName("android.hardware.AVMCamera")
+            val avm = classLookup("android.hardware.AVMCamera", cameraLoader)
             var opened = avm.getMethod("open", Int::class.java).invoke(null, cameraId)
             if (opened == null) {
                 append("static open returned null, trying constructor fallback")
@@ -158,7 +185,7 @@ class AvmCameraProbe(private val clock: () -> Long = System::currentTimeMillis) 
             bound.clear()
             bound.putAll(surfaces)
 
-            val cbType = Class.forName("android.hardware.AVMCamera\$IEventCallback")
+            val cbType = classLookup("android.hardware.AVMCamera\$IEventCallback", cameraLoader)
             val proxy = Proxy.newProxyInstance(cbType.classLoader, arrayOf(cbType)) { p, m, args ->
                 // Vendor thread: nothing may escape into the framework.
                 try {
@@ -288,6 +315,33 @@ class AvmCameraProbe(private val clock: () -> Long = System::currentTimeMillis) 
         private val CAMERA_TAGS = listOf("pano_h", "pano_l", "apa", "byd_apa")
         private const val TAG = "CameraProbe"
     }
+}
+
+private const val BMM_CAMERA_INFO = "android.hardware.BmmCameraInfo"
+
+/** Where firmwares without the camera classes on the class path keep them. */
+private val CAMERA_JARS = listOf("/system/framework/bmmcamera.jar")
+
+/**
+ * BmmCameraInfo from a vendor jar, for the firmwares that keep the camera classes off the class
+ * path (Yuan Up, DiLink 3.0, #299), with the loader it came from; null when no jar gives it.
+ */
+private fun cameraInfoFromJar(
+    lookup: (String, ClassLoader?) -> Class<*>,
+    jarExists: (String) -> Boolean,
+    jarLoader: (String) -> ClassLoader,
+    reused: Boolean,
+    note: (String) -> Unit,
+): Pair<Class<*>, ClassLoader>? {
+    val jar = CAMERA_JARS.firstOrNull(jarExists)
+    if (jar == null) {
+        note("bmmcamera.jar: not found")
+        return null
+    }
+    return runCatching { jarLoader(jar).let { lookup(BMM_CAMERA_INFO, it) to it } }
+        .onSuccess { note(if (reused) "bmmcamera.jar: reused" else "bmmcamera.jar: loaded") }
+        .onFailure { note("bmmcamera.jar: load failed: $it") }
+        .getOrNull()
 }
 
 /** One trace line per open attempt; [error] is null when the camera is warm. */
