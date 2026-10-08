@@ -41,7 +41,7 @@ interface VehicleApi {
     suspend fun dispatch(commandString: String): Result<Unit>
     suspend fun writeAcOn(): Result<Unit>
     suspend fun writeAcOff(): Result<Unit>
-    suspend fun writeSetDriverTemp(celsius: Int): Result<Unit>   // range 16..30
+    suspend fun writeSetDriverTemp(celsius: Int): Result<Unit>   // range 16..33
     suspend fun writeWindowDriver(percent: Int): Result<Unit>    // range 0..100
     suspend fun writeWindowPassenger(percent: Int): Result<Unit> // range 0..100
     suspend fun writeWindowRearLeft(percent: Int): Result<Unit>  // range 0..100

@@ -1,6 +1,8 @@
 package com.bydmate.app.data.vehicle
 
+import com.bydmate.app.data.automation.ActionDispatcher
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -358,7 +360,7 @@ class CommandTranslatorTest {
         assertTrue(onEntry.validated)
     }
 
-    // ── Temperature: dynamic parse over full 16..30 range ────────────────────
+    // ── Temperature: dynamic parse over full 16..33 range ────────────────────
     @Test fun `set temperature 24 maps to ac_temp_main val 24`() {
         val r = one("设置温度24")
         assertEquals("ac_temp_main", r?.actionName)
@@ -371,11 +373,54 @@ class CommandTranslatorTest {
         assertEquals(16, r?.value)
     }
 
-    // Out-of-range request clamps into the validated 16..30 window.
-    @Test fun `set temperature 35 clamps to ac_temp_main val 30`() {
+    @Test fun `set temperature 33 maps to ac_temp_main val 33`() {
+        val r = one("设置温度33")
+        assertEquals("ac_temp_main", r?.actionName)
+        assertEquals(33, r?.value)
+    }
+
+    // Out-of-range request clamps into the validated 16..33 window.
+    @Test fun `set temperature 35 clamps to ac_temp_main val 33`() {
         val r = one("设置温度35")
         assertEquals("ac_temp_main", r?.actionName)
-        assertEquals(30, r?.value)
+        assertEquals(33, r?.value)
+    }
+
+    // ── Window position: any per-door percentage (level row, step 10) ─────────
+    @Test fun `driver open 30 maps to window_driver_pos 30`() {
+        assertEquals(setOf("window_driver_pos" to 30), pairs("主驾打开30"))
+    }
+
+    @Test fun `rear-right open 70 maps to window_rear_right_pos 70`() {
+        assertEquals(setOf("window_rear_right_pos" to 70), pairs("后右打开70"))
+    }
+
+    @Test fun `passenger and rear-left percentages map to their pos fids`() {
+        assertEquals(setOf("window_passenger_pos" to 10), pairs("副驾打开10"))
+        assertEquals(setOf("window_rear_left_pos" to 90), pairs("后左打开90"))
+    }
+
+    @Test fun `driver open 0 and 100 stay on the dedicated close and open fids`() {
+        assertEquals(setOf("window_driver_close" to 2), pairs("主驾打开0"))
+        assertEquals(setOf("window_driver_open" to 1), pairs("主驾打开100"))
+    }
+
+    // Only the canonical 1..99 forms resolve dynamically: anything else is an unknown command,
+    // never a clamped full open the speed gate does not recognise as an open.
+    @Test fun `a non-canonical window percentage resolves to nothing`() {
+        for (cmd in listOf("主驾打开150", "主驾打开0100", "主驾打开00", "主驾打开05", "后右打开101")) {
+            assertTrue(cmd, CommandTranslator.resolve(cmd).isEmpty())
+        }
+    }
+
+    @Test fun `the speed gate and the translator agree on which window forms exist`() {
+        assertFalse(ActionDispatcher.isWindowOpenCommand("主驾打开150"))
+        assertTrue(CommandTranslator.resolve("主驾打开150").isEmpty())
+        for (pct in 1..99) {
+            val cmd = "主驾打开$pct"
+            assertTrue(cmd, ActionDispatcher.isWindowOpenCommand(cmd))
+            assertEquals(setOf("window_driver_pos" to pct), pairs(cmd))
+        }
     }
 
     @Test fun `set temperature 5 clamps to ac_temp_main val 16`() {

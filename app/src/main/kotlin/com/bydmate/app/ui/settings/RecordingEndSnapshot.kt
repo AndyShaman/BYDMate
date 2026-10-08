@@ -43,12 +43,14 @@ class RecordingEndSnapshot @Inject constructor(
         out += "timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}"
         part(out, "hud") {
             val diag = hudController.counters()
+            val cluster = hudController.amapCluster
             listOf(
                 "hud: status=${hudController.status.value} mode=${hudController.mode()} " +
                     "frames_sent=${diag?.framesSent ?: 0} last_frame_ts=${diag?.lastFrameTs ?: 0} " +
                     "last_rc=${diag?.lastRc ?: "n/a"} nonzero_rc=${diag?.nonZeroRcCount ?: 0} " +
                     "can_accepted=${diag?.canAccepted ?: 0} can_refused=${diag?.canRefused ?: 0} " +
-                    "amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}",
+                    "amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0} " +
+                    "amap_cluster_frames=${cluster?.framesSent ?: 0} amap_cluster_kills=${cluster?.killsSent ?: 0}",
                 "hud fid: gate=na (no live read at the end; each arm traces its gate)",
                 "hub_snapshot=${RecordingDumpFormat.hubSnapshot(NavGuidanceHub.snapshot())}",
                 "route_summary: ${NavGuidanceHub.routeSummary()}",

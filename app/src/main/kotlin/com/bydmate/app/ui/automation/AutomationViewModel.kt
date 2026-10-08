@@ -223,17 +223,6 @@ val ACTION_COMMANDS = listOf(
         ActionOption("后排车窗通风", R.string.auto_act_vent_rear_windows, R.string.auto_cat_windows),
         ActionOption("自动空调", R.string.auto_act_auto_ac, R.string.auto_cat_climate),
         ActionOption("打开空调通风", R.string.auto_act_ventilation_no_ac, R.string.auto_cat_climate),
-        ActionOption("设置温度18", R.string.auto_act_temp_18c, R.string.auto_cat_climate),
-        ActionOption("设置温度20", R.string.auto_act_temp_20c, R.string.auto_cat_climate),
-        ActionOption("设置温度22", R.string.auto_act_temp_22c, R.string.auto_cat_climate),
-        ActionOption("设置温度25", R.string.auto_act_temp_25c, R.string.auto_cat_climate),
-        ActionOption("风量1", R.string.auto_act_fan_1, R.string.auto_cat_climate),
-        ActionOption("风量2", R.string.auto_act_fan_2, R.string.auto_cat_climate),
-        ActionOption("风量3", R.string.auto_act_fan_3, R.string.auto_cat_climate),
-        ActionOption("风量4", R.string.auto_act_fan_4, R.string.auto_cat_climate),
-        ActionOption("风量5", R.string.auto_act_fan_5, R.string.auto_cat_climate),
-        ActionOption("风量6", R.string.auto_act_fan_6, R.string.auto_cat_climate),
-        ActionOption("风量7", R.string.auto_act_fan_7, R.string.auto_cat_climate),
         ActionOption("吹面", R.string.auto_act_wind_face, R.string.auto_cat_climate),
         ActionOption("吹面吹脚", R.string.auto_act_wind_face_feet, R.string.auto_cat_climate),
         ActionOption("吹脚", R.string.auto_act_wind_feet, R.string.auto_cat_climate),
@@ -247,33 +236,9 @@ val ACTION_COMMANDS = listOf(
         ActionOption("", R.string.toggle_target_climate, R.string.auto_cat_climate, toggleTarget = ActionDispatcher.TOGGLE_CLIMATE),
         ActionOption("空调自动", R.string.auto_act_ac_auto_on, R.string.auto_cat_climate),
         ActionOption("空调手动", R.string.auto_act_ac_auto_off, R.string.auto_cat_climate),
-        ActionOption("主驾座椅加热1档", R.string.auto_act_driver_heat_1, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热2档", R.string.auto_act_driver_heat_2, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热3档", R.string.auto_act_driver_heat_3, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热4档", R.string.auto_act_driver_heat_4, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热5档", R.string.auto_act_driver_heat_5, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热关闭", R.string.auto_act_driver_heat_off, R.string.auto_cat_seats),
         ActionOption("", R.string.toggle_target_seat_heat_driver, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_HEAT_DRIVER),
-        ActionOption("副驾座椅加热1档", R.string.auto_act_passenger_heat_1, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热2档", R.string.auto_act_passenger_heat_2, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热3档", R.string.auto_act_passenger_heat_3, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热4档", R.string.auto_act_passenger_heat_4, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热5档", R.string.auto_act_passenger_heat_5, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热关闭", R.string.auto_act_passenger_heat_off, R.string.auto_cat_seats),
         ActionOption("", R.string.toggle_target_seat_heat_passenger, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_HEAT_PASSENGER),
-        ActionOption("主驾座椅通风1档", R.string.auto_act_driver_vent_1, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风2档", R.string.auto_act_driver_vent_2, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风3档", R.string.auto_act_driver_vent_3, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风4档", R.string.auto_act_driver_vent_4, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风5档", R.string.auto_act_driver_vent_5, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风关闭", R.string.auto_act_driver_vent_off, R.string.auto_cat_seats),
         ActionOption("", R.string.toggle_target_seat_vent_driver, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_VENT_DRIVER),
-        ActionOption("副驾座椅通风1档", R.string.auto_act_passenger_vent_1, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风2档", R.string.auto_act_passenger_vent_2, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风3档", R.string.auto_act_passenger_vent_3, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风4档", R.string.auto_act_passenger_vent_4, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风5档", R.string.auto_act_passenger_vent_5, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风关闭", R.string.auto_act_passenger_vent_off, R.string.auto_cat_seats),
         ActionOption("", R.string.toggle_target_seat_vent_passenger, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_VENT_PASSENGER),
         ActionOption("后视镜加热", R.string.auto_act_mirror_heat_on, R.string.auto_cat_mirrors),
         ActionOption("关闭后视镜加热", R.string.auto_act_mirror_heat_off, R.string.auto_cat_mirrors),
@@ -321,15 +286,6 @@ val ACTION_COMMANDS = listOf(
         ActionOption("冰箱制冷", R.string.auto_act_fridge_cool, R.string.auto_cat_fridge),
         ActionOption("冰箱制热", R.string.auto_act_fridge_heat, R.string.auto_cat_fridge),
         ActionOption("冰箱关闭", R.string.auto_act_fridge_off, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷-6度", R.string.auto_act_fridge_cool_minus6c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷-3度", R.string.auto_act_fridge_cool_minus3c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷0度", R.string.auto_act_fridge_cool_0c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷3度", R.string.auto_act_fridge_cool_plus_3c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷6度", R.string.auto_act_fridge_cool_plus_6c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制热35度", R.string.auto_act_fridge_heat_35c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制热40度", R.string.auto_act_fridge_heat_40c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制热45度", R.string.auto_act_fridge_heat_45c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制热50度", R.string.auto_act_fridge_heat_50c, R.string.auto_cat_fridge),
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")
@@ -1756,7 +1712,9 @@ internal fun withCatalogName(trigger: TriggerDef, context: Context): TriggerDef 
 internal fun withCatalogName(action: ActionDef, context: Context): ActionDef = when (action.kind) {
     "toggle" -> action.payload?.let { action.copy(displayName = toggleDisplayName(context, it)) } ?: action
     "param" -> ACTION_COMMANDS.firstOrNull { it.toggleTarget == null && it.command == action.command }
-        ?.let { action.copy(displayName = it.localizedName(context)) } ?: action
+        ?.let { action.copy(displayName = it.localizedName(context)) }
+        ?: levelActionName(action.command, context.appLocalizedContext())?.let { action.copy(displayName = it) }
+        ?: action
     else -> action
 }
 

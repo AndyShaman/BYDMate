@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -628,6 +629,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }.isSuccess
     }
 
+    /** Package of the last session a «pause» step paused while it was playing; never persisted (#275). */
+    @Volatile private var lastPausedPkg: String? = null
+
     init {
         createUserChannels()
     }
@@ -677,28 +681,53 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      * The stock mediacenter keeps a session in NONE/STOPPED (or with no state) while nothing plays,
      * and play/pause to it starts Kuwo (#275), so that session is not a candidate; STOPPED sessions of other players
      * stay, some of them resume from STOPPED.
+     * A mediacenter session left PAUSED after a pause we sent to another, playing player is not
+     * resumed by the next play (#275); a PLAYING session still wins, and a pause we send to the
+     * playing stock player itself resets that. The memory lives as long as the process.
      */
     private fun dispatchMediaKey(action: ActionDef): DispatchResult {
         val keyCode = mediaKeyCode(action.payload)
             ?: return DispatchResult(false, appStrings.get(R.string.dispatch_media_key_invalid))
         val all = runCatching { activeMediaControllers() }.getOrDefault(emptyList())
-        val sessions = all.joinToString(" ") { "${it.packageName}:${it.playbackState?.state}" }
-        val controllers = all.filterNot { c ->
-            val state = c.playbackState?.state
-            c.packageName == MEDIACENTER_PKG &&
-                (state == null || state == PlaybackState.STATE_NONE || state == PlaybackState.STATE_STOPPED)
-        }
+        val sessions = all.joinToString(" ") { mediaSessionTag(it) }
+        val kept = all.filterNot { isIdleStockSession(it) }
+        val controllers = if (skipsPausedStock(keyCode)) kept.filterNot { isPausedStockSession(it) } else kept
         val index = KnobPlayPause.pickTarget(
             controllers.map { KnobPlayPause.SessionSnapshot(it.packageName, it.playbackState?.state) })
         if (index == null) {
-            Log.w(TAG, "media key ${action.payload}: no media session sessions=[$sessions]")
+            Log.w(TAG, if (controllers.size < kept.size) {
+                "media key ${action.payload}: stock player paused, last paused $lastPausedPkg gone: skipped"
+            } else {
+                "media key ${action.payload}: no media session sessions=[$sessions]"
+            })
             return DispatchResult(false, appStrings.get(R.string.dispatch_media_no_session))
         }
         val target = controllers[index]
+        val wasPlaying = target.playbackState?.state == PlaybackState.STATE_PLAYING
         val ok = sendMediaKey(target, keyCode)
+        if (ok && keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE && wasPlaying) lastPausedPkg = target.packageName
         Log.i(TAG, "media key ${action.payload} -> ${target.packageName} ok=$ok sessions=[$sessions]")
         return if (ok) DispatchResult(true)
         else DispatchResult(false, appStrings.get(R.string.dispatch_media_key_failed, target.packageName))
+    }
+
+    private fun isIdleStockSession(c: MediaController): Boolean {
+        val state = c.playbackState?.state
+        return c.packageName == MEDIACENTER_PKG &&
+            (state == null || state == PlaybackState.STATE_NONE || state == PlaybackState.STATE_STOPPED)
+    }
+
+    private fun isPausedStockSession(c: MediaController): Boolean =
+        c.packageName == MEDIACENTER_PKG && c.playbackState?.state == PlaybackState.STATE_PAUSED
+
+    private fun skipsPausedStock(keyCode: Int): Boolean =
+        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY && lastPausedPkg != null && lastPausedPkg != MEDIACENTER_PKG
+
+    /** pkg:state:t1 when the session's metadata carries a title, else pkg:state:t0. */
+    private fun mediaSessionTag(c: MediaController): String {
+        val titled = runCatching { !c.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE).isNullOrBlank() }
+            .getOrDefault(false)
+        return "${c.packageName}:${c.playbackState?.state}:t${if (titled) 1 else 0}"
     }
 
     // --- sentry mode (Settings.Global via helper daemon) ---
@@ -1238,8 +1267,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     }
 
     /**
-     * Which map app routes go to, plus the reason text when 2GIS or Maps was replaced by
-     * Yandex Navigator because it is not installed (#190, #200).
+     * Which map app routes go to, plus the reason text when 2GIS, Maps or Waze was replaced by
+     * Yandex Navigator because it is not installed (#190, #200, #305).
      */
     private fun resolveNavigator(): Pair<String, String?> {
         val chosen = RouteNavigatorUris.normalize(
@@ -1257,6 +1286,12 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         if (mapsFellBack) {
             Log.i(TAG, "navigate: yandex maps not installed, falling back to yandex")
             return RouteNavigatorUris.YANDEX to appStrings.get(R.string.dispatch_maps_fallback)
+        }
+        val wazeFellBack = chosen == RouteNavigatorUris.WAZE &&
+            !isPackageInstalled(RouteNavigatorUris.WAZE_PACKAGE)
+        if (wazeFellBack) {
+            Log.i(TAG, "navigate: waze not installed, falling back to yandex")
+            return RouteNavigatorUris.YANDEX to appStrings.get(R.string.dispatch_waze_fallback)
         }
         return chosen to null
     }
@@ -1329,6 +1364,20 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         isMapsRequest(payload) || resolveNavigator().first == RouteNavigatorUris.MAPS
 
     /**
+     * The package [startNavigate] will pin the intent to for this payload (#305): 2GIS or Waze
+     * chosen and installed. Null when the route goes to Maps, to Yandex Navigator (chosen or as
+     * the fallback), or to the Home/Work shortcut, which always opens Yandex Navigator's own
+     * action. Mirrors [sendNavigateIntent]'s routing exactly, like [willOpenMaps].
+     */
+    fun willOpenPinned(payload: JSONObject): String? {
+        if (isMapsRequest(payload) || payload.optString("shortcut").isNotBlank()) return null
+        val navigator = resolveNavigator().first
+        return if (navigator == RouteNavigatorUris.DGIS || navigator == RouteNavigatorUris.WAZE) {
+            RouteNavigatorUris.packageOf(navigator)
+        } else null
+    }
+
+    /**
      * The app="maps" mirror of [sendNavigateIntent] on Yandex Maps' own yandexmaps:// dialect
      * (#200, from a user patch). URI intents are not package-pinned — the scheme resolves to
      * whichever store variant of Maps is installed.
@@ -1387,8 +1436,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     /**
      * Fires one navigation deep link and journals which app it went to (#190).
      *
-     * The package is pinned for 2GIS only: the Yandex links have always resolved by scheme, and
-     * pinning them now would break any head unit whose navigator ships under another package.
+     * The package is pinned for 2GIS and Waze only: the Yandex links have always resolved by
+     * scheme, and pinning them now would break any head unit whose navigator ships under another
+     * package.
      */
     private fun startNavigate(
         navigator: String, mode: String, uri: String, label: String, fallbackReason: String?,
@@ -1396,8 +1446,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         Log.i(TAG, "navigate: app=$navigator mode=$mode uri=${LinkRedaction.forLog(uri)}")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (navigator == RouteNavigatorUris.DGIS) {
-            intent.setPackage(RouteNavigatorUris.DGIS_PACKAGE)
+        if (navigator == RouteNavigatorUris.DGIS || navigator == RouteNavigatorUris.WAZE) {
+            intent.setPackage(RouteNavigatorUris.packageOf(navigator))
         }
         val result = tryStartActivity(intent, label)
         Log.i(TAG, "navigate: intent sent label=${LinkRedaction.forLog(label)} ok=${result.success}")

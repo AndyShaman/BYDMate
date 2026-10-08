@@ -368,6 +368,7 @@ class SettingsViewModelTest {
                 mockk(relaxed = true),
                 kotlinx.coroutines.test.TestScope(),
             ),
+            cloudOverWifiManager = mockk(relaxed = true),
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
             ruleDao = mockk(relaxed = true),
@@ -1421,6 +1422,25 @@ class SettingsViewModelTest {
         )
     }
 
+    /** #305: Waze persists and a fresh view model reads it back. */
+    @Test fun `route navigator waze persists and reads back`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setRouteNavigator("waze")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("waze", vm.uiState.value.routeNavigator)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "waze",
+            ctx.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, "")
+        )
+        val reread = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("waze", reread.uiState.value.routeNavigator)
+    }
+
     /** The dump header must carry the choice: it is the only place a user log shows it. */
     @Test fun `the diagnostic header reports the chosen route navigator`() = runTest {
         val vm = buildViewModel()
@@ -2003,7 +2023,7 @@ class SettingsViewModelTest {
         val reason = ctx.getString(com.bydmate.app.R.string.settings_tg_error_bad_token)
         assertTrue(state.tgBackupStatus!!, state.tgBackupStatus!!.contains(reason))
         assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
-        coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
+        coVerify(exactly = 0) { sink.findLinkChat(any(), any()) }
     }
 
     private val ctxForTg: Context get() = ApplicationProvider.getApplicationContext()
@@ -2023,14 +2043,14 @@ class SettingsViewModelTest {
         assertNull(vm.uiState.value.tgBackupStatus)
         assertNull(vm.uiState.value.tgBackupBinding)
         assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
-        coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
+        coVerify(exactly = 0) { sink.findLinkChat(any(), any()) }
     }
 
     @Test
     fun `check before the code was sent keeps the same code and stores nothing`() = runTest {
         val sink = tgSinkFake()
         coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
-        coEvery { sink.findPrivateChat("123:abc", any()) } returns Result.success(null)
+        coEvery { sink.findLinkChat("123:abc", any()) } returns Result.success(null)
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
         checkToken(vm, "123:abc")
@@ -2056,7 +2076,7 @@ class SettingsViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
         checkToken(vm, "123:abc")
         val code = vm.uiState.value.tgBackupCode!!
-        coEvery { sink.findPrivateChat("123:abc", code) } returns
+        coEvery { sink.findLinkChat("123:abc", code) } returns
             Result.success(com.bydmate.app.data.backup.TelegramChat(777L, "Andy @andy_s"))
 
         checkToken(vm, "123:abc")
@@ -2077,7 +2097,7 @@ class SettingsViewModelTest {
     fun `failed greeting stores nothing and shows the reason`() = runTest {
         val sink = tgSinkFake()
         coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
-        coEvery { sink.findPrivateChat("123:abc", any()) } returns
+        coEvery { sink.findLinkChat("123:abc", any()) } returns
             Result.success(com.bydmate.app.data.backup.TelegramChat(777L, "Andy"))
         coEvery { sink.sendMessage(any(), any(), any()) } returns Result.failure(
             com.bydmate.app.data.backup.TelegramSinkException(com.bydmate.app.data.backup.TelegramError.HTTP, 403)
@@ -2110,7 +2130,7 @@ class SettingsViewModelTest {
         assertNull(vm.uiState.value.tgBackupCode)
         assertEquals("777", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
         assertEquals("Andy", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_NAME])
-        coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
+        coVerify(exactly = 0) { sink.findLinkChat(any(), any()) }
         coVerify(exactly = 1) { sink.sendMessage("123:abc", 777L, any()) }
     }
 
@@ -2118,7 +2138,7 @@ class SettingsViewModelTest {
     fun `failed chat lookup keeps the previously connected bot untouched`() = runTest {
         val sink = tgSinkFake()
         coEvery { sink.getMe("456:new") } returns Result.success("new_bot")
-        coEvery { sink.findPrivateChat("456:new", any()) } returns Result.failure(
+        coEvery { sink.findLinkChat("456:new", any()) } returns Result.failure(
             com.bydmate.app.data.backup.TelegramSinkException(com.bydmate.app.data.backup.TelegramError.WEBHOOK, 409)
         )
         val vm = buildViewModel()
@@ -2142,7 +2162,7 @@ class SettingsViewModelTest {
         val sink = tgSinkFake()
         lateinit var vm: SettingsViewModel
         coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
-        coEvery { sink.findPrivateChat("123:abc", any()) } returns
+        coEvery { sink.findLinkChat("123:abc", any()) } returns
             Result.success(com.bydmate.app.data.backup.TelegramChat(777L, "Andy"))
         coEvery { sink.sendMessage(any(), any(), any()) } coAnswers {
             vm.updateTgBackupToken("999:other")
@@ -2200,7 +2220,7 @@ class SettingsViewModelTest {
         assertFalse(vm.uiState.value.tgBackupChecking)
         assertNull(vm.uiState.value.tgBackupStatus)
         assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
-        coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
+        coVerify(exactly = 0) { sink.findLinkChat(any(), any()) }
     }
 
     @Test

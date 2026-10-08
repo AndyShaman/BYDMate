@@ -114,8 +114,7 @@ internal object RuleImportSummary {
     private fun actionDetail(action: ActionDef, lc: Context, autoGo: (JSONObject) -> Boolean): String? {
         val json = payloadJson(action.payload)
         return when (action.kind) {
-            "param" -> ACTION_COMMANDS.find { it.command == action.command }
-                ?.let { "${lc.getString(it.nameRes)} (${action.command})" } ?: action.command
+            "param" -> paramDetail(action.command, lc)
             "notification", "notification_silent", "notification_sound" ->
                 listOf(json.optString("title"), json.optString("text")).filter { it.isNotBlank() }.joinToString(" / ")
             "app_launch", "app_close" -> json.optString("packageName")
@@ -239,3 +238,8 @@ private fun callDetail(json: JSONObject, lc: Context): String {
     val phone = json.optString("phone").ifBlank { lc.getString(R.string.automation_import_contact_missing) }
     return if (json.optBoolean("autoDial", false)) "$phone, ${lc.getString(R.string.automation_call_auto_dial_label)}" else phone
 }
+
+/** «Закрыть все окна (车窗关闭)», «Температура: 22 °C (设置温度22)»; an unknown command as it is. */
+private fun paramDetail(command: String, lc: Context): String =
+    (ACTION_COMMANDS.find { it.command == command }?.let { lc.getString(it.nameRes) } ?: levelActionName(command, lc))
+        ?.let { "$it ($command)" } ?: command

@@ -260,6 +260,8 @@ object ClusterProjectionManager {
      * daemon reports that task, so a pullback would force a live user window fullscreen.
      */
     @Volatile private var placementAttempted = false
+    /** #288: the projected task's state before the VD launch of this attempt, for [scheduleVerify]. */
+    private var vdStartState: SplitTaskState? = null
     /**
      * [KEY_PREFER_FULL_DISPLAY] as read when the current projection session started. Pinned for
      * the session so a toggle flip mid-projection cannot make [swapToNewSize] resolve a different
@@ -418,8 +420,13 @@ object ClusterProjectionManager {
      * journal says active, the cluster stays dark): where the projected task really is and in
      * which windowing mode. Skipped when the projection already ended or changed hands. A direct
      * projection gets the same line from its death watch's first read (no read of its own).
+     *
+     * #288: a projection that started from a native split pane ([before]) gets the same
+     * [splitPlacementFailure] check here as right after the launch — an app that restarts on the
+     * move (2GIS) is on the VD at the immediate check and gone a moment later — and ends the same
+     * honest way: OFF, pulled back. Any other start keeps the verify a log line.
      */
-    private fun scheduleVerify(helper: HelperClient, pkg: String?, vdId: Int) {
+    private fun scheduleVerify(context: Context, helper: HelperClient, pkg: String?, vdId: Int, before: SplitTaskState?) {
         val target = pkg ?: return
         scope.launch {
             delay(VERIFY_AFTER_MS)
@@ -428,6 +435,18 @@ object ClusterProjectionManager {
                 .onFailure { if (it is CancellationException) throw it }
                 .getOrNull()
             log(verifyLine(VERIFY_AFTER_MS, "vd=$vdId", state))
+            val splitMiss = splitPlacementFailure(before, state, vdId) ?: return@launch
+            mutex.withLock {
+                // The projection may have ended or moved to another VD while the read ran.
+                if (currentMode != ClusterMode.FULLSCREEN || projectedPackage != target ||
+                    remoteDisplayId != vdId
+                ) return@withLock
+                Log.e(TAG, "verify found the task off the VD ($splitMiss)")
+                log("verify: task not on vd=$vdId pkg=$target $splitMiss")
+                onClusterSendFailed?.invoke(target)
+                hideOverlay(helper)
+                failProjectionLocked(context, helper, "projection")
+            }
         }
     }
 
@@ -943,7 +962,9 @@ object ClusterProjectionManager {
                     log("projection active: pkg=$projectedPackage " +
                         if (directDisplayId != -1) "direct display=$directDisplayId"
                         else "vd=$remoteDisplayId")
-                    if (directDisplayId == -1) scheduleVerify(helper, projectedPackage, remoteDisplayId)
+                    if (directDisplayId == -1) {
+                        scheduleVerify(context, helper, projectedPackage, remoteDisplayId, vdStartState)
+                    }
                 } else {
                     // project() already tore down the overlay/VD on its failure paths.
                     failProjectionLocked(context, helper, failure)
@@ -1428,6 +1449,7 @@ object ClusterProjectionManager {
             placementAttempted = true
             // #288: where the task starts from; only a native split pane gets the check below.
             val before = readTaskState(helper, pkg)
+            vdStartState = before
             val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
                 Log.e(TAG, "launchAndForce failed")
