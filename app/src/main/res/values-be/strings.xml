@@ -1556,6 +1556,7 @@
     <string name="settings_hud_status_connecting">Падключэнне да шыны…</string>
     <string name="settings_hud_status_on">Перадача на HUD актыўная</string>
     <string name="settings_hud_status_bind_failed">Не ўдалося падключыцца да шыны SOME/IP</string>
+    <string name="settings_hud_status_cluster_only">HUD у гэтай машыне няма: падказкі ідуць у штатную картку навігацыі на прыборцы</string>
     <string name="settings_hud_hint">Патрэбна камплектацыя з праекцыйным дысплеем. Даныя бяруцца з акна Яндэкс Навігатара</string>
     <string name="settings_hud_mode_title">Спосаб вываду на шкло</string>
     <string name="settings_hud_mode_1">Спосаб 1</string>

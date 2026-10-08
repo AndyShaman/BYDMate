@@ -1556,6 +1556,7 @@
     <string name="settings_hud_status_connecting">Łączenie z magistralą…</string>
     <string name="settings_hud_status_on">Przesyłanie na HUD aktywne</string>
     <string name="settings_hud_status_bind_failed">Nie udało się połączyć z magistralą SOME/IP</string>
+    <string name="settings_hud_status_cluster_only">To auto nie ma HUD: wskazówki trafiają do fabrycznej karty nawigacji na zegarach</string>
     <string name="settings_hud_hint">Potrzebna wersja wyposażenia z wyświetlaczem przeziernym. Dane brane są z okna Yandex Nawigatora</string>
     <string name="settings_hud_mode_title">Sposób wyświetlania na szybie</string>
     <string name="settings_hud_mode_1">Sposób 1</string>

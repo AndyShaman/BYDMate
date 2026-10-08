@@ -43,7 +43,7 @@ class HudController @Inject constructor(
     private val helperClient: HelperClient,
     private val helperBootstrap: HelperBootstrap,
 ) {
-    enum class Status { OFF, UNSUPPORTED, CONNECTING, ON, BIND_FAILED }
+    enum class Status { OFF, UNSUPPORTED, CONNECTING, ON, BIND_FAILED, CLUSTER_ONLY }
 
     /** Snapshot of HUD push-loop diagnostics for the settings dump. */
     data class HudDiag(
@@ -115,6 +115,9 @@ class HudController @Inject constructor(
     @Volatile private var arming: HudArming? = null
     /** Ways 2 and 3: the CAN fields and the family, next to [arming]; never in way 1. */
     @Volatile private var channels: HudWayChannels? = null
+    /** #301: the cluster card through the Amap adapter, only on a car without the gateway; never with it. */
+    @Volatile internal var amapCluster: HudAmapClusterLoop? = null
+        private set
 
     /** HUD check: while set, the product arming treats guidance as absent (disarming if it was
      *  armed), so the check's own arming session is the only one writing. */
@@ -267,8 +270,24 @@ class HudController @Inject constructor(
     fun startIfEnabled() {
         if (isEnabled()) {
             scope.launch { startSequence() }
-        } else if (putBackJob?.isActive != true) {
-            putBackJob = scope.launch { putBackLeftover() }
+        } else {
+            if (prefs().contains(HudAmapClusterLoop.KEY_AMAP_CLUSTER_LEFT)) scope.launch { dropClusterLeftover() }
+            if (putBackJob?.isActive != true) putBackJob = scope.launch { putBackLeftover() }
+        }
+    }
+
+    private fun clusterPathAvailable(): Boolean =
+        HudSomeIpBridge.isServiceConfirmedAbsent(context.packageManager) &&
+            HudAmapClusterLoop.isAdapterPresent(context.packageManager)
+
+    /** A cluster card a process death left up, the switch now off: the card is ours whatever the hub
+     *  shows, so one KILL. On a car with the gateway there is no card of ours, only the key goes; a
+     *  probe that failed keeps it for the next start. */
+    private fun dropClusterLeftover() {
+        when {
+            clusterPathAvailable() -> HudAmapClusterLoop.killLeftover(context, prefs())
+            HudSomeIpBridge.isServicePresent(context.packageManager) ->
+                prefs().edit().remove(HudAmapClusterLoop.KEY_AMAP_CLUSTER_LEFT).apply()
         }
     }
 
@@ -287,9 +306,7 @@ class HudController @Inject constructor(
         // Probe BEFORE any helper-daemon work: unsupported cars must see zero side effects.
         if (!HudSomeIpBridge.isServicePresent(context.packageManager)) {
             prefs().edit().putBoolean(KEY_SUPPORTED, false).apply()
-            setStatus(Status.UNSUPPORTED)
-            Log.i(TAG, "SOME/IP gateway absent; HUD output stays unloaded")
-            putBackLeftover()
+            startWithoutGateway()
             return
         }
         prefs().edit().putBoolean(KEY_SUPPORTED, true).apply()
@@ -342,6 +359,25 @@ class HudController @Inject constructor(
                 throw ce
             }
         }
+    }
+
+    /** No gateway: with the stock Amap adapter the hints go to the cluster's navigation card (#301),
+     *  without it the output stays unloaded. Neither touches the helper daemon. */
+    private suspend fun startWithoutGateway() {
+        // A running cluster loop stays as it is: a repeated start's probe must not flip its status.
+        if (amapCluster != null) return
+        // Fail closed: a probe that failed for any reason but "not installed" may hide a working gateway.
+        if (clusterPathAvailable()) {
+            amapCluster = HudAmapClusterLoop(context, prefs()).also { it.start(scope) }
+            NavGuidanceHub.hudWay = NavGuidanceHub.WAY_AMAP_CLUSTER
+            setStatus(Status.CLUSTER_ONLY)
+            Log.i(TAG, "SOME/IP gateway absent; hints go to the cluster card via the Amap adapter")
+            putBackLeftover()
+            return
+        }
+        setStatus(Status.UNSUPPORTED)
+        Log.i(TAG, "SOME/IP gateway absent; HUD output stays unloaded")
+        putBackLeftover()
     }
 
     /** A layout the HUD check kept (process killed mid-check, or its put-back deferred at a
@@ -433,6 +469,8 @@ class HudController @Inject constructor(
                 runCatching { it.unbind() }
             }
             bridge = null
+            amapCluster?.stop()
+            amapCluster = null
             NavGuidanceHub.hudWay = 0
             setStatus(Status.OFF)
             // NavGuidanceHub is intentionally NOT reset: the voice agent keeps using it.

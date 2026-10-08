@@ -1168,7 +1168,9 @@ class TrackingService : Service(), LocationListener {
      * notification — nothing retries. Guidance-active is exactly that moment.
      */
     private fun maybeRearmNotificationListenerGrant(now: Long) {
-        if (!com.bydmate.app.navdata.NavGuidanceHub.snapshot(now).active) return
+        // Without the gateway (#301) a11y stays off, so the hub needs the listener to activate at all.
+        if (!com.bydmate.app.navdata.NavGuidanceHub.snapshot(now).active &&
+            hudController.status.value != com.bydmate.app.hud.HudController.Status.CLUSTER_ONLY) return
         if (now - lastGuidanceGrantRearmTs < GUIDANCE_GRANT_REARM_MS) return
         if (runCatching { notificationListenerGranted() }.getOrDefault(false)) return
         lastGuidanceGrantRearmTs = now
