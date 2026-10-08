@@ -1,0 +1,15 @@
+# Issue #275, app v3.19.9, DiLink 5.0: the ActionDispatcher «media key» lines and the
+# ClusterMusicBridge session lists between 08:56:12 and 08:56:31, copied verbatim from the user's
+# dump. The user had paused the stock player (com.byd.mediacenter, a real track) by hand and played
+# a radio app; an automation pauses the radio and plays it again, the radio's session dies, and the
+# next automation play finds only the paused stock session and resumes it (Kugou starts).
+10-07 08:56:12.770 I/ActionDispatcher(25258): media key pause -> com.ilv.vradio ok=true sessions=[com.ilv.vradio:3 com.byd.mediacenter:2]
+10-07 08:56:16.069 I/ActionDispatcher(25258): media key pause -> com.ilv.vradio ok=true sessions=[com.ilv.vradio:1 com.byd.mediacenter:2]
+10-07 08:56:18.415 I/ActionDispatcher(25258): media key pause -> com.ilv.vradio ok=true sessions=[com.ilv.vradio:1 com.byd.mediacenter:2]
+10-07 08:56:20.229 I/ActionDispatcher(25258): media key pause -> com.ilv.vradio ok=true sessions=[com.ilv.vradio:1 com.byd.mediacenter:2]
+10-07 08:56:25.290 I/ActionDispatcher(25258): media key play -> com.ilv.vradio ok=true sessions=[com.ilv.vradio:1 com.byd.mediacenter:2]
+10-07 08:56:25.457 I/ClusterMusicBridge(25258): target idle sessions=[com.byd.mediacenter:2] owner=com.ilv.vradio via=poll
+10-07 08:56:26.992 I/ClusterMusicBridge(25258): target show:com.ilv.vradio sessions=[com.ilv.vradio:8 com.byd.mediacenter:2] owner=com.ilv.vradio via=poll
+10-07 08:56:28.516 I/ClusterMusicBridge(25258): target idle sessions=[com.byd.mediacenter:2] owner=com.ilv.vradio via=poll
+10-07 08:56:30.446 I/ActionDispatcher(25258): media key play -> com.byd.mediacenter ok=true sessions=[com.byd.mediacenter:2]
+10-07 08:56:31.537 I/ClusterMusicBridge(25258): target other:com.byd.mediacenter sessions=[com.byd.mediacenter:3] owner=com.ilv.vradio via=poll
