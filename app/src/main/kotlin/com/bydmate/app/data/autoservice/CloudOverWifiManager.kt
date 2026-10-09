@@ -106,7 +106,7 @@ sealed class CloudOverWifiState {
 
     /**
      * The car reached the BYD server and the server refused its registration: on the new servers
-     * that means no Chinese address (VPN), on a resoldered SIM also an rSIM that is not set up.
+     * that means no Chinese address, so a Chinese VPN is needed.
      */
     data object ServerRefused : CloudOverWifiState()
 
