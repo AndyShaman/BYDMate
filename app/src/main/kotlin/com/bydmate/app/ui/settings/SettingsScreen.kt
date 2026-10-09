@@ -4577,6 +4577,7 @@ private fun cloudOverWifiStatusText(state: CloudOverWifiState): String? = when (
     CloudOverWifiState.WaitingInternet -> stringResource(R.string.settings_cloud_wifi_status_waiting)
     CloudOverWifiState.ProfileRejected -> stringResource(R.string.settings_cloud_wifi_status_rejected)
     CloudOverWifiState.CloudSilent -> stringResource(R.string.settings_cloud_wifi_status_silent)
+    CloudOverWifiState.ServerRefused -> stringResource(R.string.settings_cloud_wifi_status_refused)
     CloudOverWifiState.Connected -> stringResource(R.string.settings_cloud_wifi_status_connected)
     CloudOverWifiState.ReturnPending -> stringResource(R.string.settings_cloud_wifi_status_return_pending)
 }

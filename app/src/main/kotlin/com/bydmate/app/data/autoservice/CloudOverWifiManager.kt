@@ -101,8 +101,14 @@ sealed class CloudOverWifiState {
     /** The car did not take the `double_apn` data profile. */
     data object ProfileRejected : CloudOverWifiState()
 
-    /** We asked the cloud to connect and it did not. */
+    /** We asked the cloud to connect and it did not, for a reason the car does not tell. */
     data object CloudSilent : CloudOverWifiState()
+
+    /**
+     * The car reached the BYD server and the server refused its registration: on the new servers
+     * that means no Chinese address (VPN), on a resoldered SIM also an rSIM that is not set up.
+     */
+    data object ServerRefused : CloudOverWifiState()
 
     /** The BYD cloud link is up. */
     data object Connected : CloudOverWifiState()
@@ -267,11 +273,30 @@ class CloudOverWifiManager @Inject constructor(
         if (!clearToChange(CMD_CLOUD_START, CloudOverWifiState.OwnCellular)) return
         if (!stillWanted()) return
         execLogged(CMD_CLOUD_START)
-        system.sleep(CLOUD_SETTLE_MS)
-        if (parseCloudConnected(execLogged(CMD_CLOUD_STATUS)) == true) {
-            transition(CloudOverWifiState.Connected, "cloud connected after start")
+        awaitCloudVerdict()
+    }
+
+    /** Polls the cloud after the start and, if it stays down, tells a server refusal from silence. */
+    private suspend fun awaitCloudVerdict() {
+        // The cloud client resends its handshake every 5 s, so one read 5 s after the start can
+        // miss a link that comes up a few seconds later.
+        var waited = 0L
+        while (waited < CLOUD_VERDICT_MS) {
+            system.sleep(CLOUD_SETTLE_MS)
+            waited += CLOUD_SETTLE_MS
+            if (!stillWanted()) return
+            if (parseCloudConnected(execLogged(CMD_CLOUD_STATUS)) == true) {
+                transition(CloudOverWifiState.Connected, "cloud connected ${waited / 1000}s after start")
+                return
+            }
+        }
+        val step = getprop(PROP_TCP_STEP)
+        val regError = getprop(PROP_REG_ERRCODE)
+        val reason = "cloud not connected ${waited / 1000}s after start, tcp_step=$step reg_errcode=$regError"
+        if (isRegistrationRefused(step, regError)) {
+            transition(CloudOverWifiState.ServerRefused, reason)
         } else {
-            transition(CloudOverWifiState.CloudSilent, "cloud not connected ${CLOUD_SETTLE_MS / 1000}s after start")
+            transition(CloudOverWifiState.CloudSilent, reason)
         }
     }
 
@@ -417,7 +442,7 @@ class CloudOverWifiManager @Inject constructor(
         val cloud = parseCloudConnected(adb.exec(CMD_CLOUD_STATUS))
         return "$head profile=${p.apnType} factory=${p.factory} apn1_disable=${p.apn1Disable} " +
             "apn1=${p.apn1State} apn3=${p.apn3State} cloud_tcp=$cloud " +
-            "tcp_step=${getprop("sys.tcp_step")} reg_errcode=${getprop("sys.tcp_reg_errcode")} " +
+            "tcp_step=${getprop(PROP_TCP_STEP)} reg_errcode=${getprop(PROP_REG_ERRCODE)} " +
             "app_reg=${getprop("persist.sys.cloud.app_reg_status")} " +
             "sim=${getprop("gsm.sim.operator.numeric")}/${getprop("gsm.sim.operator.iso-country")}"
     }
@@ -436,6 +461,7 @@ class CloudOverWifiManager @Inject constructor(
         const val DOUBLE_APN = "double_apn"
         const val PROFILE_SETTLE_MS = 3_000L
         const val CLOUD_SETTLE_MS = 5_000L
+        const val CLOUD_VERDICT_MS = 30_000L
         const val STOP_SETTLE_MS = 1_000L
         const val WIFI_SETTLE_MS = 15_000L
 
@@ -444,6 +470,15 @@ class CloudOverWifiManager @Inject constructor(
         private const val PROP_APN1_DISABLE = "persist.radio.net.lte.apn1.disable"
         private const val PROP_APN1_STATE = "net.lte.apn1.state"
         private const val PROP_APN3_STATE = "net.lte.apn3.state"
+        private const val PROP_TCP_STEP = "sys.tcp_step"
+        private const val PROP_REG_ERRCODE = "sys.tcp_reg_errcode"
+
+        // cloudmanager's own codes: step 5 = registration sent, no answer accepted (6 = logged in);
+        // reg_errcode 1 = success and stays 1 after a disconnect, 10 = attempt in flight,
+        // 2..9 = the server refused the registration.
+        private const val STEP_REGISTRATION_SENT = "5"
+        private const val REG_IN_FLIGHT = 10
+        private val REG_REFUSED = 2..9
         private const val CMD_CLOUD_STATUS = "service call cloudmanager 7"
         private const val CMD_CLOUD_START = "service call cloudmanager 1 i32 4"
         private const val CMD_CLOUD_STOP = "service call cloudmanager 1 i32 -5"
@@ -452,6 +487,13 @@ class CloudOverWifiManager @Inject constructor(
         // A profile name ends up in a shell command line: nothing but [a-z_] may reach it.
         private val PROFILE_NAME = Regex("^[a-z_]+$")
         private val PARCEL_WORD = Regex("""\b[0-9a-fA-F]{8}\b""")
+
+        /** A cloud that did not connect was refused by the server rather than never reaching it. */
+        fun isRegistrationRefused(step: String?, regError: String?): Boolean {
+            val code = regError?.toIntOrNull()
+            if (code == REG_IN_FLIGHT) return false
+            return step == STEP_REGISTRATION_SENT || code in REG_REFUSED
+        }
 
         private fun radioConfig(apnType: String): String =
             "am broadcast --user 0 -a com.byd.action.RADIO_CONFIG -p com.android.phone -f 0x01000000 " +
