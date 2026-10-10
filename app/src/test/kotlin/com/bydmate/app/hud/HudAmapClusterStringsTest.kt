@@ -3,7 +3,6 @@ package com.bydmate.app.hud
 import android.content.Intent
 import com.bydmate.app.navdata.NavGuidanceHub
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -29,7 +28,6 @@ class HudAmapClusterStringsTest {
     }
 
     @Test fun `the remaining time carries no Chinese unit`() {
-        val time = frame().getStringExtra("ROUTE_REMAIN_TIME_AUTO").orEmpty()
-        assertFalse("drawn as it is on the cluster: $time", time.contains('分') || time.contains('时'))
+        assertEquals("3 min", frame().getStringExtra("ROUTE_REMAIN_TIME_AUTO"))
     }
 }

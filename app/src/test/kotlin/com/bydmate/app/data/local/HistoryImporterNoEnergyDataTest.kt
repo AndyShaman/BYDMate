@@ -70,7 +70,7 @@ class HistoryImporterNoEnergyDataTest {
         coVerify(exactly = 0) { settingsRepository.setConsumptionRecalcDone() }
     }
 
-    @Test fun `a folder that is there but cannot be read is still an error`() = runTest {
+    @Test fun `a folder that is there but holds no database is still an error`() = runTest {
         coEvery { settingsRepository.isConsumptionRecalcDone() } returns false
 
         assertEquals(0, importer(readerWithDir(tmp.newFolder("energydata"))).recalculateConsumptionFromEnergyData())
