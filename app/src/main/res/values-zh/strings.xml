@@ -1226,6 +1226,7 @@
     <string name="auto_msg_sentry_invalid">动作 #%1$d：哨兵模式状态无效</string>
     <string name="auto_msg_media_key_invalid">动作 #%1$d：请选择播放或暂停</string>
     <string name="auto_msg_hotspot_invalid">动作 #%1$d：热点状态无效</string>
+    <string name="auto_msg_screen_invalid">动作 #%1$d：屏幕状态无效</string>
     <string name="auto_msg_speak_text_empty">动作 #%1$d：未设置朗读文本</string>
     <string name="auto_msg_agent_query_prompt_empty">动作 #%1$d：未设置代理查询内容</string>
     <string name="auto_msg_name_cond_action_required">名称和至少一个条件及动作是必需的</string>
@@ -1267,6 +1268,8 @@
     <string name="automation_action_hotspot">Wi-Fi热点</string>
     <string name="automation_action_hotspot_on">开启</string>
     <string name="automation_action_hotspot_off">关闭</string>
+    <string name="automation_action_screen_off">关闭屏幕</string>
+    <string name="automation_action_screen_on">打开屏幕</string>
     <string name="automation_action_speak">朗读文字</string>
     <string name="automation_action_agent_query">询问语音助手</string>
     <string name="auto_act_speak">朗读文字</string>
@@ -1826,6 +1829,8 @@
     <string name="dispatch_sentry_failed">无法切换哨兵模式</string>
     <string name="dispatch_hotspot_invalid_state">Wi-Fi 热点状态无效</string>
     <string name="dispatch_hotspot_failed">无法切换 Wi-Fi 热点</string>
+    <string name="dispatch_screen_invalid_state">屏幕状态无效</string>
+    <string name="dispatch_screen_not_available">本车不支持控制屏幕</string>
     <string name="dispatch_cluster_invalid_state">仪表盘投射状态无效</string>
     <string name="dispatch_cluster_daemon_restarting">服务进程正在重启</string>
     <string name="dispatch_cluster_not_on">投射到仪表盘未开启</string>

@@ -571,6 +571,8 @@
     <string name="automation_action_hotspot">Пункт доступу Wi-Fi</string>
     <string name="automation_action_hotspot_on">Уключыць</string>
     <string name="automation_action_hotspot_off">Адключыць</string>
+    <string name="automation_action_screen_off">Экран: выключыць</string>
+    <string name="automation_action_screen_on">Экран: уключыць</string>
     <string name="automation_action_speak">Агучыць тэкст</string>
     <string name="automation_action_agent_query">Запыт агенту</string>
     <string name="auto_act_speak">Агучыць тэкст</string>
@@ -1299,6 +1301,7 @@
     <string name="auto_msg_sentry_invalid">Дзеянне #%1$d: некарэктны стан ахоўнага рэжыму</string>
     <string name="auto_msg_media_key_invalid">Дзеянне #%1$d: выберыце «прайграць» або «паўза»</string>
     <string name="auto_msg_hotspot_invalid">Дзеянне #%1$d: некарэктны стан пункта доступу</string>
+    <string name="auto_msg_screen_invalid">Дзеянне #%1$d: некарэктны стан экрана</string>
     <string name="auto_msg_speak_text_empty">Дзеянне #%1$d: не зададзены тэкст для агучкі</string>
     <string name="auto_msg_agent_query_prompt_empty">Дзеянне #%1$d: не зададзены запыт агенту</string>
     <string name="auto_msg_name_cond_action_required">Назва і хаця б адна ўмова і дзеянне абавязковыя</string>
@@ -1864,6 +1867,8 @@
     <string name="dispatch_sentry_failed">Не ўдалося пераключыць ахоўны рэжым</string>
     <string name="dispatch_hotspot_invalid_state">Некарэктны стан пункта доступу Wi-Fi</string>
     <string name="dispatch_hotspot_failed">Не ўдалося пераключыць пункт доступу Wi-Fi</string>
+    <string name="dispatch_screen_invalid_state">Некарэктны стан экрана</string>
+    <string name="dispatch_screen_not_available">На гэтай машыне кіраванне экранам недаступна</string>
     <string name="dispatch_cluster_invalid_state">Некарэктны стан праекцыі на прыборку</string>
     <string name="dispatch_cluster_daemon_restarting">службовы працэс перазапускаецца</string>
     <string name="dispatch_cluster_not_on">праекцыя на прыборку не ўключылася</string>

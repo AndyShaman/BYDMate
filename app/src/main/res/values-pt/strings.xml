@@ -507,6 +507,8 @@
     <string name="automation_action_hotspot">Ponto de acesso Wi-Fi</string>
     <string name="automation_action_hotspot_on">Ativar</string>
     <string name="automation_action_hotspot_off">Desativar</string>
+    <string name="automation_action_screen_off">Tela: desligar</string>
+    <string name="automation_action_screen_on">Tela: ligar</string>
     <string name="automation_action_speak">Falar texto</string>
     <string name="automation_action_agent_query">Perguntar ao agente</string>
     <string name="auto_act_speak">Falar texto</string>
@@ -1140,6 +1142,7 @@
     <string name="auto_msg_sentry_invalid">Ação nº %1$d: estado do modo sentinela inválido</string>
     <string name="auto_msg_media_key_invalid">Ação nº %1$d: escolha tocar ou pausar</string>
     <string name="auto_msg_hotspot_invalid">Ação nº %1$d: estado do ponto de acesso inválido</string>
+    <string name="auto_msg_screen_invalid">Ação nº %1$d: estado da tela inválido</string>
     <string name="auto_msg_speak_text_empty">Ação nº %1$d: texto para fala não definido</string>
     <string name="auto_msg_agent_query_prompt_empty">Ação nº %1$d: consulta ao agente não definida</string>
     <string name="auto_msg_name_cond_action_required">Nome, ao menos uma condição e ao menos uma ação são obrigatórios</string>
@@ -1708,6 +1711,8 @@
     <string name="dispatch_sentry_failed">Não foi possível alternar o modo sentinela</string>
     <string name="dispatch_hotspot_invalid_state">Estado do ponto de acesso Wi-Fi inválido</string>
     <string name="dispatch_hotspot_failed">Não foi possível alternar o ponto de acesso Wi-Fi</string>
+    <string name="dispatch_screen_invalid_state">Estado da tela inválido</string>
+    <string name="dispatch_screen_not_available">O controle da tela não está disponível neste carro</string>
     <string name="dispatch_cluster_invalid_state">Estado da projeção no painel de instrumentos inválido</string>
     <string name="dispatch_cluster_daemon_restarting">o processo de serviço está reiniciando</string>
     <string name="dispatch_cluster_not_on">a projeção no painel de instrumentos não ligou</string>

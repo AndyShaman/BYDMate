@@ -223,6 +223,7 @@ class ActionDispatcherFailureLocaleTest {
         action("sentry", "1") to "Не удалось переключить охранный режим",
         action("hotspot", "7") to "Некорректное состояние точки доступа Wi-Fi",
         action("hotspot", "1") to "Не удалось переключить точку доступа Wi-Fi",
+        action("screen", "7") to "Некорректное состояние экрана",
         action("cluster_projection", "7") to "Некорректное состояние проекции на приборку",
         action("speak", null) to "не задан текст",
         action("agent_query", null) to "не задан запрос",

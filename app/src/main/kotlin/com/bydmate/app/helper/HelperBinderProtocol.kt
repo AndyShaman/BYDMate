@@ -512,6 +512,28 @@ object HelperBinderProtocol {
      */
     val TX_HUD_SDK: Int = IBinder.FIRST_CALL_TRANSACTION + 57  // 58
 
+    /**
+     * Central screen backlight off / on (#275): the hidden PowerManager.turnBacklightOff(long) /
+     * turnBacklightOn(long) the stock screen-off button calls, `TurnBacklight*` on DiLink 3.0 / 4.0,
+     * looked up by name inside the daemon (DEVICE_POWER, which the shell uid holds). Only the
+     * backlight changes: Android stays awake. The daemon then reads getPowerScreenStatus()
+     * (0 = off, 1 = on) until it shows the wanted state.
+     *
+     * Request: [int on: 1=on, 0=off]
+     * Reply:   [int outcome (SCREEN_BACKLIGHT_*), int status (last read, -1 = none),
+     *           String detail (the method found and the reads, or the exception)]
+     * An old daemon without this handler makes transact return false → the client returns null.
+     */
+    val TX_SET_SCREEN_BACKLIGHT: Int = IBinder.FIRST_CALL_TRANSACTION + 58  // 59
+
+    /** TX_SET_SCREEN_BACKLIGHT outcomes: called and the status shows the wanted state; called but
+     *  the status did not follow (or could not be read); no such method on this firmware; the
+     *  PowerManager or the call threw. */
+    const val SCREEN_BACKLIGHT_CONFIRMED = 0
+    const val SCREEN_BACKLIGHT_NOT_FOLLOWED = 1
+    const val SCREEN_BACKLIGHT_ABSENT = 2
+    const val SCREEN_BACKLIGHT_THREW = -1
+
     /** TX_HUD_SDK methods: sendSimpleGuidanceInfo, sendNextPathName, sendRestRouteInfo. */
     const val HUD_SDK_GUIDANCE = 1
     const val HUD_SDK_PATH_NAME = 2

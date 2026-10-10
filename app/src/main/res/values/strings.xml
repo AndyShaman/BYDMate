@@ -571,6 +571,8 @@
     <string name="automation_action_hotspot">Точка доступа Wi-Fi</string>
     <string name="automation_action_hotspot_on">Включить</string>
     <string name="automation_action_hotspot_off">Отключить</string>
+    <string name="automation_action_screen_off">Экран: выключить</string>
+    <string name="automation_action_screen_on">Экран: включить</string>
     <string name="automation_action_speak">Озвучить текст</string>
     <string name="automation_action_agent_query">Запрос агенту</string>
     <string name="auto_act_speak">Озвучить текст</string>
@@ -1303,6 +1305,7 @@
     <string name="auto_msg_sentry_invalid">Действие #%1$d: некорректное состояние охранного режима</string>
     <string name="auto_msg_media_key_invalid">Действие #%1$d: выберите «играть» или «пауза»</string>
     <string name="auto_msg_hotspot_invalid">Действие #%1$d: некорректное состояние точки доступа</string>
+    <string name="auto_msg_screen_invalid">Действие #%1$d: некорректное состояние экрана</string>
     <string name="auto_msg_speak_text_empty">Действие #%1$d: не задан текст для озвучки</string>
     <string name="auto_msg_agent_query_prompt_empty">Действие #%1$d: не задан запрос агенту</string>
     <string name="auto_msg_name_cond_action_required">Название и хотя бы одно условие и действие обязательны</string>
@@ -1879,6 +1882,8 @@
     <string name="dispatch_sentry_failed">Не удалось переключить охранный режим</string>
     <string name="dispatch_hotspot_invalid_state">Некорректное состояние точки доступа Wi-Fi</string>
     <string name="dispatch_hotspot_failed">Не удалось переключить точку доступа Wi-Fi</string>
+    <string name="dispatch_screen_invalid_state">Некорректное состояние экрана</string>
+    <string name="dispatch_screen_not_available">На этой машине управление экраном недоступно</string>
     <string name="dispatch_cluster_invalid_state">Некорректное состояние проекции на приборку</string>
     <string name="dispatch_cluster_daemon_restarting">служебный процесс перезапускается</string>
     <string name="dispatch_cluster_not_on">проекция на приборку не включилась</string>

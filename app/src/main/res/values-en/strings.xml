@@ -514,6 +514,8 @@
     <string name="automation_action_hotspot">Wi-Fi hotspot</string>
     <string name="automation_action_hotspot_on">Enable</string>
     <string name="automation_action_hotspot_off">Disable</string>
+    <string name="automation_action_screen_off">Screen: off</string>
+    <string name="automation_action_screen_on">Screen: on</string>
     <string name="automation_action_speak">Speak text</string>
     <string name="automation_action_agent_query">Ask the agent</string>
     <string name="auto_act_speak">Speak text</string>
@@ -1147,6 +1149,7 @@
     <string name="auto_msg_sentry_invalid">Action #%1$d: invalid sentry mode state</string>
     <string name="auto_msg_media_key_invalid">Action #%1$d: choose play or pause</string>
     <string name="auto_msg_hotspot_invalid">Action #%1$d: invalid hotspot state</string>
+    <string name="auto_msg_screen_invalid">Action #%1$d: invalid screen state</string>
     <string name="auto_msg_speak_text_empty">Action #%1$d: speak text is not set</string>
     <string name="auto_msg_agent_query_prompt_empty">Action #%1$d: agent query prompt is not set</string>
     <string name="auto_msg_name_cond_action_required">Name and at least one condition and action are required</string>
@@ -1712,6 +1715,8 @@
     <string name="dispatch_sentry_failed">Could not switch sentry mode</string>
     <string name="dispatch_hotspot_invalid_state">Invalid Wi-Fi hotspot state</string>
     <string name="dispatch_hotspot_failed">Could not switch the Wi-Fi hotspot</string>
+    <string name="dispatch_screen_invalid_state">Invalid screen state</string>
+    <string name="dispatch_screen_not_available">Screen control is not available on this car</string>
     <string name="dispatch_cluster_invalid_state">Invalid cluster projection state</string>
     <string name="dispatch_cluster_daemon_restarting">the service process is restarting</string>
     <string name="dispatch_cluster_not_on">projection to the cluster did not turn on</string>

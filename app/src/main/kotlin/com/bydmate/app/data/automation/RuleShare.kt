@@ -92,7 +92,7 @@ object RuleShare {
         "navigate", "url", "yandex_music", "youtube", "go_home", "delay", "media_volume", "sentry",
         "hotspot", "cluster_projection", "toggle", "speak", "agent_query", "split_screen",
         "split_screen_close", "split_screen_toggle", "telegram_report", "app_close",
-        "media_key",
+        "media_key", "screen",
     )
 
     /** Marker left in a stripped call or tel/sms url payload: the importer has to ask for a number. */
@@ -115,7 +115,7 @@ object RuleShare {
      * - action `url`: what [RuleShareUrl.strip] removes, and the display name is rebuilt from the
      *   stripped address (the voice agent stores the original address there).
      * - every other kind (`param`, `notification*`, `app_launch`, `navigate`, `yandex_music`,
-     *   `youtube`, `go_home`, `delay`, `media_volume`, `sentry`, `hotspot`, `cluster_projection`,
+     *   `youtube`, `go_home`, `delay`, `media_volume`, `sentry`, `hotspot`, `screen`, `cluster_projection`,
      *   `toggle`, `speak`, `agent_query`, `split_screen*`, `telegram_report`): copied as is. Free texts (notification
      *   and speak texts, agent prompts, navigation points, voice phrases, the rule name) stay: the
      *   user shares their own rule and the share note asks them to check those.

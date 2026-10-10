@@ -257,6 +257,7 @@ internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
         R.string.automation_action_cluster_projection_off, a.payload, lc,
     )
     "media_key" -> ActionDispatcher.mediaKeyNameRes(a.payload)?.let { lc.getString(it) } ?: a.displayName
+    "screen" -> ActionDispatcher.screenNameRes(a.payload)?.let { lc.getString(it) } ?: a.displayName
     "media_volume" -> a.payload?.toIntOrNull()
         ?.let { lc.getString(R.string.auto_ui_act_volume, lc.getString(R.string.automation_action_media_volume), it) }
         ?: a.displayName
@@ -545,6 +546,7 @@ internal fun ActionValidationError.toMissing(lc: Context): Missing.Action = when
     is ActionValidationError.MediaVolumeMissing -> Missing.Action(index, lc.getString(R.string.auto_msg_media_volume_missing, index))
     is ActionValidationError.SentryInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_sentry_invalid, index))
     is ActionValidationError.HotspotInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_hotspot_invalid, index))
+    is ActionValidationError.ScreenInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_screen_invalid, index))
     is ActionValidationError.MediaKeyInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_media_key_invalid, index))
     is ActionValidationError.SpeakTextEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_speak_text_empty, index))
     is ActionValidationError.AgentQueryPromptEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_agent_query_prompt_empty, index))

@@ -21,6 +21,7 @@ sealed class ActionValidationError {
     data class MediaVolumeMissing(val index: Int) : ActionValidationError()
     data class SentryInvalid(val index: Int) : ActionValidationError()
     data class HotspotInvalid(val index: Int) : ActionValidationError()
+    data class ScreenInvalid(val index: Int) : ActionValidationError()
     data class MediaKeyInvalid(val index: Int) : ActionValidationError()
     data class SpeakTextEmpty(val index: Int) : ActionValidationError()
     data class AgentQueryPromptEmpty(val index: Int) : ActionValidationError()
@@ -118,6 +119,9 @@ object RuleDraftValidator {
                 }
                 "hotspot" -> {
                     if (a.payload !in listOf("0", "1")) return ActionValidationError.HotspotInvalid(n)
+                }
+                "screen" -> {
+                    if (a.payload !in listOf("0", "1")) return ActionValidationError.ScreenInvalid(n)
                 }
                 "media_key" -> {
                     if (ActionDispatcher.mediaKeyCode(a.payload) == null) return ActionValidationError.MediaKeyInvalid(n)

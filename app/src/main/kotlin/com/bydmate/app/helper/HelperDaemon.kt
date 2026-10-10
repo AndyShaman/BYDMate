@@ -411,6 +411,16 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_SET_SCREEN_BACKLIGHT -> {
+                    val on = runCatching { data.readInt() != 0 }.getOrDefault(true)
+                    val result = setScreenBacklight(on, android.os.SystemClock.uptimeMillis()) {
+                        systemContext?.getSystemService(Context.POWER_SERVICE) ?: error("no system Context")
+                    }
+                    reply?.writeInt(result.outcome); reply?.writeInt(result.status)
+                    reply?.writeString(result.detail)
+                    true
+                }
+
                 HelperBinderProtocol.TX_LAUNCH_AND_FORCE -> runCatching {
                     val pkg = data.readString() ?: ""
                     val displayId = data.readInt(); val width = data.readInt(); val height = data.readInt()
