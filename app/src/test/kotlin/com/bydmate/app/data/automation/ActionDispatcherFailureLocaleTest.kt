@@ -180,6 +180,30 @@ class ActionDispatcherFailureLocaleTest {
         assertEquals("This car has no HUD", reason(off))
     }
 
+    // ── Battery warm-up (#311) ─────────────────────────────────────────────────
+
+    @Test fun `a refused battery warm-up names the reason in the app language`() = runTest {
+        val on = ActionDef(command = "打开电池预热", displayName = "x", kind = "param")
+        val cases = listOf(
+            VehicleWriteError.NotEquipped("battery_preheat_on") to
+                ("На этой машине нет подогрева батареи" to "This car has no battery warm-up"),
+            VehicleWriteError.NotNeeded("battery_preheat_on", "permit=1") to
+                ("Батарея тёплая, подогрев не нужен" to "The battery is warm, no warm-up needed"),
+            VehicleWriteError.StateBlocked("battery_preheat_on", "charge gun connected") to
+                ("Подогрев батареи недоступен, пока подключён зарядный кабель" to
+                    "Battery warm-up is unavailable while the charging cable is connected"),
+            VehicleWriteError.ReadbackMismatch("battery_preheat_on", "no effect read=0") to
+                ("Машина не выполнила команду" to "The car did not carry out the command"),
+        )
+        for ((err, texts) in cases) {
+            coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)
+            lang("ru")
+            assertEquals(texts.first, reason(on))
+            lang("en")
+            assertEquals(texts.second, reason(on))
+        }
+    }
+
     @Test fun `a terrain mode at unknown speed is refused before the car is asked`() = runTest {
         lang("ru")
         dispatcher.readSpeedNow = { null }

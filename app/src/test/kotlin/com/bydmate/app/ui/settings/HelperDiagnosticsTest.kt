@@ -84,6 +84,17 @@ class HelperDiagnosticsTest {
         assertEquals("hud_switch: (unavailable)", HudDiagnostics.switchLine(null))
     }
 
+    @Test fun `battery preheat fids share one line`() {
+        assertEquals(
+            "battery_preheat: config[dev=1009 fid=879755304]=0 permit[dev=1009 fid=1151336468]=1 " +
+                "status[dev=1009 fid=879755302]=0 gun[dev=1009 fid=876609586]=1 " +
+                "heat_power[dev=1009 fid=584067131]=(status=-10013)",
+            BatteryPreheatDiagnostics.line(listOf(0 to 0, 0 to 1, 0 to 0, 0 to 1, -10013 to 0)),
+        )
+        assertEquals("battery_preheat: (unavailable)", BatteryPreheatDiagnostics.line(null))
+        assertEquals("battery_preheat: (unavailable)", BatteryPreheatDiagnostics.line(listOf(0 to 0)))
+    }
+
     @Test fun `hud navi gate in its trace form`() {
         assertEquals("1/e-10011", HudDiagnostics.gate(listOf(0 to 1, -10011 to 0)))
         assertEquals("na/na", HudDiagnostics.gate(null))

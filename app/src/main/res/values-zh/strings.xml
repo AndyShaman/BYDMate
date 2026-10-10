@@ -1157,6 +1157,11 @@
     <string name="auto_act_hud_on">打开抬头显示</string>
     <string name="auto_act_hud_off">关闭抬头显示</string>
     <string name="hud_not_equipped">这辆车没有抬头显示</string>
+    <string name="auto_act_battery_preheat_on">打开电池预热</string>
+    <string name="auto_act_battery_preheat_off">关闭电池预热</string>
+    <string name="battery_preheat_not_equipped">这辆车没有电池预热</string>
+    <string name="battery_preheat_not_needed">电池温度合适，无需预热</string>
+    <string name="battery_preheat_gun_connected">连接充电枪时无法使用电池预热</string>
     <string name="auto_act_ambient_light_on">氛围灯开</string>
     <string name="auto_act_ambient_light_off">氛围灯关</string>
     <string name="auto_act_drl_on">日行灯开</string>

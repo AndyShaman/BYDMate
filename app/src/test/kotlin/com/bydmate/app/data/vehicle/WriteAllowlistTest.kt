@@ -355,6 +355,47 @@ class WriteAllowlistTest {
         assertEquals(setOf(1, 2), values)
     }
 
+    // ── Battery warm-up (#311): dev 1009 carve-out for the write fid, values 1 and 2 only ──
+    @Test fun `battery preheat write fid is the only dev 1009 carve-out, its read fids stay banned`() {
+        assertFalse(WriteAllowlist.isBanned(1009, 1324617774))
+        assertEquals(
+            setOf(1324617774),
+            WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS.filter { it.first == 1009 }.map { it.second }.toSet(),
+        )
+        for (fid in listOf(
+            WriteAllowlist.BATTERY_PREHEAT_STATUS_FID, WriteAllowlist.BATTERY_PREHEAT_PERMIT_FID,
+            WriteAllowlist.BATTERY_PREHEAT_CONFIG_FID, WriteAllowlist.CHARGE_GUN_STATE_FID,
+        )) assertTrue("fid=$fid", WriteAllowlist.isBanned(1009, fid))
+    }
+
+    @Test fun `battery preheat entries are dev 1009 unvalidated 1 on and 2 off`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        for ((name, value) in listOf("battery_preheat_on" to 1, "battery_preheat_off" to 2)) {
+            val e = al.find(name) ?: error("missing $name")
+            assertEquals(1009, e.dev)
+            assertEquals(1324617774, e.writeFid)
+            assertNull("$name is read back by its channel, not inline", e.readbackFid)
+            assertEquals(value, e.valueMin); assertEquals(value, e.valueMax)
+            assertFalse("$name must be unvalidated", e.validated)
+        }
+    }
+
+    @Test fun `no other battery preheat value opens up, whatever the source`() {
+        val fixture = """
+            {
+              "preheat_any": { "featureId": 1324617774, "deviceType": 1009 },
+              "preheat_three": { "featureId": 1324617774, "deviceType": 1009, "value": 3 },
+              "charge_other": { "featureId": 1276145714, "deviceType": 1009, "value": 1 }
+            }
+        """.trimIndent()
+        val al = WriteAllowlist.loadProduction { fixture }
+        assertNull(al.find("preheat_any"))
+        assertNull(al.find("preheat_three"))
+        assertNull("the rest of dev 1009 stays banned", al.find("charge_other"))
+        val values = al.allEntries().filter { it.dev == 1009 }.map { it.writeFid to it.valueMin }.toSet()
+        assertEquals(setOf(1324617774 to 1, 1324617774 to 2), values)
+    }
+
     // ── Task 4: competitor dev=1001 fallback seat entries in CANDIDATE_UNVALIDATED ──
     @Test fun `seat fallback entries are dev 1001 range 1 to 6 unvalidated`() {
         val al = WriteAllowlist(

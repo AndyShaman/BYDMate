@@ -162,6 +162,12 @@ object CommandTranslator {
         "打开抬头显示" to Resolved("hud_on",  1),
         "关闭抬头显示" to Resolved("hud_off", 2),
 
+        // ── Battery warm-up (#311) ── CANDIDATE (dev=1009 carve-out, 1=on / 2=off) ──
+        // VehicleApiImpl routes both through BatteryPreheatChannel (the stock toggle's checks +
+        // status readback).
+        "打开电池预热" to Resolved("battery_preheat_on",  1),
+        "关闭电池预热" to Resolved("battery_preheat_off", 2),
+
         // ── Drive mode ── dev=1023 carve-out, value = SETTING_PRESELECTED_DRIVING_MODE_SET ──
         // Names follow BYD's voice assistant (切换<name>成功); ECO模式 is the D+ string older
         // installs still carry in their rules.

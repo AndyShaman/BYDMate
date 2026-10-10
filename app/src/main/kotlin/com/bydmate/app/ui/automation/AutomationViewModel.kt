@@ -286,6 +286,8 @@ val ACTION_COMMANDS = listOf(
         ActionOption("冰箱制冷", R.string.auto_act_fridge_cool, R.string.auto_cat_fridge),
         ActionOption("冰箱制热", R.string.auto_act_fridge_heat, R.string.auto_cat_fridge),
         ActionOption("冰箱关闭", R.string.auto_act_fridge_off, R.string.auto_cat_fridge),
+        ActionOption("打开电池预热", R.string.auto_act_battery_preheat_on, R.string.auto_cat_energy),
+        ActionOption("关闭电池预热", R.string.auto_act_battery_preheat_off, R.string.auto_cat_energy),
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")

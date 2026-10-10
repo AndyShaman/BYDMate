@@ -1230,6 +1230,11 @@
     <string name="auto_act_hud_on">HUD: włącz</string>
     <string name="auto_act_hud_off">HUD: wyłącz</string>
     <string name="hud_not_equipped">Ten samochód nie ma HUD</string>
+    <string name="auto_act_battery_preheat_on">Podgrzewanie baterii: włącz</string>
+    <string name="auto_act_battery_preheat_off">Podgrzewanie baterii: wyłącz</string>
+    <string name="battery_preheat_not_equipped">Ten samochód nie ma podgrzewania baterii</string>
+    <string name="battery_preheat_not_needed">Bateria jest ciepła, podgrzewanie nie jest potrzebne</string>
+    <string name="battery_preheat_gun_connected">Podgrzewanie baterii jest niedostępne, gdy podłączony jest kabel ładowania</string>
     <string name="auto_act_ambient_light_on">Oświetlenie ambient wł.</string>
     <string name="auto_act_ambient_light_off">Oświetlenie ambient wył.</string>
     <string name="auto_act_drl_on">Światła dzienne wł.</string>

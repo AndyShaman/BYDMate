@@ -21,7 +21,7 @@ import org.json.JSONObject
  * - 1004 = light enums (firmware-protected)
  * - 1006 = drive mode
  * - 1007 = seatbelt sensor
- * - 1009 = charging gun state
+ * - 1009 = charging (gun state, charge settings)
  * - 1011 = gear
  * - 1012 = engine power
  * - 1013 = vehicle speed
@@ -83,6 +83,10 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // SET_HUD_SWITCH_SET — the HUD master switch (stock settings HudSwitchModel, BYD voice
             // HeadUpDisplayApiImpl). Only 1 (on) and 2 (off) pass, see [RESTRICTED_VALUES].
             HUD_DEV to HUD_SWITCH_FID,
+            // CHARGING_PREHEAT_SET — the stock «Battery Warm-up» toggle (CarSetting ChargingPreheat,
+            // #311). Only 1 (on) and 2 (off) pass, see [RESTRICTED_VALUES]; the rest of the
+            // charging device stays banned. Carve-out approved by the owner 2026-10-10.
+            BATTERY_PREHEAT_DEV to BATTERY_PREHEAT_SET_FID,
         )
 
         /** Drive mode: written and read back on the Setting device (dev=1023). */
@@ -101,6 +105,21 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         /** SET_HUD_CONFIG (tx=5): 1 = W-HUD, 2 = AR-HUD; a car without a HUD reads 65535. */
         const val HUD_CONFIG_FID = 951058453
 
+        /** Battery warm-up (#311): written on the Charging device (dev=1009), 1 = on, 2 = off. */
+        const val BATTERY_PREHEAT_DEV = 1009
+        const val BATTERY_PREHEAT_SET_FID = 1324617774
+        /** CHARGING_PREHEAT_STATUS (tx=5): 1 = heating, 2 = warm-up finished; 0 read while idle. */
+        const val BATTERY_PREHEAT_STATUS_FID = 879755302
+        /** CHARGING_PREHEAT_PERMIT (tx=5): 0 = the car lets the warm-up start, anything else is
+         *  the stock «no preheating is required» refusal (1 on a warm battery). */
+        const val BATTERY_PREHEAT_PERMIT_FID = 1151336468
+        /** CHARGING_PREHEAT_FUNCTION_CONFIG (tx=5): 0 = the function is fitted. */
+        const val BATTERY_PREHEAT_CONFIG_FID = 879755304
+        /** CHARGING_GUN_CONNECT_STATE (tx=5): 2, 3 and 4 disable the stock toggle; 1 = no gun. */
+        const val CHARGE_GUN_STATE_FID = 876609586
+        /** CHARGING_CURRENT_BATTERY_HEATING_POWER (tx=5), raw; diagnostics only. */
+        const val BATTERY_HEATING_POWER_FID = 584067131
+
         /**
          * Carve-outs that open only some values of their fid: an entry on such a fid must be a
          * single value from the set, anything else is dropped at load like a banned dev. The drive
@@ -109,6 +128,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         val RESTRICTED_VALUES: Map<Pair<Int, Int>, Set<Int>> = mapOf(
             (DRIVE_MODE_DEV to DRIVE_MODE_WRITE_FID) to DriveMode.entries.map { it.value }.toSet(),
             (HUD_DEV to HUD_SWITCH_FID) to setOf(1, 2),
+            (BATTERY_PREHEAT_DEV to BATTERY_PREHEAT_SET_FID) to setOf(1, 2),
         )
 
         /** False when [entry] sits on a [RESTRICTED_VALUES] fid with a value outside its set. */
@@ -364,6 +384,12 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // that a HUD is fitted and reads the status back itself.
             WriteEntry("hud_on",  1023, 1276174371, null, 1, 1, "hud", false, "byd-sdk carsetting HudSwitchModel + autovoice"),
             WriteEntry("hud_off", 1023, 1276174371, null, 2, 2, "hud", false, "byd-sdk carsetting HudSwitchModel + autovoice"),
+            // Battery warm-up (#311) — dev=1009 carve-out, 1=on, 2=off, the stock toggle's write.
+            // No readbackFid: [BatteryPreheatChannel] runs the stock checks (function fitted, no
+            // charge gun, the car's permit) and reads the status back itself. Not tried on a car:
+            // the car refuses the warm-up on a warm battery.
+            WriteEntry("battery_preheat_on",  1009, 1324617774, null, 1, 1, "energy", false, "byd-sdk carsetting ChargingPreheat"),
+            WriteEntry("battery_preheat_off", 1009, 1324617774, null, 2, 2, "energy", false, "byd-sdk carsetting ChargingPreheat"),
             WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),

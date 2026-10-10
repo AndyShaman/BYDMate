@@ -111,6 +111,9 @@ object AgentCommandCatalog {
         // HUD (projection on the windshield; the cluster projection is set_cluster_projection)
         Cmd("hud_on", "включить HUD (проекцию на лобовом стекле)", { "打开抬头显示" }),
         Cmd("hud_off", "выключить HUD (проекцию на лобовом стекле)", { "关闭抬头显示" }),
+        // Battery warm-up (the car itself refuses it on a warm battery or with a charge gun connected)
+        Cmd("battery_preheat_on", "включить подогрев тяговой батареи (перед быстрой зарядкой в холод)", { "打开电池预热" }),
+        Cmd("battery_preheat_off", "выключить подогрев тяговой батареи", { "关闭电池预热" }),
         // Locks
         Cmd("doors_lock", "запереть двери", { "车门上锁" }),
         Cmd("doors_unlock", "отпереть двери", { "车门解锁" }),

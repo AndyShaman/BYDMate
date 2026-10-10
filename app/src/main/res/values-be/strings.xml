@@ -1230,6 +1230,11 @@
     <string name="auto_act_hud_on">HUD: уключыць</string>
     <string name="auto_act_hud_off">HUD: выключыць</string>
     <string name="hud_not_equipped">На гэтай машыне няма HUD</string>
+    <string name="auto_act_battery_preheat_on">Падагрэў батарэі: уключыць</string>
+    <string name="auto_act_battery_preheat_off">Падагрэў батарэі: выключыць</string>
+    <string name="battery_preheat_not_equipped">На гэтай машыне няма падагрэву батарэі</string>
+    <string name="battery_preheat_not_needed">Батарэя цёплая, падагрэў не патрэбны</string>
+    <string name="battery_preheat_gun_connected">Падагрэў батарэі недаступны, пакуль падключаны зарадны кабель</string>
     <string name="auto_act_ambient_light_on">Амбіент укл</string>
     <string name="auto_act_ambient_light_off">Амбіент выкл</string>
     <string name="auto_act_drl_on">ДХА ўкл</string>
