@@ -1074,7 +1074,7 @@
     <string name="auto_act_battery_preheat_on">Aquecimento da bateria: ligar</string>
     <string name="auto_act_battery_preheat_off">Aquecimento da bateria: desligar</string>
     <string name="battery_preheat_not_equipped">Este carro não tem aquecimento da bateria</string>
-    <string name="battery_preheat_not_needed">A bateria está quente, o aquecimento não é necessário</string>
+    <string name="battery_preheat_not_needed">O carro indica que o aquecimento da bateria não é necessário neste momento</string>
     <string name="battery_preheat_gun_connected">O aquecimento da bateria não está disponível com o cabo de carregamento ligado</string>
     <string name="auto_act_ambient_light_on">Luz ambiente lig.</string>
     <string name="auto_act_ambient_light_off">Luz ambiente desl.</string>

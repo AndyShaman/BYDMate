@@ -1237,7 +1237,7 @@
     <string name="auto_act_battery_preheat_on">Подогрев батареи: включить</string>
     <string name="auto_act_battery_preheat_off">Подогрев батареи: выключить</string>
     <string name="battery_preheat_not_equipped">На этой машине нет подогрева батареи</string>
-    <string name="battery_preheat_not_needed">Батарея тёплая, подогрев не нужен</string>
+    <string name="battery_preheat_not_needed">Машина сообщает, что подогрев батареи сейчас не нужен</string>
     <string name="battery_preheat_gun_connected">Подогрев батареи недоступен, пока подключён зарядный кабель</string>
     <string name="auto_act_ambient_light_on">Амбиент вкл</string>
     <string name="auto_act_ambient_light_off">Амбиент выкл</string>

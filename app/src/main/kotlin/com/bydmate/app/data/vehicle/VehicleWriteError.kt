@@ -60,7 +60,7 @@ sealed class VehicleWriteError(
 
     /**
      * The car says the function has nothing to do right now. Raised only by
-     * BatteryPreheatChannel: the battery is warm enough, the car does not permit the warm-up.
+     * BatteryPreheatChannel: the car does not permit the warm-up, or reports it finished.
      */
     class NotNeeded(action: String, details: String) : VehicleWriteError(action, details)
 

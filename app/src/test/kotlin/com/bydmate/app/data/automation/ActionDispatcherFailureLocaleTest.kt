@@ -188,7 +188,7 @@ class ActionDispatcherFailureLocaleTest {
             VehicleWriteError.NotEquipped("battery_preheat_on") to
                 ("На этой машине нет подогрева батареи" to "This car has no battery warm-up"),
             VehicleWriteError.NotNeeded("battery_preheat_on", "permit=1") to
-                ("Батарея тёплая, подогрев не нужен" to "The battery is warm, no warm-up needed"),
+                ("Машина сообщает, что подогрев батареи сейчас не нужен" to "The car reports that battery warm-up is not needed right now"),
             VehicleWriteError.StateBlocked("battery_preheat_on", "charge gun connected") to
                 ("Подогрев батареи недоступен, пока подключён зарядный кабель" to
                     "Battery warm-up is unavailable while the charging cable is connected"),

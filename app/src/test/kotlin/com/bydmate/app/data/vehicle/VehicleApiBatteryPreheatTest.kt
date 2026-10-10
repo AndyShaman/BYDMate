@@ -100,6 +100,7 @@ class VehicleApiBatteryPreheatTest {
         status(1, 0)
         writeAnswers(2, 1)
         assertTrue(api().dispatch(OFF).isSuccess)
+        coVerify(exactly = 0) { helper.read(DEV, PERMIT, any()) }
     }
 
     @Test fun `a car without the function fails with NotEquipped and writes nothing`() = runTest {
@@ -133,6 +134,19 @@ class VehicleApiBatteryPreheatTest {
             val err = api().dispatch(command).exceptionOrNull()
             assertTrue("gun=$state $command got $err", err is VehicleWriteError.StateBlocked)
             assertEquals("verdict=gun connected", verdictRow().error)
+        }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+    }
+
+    @Test fun `an unreadable charge gun state blocks both commands and writes nothing`() = runTest {
+        for (state in listOf(null, 65535L, -10011L)) for (command in listOf(ON, OFF)) {
+            audit.clear()
+            gun(state)
+            status(0)
+            val err = api().dispatch(command).exceptionOrNull()
+            assertTrue("gun=$state $command got $err", err is VehicleWriteError.HelperUnreachable)
+            assertEquals("verdict=gun unreadable", verdictRow().error)
+            assertEquals(0, verdictRow().dev)
         }
         coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
     }
@@ -181,6 +195,10 @@ class VehicleApiBatteryPreheatTest {
         val err = api().dispatch(ON).exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.Unsupported)
         assertEquals("verdict=write denied", verdictRow().error)
+        assertEquals(0, verdictRow().dev)
+        advanceTimeBy(200_000)
+        runCurrent()
+        assertEquals(emptyList<String>(), events())
     }
 
     @Test fun `a write the daemon did not take is unreachable`() = runTest {
@@ -189,6 +207,18 @@ class VehicleApiBatteryPreheatTest {
         val err = api().dispatch(ON).exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.HelperUnreachable)
         assertEquals("verdict=unreachable", verdictRow().error)
+    }
+
+    @Test fun `a write with an unknown result is logged as written and read again later`() = runTest {
+        status(0)
+        writeAnswers(1, null)
+        val err = api().dispatch(ON).exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.HelperUnreachable)
+        assertEquals(DEV, verdictRow().dev)
+        advanceTimeBy(125_000)
+        runCurrent()
+        assertTrue(events().all { it.startsWith("car preheat_late want=on") })
+        assertEquals(listOf(5, 30, 120), events().map { it.substringAfter("after_s=").substringBefore(" ").toInt() })
     }
 
     @Test fun `on with a status that never turns to heating is a mismatch`() = runTest {
@@ -206,6 +236,25 @@ class VehicleApiBatteryPreheatTest {
         val err = api().dispatch(ON).exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.NotNeeded)
         assertEquals("verdict=finished", verdictRow().error)
+    }
+
+    @Test fun `on is not settled by a finished status left over from an earlier warm-up`() = runTest {
+        status(2, 2, 2, 1)   // before, then the readback
+        writeAnswers(1, 1)
+        assertTrue(api().dispatch(ON).isSuccess)
+        assertEquals("verdict=OK", verdictRow().error)
+        assertEquals(1, verdictRow().readback)
+    }
+
+    @Test fun `on with a status that stays finished through the readback is not needed`() = runTest {
+        status(2, 2, 2, 2, 2)
+        writeAnswers(1, 1)
+        val err = api().dispatch(ON).exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.NotNeeded)
+        assertEquals("verdict=finished", verdictRow().error)
+        assertEquals(DEV, verdictRow().dev)
+        assertEquals(2, verdictRow().readback)
+        coVerify(exactly = 5) { helper.read(DEV, STATUS, any()) }   // before and every readback attempt
     }
 
     @Test fun `off with a status that stays heating is a mismatch`() = runTest {

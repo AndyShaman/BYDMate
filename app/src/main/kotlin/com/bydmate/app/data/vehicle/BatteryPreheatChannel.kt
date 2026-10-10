@@ -35,13 +35,15 @@ fun interface PreheatAudit {
  * same conditions, and nothing is written unless every check before it passes:
  *  - config read failed or a read error      → UNREACHABLE (1048575, -10011/-10013)
  *  - config not 0                            → NOT_EQUIPPED (65535 on a firmware without the fid)
+ *  - charge gun state unreadable             → UNREACHABLE (a cable may be connected)
  *  - charge gun state 2, 3 or 4              → GUN_CONNECTED (the stock toggle is disabled)
  *  - on, the status already reads heating    → OK
  *  - on, permit unreadable                   → UNREACHABLE
  *  - on, permit not 0                        → NOT_NEEDED (stock: «no preheating is required»)
  * After the write:
- *  - the daemon or the car did not take it   → UNREACHABLE / DENIED (-10011), not read back
- *  - on: status 1 → OK, status 2 (finished)  → NOT_NEEDED
+ *  - the daemon did not answer               → UNREACHABLE, not read back, counted as written
+ *  - the car denied it (-10011)              → DENIED, not read back
+ *  - on: status 1 → OK, still 2 (finished) at the last read → NOT_NEEDED
  *  - off: any status but 1                   → OK
  *  - the status never follows                → NO_EFFECT, an unreadable status → UNCONFIRMED
  * Not tried on a car: the permit refuses the warm-up on a warm battery, so every command logs
@@ -56,7 +58,8 @@ class BatteryPreheatChannel(
     enum class Result { OK, NOT_EQUIPPED, GUN_CONNECTED, NOT_NEEDED, DENIED, NO_EFFECT, UNREACHABLE, UNCONFIRMED }
 
     /**
-     * [verdict] ends the channel's log line; [written] says whether the car took the write;
+     * [verdict] ends the channel's log line; [written] is false only when it is certain that nothing
+     * reached the car (a write with an unknown result counts as written);
      * [state] is the last status read (null when the read failed or never happened).
      */
     data class Outcome(val result: Result, val verdict: String, val written: Boolean, val state: Int?) {
@@ -78,7 +81,7 @@ class BatteryPreheatChannel(
 
     /**
      * One of [ACTIONS] as the Result dispatch returns: runs the command and writes its verdict
-     * row. A write the car took is followed by the late trace reads on [scope].
+     * row. A write that may have reached the car is followed by the late trace reads on [scope].
      */
     suspend fun dispatch(action: String, scope: CoroutineScope): kotlin.Result<Unit> {
         val on = action == ACTION_ON
@@ -102,7 +105,7 @@ class BatteryPreheatChannel(
     }
 
     /**
-     * What the warm-up does after a write the car took, as trace lines at [LATE_READS_MS]: status,
+     * What the warm-up does after a write that may have reached the car, as trace lines at [LATE_READS_MS]: status,
      * permit, heating power and the battery temperature, each the value or `err`. The heater's
      * start, power and end are not known from a live car yet. Diagnostics only: fire-and-forget
      * on [scope], no verdict changes.
@@ -139,7 +142,11 @@ class BatteryPreheatChannel(
         val before = readCharging(WriteAllowlist.BATTERY_PREHEAT_STATUS_FID)
         line.append(" gun=${render(gun)} before=${render(before)}")
         line.append(" tmin=${temperature("minBatTemp")} tmax=${temperature("maxBatTemp")}")
-        if (gun != null && gun in GUN_CONNECTED) return Outcome(Result.GUN_CONNECTED, "gun connected", false, before)
+        // A cable may be connected behind a failed read or a sentinel, so only a real value lets the write go.
+        if (gun == null || SentinelDecoder.decodeInt(gun) == null) {
+            return Outcome(Result.UNREACHABLE, "gun unreadable", false, before)
+        }
+        if (gun in GUN_CONNECTED) return Outcome(Result.GUN_CONNECTED, "gun connected", false, before)
         if (!on) return null
         if (before == STATUS_HEATING) return Outcome(Result.OK, "already heating", false, before)
         val permit = readCharging(WriteAllowlist.BATTERY_PREHEAT_PERMIT_FID)
@@ -156,7 +163,8 @@ class BatteryPreheatChannel(
     private suspend fun write(on: Boolean, line: StringBuilder): Outcome {
         val status = writer.write(if (on) ACTION_ON else ACTION_OFF, if (on) SET_ON else SET_OFF)
         line.append(" write=$status")
-        if (status == WriteOutcome.TRANSIENT) return Outcome(Result.UNREACHABLE, "unreachable", false, null)
+        // No answer is not a refusal: the car may have taken the write and started heating.
+        if (status == WriteOutcome.TRANSIENT) return Outcome(Result.UNREACHABLE, "unreachable", true, null)
         if (status == WriteOutcome.PERMANENT_DENIED) return Outcome(Result.DENIED, "write denied", false, null)
 
         val after = mutableListOf<Int?>()
@@ -172,13 +180,17 @@ class BatteryPreheatChannel(
         val last = after.last()
         val value = last?.let(SentinelDecoder::decodeInt)
             ?: return Outcome(Result.UNCONFIRMED, "unconfirmed read=${render(last)}", true, last)
+        if (on && value == STATUS_FINISHED) return Outcome(Result.NOT_NEEDED, "finished", true, value)
         return Outcome(Result.NO_EFFECT, "no effect read=$value", true, value)
     }
 
-    /** The verdict a status read after the write gives, or null while the status has not followed. */
+    /**
+     * The verdict a status read after the write gives, or null while the status has not followed.
+     * Finished does not settle `on`: it can be left over from an earlier warm-up and turn to heating
+     * a moment later.
+     */
     private fun settledBy(on: Boolean, status: Int?): Outcome? = when {
         on && status == STATUS_HEATING -> Outcome(Result.OK, "OK", true, status)
-        on && status == STATUS_FINISHED -> Outcome(Result.NOT_NEEDED, "finished", true, status)
         !on && status != null && status != STATUS_HEATING -> Outcome(Result.OK, "OK", true, status)
         else -> null
     }

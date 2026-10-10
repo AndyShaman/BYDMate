@@ -1081,7 +1081,7 @@
     <string name="auto_act_battery_preheat_on">Battery warm-up: on</string>
     <string name="auto_act_battery_preheat_off">Battery warm-up: off</string>
     <string name="battery_preheat_not_equipped">This car has no battery warm-up</string>
-    <string name="battery_preheat_not_needed">The battery is warm, no warm-up needed</string>
+    <string name="battery_preheat_not_needed">The car reports that battery warm-up is not needed right now</string>
     <string name="battery_preheat_gun_connected">Battery warm-up is unavailable while the charging cable is connected</string>
     <string name="auto_act_ambient_light_on">Ambient Light On</string>
     <string name="auto_act_ambient_light_off">Ambient Light Off</string>

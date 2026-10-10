@@ -1233,7 +1233,7 @@
     <string name="auto_act_battery_preheat_on">Падагрэў батарэі: уключыць</string>
     <string name="auto_act_battery_preheat_off">Падагрэў батарэі: выключыць</string>
     <string name="battery_preheat_not_equipped">На гэтай машыне няма падагрэву батарэі</string>
-    <string name="battery_preheat_not_needed">Батарэя цёплая, падагрэў не патрэбны</string>
+    <string name="battery_preheat_not_needed">Машына паведамляе, што падагрэў батарэі цяпер не патрэбны</string>
     <string name="battery_preheat_gun_connected">Падагрэў батарэі недаступны, пакуль падключаны зарадны кабель</string>
     <string name="auto_act_ambient_light_on">Амбіент укл</string>
     <string name="auto_act_ambient_light_off">Амбіент выкл</string>
