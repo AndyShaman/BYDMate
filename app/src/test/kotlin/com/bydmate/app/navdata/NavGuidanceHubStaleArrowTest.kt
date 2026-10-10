@@ -97,21 +97,23 @@ class NavGuidanceHubStaleArrowTest {
 
     @Test fun `a distance jump read by the other source keeps the held arrow`() {
         val t0 = 1_000_000L
-        a11yRead(gaode = 2, dist = 250, atMs = t0)
-        // Past the a11y priority window, so the notification is merged; it rounds 250 up to 300.
+        a11yRead(gaode = 2, dist = 20, atMs = t0)
+        // Past the a11y priority window, so the notification is merged. 150 m is both 50 m further
+        // and more than twice 20 m: only the source differs from a jump that drops the arrow.
         val t1 = t0 + NavGuidanceHub.A11Y_PRIORITY_MS + 1_000
-        notifRead(gaode = 0, dist = 300, atMs = t1)
+        notifRead(gaode = 0, dist = 150, atMs = t1)
         val s = NavGuidanceHub.snapshot(nowMs = t1)
-        assertEquals(300, s.distanceMeters)
+        assertEquals(150, s.distanceMeters)
         assertEquals(2, s.maneuverGaode)
     }
 
     @Test fun `a distance that rose by less than the margin keeps the held arrow`() {
         val t0 = 1_000_000L
-        a11yRead(gaode = 2, dist = 100, atMs = t0)
-        a11yRead(gaode = 0, dist = 140, atMs = t0 + 1_000)
+        // 40 m is four times 10 m, so only the 50 m margin keeps the arrow here.
+        a11yRead(gaode = 2, dist = 10, atMs = t0)
+        a11yRead(gaode = 0, dist = 40, atMs = t0 + 1_000)
         val s = NavGuidanceHub.snapshot(nowMs = t0 + 1_000)
-        assertEquals(140, s.distanceMeters)
+        assertEquals(40, s.distanceMeters)
         assertEquals(2, s.maneuverGaode)
     }
 
