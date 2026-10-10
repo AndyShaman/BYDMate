@@ -5,6 +5,7 @@ import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.split.readSystemProperty
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -33,6 +34,9 @@ fun interface PreheatAudit {
  * Battery warm-up on/off (#311), the write of the stock «Battery Warm-up» toggle (CarSetting
  * ChargingPreheat: 1 = on, 2 = off). The channel sends only what that toggle can send, under the
  * same conditions, and nothing is written unless every check before it passes:
+ *  - HEV odometer 1048575 (a pure EV)        → the checks below
+ *  - HEV odometer a real number, also 0      → NOT_EQUIPPED (a hybrid: the stock toggle is hidden)
+ *  - HEV odometer unreadable                 → UNREACHABLE (null, 65535, -10011/-10013)
  *  - config read failed or a read error      → UNREACHABLE (1048575, -10011/-10013)
  *  - config not 0                            → NOT_EQUIPPED (65535 on a firmware without the fid)
  *  - charge gun state unreadable             → UNREACHABLE (a cable may be connected)
@@ -54,6 +58,7 @@ class BatteryPreheatChannel(
     private val writer: SeatWriter,
     private val reader: PreheatReader,
     private val audit: PreheatAudit,
+    private val systemProperty: (String) -> String? = ::readSystemProperty,
 ) {
     enum class Result { OK, NOT_EQUIPPED, GUN_CONNECTED, NOT_NEEDED, DENIED, NO_EFFECT, UNREACHABLE, UNCONFIRMED }
 
@@ -99,7 +104,7 @@ class BatteryPreheatChannel(
 
     private suspend fun actuate(on: Boolean): Outcome = mutex.withLock {
         val line = StringBuilder("Preheat: want=${if (on) "on" else "off"}")
-        val outcome = refusal(on, line) ?: write(on, line)
+        val outcome = notAnEv(line) ?: refusal(on, line) ?: write(on, line)
         Log.i(TAG, "$line -> ${outcome.verdict}" + if (outcome.written) "" else ", nothing written")
         outcome
     }
@@ -159,6 +164,23 @@ class BatteryPreheatChannel(
         }
     }
 
+    /**
+     * The check before all of [refusal]: the stock toggle exists on a pure EV only (isEVCarType).
+     * A hybrid answers a flat 0 for fids it does not fill, so config and permit cannot refuse it;
+     * its HEV odometer can. Fuel percent and the property stock reads ("1" EV, "2" hybrid,
+     * "0" fuel) are logged only.
+     */
+    private suspend fun notAnEv(line: StringBuilder): Outcome? {
+        val hev = read(WriteAllowlist.HEV_MILEAGE_DEV, WriteAllowlist.HEV_MILEAGE_FID)
+        val fuel = read(WriteAllowlist.HEV_MILEAGE_DEV, WriteAllowlist.FUEL_PERCENT_FID)
+        line.append(" hev=${render(hev)} fuel=${render(fuel)} type=${systemProperty(ENERGY_TYPE_PROP) ?: "err"}")
+        return when {
+            hev == HEV_MILEAGE_ABSENT -> null
+            hev != null && SentinelDecoder.decodeInt(hev) != null -> Outcome(Result.NOT_EQUIPPED, "not an EV", false, null)
+            else -> Outcome(Result.UNREACHABLE, "car type unreadable", false, null)
+        }
+    }
+
     /** The write and the status readback. */
     private suspend fun write(on: Boolean, line: StringBuilder): Outcome {
         val status = writer.write(if (on) ACTION_ON else ACTION_OFF, if (on) SET_ON else SET_OFF)
@@ -212,15 +234,18 @@ class BatteryPreheatChannel(
         }
         .getOrNull()
 
-    private fun render(value: Int?) = value?.toString() ?: "err"
-
     companion object {
         private const val ACTION_ON = "battery_preheat_on"
         private const val ACTION_OFF = "battery_preheat_off"
         /** The allowlist actions this channel carries out. */
         val ACTIONS = setOf(ACTION_ON, ACTION_OFF)
 
+        /** The car type as the stock settings app reads it; logged, never a gate. */
+        const val ENERGY_TYPE_PROP = "persist.sys.energytype"
+
         private const val TAG = "BatteryPreheatChannel"
+        /** What a pure EV answers for the HEV odometer (20-bit "not initialized"). */
+        private const val HEV_MILEAGE_ABSENT = 0x000FFFFF
         private const val SET_ON = 1
         private const val SET_OFF = 2
         private const val CONFIG_FITTED = 0
@@ -237,3 +262,5 @@ class BatteryPreheatChannel(
         private val LATE_READS_MS = listOf(5_000L, 30_000L, 120_000L)
     }
 }
+
+private fun render(value: Int?) = value?.toString() ?: "err"

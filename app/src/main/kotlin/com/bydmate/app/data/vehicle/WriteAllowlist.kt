@@ -119,6 +119,12 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         const val CHARGE_GUN_STATE_FID = 876609586
         /** CHARGING_CURRENT_BATTERY_HEATING_POWER (tx=5), raw; diagnostics only. */
         const val BATTERY_HEATING_POWER_FID = 584067131
+        /** HEV odometer (dev=1014, tx=5): 1048575 on a pure EV, a real number on a hybrid.
+         *  Stands in for the stock toggle's isEVCarType() check. */
+        const val HEV_MILEAGE_DEV = 1014
+        const val HEV_MILEAGE_FID = 1246773264
+        /** Fuel percent (dev=1014, tx=5), raw; diagnostics only. */
+        const val FUEL_PERCENT_FID = 1246785600
 
         /**
          * Carve-outs that open only some values of their fid: an entry on such a fid must be a

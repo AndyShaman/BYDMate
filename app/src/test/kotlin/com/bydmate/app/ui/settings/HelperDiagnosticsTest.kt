@@ -88,8 +88,15 @@ class HelperDiagnosticsTest {
         assertEquals(
             "battery_preheat: config[dev=1009 fid=879755304]=0 permit[dev=1009 fid=1151336468]=1 " +
                 "status[dev=1009 fid=879755302]=0 gun[dev=1009 fid=876609586]=1 " +
-                "heat_power[dev=1009 fid=584067131]=(status=-10013)",
-            BatteryPreheatDiagnostics.line(listOf(0 to 0, 0 to 1, 0 to 0, 0 to 1, -10013 to 0)),
+                "heat_power[dev=1009 fid=584067131]=(status=-10013) " +
+                "hev[dev=1014 fid=1246773264]=1048575 fuel[dev=1014 fid=1246785600]=65535 type=1",
+            BatteryPreheatDiagnostics.line(
+                listOf(0 to 0, 0 to 1, 0 to 0, 0 to 1, -10013 to 0, 0 to 1048575, 0 to 65535), "1",
+            ),
+        )
+        assertEquals(
+            "fuel[dev=1014 fid=1246785600]=0 type=err",
+            BatteryPreheatDiagnostics.line(List(7) { 0 to 0 }, null).substringAfter("=0 hev[dev=1014 fid=1246773264]=0 "),
         )
         assertEquals("battery_preheat: (unavailable)", BatteryPreheatDiagnostics.line(null))
         assertEquals("battery_preheat: (unavailable)", BatteryPreheatDiagnostics.line(listOf(0 to 0)))

@@ -62,12 +62,13 @@ class VehicleApiBatteryPreheatTest {
     private fun gun(value: Long?) = coEvery { helper.read(DEV, GUN, any()) } returns value
     private fun permit(value: Long?) = coEvery { helper.read(DEV, PERMIT, any()) } returns value
     private fun status(vararg values: Long?) = coEvery { helper.read(DEV, STATUS, any()) } returnsMany values.toList()
+    private fun hev(value: Long?) = coEvery { helper.read(1014, HEV, any()) } returns value
     private fun writeAnswers(value: Int, answer: Int?) = coEvery { helper.writeStatus(DEV, SET, value) } returns answer
 
-    /** A cold Leopard 3: the function is fitted, no gun, the car permits the warm-up, -5..-3 °C. */
+    /** A cold Leopard 3: a pure EV, the function is fitted, no gun, the car permits the warm-up, -5..-3 °C. */
     @Before fun coldCar() {
         coEvery { helper.read(any(), any(), any()) } returns null
-        config(0); gun(1); permit(0)
+        hev(1048575); config(0); gun(1); permit(0)
         coEvery { helper.read(1014, 1148190736, any()) } returns 35L
         coEvery { helper.read(1014, 1148190752, any()) } returns 37L
         coEvery { helper.read(DEV, POWER, any()) } returns 3000L
@@ -101,6 +102,35 @@ class VehicleApiBatteryPreheatTest {
         writeAnswers(2, 1)
         assertTrue(api().dispatch(OFF).isSuccess)
         coVerify(exactly = 0) { helper.read(DEV, PERMIT, any()) }
+    }
+
+    @Test fun `a hybrid is refused before any other check and nothing is written`() = runTest {
+        // A hybrid fills the HEV odometer with a real number (0 on a new car); a pure EV answers 1048575.
+        for (value in listOf(12679L, 0L)) for (command in listOf(ON, OFF)) {
+            audit.clear()
+            hev(value)
+            status(0)
+            val err = api().dispatch(command).exceptionOrNull()
+            assertTrue("hev=$value $command got $err", err is VehicleWriteError.NotEquipped)
+            assertEquals("verdict=not an EV", verdictRow().error)
+            assertEquals(0, verdictRow().dev)
+        }
+        coVerify(exactly = 0) { helper.read(DEV, CONFIG, any()) }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+    }
+
+    @Test fun `an unreadable car type writes nothing and is not called a hybrid`() = runTest {
+        for (value in listOf(null, -10011L, 65535L)) for (command in listOf(ON, OFF)) {
+            audit.clear()
+            hev(value)
+            status(0)
+            val err = api().dispatch(command).exceptionOrNull()
+            assertTrue("hev=$value $command got $err", err is VehicleWriteError.HelperUnreachable)
+            assertEquals("verdict=car type unreadable", verdictRow().error)
+            assertEquals(0, verdictRow().dev)
+        }
+        coVerify(exactly = 0) { helper.read(DEV, CONFIG, any()) }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
     }
 
     @Test fun `a car without the function fails with NotEquipped and writes nothing`() = runTest {
@@ -310,5 +340,6 @@ class VehicleApiBatteryPreheatTest {
         const val CONFIG = 879755304
         const val GUN = 876609586
         const val POWER = 584067131
+        const val HEV = 1246773264
     }
 }
