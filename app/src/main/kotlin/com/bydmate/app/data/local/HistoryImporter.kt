@@ -558,6 +558,12 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
      */
     suspend fun recalculateConsumptionFromEnergyData(): Int {
         if (settingsRepository.isConsumptionRecalcDone()) return 0
+        // No folder (Song, Atto: #301): nothing to recalculate, not a failure. The flag stays unset,
+        // so a Leopard 3 whose folder is only missing right now still gets its recalculation.
+        if (!energyDataReader.energyDataDir().exists()) {
+            Log.d(TAG, "recalculateConsumption: no energydata directory, skipped")
+            return 0
+        }
 
         return try {
             val bydRecords = energyDataReader.readTrips()
