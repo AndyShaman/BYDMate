@@ -336,6 +336,8 @@ Enable it in **Settings → Display**, section "HUD (head-up display)": the "Nav
 
 **If nothing shows up on the glass.** Open **Settings → Service & Data**, "Data" section, and tap **"Start"** next to the "HUD check" line. The car needs to be parked, with no route running in the navigator. The check takes about two minutes and shows the numbers 111, 222, 333 and 444 on the glass one after another, each by its own way. At the end it asks which number you saw and sets the right way itself. If the glass showed nothing, record a log with the log recording button and send it in a GitHub issue along with your car model.
 
+**Which navigator.** The maneuver arrow comes from Yandex Navigator 31.0.2 or newer. Older versions (24.5.1) give only the distance and the street, without the arrow. Yandex Maps gives the arrow intermittently, so use Navigator for the HUD and the cluster.
+
 ---
 
 ## Blind-Spot Cameras
