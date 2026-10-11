@@ -141,17 +141,18 @@ interface LastStateDao {
     suspend fun setOpenTripCounters(fuelTotal: Double?, mileageHev: Double?)
 
     /**
-     * DM-i only: time and counters of the last tick the car was on (TripRecorder). The end edge
-     * of a trip the next cold start closes; a counter that tick missed is stored as null.
+     * DM-i only: time, counters and odometer of the trip's end edge (TripRecorder, ReadableOnTick),
+     * read by the next cold start; a counter that tick missed is stored as null.
      */
     @Query(
         """
         UPDATE last_state
         SET on_ts = :ts,
             on_fuel_total = :fuelTotal,
-            on_mileage_hev = :mileageHev
+            on_mileage_hev = :mileageHev,
+            on_mileage = :mileage
         WHERE id = 1
         """
     )
-    suspend fun setLastOn(ts: Long, fuelTotal: Double?, mileageHev: Double?)
+    suspend fun setLastOn(ts: Long, fuelTotal: Double?, mileageHev: Double?, mileage: Double?)
 }

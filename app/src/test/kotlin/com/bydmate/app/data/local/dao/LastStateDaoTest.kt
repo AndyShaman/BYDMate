@@ -138,7 +138,7 @@ class LastStateDaoTest {
 
     @Test fun `setLastOn keeps the last ON tick through snapshot writes and a trip close`() = runBlocking {
         dao.upsert(LastStateEntity(id = 1, ts = 1000L, soc = 60, openTripId = 900L, tripStartTs = 900L))
-        dao.setLastOn(1500L, 305.2, 3850.0)
+        dao.setLastOn(1500L, 305.2, 3850.0, 1040.0)
         dao.writeSnapshot(
             ts = 2000L, soc = 60, mileage = 1040.0, totalElec = null, ignition = 0, energydataAvailable = 0,
         )
@@ -149,8 +149,9 @@ class LastStateDaoTest {
         assertEquals(1500L, row.onTs)
         assertEquals(305.2, row.onFuelTotal!!, 1e-9)
         assertEquals(3850.0, row.onMileageHev!!, 1e-9)
+        assertEquals(1040.0, row.onMileage!!, 1e-9)
 
-        dao.setLastOn(2500L, null, 3851.0)
+        dao.setLastOn(2500L, null, 3851.0, 1041.0)
         assertEquals(2500L, dao.getCurrent()!!.onTs)
         assertNull("a counter the ON tick missed is stored as missing", dao.getCurrent()!!.onFuelTotal)
     }

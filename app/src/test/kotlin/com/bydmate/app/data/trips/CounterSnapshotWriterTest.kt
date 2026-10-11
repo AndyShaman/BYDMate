@@ -108,7 +108,7 @@ class CounterSnapshotWriterTest {
         assertEquals(5_000_000L, rows.single().ts)
     }
 
-    @Test fun `a cold start next to an existing snapshot writes nothing`() = runTest {
+    @Test fun `a cold start next to a snapshot with counters writes nothing`() = runTest {
         coEvery { dao.nearest(5_000_000L, 90_000L) } returns CounterSnapshotEntity(
             ts = 5_000_000L - 89_000L, fuelTotal = 305.2, mileageHev = 3850.0, mileageEv = null,
             odometer = 1040.0, reason = CounterSnapshotEntity.REASON_IGNITION_OFF,
@@ -140,5 +140,41 @@ class CounterSnapshotWriterTest {
         writer.onColdStart(lastState, VehicleKind.EV)
         writer.onColdStart(lastState, VehicleKind.UNKNOWN)
         coVerify(exactly = 0) { dao.insert(any()) }
+    }
+
+    // --- The off row takes the last ON tick with a readable counter (round 4) ---
+
+    private val t = 2_000_000L
+
+    private fun raw(powerState: Int?, mileage: Double, fuel: Double?, hev: Int?): DiParsData =
+        diParsData(powerState = powerState, mileage = mileage)
+            .copy(fuelTotalL = fuel, mileageHevKm = hev, mileageEvKm = hev?.let { 9240 }, engineRpm = 0)
+
+    /** ON ticks up to [t] (305.2 L at [t]), then ticks with null counters that the odometer window keeps ON. */
+    private suspend fun parkThenNullTicks(nullMileage: Double) {
+        val h = VehicleKind.HYBRID
+        writer.onTick(raw(2, 1030.0, 304.9, 3849), h, t - 10_000L)
+        writer.onTick(raw(2, 1040.0, 305.2, 3850), h, t)
+        for (s in 1..5) writer.onTick(raw(0, nullMileage, null, null), h, t + s * 10_000L)
+        writer.onTick(raw(0, nullMileage, null, null), h, t + 100_000L)
+        writer.onTick(raw(0, nullMileage, null, null), h, t + 150_000L)   // OFF confirmed
+    }
+
+    @Test fun `the off row keeps the readable ON tick when null ticks follow while parked`() = runTest {
+        parkThenNullTicks(nullMileage = 1040.0)
+        val off = written().single { it.reason == CounterSnapshotEntity.REASON_IGNITION_OFF }
+        assertEquals(t, off.ts)
+        assertEquals(305.2, off.fuelTotal!!, 1e-9)
+        assertEquals(3850.0, off.mileageHev!!, 1e-9)
+        assertEquals(9240.0, off.mileageEv!!, 1e-9)
+        assertEquals(1040.0, off.odometer!!, 1e-9)
+    }
+
+    @Test fun `the off row has no counters when the car moved past the readable tick`() = runTest {
+        parkThenNullTicks(nullMileage = 1041.0)
+        val off = written().single { it.reason == CounterSnapshotEntity.REASON_IGNITION_OFF }
+        assertEquals(t + 10_000L, off.ts)
+        assertNull(off.fuelTotal)
+        assertNull(off.mileageHev)
     }
 }

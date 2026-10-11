@@ -50,8 +50,8 @@ class Migration22to23Test {
             assertEquals(50.5, c.getDouble(9), 1e-9)
         }
         migrated.query(
-            "SELECT trip_start_fuel_total, trip_start_mileage_hev, ts, on_ts, on_fuel_total, on_mileage_hev " +
-                "FROM last_state"
+            "SELECT trip_start_fuel_total, trip_start_mileage_hev, ts, on_ts, on_fuel_total, on_mileage_hev, " +
+                "on_mileage FROM last_state"
         ).use { c ->
             c.moveToFirst()
             assertTrue(c.isNull(0))
@@ -60,6 +60,7 @@ class Migration22to23Test {
             assertTrue(c.isNull(3))
             assertTrue(c.isNull(4))
             assertTrue(c.isNull(5))
+            assertTrue(c.isNull(6))
         }
 
         // The litre price belongs to a period; a migrated period has none.

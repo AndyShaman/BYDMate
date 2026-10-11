@@ -36,4 +36,6 @@ data class LastStateEntity(
     @ColumnInfo(name = "on_fuel_total") val onFuelTotal: Double? = null,
     /** DM-i only: engine odometer at [onTs], km. */
     @ColumnInfo(name = "on_mileage_hev") val onMileageHev: Double? = null,
+    /** DM-i only: odometer at [onTs], km; the baseline a resumed trip compares later ticks with. */
+    @ColumnInfo(name = "on_mileage") val onMileage: Double? = null,
 )

@@ -23,8 +23,8 @@ class CounterSnapshotWriter @Inject constructor(
     private var wasOn = false
     private var lastWriteMs = 0L
     private var pruned = false
-    /** The last tick that showed a running car: what an ignition_off row records. */
-    private var lastOnData: DiParsData? = null
+    /** The trip's end edge: what an ignition_off row records. */
+    private val endEdge = ReadableOnTick()
 
     suspend fun onTick(data: DiParsData, kind: VehicleKind, nowMs: Long) {
         if (kind != VehicleKind.HYBRID) return
@@ -35,26 +35,28 @@ class CounterSnapshotWriter @Inject constructor(
         val on = edge.update(data, nowMs)
         val reason = reasonFor(on, nowMs)
         wasOn = on
-        if (on && edge.lastOnMs == nowMs) lastOnData = data
+        endEdge.update(data, nowMs, isOnTick = on && edge.lastOnMs == nowMs)
         if (reason == null) return
         // The off edge is only known OFF_AFTER_MS after the car stopped; the row carries the
-        // time and counters of the last running tick, so it lands next to the trip's real end.
-        val turnedOff = reason == CounterSnapshotEntity.REASON_IGNITION_OFF
-        val source = if (turnedOff) lastOnData ?: data else data
-        val ts = if (turnedOff) edge.lastOnMs else nowMs
-        dao.insert(
-            CounterSnapshotEntity(
-                ts = ts,
-                fuelTotal = source.fuelTotalL,
-                mileageHev = source.mileageHevKm?.toDouble(),
-                mileageEv = source.mileageEvKm?.toDouble(),
-                odometer = source.mileage,
+        // time and counters of the trip's end edge, so it lands next to the trip's real end.
+        val edgeMs = endEdge.tickMs
+        val row = when {
+            reason != CounterSnapshotEntity.REASON_IGNITION_OFF -> rowOf(nowMs, data, reason)
+            edgeMs != null -> CounterSnapshotEntity(
+                ts = edgeMs,
+                fuelTotal = endEdge.fuelTotalL,
+                mileageHev = endEdge.mileageHevKm,
+                mileageEv = endEdge.mileageEvKm,
+                odometer = endEdge.odometerKm,
                 reason = reason,
             )
-        )
+            else -> rowOf(edge.lastOnMs, data, reason)
+        }
+        if (reason == CounterSnapshotEntity.REASON_IGNITION_OFF) endEdge.clear()
+        dao.insert(row)
         lastWriteMs = nowMs
-        Log.i(TAG, "snapshot $reason ts=$ts fuel=${source.fuelTotalL} hev=${source.mileageHevKm} " +
-            "ev=${source.mileageEvKm} odo=${source.mileage}")
+        Log.i(TAG, "snapshot $reason ts=${row.ts} fuel=${row.fuelTotal} hev=${row.mileageHev} " +
+            "ev=${row.mileageEv} odo=${row.odometer}")
     }
 
     /**
@@ -80,6 +82,15 @@ class CounterSnapshotWriter @Inject constructor(
         Log.i(TAG, "snapshot ${CounterSnapshotEntity.REASON_COLD_START} ts=$ts onTs=${state.onTs} " +
             "fuel=${state.onFuelTotal} hev=${state.onMileageHev} odo=${state.mileage}")
     }
+
+    private fun rowOf(ts: Long, data: DiParsData, reason: String) = CounterSnapshotEntity(
+        ts = ts,
+        fuelTotal = data.fuelTotalL,
+        mileageHev = data.mileageHevKm?.toDouble(),
+        mileageEv = data.mileageEvKm?.toDouble(),
+        odometer = data.mileage,
+        reason = reason,
+    )
 
     /** Why this tick writes a row, or null when it does not. */
     private fun reasonFor(on: Boolean, nowMs: Long): String? = when {

@@ -201,8 +201,8 @@ class TripRecorderHybridTest {
         assertEquals(305.2, trip.captured.fuelTotalEnd!!, 1e-9)
         assertEquals(3850.0, trip.captured.mileageHevEnd!!, 1e-9)
         assertEquals(2.8, trip.captured.fuelLiters!!, 1e-9)
-        coVerify(exactly = 1) { lastState.setLastOn(10_000L, 305.2, 3850.0) }
-        coVerify(exactly = 0) { lastState.setLastOn(any(), 305.5, any()) }
+        coVerify(exactly = 1) { lastState.setLastOn(10_000L, 305.2, 3850.0, 1040.0) }
+        coVerify(exactly = 0) { lastState.setLastOn(any(), 305.5, any(), any()) }
     }
 
     @Test fun `counters lost while the car still moves leave the trip without litres`() = runTest {
@@ -252,12 +252,12 @@ class TripRecorderHybridTest {
         assertEquals(305.2, trip.captured.fuelTotalEnd!!, 1e-9)
         assertEquals(2.8, trip.captured.fuelLiters!!, 1e-9)
         assertEquals(38.0, trip.captured.hevKm!!, 1e-9)
-        coVerify(exactly = 0) { lastState.setLastOn(30_000L, any(), any()) }
+        coVerify(exactly = 0) { lastState.setLastOn(30_000L, any(), any(), any()) }
     }
 
     @Test fun `an ON tick with both counters null after parking keeps the readable tick at cold start`() = runTest {
         var written: Triple<Long, Double?, Double?>? = null
-        coEvery { lastState.setLastOn(any(), any(), any()) } answers {
+        coEvery { lastState.setLastOn(any(), any(), any(), any()) } answers {
             written = Triple(firstArg(), secondArg(), thirdArg())
         }
         parkWithNullCounters(recorder(VehicleKind.HYBRID))   // then the process dies
@@ -289,8 +289,8 @@ class TripRecorderHybridTest {
         // 65 s after the last odometer growth, so the edge sees no sign of running on this tick.
         live.at(1_015_000L, hybrid(powerState = 0, rpm = 0, mileage = 1040.0, fuel = null, hev = null))
         coVerify(exactly = 1) { lastState.setOpenTripCounters(302.4, 3812.0) }
-        coVerify(exactly = 1) { lastState.setLastOn(950_000L, 305.2, 3850.0) }
-        coVerify(exactly = 0) { lastState.setLastOn(any(), null, any()) }
+        coVerify(exactly = 1) { lastState.setLastOn(950_000L, 305.2, 3850.0, 1040.0) }
+        coVerify(exactly = 0) { lastState.setLastOn(any(), null, any(), any()) }
         coVerify(exactly = 0) { tripDao.insert(any()) }
 
         coEvery { lastState.getCurrent() } returns LastStateEntity(
@@ -402,7 +402,7 @@ class TripRecorderHybridTest {
             coVerify(exactly = 1) { dao.insert(capture(trip)) }
             assertEquals("kind=$kind", expected, trip.captured)
             coVerify(exactly = 0) { ls.setOpenTripCounters(any(), any()) }
-            coVerify(exactly = 0) { ls.setLastOn(any(), any(), any()) }
+            coVerify(exactly = 0) { ls.setLastOn(any(), any(), any(), any()) }
         }
     }
 
@@ -412,7 +412,7 @@ class TripRecorderHybridTest {
         rec.at(2_000, hybrid(powerState = 1, mileage = 110.0, fuel = 305.2, hev = 3820))
         val trip = slot<TripEntity>()
         coVerify(exactly = 1) { tripDao.insert(capture(trip)) }
-        coVerify(exactly = 0) { lastState.setLastOn(any(), any(), any()) }
+        coVerify(exactly = 0) { lastState.setLastOn(any(), any(), any(), any()) }
         assertNull(trip.captured.fuelLiters)
         assertNull(trip.captured.fuelTotalStart)
         assertNull(trip.captured.mileageHevEnd)
@@ -452,5 +452,67 @@ class TripRecorderHybridTest {
         assertNull(trip.captured.hevKm)
         assertEquals(302.4, trip.captured.fuelTotalStart!!, 1e-9)
         assertNull(trip.captured.fuelTotalEnd)
+    }
+
+    // --- Resume restores the saved end edge (round 4) ---
+
+    /** An open trip in last_state, the process died 60 s ago. */
+    private fun resumedState(onTs: Long) = LastStateEntity(
+        id = 1, ts = 1_000_000L, mileage = 40180.0,
+        openTripId = 900_000L, tripStartTs = 900_000L, tripStartMileage = 40140.0,
+        tripStartFuelTotal = 302.4, tripStartMileageHev = 3812.0,
+        onTs = onTs, onFuelTotal = 305.2, onMileageHev = 3850.0, onMileage = 40180.0,
+    )
+
+    /** Ticks with no sign of running and no counters until the 90 s OFF confirmation. */
+    private suspend fun silentUntilOff(rec: TripRecorder) {
+        for (ms in listOf(1_065_000L, 1_100_000L, 1_150_000L)) {
+            rec.at(ms, hybrid(powerState = 0, mileage = 40180.0))
+        }
+    }
+
+    @Test fun `a resumed trip that sees only silent ticks ends at the saved ON tick with its litres`() = runTest {
+        coEvery { lastState.getCurrent() } returns resumedState(onTs = 990_000L)
+        val rec = recorder(VehicleKind.HYBRID)
+        clock = 1_060_000L
+        rec.reconcileColdStart()
+        silentUntilOff(rec)
+
+        val trip = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(trip)) }
+        assertEquals(990_000L, trip.captured.endTs)
+        assertEquals(305.2, trip.captured.fuelTotalEnd!!, 1e-9)
+        assertEquals(305.2 - 302.4, trip.captured.fuelLiters!!, 1e-9)
+        assertEquals(38.0, trip.captured.hevKm!!, 1e-9)
+    }
+
+    @Test fun `a resumed trip whose saved ON tick predates its start gets no end counters`() = runTest {
+        coEvery { lastState.getCurrent() } returns resumedState(onTs = 800_000L)
+        val rec = recorder(VehicleKind.HYBRID)
+        clock = 1_060_000L
+        rec.reconcileColdStart()
+        silentUntilOff(rec)
+
+        val trip = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(trip)) }
+        assertNull(trip.captured.fuelTotalEnd)
+        assertNull(trip.captured.fuelLiters)
+    }
+
+    @Test fun `a real ON tick after the resume moves the end edge forward`() = runTest {
+        coEvery { lastState.getCurrent() } returns resumedState(onTs = 990_000L)
+        val rec = recorder(VehicleKind.HYBRID)
+        clock = 1_060_000L
+        rec.reconcileColdStart()
+        rec.at(1_070_000L, hybrid(powerState = 2, mileage = 40185.0, fuel = 306.0, hev = 3852))
+        for (ms in listOf(1_100_000L, 1_140_000L, 1_170_000L)) {
+            rec.at(ms, hybrid(powerState = 0, mileage = 40185.0))
+        }
+
+        val trip = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(trip)) }
+        assertEquals(1_070_000L, trip.captured.endTs)
+        assertEquals(306.0, trip.captured.fuelTotalEnd!!, 1e-9)
+        assertEquals(306.0 - 302.4, trip.captured.fuelLiters!!, 1e-9)
     }
 }

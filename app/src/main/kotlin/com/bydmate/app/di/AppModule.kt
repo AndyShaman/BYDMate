@@ -390,6 +390,7 @@ object AppModule {
             db.execSQL("ALTER TABLE last_state ADD COLUMN on_ts INTEGER")
             db.execSQL("ALTER TABLE last_state ADD COLUMN on_fuel_total REAL")
             db.execSQL("ALTER TABLE last_state ADD COLUMN on_mileage_hev REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN on_mileage REAL")
             db.execSQL("""
                 CREATE TABLE IF NOT EXISTS counter_snapshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
