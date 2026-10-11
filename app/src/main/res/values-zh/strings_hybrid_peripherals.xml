@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tg_report_range_hybrid">续航 电池 %1$s，燃油 %2$s</string>
+    <string name="tg_report_range_hybrid_ev">续航 电池 %1$s</string>
+    <string name="tg_report_range_hybrid_fuel">续航 燃油 %1$s</string>
+    <string name="tg_report_fuel_period">燃油：本期 %1$.1f 升，全部里程 %2$.1f 升/100 公里</string>
+    <string name="tg_report_trip_fuel">燃油：%1$.1f 升</string>
+</resources>

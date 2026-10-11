@@ -1,6 +1,8 @@
 package com.bydmate.app.agent
 
 import android.util.Log
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.voice.AgentIdentity
@@ -35,6 +37,16 @@ class AgentOrchestrator @Inject constructor(
     private val memoryBlock: () -> String = { "" },
     private val dayMemory: DayMemory = DayMemory(prefs = null),
 ) {
+    // Method injection keeps every existing constructor call intact. Null until Hilt injects it;
+    // the car then counts as not a hybrid and gets the EV prompt.
+    private var vehicleKindMonitor: VehicleKindMonitor? = null
+
+    /** Called by Hilt after construction; call manually in unit tests of the hybrid prompt. */
+    @Inject
+    internal fun injectVehicleKind(monitor: VehicleKindMonitor) {
+        vehicleKindMonitor = monitor
+    }
+
     /** Test seam — deterministic clock for the session TTL. */
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
@@ -176,7 +188,8 @@ class AgentOrchestrator @Inject constructor(
             .format(Date(nowMs())) + "." +
             AgentPersonaPrompt.block(identity()) +
             (if (includeMemory) memoryBlock() + dayMemory.promptBlock(nowMs()) else "")
-        return listOf(AgentMessage.System(SYSTEM_PROMPT), AgentMessage.System(dynamic))
+        val static = if (vehicleKindMonitor?.kind?.value == VehicleKind.HYBRID) HYBRID_SYSTEM_PROMPT else SYSTEM_PROMPT
+        return listOf(AgentMessage.System(static), AgentMessage.System(dynamic))
     }
 
     /** The LLM/tool loop shared by [ask] (live, persistent history) and [askDetached]
@@ -465,5 +478,16 @@ class AgentOrchestrator @Inject constructor(
             стоимость), показывает статистику и AI-инсайты, умеет автоматизации
             (триггер + действие) и управляет устройствами машины.
         """.trimIndent()
+
+        /** The fuel sentence of [SYSTEM_PROMPT]; on a DM-i [HYBRID_SYSTEM_PROMPT] swaps it out. */
+        private const val EV_FUEL_RULE = "- BYDMate видит только электрическую часть машины: расход и запас считаются\n" +
+            "  в кВт·ч по батарее, данных о топливе и ДВС у тебя нет. Не рассуждай о типе\n" +
+            "  силовой установки (электромобиль или гибрид) и не выдумывай расход топлива."
+        private const val HYBRID_FUEL_RULE = "- Машина - подключаемый гибрид (DM-i). Расход в кВт·ч считается по батарее.\n" +
+            "  Об уровне бака и запасе хода на топливе говори по полям fuel_percent и fuel_range_km\n" +
+            "  из get_vehicle_state, запас на батарее - ev_range_km. Расход топлива не выдумывай."
+
+        /** [SYSTEM_PROMPT] for a plug-in hybrid: the agent may speak about the tank. */
+        internal val HYBRID_SYSTEM_PROMPT = SYSTEM_PROMPT.replace(EV_FUEL_RULE, HYBRID_FUEL_RULE)
     }
 }

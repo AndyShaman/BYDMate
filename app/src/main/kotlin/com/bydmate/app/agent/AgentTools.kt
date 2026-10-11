@@ -34,6 +34,8 @@ import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.remote.InsightStatsAggregator
 import com.bydmate.app.data.nativestack.MotorSplit
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
@@ -179,6 +181,16 @@ class AgentTools @Inject constructor(
     @Inject
     internal fun injectSettlementSearch(client: SettlementSearchClient) {
         settlementSearchClient = client
+    }
+
+    // Same method-injection reason as splitPrefs above. Null until Hilt injects it; the car then
+    // counts as not a hybrid and get_vehicle_state answers as on an EV.
+    private var vehicleKindMonitor: VehicleKindMonitor? = null
+
+    /** Called by Hilt after construction; call manually in unit tests of the hybrid fields. */
+    @Inject
+    internal fun injectVehicleKind(monitor: VehicleKindMonitor) {
+        vehicleKindMonitor = monitor
     }
 
     /** Sorted names of the enabled automations, kept in step with the rules table by
@@ -1117,9 +1129,20 @@ class AgentTools @Inject constructor(
             putIf("lifetime_km", b.lifetimeKm?.toDouble())
             putIf("lifetime_kwh", b.lifetimeKwh?.toDouble())
         }
+        // A DM-i reports its own ranges; SOC x capacity would be an invented range there.
+        val hybrid = vehicleKindMonitor?.kind?.value == VehicleKind.HYBRID
+        if (hybrid) {
+            putIf("range_km", d.evRangeKm)
+            putIf("ev_range_km", d.evRangeKm)
+            putIf("fuel_percent", d.fuelPercent)
+            putIf("fuel_range_km", d.fuelRangeKm)
+            putIf("engine_rpm", d.engineRpm)
+            putIf("mileage_hev_km", d.mileageHevKm)
+            putIf("mileage_ev_km", d.mileageEvKm)
+        }
         runCatchingCancellable { rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.avgBatTemp) }
             .getOrNull()?.let { est ->
-                o.put("range_km", est.rangeKm.roundToInt())
+                if (!hybrid) o.put("range_km", est.rangeKm.roundToInt())
                 o.put("battery_capacity_kwh", est.capacityKwh)
                 o.put("battery_remaining_kwh", (est.remainingKwh * 10).roundToInt() / 10.0)
                 o.put("avg_consumption_kwh_100km", (est.avgKwhPer100 * 10).roundToInt() / 10.0)

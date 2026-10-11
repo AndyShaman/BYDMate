@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Telegram report on a DM-i: the car's own ranges and the fuel of a TRIP counter. -->
+    <string name="tg_report_range_hybrid">запас %1$s на батарее, %2$s на топливе</string>
+    <string name="tg_report_range_hybrid_ev">запас %1$s на батарее</string>
+    <string name="tg_report_range_hybrid_fuel">запас %1$s на топливе</string>
+    <string name="tg_report_fuel_period">Топливо: %1$.1f л за период, %2$.1f л/100 на все км</string>
+    <string name="tg_report_trip_fuel">Топливо: %1$.1f л</string>
+</resources>

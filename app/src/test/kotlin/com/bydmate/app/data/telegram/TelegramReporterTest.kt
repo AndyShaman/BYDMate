@@ -10,6 +10,9 @@ import com.bydmate.app.data.local.dao.TripCounterStats
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
+import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.trips.TripCounterMath
@@ -30,6 +33,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -386,5 +390,59 @@ class TelegramReporterTest {
         assertEquals(anchor1.resetTs, inputs.trip1?.resetTs)
         assertEquals(0L, inputs.trip2?.resetTs)
         verify { tripDao.observeCounterStats(anchor1.resetTs, Long.MAX_VALUE) }
+    }
+
+    private val emptyStats = TripCounterStats(
+        totalKm = 0.0, totalKwh = 0.0, totalCost = 0.0, drivingKwh = 0.0, idleKwh = 0.0, tripCount = 0,
+        drivingMs = 0L, straddlingKm = 0.0, straddlingKwh = 0.0, straddlingMs = 0L, straddlingTripCount = 0,
+        landedSessionKm = 0.0, landedSessionKwh = 0.0, landedSessionMs = 0L,
+    )
+
+    private fun monitor(kind: VehicleKind) =
+        mockk<VehicleKindMonitor> { every { this@mockk.kind } returns MutableStateFlow(kind) }
+
+    @Test fun `on a hybrid the live state carries the fuel of each counter's trips`() = runBlocking {
+        val anchor1 = TripResetState(resetTs = now - 6 * 86_400_000L, corrKm = 0.0, corrKwh = 0.0, corrMs = 0L)
+        settings.setTripResetState(1, anchor1)
+        val tripDao = mockk<TripDao>()
+        every { tripDao.getRecent(any()) } returns flowOf(emptyList())
+        every { tripDao.observeCounterStats(any(), any()) } returns flowOf(emptyStats)
+        every { tripDao.getByDateRange(anchor1.resetTs, now) } returns flowOf(listOf(
+            TripEntity(startTs = now - 3_600_000L, distanceKm = 300.0, fuelLiters = 6.0),
+            TripEntity(startTs = now - 7_200_000L, distanceKm = 120.0, fuelLiters = 1.6),
+            TripEntity(startTs = now - 9_000_000L, distanceKm = 40.0),
+        ))
+        every { tripDao.getByDateRange(0L, now) } returns flowOf(listOf(TripEntity(startTs = 1L, distanceKm = 12.0)))
+        val live = TelegramReporter(
+            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, monitor(VehicleKind.HYBRID),
+        )
+        live.clock = { now }
+
+        val inputs = live.inputs()
+
+        assertTrue(inputs.hybrid)
+        assertEquals(7.6, inputs.trip1Fuel!!.liters, 1e-9)
+        assertEquals("only the km of trips that know their litres", 420.0, inputs.trip1Fuel!!.km, 1e-9)
+        assertNull("no trip of TRIP 2 has litres", inputs.trip2Fuel)
+
+        // Same reset and trip count: the next build reuses the totals instead of reading the trips again.
+        assertEquals(inputs.trip1Fuel, live.inputs().trip1Fuel)
+        verify(exactly = 1) { tripDao.getByDateRange(anchor1.resetTs, now) }
+    }
+
+    @Test fun `on an EV the live state asks for no fuel at all`() = runBlocking {
+        val tripDao = mockk<TripDao>()
+        every { tripDao.getRecent(any()) } returns flowOf(emptyList())
+        every { tripDao.observeCounterStats(any(), any()) } returns flowOf(emptyStats)
+        val live = TelegramReporter(
+            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, monitor(VehicleKind.EV),
+        )
+        live.clock = { now }
+
+        val inputs = live.inputs()
+
+        assertFalse(inputs.hybrid)
+        assertNull(inputs.trip1Fuel)
+        verify(exactly = 0) { tripDao.getByDateRange(any(), any()) }
     }
 }

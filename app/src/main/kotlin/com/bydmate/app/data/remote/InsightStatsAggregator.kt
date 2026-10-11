@@ -2,6 +2,7 @@ package com.bydmate.app.data.remote
 
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.IdleDrainEntity
+import com.bydmate.app.data.local.entity.TripEntity
 import java.util.Calendar
 
 /** Pure helpers for [InsightStats] aggregation — unit-testable without Room. */
@@ -16,6 +17,14 @@ object InsightStatsAggregator {
         val dcCostPerKwh: Double?,
         val totalCost: Double,
     )
+
+    /**
+     * The trips the kWh/100 rules rate: on a DM-i only those known to have burned no fuel (the kWh
+     * of a trip the engine helped, or may have helped, do not rate electric consumption), on an EV
+     * all of them.
+     */
+    fun consumptionTrips(trips: List<TripEntity>, hybrid: Boolean): List<TripEntity> =
+        if (hybrid) trips.filter { it.fuelLiters == 0.0 } else trips
 
     /** Idle sessions that started between 22:00 and 05:59 local time. */
     fun nightDrainKwh(drains: List<IdleDrainEntity>): Double {

@@ -3,6 +3,8 @@ package com.bydmate.app.data.remote
 import android.util.Log
 import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.autoservice.ChargingReading
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -36,7 +38,8 @@ import kotlin.math.round
  */
 @Singleton
 class IternioTelemetryClient @Inject constructor(
-    private val httpClient: OkHttpClient
+    private val httpClient: OkHttpClient,
+    private val vehicleKindMonitor: VehicleKindMonitor,
 ) {
     companion object {
         private const val TAG = "IternioTelemetry"
@@ -163,7 +166,9 @@ class IternioTelemetryClient @Inject constructor(
         // and tag the chosen source in logcat so a missing live source
         // shows up as `power_source=zero_fallback`, distinct from a
         // genuine 0 kW snapshot during coast/standstill.
-        val sanePower = enginePowerKw?.takeIf { it in POWER_MIN_KW..POWER_MAX_KW }
+        // On a DM-i the Power needle (ENG_POW) is not the pack, so it is never sent there.
+        val hybrid = vehicleKindMonitor.kind.value == VehicleKind.HYBRID
+        val sanePower = enginePowerKw?.takeIf { !hybrid && it in POWER_MIN_KW..POWER_MAX_KW }
         val isChargingNow = isCharging(data, charging)
         // Traction battery V/A. Our hvCurrent already follows the Iternio convention —
         // discharge positive, charge negative (FidMap: «negative = charging», #153) — so the
@@ -175,9 +180,14 @@ class IternioTelemetryClient @Inject constructor(
         val chargePowerKw = if (isChargingNow && hvVolt != null && hvAmp != null) {
             -(abs(hvVolt * hvAmp) / 1000.0).let { kw -> round(kw * 10) / 10 }
         } else null
-        val powerKw: Double = chargePowerKw ?: sanePower?.toDouble() ?: data.power ?: 0.0
+        // On a DM-i V × A is the pack power.
+        val hybridPowerKw = if (hybrid && hvVolt != null && hvAmp != null) {
+            (hvVolt * hvAmp / 1000.0).let { kw -> round(kw * 10) / 10 }
+        } else null
+        val powerKw: Double = chargePowerKw ?: hybridPowerKw ?: sanePower?.toDouble() ?: data.power ?: 0.0
         val powerSource = when {
             chargePowerKw != null -> "hv_charging"
+            hybridPowerKw != null -> "hv_hybrid"
             sanePower != null -> "autoservice"
             data.power != null -> "diplus"
             else -> "zero_fallback"

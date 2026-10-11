@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tg_report_range_hybrid">zasięg %1$s na baterii, %2$s na paliwie</string>
+    <string name="tg_report_range_hybrid_ev">zasięg %1$s na baterii</string>
+    <string name="tg_report_range_hybrid_fuel">zasięg %1$s na paliwie</string>
+    <string name="tg_report_fuel_period">Paliwo: %1$.1f l w okresie, %2$.1f l/100 na wszystkie km</string>
+    <string name="tg_report_trip_fuel">Paliwo: %1$.1f l</string>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tg_report_range_hybrid">autonomia %1$s na bateria, %2$s no combustível</string>
+    <string name="tg_report_range_hybrid_ev">autonomia %1$s na bateria</string>
+    <string name="tg_report_range_hybrid_fuel">autonomia %1$s no combustível</string>
+    <string name="tg_report_fuel_period">Combustível: %1$.1f L no período, %2$.1f L/100 em todos os km</string>
+    <string name="tg_report_trip_fuel">Combustível: %1$.1f L</string>
+</resources>

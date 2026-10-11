@@ -6,6 +6,8 @@ import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,6 +31,16 @@ class InsightsManager @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val localePreferences: LocalePreferences = LocalePreferences(context)
 ) {
+    // Method injection keeps every existing constructor call intact. Null until Hilt injects it;
+    // the car then counts as not a hybrid and every trip is rated.
+    private var vehicleKindMonitor: VehicleKindMonitor? = null
+
+    /** Called by Hilt after construction; call manually in unit tests of the hybrid trip filter. */
+    @Inject
+    internal fun injectVehicleKind(monitor: VehicleKindMonitor) {
+        vehicleKindMonitor = monitor
+    }
+
     companion object {
         private const val TAG = "InsightsManager"
         private const val PREFS_NAME = "insights_cache"
@@ -206,12 +218,18 @@ class InsightsManager @Inject constructor(
 
         // --- Consumption ---
         val recentKm = recentTrips.sumOf { it.distanceKm ?: 0.0 }
-        val recentKwh = recentTrips.sumOf { it.kwhConsumed ?: 0.0 }
-        val recentCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
-
         val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
-        val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
-        val prevCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
+        val hybrid = isHybrid()
+        val consRecent = InsightStatsAggregator.consumptionTrips(recentTrips, hybrid)
+        val consPrev = InsightStatsAggregator.consumptionTrips(prevTrips, hybrid)
+
+        val consRecentKm = consRecent.sumOf { it.distanceKm ?: 0.0 }
+        val recentKwh = consRecent.sumOf { it.kwhConsumed ?: 0.0 }
+        val recentCons = if (consRecentKm > 0) recentKwh / consRecentKm * 100 else 0.0
+
+        val consPrevKm = consPrev.sumOf { it.distanceKm ?: 0.0 }
+        val prevKwh = consPrev.sumOf { it.kwhConsumed ?: 0.0 }
+        val prevCons = if (consPrevKm > 0) prevKwh / consPrevKm * 100 else 0.0
 
         if (recentCons > 0) {
             val pct = if (prevCons > 0) (recentCons - prevCons) / prevCons * 100 else null
@@ -417,20 +435,26 @@ class InsightsManager @Inject constructor(
 
         val recentKm = recentTrips.sumOf { it.distanceKm ?: 0.0 }
         val recentKwh = recentTrips.sumOf { it.kwhConsumed ?: 0.0 }
-        val recentAvgCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
+        val hybrid = isHybrid()
+        val consRecent = InsightStatsAggregator.consumptionTrips(recentTrips, hybrid)
+        val consPrev = InsightStatsAggregator.consumptionTrips(prevTrips, hybrid)
+        val consRecentKm = consRecent.sumOf { it.distanceKm ?: 0.0 }
+        val consRecentKwh = consRecent.sumOf { it.kwhConsumed ?: 0.0 }
+        val recentAvgCons = if (consRecentKm > 0) consRecentKwh / consRecentKm * 100 else 0.0
         val recentAvgSpeed = recentTrips.mapNotNull { it.avgSpeedKmh }.let {
             if (it.isNotEmpty()) it.average() else 0.0
         }
         val shortTripCount = recentTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
 
         val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
-        val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
-        val prevAvgCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
+        val consPrevKm = consPrev.sumOf { it.distanceKm ?: 0.0 }
+        val prevKwh = consPrev.sumOf { it.kwhConsumed ?: 0.0 }
+        val prevAvgCons = if (consPrevKm > 0) prevKwh / consPrevKm * 100 else 0.0
         val consumptionChangePct = if (prevAvgCons > 0) {
             (recentAvgCons - prevAvgCons) / prevAvgCons * 100
         } else null
 
-        val tripsWithCons = recentTrips.filter {
+        val tripsWithCons = consRecent.filter {
             (it.kwhPer100km ?: 0.0) > 0 && (it.distanceKm ?: 0.0) > 1.0
         }
         val best = tripsWithCons.minByOrNull { it.kwhPer100km!! }
@@ -514,6 +538,8 @@ class InsightsManager @Inject constructor(
             nightDrainSharePct = nightDrainSharePct,
         )
     }
+
+    private fun isHybrid(): Boolean = vehicleKindMonitor?.kind?.value == VehicleKind.HYBRID
 
     private fun parseInsight(json: String): InsightData? {
         return try {
