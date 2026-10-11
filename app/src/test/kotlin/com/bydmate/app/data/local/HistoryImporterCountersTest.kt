@@ -200,26 +200,26 @@ class HistoryImporterCountersTest {
         assertEquals(305.2, trip(id).fuelTotalEnd!!, 1e-9)
     }
 
-    @Test fun `a null ignition_off row next to the trip end gives way to the cold_start row`() = runBlocking {
+    @Test fun `a null ignition_on row at the start is no reason to take the previous trip's row`() = runBlocking {
         val id = insertTrip()
-        snapshot(start, 302.4, 3812.0)
+        snapshot(start - 70_000L, 302.4, 3812.0)   // the previous trip's tail
         db.counterSnapshotDao().insert(
             CounterSnapshotEntity(
-                ts = end - 5_000L, fuelTotal = null, mileageHev = null, mileageEv = null,
-                odometer = null, reason = CounterSnapshotEntity.REASON_IGNITION_OFF,
+                ts = start, fuelTotal = null, mileageHev = null, mileageEv = null,
+                odometer = null, reason = CounterSnapshotEntity.REASON_IGNITION_ON,
             )
         )
         db.counterSnapshotDao().insert(
             CounterSnapshotEntity(
-                ts = end + 3_000L, fuelTotal = 305.2, mileageHev = 3850.0, mileageEv = null,
-                odometer = null, reason = CounterSnapshotEntity.REASON_COLD_START,
+                ts = end, fuelTotal = 305.2, mileageHev = 3850.0, mileageEv = null,
+                odometer = null, reason = CounterSnapshotEntity.REASON_IGNITION_OFF,
             )
         )
 
         importer(VehicleKind.HYBRID).attachCounters()
 
-        assertEquals(2.8, trip(id).fuelLiters!!, 1e-9)
-        assertEquals(305.2, trip(id).fuelTotalEnd!!, 1e-9)
+        assertNull(trip(id).fuelLiters)
+        assertNull("stays retryable", trip(id).fuelTotalStart)
     }
 
     @Test fun `an EV car skips the step and writes nothing`() = runBlocking {
