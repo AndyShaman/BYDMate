@@ -10,6 +10,7 @@ import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_
 import com.bydmate.app.data.repository.SettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToLong
 
 /** What one [CostCalculator.recalculate] pass touched. */
 data class RecalcResult(
@@ -148,12 +149,16 @@ class CostCalculator @Inject constructor(
     /**
      * Prices trips that carry energy but no cost yet, each by its own period. Trips that
      * already have a cost are left untouched — this is the import path, not a recalculation.
+     * With [fuelPricePerLiter] (DM-i only) a trip that burned fuel also gets [TripEntity.fuelCost]
+     * and a [TripEntity.cost] of electricity plus fuel; without it the cost is electricity only.
      */
-    suspend fun priceUncostedTrips(trips: List<TripEntity>): Int {
-        val priceable = trips.filter { it.kwhConsumed != null && it.cost == null }
+    suspend fun priceUncostedTrips(trips: List<TripEntity>, fuelPricePerLiter: Double? = null): Int {
+        val priceable = trips.filter {
+            it.cost == null && (it.kwhConsumed != null || fuelCost(it, fuelPricePerLiter) != null)
+        }
         if (priceable.isEmpty()) return 0
         val schedule = schedule()
-        if (schedule.isEmpty) return 0
+        if (schedule.isEmpty && fuelPricePerLiter == null) return 0
         val timeline = BatteryPriceTimeline(
             chargeDao.getCompletedForPricing(priceable.maxOf { it.startTs }),
             settingsRepository.getBatteryCapacity(),
@@ -162,12 +167,24 @@ class CostCalculator @Inject constructor(
         for (trip in priceable) {
             val kwh = trip.kwhConsumed
             val period = schedule.periodAt(trip.startTs)
-            if (kwh == null || period == null) continue
-            tripDao.update(trip.copy(cost = kwh * tripRate(period, trip.startTs, timeline)))
+            val electricityCost = if (kwh != null && period != null) kwh * tripRate(period, trip.startTs, timeline) else null
+            val fuelCost = fuelCost(trip, fuelPricePerLiter)
+            when {
+                fuelCost != null -> tripDao.update(trip.copy(cost = (electricityCost ?: 0.0) + fuelCost, fuelCost = fuelCost))
+                electricityCost != null -> tripDao.update(trip.copy(cost = electricityCost))
+                else -> continue
+            }
             priced++
         }
         Log.i(TAG, "priced uncosted trips=$priced")
         return priced
+    }
+
+    /** DM-i fuel part of a trip's cost, rounded to 0.01; null without a price or without litres. */
+    private fun fuelCost(trip: TripEntity, pricePerLiter: Double?): Double? {
+        val liters = trip.fuelLiters
+        if (pricePerLiter == null || liters == null || liters <= 0.0) return null
+        return (liters * pricePerLiter * 100.0).roundToLong() / 100.0
     }
 
     /** Price per kWh for one trip under [period]; logs the `charges` rule decision. */

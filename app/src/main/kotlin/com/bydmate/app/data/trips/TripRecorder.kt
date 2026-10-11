@@ -5,6 +5,7 @@ import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.remote.DiParsData
 import android.util.Log
 import javax.inject.Inject
@@ -13,13 +14,15 @@ import kotlin.math.abs
 import kotlin.math.roundToLong
 
 @Singleton
-class TripRecorder @Inject constructor(
+class TripRecorder @Inject @Suppress("LongParameterList") constructor( // injected dependencies + test clocks
     private val tripDao: TripDao,
     private val lastStateDao: LastStateDao,
     private val energyDataReader: EnergyDataReader,
     private val deadDetector: EnergyDataDeadDetector,
     private val batteryCapacityKwh: suspend () -> Double,
     private val now: () -> Long = { System.currentTimeMillis() },
+    /** Car type; every DM-i branch below is behind HYBRID, EV and UNKNOWN take the old path. */
+    private val kind: () -> VehicleKind = { VehicleKind.UNKNOWN },
 ) {
     // In-memory mirror of last_state.open_trip_*; rebuilt at cold-start from DAO.
     internal data class Open(
@@ -29,11 +32,18 @@ class TripRecorder @Inject constructor(
         val startTotalElec: Double? = null,
         /** Outside temperature when the trip opened, °C. */
         val startExteriorTemp: Int? = null,
+        /** DM-i only: lifetime fuel counter at open, L. */
+        val startFuelTotal: Double? = null,
+        /** DM-i only: engine odometer at open, km. */
+        val startMileageHev: Double? = null,
     )
     internal var open: Open? = null
 
+    private val hybridEdge = HybridIgnitionEdge()
+
     private var nullPowerStreak = 0
     private fun ignitionOn(data: DiParsData): Boolean {
+        if (kind() == VehicleKind.HYBRID) return hybridEdge.update(data, now())
         if (data.powerState != null) { nullPowerStreak = 0; return data.powerState == 2 }
         nullPowerStreak++
         val fallback = nullPowerStreak >= 5
@@ -57,7 +67,10 @@ class TripRecorder @Inject constructor(
 
     private suspend fun openTrip(data: DiParsData) {
         val startTs = now()
-        open = Open(startTs, data.soc, data.mileage, data.totalElecConsumption, data.exteriorTemp)
+        val hybrid = kind() == VehicleKind.HYBRID
+        val startFuel = if (hybrid) data.fuelTotalL else null
+        val startHev = if (hybrid) data.mileageHevKm?.toDouble() else null
+        open = Open(startTs, data.soc, data.mileage, data.totalElecConsumption, data.exteriorTemp, startFuel, startHev)
         Log.i(TAG, "trip open: ts=$startTs soc=${data.soc} ext_temp=${data.exteriorTemp}")
         // Spec §96-100: persist open trip to last_state so cold-start can resume.
         val updated = lastStateDao.openTrip(
@@ -86,19 +99,22 @@ class TripRecorder @Inject constructor(
                 now = startTs,
             )
         }
+        if (hybrid) lastStateDao.setOpenTripCounters(startFuel, startHev)
     }
 
     /**
      * BMS lifetime-consumption counter (0.1 kWh granularity) beats the integer SOC
      * delta (1% SOC = ~0.7 kWh quantum — issue #53: dashes on short trips, inflated
      * per-100km on others). Negative/zero delta (counter reset or unsupported fid)
-     * falls back to the SOC estimate.
+     * falls back to the SOC estimate. A DM-i hybrid gets no SOC estimate: the engine charges
+     * the pack on the way, so a SOC delta is not what the trip drew (null instead).
      */
     private fun computeKwh(startElec: Double?, endElec: Double?, startSoc: Int?, endSoc: Int?, cap: Double): Double? {
         if (startElec != null && endElec != null) {
             val elecDelta = endElec - startElec
             if (elecDelta > 0) return elecDelta
         }
+        if (kind() == VehicleKind.HYBRID) return null
         val socDelta = (startSoc ?: 0) - (endSoc ?: 0)
         return if (socDelta > 0) socDelta / 100.0 * cap else null
     }
@@ -133,16 +149,48 @@ class TripRecorder @Inject constructor(
 
     private fun round1(v: Double): Double = (v * 10.0).roundToLong() / 10.0
 
+    /**
+     * DM-i fuel columns of one trip from the counters at its two edges: raw readings as read,
+     * litres only for a delta in [0, [MAX_TRIP_LITERS]], engine km only for a delta in
+     * [0, distance + 1]. A missing edge leaves the derived value null. Not HYBRID: all null.
+     */
+    private fun fuelColumns(
+        startFuel: Double?,
+        endFuel: Double?,
+        startHev: Double?,
+        endHev: Double?,
+        distanceKm: Double?,
+    ): TripFuel {
+        if (kind() != VehicleKind.HYBRID) return TripFuel()
+        return TripFuel(
+            fuelLiters = TripFuel.liters(startFuel, endFuel),
+            hevKm = TripFuel.hevKm(startHev, endHev, distanceKm),
+            fuelTotalStart = startFuel,
+            fuelTotalEnd = endFuel,
+            mileageHevStart = startHev,
+            mileageHevEnd = endHev,
+        )
+    }
+
     private suspend fun close(open: Open, end: DiParsData) {
         val cap = batteryCapacityKwh()
         val kwh = computeKwh(open.startTotalElec, end.totalElecConsumption, open.startSoc, end.soc, cap)
         val distance = plausibleDistance(open.startMileage, end.mileage)
         val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
         val (odoStart, odoEnd) = odometerPair(open.startMileage, end.mileage)
+        val fuel = fuelColumns(
+            open.startFuelTotal, end.fuelTotalL, open.startMileageHev, end.mileageHevKm?.toDouble(), distance,
+        )
         tripDao.insert(
             TripEntity(
                 startTs = open.startTs,
-                endTs = now(),
+                // The hybrid edge drops OFF_AFTER_MS after the car stopped; the trip ends at the
+                // last tick the car was on, not at the moment the silence was confirmed.
+                endTs = if (kind() == VehicleKind.HYBRID) {
+                    hybridEdge.lastOnMs.takeIf { it >= open.startTs } ?: now()  // resumed trip, no live tick
+                } else {
+                    now()
+                },
                 distanceKm = distance,
                 kwhConsumed = kwh,
                 kwhPer100km = per100,
@@ -153,8 +201,18 @@ class TripRecorder @Inject constructor(
                 odometerStartKm = odoStart,
                 odometerEndKm = odoEnd,
                 source = TripSource.NATIVE_POLLING,
+                fuelLiters = fuel.fuelLiters,
+                hevKm = fuel.hevKm,
+                fuelTotalStart = fuel.fuelTotalStart,
+                fuelTotalEnd = fuel.fuelTotalEnd,
+                mileageHevStart = fuel.mileageHevStart,
+                mileageHevEnd = fuel.mileageHevEnd,
             )
         )
+        if (kind() == VehicleKind.HYBRID) {
+            Log.i(TAG, "trip close fuel: l=${fuel.fuelLiters} hev=${fuel.hevKm} " +
+                "total=${fuel.fuelTotalStart}/${fuel.fuelTotalEnd} hevOdo=${fuel.mileageHevStart}/${fuel.mileageHevEnd}")
+        }
         Log.i(TAG, "trip close: km=$distance kwh=$kwh " +
             "ext_temp=${open.startExteriorTemp}/${end.exteriorTemp} odo=$odoStart/$odoEnd")
         this.open = null
@@ -173,6 +231,7 @@ class TripRecorder @Inject constructor(
                 open = Open(
                     state.tripStartTs, state.tripStartSoc, state.tripStartMileage,
                     state.tripStartTotalElec, state.tripStartExteriorTemp,
+                    state.tripStartFuelTotal, state.tripStartMileageHev,
                 )
                 Log.i(TAG, "trip resume (cold start): ts=${state.tripStartTs} ext_temp=${state.tripStartExteriorTemp}")
             }
@@ -183,6 +242,9 @@ class TripRecorder @Inject constructor(
             val distance = plausibleDistance(state.tripStartMileage, state.mileage)
             val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
             val (odoStart, odoEnd) = odometerPair(state.tripStartMileage, state.mileage)
+            // last_state keeps no end counters, so a trip finalised here has no fuel end edge:
+            // litres and engine km stay null, the start readings are still kept.
+            val fuel = fuelColumns(state.tripStartFuelTotal, null, state.tripStartMileageHev, null, distance)
             tripDao.insert(
                 TripEntity(
                     startTs = state.tripStartTs,
@@ -196,6 +258,12 @@ class TripRecorder @Inject constructor(
                     odometerStartKm = odoStart,
                     odometerEndKm = odoEnd,
                     source = TripSource.NATIVE_POLLING,
+                    fuelLiters = fuel.fuelLiters,
+                    hevKm = fuel.hevKm,
+                    fuelTotalStart = fuel.fuelTotalStart,
+                    fuelTotalEnd = fuel.fuelTotalEnd,
+                    mileageHevStart = fuel.mileageHevStart,
+                    mileageHevEnd = fuel.mileageHevEnd,
                 )
             )
             Log.i(TAG, "trip close (cold start): km=$distance " +

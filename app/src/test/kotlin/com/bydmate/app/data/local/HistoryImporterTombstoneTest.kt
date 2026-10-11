@@ -33,6 +33,8 @@ class HistoryImporterTombstoneTest {
         tripTombstoneDao = tombstoneDao,
         costCalculator = mockk(relaxed = true),
         odometerMarks = mockk(relaxed = true),
+        vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(),
+        counterSnapshotDao = mockk(relaxed = true),
     )
 
     private val record = BydTripRecord(

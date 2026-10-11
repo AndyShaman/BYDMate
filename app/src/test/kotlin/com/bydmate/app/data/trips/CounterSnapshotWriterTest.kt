@@ -1,0 +1,65 @@
+package com.bydmate.app.data.trips
+
+import com.bydmate.app.data.local.dao.CounterSnapshotDao
+import com.bydmate.app.data.local.entity.CounterSnapshotEntity
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.remote.diParsData
+import io.mockk.coVerify
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class CounterSnapshotWriterTest {
+
+    private val dao = mockk<CounterSnapshotDao>(relaxed = true)
+    private val writer = CounterSnapshotWriter(dao)
+
+    private fun tick(powerState: Int?, mileage: Double, fuel: Double, rpm: Int? = 0): DiParsData =
+        diParsData(powerState = powerState, mileage = mileage)
+            .copy(fuelTotalL = fuel, mileageHevKm = 3812, mileageEvKm = 9240, engineRpm = rpm)
+
+    private fun written(): List<CounterSnapshotEntity> {
+        val rows = mutableListOf<CounterSnapshotEntity>()
+        coVerify(atLeast = 0) { dao.insert(capture(rows)) }
+        return rows
+    }
+
+    @Test fun `an EV or UNKNOWN car writes and prunes nothing`() = runTest {
+        for (kind in listOf(VehicleKind.EV, VehicleKind.UNKNOWN)) {
+            writer.onTick(tick(2, 1000.0, 302.4, rpm = 1500), kind, 0L)
+        }
+        coVerify(exactly = 0) { dao.insert(any()) }
+        coVerify(exactly = 0) { dao.deleteOlderThan(any()) }
+    }
+
+    @Test fun `on edge, periodic rows, and an off row stamped at the last running tick`() = runTest {
+        val h = VehicleKind.HYBRID
+        writer.onTick(tick(2, 1000.0, 302.4), h, 1_000_000L)                       // on
+        writer.onTick(tick(2, 1005.0, 302.8), h, 1_000_000L + 5 * 60_000L)          // nothing yet
+        writer.onTick(tick(2, 1010.0, 303.1), h, 1_000_000L + 10 * 60_000L)         // periodic
+        writer.onTick(tick(0, 1012.0, 303.3), h, 1_000_000L + 11 * 60_000L)         // still moving
+        val lastRun = 1_000_000L + 11 * 60_000L
+        writer.onTick(tick(0, 1012.0, 303.3), h, lastRun + 60_000L)                 // silent, still on
+        writer.onTick(tick(0, 1012.0, 303.3), h, lastRun + 120_000L)                // off
+
+        val rows = written()
+        assertEquals(
+            listOf(
+                CounterSnapshotEntity.REASON_IGNITION_ON,
+                CounterSnapshotEntity.REASON_PERIODIC,
+                CounterSnapshotEntity.REASON_IGNITION_OFF,
+            ),
+            rows.map { it.reason },
+        )
+        assertEquals(1_000_000L, rows[0].ts)
+        assertEquals(302.4, rows[0].fuelTotal!!, 1e-9)
+        assertEquals(3812.0, rows[0].mileageHev!!, 1e-9)
+        assertEquals(9240.0, rows[0].mileageEv!!, 1e-9)
+        assertEquals(1000.0, rows[0].odometer!!, 1e-9)
+        assertEquals(lastRun, rows[2].ts)
+        assertEquals(303.3, rows[2].fuelTotal!!, 1e-9)
+        coVerify(exactly = 1) { dao.deleteOlderThan(1_000_000L - CounterSnapshotWriter.RETENTION_MS) }
+    }
+}

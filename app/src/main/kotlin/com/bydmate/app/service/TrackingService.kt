@@ -134,6 +134,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var telegramReporter: com.bydmate.app.data.telegram.TelegramReporter
     @Inject lateinit var powerOffArmer: com.bydmate.app.data.telegram.PowerOffArmer
     @Inject lateinit var vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor
+    @Inject lateinit var counterSnapshotWriter: com.bydmate.app.data.trips.CounterSnapshotWriter
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -1745,6 +1746,9 @@ class TrackingService : Service(), LocationListener {
                     // Native trip recorder (writes only when energydata absent — i.e. Song/Atto/non-Leopard3)
                     runCatching { tripRecorder.consume(data) }
                         .onFailure { Log.w(TAG, "TripRecorder.consume failed", it) }
+                    // DM-i counter snapshots for the energydata trips; no-op unless HYBRID.
+                    runCatching { counterSnapshotWriter.onTick(data, vehicleKindMonitor.kind.value, nowMs) }
+                        .onFailure { Log.w(TAG, "CounterSnapshotWriter.onTick failed", it) }
                 } catch (e: Exception) {
                     Log.e(TAG, "Downstream consumer threw on tick: ${e.message}", e)
                 }

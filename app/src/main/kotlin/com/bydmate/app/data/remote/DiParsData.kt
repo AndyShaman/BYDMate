@@ -112,4 +112,12 @@ data class DiParsData(
     val rearBeltSettingRL: Int? = null,
     val rearBeltSettingRM: Int? = null,
     val rearBeltSettingRR: Int? = null,
+    // DM-i hybrid readings (#184): polled only when the car is confirmed HYBRID, null otherwise.
+    val fuelPercent: Int? = null,         // tank level, %
+    val fuelRangeKm: Int? = null,         // range on fuel as the car reports it, km
+    val fuelTotalL: Double? = null,       // lifetime fuel used, L (0.1 L step)
+    val mileageHevKm: Int? = null,        // odometer driven on the engine, km
+    val mileageEvKm: Int? = null,         // odometer driven on the battery, km
+    val engineRpm: Int? = null,           // engine speed, rpm (0 = engine off)
+    val evRangeKm: Int? = null,           // range on battery as the car reports it, km (meaning unconfirmed)
 )

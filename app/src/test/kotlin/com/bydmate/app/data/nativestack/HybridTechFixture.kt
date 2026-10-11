@@ -63,6 +63,6 @@ object HybridTechFixture {
         coEvery { gate.mode() } returns BatchMode.ACTIVE
         coEvery { gate.recordComparison(any(), any()) } just Runs
         every { gate.recordBatchUnavailable() } just Runs
-        return checkNotNull(NativeParsReader(mockk<AutoserviceClient>(), settings, helper, gate).fetch())
+        return checkNotNull(NativeParsReader(mockk<AutoserviceClient>(), settings, helper, gate, kindMonitor()).fetch())
     }
 }

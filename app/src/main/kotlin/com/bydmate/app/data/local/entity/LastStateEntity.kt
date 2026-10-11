@@ -25,5 +25,9 @@ data class LastStateEntity(
     @ColumnInfo(name = "trip_start_mileage") val tripStartMileage: Double? = null,
     @ColumnInfo(name = "trip_start_total_elec") val tripStartTotalElec: Double? = null,
     @ColumnInfo(name = "trip_start_exterior_temp") val tripStartExteriorTemp: Int? = null,
-    @ColumnInfo(name = "energydata_available") val energydataAvailable: Int = 0
+    @ColumnInfo(name = "energydata_available") val energydataAvailable: Int = 0,
+    /** DM-i only: lifetime fuel counter when the open trip started, L. */
+    @ColumnInfo(name = "trip_start_fuel_total") val tripStartFuelTotal: Double? = null,
+    /** DM-i only: engine odometer when the open trip started, km. */
+    @ColumnInfo(name = "trip_start_mileage_hev") val tripStartMileageHev: Double? = null,
 )

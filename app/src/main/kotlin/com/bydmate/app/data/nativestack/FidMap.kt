@@ -240,6 +240,24 @@ object FidMap {
         FidEntry("seatCandLrseLevel4",          1000, 412180548,  5, Decoder.INT_RAW, symbol = "Ac.AC_LRSE_REAR_RIGHT_SEAT_HEATING_LEVEL_SET_hal_only"),
     )
 
+    /**
+     * DM-i hybrid READ set (#184). NativeParsReader appends it to the poll batch only when the
+     * car is confirmed HYBRID, so an EV batch keeps its exact length and order. Read at these
+     * compiled addresses (the ones the hybrid dumps answered), never through [FidResolver]:
+     * kept out of [all] so the resolver, the push fields and every EV read stay as they were.
+     * Order is part of the batch contract: the reply tail lines up with this list.
+     */
+    val hybrid: List<FidEntry> = listOf(
+        FidEntry("fuelPercent",  1014, 1246785600, 5, Decoder.INT_PERCENT),   // EV: 255
+        FidEntry("fuelRangeKm",  1014, 1246773304, 5, Decoder.INT_RANGE_KM),  // EV: 2046
+        FidEntry("fuelTotalL",   1014, 1246760976, 7, Decoder.FLOAT_LITERS),  // 0.1 L step
+        FidEntry("mileageHevKm", 1014, 1246773264, 5, Decoder.INT_RAW),       // EV: 1048575
+        FidEntry("mileageEvKm",  1014, 1246773284, 5, Decoder.INT_RAW),       // EV: 1048575
+        FidEntry("engineRpm",    1012, 339738642,  5, Decoder.INT_RPM),       // EV: 8191
+        // Meaning not confirmed by a dump yet; the UI shows a dash on null.
+        FidEntry("evRangeKm",    1014, 1246765118, 5, Decoder.INT_RANGE_KM),
+    )
+
     /** Every READ address the app knows, polled or not. */
     val all: List<FidEntry> = entries + extra
 

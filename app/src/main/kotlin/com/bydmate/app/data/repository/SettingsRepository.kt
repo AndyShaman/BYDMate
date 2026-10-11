@@ -33,6 +33,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_BATTERY_CAPACITY = "battery_capacity_kwh"
         const val KEY_HOME_TARIFF = "home_tariff"
         const val KEY_DC_TARIFF = "dc_tariff"
+        /** DM-i: price of one litre of fuel; empty until the owner sets it. */
+        const val KEY_FUEL_PRICE_PER_LITER = "fuel_price_per_liter"
         const val KEY_UNITS = "units" // "km" or "miles"
         const val KEY_CURRENCY = "currency" // "BYN", "RUB", "USD", "EUR", "CNY"
         /** The car's charging connector the voice agent filters stations by (ChargeConnector.key). */
@@ -256,6 +258,10 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun getDcTariff(): Double =
         getString(KEY_DC_TARIFF, DEFAULT_DC_TARIFF).parseNumericSetting() ?: 0.73
+
+    /** Price of one litre, or null while the setting is empty or not a number. */
+    suspend fun getFuelPricePerLiter(): Double? =
+        getString(KEY_FUEL_PRICE_PER_LITER, "").parseNumericSetting()
 
     suspend fun getCurrency(): Currency {
         val code = getString(KEY_CURRENCY, DEFAULT_CURRENCY)
