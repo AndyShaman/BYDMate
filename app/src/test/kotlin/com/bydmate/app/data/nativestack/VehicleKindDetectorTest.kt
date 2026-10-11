@@ -33,7 +33,7 @@ class VehicleKindDetectorTest {
 
     @Test fun `every measured dump classifies as its car`() {
         val all = samples()
-        assertEquals(7, all.size)
+        assertEquals(35, all.size)
         all.forEach { s ->
             assertEquals(s.label, s.expected, VehicleKindDetector.classify(s.hev, s.ev, s.fuel))
         }
@@ -197,7 +197,7 @@ class VehicleKindDetectorTest {
         coEvery { helper.readBatch(capture(items)) } returns null
         coEvery { auto.isAvailable() } returns false
 
-        NativeParsReader(auto, settings, helper, gate).fetch()
+        NativeParsReader(auto, settings, helper, gate, kindMonitor()).fetch()
 
         assertEquals(EV_POLL_BATCH_SIZE, items.captured.size)
     }
