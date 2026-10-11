@@ -430,6 +430,29 @@ class TelegramReporterTest {
         verify(exactly = 1) { tripDao.getByDateRange(anchor1.resetTs, now) }
     }
 
+    @Test fun `litres attached to a counted trip show up once the fuel cache is a minute old`() = runBlocking {
+        val anchor1 = TripResetState(resetTs = now - 6 * 86_400_000L, corrKm = 0.0, corrKwh = 0.0, corrMs = 0L)
+        settings.setTripResetState(1, anchor1)
+        val tripDao = mockk<TripDao>()
+        every { tripDao.getRecent(any()) } returns flowOf(emptyList())
+        every { tripDao.observeCounterStats(any(), any()) } returns flowOf(emptyStats)
+        var trips = listOf(TripEntity(startTs = now - 3_600_000L, distanceKm = 300.0))
+        every { tripDao.getByDateRange(any(), any()) } answers { flowOf(trips) }
+        var clock = now
+        val live = TelegramReporter(
+            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, monitor(VehicleKind.HYBRID),
+        )
+        live.clock = { clock }
+
+        assertNull(live.inputs().trip1Fuel)
+        // attachCounters gives the same trip its litres: the trip count does not move.
+        trips = listOf(TripEntity(startTs = now - 3_600_000L, distanceKm = 300.0, fuelLiters = 6.0))
+        clock = now + 59_000L
+        assertNull("still the cached totals", live.inputs().trip1Fuel)
+        clock = now + 60_000L
+        assertEquals(6.0, live.inputs().trip1Fuel!!.liters, 1e-9)
+    }
+
     @Test fun `on an EV the live state asks for no fuel at all`() = runBlocking {
         val tripDao = mockk<TripDao>()
         every { tripDao.getRecent(any()) } returns flowOf(emptyList())

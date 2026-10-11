@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 23,
-    "identityHash": "ee7208d0585b09a6395653395846881d",
+    "identityHash": "f7ade74cba6097785ba64dc9f010cca3",
     "entities": [
       {
         "tableName": "trips",
@@ -1010,7 +1010,7 @@
       },
       {
         "tableName": "last_state",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `ts` INTEGER NOT NULL, `soc` INTEGER, `mileage` REAL, `total_elec` REAL, `ignition` INTEGER, `open_trip_id` INTEGER, `trip_start_ts` INTEGER, `trip_start_soc` INTEGER, `trip_start_mileage` REAL, `trip_start_total_elec` REAL, `trip_start_exterior_temp` INTEGER, `energydata_available` INTEGER NOT NULL, `trip_start_fuel_total` REAL, `trip_start_mileage_hev` REAL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `ts` INTEGER NOT NULL, `soc` INTEGER, `mileage` REAL, `total_elec` REAL, `ignition` INTEGER, `open_trip_id` INTEGER, `trip_start_ts` INTEGER, `trip_start_soc` INTEGER, `trip_start_mileage` REAL, `trip_start_total_elec` REAL, `trip_start_exterior_temp` INTEGER, `energydata_available` INTEGER NOT NULL, `trip_start_fuel_total` REAL, `trip_start_mileage_hev` REAL, `fuel_total` REAL, `mileage_hev` REAL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -1099,6 +1099,18 @@
           {
             "fieldPath": "tripStartMileageHev",
             "columnName": "trip_start_mileage_hev",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "fuelTotal",
+            "columnName": "fuel_total",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "mileageHev",
+            "columnName": "mileage_hev",
             "affinity": "REAL",
             "notNull": false
           }
@@ -1343,7 +1355,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ee7208d0585b09a6395653395846881d')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f7ade74cba6097785ba64dc9f010cca3')"
     ]
   }
 }

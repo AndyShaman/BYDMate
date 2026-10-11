@@ -309,7 +309,12 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         socEnd: Int?,
         capacity: Double,
     ): Double? {
-        val sane = TripEnergySanity.kwhFor(raw, km, socStart, socEnd, capacity)
+        // DM-i: the engine charges the pack on the way, so a SOC delta is no trip figure.
+        val sane = if (vehicleKind.kind.value == VehicleKind.HYBRID) {
+            raw.takeIf { TripEnergySanity.isPlausible(it, km) }
+        } else {
+            TripEnergySanity.kwhFor(raw, km, socStart, socEnd, capacity)
+        }
         if (sane != raw) {
             Log.w(TAG, "energydata kwh implausible: id=$bydId kwh=$raw km=$km " +
                 "soc=$socStart->$socEnd -> ${sane ?: "null"}")

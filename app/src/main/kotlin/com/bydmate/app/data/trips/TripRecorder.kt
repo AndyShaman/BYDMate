@@ -40,10 +40,23 @@ class TripRecorder @Inject @Suppress("LongParameterList") constructor( // inject
     internal var open: Open? = null
 
     private val hybridEdge = HybridIgnitionEdge()
+    /** DM-i: the counters of the tick at [HybridIgnitionEdge.lastOnMs], the trip's end edge. */
+    private var lastOnFuel: Double? = null
+    private var lastOnHev: Double? = null
 
     private var nullPowerStreak = 0
     private fun ignitionOn(data: DiParsData): Boolean {
-        if (kind() == VehicleKind.HYBRID) return hybridEdge.update(data, now())
+        if (kind() == VehicleKind.HYBRID) {
+            val nowMs = now()
+            val on = hybridEdge.update(data, nowMs)
+            // Taken from the same tick as the trip's end time; a counter that tick missed stays
+            // missing rather than borrowing an older reading.
+            if (on && hybridEdge.lastOnMs == nowMs) {
+                lastOnFuel = data.fuelTotalL
+                lastOnHev = data.mileageHevKm?.toDouble()
+            }
+            return on
+        }
         if (data.powerState != null) { nullPowerStreak = 0; return data.powerState == 2 }
         nullPowerStreak++
         val fallback = nullPowerStreak >= 5
@@ -178,8 +191,10 @@ class TripRecorder @Inject @Suppress("LongParameterList") constructor( // inject
         val distance = plausibleDistance(open.startMileage, end.mileage)
         val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
         val (odoStart, odoEnd) = odometerPair(open.startMileage, end.mileage)
+        // The confirming tick comes OFF_AFTER_MS after the car stopped and may miss a counter.
         val fuel = fuelColumns(
-            open.startFuelTotal, end.fuelTotalL, open.startMileageHev, end.mileageHevKm?.toDouble(), distance,
+            open.startFuelTotal, end.fuelTotalL ?: lastOnFuel,
+            open.startMileageHev, end.mileageHevKm?.toDouble() ?: lastOnHev, distance,
         )
         tripDao.insert(
             TripEntity(
@@ -216,6 +231,8 @@ class TripRecorder @Inject @Suppress("LongParameterList") constructor( // inject
         Log.i(TAG, "trip close: km=$distance kwh=$kwh " +
             "ext_temp=${open.startExteriorTemp}/${end.exteriorTemp} odo=$odoStart/$odoEnd")
         this.open = null
+        lastOnFuel = null
+        lastOnHev = null
         lastStateDao.clearOpenTrip()
     }
 
@@ -233,6 +250,9 @@ class TripRecorder @Inject @Suppress("LongParameterList") constructor( // inject
                     state.tripStartTotalElec, state.tripStartExteriorTemp,
                     state.tripStartFuelTotal, state.tripStartMileageHev,
                 )
+                // The new edge starts off with an empty odometer window; without the seed the
+                // first silent tick would close the trip that was running a moment ago.
+                if (kind() == VehicleKind.HYBRID) hybridEdge.seedOn(now())
                 Log.i(TAG, "trip resume (cold start): ts=${state.tripStartTs} ext_temp=${state.tripStartExteriorTemp}")
             }
             return
@@ -242,9 +262,11 @@ class TripRecorder @Inject @Suppress("LongParameterList") constructor( // inject
             val distance = plausibleDistance(state.tripStartMileage, state.mileage)
             val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
             val (odoStart, odoEnd) = odometerPair(state.tripStartMileage, state.mileage)
-            // last_state keeps no end counters, so a trip finalised here has no fuel end edge:
-            // litres and engine km stay null, the start readings are still kept.
-            val fuel = fuelColumns(state.tripStartFuelTotal, null, state.tripStartMileageHev, null, distance)
+            // The end edge is what the last snapshot tick left in last_state; null there leaves
+            // litres and engine km null, the start readings are still kept.
+            val fuel = fuelColumns(
+                state.tripStartFuelTotal, state.fuelTotal, state.tripStartMileageHev, state.mileageHev, distance,
+            )
             tripDao.insert(
                 TripEntity(
                     startTs = state.tripStartTs,

@@ -143,7 +143,7 @@ class TripRecorderHybridTest {
         assertEquals(20_000L, trip.endTs)
     }
 
-    @Test fun `a resumed hybrid trip that sees no live tick ends now, not at zero`() = runTest {
+    @Test fun `a resumed hybrid trip that sees no live tick ends at the resume, not at zero`() = runTest {
         coEvery { lastState.getCurrent() } returns LastStateEntity(
             id = 1, ts = 1_000_000L, mileage = 1040.0,
             openTripId = 99L, tripStartTs = 900_000L, tripStartMileage = 1000.0,
@@ -152,9 +152,98 @@ class TripRecorderHybridTest {
         clock = 1_060_000L
         rec.reconcileColdStart()
         rec.at(1_070_000L, hybrid(powerState = 0, rpm = 0, mileage = 1040.0))
+        rec.at(1_150_000L, hybrid(powerState = 0, rpm = 0, mileage = 1040.0))
         val trip = slot<TripEntity>()
         coVerify(exactly = 1) { tripDao.insert(capture(trip)) }
-        assertEquals(1_070_000L, trip.captured.endTs)
+        assertEquals(1_060_000L, trip.captured.endTs)
+    }
+
+    @Test fun `a resumed hybrid trip survives the first silent tick and closes 90 s later`() = runTest {
+        coEvery { lastState.getCurrent() } returns LastStateEntity(
+            id = 1, ts = 1_000_000L, mileage = 1040.0,
+            openTripId = 99L, tripStartTs = 900_000L, tripStartMileage = 1000.0,
+        )
+        val rec = recorder(VehicleKind.HYBRID)
+        clock = 1_030_000L
+        rec.reconcileColdStart()
+
+        rec.at(1_032_000L, hybrid(powerState = 0, rpm = 0, mileage = 1040.0))
+        rec.at(1_119_999L, hybrid(powerState = 0, rpm = 0, mileage = 1040.0))
+        coVerify(exactly = 0) { tripDao.insert(any()) }
+
+        rec.at(1_120_000L, hybrid(powerState = 0, rpm = 0, mileage = 1040.0))
+        coVerify(exactly = 1) { tripDao.insert(any()) }
+    }
+
+    @Test fun `end counters missing on the confirming tick come from the last running tick`() = runTest {
+        val rec = recorder(VehicleKind.HYBRID)
+        rec.at(0, hybrid(powerState = 2, mileage = 1000.0, fuel = 302.4, hev = 3812))
+        rec.at(10_000, hybrid(powerState = 2, mileage = 1040.0, fuel = 305.2, hev = 3850))
+        rec.at(75_000, hybrid(powerState = 0, rpm = 0, mileage = 1040.0, fuel = null, hev = null))
+        rec.at(100_000, hybrid(powerState = 0, rpm = 0, mileage = 1040.0, fuel = null, hev = null))
+        val trip = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(trip)) }
+        assertEquals(10_000L, trip.captured.endTs)
+        assertEquals(2.8, trip.captured.fuelLiters!!, 1e-9)
+        assertEquals(38.0, trip.captured.hevKm!!, 1e-9)
+        assertEquals(305.2, trip.captured.fuelTotalEnd!!, 1e-9)
+    }
+
+    @Test fun `a trip opened live and closed at the next cold start takes its end counters from last_state`() = runTest {
+        val live = recorder(VehicleKind.HYBRID)
+        live.at(900_000L, hybrid(powerState = 2, mileage = 1000.0, fuel = 302.4, hev = 3812))
+        coVerify(exactly = 1) { lastState.setOpenTripCounters(302.4, 3812.0) }
+        // The head unit dies with the car; the last snapshot tick left the counters in last_state.
+        coEvery { lastState.getCurrent() } returns LastStateEntity(
+            id = 1, ts = 1_000_000L, mileage = 1040.0,
+            openTripId = 900_000L, tripStartTs = 900_000L, tripStartMileage = 1000.0,
+            tripStartFuelTotal = 302.4, tripStartMileageHev = 3812.0,
+            fuelTotal = 305.2, mileageHev = 3850.0,
+        )
+        val rec = recorder(VehicleKind.HYBRID)
+        clock = 1_000_000L + 10 * 60_000L
+        rec.reconcileColdStart()
+
+        val trip = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(trip)) }
+        assertEquals(1_000_000L, trip.captured.endTs)
+        assertEquals(2.8, trip.captured.fuelLiters!!, 1e-9)
+        assertEquals(38.0, trip.captured.hevKm!!, 1e-9)
+        assertEquals(305.2, trip.captured.fuelTotalEnd!!, 1e-9)
+        assertEquals(3850.0, trip.captured.mileageHevEnd!!, 1e-9)
+    }
+
+    @Test fun `an EV trip closed at cold start is the same TripEntity as before`() = runTest {
+        for (kind in listOf(VehicleKind.EV, VehicleKind.UNKNOWN)) {
+            val dao = mockk<TripDao>(relaxed = true)
+            val ls = mockk<LastStateDao>(relaxed = true)
+            coEvery { ls.getCurrent() } returns LastStateEntity(
+                id = 1, ts = 1_000_000L, soc = 70, mileage = 110.0,
+                openTripId = 900_000L, tripStartTs = 900_000L, tripStartSoc = 80, tripStartMileage = 100.0,
+                fuelTotal = 305.2, mileageHev = 3850.0,
+            )
+            val rec = TripRecorder(
+                dao, ls,
+                mockk<EnergyDataReader> { every { isAvailable() } returns false },
+                mockk<EnergyDataDeadDetector>(relaxed = true),
+                batteryCapacityKwh = { 72.9 },
+                now = { 1_000_000L + 10 * 60_000L },
+                kind = { kind },
+            )
+            rec.reconcileColdStart()
+
+            val kwh = 10 / 100.0 * 72.9
+            val expected = TripEntity(
+                startTs = 900_000L, endTs = 1_000_000L, distanceKm = 10.0,
+                kwhConsumed = kwh, kwhPer100km = kwh / 10.0 * 100.0,
+                socStart = 80, socEnd = 70,
+                odometerStartKm = 100.0, odometerEndKm = 110.0,
+                source = TripSource.NATIVE_POLLING,
+            )
+            val trip = slot<TripEntity>()
+            coVerify(exactly = 1) { dao.insert(capture(trip)) }
+            assertEquals("kind=$kind", expected, trip.captured)
+        }
     }
 
     @Test fun `a growing odometer keeps a hybrid trip open with powerState and rpm silent`() = runTest {

@@ -139,6 +139,7 @@ class SettingsViewModelTest {
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
+        override suspend fun getTripsWithFuel(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
@@ -243,6 +244,9 @@ class SettingsViewModelTest {
 
     // Tariff fixture: fields rather than factory parameters, the factory is long enough.
     private var exportCostCalculator: com.bydmate.app.domain.cost.CostCalculator? = null
+
+    // Car type handed to the next built VM; null keeps the relaxed monitor.
+    private var vehicleKind: com.bydmate.app.data.nativestack.VehicleKind? = null
     private var tariffPeriodDaoOverride: TariffPeriodDao? = null
 
     /** In-memory stand-in for the Room DAO, including the unique `start_ts` constraint. */
@@ -390,7 +394,8 @@ class SettingsViewModelTest {
             telegramReporter = mockk(relaxed = true),
             clusterMusicBridge = mockk(relaxed = true),
             vehicleWriteLogDao = mockk(relaxed = true),
-            vehicleKindMonitor = mockk(relaxed = true),
+            vehicleKindMonitor = vehicleKind?.let { com.bydmate.app.data.nativestack.kindMonitor(it) }
+                ?: mockk(relaxed = true),
         )
     }
 
@@ -451,6 +456,35 @@ class SettingsViewModelTest {
 
         assertEquals("2.35", vm.uiState.value.fuelPricePerLiter)
         assertEquals("2.35", settingsDao.map[SettingsRepository.KEY_FUEL_PRICE_PER_LITER])
+    }
+
+    @Test
+    fun `on a hybrid a saved litre price re-prices the fuel of the trips, on an EV it does not`() = runTest {
+        val calc = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
+        exportCostCalculator = calc
+        vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID
+        val hybrid = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        hybrid.saveFuelPricePerLiter("2,5")
+        hybrid.saveFuelPricePerLiter("2,55")
+        testDispatcher.scheduler.advanceUntilIdle()
+        hybrid.saveFuelPricePerLiter("")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // In typing order, so the last price typed is the one the trips end up with.
+        io.mockk.coVerifyOrder {
+            calc.repriceFuel(2.5)
+            calc.repriceFuel(2.55)
+            calc.repriceFuel(null)
+        }
+
+        vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV
+        val ev = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        ev.saveFuelPricePerLiter("3")
+        testDispatcher.scheduler.advanceUntilIdle()
+        io.mockk.coVerify(exactly = 0) { calc.repriceFuel(3.0) }
     }
 
     // Issue #23: pressing "Close" while an update is downloading must cancel the

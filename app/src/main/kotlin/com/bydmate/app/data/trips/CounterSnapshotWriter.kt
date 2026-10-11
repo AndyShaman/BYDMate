@@ -3,6 +3,7 @@ package com.bydmate.app.data.trips
 import android.util.Log
 import com.bydmate.app.data.local.dao.CounterSnapshotDao
 import com.bydmate.app.data.local.entity.CounterSnapshotEntity
+import com.bydmate.app.data.local.entity.LastStateEntity
 import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.remote.DiParsData
 import javax.inject.Inject
@@ -56,6 +57,28 @@ class CounterSnapshotWriter @Inject constructor(
             "ev=${source.mileageEvKm} odo=${source.mileage}")
     }
 
+    /**
+     * At a service start: the head unit dies with the car, so the ignition_off row is often never
+     * written. The counters [LastStateEntity] kept at its last snapshot become the end edge of the
+     * trip that ended at power-off, unless a row within [COLD_START_WINDOW_MS] already covers it.
+     */
+    suspend fun onColdStart(state: LastStateEntity?, kind: VehicleKind) {
+        if (kind != VehicleKind.HYBRID || state?.fuelTotal == null) return
+        if (dao.nearest(state.ts, COLD_START_WINDOW_MS) != null) return
+        dao.insert(
+            CounterSnapshotEntity(
+                ts = state.ts,
+                fuelTotal = state.fuelTotal,
+                mileageHev = state.mileageHev,
+                mileageEv = null,
+                odometer = state.mileage,
+                reason = CounterSnapshotEntity.REASON_COLD_START,
+            )
+        )
+        Log.i(TAG, "snapshot ${CounterSnapshotEntity.REASON_COLD_START} ts=${state.ts} " +
+            "fuel=${state.fuelTotal} hev=${state.mileageHev} odo=${state.mileage}")
+    }
+
     /** Why this tick writes a row, or null when it does not. */
     private fun reasonFor(on: Boolean, nowMs: Long): String? = when {
         on && !wasOn -> CounterSnapshotEntity.REASON_IGNITION_ON
@@ -68,5 +91,6 @@ class CounterSnapshotWriter @Inject constructor(
         private const val TAG = "CounterSnapshot"
         const val PERIODIC_MS = 10 * 60 * 1000L
         const val RETENTION_MS = 90L * 24 * 60 * 60 * 1000
+        const val COLD_START_WINDOW_MS = 90_000L
     }
 }

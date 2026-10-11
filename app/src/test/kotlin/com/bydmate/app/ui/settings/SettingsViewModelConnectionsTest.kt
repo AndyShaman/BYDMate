@@ -120,6 +120,7 @@ class SettingsViewModelConnectionsTest {
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
+        override suspend fun getTripsWithFuel(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null

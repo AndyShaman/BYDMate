@@ -135,6 +135,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var powerOffArmer: com.bydmate.app.data.telegram.PowerOffArmer
     @Inject lateinit var vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor
     @Inject lateinit var counterSnapshotWriter: com.bydmate.app.data.trips.CounterSnapshotWriter
+    @Inject lateinit var lastStateDao: com.bydmate.app.data.local.dao.LastStateDao
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -1519,6 +1520,13 @@ class TrackingService : Service(), LocationListener {
     private fun startPolling() {
         Log.i(TAG, "Starting polling via SharedAdaptiveLoop")
         pollingJob = serviceScope.launch {
+            // DM-i: the counters last_state kept when the previous process died are the end edge
+            // of the energydata trip that ended at power-off. Read before the loop's first write,
+            // and only once the cached car type is known: onServiceStart loads it concurrently.
+            runCatching { vehicleKindMonitor.awaitCache() }
+                .onFailure { Log.w(TAG, "vehicle kind cache load failed", it) }
+            runCatching { counterSnapshotWriter.onColdStart(lastStateDao.getCurrent(), vehicleKindMonitor.kind.value) }
+                .onFailure { Log.w(TAG, "CounterSnapshotWriter.onColdStart failed", it) }
             // Cold-start reconciliation BEFORE subscribing — so we never receive
             // a tick into a stale open trip from a previous session.
             runCatching { tripRecorder.reconcileColdStart() }
@@ -1715,14 +1723,15 @@ class TrackingService : Service(), LocationListener {
                         shortAvg = shortAvg,
                     )
 
-                    val rangeEstimate = rangeCalculator.estimateDetailed(
-                        soc = data.soc,
-                        totalElecKwh = data.totalElecConsumption,
-                        batteryTempC = data.avgBatTemp,
-                    )
-                    val rangeKm = rangeEstimate?.rangeKm
-                    _lastRangeKm.value = rangeKm
-                    logRangeIfChanged(rangeEstimate, data.soc, data.totalElecConsumption)
+                    _lastRangeKm.value = liveRangeKm(vehicleKindMonitor.kind.value, data) {
+                        val rangeEstimate = rangeCalculator.estimateDetailed(
+                            soc = data.soc,
+                            totalElecKwh = data.totalElecConsumption,
+                            batteryTempC = data.avgBatTemp,
+                        )
+                        logRangeIfChanged(rangeEstimate, data.soc, data.totalElecConsumption)
+                        rangeEstimate?.rangeKm
+                    }
 
                     _tripDistanceKm.value = tripDistance
                     _tripKwhConsumed.value = tripKwhConsumed

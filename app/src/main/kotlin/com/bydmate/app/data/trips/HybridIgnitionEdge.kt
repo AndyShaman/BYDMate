@@ -16,6 +16,15 @@ class HybridIgnitionEdge {
     var lastOnMs = 0L
         private set
 
+    /**
+     * A trip resumed after a process restart was running when the old process died: start on,
+     * so the [OFF_AFTER_MS] silence is counted from [nowMs] rather than closing it on the first tick.
+     */
+    fun seedOn(nowMs: Long) {
+        on = true
+        lastOnMs = nowMs
+    }
+
     fun update(data: DiParsData, nowMs: Long): Boolean {
         val rpm = data.engineRpm
         // Fed on every tick, so the window is full when powerState and rpm fall silent.

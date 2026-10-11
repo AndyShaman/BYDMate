@@ -166,7 +166,7 @@ class IternioTelemetryClient @Inject constructor(
         // and tag the chosen source in logcat so a missing live source
         // shows up as `power_source=zero_fallback`, distinct from a
         // genuine 0 kW snapshot during coast/standstill.
-        // On a DM-i the Power needle (ENG_POW) is not the pack, so it is never sent there.
+        // On a DM-i only the pack power (V × A) goes out: never the motor's ENG_POW, DiPars or 0.
         val hybrid = vehicleKindMonitor.kind.value == VehicleKind.HYBRID
         val sanePower = enginePowerKw?.takeIf { !hybrid && it in POWER_MIN_KW..POWER_MAX_KW }
         val isChargingNow = isCharging(data, charging)
@@ -184,15 +184,16 @@ class IternioTelemetryClient @Inject constructor(
         val hybridPowerKw = if (hybrid && hvVolt != null && hvAmp != null) {
             (hvVolt * hvAmp / 1000.0).let { kw -> round(kw * 10) / 10 }
         } else null
-        val powerKw: Double = chargePowerKw ?: hybridPowerKw ?: sanePower?.toDouble() ?: data.power ?: 0.0
+        val powerKw: Double? = if (hybrid) chargePowerKw ?: hybridPowerKw else chargePowerKw ?: sanePower?.toDouble() ?: data.power ?: 0.0
         val powerSource = when {
             chargePowerKw != null -> "hv_charging"
             hybridPowerKw != null -> "hv_hybrid"
+            hybrid -> "none"
             sanePower != null -> "autoservice"
             data.power != null -> "diplus"
             else -> "zero_fallback"
         }
-        telemetry.put("power", powerKw)
+        powerKw?.let { telemetry.put("power", it) }
         hvVolt?.let { telemetry.put("voltage", it) }
         hvAmp?.let { telemetry.put("current", it) }
         // Climate set point — what the driver asked for, not the cabin reading.

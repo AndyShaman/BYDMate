@@ -150,6 +150,18 @@ class VehicleKindDetectorTest {
         assertTrue(monitor.claimProbe(VehicleKindMonitor.RECHECK_MS))
     }
 
+    @Test fun `awaitCache publishes the cached kind without a read`() = runTest {
+        val store = Store()
+        store.values[SettingsRepository.KEY_VEHICLE_KIND] = "HYBRID"
+        val helper = mockk<HelperClient>()
+        val monitor = VehicleKindMonitor(store.settings, helper)
+
+        monitor.awaitCache()
+
+        assertEquals(VehicleKind.HYBRID, monitor.kind.value)
+        coVerify(exactly = 0) { helper.readBatch(any()) }
+    }
+
     @Test fun `failed reads after a confirmation keep the cached kind`() = runTest {
         val store = Store()
         store.values[SettingsRepository.KEY_VEHICLE_KIND] = "HYBRID"

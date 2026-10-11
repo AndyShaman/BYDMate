@@ -48,3 +48,10 @@ internal fun tripsColumnWidthsDp(kind: VehicleKind): List<Int> =
 /** Sum of the trips' litres, null when none of them carries a litre figure. */
 internal fun sumLiters(trips: List<TripEntity>): Double? =
     trips.mapNotNull { it.fuelLiters }.takeIf { it.isNotEmpty() }?.sum()
+
+/**
+ * Km of the trips that know their litres (a zero-litre trip counts), the denominator of
+ * [sumLiters] per 100 km; null when none does. A trip with unknown litres would dilute it.
+ */
+internal fun litersKm(trips: List<TripEntity>): Double? =
+    trips.filter { it.fuelLiters != null }.takeIf { it.isNotEmpty() }?.sumOf { it.distanceKm ?: 0.0 }

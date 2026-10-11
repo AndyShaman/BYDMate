@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
+import com.bydmate.app.data.local.entity.LastStateEntity
 import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
 import kotlinx.coroutines.CoroutineDispatcher
@@ -106,13 +107,7 @@ class SharedAdaptiveLoop constructor(
         val ignition = data.powerState
         // Skip the fsync write when nothing changed and the heartbeat is fresh.
         // (Spelled as one positive condition so the compiler smart-casts prev.)
-        if (prev != null &&
-            prev.soc == data.soc &&
-            prev.mileage == data.mileage &&
-            prev.totalElec == data.totalElecConsumption &&
-            prev.ignition == ignition &&
-            now - prev.ts < HEARTBEAT_MS
-        ) return
+        if (prev != null && prev.holds(data, ignition) && now - prev.ts < HEARTBEAT_MS) return
         // Snapshot-only write: never touches open_trip_id / trip_start_*, which TripRecorder
         // owns. A whole-row upsert() here raced with TripRecorder's openTrip()/clearOpenTrip()
         // between getCurrent() above and the write, and could wipe a trip opened or closed
@@ -124,8 +119,21 @@ class SharedAdaptiveLoop constructor(
             totalElec = data.totalElecConsumption,
             ignition = ignition,
             energydataAvailable = if (energyDataReader.isAvailable()) 1 else 0,
+            // Read only on a HYBRID car (FidMap.hybrid), so null elsewhere: the end edge of a
+            // DM-i trip that TripRecorder closes at the next cold start.
+            fuelTotal = data.fuelTotalL,
+            mileageHev = data.mileageHevKm?.toDouble(),
         )
     }
+
+    /** True when the row already carries every loop-owned value of [data]. */
+    private fun LastStateEntity.holds(data: DiParsData, ignition: Int?): Boolean =
+        soc == data.soc &&
+            mileage == data.mileage &&
+            totalElec == data.totalElecConsumption &&
+            this.ignition == ignition &&
+            fuelTotal == data.fuelTotalL &&
+            mileageHev == data.mileageHevKm?.toDouble()
 
     private fun pow15(n: Int): Long {
         var v = 1.0

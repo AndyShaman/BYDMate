@@ -27,7 +27,9 @@ class HistoryImporterKwhSanityTest {
     private val idleDrainDao = mockk<IdleDrainDao>(relaxed = true)
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
 
-    private fun importer() = HistoryImporter(
+    private fun importer(
+        kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
+    ) = HistoryImporter(
         context = mockk<Context>(relaxed = true),
         energyDataReader = energyDataReader,
         tripRepository = tripRepository,
@@ -39,7 +41,7 @@ class HistoryImporterKwhSanityTest {
         tripTombstoneDao = mockk<TripTombstoneDao>(relaxed = true),
         costCalculator = mockk(relaxed = true),
         odometerMarks = mockk(relaxed = true),
-        vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(),
+        vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(kind),
         counterSnapshotDao = mockk(relaxed = true),
     )
 
@@ -68,6 +70,22 @@ class HistoryImporterKwhSanityTest {
         assertEquals(4.8 / 38.2 * 100.0, updated.captured.kwhPer100km!!, 1e-9)
         assertNull(updated.captured.cost)
         coVerify(exactly = 1) { settingsRepository.setEnergyKwhSanityDone() }
+    }
+
+    @Test fun `on a hybrid an implausible value is dropped, never replaced by the SOC delta`() = runTest {
+        coEvery { settingsRepository.isEnergyKwhSanityDone() } returns false
+        coEvery { settingsRepository.getBatteryCapacity() } returns 60.0
+        coEvery { tripDao.getAllSnapshot() } returns listOf(poisoned, healthy)
+
+        val updated = slot<TripEntity>()
+        val repaired = importer(com.bydmate.app.data.nativestack.VehicleKind.HYBRID).repairImplausibleKwh()
+
+        assertEquals(1, repaired)
+        coVerify(exactly = 1) { tripRepository.updateTrip(capture(updated)) }
+        assertEquals(7L, updated.captured.id)
+        assertNull("the engine charged the pack on the way: SOC delta is no trip figure", updated.captured.kwhConsumed)
+        assertNull(updated.captured.kwhPer100km)
+        assertNull(updated.captured.cost)
     }
 
     @Test fun `repair leaves plausible trips alone`() = runTest {

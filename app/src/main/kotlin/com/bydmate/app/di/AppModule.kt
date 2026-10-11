@@ -386,6 +386,8 @@ object AppModule {
             db.execSQL("ALTER TABLE trips ADD COLUMN fuel_cost REAL")
             db.execSQL("ALTER TABLE last_state ADD COLUMN trip_start_fuel_total REAL")
             db.execSQL("ALTER TABLE last_state ADD COLUMN trip_start_mileage_hev REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN fuel_total REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN mileage_hev REAL")
             db.execSQL("""
                 CREATE TABLE IF NOT EXISTS counter_snapshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

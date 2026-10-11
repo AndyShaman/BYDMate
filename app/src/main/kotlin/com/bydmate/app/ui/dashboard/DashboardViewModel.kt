@@ -23,6 +23,7 @@ import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.ui.trips.litersKm
 import com.bydmate.app.util.CalendarPeriods
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -116,6 +117,8 @@ data class DashboardUiState(
     val fuelPricePerLiter: Double? = null,
     // Period sums over the selected period's trips, null when no trip carries the figure.
     val periodLiters: Double? = null,
+    /** Km of the period trips that know their litres: what [periodLiters] per 100 divides by. */
+    val periodLitersKm: Double? = null,
     val periodHevKm: Double? = null,
     val periodFuelCost: Double? = null,
     val periodElecCost: Double? = null,
@@ -124,6 +127,7 @@ data class DashboardUiState(
 /** Fuel sums of a period's trips (DM-i); a sum no trip contributes to is null, never 0. */
 internal data class HybridPeriodTotals(
     val liters: Double?,
+    val litersKm: Double?,
     val hevKm: Double?,
     val fuelCost: Double?,
     val elecCost: Double?,
@@ -134,6 +138,7 @@ internal fun hybridPeriodTotals(trips: List<TripEntity>): HybridPeriodTotals {
     fun sumOrNull(values: List<Double?>): Double? = values.filterNotNull().takeIf { it.isNotEmpty() }?.sum()
     return HybridPeriodTotals(
         liters = sumOrNull(trips.map { it.fuelLiters }),
+        litersKm = litersKm(trips),
         hevKm = sumOrNull(trips.map { it.hevKm }),
         fuelCost = sumOrNull(trips.map { it.fuelCost }),
         elecCost = sumOrNull(trips.map { t ->
@@ -144,9 +149,9 @@ internal fun hybridPeriodTotals(trips: List<TripEntity>): HybridPeriodTotals {
     )
 }
 
-/** Litres per 100 km over every km of the period, null without litres or km. */
-internal fun periodLitersPer100(liters: Double?, totalKm: Double): Double? =
-    if (liters != null && totalKm > 0.0) liters / totalKm * 100.0 else null
+/** Litres per 100 km over [km], the km of the trips that know their litres; null without litres or km. */
+internal fun periodLitersPer100(liters: Double?, km: Double?): Double? =
+    if (liters != null && km != null && km > 0.0) liters / km * 100.0 else null
 
 @HiltViewModel
 @Suppress("LongParameterList") // Hilt-injected dependencies
@@ -311,13 +316,15 @@ class DashboardViewModel @Inject constructor(
                         // gun-connected AND negative motor power. Regen has gun=0, so
                         // it's filtered. Gun pull → gunState=0 within ≤3s → bolt off.
                         isCharging = data?.chargeGunState == 2 && (data.power ?: 0.0) < -0.3,
-                        fuelPercent = data?.fuelPercent ?: current.fuelPercent,
-                        fuelRangeKm = data?.fuelRangeKm ?: current.fuelRangeKm,
-                        evRangeKm = data?.evRangeKm ?: current.evRangeKm,
-                        engineRpm = data?.engineRpm ?: current.engineRpm,
-                        mileageHevKm = data?.mileageHevKm ?: current.mileageHevKm,
-                        mileageEvKm = data?.mileageEvKm ?: current.mileageEvKm,
-                        fuelTotalL = data?.fuelTotalL ?: current.fuelTotalL,
+                        // DM-i: the newest reading as it is, a missing one included; an old
+                        // rpm or range shown as current would be a guess.
+                        fuelPercent = data?.fuelPercent,
+                        fuelRangeKm = data?.fuelRangeKm,
+                        evRangeKm = data?.evRangeKm,
+                        engineRpm = data?.engineRpm,
+                        mileageHevKm = data?.mileageHevKm,
+                        mileageEvKm = data?.mileageEvKm,
+                        fuelTotalL = data?.fuelTotalL,
                     )
                 }
             }
@@ -377,6 +384,7 @@ class DashboardViewModel @Inject constructor(
                     totalKmToday = if (period == DashboardPeriod.TODAY) summary.totalKm else it.totalKmToday,
                     totalKwhToday = if (period == DashboardPeriod.TODAY) summary.totalKwh else it.totalKwhToday,
                     periodLiters = totals?.liters,
+                    periodLitersKm = totals?.litersKm,
                     periodHevKm = totals?.hevKm,
                     periodFuelCost = totals?.fuelCost,
                     periodElecCost = totals?.elecCost,

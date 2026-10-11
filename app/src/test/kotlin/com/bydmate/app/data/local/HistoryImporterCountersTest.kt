@@ -204,6 +204,53 @@ class HistoryImporterCountersTest {
         assertEquals(0.6 + 7.14, t.cost!!, 1e-9)          // 6 kWh × 0.10 + fuel
     }
 
+    @Test fun `litres attached after the first sync are priced on the next one`() = runBlocking {
+        db.settingsDao().set(SettingEntity(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "2.55"))
+        val id = insertTrip(kwh = 6.0)
+        val importer = importer(VehicleKind.HYBRID)
+
+        // First sync: no snapshot pair yet, the trip is priced by its electricity alone.
+        importer.attachCounters()
+        importer.calculateMissingCosts()
+        assertEquals(0.6, trip(id).cost!!, 1e-9)
+        assertNull(trip(id).fuelCost)
+
+        // Second sync: the pair is there now, the litres land and get their price.
+        snapshot(start, 302.4, 3812.0)
+        snapshot(end, 305.2, 3850.0)
+        importer.attachCounters()
+        importer.calculateMissingCosts()
+
+        val t = trip(id)
+        assertEquals(2.8, t.fuelLiters!!, 1e-9)
+        assertEquals(7.14, t.fuelCost!!, 1e-9)
+        assertEquals(0.6 + 7.14, t.cost!!, 1e-9)
+
+        // A third sync leaves a fully priced trip as it is.
+        importer.calculateMissingCosts()
+        assertEquals(t, trip(id))
+    }
+
+    @Test fun `a trip that already has both cost parts is not offered again`() = runBlocking {
+        val priced = db.tripDao().insert(
+            TripEntity(startTs = start, endTs = end, distanceKm = 40.0, kwhConsumed = 6.0, fuelLiters = 2.8,
+                cost = 7.74, fuelCost = 7.14, source = "energydata")
+        )
+        val pending = db.tripDao().insert(
+            TripEntity(startTs = start, endTs = end, distanceKm = 40.0, kwhConsumed = 6.0, fuelLiters = 2.8,
+                cost = 0.6, source = "energydata")
+        )
+        val zeroLitres = db.tripDao().insert(
+            TripEntity(startTs = start, endTs = end, distanceKm = 40.0, kwhConsumed = 6.0, fuelLiters = 0.0,
+                cost = 0.6, source = "energydata")
+        )
+
+        val offered = db.tripDao().getHybridTripsWithoutCost().map { it.id }.toSet()
+        assertEquals(setOf(pending), offered)
+        assertEquals(setOf(priced, pending), db.tripDao().getTripsWithFuel().map { it.id }.toSet())
+        assertNull(trip(zeroLitres).fuelCost)
+    }
+
     @Test fun `without a price the cost is electricity only`() = runBlocking {
         val id = insertTrip(kwh = 6.0)
         snapshot(start, 302.4, 3812.0)

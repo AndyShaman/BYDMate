@@ -19,6 +19,13 @@ data class RecalcResult(
     val skippedManual: Int = 0,
 )
 
+/**
+ * A trip [CostCalculator.priceUncostedTrips] prices: one with no cost yet, or (DM-i) one priced
+ * before its litres arrived, given [fuelCost] for those litres.
+ */
+private fun TripEntity.needsPrice(fuelCost: Double?): Boolean =
+    if (cost == null) kwhConsumed != null || fuelCost != null else this.fuelCost == null && fuelCost != null
+
 /** Measured AC/DC losses derived from the charges where a meter reading was typed in. */
 data class MeasuredLosses(
     val acPct: Double?,
@@ -137,7 +144,8 @@ class CostCalculator @Inject constructor(
             val kwh = trip.kwhConsumed
             val period = schedule.periodAt(trip.startTs)
             if (kwh == null || period == null) continue
-            val cost = kwh * tripRate(period, trip.startTs, timeline)
+            // DM-i: the fuel part is priced by the litre, not by the tariff, and stays as it is.
+            val cost = kwh * tripRate(period, trip.startTs, timeline) + (trip.fuelCost ?: 0.0)
             if (trip.cost != cost) {
                 tripDao.update(trip.copy(cost = cost))
                 updated++
@@ -151,11 +159,10 @@ class CostCalculator @Inject constructor(
      * already have a cost are left untouched — this is the import path, not a recalculation.
      * With [fuelPricePerLiter] (DM-i only) a trip that burned fuel also gets [TripEntity.fuelCost]
      * and a [TripEntity.cost] of electricity plus fuel; without it the cost is electricity only.
+     * A priced trip whose litres arrived later gets only the fuel part added to its cost.
      */
     suspend fun priceUncostedTrips(trips: List<TripEntity>, fuelPricePerLiter: Double? = null): Int {
-        val priceable = trips.filter {
-            it.cost == null && (it.kwhConsumed != null || fuelCost(it, fuelPricePerLiter) != null)
-        }
+        val priceable = trips.filter { it.needsPrice(fuelCost(it, fuelPricePerLiter)) }
         if (priceable.isEmpty()) return 0
         val schedule = schedule()
         if (schedule.isEmpty && fuelPricePerLiter == null) return 0
@@ -167,7 +174,9 @@ class CostCalculator @Inject constructor(
         for (trip in priceable) {
             val kwh = trip.kwhConsumed
             val period = schedule.periodAt(trip.startTs)
-            val electricityCost = if (kwh != null && period != null) kwh * tripRate(period, trip.startTs, timeline) else null
+            // A trip priced before its litres arrived keeps its cost as the electricity part.
+            val electricityCost = trip.cost
+                ?: if (kwh != null && period != null) kwh * tripRate(period, trip.startTs, timeline) else null
             val fuelCost = fuelCost(trip, fuelPricePerLiter)
             when {
                 fuelCost != null -> tripDao.update(trip.copy(cost = (electricityCost ?: 0.0) + fuelCost, fuelCost = fuelCost))
@@ -178,6 +187,33 @@ class CostCalculator @Inject constructor(
         }
         Log.i(TAG, "priced uncosted trips=$priced")
         return priced
+    }
+
+    /**
+     * DM-i: the litre price changed. Every trip that burned fuel swaps its fuel part for one at
+     * [pricePerLiter] and keeps its electricity part; a null price removes the fuel part. A trip
+     * with no cost yet is priced in full, as on import.
+     */
+    suspend fun repriceFuel(pricePerLiter: Double?) {
+        val trips = tripDao.getTripsWithFuel()
+        var updated = 0
+        for (trip in trips) {
+            val oldCost = trip.cost ?: continue
+            val newFuel = fuelCost(trip, pricePerLiter)
+            val electricity = oldCost - (trip.fuelCost ?: 0.0)
+            val cost = when {
+                newFuel != null -> electricity + newFuel
+                // No kWh means nothing but fuel was ever priced.
+                trip.kwhConsumed == null -> null
+                else -> electricity
+            }
+            if (cost != trip.cost || newFuel != trip.fuelCost) {
+                tripDao.update(trip.copy(cost = cost, fuelCost = newFuel))
+                updated++
+            }
+        }
+        val priced = priceUncostedTrips(trips.filter { it.cost == null }, pricePerLiter)
+        Log.i(TAG, "fuel reprice price=$pricePerLiter trips=$updated uncosted=$priced")
     }
 
     /** DM-i fuel part of a trip's cost, rounded to 0.01; null without a price or without litres. */

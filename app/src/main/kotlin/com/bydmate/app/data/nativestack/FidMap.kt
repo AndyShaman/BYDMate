@@ -254,7 +254,10 @@ object FidMap {
         FidEntry("mileageHevKm", 1014, 1246773264, 5, Decoder.INT_RAW),       // EV: 1048575
         FidEntry("mileageEvKm",  1014, 1246773284, 5, Decoder.INT_RAW),       // EV: 1048575
         FidEntry("engineRpm",    1012, 339738642,  5, Decoder.INT_RPM),       // EV: 8191
-        // Meaning not confirmed by a dump yet; the UI shows a dash on null.
+        // STATISTIC_ELEC_DRIVING_RANGE, the named twin of STATISTIC_FUEL_DRIVING_RANGE above
+        // (BYD OpenAPI, Statistic dev 1014): the EV range. On an EV it equals the cluster range
+        // (Leopard 3: 413 km); the fuel twin matches the cockpit on a Leopard 5 (#184). Not yet
+        // read on a hybrid: an absent value is the 2046 word and shows as a dash.
         FidEntry("evRangeKm",    1014, 1246765118, 5, Decoder.INT_RANGE_KM),
     )
 

@@ -105,6 +105,7 @@ class DashboardViewModelTest {
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
+        override suspend fun getTripsWithFuel(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
@@ -389,10 +390,55 @@ class DashboardViewModelTest {
         val state = vm.uiState.value
         assertEquals(com.bydmate.app.data.nativestack.VehicleKind.HYBRID, state.vehicleKind)
         assertEquals(2.8, state.periodLiters!!, 1e-9)
+        assertEquals("only the km of the trip with litres", 64.0, state.periodLitersKm!!, 1e-9)
         assertEquals(38.0, state.periodHevKm!!, 1e-9)
         assertEquals(2.0, state.periodFuelCost!!, 1e-9)
         // 3.0 − 2.0 from the fuel trip plus the plain 1.0 of the electric one.
         assertEquals(2.0, state.periodElecCost!!, 1e-9)
+    }
+
+    private fun liveDataFlow(): MutableStateFlow<com.bydmate.app.data.remote.DiParsData?> {
+        @Suppress("UNCHECKED_CAST")
+        return com.bydmate.app.service.TrackingService::class.java
+            .getDeclaredField("_lastData")
+            .apply { isAccessible = true }
+            .get(null) as MutableStateFlow<com.bydmate.app.data.remote.DiParsData?>
+    }
+
+    @Test
+    fun `hybrid live fields follow the newest snapshot, a missing reading included`() = runTest {
+        val live = liveDataFlow()
+        try {
+            val vm = buildViewModel(
+                fakeAutoservice = FakeAutoservice(battery = null, available = false),
+                tripDaoOverride = daoWithPeriodTrips(fuelTrips),
+                vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID,
+            )
+            live.value = com.bydmate.app.data.remote.diParsData(soc = 60).copy(
+                fuelPercent = 64, fuelRangeKm = 512, evRangeKm = 46, engineRpm = 1450,
+                mileageHevKm = 3120, mileageEvKm = 8400, fuelTotalL = 302.4,
+            )
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1450, vm.uiState.value.engineRpm)
+            assertEquals(64, vm.uiState.value.fuelPercent)
+
+            live.value = com.bydmate.app.data.remote.diParsData(soc = 60)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertNull(state.fuelPercent)
+            assertNull(state.fuelRangeKm)
+            assertNull(state.evRangeKm)
+            assertNull("an unread rpm is not the last one seen", state.engineRpm)
+            assertNull(state.mileageHevKm)
+            assertNull(state.mileageEvKm)
+            assertNull(state.fuelTotalL)
+            // The period sums come from the trips, not from the live snapshot.
+            assertEquals(2.8, state.periodLiters!!, 1e-9)
+            assertEquals(38.0, state.periodHevKm!!, 1e-9)
+        } finally {
+            live.value = null
+        }
     }
 
     @Test
@@ -406,6 +452,7 @@ class DashboardViewModelTest {
 
         val state = vm.uiState.value
         assertNull(state.periodLiters)
+        assertNull(state.periodLitersKm)
         assertNull(state.periodHevKm)
         assertNull(state.periodFuelCost)
         assertNull(state.periodElecCost)

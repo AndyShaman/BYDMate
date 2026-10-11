@@ -91,6 +91,7 @@ class LastStateDaoTest {
         )
         dao.writeSnapshot(
             ts = 2000L, soc = 78, mileage = 102.0, totalElec = 501.0, ignition = 2, energydataAvailable = 1,
+            fuelTotal = null, mileageHev = null,
         )
         val row = dao.getCurrent()!!
         assertEquals(1500L, row.openTripId)
@@ -110,6 +111,7 @@ class LastStateDaoTest {
         assertNull(dao.getCurrent())
         dao.writeSnapshot(
             ts = 1000L, soc = 80, mileage = 100.0, totalElec = 500.0, ignition = 2, energydataAvailable = 1,
+            fuelTotal = null, mileageHev = null,
         )
         val row = dao.getCurrent()!!
         assertEquals(80, row.soc)
@@ -128,11 +130,28 @@ class LastStateDaoTest {
         dao.clearOpenTrip()
         dao.writeSnapshot(
             ts = 2000L, soc = 78, mileage = 102.0, totalElec = 501.0, ignition = 0, energydataAvailable = 1,
+            fuelTotal = null, mileageHev = null,
         )
         val row = dao.getCurrent()!!
         assertNull(row.openTripId)
         assertNull(row.tripStartTs)
         assertNull(row.tripStartExteriorTemp)
         assertEquals(78, row.soc) // the snapshot write still applied
+    }
+
+    @Test fun `writeSnapshot keeps the DM-i counters of the tick, null as null`() = runBlocking {
+        dao.writeSnapshot(
+            ts = 1000L, soc = 60, mileage = 1040.0, totalElec = null, ignition = 2, energydataAvailable = 0,
+            fuelTotal = 305.2, mileageHev = 3850.0,
+        )
+        assertEquals(305.2, dao.getCurrent()!!.fuelTotal)
+        assertEquals(3850.0, dao.getCurrent()!!.mileageHev)
+
+        dao.writeSnapshot(
+            ts = 2000L, soc = 60, mileage = 1040.0, totalElec = null, ignition = 2, energydataAvailable = 0,
+            fuelTotal = null, mileageHev = null,
+        )
+        assertNull(dao.getCurrent()!!.fuelTotal)
+        assertNull(dao.getCurrent()!!.mileageHev)
     }
 }

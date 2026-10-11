@@ -964,11 +964,11 @@ private fun FuelDetailDialog(state: DashboardUiState, onEditPrice: () -> Unit, o
         TripDetailRow(stringResource(R.string.dashboard_fuel_popup_fuel_range), state.fuelRangeKm?.let { "$it $km" } ?: "—")
         TripDetailRow(stringResource(R.string.dashboard_fuel_popup_ev_range), state.evRangeKm?.let { "$it $km" } ?: "—")
         val rpm = state.engineRpm
-        if (rpm != null && rpm > 0) {
-            TripDetailRow(stringResource(R.string.dashboard_fuel_popup_engine_rpm),
+        when {
+            rpm == null -> TripDetailRow(stringResource(R.string.dashboard_fuel_popup_engine_rpm), "—")
+            rpm > 0 -> TripDetailRow(stringResource(R.string.dashboard_fuel_popup_engine_rpm),
                 stringResource(R.string.dashboard_fuel_rpm_value, rpm), valueColor = AccentOrange)
-        } else {
-            TripDetailRow(stringResource(R.string.dashboard_fuel_popup_engine_rpm),
+            else -> TripDetailRow(stringResource(R.string.dashboard_fuel_popup_engine_rpm),
                 stringResource(R.string.dashboard_fuel_engine_off), valueColor = TextMuted)
         }
         TripDetailRow(stringResource(R.string.dashboard_fuel_popup_mileage_hev), state.mileageHevKm?.let { "$it $km" } ?: "—")
@@ -993,7 +993,8 @@ private fun FuelDetailDialog(state: DashboardUiState, onEditPrice: () -> Unit, o
 
 /**
  * The four period cards on a hybrid (#184): every figure is over all km of the period, the
- * way the instrument cluster's «Accumulated AEC» counts. Missing sums leave their subtitle out.
+ * way the instrument cluster's «Accumulated AEC» counts, except litres per 100, which divide by
+ * the km of the trips that know their litres. Missing sums leave their subtitle out.
  */
 @Composable
 private fun RowScope.HybridStatCards(state: DashboardUiState) {
@@ -1010,7 +1011,7 @@ private fun RowScope.HybridStatCards(state: DashboardUiState) {
         state.periodLiters?.let { stringResource(R.string.dashboard_energy_fuel_subtitle, it) },
         AccentBlue, Modifier.weight(1f), valueMaxLines = 1,
     )
-    val litersPer100 = periodLitersPer100(state.periodLiters, state.totalKm)
+    val litersPer100 = periodLitersPer100(state.periodLiters, state.periodLitersKm)
     if (litersPer100 != null) {
         StatCard(
             stringResource(R.string.dashboard_stat_consumption),

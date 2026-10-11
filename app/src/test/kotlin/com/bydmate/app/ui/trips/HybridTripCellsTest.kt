@@ -63,4 +63,20 @@ class HybridTripCellsTest {
             1e-9,
         )
     }
+
+    @Test
+    fun `day and month litres per 100 use the km of the trips that know their litres`() {
+        val trips = listOf(
+            TripEntity(startTs = 1L, distanceKm = 10.0, fuelLiters = 1.0),
+            TripEntity(startTs = 2L, distanceKm = 90.0),
+        )
+        assertEquals(10.0, litersKm(trips)!!, 1e-9)
+        assertEquals("%.1f л".format(10.0), per100Cell(15.0, sumLiters(trips), litersKm(trips), "л").text)
+        assertNull(litersKm(listOf(TripEntity(startTs = 1L, distanceKm = 90.0))))
+        assertEquals(
+            30.0,
+            litersKm(listOf(TripEntity(startTs = 1L, distanceKm = 30.0, fuelLiters = 0.0), TripEntity(startTs = 2L)))!!,
+            1e-9,
+        )
+    }
 }

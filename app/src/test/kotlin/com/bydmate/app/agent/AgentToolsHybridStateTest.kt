@@ -96,4 +96,21 @@ class AgentToolsHybridStateTest {
         assertFalse(out.has("ev_range_km"))
         assertEquals(512, out.getInt("fuel_range_km"))
     }
+
+    @Test fun a_hybrid_gets_no_battery_figures_built_from_soc_and_capacity() = runTest {
+        val out = JSONObject(state(VehicleKind.HYBRID, hybridSnapshot()))
+        for (key in listOf(
+            "battery_capacity_kwh", "battery_remaining_kwh",
+            "avg_consumption_kwh_100km", "battery_effective_capacity_kwh",
+        )) {
+            assertFalse(key, out.has(key))
+        }
+    }
+
+    @Test fun an_ev_keeps_its_battery_figures() = runTest {
+        val out = JSONObject(state(VehicleKind.EV, AgentToolsReadTest.snapshot(soc = 60)))
+        assertEquals(72.9, out.getDouble("battery_capacity_kwh"), 1e-9)
+        assertEquals(43.7, out.getDouble("battery_remaining_kwh"), 1e-9)
+        assertEquals(18.0, out.getDouble("avg_consumption_kwh_100km"), 1e-9)
+    }
 }

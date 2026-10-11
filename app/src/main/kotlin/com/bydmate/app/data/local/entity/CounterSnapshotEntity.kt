@@ -24,12 +24,14 @@ data class CounterSnapshotEntity(
     /** Odometer driven on the battery, km. */
     @ColumnInfo(name = "mileage_ev") val mileageEv: Double?,
     @ColumnInfo(name = "odometer") val odometer: Double?,
-    /** [REASON_IGNITION_ON], [REASON_IGNITION_OFF] or [REASON_PERIODIC]. */
+    /** [REASON_IGNITION_ON], [REASON_IGNITION_OFF], [REASON_PERIODIC] or [REASON_COLD_START]. */
     @ColumnInfo(name = "reason") val reason: String,
 ) {
     companion object {
         const val REASON_IGNITION_ON = "ignition_on"
         const val REASON_IGNITION_OFF = "ignition_off"
         const val REASON_PERIODIC = "periodic"
+        /** Written at a service start from the counters last_state kept when the process died. */
+        const val REASON_COLD_START = "cold_start"
     }
 }

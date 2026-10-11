@@ -711,7 +711,7 @@ class IternioTelemetryClientTest {
     }
 
     @Test
-    fun `a hybrid without V and A skips the Power needle and takes DiPars, then zero`() = runTest {
+    fun `a hybrid without V and A sends no power at all, neither motor power nor zero`() = runTest {
         val cap = CapturingInterceptor()
         makeClient(cap, VehicleKind.HYBRID).send(
             apiKey = "k", userToken = "t",
@@ -719,7 +719,8 @@ class IternioTelemetryClientTest {
             nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
             enginePowerKw = 30,
         )
-        assertEquals(12.5, cap.lastTlmJson!!.getDouble("power"), 0.001)
+        assertFalse(cap.lastTlmJson!!.has("power"))
+        assertEquals(73, cap.lastTlmJson!!.getInt("soc"))
 
         val cap2 = CapturingInterceptor()
         makeClient(cap2, VehicleKind.HYBRID).send(
@@ -728,6 +729,6 @@ class IternioTelemetryClientTest {
             nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
             enginePowerKw = 30,
         )
-        assertEquals(0.0, cap2.lastTlmJson!!.getDouble("power"), 0.001)
+        assertFalse(cap2.lastTlmJson!!.has("power"))
     }
 }

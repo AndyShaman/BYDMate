@@ -1140,9 +1140,10 @@ class AgentTools @Inject constructor(
             putIf("mileage_hev_km", d.mileageHevKm)
             putIf("mileage_ev_km", d.mileageEvKm)
         }
-        runCatchingCancellable { rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.avgBatTemp) }
+        // Every figure below is SOC x capacity, so a DM-i gets none of them.
+        if (!hybrid) runCatchingCancellable { rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.avgBatTemp) }
             .getOrNull()?.let { est ->
-                if (!hybrid) o.put("range_km", est.rangeKm.roundToInt())
+                o.put("range_km", est.rangeKm.roundToInt())
                 o.put("battery_capacity_kwh", est.capacityKwh)
                 o.put("battery_remaining_kwh", (est.remainingKwh * 10).roundToInt() / 10.0)
                 o.put("avg_consumption_kwh_100km", (est.avgKwhPer100 * 10).roundToInt() / 10.0)

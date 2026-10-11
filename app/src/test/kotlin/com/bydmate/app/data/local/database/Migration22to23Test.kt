@@ -45,11 +45,15 @@ class Migration22to23Test {
             for (i in 2..8) assertTrue("column $i", c.isNull(i))
             assertEquals(50.5, c.getDouble(9), 1e-9)
         }
-        migrated.query("SELECT trip_start_fuel_total, trip_start_mileage_hev, ts FROM last_state").use { c ->
+        migrated.query(
+            "SELECT trip_start_fuel_total, trip_start_mileage_hev, ts, fuel_total, mileage_hev FROM last_state"
+        ).use { c ->
             c.moveToFirst()
             assertTrue(c.isNull(0))
             assertTrue(c.isNull(1))
             assertEquals(5000L, c.getLong(2))
+            assertTrue(c.isNull(3))
+            assertTrue(c.isNull(4))
         }
 
         migrated.execSQL(

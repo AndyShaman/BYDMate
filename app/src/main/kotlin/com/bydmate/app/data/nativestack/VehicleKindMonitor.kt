@@ -106,6 +106,13 @@ class VehicleKindMonitor @Inject constructor(
         return VehicleKindDetector.dumpLine(kind, evidence, at, lastEvidence)
     }
 
+    /**
+     * The cached car type, read before the cold-start steps of TrackingService: they decide by
+     * [kind] whether the counters of the previous process become a trip's litres, and
+     * [onServiceStart] runs concurrently with them.
+     */
+    suspend fun awaitCache() = loadCache()
+
     private suspend fun loadCache() {
         if (cacheLoaded) return
         val cached = settings.getString(SettingsRepository.KEY_VEHICLE_KIND, "")

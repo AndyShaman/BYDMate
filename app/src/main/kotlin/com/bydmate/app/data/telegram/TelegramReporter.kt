@@ -84,6 +84,7 @@ class TelegramReporter @Inject constructor(
         const val LATE_MARK_AFTER_MS = 2 * 60_000L
         private const val PARSE_MODE = "HTML"
         private const val RECENT_TRIPS = 5
+        private const val FUEL_CACHE_TTL_MS = 60_000L
     }
 
     sealed interface SendResult {
@@ -104,9 +105,13 @@ class TelegramReporter @Inject constructor(
     private val strings = ReportStrings { id, args -> appStrings.get(id, *args) }
     private val outboxMutex = Mutex()
 
-    /** [counterFuel] per counter, keyed by (reset ts, trip count): the power-off report is rebuilt every ~10 s. */
+    /**
+     * [counterFuel] per counter, keyed by (reset ts, trip count) and kept [FUEL_CACHE_TTL_MS]: the
+     * power-off report is rebuilt every ~10 s, and litres can land on a trip already counted.
+     */
     private data class FuelKey(val resetTs: Long, val tripCount: Int)
-    private val fuelCache = ConcurrentHashMap<Int, Pair<FuelKey, FuelTotals?>>()
+    private data class FuelEntry(val key: FuelKey, val readAtMs: Long, val totals: FuelTotals?)
+    private val fuelCache = ConcurrentHashMap<Int, FuelEntry>()
 
     /**
      * Bumped by every [drainOutbox] call. [deliver] reads it before sending: if it moved while the
@@ -384,16 +389,18 @@ class TelegramReporter @Inject constructor(
 
     /**
      * Litres of the trips started since TRIP [n]'s reset that know their litres, over the km of those
-     * same trips; null when none does. Read again only when the counter's reset or trip count moves.
+     * same trips; null when none does. Read again when the counter's reset or trip count moves, or
+     * after [FUEL_CACHE_TTL_MS].
      */
     private suspend fun counterFuel(n: Int, counter: TripCounterUi?): FuelTotals? {
         val c = counter ?: return null
         val key = FuelKey(c.resetTs, c.tripCount)
-        fuelCache[n]?.takeIf { it.first == key }?.let { return it.second }
-        val known = tripDao.getByDateRange(c.resetTs, clock()).first().filter { it.fuelLiters != null }
+        val nowMs = clock()
+        fuelCache[n]?.takeIf { it.key == key && nowMs - it.readAtMs < FUEL_CACHE_TTL_MS }?.let { return it.totals }
+        val known = tripDao.getByDateRange(c.resetTs, nowMs).first().filter { it.fuelLiters != null }
         val totals = if (known.isEmpty()) null
         else FuelTotals(known.sumOf { it.fuelLiters ?: 0.0 }, known.sumOf { it.distanceKm ?: 0.0 })
-        fuelCache[n] = key to totals
+        fuelCache[n] = FuelEntry(key, nowMs, totals)
         return totals
     }
 

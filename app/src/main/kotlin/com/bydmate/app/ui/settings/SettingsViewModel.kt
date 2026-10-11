@@ -716,11 +716,22 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         }
     }
 
-    /** DM-i: price of one litre, stored as typed (numeric string, empty allowed) like the tariffs. */
+    /** The last litre-price save; the next one waits for it so the trips end at the last price typed. */
+    private var fuelRepriceJob: Job? = null
+
+    /**
+     * DM-i: price of one litre, stored as typed (numeric string, empty allowed) like the tariffs.
+     * On a hybrid the fuel part of every trip that burned fuel follows it, as a tariff change does.
+     */
     fun saveFuelPricePerLiter(value: String) {
         _uiState.update { it.copy(fuelPricePerLiter = value) }
-        viewModelScope.launch {
+        val previous = fuelRepriceJob
+        fuelRepriceJob = viewModelScope.launch {
+            previous?.join()
             settingsRepository.setString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, value)
+            if (vehicleKindMonitor.kind.value == com.bydmate.app.data.nativestack.VehicleKind.HYBRID) {
+                costCalculator.repriceFuel(settingsRepository.getFuelPricePerLiter())
+            }
         }
     }
 

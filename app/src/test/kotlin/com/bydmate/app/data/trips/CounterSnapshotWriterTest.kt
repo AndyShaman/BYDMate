@@ -1,10 +1,12 @@
 package com.bydmate.app.data.trips
 
 import com.bydmate.app.data.local.dao.CounterSnapshotDao
+import com.bydmate.app.data.local.entity.LastStateEntity
 import com.bydmate.app.data.local.entity.CounterSnapshotEntity
 import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.remote.diParsData
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -61,5 +63,49 @@ class CounterSnapshotWriterTest {
         assertEquals(lastRun, rows[2].ts)
         assertEquals(303.3, rows[2].fuelTotal!!, 1e-9)
         coVerify(exactly = 1) { dao.deleteOlderThan(1_000_000L - CounterSnapshotWriter.RETENTION_MS) }
+    }
+
+    private val lastState = LastStateEntity(
+        id = 1, ts = 5_000_000L, mileage = 1040.0, fuelTotal = 305.2, mileageHev = 3850.0,
+    )
+
+    @Test fun `a cold start writes one row from last_state, and none twice`() = runTest {
+        val rows = mutableListOf<CounterSnapshotEntity>()
+        coEvery { dao.nearest(any(), any()) } answers {
+            val ts = firstArg<Long>()
+            val window = secondArg<Long>()
+            rows.lastOrNull { kotlin.math.abs(it.ts - ts) <= window }
+        }
+        coEvery { dao.insert(any()) } answers { rows.add(firstArg()); 1L }
+
+        writer.onColdStart(lastState, VehicleKind.HYBRID)
+        writer.onColdStart(lastState, VehicleKind.HYBRID)
+
+        assertEquals(1, rows.size)
+        val row = rows.single()
+        assertEquals(CounterSnapshotEntity.REASON_COLD_START, row.reason)
+        assertEquals(5_000_000L, row.ts)
+        assertEquals(305.2, row.fuelTotal!!, 1e-9)
+        assertEquals(3850.0, row.mileageHev!!, 1e-9)
+        assertEquals(1040.0, row.odometer!!, 1e-9)
+        coVerify { dao.nearest(5_000_000L, 90_000L) }
+    }
+
+    @Test fun `a cold start next to an existing snapshot writes nothing`() = runTest {
+        coEvery { dao.nearest(5_000_000L, 90_000L) } returns CounterSnapshotEntity(
+            ts = 5_000_000L - 89_000L, fuelTotal = 305.2, mileageHev = 3850.0, mileageEv = null,
+            odometer = 1040.0, reason = CounterSnapshotEntity.REASON_IGNITION_OFF,
+        )
+        writer.onColdStart(lastState, VehicleKind.HYBRID)
+        coVerify(exactly = 0) { dao.insert(any()) }
+    }
+
+    @Test fun `a cold start without a fuel counter, or on an EV, writes nothing`() = runTest {
+        coEvery { dao.nearest(any(), any()) } returns null
+        writer.onColdStart(lastState.copy(fuelTotal = null), VehicleKind.HYBRID)
+        writer.onColdStart(null, VehicleKind.HYBRID)
+        writer.onColdStart(lastState, VehicleKind.EV)
+        writer.onColdStart(lastState, VehicleKind.UNKNOWN)
+        coVerify(exactly = 0) { dao.insert(any()) }
     }
 }

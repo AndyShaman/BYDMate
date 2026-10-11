@@ -42,7 +42,7 @@ class SharedAdaptiveLoopPersistTest {
         val recorded = mutableListOf<LastStateEntity>()
         coEvery { dao.getCurrent() } answers { box.value }
         coEvery {
-            dao.writeSnapshot(any(), any(), any(), any(), any(), any())
+            dao.writeSnapshot(any(), any(), any(), any(), any(), any(), any(), any())
         } answers {
             val next = (box.value ?: LastStateEntity(id = 1, ts = firstArg())).copy(
                 ts = firstArg<Long>(),
@@ -51,6 +51,8 @@ class SharedAdaptiveLoopPersistTest {
                 totalElec = arg<Double?>(3),
                 ignition = arg<Int?>(4),
                 energydataAvailable = arg<Int>(5),
+                fuelTotal = arg<Double?>(6),
+                mileageHev = arg<Double?>(7),
             )
             box.value = next
             recorded.add(next)
@@ -114,6 +116,36 @@ class SharedAdaptiveLoopPersistTest {
         assertEquals(2, recorded.size)
         assertEquals(42L, recorded[1].openTripId)
         assertEquals(10, recorded[1].tripStartExteriorTemp)  // issue #250
+    }
+
+    @Test fun `a DM-i tick stores its fuel counters, and a fuel change alone writes again`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val reader = mockk<ParsReader>()
+        var tick = 0
+        coEvery { reader.fetch() } answers {
+            tick++
+            diParsData(soc = 60, mileage = 1040.0, totalElecConsumption = 500.0, powerState = 0)
+                .copy(fuelTotalL = if (tick == 1) 305.2 else 305.3, mileageHevKm = 3850)
+        }
+        val (dao, recorded) = statefulDao(RowBox())
+        val energy = mockk<EnergyDataReader> { every { isAvailable() } returns false }
+        val loop = SharedAdaptiveLoop(reader, dao, energy, dispatcher)
+
+        val job = loop.start(TestScope(dispatcher))
+        try {
+            loop.flow.test {
+                advanceTimeBy(1)
+                awaitItem()
+                advanceTimeBy(30_000)
+                awaitItem()
+            }
+        } finally {
+            job.cancel()
+        }
+        assertEquals(2, recorded.size)
+        assertEquals(305.2, recorded[0].fuelTotal!!, 1e-9)
+        assertEquals(3850.0, recorded[0].mileageHev!!, 1e-9)
+        assertEquals(305.3, recorded[1].fuelTotal!!, 1e-9)
     }
 
     @Test fun `stale heartbeat forces a write even with identical data`() = runTest {
@@ -182,7 +214,7 @@ class SharedAdaptiveLoopPersistTest {
         var firstWrite = true
         coEvery { dao.getCurrent() } answers { box.value }
         coEvery {
-            dao.writeSnapshot(any(), any(), any(), any(), any(), any())
+            dao.writeSnapshot(any(), any(), any(), any(), any(), any(), any(), any())
         } answers {
             if (firstWrite) {
                 firstWrite = false
@@ -246,7 +278,7 @@ class SharedAdaptiveLoopPersistTest {
         // pre-race) trip fields copied in.
         coEvery { dao.upsert(any()) } answers { box.value = firstArg() }
         coEvery {
-            dao.writeSnapshot(any(), any(), any(), any(), any(), any())
+            dao.writeSnapshot(any(), any(), any(), any(), any(), any(), any(), any())
         } answers {
             val current = box.value!!
             box.value = current.copy(

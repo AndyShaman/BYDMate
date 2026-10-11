@@ -44,6 +44,8 @@ data class MonthGroup(
     val days: List<DayGroup>,
     /** DM-i: litres of the month's trips, null when no trip carries a litre figure. */
     val totalLiters: Double? = null,
+    /** DM-i: km of the month's trips that know their litres. */
+    val litersKm: Double? = null,
 )
 
 data class DayGroup(
@@ -54,6 +56,7 @@ data class DayGroup(
     val totalCost: Double,
     val trips: List<TripEntity>,
     val totalLiters: Double? = null,
+    val litersKm: Double? = null,
 )
 
 data class TripsUiState(
@@ -348,6 +351,7 @@ class TripsViewModel @Inject constructor(
                     totalCost = dayTrips.sumOf { it.cost ?: 0.0 },
                     trips = dayTrips,
                     totalLiters = sumLiters(dayTrips),
+                    litersKm = litersKm(dayTrips),
                 )
             }
 
@@ -361,6 +365,7 @@ class TripsViewModel @Inject constructor(
                 totalCost = monthTrips.sumOf { it.cost ?: 0.0 },
                 days = days,
                 totalLiters = sumLiters(monthTrips),
+                litersKm = litersKm(monthTrips),
             )
         }
     }

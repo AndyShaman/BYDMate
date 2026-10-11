@@ -45,9 +45,42 @@ class HybridPeriodTotalsTest {
     }
 
     @Test
-    fun `litres per 100 count every km of the period`() {
+    fun `litres per 100 divide by the km they are given`() {
         assertEquals(1.84, periodLitersPer100(7.6, 412.6)!!, 0.01)
         assertNull(periodLitersPer100(null, 412.6))
         assertNull(periodLitersPer100(7.6, 0.0))
+        assertNull(periodLitersPer100(7.6, null))
+    }
+
+    @Test
+    fun `litres per 100 of a period count only the km of trips that know their litres`() {
+        val totals = hybridPeriodTotals(
+            listOf(
+                TripEntity(startTs = 1L, distanceKm = 10.0, fuelLiters = 1.0),
+                TripEntity(startTs = 2L, distanceKm = 90.0),
+            )
+        )
+        assertEquals(10.0, totals.litersKm!!, 1e-9)
+        assertEquals(10.0, periodLitersPer100(totals.liters, totals.litersKm)!!, 1e-9)
+    }
+
+    @Test
+    fun `a zero-litre trip counts its km, a trip without litres does not`() {
+        val totals = hybridPeriodTotals(
+            listOf(
+                TripEntity(startTs = 1L, distanceKm = 10.0, fuelLiters = 1.0),
+                TripEntity(startTs = 2L, distanceKm = 30.0, fuelLiters = 0.0),
+                TripEntity(startTs = 3L, distanceKm = 60.0),
+            )
+        )
+        assertEquals(40.0, totals.litersKm!!, 1e-9)
+        assertEquals(2.5, periodLitersPer100(totals.liters, totals.litersKm)!!, 1e-9)
+    }
+
+    @Test
+    fun `no trip with litres leaves the km null too`() {
+        val totals = hybridPeriodTotals(listOf(TripEntity(startTs = 1L, distanceKm = 90.0)))
+        assertNull(totals.litersKm)
+        assertNull(periodLitersPer100(totals.liters, totals.litersKm))
     }
 }

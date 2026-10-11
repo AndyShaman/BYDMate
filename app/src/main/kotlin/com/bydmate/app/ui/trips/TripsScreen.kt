@@ -265,7 +265,7 @@ private fun MonthHeader(month: MonthGroup, expanded: Boolean, currencySymbol: St
             Text(stringResource(R.string.trips_kwh_value, month.totalKwh), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(104.dp))
-            AggregatePer100(month.avgConsumption, month.totalLiters, month.totalKm, hybrid)
+            AggregatePer100(month.avgConsumption, month.totalLiters, month.litersKm, hybrid)
             Text("%.2f %s".format(month.totalCost, currencySymbol), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(80.dp))
@@ -304,7 +304,7 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
             Text(stringResource(R.string.trips_kwh_decimal_value, day.totalKwh), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(104.dp))
-            AggregatePer100(day.avgConsumption, day.totalLiters, day.totalKm, hybrid)
+            AggregatePer100(day.avgConsumption, day.totalLiters, day.litersKm, hybrid)
             Text("%.2f %s".format(day.totalCost, currencySymbol), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(80.dp))
@@ -314,11 +314,12 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
 
 /**
  * «/100» of a day or month header. On a hybrid the trip-row rule runs on the sums: with litres
- * it reads «1.8 л/100» uncoloured, without them today's coloured kWh/100.
+ * it reads «1.8 л/100» uncoloured over [litersKm], the km of the trips that know their litres,
+ * without them today's coloured kWh/100.
  */
 @Composable
-private fun AggregatePer100(avgConsumption: Double, totalLiters: Double?, totalKm: Double, hybrid: Boolean) {
-    val cell = per100Cell(avgConsumption, totalLiters, totalKm, stringResource(R.string.dashboard_unit_liters))
+private fun AggregatePer100(avgConsumption: Double, totalLiters: Double?, litersKm: Double?, hybrid: Boolean) {
+    val cell = per100Cell(avgConsumption, totalLiters, litersKm, stringResource(R.string.dashboard_unit_liters))
     if (hybrid && !cell.colored) {
         Text("${cell.text}/100",
             color = TextPrimary, fontSize = 12.sp,

@@ -60,9 +60,20 @@ interface TripDao {
     """)
     suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity>
 
-    /** DM-i: [getTripsWithoutCost] plus trips that burned fuel but carry no kWh. */
-    @Query("SELECT * FROM trips WHERE cost IS NULL AND (kwh_consumed IS NOT NULL OR fuel_liters IS NOT NULL)")
+    /**
+     * DM-i: [getTripsWithoutCost] plus trips that burned fuel but carry no kWh, plus priced trips
+     * whose litres arrived after their electricity was priced (no fuel part yet).
+     */
+    @Query("""
+        SELECT * FROM trips
+        WHERE (cost IS NULL AND (kwh_consumed IS NOT NULL OR fuel_liters IS NOT NULL))
+           OR (fuel_liters > 0 AND fuel_cost IS NULL)
+    """)
     suspend fun getHybridTripsWithoutCost(): List<TripEntity>
+
+    /** DM-i: trips that burned fuel, the ones a new litre price re-prices. */
+    @Query("SELECT * FROM trips WHERE fuel_liters > 0")
+    suspend fun getTripsWithFuel(): List<TripEntity>
 
     @Query("SELECT * FROM trips WHERE cost IS NULL AND kwh_consumed IS NOT NULL")
     suspend fun getTripsWithoutCost(): List<TripEntity>
