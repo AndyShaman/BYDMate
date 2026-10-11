@@ -137,6 +137,8 @@ class SettingsViewModelTest {
         override suspend fun getByBydId(bydId: Long): TripEntity? = null
         override suspend fun getTripsWithoutSoc(): List<TripEntity> = emptyList()
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
+        override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
+        override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
@@ -306,6 +308,7 @@ class SettingsViewModelTest {
             settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx),
             mockk<TripTombstoneDao>(relaxed = true), mockk(relaxed = true),
             com.bydmate.app.data.repository.OdometerMarks(ctx),
+            com.bydmate.app.data.nativestack.kindMonitor(), mockk(relaxed = true),
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
@@ -434,6 +437,20 @@ class SettingsViewModelTest {
 
         assertEquals(ChargeConnector.CHADEMO, vm.uiState.value.chargeConnector)
         assertEquals("chademo", settingsDao.map[SettingsRepository.KEY_CHARGE_CONNECTOR])
+    }
+
+    // DM-i (#184): «Цена литра» starts empty and is stored as typed, like the tariffs.
+    @Test
+    fun `price per litre starts empty and is saved as typed`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("", vm.uiState.value.fuelPricePerLiter)
+
+        vm.saveFuelPricePerLiter("2.35")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("2.35", vm.uiState.value.fuelPricePerLiter)
+        assertEquals("2.35", settingsDao.map[SettingsRepository.KEY_FUEL_PRICE_PER_LITER])
     }
 
     // Issue #23: pressing "Close" while an update is downloading must cancel the

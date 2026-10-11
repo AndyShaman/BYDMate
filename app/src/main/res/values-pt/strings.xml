@@ -1963,4 +1963,36 @@
     <string name="auto_ui_test_park">Não executada: a regra só funciona estacionado. Engate o P.</string>
     <string name="auto_ui_confirm_rule">Regra «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Cancela em %1$d s</string>
+    <!-- DM-i hybrid (#184) -->
+    <string name="dashboard_range_label_battery">na bateria</string>
+    <string name="dashboard_fuel_tank">tanque</string>
+    <string name="dashboard_fuel_range">no combustível</string>
+    <string name="dashboard_fuel_popup_tank">Tanque</string>
+    <string name="dashboard_fuel_popup_fuel_range">Autonomia no combustível</string>
+    <string name="dashboard_fuel_popup_ev_range">Autonomia na bateria</string>
+    <string name="dashboard_fuel_popup_engine_rpm">Rotação do motor a combustão</string>
+    <string name="dashboard_fuel_rpm_value">%1$d rpm</string>
+    <string name="dashboard_fuel_engine_off">Motor a combustão desligado</string>
+    <string name="dashboard_fuel_popup_mileage_hev">Distância no motor a combustão</string>
+    <string name="dashboard_fuel_popup_mileage_ev">Distância na bateria</string>
+    <string name="dashboard_fuel_popup_fuel_total">Combustível desde o início</string>
+    <string name="dashboard_fuel_popup_price">Preço por litro</string>
+    <string name="dashboard_fuel_price_edit">alterar</string>
+    <string name="dashboard_fuel_footer">Dados do carro</string>
+    <string name="dashboard_fuel_percent_value">%1$d%%</string>
+    <string name="dashboard_fuel_liters_value">%1$.1f L</string>
+    <string name="dashboard_unit_liters">L</string>
+    <string name="dashboard_distance_hev_subtitle">%1$s · motor %2$.1f km</string>
+    <string name="dashboard_energy_fuel_subtitle">+ %1$.1f L</string>
+    <string name="dashboard_consumption_fuel_value">%1$.1f L/100</string>
+    <string name="dashboard_consumption_elec_subtitle">%1$.1f kWh/100 · todos os km</string>
+    <string name="dashboard_cost_split_subtitle">%1$.2f elétr. + %2$.2f comb.</string>
+    <string name="trip_detail_fuel_label">Combustível</string>
+    <string name="trip_detail_hev_ev_label">No motor / na bateria</string>
+    <string name="trip_detail_hev_ev_value">%1$.0f / %2$.0f km</string>
+    <string name="trip_detail_fuel_cost_label">Custo do combustível</string>
+    <string name="tech_label_engine_rpm">rotação do motor a combustão</string>
+    <string name="tech_card_fuel">Combustível</string>
+    <string name="settings_fuel_price_label">Preço por litro</string>
+    <string name="settings_fuel_price_hint">por litro, na moeda da tarifa</string>
 </resources>

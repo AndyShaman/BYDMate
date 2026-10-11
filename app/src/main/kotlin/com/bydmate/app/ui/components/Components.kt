@@ -325,6 +325,8 @@ fun TripCard(
     modifier: Modifier = Modifier,
     currencySymbol: String = "BYN",
     verticalPadding: Dp = 8.dp,
+    // DM-i (#184): adds the «л» column and the litre rule of «/100»; off draws today's row.
+    showFuel: Boolean = false,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Compact single-row trip card with weight-based columns
@@ -381,15 +383,40 @@ fun TripCard(
             modifier = Modifier.weight(1f)
         )
 
-        // Consumption — color-coded
-        val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
-        val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
-        Text(
-            text = consumptionText, color = consumptionClr, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f)
-        )
+        if (showFuel) {
+            val liters = trip.fuelLiters
+            Text(
+                text = com.bydmate.app.ui.trips.litersCell(liters),
+                color = if (liters != null && liters > 0.0) AccentOrange else TextMuted,
+                fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            val per100 = trip.kwhPer100km
+            val cell = com.bydmate.app.ui.trips.per100Cell(per100, liters, trip.distanceKm,
+                stringResource(R.string.dashboard_unit_liters))
+            Text(
+                text = cell.text,
+                color = when {
+                    cell.colored && per100 != null -> consumptionColor(per100)
+                    per100 == null && cell.text == "—" -> TextSecondary
+                    else -> TextPrimary
+                },
+                fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        } else {
+            // Consumption — color-coded
+            val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
+            val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
+            Text(
+                text = consumptionText, color = consumptionClr, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f)
+            )
+        }
 
         // Cost
         Text(

@@ -70,4 +70,15 @@ class TechCardOrderTest {
             MOTOR_CARD_ROWS,
         )
     }
+
+    /** DM-i (#184): only a hybrid's order holds the fuel card; any other car drops it. */
+    @Test
+    fun `the fuel card joins the order only on a hybrid`() {
+        val hybrid = com.bydmate.app.data.nativestack.VehicleKind.HYBRID
+        val withFuel = TechCardOrder.forKind(TechCardOrder.DEFAULT, hybrid)
+        assertEquals(TechCardOrder.DEFAULT + TechCard.FUEL, withFuel)
+        assertEquals(withFuel, TechCardOrder.forKind(withFuel, hybrid))
+        assertEquals(TechCardOrder.DEFAULT, TechCardOrder.forKind(withFuel, com.bydmate.app.data.nativestack.VehicleKind.EV))
+        assertEquals(TechCardOrder.DEFAULT, TechCardOrder.forKind(withFuel, com.bydmate.app.data.nativestack.VehicleKind.UNKNOWN))
+    }
 }

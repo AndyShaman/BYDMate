@@ -2,6 +2,8 @@ package com.bydmate.app.ui.tech
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.AvgSocProvider
@@ -82,7 +84,19 @@ data class TechPanelUiState(
     val lifetimeChargedKwh: Double? = null,
     /** Pack size from settings, the divisor of the full-cycle count. */
     val nominalCapacityKwh: Double = 0.0,
+    // DM-i hybrid (#184): the car's own fuel readings, polled only on a confirmed hybrid.
+    val vehicleKind: VehicleKind = VehicleKind.UNKNOWN,
+    val engineRpm: Int? = null,
+    val fuelPercent: Int? = null,
+    val fuelRangeKm: Int? = null,
+    val evRangeKm: Int? = null,
+    val mileageHevKm: Int? = null,
+    val mileageEvKm: Int? = null,
+    val fuelTotalL: Double? = null,
 ) {
+    val isHybrid: Boolean
+        get() = vehicleKind == VehicleKind.HYBRID
+
     val cellDelta: Double?
         get() = if (cellMin != null && cellMax != null) cellMax - cellMin else null
 
@@ -107,10 +121,14 @@ data class TechPanelUiState(
         get() = anyOf(
             motorTempFront, motorTempRear, inverterTempFront, inverterTempRear,
             motorRpmFront, motorRpmRear, pedalAccel, pedalBrake,
-            motorCurrentFront, motorCurrentRear,
+            motorCurrentFront, motorCurrentRear, engineRpm,
         )
     val showClimate: Boolean
         get() = anyOf(compressorW, acStatus, insideTemp, exteriorTemp)
+    val showFuel: Boolean
+        get() = isHybrid && anyOf(
+            fuelPercent, fuelRangeKm, evRangeKm, engineRpm, mileageHevKm, mileageEvKm, fuelTotalL,
+        )
     val showTyres: Boolean
         get() = anyOf(
             tirePressFL, tirePressFR, tirePressRL, tirePressRR,
@@ -135,11 +153,12 @@ data class TechPanelUiState(
         TechCard.MOTORS -> showMotors
         TechCard.CLIMATE -> showClimate
         TechCard.TYRES -> showTyres
+        TechCard.FUEL -> showFuel
     }
 
     val hasAnyCard: Boolean
         get() = showBatteryNow || showLimitsAndCells || showMotors ||
-            showClimate || showTyres || showHistory
+            showClimate || showTyres || showHistory || showFuel
 
     private fun anyOf(vararg values: Any?): Boolean = values.any { it != null }
 }
@@ -165,6 +184,7 @@ class TechPanelViewModel @Inject constructor(
     private val avgSocProvider: AvgSocProvider,
     private val settingsRepository: SettingsRepository,
     private val chargeRepository: ChargeRepository,
+    private val vehicleKindMonitor: VehicleKindMonitor,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TechPanelUiState())
@@ -176,6 +196,11 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch { loadAvgSoc() }
         viewModelScope.launch { loadCardOrder() }
         viewModelScope.launch { loadFullCycles() }
+        viewModelScope.launch {
+            vehicleKindMonitor.kind.collect { kind ->
+                _uiState.update { it.copy(vehicleKind = kind, cardOrder = TechCardOrder.forKind(it.cardOrder, kind)) }
+            }
+        }
     }
 
     /** One open hint at a time: tapping the open one closes it, any other replaces it. */
@@ -202,7 +227,9 @@ class TechPanelViewModel @Inject constructor(
     private suspend fun loadCardOrder() {
         val order = TechCardOrder.parse(settingsRepository.getTechCardOrder())
         val hintSeen = settingsRepository.isTechOrderHintSeen()
-        _uiState.update { it.copy(cardOrder = order, showOrderHint = !hintSeen) }
+        _uiState.update {
+            it.copy(cardOrder = TechCardOrder.forKind(order, it.vehicleKind), showOrderHint = !hintSeen)
+        }
     }
 
     private fun observeLiveData() {
@@ -252,6 +279,13 @@ class TechPanelViewModel @Inject constructor(
                             tyreTempFR = data?.tyreTempFR,
                             tyreTempRL = data?.tyreTempRL,
                             tyreTempRR = data?.tyreTempRR,
+                            engineRpm = data?.engineRpm,
+                            fuelPercent = data?.fuelPercent,
+                            fuelRangeKm = data?.fuelRangeKm,
+                            evRangeKm = data?.evRangeKm,
+                            mileageHevKm = data?.mileageHevKm,
+                            mileageEvKm = data?.mileageEvKm,
+                            fuelTotalL = data?.fuelTotalL,
                         )
                     }
                 }

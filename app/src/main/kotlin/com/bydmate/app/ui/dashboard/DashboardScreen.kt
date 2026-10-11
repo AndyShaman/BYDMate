@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -77,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import com.bydmate.app.data.autoservice.AdbVerdict
+import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.trips.TripAutoResetMode
 import com.bydmate.app.data.trips.TripCounterUi
@@ -107,6 +109,7 @@ fun DashboardScreen(
     // The verdict the dialog was opened for; cleared when the problem goes away so the dialog
     // cannot pop up by itself the next time a verdict appears.
     var openAdbVerdict by remember { mutableStateOf<AdbVerdict?>(null) }
+    var fuelExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(state.adbVerdict) {
         if (state.adbVerdict == null || state.adbVerdict == AdbVerdict.OK) openAdbVerdict = null
     }
@@ -243,7 +246,10 @@ fun DashboardScreen(
                             Trend.FLAT -> TextPrimary
                             Trend.NONE -> TextMuted
                         }
-                        val rangeText = state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—"
+                        // DM-i: the car's own range on battery; our SOC-based estimate means nothing there.
+                        val hybrid = state.vehicleKind == VehicleKind.HYBRID
+                        val rangeText = if (hybrid) state.evRangeKm?.let { "~$it" } ?: "—"
+                            else state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—"
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -265,7 +271,12 @@ fun DashboardScreen(
                                     Text(stringResource(R.string.dashboard_unit_km), color = AccentGreen.copy(alpha = 0.7f), fontSize = 18.sp,
                                         fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 4.dp))
                                 }
-                                Text(stringResource(R.string.dashboard_range_label), color = TextMuted, fontSize = 12.sp)
+                                if (hybrid) {
+                                    Text(stringResource(R.string.dashboard_range_label_battery), color = TextMuted, fontSize = 12.sp,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                } else {
+                                    Text(stringResource(R.string.dashboard_range_label), color = TextMuted, fontSize = 12.sp)
+                                }
                             }
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -372,6 +383,14 @@ fun DashboardScreen(
                             borderColor = worstColor,
                             onClick = onOpenTechPanel
                         )
+                        if (state.vehicleKind == VehicleKind.HYBRID) {
+                            FuelCompactCard(
+                                tankText = state.fuelPercent?.let { "$it%" } ?: "—",
+                                rangeText = state.fuelRangeKm
+                                    ?.let { "$it ${stringResource(R.string.dashboard_unit_km)}" } ?: "—",
+                                onClick = { fuelExpanded = true },
+                            )
+                        }
                         // TRIP 1 / TRIP 2 resettable counters row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -389,6 +408,13 @@ fun DashboardScreen(
                     }
 
                     // Pop-up dialogs
+                    if (fuelExpanded) {
+                        FuelDetailDialog(
+                            state = state,
+                            onEditPrice = { fuelExpanded = false; onOpenSettings() },
+                            onDismiss = { fuelExpanded = false },
+                        )
+                    }
                     if (state.insightExpanded) {
                         val insightDialogColor = when (state.effectiveInsightTone) {
                             "critical" -> SocRed
@@ -524,24 +550,35 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    StatCard(stringResource(R.string.dashboard_stat_distance), stringResource(R.string.dashboard_stat_km_value, state.totalKm), stringResource(R.string.dashboard_trip_count, state.tripCount), Color.White, Modifier.weight(1f))
-                    StatCard(stringResource(R.string.dashboard_stat_energy), stringResource(R.string.dashboard_stat_kwh_value, state.totalKwh), null, AccentBlue, Modifier.weight(1f))
-                    val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
-                    StatCard(stringResource(R.string.dashboard_stat_consumption), if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
-                    StatCard(stringResource(R.string.dashboard_stat_cost), "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))
+                    if (state.vehicleKind == VehicleKind.HYBRID) {
+                        HybridStatCards(state)
+                    } else {
+                        StatCard(stringResource(R.string.dashboard_stat_distance), stringResource(R.string.dashboard_stat_km_value, state.totalKm), stringResource(R.string.dashboard_trip_count, state.tripCount), Color.White, Modifier.weight(1f))
+                        StatCard(stringResource(R.string.dashboard_stat_energy), stringResource(R.string.dashboard_stat_kwh_value, state.totalKwh), null, AccentBlue, Modifier.weight(1f))
+                        val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
+                        StatCard(stringResource(R.string.dashboard_stat_consumption), if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
+                        StatCard(stringResource(R.string.dashboard_stat_cost), "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))
+                    }
                 }
 
                 SectionHeader(text = stringResource(R.string.dashboard_recent_trips_title))
+                // DM-i adds the «л» column between kWh and /100; EV keeps today's six weights.
+                val showFuel = state.vehicleKind == VehicleKind.HYBRID
+                val weights = com.bydmate.app.ui.trips.columnWeights(state.vehicleKind)
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(stringResource(R.string.dashboard_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
-                    Text(stringResource(R.string.dashboard_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text(stringResource(R.string.dashboard_unit_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text(stringResource(R.string.dashboard_unit_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text(stringResource(R.string.dashboard_col_per100), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.dashboard_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(weights[0]))
+                    Text(stringResource(R.string.dashboard_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(weights[1]))
+                    Text(stringResource(R.string.dashboard_unit_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(weights[2]))
+                    Text(stringResource(R.string.dashboard_unit_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(weights[3]))
+                    if (showFuel) {
+                        Text(stringResource(R.string.dashboard_unit_liters), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End,
+                            maxLines = 1, modifier = Modifier.weight(weights[4]))
+                    }
+                    Text(stringResource(R.string.dashboard_col_per100), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(weights[weights.size - 2]))
+                    Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(weights.last()))
                 }
                 if (state.recentTrips.isNotEmpty()) {
                     // The bottom padding matches the left column's, so the last row ends level
@@ -557,6 +594,7 @@ fun DashboardScreen(
                                 onClick = { },
                                 currencySymbol = state.currencySymbol,
                                 verticalPadding = 6.dp,
+                                showFuel = showFuel,
                             )
                         }
                     }
@@ -884,6 +922,120 @@ private fun BatteryCompactCard(
     }
 }
 
+/** DM-i only: tank level and the car's range on fuel, same shape as [BatteryCompactCard]. */
+@Composable
+private fun FuelCompactCard(tankText: String, rangeText: String, onClick: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, AccentOrange.copy(alpha = 0.5f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            FuelCell(value = tankText, label = stringResource(R.string.dashboard_fuel_tank), color = AccentOrange)
+            FuelCell(value = rangeText, label = stringResource(R.string.dashboard_fuel_range), color = TextPrimary)
+        }
+    }
+}
+
+@Composable
+private fun FuelCell(value: String, label: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, color = TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Popup of the «Топливо» card: the car's own readings only, nothing computed by the app. */
+@Composable
+private fun FuelDetailDialog(state: DashboardUiState, onEditPrice: () -> Unit, onDismiss: () -> Unit) {
+    val km = stringResource(R.string.dashboard_unit_km)
+    CardDetailDialog(title = null, borderColor = AccentOrange, onDismiss = onDismiss) {
+        TripDetailRow(stringResource(R.string.dashboard_fuel_popup_tank),
+            state.fuelPercent?.let { stringResource(R.string.dashboard_fuel_percent_value, it) } ?: "—")
+        TripDetailRow(stringResource(R.string.dashboard_fuel_popup_fuel_range), state.fuelRangeKm?.let { "$it $km" } ?: "—")
+        TripDetailRow(stringResource(R.string.dashboard_fuel_popup_ev_range), state.evRangeKm?.let { "$it $km" } ?: "—")
+        val rpm = state.engineRpm
+        if (rpm != null && rpm > 0) {
+            TripDetailRow(stringResource(R.string.dashboard_fuel_popup_engine_rpm),
+                stringResource(R.string.dashboard_fuel_rpm_value, rpm), valueColor = AccentOrange)
+        } else {
+            TripDetailRow(stringResource(R.string.dashboard_fuel_popup_engine_rpm),
+                stringResource(R.string.dashboard_fuel_engine_off), valueColor = TextMuted)
+        }
+        TripDetailRow(stringResource(R.string.dashboard_fuel_popup_mileage_hev), state.mileageHevKm?.let { "$it $km" } ?: "—")
+        TripDetailRow(stringResource(R.string.dashboard_fuel_popup_mileage_ev), state.mileageEvKm?.let { "$it $km" } ?: "—")
+        TripDetailRow(stringResource(R.string.dashboard_fuel_popup_fuel_total),
+            state.fuelTotalL?.let { stringResource(R.string.dashboard_fuel_liters_value, it) } ?: "—")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.dashboard_fuel_popup_price), color = TextSecondary, fontSize = 13.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(state.fuelPricePerLiter?.let { "%.2f %s".format(it, state.currencySymbol) } ?: "—",
+                    color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace)
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.dashboard_fuel_price_edit), color = AccentGreen, fontSize = 13.sp,
+                    modifier = Modifier.clickable { onEditPrice() })
+            }
+        }
+        Text(stringResource(R.string.dashboard_fuel_footer), color = TextMuted, fontSize = 11.sp)
+    }
+}
+
+/**
+ * The four period cards on a hybrid (#184): every figure is over all km of the period, the
+ * way the instrument cluster's «Accumulated AEC» counts. Missing sums leave their subtitle out.
+ */
+@Composable
+private fun RowScope.HybridStatCards(state: DashboardUiState) {
+    val tripCount = stringResource(R.string.dashboard_trip_count, state.tripCount)
+    StatCard(
+        stringResource(R.string.dashboard_stat_distance),
+        stringResource(R.string.dashboard_stat_km_value, state.totalKm),
+        state.periodHevKm?.let { stringResource(R.string.dashboard_distance_hev_subtitle, tripCount, it) } ?: tripCount,
+        Color.White, Modifier.weight(1f), valueMaxLines = 1,
+    )
+    StatCard(
+        stringResource(R.string.dashboard_stat_energy),
+        stringResource(R.string.dashboard_stat_kwh_value, state.totalKwh),
+        state.periodLiters?.let { stringResource(R.string.dashboard_energy_fuel_subtitle, it) },
+        AccentBlue, Modifier.weight(1f), valueMaxLines = 1,
+    )
+    val litersPer100 = periodLitersPer100(state.periodLiters, state.totalKm)
+    if (litersPer100 != null) {
+        StatCard(
+            stringResource(R.string.dashboard_stat_consumption),
+            stringResource(R.string.dashboard_consumption_fuel_value, litersPer100),
+            if (state.avgConsumption > 0) stringResource(R.string.dashboard_consumption_elec_subtitle, state.avgConsumption) else null,
+            AccentOrange, Modifier.weight(1f), valueMaxLines = 1,
+        )
+    } else {
+        StatCard(
+            stringResource(R.string.dashboard_stat_consumption),
+            "—",
+            if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else null,
+            TextSecondary, Modifier.weight(1f), valueMaxLines = 1,
+        )
+    }
+    StatCard(
+        stringResource(R.string.dashboard_stat_cost),
+        "%.2f %s".format(state.totalCost, state.currencySymbol),
+        state.periodFuelCost?.let {
+            stringResource(R.string.dashboard_cost_split_subtitle, state.periodElecCost ?: 0.0, it)
+        },
+        AccentGreen, Modifier.weight(1f), valueMaxLines = 1,
+    )
+}
+
 @Composable
 private fun BatteryCell(value: String, label: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1161,7 +1313,14 @@ private fun TripAutoResetChip(label: String, selected: Boolean, onClick: () -> U
 }
 
 @Composable
-private fun StatCard(title: String, value: String, subtitle: String?, accentColor: Color, modifier: Modifier = Modifier) {
+private fun StatCard(
+    title: String,
+    value: String,
+    subtitle: String?,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    valueMaxLines: Int = Int.MAX_VALUE,
+) {
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
@@ -1174,7 +1333,7 @@ private fun StatCard(title: String, value: String, subtitle: String?, accentColo
         ) {
             Text(title, color = TextSecondary, fontSize = 11.sp)
             Text(value, color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace)
+                fontFamily = FontFamily.Monospace, maxLines = valueMaxLines, overflow = TextOverflow.Ellipsis)
             Text(subtitle ?: "", color = TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }

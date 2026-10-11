@@ -2119,4 +2119,36 @@
     <string name="auto_ui_test_park">Не выканана: правіла працуе толькі на паркоўцы. Уключыце P.</string>
     <string name="auto_ui_confirm_rule">Правіла «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Адменіцца праз %1$d с</string>
+    <!-- DM-i hybrid (#184) -->
+    <string name="dashboard_range_label_battery">на батарэі</string>
+    <string name="dashboard_fuel_tank">бак</string>
+    <string name="dashboard_fuel_range">на паліве</string>
+    <string name="dashboard_fuel_popup_tank">Бак</string>
+    <string name="dashboard_fuel_popup_fuel_range">Запас ходу на паліве</string>
+    <string name="dashboard_fuel_popup_ev_range">Запас ходу на батарэі</string>
+    <string name="dashboard_fuel_popup_engine_rpm">Абароты ДУЗ</string>
+    <string name="dashboard_fuel_rpm_value">%1$d аб/хв</string>
+    <string name="dashboard_fuel_engine_off">ДУЗ выключаны</string>
+    <string name="dashboard_fuel_popup_mileage_hev">Прабег на ДУЗ</string>
+    <string name="dashboard_fuel_popup_mileage_ev">Прабег на батарэі</string>
+    <string name="dashboard_fuel_popup_fuel_total">Паліва за ўвесь час</string>
+    <string name="dashboard_fuel_popup_price">Цана літра</string>
+    <string name="dashboard_fuel_price_edit">змяніць</string>
+    <string name="dashboard_fuel_footer">Даныя машыны</string>
+    <string name="dashboard_fuel_percent_value">%1$d %%</string>
+    <string name="dashboard_fuel_liters_value">%1$.1f л</string>
+    <string name="dashboard_unit_liters">л</string>
+    <string name="dashboard_distance_hev_subtitle">%1$s · ДУЗ %2$.1f км</string>
+    <string name="dashboard_energy_fuel_subtitle">+ %1$.1f л</string>
+    <string name="dashboard_consumption_fuel_value">%1$.1f л/100</string>
+    <string name="dashboard_consumption_elec_subtitle">%1$.1f кВт·гадз/100 · на ўсе км</string>
+    <string name="dashboard_cost_split_subtitle">%1$.2f эл. + %2$.2f пал.</string>
+    <string name="trip_detail_fuel_label">Паліва</string>
+    <string name="trip_detail_hev_ev_label">На ДУЗ / на батарэі</string>
+    <string name="trip_detail_hev_ev_value">%1$.0f / %2$.0f км</string>
+    <string name="trip_detail_fuel_cost_label">Кошт паліва</string>
+    <string name="tech_label_engine_rpm">абароты ДУЗ</string>
+    <string name="tech_card_fuel">Паліва</string>
+    <string name="settings_fuel_price_label">Цана літра</string>
+    <string name="settings_fuel_price_hint">за літр, у валюце тарыфу</string>
 </resources>

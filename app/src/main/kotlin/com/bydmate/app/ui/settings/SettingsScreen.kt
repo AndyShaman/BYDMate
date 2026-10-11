@@ -472,6 +472,17 @@ private fun BatterySection(
             state.tariffRecalcStatus?.let {
                 Text(it, color = AccentGreen, fontSize = 12.sp)
             }
+            val vehicleKind by viewModel.vehicleKind.collectAsStateWithLifecycle()
+            if (vehicleKind == com.bydmate.app.data.nativestack.VehicleKind.HYBRID) {
+                SettingDivider()
+                SettingsTextField(
+                    label = stringResource(R.string.settings_fuel_price_label),
+                    value = state.fuelPricePerLiter,
+                    onValueChange = { viewModel.saveFuelPricePerLiter(it) },
+                    keyboardType = KeyboardType.Decimal
+                )
+                SettingHint(stringResource(R.string.settings_fuel_price_hint))
+            }
         }
     }
 

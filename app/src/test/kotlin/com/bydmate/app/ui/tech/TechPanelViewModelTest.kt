@@ -101,6 +101,7 @@ class TechPanelViewModelTest {
         avg: AvgSoc = AvgSoc(null, null),
         lifetimeCharged: LifetimeChargingStats? = null,
         capacityKwh: Double = 72.9,
+        kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
     ): TechPanelViewModel {
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } returns (
@@ -113,7 +114,7 @@ class TechPanelViewModelTest {
             lifetimeCharged ?: LifetimeChargingStats(0.0, 0.0, 0.0, 0)
             )
         val settings = settings().also { coEvery { it.getBatteryCapacity() } returns capacityKwh }
-        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges))
+        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind)))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -274,7 +275,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true)))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor()))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
@@ -463,6 +464,35 @@ class TechPanelViewModelTest {
             soc = 43,
         )
         assertEquals(listOf(TechCard.MOTORS, TechCard.BATTERY_NOW), state.visibleCards)
+    }
+
+    /** DM-i (#184): a hybrid gets the fuel card appended to an order saved before it, and a drag stores it. */
+    @Test
+    fun `a hybrid appends the fuel card to the saved order and persists it`() = runTest {
+        savedOrder = "tyres,motors,battery_now,limits,history,climate"
+        val vm = buildViewModel(kind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(TechCard.FUEL, vm.uiState.value.cardOrder.last())
+        vm.moveCard(TechCard.FUEL, TechCard.TYRES)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("fuel,tyres,motors,battery_now,limits,history,climate", savedOrder)
+    }
+
+    /** DM-i (#184): the fuel card needs a confirmed hybrid; an EV never lays it out. */
+    @Test
+    fun `the fuel card shows only on a hybrid with a fuel reading`() {
+        val withFuel = TechPanelUiState(fuelPercent = 54, fuelRangeKm = 512)
+        assertFalse(withFuel.copy(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV).showFuel)
+        assertFalse(withFuel.copy(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.UNKNOWN).showFuel)
+        assertTrue(withFuel.copy(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID).showFuel)
+        assertFalse(TechPanelUiState(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID).showFuel)
+    }
+
+    @Test
+    fun `an EV keeps today's visible cards`() {
+        val state = TechPanelUiState(motorRpmFront = 1200, soc = 43)
+        assertEquals(listOf(TechCard.BATTERY_NOW, TechCard.MOTORS), state.visibleCards)
     }
 
     // --- full cycles --------------------------------------------------------

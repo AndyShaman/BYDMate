@@ -1967,4 +1967,36 @@
     <string name="auto_ui_test_park">Not run: this rule works only when parked. Shift to P.</string>
     <string name="auto_ui_confirm_rule">Rule «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Cancels in %1$d s</string>
+    <!-- DM-i hybrid (#184) -->
+    <string name="dashboard_range_label_battery">on battery</string>
+    <string name="dashboard_fuel_tank">tank</string>
+    <string name="dashboard_fuel_range">on fuel</string>
+    <string name="dashboard_fuel_popup_tank">Tank</string>
+    <string name="dashboard_fuel_popup_fuel_range">Range on fuel</string>
+    <string name="dashboard_fuel_popup_ev_range">Range on battery</string>
+    <string name="dashboard_fuel_popup_engine_rpm">Engine speed</string>
+    <string name="dashboard_fuel_rpm_value">%1$d rpm</string>
+    <string name="dashboard_fuel_engine_off">Engine off</string>
+    <string name="dashboard_fuel_popup_mileage_hev">Distance on engine</string>
+    <string name="dashboard_fuel_popup_mileage_ev">Distance on battery</string>
+    <string name="dashboard_fuel_popup_fuel_total">Fuel used, all time</string>
+    <string name="dashboard_fuel_popup_price">Price per litre</string>
+    <string name="dashboard_fuel_price_edit">edit</string>
+    <string name="dashboard_fuel_footer">Car data</string>
+    <string name="dashboard_fuel_percent_value">%1$d %%</string>
+    <string name="dashboard_fuel_liters_value">%1$.1f L</string>
+    <string name="dashboard_unit_liters">L</string>
+    <string name="dashboard_distance_hev_subtitle">%1$s · engine %2$.1f km</string>
+    <string name="dashboard_energy_fuel_subtitle">+ %1$.1f L</string>
+    <string name="dashboard_consumption_fuel_value">%1$.1f L/100</string>
+    <string name="dashboard_consumption_elec_subtitle">%1$.1f kWh/100 · all km</string>
+    <string name="dashboard_cost_split_subtitle">%1$.2f elec. + %2$.2f fuel</string>
+    <string name="trip_detail_fuel_label">Fuel</string>
+    <string name="trip_detail_hev_ev_label">On engine / on battery</string>
+    <string name="trip_detail_hev_ev_value">%1$.0f / %2$.0f km</string>
+    <string name="trip_detail_fuel_cost_label">Fuel cost</string>
+    <string name="tech_label_engine_rpm">engine rpm</string>
+    <string name="tech_card_fuel">Fuel</string>
+    <string name="settings_fuel_price_label">Price per litre</string>
+    <string name="settings_fuel_price_hint">per litre, in the tariff currency</string>
 </resources>

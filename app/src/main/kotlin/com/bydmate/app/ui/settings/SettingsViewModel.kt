@@ -141,6 +141,8 @@ data class SettingsUiState(
     val batteryCapacity: String = SettingsRepository.DEFAULT_BATTERY_CAPACITY,
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
+    /** DM-i: price of one litre as typed, empty until set. */
+    val fuelPricePerLiter: String = "",
     val units: String = SettingsRepository.DEFAULT_UNITS,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
@@ -378,6 +380,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     val adbVerdict: StateFlow<com.bydmate.app.data.autoservice.AdbVerdict?> = adbVerdictMonitor.verdict
     val adbChecking: StateFlow<Boolean> = adbVerdictMonitor.checking
 
+    /** Car type: the price-per-litre field shows only on a confirmed hybrid. */
+    val vehicleKind: StateFlow<com.bydmate.app.data.nativestack.VehicleKind> = vehicleKindMonitor.kind
+
     fun recheckAdb() = adbVerdictMonitor.recheck("settings")
 
     fun enableAdbRestore() = adbVerdictMonitor.enableRestoreAndRecheck()
@@ -497,6 +502,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 SettingsRepository.KEY_DC_TARIFF,
                 SettingsRepository.DEFAULT_DC_TARIFF
             )
+            val fuelPricePerLiter = settingsRepository.getString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "")
             val units = settingsRepository.getString(
                 SettingsRepository.KEY_UNITS,
                 SettingsRepository.DEFAULT_UNITS
@@ -611,6 +617,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     batteryCapacity = capacity,
                     homeTariff = homeTariff,
                     dcTariff = dcTariff,
+                    fuelPricePerLiter = fuelPricePerLiter,
                     units = units,
                     currency = currency.code,
                     currencySymbol = currency.symbol,
@@ -706,6 +713,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(batteryCapacity = value) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_BATTERY_CAPACITY, value)
+        }
+    }
+
+    /** DM-i: price of one litre, stored as typed (numeric string, empty allowed) like the tariffs. */
+    fun saveFuelPricePerLiter(value: String) {
+        _uiState.update { it.copy(fuelPricePerLiter = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, value)
         }
     }
 
@@ -1877,6 +1892,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     "start=${it.startTs} home=${it.homeRate} dc=${it.dcRate} " +
                         "loss=${it.acLossPct}/${it.dcLossPct} rule=${it.tripRule}"
                 } ?: "(none)"))
+                appendLine(
+                    "fuel_price_per_liter=" +
+                        settingsRepository.getString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "")
+                )
             } catch (e: Exception) {
                 appendLine("(failed to gather tariff periods: ${e.message})")
             }

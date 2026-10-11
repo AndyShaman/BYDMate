@@ -2081,4 +2081,36 @@
     <string name="auto_ui_test_park">未执行：此规则仅在驻车时生效，请挂入 P 挡。</string>
     <string name="auto_ui_confirm_rule">规则「%1$s」</string>
     <string name="auto_ui_confirm_countdown">%1$d 秒后取消</string>
+    <!-- DM-i hybrid (#184) -->
+    <string name="dashboard_range_label_battery">纯电续航</string>
+    <string name="dashboard_fuel_tank">油箱</string>
+    <string name="dashboard_fuel_range">燃油续航</string>
+    <string name="dashboard_fuel_popup_tank">油箱</string>
+    <string name="dashboard_fuel_popup_fuel_range">燃油续航</string>
+    <string name="dashboard_fuel_popup_ev_range">纯电续航</string>
+    <string name="dashboard_fuel_popup_engine_rpm">发动机转速</string>
+    <string name="dashboard_fuel_rpm_value">%1$d rpm</string>
+    <string name="dashboard_fuel_engine_off">发动机未运行</string>
+    <string name="dashboard_fuel_popup_mileage_hev">燃油行驶里程</string>
+    <string name="dashboard_fuel_popup_mileage_ev">纯电行驶里程</string>
+    <string name="dashboard_fuel_popup_fuel_total">累计耗油</string>
+    <string name="dashboard_fuel_popup_price">每升油价</string>
+    <string name="dashboard_fuel_price_edit">修改</string>
+    <string name="dashboard_fuel_footer">车辆数据</string>
+    <string name="dashboard_fuel_percent_value">%1$d%%</string>
+    <string name="dashboard_fuel_liters_value">%1$.1f 升</string>
+    <string name="dashboard_unit_liters">升</string>
+    <string name="dashboard_distance_hev_subtitle">%1$s · 燃油 %2$.1f km</string>
+    <string name="dashboard_energy_fuel_subtitle">+ %1$.1f 升</string>
+    <string name="dashboard_consumption_fuel_value">%1$.1f 升/100</string>
+    <string name="dashboard_consumption_elec_subtitle">%1$.1f kWh/100 · 全部里程</string>
+    <string name="dashboard_cost_split_subtitle">电 %1$.2f + 油 %2$.2f</string>
+    <string name="trip_detail_fuel_label">燃油</string>
+    <string name="trip_detail_hev_ev_label">燃油 / 纯电</string>
+    <string name="trip_detail_hev_ev_value">%1$.0f / %2$.0f km</string>
+    <string name="trip_detail_fuel_cost_label">燃油费用</string>
+    <string name="tech_label_engine_rpm">发动机转速</string>
+    <string name="tech_card_fuel">燃油</string>
+    <string name="settings_fuel_price_label">每升油价</string>
+    <string name="settings_fuel_price_hint">每升价格，使用电价的货币</string>
 </resources>

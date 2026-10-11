@@ -76,6 +76,8 @@ fun TripDetailDialog(
     points: List<TripPointEntity>,
     currencySymbol: String,
     tileSource: String = "osm",
+    // DM-i (#184): fuel rows appear on a hybrid or on any trip that carries litres.
+    hybrid: Boolean = false,
     onDismiss: () -> Unit
 ) {
     val ctx = LocalContext.current
@@ -163,6 +165,7 @@ fun TripDetailDialog(
                             }
 
                             // RIGHT: Stats in groups split by a thin line; a row without data and a group without rows are hidden
+                            val showFuel = hybrid || trip.fuelLiters != null
                             val groups = buildList {
                                 add(buildList {
                                     trip.distanceKm?.let {
@@ -222,6 +225,17 @@ fun TripDetailDialog(
                                             "${trip.socStart}% → ${trip.socEnd}%",
                                             note = "(${TripDetailStats.socChangeLabel(trip.socStart, trip.socEnd)})"))
                                     }
+                                    if (showFuel) {
+                                        add(StatRow(stringResource(R.string.trip_detail_fuel_label),
+                                            trip.fuelLiters?.let { stringResource(R.string.dashboard_fuel_liters_value, it) } ?: "—",
+                                            if ((trip.fuelLiters ?: 0.0) > 0.0) AccentOrange else TextPrimary))
+                                        val hev = trip.hevKm
+                                        val dist = trip.distanceKm
+                                        add(StatRow(stringResource(R.string.trip_detail_hev_ev_label),
+                                            if (hev != null && dist != null)
+                                                stringResource(R.string.trip_detail_hev_ev_value, hev, (dist - hev).coerceAtLeast(0.0))
+                                            else "—"))
+                                    }
                                 })
                                 add(buildList {
                                     trip.cost?.let {
@@ -231,6 +245,10 @@ fun TripDetailDialog(
                                     TripDetailStats.costPer100Km(trip.cost, trip.distanceKm)?.let {
                                         add(StatRow(stringResource(R.string.trip_detail_cost_per_100_label),
                                             "%.2f %s".format(it, currencySymbol)))
+                                    }
+                                    if (showFuel) {
+                                        add(StatRow(stringResource(R.string.trip_detail_fuel_cost_label),
+                                            trip.fuelCost?.let { "%.2f %s".format(it, currencySymbol) } ?: "—"))
                                     }
                                 })
                                 add(buildList {

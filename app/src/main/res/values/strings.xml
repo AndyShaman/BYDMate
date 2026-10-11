@@ -2134,4 +2134,36 @@
     <string name="auto_ui_test_park">Не выполнено: правило работает только на парковке. Включите P.</string>
     <string name="auto_ui_confirm_rule">Правило «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Отменится через %1$d с</string>
+    <!-- DM-i hybrid (#184) -->
+    <string name="dashboard_range_label_battery">на батарее</string>
+    <string name="dashboard_fuel_tank">бак</string>
+    <string name="dashboard_fuel_range">на топливе</string>
+    <string name="dashboard_fuel_popup_tank">Бак</string>
+    <string name="dashboard_fuel_popup_fuel_range">Запас хода на топливе</string>
+    <string name="dashboard_fuel_popup_ev_range">Запас хода на батарее</string>
+    <string name="dashboard_fuel_popup_engine_rpm">Обороты ДВС</string>
+    <string name="dashboard_fuel_rpm_value">%1$d об/мин</string>
+    <string name="dashboard_fuel_engine_off">ДВС выключен</string>
+    <string name="dashboard_fuel_popup_mileage_hev">Пробег на ДВС</string>
+    <string name="dashboard_fuel_popup_mileage_ev">Пробег на батарее</string>
+    <string name="dashboard_fuel_popup_fuel_total">Топлива за всё время</string>
+    <string name="dashboard_fuel_popup_price">Цена литра</string>
+    <string name="dashboard_fuel_price_edit">изменить</string>
+    <string name="dashboard_fuel_footer">Данные машины</string>
+    <string name="dashboard_fuel_percent_value">%1$d %%</string>
+    <string name="dashboard_fuel_liters_value">%1$.1f л</string>
+    <string name="dashboard_unit_liters">л</string>
+    <string name="dashboard_distance_hev_subtitle">%1$s · ДВС %2$.1f км</string>
+    <string name="dashboard_energy_fuel_subtitle">+ %1$.1f л</string>
+    <string name="dashboard_consumption_fuel_value">%1$.1f л/100</string>
+    <string name="dashboard_consumption_elec_subtitle">%1$.1f кВт·ч/100 · на все км</string>
+    <string name="dashboard_cost_split_subtitle">%1$.2f эл. + %2$.2f топл.</string>
+    <string name="trip_detail_fuel_label">Топливо</string>
+    <string name="trip_detail_hev_ev_label">На ДВС / на батарее</string>
+    <string name="trip_detail_hev_ev_value">%1$.0f / %2$.0f км</string>
+    <string name="trip_detail_fuel_cost_label">Стоимость топлива</string>
+    <string name="tech_label_engine_rpm">обороты ДВС</string>
+    <string name="tech_card_fuel">Топливо</string>
+    <string name="settings_fuel_price_label">Цена литра</string>
+    <string name="settings_fuel_price_hint">за литр, в валюте тарифа</string>
 </resources>

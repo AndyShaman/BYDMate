@@ -103,6 +103,8 @@ class DashboardViewModelTest {
         override suspend fun getByBydId(bydId: Long): TripEntity? = null
         override suspend fun getTripsWithoutSoc(): List<TripEntity> = emptyList()
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
+        override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
+        override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
@@ -265,6 +267,7 @@ class DashboardViewModelTest {
 
     // --- Factory ---
 
+    @Suppress("LongParameterList") // test factory: every override is optional
     private fun buildViewModel(
         fakeAutoservice: VehicleApi,
         insightsManager: InsightsManager? = null,
@@ -272,6 +275,7 @@ class DashboardViewModelTest {
         charges: List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList(),
         settingsRepositoryOverride: SettingsRepository? = null,
         tripDaoOverride: TripDao? = null,
+        vehicleKind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
     ): DashboardViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
@@ -302,6 +306,7 @@ class DashboardViewModelTest {
             batteryStateRepository = batteryStateRepo,
             adbVerdictMonitor = adbVerdictMonitor,
             tripCounterResets = TripCounterResets(settingsRepo).also { lastTripCounterResets = it },
+            vehicleKindMonitor = com.bydmate.app.data.nativestack.kindMonitor(vehicleKind),
         )
     }
 
@@ -358,6 +363,53 @@ class DashboardViewModelTest {
 
         verify { adbVerdictMonitor.recheck("dashboard") }
         verify { adbVerdictMonitor.enableRestoreAndRecheck() }
+    }
+
+    // --- DM-i hybrid period sums (#184) ---
+
+    private val fuelTrips = listOf(
+        TripEntity(startTs = 1L, distanceKm = 64.0, kwhConsumed = 4.1, cost = 3.0,
+            fuelLiters = 2.8, hevKm = 38.0, fuelCost = 2.0),
+        TripEntity(startTs = 2L, distanceKm = 21.3, kwhConsumed = 3.2, cost = 1.0),
+    )
+
+    private fun daoWithPeriodTrips(trips: List<TripEntity>): TripDao = object : TripDao by StubTripDao() {
+        override fun getByDateRange(from: Long, to: Long): Flow<List<TripEntity>> = flowOf(trips)
+    }
+
+    @Test
+    fun `on a hybrid the period cards carry the fuel sums of the period trips`() = runTest {
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(battery = null, available = false),
+            tripDaoOverride = daoWithPeriodTrips(fuelTrips),
+            vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(com.bydmate.app.data.nativestack.VehicleKind.HYBRID, state.vehicleKind)
+        assertEquals(2.8, state.periodLiters!!, 1e-9)
+        assertEquals(38.0, state.periodHevKm!!, 1e-9)
+        assertEquals(2.0, state.periodFuelCost!!, 1e-9)
+        // 3.0 − 2.0 from the fuel trip plus the plain 1.0 of the electric one.
+        assertEquals(2.0, state.periodElecCost!!, 1e-9)
+    }
+
+    @Test
+    fun `an EV never reads fuel sums even when trips carry litres`() = runTest {
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(battery = null, available = false),
+            tripDaoOverride = daoWithPeriodTrips(fuelTrips),
+            vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertNull(state.periodLiters)
+        assertNull(state.periodHevKm)
+        assertNull(state.periodFuelCost)
+        assertNull(state.periodElecCost)
+        assertNull(state.fuelPricePerLiter)
     }
 
     @Test
