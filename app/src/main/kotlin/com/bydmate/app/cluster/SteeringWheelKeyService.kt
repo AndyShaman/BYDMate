@@ -262,7 +262,8 @@ class SteeringWheelKeyService : AccessibilityService() {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val pkg = event.packageName?.toString()
             if (pkg != null && ForegroundHintFilter.allows(this, event, pkg)) {
-                entryPoint().cameraStateMonitor().onForegroundHint(pkg, event.className?.toString())
+                entryPoint().cameraStateMonitor().onForegroundHint(
+                    pkg, event.className?.toString(), ForegroundHintFilter.eventDisplayId(event))
             }
             // ADB restore: the wireless-debugging dialog returns on every boot on a hotspot
             // (new BSSID each time), and nobody but us can press Allow before ADB is back.

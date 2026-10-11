@@ -26,7 +26,7 @@ object ForegroundHintFilter {
      */
     fun allows(service: AccessibilityService, event: AccessibilityEvent, pkg: String): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
-        val displayId = runCatching { event.source?.window?.displayId }.getOrNull()
+        val displayId = eventDisplayId(event)
         val presence = if (displayId == null) packageOnDisplays(service, pkg) else null
         val allowed = shouldForwardHint(displayId, presence?.first, presence?.second)
         if (!allowed) Log.d(TAG, "foreground hint dropped: $pkg display=${displayId ?: "unknown"}")
@@ -46,6 +46,44 @@ object ForegroundHintFilter {
         if (eventDisplayId != null) return eventDisplayId == Display.DEFAULT_DISPLAY
         return !(pkgOnOtherDisplay == true && pkgOnMainDisplay == false)
     }
+
+    /** Display the event's window is on, null when the event carries none or below API 30. */
+    fun eventDisplayId(event: AccessibilityEvent): Int? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return runCatching { event.source?.window?.displayId }.getOrNull()
+    }
+
+    /**
+     * Whether [pkg] has a window on the main display (#303). UsageStats events carry no display,
+     * so the cluster's own activities read as the head unit's foreground; only the window list
+     * tells them apart. null when display 0 cannot be read (API < 30, list unreadable).
+     */
+    fun mainDisplayPresence(service: AccessibilityService, pkg: String): Boolean? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val byDisplay = runCatching { service.windowsOnAllDisplays }.getOrNull() ?: return null
+        val main = byDisplay.get(Display.DEFAULT_DISPLAY) ?: return null
+        val entries = main.map { WindowEntry(runCatching { it.type }.getOrDefault(-1), windowPackage(it)) }
+        return presenceFrom(entries, pkg)
+    }
+
+    /** A window on display 0: its [type] (AccessibilityWindowInfo.TYPE_*) and root package,
+     *  null when the root cannot be read. */
+    data class WindowEntry(val type: Int, val pkg: String?)
+
+    /**
+     * true when [pkg] owns a readable window, false when other windows are readable and none is
+     * [pkg]'s. null when nothing is readable, or when an application window cannot be read: that
+     * one may be [pkg]'s own, so it cannot prove the app absent.
+     */
+    fun presenceFrom(windows: List<WindowEntry>, pkg: String): Boolean? {
+        if (windows.any { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.pkg == null }) return null
+        val packages = windows.mapNotNull { it.pkg }
+        if (packages.isEmpty()) return null
+        return pkg in packages
+    }
+
+    /** A foreground change counts for every widget rule but the camera unless display 0 denies it. */
+    fun confirmsForeground(onMain: Boolean?): Boolean = onMain != false
 
     /** (has a window on the main display, has one on another display), null when unreadable. */
     private fun packageOnDisplays(

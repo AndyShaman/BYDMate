@@ -1,0 +1,110 @@
+# GitHub #303, BYDMate 3.20.0, dump bydmate_logs_20261011_114600.txt lines 699-803 verbatim
+device: BYD AUTO DiLink5.1
+android: 13 (SDK 33)
+widget_home_only=true home_packages=[com.android.launcher3, com.byd.mycar]
+---
+18:03:24.537 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9764
+18:03:24.543 widget show was=not_home:com.huawei.hibaic.adshmiic #9765 by=#9764
+18:03:24.620 screen foreground pkg=com.huawei.hibaic.adshmiic class=com.huawei.mdwmdashboardcastimpl.view.AlarmViewActivity src=a11y #9766
+18:03:24.626 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9767 by=#9766
+18:03:24.998 screen foreground pkg=com.huawei.maps.car.app class=com.huawei.maps.car.app.activity.AvmActivity src=a11y #9768
+18:03:25.004 widget hide reason=not_home:com.huawei.maps.car.app #9769 by=#9768
+18:03:30.531 screen foreground pkg=com.example.amapservice src=poll #9770
+18:03:30.532 widget hide reason=not_home:com.example.amapservice #9771 by=#9770
+18:03:36.562 screen foreground pkg=com.android.launcher3 src=poll #9772
+18:03:36.570 widget show was=not_home:com.example.amapservice #9773 by=#9772
+18:03:36.735 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #9774
+18:03:37.129 screen foreground pkg=com.huawei.maps.car.app class=com.huawei.maps.car.app.activity.AvmActivity src=a11y #9775
+18:03:37.130 widget hide reason=not_home:com.huawei.maps.car.app #9776 by=#9775
+18:04:00.025 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9777
+18:04:00.026 widget show was=not_home:com.huawei.maps.car.app #9778 by=#9777
+18:04:31.200 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9779
+18:04:31.202 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9780 by=#9779
+18:04:34.709 screen foreground pkg=com.example.amapservice src=poll #9781
+18:04:34.709 widget hide reason=not_home:com.example.amapservice #9782 by=#9781
+18:05:18.310 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9783
+18:05:18.310 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9784 by=#9783
+18:05:21.322 screen foreground pkg=com.example.amapservice src=poll #9785
+18:05:21.323 widget hide reason=not_home:com.example.amapservice #9786 by=#9785
+18:06:06.923 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9787
+18:06:06.924 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9788 by=#9787
+18:06:09.429 screen foreground pkg=com.example.amapservice src=poll #9789
+18:06:09.429 widget hide reason=not_home:com.example.amapservice #9790 by=#9789
+18:06:41.007 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9791
+18:06:41.017 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9792 by=#9791
+18:06:45.023 screen foreground pkg=com.example.amapservice src=poll #9793
+18:06:45.024 widget hide reason=not_home:com.example.amapservice #9794 by=#9793
+18:08:00.207 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9795
+18:08:00.207 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9796 by=#9795
+18:08:04.215 screen foreground pkg=com.example.amapservice src=poll #9797
+18:08:04.217 widget hide reason=not_home:com.example.amapservice #9798 by=#9797
+18:08:20.260 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9799
+18:08:20.260 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9800 by=#9799
+18:08:23.266 screen foreground pkg=com.example.amapservice src=poll #9801
+18:08:23.267 widget hide reason=not_home:com.example.amapservice #9802 by=#9801
+18:09:02.865 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9803
+18:09:02.865 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9804 by=#9803
+18:09:06.374 screen foreground pkg=com.example.amapservice src=poll #9805
+18:09:06.375 widget hide reason=not_home:com.example.amapservice #9806 by=#9805
+18:10:04.494 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9807
+18:10:04.495 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9808 by=#9807
+18:10:10.009 screen foreground pkg=com.example.amapservice src=poll #9809
+18:10:10.010 widget hide reason=not_home:com.example.amapservice #9810 by=#9809
+18:10:59.626 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9811
+18:10:59.627 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9812 by=#9811
+18:11:00.629 screen foreground pkg=com.example.amapservice src=poll #9813
+18:11:00.630 widget hide reason=not_home:com.example.amapservice #9814 by=#9813
+18:11:01.121 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9815
+18:11:01.122 widget show was=not_home:com.example.amapservice #9816 by=#9815
+18:11:01.548 screen foreground pkg=com.huawei.maps.car.app class=com.huawei.maps.car.app.activity.AvmActivity src=a11y #9817
+18:11:01.552 widget hide reason=not_home:com.huawei.maps.car.app #9818 by=#9817
+18:11:10.167 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9819
+18:11:10.168 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9820 by=#9819
+18:11:23.210 screen foreground pkg=com.example.amapservice src=poll #9821
+18:11:23.216 widget hide reason=not_home:com.example.amapservice #9822 by=#9821
+18:11:23.474 screen foreground pkg=com.huawei.hibaic.adshmiic class=com.huawei.mdwmdashboardcastimpl.view.AlarmViewActivity src=a11y #9823
+18:11:23.474 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9824 by=#9823
+18:11:23.719 screen foreground pkg=com.example.amapservice src=poll #9825
+18:11:23.719 widget hide reason=not_home:com.example.amapservice #9826 by=#9825
+18:11:24.072 screen foreground pkg=com.huawei.hibaic.adshmiic class=com.huawei.mdwmdashboardcastimpl.view.AlarmViewActivity src=a11y #9827
+18:11:24.073 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9828 by=#9827
+18:11:27.233 screen foreground pkg=com.example.amapservice src=poll #9829
+18:11:27.235 widget hide reason=not_home:com.example.amapservice #9830 by=#9829
+18:11:27.550 screen foreground pkg=com.huawei.hibaic.adshmiic class=com.huawei.mdwmdashboardcastimpl.view.AlarmViewActivity src=a11y #9831
+18:11:27.551 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9832 by=#9831
+18:11:48.291 screen foreground pkg=com.android.launcher3 src=poll #9833
+18:11:48.432 screen foreground pkg=com.huawei.maps.car.app class=com.huawei.maps.car.app.activity.AvmActivity src=a11y #9834
+18:11:48.476 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9835
+18:11:48.500 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #9836
+18:11:48.501 widget show was=not_home:com.huawei.hibaic.adshmiic #9837 by=#9835
+18:11:54.308 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9838
+18:11:54.308 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9839 by=#9838
+18:11:58.317 screen foreground pkg=com.example.amapservice src=poll #9840
+18:11:58.318 widget hide reason=not_home:com.example.amapservice #9841 by=#9840
+18:12:11.349 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9842
+18:12:11.350 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9843 by=#9842
+18:12:15.357 screen foreground pkg=com.example.amapservice src=poll #9844
+18:12:15.357 widget hide reason=not_home:com.example.amapservice #9845 by=#9844
+18:14:04.615 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9846
+18:14:04.615 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9847 by=#9846
+18:14:08.121 screen foreground pkg=com.example.amapservice src=poll #9848
+18:14:08.122 widget hide reason=not_home:com.example.amapservice #9849 by=#9848
+18:14:20.149 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9850
+18:14:20.149 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9851 by=#9850
+18:14:26.160 screen foreground pkg=com.example.amapservice src=poll #9852
+18:14:26.161 widget hide reason=not_home:com.example.amapservice #9853 by=#9852
+18:14:29.167 screen foreground pkg=com.huawei.hibaic.adshmiic src=poll #9854
+18:14:29.167 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9855 by=#9854
+18:14:34.178 screen foreground pkg=com.example.amapservice src=poll #9856
+18:14:34.178 widget hide reason=not_home:com.example.amapservice #9857 by=#9856
+18:16:34.701 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9858
+18:16:34.701 widget show was=not_home:com.example.amapservice #9859 by=#9858
+18:16:35.053 screen foreground pkg=com.huawei.maps.car.app class=com.huawei.maps.car.app.activity.AvmActivity src=a11y #9860
+18:16:35.061 widget hide reason=not_home:com.huawei.maps.car.app #9861 by=#9860
+18:16:55.576 screen foreground pkg=com.android.launcher3 src=poll #9862
+18:16:55.592 widget show was=not_home:com.huawei.maps.car.app #9863 by=#9862
+18:16:55.726 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #9864
+18:16:55.928 screen foreground pkg=com.huawei.maps.car.app class=com.huawei.maps.car.app.activity.AvmActivity src=a11y #9865
+18:16:55.929 widget hide reason=not_home:com.huawei.maps.car.app #9866 by=#9865
+18:17:00.038 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9867
+18:17:00.039 widget show was=not_home:com.huawei.maps.car.app #9868 by=#9867

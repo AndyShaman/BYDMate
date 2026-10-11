@@ -6,6 +6,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
+import com.bydmate.app.cluster.ForegroundHintFilter
+import com.bydmate.app.cluster.SteeringWheelKeyService
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -46,9 +48,19 @@ class CameraStateMonitor @Inject constructor(
     private val _youtubeForeground = MutableStateFlow(false)
     val youtubeForeground: StateFlow<Boolean> = _youtubeForeground.asStateFlow()
 
-    /** Raw foreground package, for the user-configurable "hide in these apps" list. */
+    /**
+     * Foreground package for the "hide in these apps" list and the home-only rule. Unlike [active]
+     * it moves only once display 0 does not deny the package (#303): the cluster and projection
+     * displays resume their own activities every few seconds, and UsageStats does not say where.
+     */
     private val _foregroundPackage = MutableStateFlow<String?>(null)
     val foregroundPackage: StateFlow<String?> = _foregroundPackage.asStateFlow()
+
+    /** Window-list answer for "is this package on display 0", null when it cannot be read. */
+    internal var mainDisplayPresence: (String) -> Boolean? = { pkg ->
+        SteeringWheelKeyService.instance?.let { ForegroundHintFilter.mainDisplayPresence(it, pkg) }
+    }
+    internal var clock: () -> Long = System::currentTimeMillis
 
     private var scope: CoroutineScope? = null
     private var job: Job? = null
@@ -72,8 +84,26 @@ class CameraStateMonitor @Inject constructor(
     // stop()/start(), so a poller restart does not write the same app again.
     @Volatile private var lastTracedPkg: String? = null
 
+    // Confirmed foreground, guarded by this. A package display 0 denies stays a candidate for
+    // CONFIRM_WINDOW_MS: an app opening cold reports its activity before its window is listed.
+    private var confirmedPkg: String? = null
+    private var candidatePkg: String? = null
+    private var candidateSrc: String? = null
+    private var candidateDeadline = 0L
+    // Bumped by every raw foreground change: a window read taken before it is stale even when the
+    // package came back (A -> B -> A) while the read ran.
+    private var foregroundRevision = 0
+    // Packages already traced as not on the main screen: one line per run, not one per tick.
+    private val tracedNotMain = mutableSetOf<String>()
+
     fun start() {
         if (job?.isActive == true) return
+        // A poll in flight when stop() ran may have confirmed a package after the reset there.
+        synchronized(this) {
+            confirmedPkg = null
+            candidatePkg = null
+            tracedNotMain.clear()
+        }
         lastForegroundPkg = null
         lastEventTs = 0L
         val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -81,6 +111,7 @@ class CameraStateMonitor @Inject constructor(
         job = s.launch {
             while (true) {
                 refreshForegroundPackage()
+                recheckForegroundCandidate()
                 // queryEvents is blocking; check we weren't cancelled mid-IO
                 // before publishing. Stops a stale value from clobbering the
                 // false set in stop().
@@ -99,6 +130,11 @@ class CameraStateMonitor @Inject constructor(
         _active.value = false
         _youtubeForeground.value = false
         _foregroundPackage.value = null
+        synchronized(this) {
+            confirmedPkg = null
+            candidatePkg = null
+            tracedNotMain.clear()
+        }
         lastForegroundPkg = null
         lastEventTs = 0L
     }
@@ -112,7 +148,7 @@ class CameraStateMonitor @Inject constructor(
      * popup (field log 28.09: the camera app's parking radar overlay read as the camera and hid
      * the widget). Only a [className] naming an activity of the package counts as a screen change.
      */
-    fun onForegroundHint(packageName: String, className: String?) {
+    fun onForegroundHint(packageName: String, className: String?, displayId: Int? = null) {
         if (packageName == context.packageName || packageName in HINT_IGNORED_PACKAGES) return
         if (packageName.contains(INPUT_METHOD_MARKER)) return
         if (!isActivity(packageName, className)) {
@@ -125,11 +161,12 @@ class CameraStateMonitor @Inject constructor(
             lastIgnoredHint = key
             return
         }
-        if (!acceptForeground(packageName, System.currentTimeMillis())) return
+        if (!acceptForeground(packageName, clock())) return
         // Before publish(): the widget reads it as the cause of the hide or show that follows.
         lastForegroundTraceId = Trace.event(TraceArea.SCREEN, "foreground", "pkg" to packageName,
-            "class" to className, "src" to "a11y")
+            "class" to className, "src" to "a11y", "display" to (displayId ?: "unknown"))
         lastTracedPkg = packageName
+        offerForeground(packageName, "a11y")
         publish()
         lastIgnoredHint = null
         Log.i(TAG, "foreground hint: $packageName class=$className (a11y)")
@@ -156,15 +193,59 @@ class CameraStateMonitor @Inject constructor(
     internal fun acceptForeground(packageName: String, eventTs: Long): Boolean {
         if (eventTs < lastEventTs) return false
         val changed = packageName != lastForegroundPkg
+        if (changed) foregroundRevision++
         lastForegroundPkg = packageName
         lastEventTs = eventTs
         return changed
     }
 
-    private fun publish() {
+    /** A changed foreground is confirmed at once unless display 0 denies it. The window list is
+     *  read outside the lock: it is a binder call, and the a11y thread waits here. */
+    private fun offerForeground(pkg: String, src: String) {
+        val revision = synchronized(this) { foregroundRevision }
+        val accepted = ForegroundHintFilter.confirmsForeground(mainDisplayPresence(pkg))
+        synchronized(this) {
+            // A newer foreground arrived on the other thread while the list was read.
+            if (revision != foregroundRevision || pkg != lastForegroundPkg) return
+            if (accepted) {
+                candidatePkg = null
+                confirmedPkg = pkg
+            } else {
+                candidatePkg = pkg
+                candidateSrc = src
+                candidateDeadline = clock() + CONFIRM_WINDOW_MS
+            }
+        }
+    }
+
+    /** Every poll tick: a pending candidate is confirmed once seen on display 0, dropped after
+     *  the deadline. An unconfirmed one never touches the published foreground. */
+    internal fun recheckForegroundCandidate() {
+        val (pkg, revision) = synchronized(this) { (candidatePkg ?: return) to foregroundRevision }
+        val accepted = ForegroundHintFilter.confirmsForeground(mainDisplayPresence(pkg))
+        synchronized(this) {
+            // A newer foreground replaced the candidate while the list was read.
+            if (revision != foregroundRevision || candidatePkg != pkg) return
+            if (accepted) {
+                candidatePkg = null
+                confirmedPkg = pkg
+                return
+            }
+            if (clock() < candidateDeadline) return
+            candidatePkg = null
+            if (tracedNotMain.add(pkg)) {
+                Trace.event(TraceArea.SCREEN, "not-main", "pkg" to pkg, "src" to candidateSrc)
+                Log.i(TAG, "foreground $pkg not on the main display ($candidateSrc): keeps $confirmedPkg")
+            }
+        }
+    }
+
+    internal fun publish() {
+        // The camera surface may not be an a11y window: it follows the raw package, unconfirmed.
         _active.value = lastForegroundPkg == CAMERA_PACKAGE
-        _youtubeForeground.value = isYoutubePackage(lastForegroundPkg)
-        _foregroundPackage.value = lastForegroundPkg
+        val confirmed = synchronized(this) { confirmedPkg }
+        _youtubeForeground.value = isYoutubePackage(confirmed)
+        _foregroundPackage.value = confirmed
     }
 
     private fun refreshForegroundPackage() {
@@ -172,14 +253,7 @@ class CameraStateMonitor @Inject constructor(
         val beginTs = if (lastEventTs == 0L) now - INITIAL_LOOKBACK_MS else lastEventTs + 1
         try {
             val latest = latestResumed(usm, beginTs, now + 1)
-            if (latest != null && acceptForeground(latest.first, latest.second)) {
-                Log.i(TAG, "foreground: ${latest.first} (poll)")
-                // A restart of the poller forgets the foreground and re-reads the same app: not a change.
-                if (latest.first != lastTracedPkg) {
-                    lastForegroundTraceId = Trace.event(TraceArea.SCREEN, "foreground", "pkg" to latest.first, "src" to "poll")
-                    lastTracedPkg = latest.first
-                }
-            }
+            if (latest != null) onPolled(latest.first, latest.second)
             // No new events => keep prior foreground (camera still on, etc.).
             // Forward through start() ensures the very first call has lastEventTs=0,
             // forcing the wider window above.
@@ -189,6 +263,18 @@ class CameraStateMonitor @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "queryEvents failed: ${e.message}")
         }
+    }
+
+    /** The newest ACTIVITY_RESUMED a poll found; published by the caller. */
+    internal fun onPolled(pkg: String, ts: Long) {
+        if (!acceptForeground(pkg, ts)) return
+        Log.i(TAG, "foreground: $pkg (poll)")
+        // A restart of the poller forgets the foreground and re-reads the same app: not a change.
+        if (pkg != lastTracedPkg) {
+            lastForegroundTraceId = Trace.event(TraceArea.SCREEN, "foreground", "pkg" to pkg, "src" to "poll")
+            lastTracedPkg = pkg
+        }
+        offerForeground(pkg, "poll")
     }
 
     companion object {
@@ -208,6 +294,8 @@ class CameraStateMonitor @Inject constructor(
         // taking the screen (#183 feedback: a 2 s lag reads as a bug). Each poll is a delta
         // UsageStats query since the last consumed event, so the extra ticks are cheap.
         private const val POLL_INTERVAL_MS = 500L
+        // How long a package display 0 denies may take to show its window there (cold start).
+        private const val CONFIRM_WINDOW_MS = 2_000L
         // First-poll window — wide enough to catch the camera ACTIVITY_RESUMED
         // that fired before our service even started (boot + immediate-reverse
         // scenario). Subsequent polls only fetch the delta since lastEventTs.
