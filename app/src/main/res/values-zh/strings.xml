@@ -135,6 +135,8 @@
     <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。默认不发送 GPS 坐标。</string>
     <string name="settings_abrp_token_label">ABRP 实时数据令牌</string>
     <string name="settings_abrp_save_button">保存 ABRP</string>
+    <string name="settings_abrp_location_label">向 ABRP 发送坐标</string>
+    <string name="settings_abrp_location_description">适用于少见的情况：车内的 ABRP 没有运行时，用手机上的 ABRP 查看车辆位置。如果车内打开了 ABRP，它会自己获取 GPS，开启此项后地图上的车辆标记会来回跳动。默认关闭。</string>
     <string name="settings_webhook_section_header">Webhook - 遥测</string>
     <string name="settings_webhook_label">实时数据 -> 自己的服务器</string>
     <string name="settings_webhook_description">与发送至 ABRP 相同的 JSON（SOC、功率、温度、里程表、胎压、充电）通过 POST 请求发送到您的 URL：行驶时每秒一次，充电时每 8 秒一次，停车时每 30 秒一次。默认不发送坐标。</string>
@@ -819,14 +821,15 @@
     <string name="settings_adb_restore_status_failed">错误：%1$s</string>
     <string name="settings_adb_restore_status_unsupported">Android 10 上不可用。如果重启后 ADB 消失，请按照 GitHub 上的说明重新开启，见“激活 ADB”一节。</string>
     <string name="settings_cloud_wifi_title">通过 Wi-Fi 连接 BYD 云</string>
-    <string name="settings_cloud_wifi_desc">车辆连上 Wi-Fi 时，手机上的 BYD 应用即可看到车辆。需要原装中国 SIM 卡。</string>
+    <string name="settings_cloud_wifi_desc">车辆连上 Wi-Fi 时，手机上的 BYD 应用即可看到车辆。使用新版 BYD 服务器的车辆需要中国 VPN。</string>
     <string name="settings_cloud_wifi_help_title">通过 Wi-Fi 连接 BYD 云的工作方式</string>
-    <string name="settings_cloud_wifi_help_body">如果车内原装中国 SIM 卡没有信号，车辆就无法连接 BYD 云：收不到 OTA 升级，NFC 钥匙和手机 BYD 应用远程控制都无法使用。\n\n开启此设置后，BYDMate 会通过 Wi-Fi 把车辆连接到云：家里的网络、手机热点或任何能上网的网络都可以。\n\n条件：\n\n1. 车内装有原装中国 SIM 卡。BYD 云只接受这张卡。\n\n2. 部分车辆需要在路由器上设置中国 VPN。这在路由器上设置，不在应用里。\n\n3. 如果车辆已有自己的移动网络，则不会做任何改动：云本来就能正常工作。\n\n关闭此设置后，应用会恢复车辆原来的网络设置。</string>
+    <string name="settings_cloud_wifi_help_body">没有连接 BYD 云时，收不到 OTA 升级，NFC 钥匙和手机 BYD 应用远程控制都无法使用。\n\n开启此设置后，BYDMate 会通过 Wi-Fi 把车辆连接到云：家里的网络、手机热点或任何能上网的网络都可以。\n\n条件：\n\n1. 使用新版 BYD 服务器的车辆需要中国 VPN：服务器只接受来自中国 IP 的连接。最可靠的是在车辆连接的路由器上设置 VPN，它不依赖车机。车机上的 VPN 应用只在车机开启时工作。\n\n2. 如果车辆已有自己的移动网络，则不会做任何改动：云本来就能正常工作。\n\n关闭此设置后，应用会恢复车辆原来的网络设置。</string>
     <string name="settings_cloud_wifi_status_connected">已连接 BYD 云</string>
     <string name="settings_cloud_wifi_status_own_cellular">车辆有自己的移动网络，云本来就能正常工作</string>
     <string name="settings_cloud_wifi_status_waiting">正在等待可上网的 Wi-Fi</string>
     <string name="settings_cloud_wifi_status_rejected">车辆未接受网络设置</string>
     <string name="settings_cloud_wifi_status_silent">BYD 云没有响应。下次连接 Wi-Fi 时会再试</string>
+    <string name="settings_cloud_wifi_status_refused">BYD 服务器拒绝了车辆。需要中国 VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">无法访问 ADB：请先开启 ADB 才能使用此设置</string>
     <string name="settings_cloud_wifi_status_return_pending">之前的网络设置尚未恢复。下次连接 Wi-Fi 时将再次尝试</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
@@ -1156,6 +1159,11 @@
     <string name="auto_act_hud_on">打开抬头显示</string>
     <string name="auto_act_hud_off">关闭抬头显示</string>
     <string name="hud_not_equipped">这辆车没有抬头显示</string>
+    <string name="auto_act_battery_preheat_on">打开电池预热</string>
+    <string name="auto_act_battery_preheat_off">关闭电池预热</string>
+    <string name="battery_preheat_not_equipped">这辆车没有电池预热</string>
+    <string name="battery_preheat_not_needed">车辆提示当前无需电池预热</string>
+    <string name="battery_preheat_gun_connected">连接充电枪时无法使用电池预热</string>
     <string name="auto_act_ambient_light_on">氛围灯开</string>
     <string name="auto_act_ambient_light_off">氛围灯关</string>
     <string name="auto_act_drl_on">日行灯开</string>
@@ -1220,6 +1228,7 @@
     <string name="auto_msg_sentry_invalid">动作 #%1$d：哨兵模式状态无效</string>
     <string name="auto_msg_media_key_invalid">动作 #%1$d：请选择播放或暂停</string>
     <string name="auto_msg_hotspot_invalid">动作 #%1$d：热点状态无效</string>
+    <string name="auto_msg_screen_invalid">动作 #%1$d：屏幕状态无效</string>
     <string name="auto_msg_speak_text_empty">动作 #%1$d：未设置朗读文本</string>
     <string name="auto_msg_agent_query_prompt_empty">动作 #%1$d：未设置代理查询内容</string>
     <string name="auto_msg_name_cond_action_required">名称和至少一个条件及动作是必需的</string>
@@ -1261,6 +1270,8 @@
     <string name="automation_action_hotspot">Wi-Fi热点</string>
     <string name="automation_action_hotspot_on">开启</string>
     <string name="automation_action_hotspot_off">关闭</string>
+    <string name="automation_action_screen_off">关闭屏幕</string>
+    <string name="automation_action_screen_on">打开屏幕</string>
     <string name="automation_action_speak">朗读文字</string>
     <string name="automation_action_agent_query">询问语音助手</string>
     <string name="auto_act_speak">朗读文字</string>
@@ -1820,6 +1831,8 @@
     <string name="dispatch_sentry_failed">无法切换哨兵模式</string>
     <string name="dispatch_hotspot_invalid_state">Wi-Fi 热点状态无效</string>
     <string name="dispatch_hotspot_failed">无法切换 Wi-Fi 热点</string>
+    <string name="dispatch_screen_invalid_state">屏幕状态无效</string>
+    <string name="dispatch_screen_not_available">本车不支持控制屏幕</string>
     <string name="dispatch_cluster_invalid_state">仪表盘投射状态无效</string>
     <string name="dispatch_cluster_daemon_restarting">服务进程正在重启</string>
     <string name="dispatch_cluster_not_on">投射到仪表盘未开启</string>
@@ -2068,4 +2081,36 @@
     <string name="auto_ui_test_park">未执行：此规则仅在驻车时生效，请挂入 P 挡。</string>
     <string name="auto_ui_confirm_rule">规则「%1$s」</string>
     <string name="auto_ui_confirm_countdown">%1$d 秒后取消</string>
+    <!-- DM-i hybrid (#184) -->
+    <string name="dashboard_range_label_battery">纯电续航</string>
+    <string name="dashboard_fuel_tank">油箱</string>
+    <string name="dashboard_fuel_range">燃油续航</string>
+    <string name="dashboard_fuel_popup_tank">油箱</string>
+    <string name="dashboard_fuel_popup_fuel_range">燃油续航</string>
+    <string name="dashboard_fuel_popup_ev_range">纯电续航</string>
+    <string name="dashboard_fuel_popup_engine_rpm">发动机转速</string>
+    <string name="dashboard_fuel_rpm_value">%1$d rpm</string>
+    <string name="dashboard_fuel_engine_off">发动机未运行</string>
+    <string name="dashboard_fuel_popup_mileage_hev">燃油行驶里程</string>
+    <string name="dashboard_fuel_popup_mileage_ev">纯电行驶里程</string>
+    <string name="dashboard_fuel_popup_fuel_total">累计耗油</string>
+    <string name="dashboard_fuel_popup_price">每升油价</string>
+    <string name="dashboard_fuel_price_edit">修改</string>
+    <string name="dashboard_fuel_footer">车辆数据</string>
+    <string name="dashboard_fuel_percent_value">%1$d%%</string>
+    <string name="dashboard_fuel_liters_value">%1$.1f 升</string>
+    <string name="dashboard_unit_liters">升</string>
+    <string name="dashboard_distance_hev_subtitle">%1$s · 燃油 %2$.1f km</string>
+    <string name="dashboard_energy_fuel_subtitle">+ %1$.1f 升</string>
+    <string name="dashboard_consumption_fuel_value">%1$.1f 升/100</string>
+    <string name="dashboard_consumption_elec_subtitle">%1$.1f kWh/100 · 全部里程</string>
+    <string name="dashboard_cost_split_subtitle">电 %1$.2f + 油 %2$.2f</string>
+    <string name="trip_detail_fuel_label">燃油</string>
+    <string name="trip_detail_hev_ev_label">燃油 / 纯电</string>
+    <string name="trip_detail_hev_ev_value">%1$.0f / %2$.0f km</string>
+    <string name="trip_detail_fuel_cost_label">燃油费用</string>
+    <string name="tech_label_engine_rpm">发动机转速</string>
+    <string name="tech_card_fuel">燃油</string>
+    <string name="settings_fuel_price_label">每升油价</string>
+    <string name="settings_fuel_price_hint">每升价格，适用于此日期起的行程</string>
 </resources>

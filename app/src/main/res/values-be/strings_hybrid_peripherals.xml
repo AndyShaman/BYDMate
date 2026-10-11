@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tg_report_range_hybrid">запас %1$s на батарэі, %2$s на паліве</string>
+    <string name="tg_report_range_hybrid_ev">запас %1$s на батарэі</string>
+    <string name="tg_report_range_hybrid_fuel">запас %1$s на паліве</string>
+    <string name="tg_report_fuel_period">Паліва: %1$.1f л за перыяд, %2$.1f л/100 на ўсе км</string>
+    <string name="tg_report_trip_fuel">Паліва: %1$.1f л</string>
+</resources>

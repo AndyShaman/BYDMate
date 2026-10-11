@@ -2,6 +2,11 @@ package com.bydmate.app.data.remote
 
 import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.autoservice.ChargingReading
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -61,9 +66,13 @@ class IternioTelemetryClientTest {
         }
     }
 
-    private fun makeClient(interceptor: CapturingInterceptor): IternioTelemetryClient {
+    private fun makeClient(
+        interceptor: CapturingInterceptor,
+        kind: VehicleKind = VehicleKind.EV,
+    ): IternioTelemetryClient {
         val ok = OkHttpClient.Builder().addInterceptor(interceptor).build()
-        return IternioTelemetryClient(ok)
+        val monitor = mockk<VehicleKindMonitor> { every { this@mockk.kind } returns MutableStateFlow(kind) }
+        return IternioTelemetryClient(ok, monitor)
     }
 
     /** Minimal DiParsData with the most common driving fields populated. */
@@ -523,10 +532,9 @@ class IternioTelemetryClientTest {
     }
 
     @Test
-    fun `Iternio payload never carries lat lon even when a fresh location exists`() = runTest {
-        // The position is deliberately absent from this sink: ABRP merges a telemetry position
-        // with the GPS it reads on the head unit itself, and the car marker jumps between the
-        // two. TrackingService keeps a fresh fix for the webhook, and passes none here.
+    fun `base Iternio payload never carries lat lon, the position is added per target`() = runTest {
+        // The client never puts a position in: TrackingService adds lat/lon/heading per target
+        // behind each target's own toggle (ABRP opt-in, webhook opt-in), see withLocation.
         val cap = CapturingInterceptor()
         val client = makeClient(cap)
 
@@ -634,5 +642,93 @@ class IternioTelemetryClientTest {
         )
 
         assertEquals(7.0, cap.lastTlmJson!!.getDouble("power"), 0.001)
+    }
+
+    @Test
+    fun `an EV with V and A still takes the motor power, then DiPars`() = runTest {
+        for (kind in listOf(VehicleKind.EV, VehicleKind.UNKNOWN)) {
+            val cap = CapturingInterceptor()
+            makeClient(cap, kind).send(
+                apiKey = "k", userToken = "t",
+                data = drivingData(power = 12.5, hvVoltage = 396, hvCurrent = 63.5),
+                nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+                enginePowerKw = 30,
+            )
+            assertEquals(30.0, cap.lastTlmJson!!.getDouble("power"), 0.001)
+
+            val cap2 = CapturingInterceptor()
+            makeClient(cap2, kind).send(
+                apiKey = "k", userToken = "t",
+                data = drivingData(power = 12.5, hvVoltage = 396, hvCurrent = 63.5),
+                nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            )
+            assertEquals(12.5, cap2.lastTlmJson!!.getDouble("power"), 0.001)
+        }
+    }
+
+    @Test
+    fun `a hybrid sends pack power from V and A, not the Power needle`() = runTest {
+        val cap = CapturingInterceptor()
+        makeClient(cap, VehicleKind.HYBRID).send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(power = 12.5, hvVoltage = 396, hvCurrent = 63.5),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = 30,
+        )
+
+        val tlm = cap.lastTlmJson!!
+        // 396 V x 63.5 A = 25.146 kW, rounded to 0.1.
+        assertEquals(25.1, tlm.getDouble("power"), 0.001)
+        assertEquals(0, tlm.getInt("is_charging"))
+        assertFalse(tlm.has("fuel_percent"))
+    }
+
+    @Test
+    fun `a hybrid on regen sends negative pack power`() = runTest {
+        val cap = CapturingInterceptor()
+        makeClient(cap, VehicleKind.HYBRID).send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(power = 0.0, hvVoltage = 400, hvCurrent = -20.0),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+        )
+
+        assertEquals(-8.0, cap.lastTlmJson!!.getDouble("power"), 0.001)
+    }
+
+    @Test
+    fun `a charging hybrid keeps the charging branch first`() = runTest {
+        val cap = CapturingInterceptor()
+        makeClient(cap, VehicleKind.HYBRID).send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(power = 0.0, chargeGunState = 2, speed = 0, gear = 1,
+                hvVoltage = 400, hvCurrent = 16.0),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+        )
+
+        val tlm = cap.lastTlmJson!!
+        assertEquals(1, tlm.getInt("is_charging"))
+        assertEquals(-6.4, tlm.getDouble("power"), 0.001)
+    }
+
+    @Test
+    fun `a hybrid without V and A sends no power at all, neither motor power nor zero`() = runTest {
+        val cap = CapturingInterceptor()
+        makeClient(cap, VehicleKind.HYBRID).send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(power = 12.5, hvVoltage = 0, hvCurrent = 63.5),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = 30,
+        )
+        assertFalse(cap.lastTlmJson!!.has("power"))
+        assertEquals(73, cap.lastTlmJson!!.getInt("soc"))
+
+        val cap2 = CapturingInterceptor()
+        makeClient(cap2, VehicleKind.HYBRID).send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(power = null, hvVoltage = null, hvCurrent = null),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = 30,
+        )
+        assertFalse(cap2.lastTlmJson!!.has("power"))
     }
 }

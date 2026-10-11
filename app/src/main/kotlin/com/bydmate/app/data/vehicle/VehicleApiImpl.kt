@@ -61,6 +61,12 @@ class VehicleApiImpl @Inject constructor(
         HudReader { fid -> helper.read(WriteAllowlist.HUD_DEV, fid)?.toInt() },
     )
 
+    private val batteryPreheatChannel = BatteryPreheatChannel(
+        SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
+        PreheatReader { dev, fid -> helper.read(dev, fid)?.toInt() },
+        PreheatAudit { logWrite(it.action, it.dev, it.fid, it.value, it.state, it.ok, it.verdict, validated = false) },
+    )
+
     private val driveModeChannel = DriveModeChannel(
         DriveModeWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
         DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
@@ -371,6 +377,8 @@ class VehicleApiImpl @Inject constructor(
     private suspend fun channelWrite(action: String): Result<Unit>? = when {
         action in STEERING_HEAT_ACTIONS -> withContext(NonCancellable) { steeringHeat(action) }
         action in HUD_ACTIONS -> withContext(NonCancellable) { hudSwitch(action) }
+        action in BatteryPreheatChannel.ACTIONS ->
+            withContext(NonCancellable) { batteryPreheatChannel.dispatch(action, readbackScope) }
         else -> DriveMode.ofAction(action)?.let { mode -> withContext(NonCancellable) { driveMode(mode) } }
     }
 

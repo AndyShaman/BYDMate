@@ -80,7 +80,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ALICE_ENDPOINT = "alice_endpoint"
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
-        /** Передавать живые данные DiPars в A Better Route Planner (Iternio Telemetry API). Координаты в ABRP не уходят никогда. */
+        /** Передавать живые данные DiPars в A Better Route Planner (Iternio Telemetry API). GPS передаётся только если включён KEY_ABRP_SEND_LOCATION. */
         const val KEY_ABRP_ENABLED = "abrp_telemetry_enabled"
         /** API-ключ приложения Iternio ([abetterrouteplanner.com/resources/api](https://abetterrouteplanner.com/resources/api)). */
         const val KEY_ABRP_API_KEY = "abrp_api_key"
@@ -89,11 +89,10 @@ open class SettingsRepository @Inject constructor(
         /** Необязательный код модели автомобиля из библиотеки ABRP. */
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
         /**
-         * УСТАРЕЛО (волна 2026-09-16): координаты в ABRP не отправляются никогда — ABRP сам
-         * читает GPS на головном устройстве и склеивает две позиции, из-за чего машина на карте
-         * прыгает. Константа оставлена, чтобы старое сохранённое значение никому не мешало.
+         * Отправлять GPS-координаты и курс в телеметрию ABRP (opt-in, по умолчанию выкл).
+         * Узкий случай: следить за машиной в ABRP с телефона, когда ABRP на головном устройстве
+         * не запущен. Если он запущен, он сам читает GPS, и с двумя источниками метка прыгает.
          */
-        @Deprecated("ABRP position is never sent; the setting is gone from the UI")
         const val KEY_ABRP_SEND_LOCATION = "abrp_send_location"
         /** Слать тот же JSON телеметрии POST-запросом на свой URL. Работает независимо от ABRP. */
         const val KEY_WEBHOOK_ENABLED = "webhook_enabled"
@@ -130,6 +129,12 @@ open class SettingsRepository @Inject constructor(
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
         /** "true" hides the native BYD voice assistant (pm disable-user); default "false". */
         const val KEY_DISABLE_NATIVE_ASSISTANT = "disable_native_assistant"
+        /** Confirmed car type (VehicleKindMonitor): "EV" or "HYBRID"; absent until confirmed. */
+        const val KEY_VEHICLE_KIND = "vehicle_kind"
+        /** The raw words that confirmed it: "hev=…;ev=…;fuel=…". */
+        const val KEY_VEHICLE_KIND_EVIDENCE = "vehicle_kind_evidence"
+        /** Epoch ms of the confirmation. */
+        const val KEY_VEHICLE_KIND_CONFIRMED_AT = "vehicle_kind_confirmed_at"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
         const val KEY_LAST_STATE_TS = "last_state_ts"

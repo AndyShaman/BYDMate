@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.bydmate.app.navdata.NavGuidanceHub
+import java.util.Locale
 
 /** Channel A: standard AutoNavi/Amap HUD broadcast. Broadcast format is donor-derived
  *  (OpenBYD 2.4.2 HudController.java:210-320 in the decompile); icon mapping is
@@ -46,6 +47,22 @@ class HudAmapBroadcaster(private val context: Context) {
             48 -> 15       // DESTINATION
             49 -> 16       // TUNNEL
             else -> 9      // neutral default: STRAIGHT
+        }
+
+        /** The *_REMAIN_DIS_AUTO strings, donor :237-249. Shared with [HudAmapClusterLoop]: the
+         *  1for2 cluster draws them as they are. */
+        internal fun distanceAuto(meters: Int): String =
+            if (meters >= 1000) String.format(Locale.getDefault(), "%.1f km", meters / 1000.0f) else "$meters m"
+
+        /** ROUTE_REMAIN_TIME_AUTO, donor :251-262. Shared with [HudAmapClusterLoop], where the
+         *  cluster draws the string as it is, so "N分" showed there raw (#301). Decided on
+         *  2026-10-10 for #301: that path sends this Latin form too. The known cost: the stock
+         *  adapter parses only 天/时/分, so on that path it no longer writes the CAN time. */
+        internal fun remainTimeAuto(etaSeconds: Int): String {
+            val totalMin = etaSeconds / 60
+            val hours = totalMin / 60
+            val mins = totalMin % 60
+            return if (hours > 0) "${hours}h ${mins}m" else "${mins} min"
         }
     }
 
@@ -112,27 +129,12 @@ class HudAmapBroadcaster(private val context: Context) {
         intent.putExtra("ROUTE_REMAIN_DIS", routeRemDis)
         intent.putExtra("ROUTE_REMAIN_TIME", routeRemTime)
         // SEG_REMAIN_DIS_AUTO: donor :237-242
-        val segAuto = if (s.distanceMeters >= 1000) {
-            String.format("%.1f km", s.distanceMeters / 1000.0f)
-        } else {
-            "$segDis m"
-        }
-        intent.putExtra("SEG_REMAIN_DIS_AUTO", segAuto)
+        intent.putExtra("SEG_REMAIN_DIS_AUTO", distanceAuto(segDis))
         // ROUTE_REMAIN_DIS_AUTO: donor :243-249 (only when route distance is known)
-        if (routeRemDis != -1) {
-            val routeAuto = if (routeRemDis >= 1000) {
-                String.format("%.1f km", routeRemDis / 1000.0f)
-            } else {
-                "$routeRemDis m"
-            }
-            intent.putExtra("ROUTE_REMAIN_DIS_AUTO", routeAuto)
-        }
+        if (routeRemDis != -1) intent.putExtra("ROUTE_REMAIN_DIS_AUTO", distanceAuto(routeRemDis))
         // ROUTE_REMAIN_TIME_AUTO + ROUTE_REMAIN_TIME_STRING: donor :251-262
         if (routeRemTime != -1) {
-            val totalMin = routeRemTime / 60
-            val hours = totalMin / 60
-            val mins = totalMin % 60
-            val timeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins} min"
+            val timeStr = remainTimeAuto(routeRemTime)
             intent.putExtra("ROUTE_REMAIN_TIME_AUTO", timeStr)
             intent.putExtra("ROUTE_REMAIN_TIME_STRING", timeStr)
         }

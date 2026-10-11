@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tg_report_range_hybrid">range %1$s on battery, %2$s on fuel</string>
+    <string name="tg_report_range_hybrid_ev">range %1$s on battery</string>
+    <string name="tg_report_range_hybrid_fuel">range %1$s on fuel</string>
+    <string name="tg_report_fuel_period">Fuel: %1$.1f L for the period, %2$.1f L/100 over all km</string>
+    <string name="tg_report_trip_fuel">Fuel: %1$.1f L</string>
+</resources>

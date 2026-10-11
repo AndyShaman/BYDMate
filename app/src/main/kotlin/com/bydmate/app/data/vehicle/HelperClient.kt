@@ -64,6 +64,13 @@ data class HudNaviReply(val outcome: Int, val sdkReturn: Int) {
     val accepted: Boolean get() = outcome == HelperBinderProtocol.HUD_NAVI_CALLED && sdkReturn >= 0
 }
 
+/**
+ * TX_SET_SCREEN_BACKLIGHT answer: [outcome] is one of HelperBinderProtocol.SCREEN_BACKLIGHT_*,
+ * [status] the last getPowerScreenStatus read (0 = off, 1 = on, -1 = none), [detail] the method
+ * the daemon found and its reads, or the exception.
+ */
+data class ScreenBacklightReply(val outcome: Int, val status: Int, val detail: String)
+
 /** One TX_HUD_SDK call: the instrument SDK method way 3 makes after its raw writes, as OpenBYD does. */
 sealed class HudSdkCall(val method: Int, val sdkName: String) {
     data class Guidance(val turnKind: Int, val distanceM: Int) :
@@ -346,6 +353,11 @@ interface HelperClient {
     /** Enable or disable the Wi-Fi hotspot (TETHERING_WIFI) via the daemon (shell uid holds
      *  TETHER_PRIVILEGED). True on daemon status 0. Needs on-car validation. */
     suspend fun setHotspot(enable: Boolean): Boolean
+
+    /** Central screen backlight on / off inside the daemon (TX_SET_SCREEN_BACKLIGHT, #275). Null
+     *  when the daemon is unreachable or too old to know the transaction; [isAlive] tells the
+     *  two apart. */
+    suspend fun setScreenBacklight(on: Boolean): ScreenBacklightReply?
 
     /**
      * Direct freeform launch: find-or-launch [packageName], switch its task to freeform,
@@ -794,6 +806,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun setHotspot(enable: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_HOTSPOT) { it.writeInt(if (enable) 1 else 0) }
+
+    override suspend fun setScreenBacklight(on: Boolean): ScreenBacklightReply? =
+        transactParsed(HelperBinderProtocol.TX_SET_SCREEN_BACKLIGHT, { it.writeInt(if (on) 1 else 0) }) { reply ->
+            if (reply.dataAvail() < 8) return@transactParsed null
+            ScreenBacklightReply(reply.readInt(), reply.readInt(), reply.readString().orEmpty())
+        }
 
     // Two-stage budget instead of the single transactParsed timeout: the daemon plans its own work
     // against FORCE_TIMEOUT_MS (~9.5s cold-start launch retry loop, then the pin loop, the grace

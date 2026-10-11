@@ -59,6 +59,7 @@ import com.bydmate.app.ui.components.HelpIcon
 import com.bydmate.app.ui.components.HintBlock
 import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
+import com.bydmate.app.ui.theme.AccentOrange
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.CardSurfaceElevated
@@ -257,6 +258,7 @@ private fun TechCardContent(
         TechCard.MOTORS -> MotorsCard(state, onHint, modifier)
         TechCard.CLIMATE -> ClimateCard(state, onHint, modifier)
         TechCard.TYRES -> TyresCard(state, onHint, modifier)
+        TechCard.FUEL -> FuelCard(state, modifier)
     }
 }
 
@@ -463,7 +465,11 @@ private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifi
         onHint = onHint,
         modifier = modifier,
     ) {
-        MOTOR_CARD_ROWS.forEach { MotorCardRow(it, state) }
+        MOTOR_CARD_ROWS.forEach {
+            MotorCardRow(it, state)
+            // DM-i: the engine is not a motor pair, so its rpm is one value under the motors' rpm.
+            if (it == MotorRow.RPM && state.isHybrid) EngineRpmRow(state.engineRpm, R.string.tech_label_engine_rpm)
+        }
         Hint(state.openHint, "motors", R.string.tech_hint_motors)
     }
 }
@@ -518,6 +524,35 @@ private fun MotorCardRow(row: MotorRow, state: TechPanelUiState) {
                     stringResource(R.string.tech_value_percent, split.rearPercent),
                 )
             }
+    }
+}
+
+/** Engine rpm the way the Dashboard popup shows it: orange while it turns, «ДВС выключен» at 0. */
+@Composable
+private fun EngineRpmRow(rpm: Int?, labelRes: Int) {
+    when {
+        rpm == null -> TechRow(stringResource(labelRes), DASH)
+        rpm > 0 -> TechRow(stringResource(labelRes), stringResource(R.string.dashboard_fuel_rpm_value, rpm),
+            valueColor = AccentOrange)
+        else -> TechRow(stringResource(labelRes), stringResource(R.string.dashboard_fuel_engine_off),
+            valueColor = TextMuted)
+    }
+}
+
+/** DM-i only: the rows of the Dashboard «Топливо» popup without the price, all from the car. */
+@Composable
+private fun FuelCard(state: TechPanelUiState, modifier: Modifier = Modifier) {
+    val km = stringResource(R.string.dashboard_unit_km)
+    TechCard(stringResource(R.string.tech_card_fuel), modifier = modifier) {
+        TechRow(stringResource(R.string.dashboard_fuel_popup_tank),
+            state.fuelPercent?.let { stringResource(R.string.dashboard_fuel_percent_value, it) } ?: DASH)
+        TechRow(stringResource(R.string.dashboard_fuel_popup_fuel_range), state.fuelRangeKm?.let { "$it $km" } ?: DASH)
+        TechRow(stringResource(R.string.dashboard_fuel_popup_ev_range), state.evRangeKm?.let { "$it $km" } ?: DASH)
+        EngineRpmRow(state.engineRpm, R.string.dashboard_fuel_popup_engine_rpm)
+        TechRow(stringResource(R.string.dashboard_fuel_popup_mileage_hev), state.mileageHevKm?.let { "$it $km" } ?: DASH)
+        TechRow(stringResource(R.string.dashboard_fuel_popup_mileage_ev), state.mileageEvKm?.let { "$it $km" } ?: DASH)
+        TechRow(stringResource(R.string.dashboard_fuel_popup_fuel_total),
+            state.fuelTotalL?.let { stringResource(R.string.dashboard_fuel_liters_value, it) } ?: DASH)
     }
 }
 

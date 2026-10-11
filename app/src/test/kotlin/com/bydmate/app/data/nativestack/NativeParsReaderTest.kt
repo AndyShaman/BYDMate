@@ -31,7 +31,7 @@ class NativeParsReaderTest {
     private fun nativeReader(auto: AutoserviceClient, settings: SettingsRepository): NativeParsReader {
         val gate = mockk<BatchReadGate>()
         coEvery { gate.mode() } returns BatchMode.OFF
-        return NativeParsReader(auto, settings, mockk<HelperClient>(), gate)
+        return NativeParsReader(auto, settings, mockk<HelperClient>(), gate, kindMonitor())
     }
 
     private fun loadFixture(): JSONObject {

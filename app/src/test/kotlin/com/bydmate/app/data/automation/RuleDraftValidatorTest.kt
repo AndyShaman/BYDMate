@@ -161,6 +161,15 @@ class RuleDraftValidatorTest {
             ActionDef(command = "sentry", displayName = "x", kind = "sentry", payload = "1"))))
     }
 
+    @Test fun screen_action_payload_is_0_or_1() {
+        fun check(payload: String?) = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "screen", displayName = "x", kind = "screen", payload = payload)))
+        assertNull(check("0"))
+        assertNull(check("1"))
+        assertEquals(ActionValidationError.ScreenInvalid(1), check("2"))
+        assertEquals(ActionValidationError.ScreenInvalid(1), check(null))
+    }
+
     @Test fun hotspot_action_invalid_payload_is_invalid() {
         val err = RuleDraftValidator.validateActions(listOf(
             ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "2")))

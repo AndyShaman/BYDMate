@@ -1,0 +1,22 @@
+# Field dump bydmate_logs_20261006_191541.txt, lines 1071-1076 and 1252-1262 verbatim: apps seen only by the poll
+device: BYD AUTO DiLink5.0 For BYD AUTO
+android: 12 (SDK 32)
+widget_home_only=false home_packages=[com.android.launcher3, com.byd.launchermap]
+---
+09:26:51.977 screen hint-ignored pkg=app.morphe.android.youtube class=android.widget.FrameLayout #2992
+09:26:52.035 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #2993
+09:26:52.126 screen foreground pkg=app.morphe.android.youtube src=poll #2994
+09:26:53.563 screen hint-ignored pkg=app.morphe.android.youtube class=android.widget.FrameLayout #2995
+09:26:54.814 screen hint-ignored pkg=app.morphe.android.youtube class=android.view.ViewGroup #2996 (x4)
+09:27:06.365 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #2997
+12:20:21.932 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #3173 (x2)
+12:20:24.904 screen hint-ignored pkg=ru.yandex.yandexmaps class=android.widget.FrameLayout #3174
+12:20:25.358 screen foreground pkg=ru.yandex.yandexmaps src=poll #3175
+12:21:01.700 hud    arm via=sdk navi=0 screen=skipped can=1 isa=1 rb-navi=2 rb-screen=3 rb-can=-10011 rb-isa=-10011 #3176
+12:21:01.791 hud    way-route way=2 channels=can started=none #3177
+12:21:20.244 screen hint-ignored pkg=com.byd.avc class=android.widget.FrameLayout #3178
+12:21:20.272 screen foreground pkg=com.byd.avc class=com.byd.avc.AutoVideoActivity src=a11y #3179
+12:21:20.276 widget hide reason=camera #3180 by=#3179
+12:21:36.554 car    turn to=left #3181
+12:21:49.072 screen foreground pkg=ru.yandex.yandexmaps src=poll #3182
+12:21:49.940 widget show was=camera #3183 by=#3182

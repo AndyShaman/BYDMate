@@ -58,7 +58,7 @@ class ScreenTraceTest {
 
         assertEquals(
             listOf(
-                "screen foreground pkg=$CAMERA class=$CAMERA_ACTIVITY src=a11y #1",
+                "screen foreground pkg=$CAMERA class=$CAMERA_ACTIVITY src=a11y display=unknown #1",
                 "widget hide reason=camera #2 by=#1",
                 "screen hint-ignored pkg=$NAVIGATOR #3",
                 "widget show was=camera #4 by=#1",

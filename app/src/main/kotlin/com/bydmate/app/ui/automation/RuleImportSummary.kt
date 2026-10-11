@@ -101,8 +101,11 @@ internal object RuleImportSummary {
     fun action(action: ActionDef, context: Context, autoGo: (JSONObject) -> Boolean = { false }): String {
         val lc = context.appLocalizedContext()
         if (action.kind == "toggle") return toggleDisplayName(context, action.payload.orEmpty())
-        val labelRes = if (action.kind == "media_key") ActionDispatcher.mediaKeyNameRes(action.payload)
-        else ACTION_KIND_LABELS[action.kind]
+        val labelRes = when (action.kind) {
+            "media_key" -> ActionDispatcher.mediaKeyNameRes(action.payload)
+            "screen" -> ActionDispatcher.screenNameRes(action.payload)
+            else -> ACTION_KIND_LABELS[action.kind]
+        }
         val label = labelRes?.let { lc.getString(it) } ?: action.kind
         // Same default as the dispatcher: no flag, no minimize.
         val minimize = lc.getString(R.string.automation_import_minimize)

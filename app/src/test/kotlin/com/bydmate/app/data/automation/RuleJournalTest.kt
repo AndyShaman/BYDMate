@@ -182,6 +182,7 @@ class RuleJournalTest {
         assertEquals("""{"name":"Дом"}""", RuleJournal.shownPayload(nav))
         assertEquals("""{"title":"Заряд"}""", RuleJournal.shownPayload(note))
         assertEquals("30000", RuleJournal.shownPayload(pause))
+        assertEquals("0", RuleJournal.shownPayload(ActionDef("screen", "Экран: выключить", "screen", "0")))
         assertEquals(null, RuleJournal.shownPayload(window))
         // The payload key is there even when empty: it marks an entry that recorded payloads.
         assertTrue(RuleJournal.recordedAction(window).has("payload"))

@@ -34,6 +34,8 @@ import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import java.util.Locale
@@ -60,6 +62,39 @@ interface SplitWidgetEntryPoint {
     fun splitSessionManager(): SplitSessionManager
     fun splitOverlayController(): SplitOverlayController
     fun helperBootstrap(): HelperBootstrap
+    fun vehicleKindMonitor(): VehicleKindMonitor
+}
+
+/**
+ * DM-i hybrid (#184) inputs of the widget: the car type, the two fuel slots and the car's own
+ * range on battery, which replaces our SOC-based range on a hybrid.
+ */
+private data class WidgetHybrid(
+    val kind: VehicleKind = VehicleKind.UNKNOWN,
+    val fuelPercent: Int? = null,
+    val fuelRangeKm: Int? = null,
+    val evRangeKm: Int? = null,
+) {
+    fun rangeKm(estimatedRangeKm: Double?): Double? =
+        if (kind == VehicleKind.HYBRID) evRangeKm?.toDouble() else estimatedRangeKm
+
+    fun withData(data: com.bydmate.app.data.remote.DiParsData?): WidgetHybrid =
+        copy(fuelPercent = data?.fuelPercent, fuelRangeKm = data?.fuelRangeKm, evRangeKm = data?.evRangeKm)
+}
+
+/** Car type through the split entry point; on failure the widget simply stays EV. */
+@Suppress("TooGenericExceptionCaught") // runs on the widget scope, which has no exception handler
+private suspend fun collectVehicleKind(appCtx: Context, onKind: (VehicleKind) -> Unit) {
+    try {
+        EntryPointAccessors.fromApplication(appCtx, SplitWidgetEntryPoint::class.java)
+            .vehicleKindMonitor()
+            .kind
+            .collect { onKind(it) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w("WidgetController", "vehicle kind subscription failed: ${e.message}")
+    }
 }
 
 /**
@@ -127,6 +162,7 @@ object WidgetController {
     private var insideTempState = mutableStateOf<Int?>(null)
     private var batTempState = mutableStateOf<Int?>(null)
     private var voltsState = mutableStateOf<Double?>(null)
+    private var hybridState = mutableStateOf(WidgetHybrid())
     private var alphaState = mutableStateOf(1.0f)
     private var scaleState = mutableStateOf(1.0f)
     private var trashActive = mutableStateOf(false)
@@ -209,9 +245,10 @@ object WidgetController {
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setContent {
+                val hybrid = hybridState.value
                 FloatingWidgetView(
                     soc = socState.value,
-                    rangeKm = rangeState.value,
+                    rangeKm = hybrid.rangeKm(rangeState.value),
                     consumption = consumptionState.value,
                     trend = trendState.value,
                     sessionStartedAt = sessionStartedAtState.value,
@@ -222,6 +259,9 @@ object WidgetController {
                     alpha = alphaState.value,
                     scaleFactor = scaleState.value,
                     listening = listeningState.value,
+                    kind = hybrid.kind,
+                    fuelPercent = hybrid.fuelPercent,
+                    fuelRangeKm = hybrid.fuelRangeKm,
                 )
             }
             setOnTouchListener(WidgetTouchListener(viewCtx, prefs, metrics))
@@ -419,6 +459,7 @@ object WidgetController {
                 insideTempState.value = snap.data?.insideTemp
                 batTempState.value = snap.data?.avgBatTemp
                 voltsState.value = snap.data?.voltage12v
+                hybridState.value = hybridState.value.withData(snap.data)
                 sessionStartedAtState.value = snap.sessionStartedAt
                 tripDistanceKmState.value = snap.tripDistanceKm
                 consumptionState.value = snap.consumption.displayValue
@@ -446,6 +487,8 @@ object WidgetController {
                 if (reason != null) hideTrashZone()
             }
         }
+
+        scope.launch { collectVehicleKind(appCtx) { hybridState.value = hybridState.value.copy(kind = it) } }
 
         // Voice-session listening indicator (Wave B): reuses the existing ClusterEntryPoint Hilt
         // bridge (already used by SteeringWheelKeyService) to reach the @Singleton VoiceController

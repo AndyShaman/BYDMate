@@ -7,6 +7,8 @@ import com.bydmate.app.data.backup.TelegramBackupSink
 import com.bydmate.app.data.backup.TelegramSinkException
 import com.bydmate.app.data.backup.TgBackupConfig
 import com.bydmate.app.data.local.dao.TripDao
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.trips.TripCounterMath
 import com.bydmate.app.data.trips.TripCounterResets
@@ -23,6 +25,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -72,6 +75,7 @@ class TelegramReporter @Inject constructor(
     private val tripCounterResets: TripCounterResets,
     private val appStrings: AppStrings,
     private val offState: PowerOffArmState,
+    private val vehicleKindMonitor: VehicleKindMonitor? = null,
 ) {
     companion object {
         private const val TAG = "TgReport"
@@ -80,6 +84,7 @@ class TelegramReporter @Inject constructor(
         const val LATE_MARK_AFTER_MS = 2 * 60_000L
         private const val PARSE_MODE = "HTML"
         private const val RECENT_TRIPS = 5
+        private const val FUEL_CACHE_TTL_MS = 60_000L
     }
 
     sealed interface SendResult {
@@ -99,6 +104,14 @@ class TelegramReporter @Inject constructor(
     @Suppress("SpreadOperator") // at most three format arguments per string
     private val strings = ReportStrings { id, args -> appStrings.get(id, *args) }
     private val outboxMutex = Mutex()
+
+    /**
+     * [counterFuel] per counter, keyed by (reset ts, trip count) and kept [FUEL_CACHE_TTL_MS]: the
+     * power-off report is rebuilt every ~10 s, and litres can land on a trip already counted.
+     */
+    private data class FuelKey(val resetTs: Long, val tripCount: Int)
+    private data class FuelEntry(val key: FuelKey, val readAtMs: Long, val totals: FuelTotals?)
+    private val fuelCache = ConcurrentHashMap<Int, FuelEntry>()
 
     /**
      * Bumped by every [drainOutbox] call. [deliver] reads it before sending: if it moved while the
@@ -356,6 +369,9 @@ class TelegramReporter @Inject constructor(
         val lastTrip = tripDao.getRecent(RECENT_TRIPS).first().firstOrNull { (it.distanceKm ?: 0.0) > 0.0 }
         tripCounterResets.load()
         val tariff = settings.getTripCostTariff()
+        val hybrid = vehicleKindMonitor?.kind?.value == VehicleKind.HYBRID
+        val trip1 = tripCounter(1, tariff)
+        val trip2 = tripCounter(2, tariff)
         return ReportInputs(
             data = TrackingService.lastData.value,
             rangeKm = TrackingService.lastRangeKm.value,
@@ -363,9 +379,29 @@ class TelegramReporter @Inject constructor(
             longitude = location?.longitude,
             liveTrip = live,
             lastTrip = lastTrip,
-            trip1 = tripCounter(1, tariff),
-            trip2 = tripCounter(2, tariff),
+            trip1 = trip1,
+            trip2 = trip2,
+            hybrid = hybrid,
+            trip1Fuel = if (hybrid) counterFuel(1, trip1) else null,
+            trip2Fuel = if (hybrid) counterFuel(2, trip2) else null,
         )
+    }
+
+    /**
+     * Litres of the trips started since TRIP [n]'s reset that know their litres, over the km of those
+     * same trips; null when none does. Read again when the counter's reset or trip count moves, or
+     * after [FUEL_CACHE_TTL_MS].
+     */
+    private suspend fun counterFuel(n: Int, counter: TripCounterUi?): FuelTotals? {
+        val c = counter ?: return null
+        val key = FuelKey(c.resetTs, c.tripCount)
+        val nowMs = clock()
+        fuelCache[n]?.takeIf { it.key == key && nowMs - it.readAtMs < FUEL_CACHE_TTL_MS }?.let { return it.totals }
+        val known = tripDao.getByDateRange(c.resetTs, nowMs).first().filter { it.fuelLiters != null }
+        val totals = if (known.isEmpty()) null
+        else FuelTotals(known.sumOf { it.fuelLiters ?: 0.0 }, known.sumOf { it.distanceKm ?: 0.0 })
+        fuelCache[n] = FuelEntry(key, nowMs, totals)
+        return totals
     }
 
     /** TRIP [n] as the dashboard shows it now (DashboardViewModel.collectTripCounter, read once). */

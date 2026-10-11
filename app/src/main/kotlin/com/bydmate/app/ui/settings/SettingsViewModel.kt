@@ -195,6 +195,7 @@ data class SettingsUiState(
     val abrpApiKey: String = "",
     val abrpUserToken: String = "",
     val abrpCarModel: String = "",
+    val abrpSendLocation: Boolean = false,
     val abrpSaveStatus: String? = null,
     val webhookEnabled: Boolean = false,
     val webhookUrl: String = "",
@@ -370,11 +371,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter,
     private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge,
     private val vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao,
+    private val vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor,
 ) : ViewModel() {
 
     /** ADB control-channel verdict for the line under the ADB-restore toggle. */
     val adbVerdict: StateFlow<com.bydmate.app.data.autoservice.AdbVerdict?> = adbVerdictMonitor.verdict
     val adbChecking: StateFlow<Boolean> = adbVerdictMonitor.checking
+
+    /** Car type: the price-per-litre field shows only on a confirmed hybrid. */
+    val vehicleKind: StateFlow<com.bydmate.app.data.nativestack.VehicleKind> = vehicleKindMonitor.kind
 
     fun recheckAdb() = adbVerdictMonitor.recheck("settings")
 
@@ -531,6 +536,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
             val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+            val abrpSendLocation = settingsRepository.getString(SettingsRepository.KEY_ABRP_SEND_LOCATION, "false") == "true"
 
             val webhookEnabled = settingsRepository.getString(SettingsRepository.KEY_WEBHOOK_ENABLED, "false") == "true"
             val webhookUrl = settingsRepository.getString(SettingsRepository.KEY_WEBHOOK_URL, "")
@@ -630,6 +636,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     abrpApiKey = abrpApiKey,
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
+                    abrpSendLocation = abrpSendLocation,
                     webhookEnabled = webhookEnabled,
                     webhookUrl = webhookUrl,
                     webhookSecret = webhookSecret,
@@ -774,7 +781,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val wasEarliest = before.firstOrNull()?.id == period.id
             if (period.id == 0L) tariffPeriodDao.insert(period) else tariffPeriodDao.update(period)
             Log.i(CostCalculator.TAG, "period saved start=${period.startTs} home=${period.homeRate} " +
-                "dc=${period.dcRate} loss=${period.acLossPct}/${period.dcLossPct} rule=${period.tripRule}")
+                "dc=${period.dcRate} loss=${period.acLossPct}/${period.dcLossPct} rule=${period.tripRule} " +
+                "fuel=${period.fuelPricePerLiter}")
             // The earliest period also covers everything before its own date, so touching it
             // has to re-price the whole history, not just the span from its start_ts.
             val becameEarliest = tariffPeriodDao.getAllAsc().firstOrNull()?.startTs == period.startTs
@@ -1215,6 +1223,13 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(webhookEnabled = effective) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_WEBHOOK_ENABLED, effective.toString())
+        }
+    }
+
+    fun toggleAbrpSendLocation(enabled: Boolean) {
+        _uiState.update { it.copy(abrpSendLocation = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_SEND_LOCATION, enabled.toString())
         }
     }
 
@@ -1721,6 +1736,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 collected.set(collected.get().copy(hud = hud))
                 val hudSwitch = runCatching { helper.readBatch(HudDiagnostics.switchBatchItems()) }.getOrNull()
                 collected.set(collected.get().copy(hudSwitch = hudSwitch))
+                val batteryPreheat = runCatching { helper.readBatch(BatteryPreheatDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(batteryPreheat = batteryPreheat))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
@@ -1735,6 +1752,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         val windows: List<Pair<Int, Int>>? = null,
         val hud: List<Pair<Int, Int>>? = null,
         val hudSwitch: List<Pair<Int, Int>>? = null,
+        val batteryPreheat: List<Pair<Int, Int>>? = null,
     )
 
     /** Liveness and the seat, steering heat and window fid snapshots under ONE shared budget. */
@@ -1827,9 +1845,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
                 val abrpTokenLen = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "").length
                 val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+                val abrpSendLocation = settingsRepository.getString(SettingsRepository.KEY_ABRP_SEND_LOCATION, "false") == "true"
                 appendLine("data_source: $dataSource")
                 appendLine("battery_capacity: raw=\"$capacityRaw\" parsed=$capacityParsed")
-                appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
+                appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\" send_location=$abrpSendLocation")
                 appendLine("route_navigator=" + com.bydmate.app.data.automation.RouteNavigatorUris.normalize(
                     appContext.getSharedPreferences(
                         com.bydmate.app.data.automation.RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE
@@ -1862,6 +1881,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     "start=${it.startTs} home=${it.homeRate} dc=${it.dcRate} " +
                         "loss=${it.acLossPct}/${it.dcLossPct} rule=${it.tripRule}"
                 } ?: "(none)"))
+                appendLine("fuel_price_per_liter=" + (current?.fuelPricePerLiter?.toString() ?: ""))
             } catch (e: Exception) {
                 appendLine("(failed to gather tariff periods: ${e.message})")
             }
@@ -1922,6 +1942,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     .format(helperClient.readBatch(HybridProbeDiagnostics.batchItems()))
                     .forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
+            try {
+                appendLine(vehicleKindMonitor.dumpLine())
+            } catch (e: Exception) { appendLine("vehicle_kind: error ${e.message}") }
 
             appendLine(automationEngine.serviceStartDumpLine())
             // Automation rules (#177): issue reports about a rule that "does nothing"
@@ -2331,6 +2354,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 HudDiagnostics.format(helperDiag.hud).forEach { appendLine(it) }
                 // The HUD master switch (#292) and the HUD type, read only.
                 appendLine(HudDiagnostics.switchLine(helperDiag.hudSwitch))
+                // The battery warm-up (#311): fitted or not, and whether the car permits it now, read only.
+                appendLine(BatteryPreheatDiagnostics.line(helperDiag.batteryPreheat))
                 // How the daemon is reachable: a registered service name, or the Binder it
                 // broadcast to us on firmwares that refuse addService (#64/#148).
                 val registered = com.bydmate.app.data.vehicle.helperServiceBinder() != null

@@ -62,7 +62,9 @@ class HudAmapClusterLoopTest {
         assertEquals("Ленина", i.getStringExtra("NEXT_ROAD_NAME"))
         assertEquals(15000, i.getIntExtra("ROUTE_REMAIN_DIS", -99))
         assertEquals(1200, i.getIntExtra("ROUTE_REMAIN_TIME", -99))
-        assertEquals("20分", i.getStringExtra("ROUTE_REMAIN_TIME_AUTO"))
+        assertEquals("500 m", i.getStringExtra("SEG_REMAIN_DIS_AUTO"))
+        assertEquals("15.0 km", i.getStringExtra("ROUTE_REMAIN_DIS_AUTO"))
+        assertEquals("20 min", i.getStringExtra("ROUTE_REMAIN_TIME_AUTO"))
     }
 
     @Test fun `NEW_ICON follows the Gaode table and 0 stays 0`() {
@@ -76,18 +78,22 @@ class HudAmapClusterLoopTest {
         assertFalse(icon(0).hasExtra("ROUNG_ABOUT_NUM"))
     }
 
-    @Test fun `remaining time is written in the adapter's hours and minutes`() {
-        assertEquals("1时5分", HudAmapClusterLoop.remainTimeAuto(3900))
-        assertEquals("20分", HudAmapClusterLoop.remainTimeAuto(1200))
+    @Test fun `remaining time is written as the gateway path writes it, unknown route values send no string`() {
+        fun time(eta: Int): String? = HudAmapClusterLoop.buildGuideIntent(
+            NavGuidanceHub.Snapshot(active = true, distanceMeters = 300, etaSeconds = eta)).getStringExtra("ROUTE_REMAIN_TIME_AUTO")
+        assertEquals("1h 5m", time(3900))
+        assertEquals("20 min", time(1200))
         val unknown = HudAmapClusterLoop.buildGuideIntent(NavGuidanceHub.Snapshot(active = true, distanceMeters = 300))
         assertEquals(-1, unknown.getIntExtra("ROUTE_REMAIN_TIME", -99))
         assertEquals(-1, unknown.getIntExtra("ROUTE_REMAIN_DIS", -99))
         assertNull(unknown.getStringExtra("ROUTE_REMAIN_TIME_AUTO"))
+        assertNull(unknown.getStringExtra("ROUTE_REMAIN_DIS_AUTO"))
     }
 
     @Test fun `a distance below the floor is lifted like the gateway path`() {
         val i = HudAmapClusterLoop.buildGuideIntent(NavGuidanceHub.Snapshot(active = true, maneuverGaode = 2, distanceMeters = 5))
         assertEquals(HudProtobufBuilder.MIN_DISTANCE_METERS, i.getIntExtra("SEG_REMAIN_DIS", -99))
+        assertEquals("11 m", i.getStringExtra("SEG_REMAIN_DIS_AUTO"))
     }
 
     @Test fun `the route end is one KILL to the adapter, the leftover key goes with it`() {

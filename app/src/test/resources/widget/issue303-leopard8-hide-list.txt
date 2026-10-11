@@ -1,0 +1,197 @@
+# GitHub #303, BYDMate 3.20.0, dump bydmate_logs_20261011_114600.txt lines 853-1044 verbatim: listed apps on screen while cluster packages resume
+device: BYD AUTO DiLink5.1
+android: 13 (SDK 33)
+widget_home_only=true home_packages=[com.android.launcher3, com.byd.mycar]
+---
+18:25:21.160 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9918
+18:25:21.161 widget show was=not_home:com.huawei.maps.car.app #9919 by=#9918
+18:25:21.694 screen hint-ignored pkg=ru.fmplay class=android.widget.FrameLayout #9920
+18:25:21.716 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #9921
+18:25:21.886 screen foreground pkg=ru.fmplay src=poll #9922
+18:25:21.886 widget hide reason=app:ru.fmplay #9923 by=#9922
+18:25:22.920 car    cluster_music target=show:ru.fmplay sessions=ru.fmplay:3_com.byd.mediacenter:1 via=poll #9924
+18:25:22.933 car    cluster_music outcome=shown #9925
+18:25:33.910 screen foreground pkg=com.example.amapservice src=poll #9926
+18:25:33.911 widget hide reason=not_home:com.example.amapservice #9927 by=#9926
+18:25:34.313 screen foreground pkg=com.huawei.hibaic.adshmiic class=com.huawei.mdwmdashboardcastimpl.view.AlarmViewActivity src=a11y #9928
+18:25:34.313 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9929 by=#9928
+18:26:12.339 car    turn-end side=left blinks=2 ms=57480 #9930
+18:26:12.842 car    turn side=hazard #9931
+18:26:15.744 car    turn-end side=hazard blinks=1 ms=1402 #9932
+18:26:19.200 screen hint-ignored pkg=com.dotix.button class=android.widget.RelativeLayout #9933
+18:26:55.700 car    turn side=left #9934
+18:27:08.415 car    turn-end side=left blinks=1 ms=11215 #9935
+18:27:11.629 screen foreground pkg=com.example.amapservice src=poll #9936
+18:27:11.629 widget hide reason=not_home:com.example.amapservice #9937 by=#9936
+18:27:11.766 screen foreground pkg=com.huawei.hibaic.adshmiic class=com.huawei.mdwmdashboardcastimpl.view.AlarmViewActivity src=a11y #9938
+18:27:11.766 widget hide reason=not_home:com.huawei.hibaic.adshmiic #9939 by=#9938
+18:27:31.746 car    turn side=right #9940
+18:27:46.063 car    turn-end side=right blinks=1 ms=12817 #9941
+18:28:20.025 screen foreground pkg=ru.fmplay class=ru.fmplay.car.CarModeActivity src=a11y #9942
+18:28:20.027 widget hide reason=app:ru.fmplay #9943 by=#9942
+18:28:20.215 screen foreground pkg=com.huawei.maps.car.app class=com.huawei.maps.car.app.activity.AvmActivity src=a11y #9944
+18:28:20.224 widget hide reason=not_home:com.huawei.maps.car.app #9945 by=#9944
+-- 2026-10-10 --
+07:39:29.348 app    start version=506 name=3.20.0 #9946
+07:39:29.543 app    boot-receiver action=BOOT_COMPLETED service_running=false #9947
+07:39:30.290 app    start-worker trigger=worker:BOOT_COMPLETED attempt=0 result=ok #9948
+07:39:30.880 app    service-start #9949
+07:39:30.880 app    head-unit android=13 sdk=33 legacy=false #9950
+07:39:31.477 hud    status to=connecting #9951
+07:39:31.483 app    helper-connected via=servicemanager #9952
+07:39:31.496 screen foreground pkg=com.example.amapservice src=poll #9953
+07:39:31.505 car    cluster_music switch=on #9954
+07:39:31.528 app    service-trigger trigger=worker:BOOT_COMPLETED n=1 #9955
+07:39:31.584 car    cluster_music target=idle sessions=com.byd.mediacenter:1 via=poll #9956
+07:39:31.739 widget attach reason=service_start #9957
+07:39:32.666 widget home-packages pkgs=com.android.launcher3,com.byd.mycar #9958
+07:39:32.666 widget hide reason=not_home:com.example.amapservice #9959 by=#9953
+07:39:32.762 hud    status to=on rc=0 #9960
+07:39:32.855 auto   rule id=7 edge=fire src=poll #9961
+07:39:33.053 car    adas-subscribe confirmed=7 skipped=0 #9962
+07:39:33.827 screen foreground pkg=ru.fmplay src=poll #9963
+07:39:33.888 widget hide reason=app:ru.fmplay #9964 by=#9963
+07:39:33.925 app    a11y-unbound #9965
+07:39:33.926 app    a11y-destroyed #9966
+07:39:34.875 car    cluster_music target=show:ru.fmplay sessions=ru.fmplay:3_com.byd.mediacenter:1 via=poll #9967
+07:39:34.888 car    cluster_music outcome=shown #9968
+07:39:35.565 car    cluster_music outcome=source_reasserted reason=watch #9969
+07:39:35.952 app    a11y-connected streak=0 service_running=true #9970
+07:39:36.179 screen hint-ignored pkg=com.byd.autovoice class=android.widget.FrameLayout #9971
+07:39:36.274 auto   step rule=7 n=1 action=app_launch st=ok #9972 by=#9961
+07:39:36.387 screen foreground pkg=com.android.launcher3 src=poll #9973
+07:39:36.388 widget show was=app:ru.fmplay #9974 by=#9973
+07:39:37.784 screen foreground pkg=ru.fmplay class=ru.fmplay.car.CarModeActivity src=a11y #9975
+07:39:37.805 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9976
+07:39:37.880 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #9977
+07:39:37.932 app    a11y-grant reason=startup granted=true tries=2 reasserts=1 #9978
+07:39:38.607 screen hint-ignored pkg=com.byd.autovoice class=android.widget.FrameLayout #9979
+07:39:41.820 screen hint-ignored pkg=com.dotix.button class=android.widget.RelativeLayout #9980
+07:40:40.125 screen foreground pkg=com.byd.smarttravel src=poll #9981
+07:40:40.126 widget hide reason=not_home:com.byd.smarttravel #9982 by=#9981
+07:40:40.482 screen hint-ignored pkg=com.byd.smarttravel class=android.widget.FrameLayout #9983
+07:40:41.263 car    cluster_music outcome=shown #9984
+07:46:05.555 car    turn side=9 #9985
+07:46:08.657 car    turn-end side=9 blinks=1 ms=1602 #9986
+07:46:12.645 screen hint-ignored pkg=com.byd.vehicledialog class=android.app.AlertDialog #9987
+07:46:52.285 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #9988
+07:46:52.339 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9989
+07:46:52.369 widget show was=not_home:com.byd.smarttravel #9990 by=#9989
+07:46:54.370 screen foreground pkg=com.example.amapservice src=poll #9991
+07:46:54.371 widget hide reason=not_home:com.example.amapservice #9992 by=#9991
+07:46:55.251 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9993
+07:46:55.258 widget show was=not_home:com.example.amapservice #9994 by=#9993
+07:46:55.840 screen foreground pkg=com.byd.mycar class=com.byd.mycar.SeatActivity src=a11y #9995
+07:46:55.888 screen hint-ignored pkg=com.byd.mycar class=android.widget.FrameLayout #9996
+07:46:57.887 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #9997
+07:46:57.934 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #9998
+07:47:04.663 user   app-open #9999
+07:47:04.665 widget detach reason=app_foreground #10000
+07:47:04.678 user   app-background #10001
+07:47:04.692 widget attach reason=app_backgrounded #10002
+07:47:04.700 app    service-trigger trigger=activity n=2 #10003
+07:47:04.975 screen foreground pkg=com.android.permissioncontroller src=poll #10004
+07:47:05.049 user   app-open #10005
+07:47:05.051 widget detach reason=app_foreground #10006
+07:47:13.432 user   tab to=settings #10007
+07:47:16.181 user   app-background #10008
+07:47:16.194 widget attach reason=app_backgrounded #10009
+07:47:16.241 widget hide reason=not_home:com.android.permissioncontroller #10010 by=#10004
+07:47:16.413 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.Launcher src=a11y #10011
+07:47:16.417 widget show was=not_home:com.android.permissioncontroller #10012 by=#10011
+07:47:16.722 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #10013
+07:47:17.708 screen foreground pkg=com.openwifi class=com.openwifi.MainActivity src=a11y #10014
+07:47:17.728 widget hide reason=app:com.openwifi #10015 by=#10014
+07:47:17.987 screen hint-ignored pkg=com.openwifi class=android.widget.FrameLayout #10016
+07:47:18.192 screen hint-ignored pkg=com.openwifi class=android.app.AlertDialog #10017
+07:47:52.338 screen hint-ignored pkg=com.dotix.button class=android.widget.RelativeLayout #10018
+07:47:56.321 screen hint-ignored pkg=com.byd.vehicledialog class=android.widget.LinearLayout #10019
+07:48:11.817 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #10020
+07:48:11.833 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #10021
+07:48:11.845 widget show was=app:com.openwifi #10022 by=#10020
+07:48:55.458 screen hint-ignored pkg=ru.yandex.weatherplugin class=android.widget.FrameLayout #10023
+07:48:55.482 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #10024
+07:48:55.770 screen foreground pkg=ru.yandex.weatherplugin src=poll #10025
+07:48:55.771 widget hide reason=app:ru.yandex.weatherplugin #10026 by=#10025
+07:48:56.289 app    start-worker trigger=worker:task_removed attempt=0 result=ok #10027
+07:48:56.297 app    service-trigger trigger=worker:task_removed n=3 #10028
+07:49:01.365 screen hint-ignored pkg=ru.yandex.weatherplugin class=android.view.ViewGroup #10029
+07:50:09.932 screen foreground pkg=com.example.amapservice src=poll #10030
+07:50:09.934 widget hide reason=not_home:com.example.amapservice #10031 by=#10030
+07:50:10.222 screen foreground pkg=com.huawei.hibaic.adshmiic class=com.huawei.mdwmdashboardcastimpl.view.AlarmViewActivity src=a11y #10032
+07:50:10.223 widget hide reason=not_home:com.huawei.hibaic.adshmiic #10033 by=#10032
+07:50:34.940 car    turn side=right #10034
+07:50:48.457 car    turn-end side=right blinks=1 ms=12016 #10035
+07:50:48.923 user   app-open #10036
+07:50:48.925 widget detach reason=app_foreground #10037
+07:50:48.948 user   app-background #10038
+07:50:48.961 widget attach reason=app_backgrounded #10039
+07:50:48.972 app    service-trigger trigger=activity n=4 #10040
+07:50:49.060 screen foreground pkg=ru.yandex.weatherplugin class=ru.yandex.weatherplugin.newui.container.ContainerActivity src=a11y #10041
+07:50:49.077 widget hide reason=app:ru.yandex.weatherplugin #10042 by=#10041
+07:50:49.162 user   app-open #10043
+07:50:49.163 widget detach reason=app_foreground #10044
+07:50:49.543 screen foreground pkg=com.bydmate.app src=poll #10045
+07:50:49.736 screen foreground pkg=com.android.permissioncontroller class=com.android.permissioncontroller.permission.ui.GrantPermissionsActivity src=a11y #10046
+07:51:34.022 car    turn side=left #10047
+07:51:37.924 car    turn-end side=left blinks=1 ms=2402 #10048
+07:51:41.854 user   app-background #10049
+07:51:41.866 widget attach reason=app_backgrounded #10050
+07:51:41.944 widget hide reason=not_home:com.android.permissioncontroller #10051 by=#10046
+07:51:42.159 screen foreground pkg=com.byd.mycar src=poll #10052
+07:51:42.357 widget show was=not_home:com.android.permissioncontroller #10053 by=#10052
+07:51:42.423 screen hint-ignored pkg=com.byd.mycar class=android.widget.FrameLayout #10054
+07:52:11.269 car    turn side=right #10055
+07:52:36.801 car    turn-end side=right blinks=1 ms=24031 #10056
+07:52:53.019 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #10057
+07:52:53.040 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #10058
+07:52:54.979 screen foreground pkg=com.huawei.maps.car.app class=com.huawei.maps.car.app.activity.AvmActivity src=a11y #10059
+07:52:54.980 widget hide reason=not_home:com.huawei.maps.car.app #10060 by=#10059
+07:52:55.322 app    start-worker trigger=worker:task_removed attempt=0 result=ok #10061
+07:52:55.324 app    service-trigger trigger=worker:task_removed n=5 #10062
+07:53:34.379 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #10063
+07:53:34.401 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #10064
+07:53:34.450 widget show was=not_home:com.huawei.maps.car.app #10065 by=#10063
+07:54:20.656 car    turn side=left #10066
+07:54:32.772 car    turn-end side=left blinks=1 ms=10616 #10067
+07:55:07.629 screen hint-ignored pkg=com.byd.carsettings class=com.byd.systemsettings.wifi2.WifiDialog #10068
+07:55:17.642 screen foreground pkg=com.openwifi class=com.openwifi.MainActivity src=a11y #10069
+07:55:17.666 widget hide reason=app:com.openwifi #10070 by=#10069
+07:55:21.276 screen hint-ignored pkg=com.openwifi class=android.app.AlertDialog #10071
+07:55:41.774 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.Launcher src=a11y #10072
+07:55:41.790 widget show was=app:com.openwifi #10073 by=#10072
+07:56:23.177 screen hint-ignored pkg=com.byd.carsettings class=com.byd.systemsettings.wifi2.WifiDialog #10074
+07:56:31.646 screen foreground pkg=com.openwifi class=com.openwifi.MainActivity src=a11y #10075
+07:56:31.652 widget hide reason=app:com.openwifi #10076 by=#10075
+07:56:38.505 screen hint-ignored pkg=com.openwifi class=android.app.AlertDialog #10077
+07:56:40.352 screen foreground pkg=com.huawei.hibaic.adshmiic class=com.huawei.mdwmdashboardcastimpl.view.AlarmViewActivity src=a11y #10078
+07:56:40.353 widget hide reason=not_home:com.huawei.hibaic.adshmiic #10079 by=#10078
+07:56:42.457 screen foreground pkg=com.example.amapservice src=poll #10080
+07:56:42.458 widget hide reason=not_home:com.example.amapservice #10081 by=#10080
+07:56:44.168 screen foreground pkg=com.openwifi class=com.openwifi.MainActivity src=a11y #10082
+07:56:44.169 widget hide reason=app:com.openwifi #10083 by=#10082
+07:56:44.370 screen foreground pkg=android class=com.android.internal.app.ResolverActivity src=a11y #10084
+07:56:44.373 widget hide reason=not_home:android #10085 by=#10084
+07:56:46.471 screen foreground pkg=com.android.packageinstaller src=poll #10086
+07:56:47.355 screen hint-ignored pkg=com.android.packageinstaller class=android.app.Dialog #10087
+07:56:47.453 widget hide reason=not_home:com.android.packageinstaller #10088 by=#10086
+07:56:47.563 screen hint-ignored pkg=com.android.packageinstaller class=android.app.AlertDialog #10089
+07:56:47.576 screen hint-ignored pkg=com.android.packageinstaller class=android.app.Dialog #10090
+07:56:47.594 screen hint-ignored pkg=com.android.packageinstaller class=android.app.AlertDialog #10091
+07:56:49.361 screen hint-ignored pkg=com.android.packageinstaller class=android.app.Dialog #10092
+07:56:51.112 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.Launcher src=a11y #10093
+07:56:51.113 widget show was=not_home:com.android.packageinstaller #10094 by=#10093
+07:56:52.638 screen hint-ignored pkg=com.android.packageinstaller class=android.app.Dialog #10095
+07:56:53.213 screen foreground pkg=com.android.packageinstaller src=poll #10096
+07:56:53.214 widget hide reason=not_home:com.android.packageinstaller #10097 by=#10096
+07:56:55.660 screen foreground pkg=com.openwifi class=com.openwifi.MainActivity src=a11y #10098
+07:56:55.681 widget hide reason=app:com.openwifi #10099 by=#10098
+07:56:55.731 screen hint-ignored pkg=com.openwifi class=android.app.AlertDialog #10100
+07:56:55.800 screen hint-ignored pkg=com.openwifi class=android.widget.FrameLayout #10101
+07:56:57.471 screen foreground pkg=com.byd.appstartmanagement class=com.byd.appstartmanagement.frame.AppStartManagement src=a11y #10102
+07:56:57.475 widget hide reason=not_home:com.byd.appstartmanagement #10103 by=#10102
+07:57:03.110 screen foreground pkg=com.openwifi class=com.openwifi.MainActivity src=a11y #10104
+07:57:03.115 widget hide reason=app:com.openwifi #10105 by=#10104
+07:57:39.065 screen foreground pkg=com.android.launcher3 class=com.android.launcher3.home.MainActivity src=a11y #10106
+07:57:39.086 screen hint-ignored pkg=com.android.launcher3 class=android.widget.FrameLayout #10107
+07:57:39.089 widget show was=app:com.openwifi #10108 by=#10106

@@ -9,6 +9,7 @@ import com.bydmate.app.data.automation.VoiceFireResult
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
+import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.remote.InsightsManager
@@ -21,6 +22,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
@@ -302,5 +304,53 @@ class AgentToolsControlTest {
         val out = JSONObject(tools().execute(call("set_hotspot", """{}""")))
         assertTrue(out.has("error"))
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    }
+
+    // --- set_screen (#275) ---
+
+    @Test fun set_screen_on_false_dispatches_screen_payload_0() = runTest {
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val out = JSONObject(tools().execute(call("set_screen", """{"on":false}""")))
+        assertTrue(out.getBoolean("ok"))
+        coVerify { dispatcher.dispatch(match { it.kind == "screen" && it.payload == "0" }, null) }
+    }
+
+    @Test fun set_screen_on_true_dispatches_screen_payload_1() = runTest {
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val out = JSONObject(tools().execute(call("set_screen", """{"on":true}""")))
+        assertTrue(out.getBoolean("ok"))
+        coVerify { dispatcher.dispatch(match { it.kind == "screen" && it.payload == "1" }, null) }
+    }
+
+    @Test fun set_screen_without_on_reports_error_and_does_not_dispatch() = runTest {
+        val out = JSONObject(tools().execute(call("set_screen", """{}""")))
+        assertTrue(out.has("error"))
+        assertFalse(out.getString("error"), out.getString("error").contains("неизвестный инструмент"))
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    }
+
+    private fun screenRule(action: String) =
+        """{"name":"Сон","trigger":{"kind":"param","param":"SOC","operator":"<","value":"20"},"actions":[$action]}"""
+
+    @Test fun create_automation_screen_off_persists_payload_0() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        coEvery { ruleDao.getCount() } returns 0
+        val saved = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(saved)) } returns 1L
+
+        tools().execute(call("create_automation", screenRule("""{"kind":"screen","on":false}""")))
+
+        val action = ActionDef.listFromJson(saved.captured.actions).first()
+        assertEquals("screen", action.kind)
+        assertEquals("0", action.payload)
+    }
+
+    @Test fun create_automation_screen_missing_on_reports_error_no_insert() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+
+        val out = JSONObject(tools().execute(call("create_automation", screenRule("""{"kind":"screen"}"""))))
+
+        assertTrue(out.getString("error"), out.getString("error").contains("screen"))
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 }

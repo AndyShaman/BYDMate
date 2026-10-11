@@ -30,6 +30,8 @@ internal object HybridProbeDiagnostics {
         ProbeFid("mileage_hev", 1014, 1246773264, TX_GET_INT),
         ProbeFid("mileage_ev", 1014, 1246773284, TX_GET_INT),
         ProbeFid("fuel_tank_cap", 1001, 1336934422, TX_GET_INT),
+        ProbeFid("ev_range_km", 1014, 1246765118, TX_GET_INT),
+        ProbeFid("elec_phm", 1014, 1032863794, TX_GET_FLOAT),
     )
 
     fun batchItems(): List<BatchReadItem> = FIDS.map { BatchReadItem(it.tx, it.dev, it.fid) }

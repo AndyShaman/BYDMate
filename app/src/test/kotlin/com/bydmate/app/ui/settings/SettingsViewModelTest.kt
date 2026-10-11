@@ -137,6 +137,8 @@ class SettingsViewModelTest {
         override suspend fun getByBydId(bydId: Long): TripEntity? = null
         override suspend fun getTripsWithoutSoc(): List<TripEntity> = emptyList()
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
+        override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
+        override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
@@ -241,6 +243,9 @@ class SettingsViewModelTest {
 
     // Tariff fixture: fields rather than factory parameters, the factory is long enough.
     private var exportCostCalculator: com.bydmate.app.domain.cost.CostCalculator? = null
+
+    // Car type handed to the next built VM; null keeps the relaxed monitor.
+    private var vehicleKind: com.bydmate.app.data.nativestack.VehicleKind? = null
     private var tariffPeriodDaoOverride: TariffPeriodDao? = null
 
     /** In-memory stand-in for the Room DAO, including the unique `start_ts` constraint. */
@@ -306,6 +311,8 @@ class SettingsViewModelTest {
             settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx),
             mockk<TripTombstoneDao>(relaxed = true), mockk(relaxed = true),
             com.bydmate.app.data.repository.OdometerMarks(ctx),
+            com.bydmate.app.data.nativestack.kindMonitor(), mockk(relaxed = true),
+            mockk(relaxed = true), mockk(relaxed = true),
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
@@ -387,6 +394,8 @@ class SettingsViewModelTest {
             telegramReporter = mockk(relaxed = true),
             clusterMusicBridge = mockk(relaxed = true),
             vehicleWriteLogDao = mockk(relaxed = true),
+            vehicleKindMonitor = vehicleKind?.let { com.bydmate.app.data.nativestack.kindMonitor(it) }
+                ?: mockk(relaxed = true),
         )
     }
 
@@ -1991,6 +2000,29 @@ class SettingsViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify { calculator.recalculate(septemberStart, Long.MAX_VALUE) }
+    }
+
+    // DM-i (#184): the litre price is part of a period, so a new price re-prices from its date only.
+    @Test
+    fun `a new period with a litre price recalculates only from its own date`() = runTest {
+        val dao = twoPeriods()
+        tariffPeriodDaoOverride = dao
+        val calculator = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
+        exportCostCalculator = calculator
+        vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val octoberStart = 1_759_276_800_000L // 01.10.2026
+
+        vm.saveTariffPeriod(
+            TariffPeriodEntity(startTs = octoberStart, homeRate = 0.20, dcRate = 0.60, fuelPricePerLiter = 2.5)
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { calculator.recalculate(octoberStart, Long.MAX_VALUE) }
+        coVerify(exactly = 0) { calculator.recalculate(0L, any()) }
+        assertEquals(2.5, dao.rows.single { it.startTs == octoberStart }.fuelPricePerLiter!!, 0.0)
+        assertNull(dao.rows.single { it.startTs == septemberStart }.fuelPricePerLiter)
     }
 
     // --- Telegram backup bot «Проверить» (#237) ---

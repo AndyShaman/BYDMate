@@ -412,7 +412,7 @@ private fun RailItem(
  * button so the section stays compact but still tells the driver what is being charged.
  */
 @Composable
-private fun currentTariffPeriodSummary(state: SettingsUiState): String {
+private fun currentTariffPeriodSummary(state: SettingsUiState, hybrid: Boolean): String {
     val current = state.tariffPeriods.firstOrNull { it.startTs <= System.currentTimeMillis() }
         ?: state.tariffPeriods.lastOrNull()
         ?: return stringResource(R.string.settings_tariff_periods_empty)
@@ -424,7 +424,7 @@ private fun currentTariffPeriodSummary(state: SettingsUiState): String {
         R.string.settings_tariff_periods_summary,
         "%.2f".format(current.homeRate), "%.2f".format(current.dcRate), state.currencySymbol,
         "%.0f".format(current.acLossPct), "%.0f".format(current.dcLossPct),
-    )
+    ) + fuelPriceSuffix(current.fuelPricePerLiter, hybrid, stringResource(R.string.dashboard_unit_liters))
     return if (date == null) rates
     else stringResource(R.string.settings_tariff_periods_summary_since, date, rates)
 }
@@ -461,9 +461,12 @@ private fun BatterySection(
                 onSelect = { idx -> viewModel.saveChargeConnector(ChargeConnector.entries[idx]) },
             )
             SettingDivider()
+            val vehicleKind by viewModel.vehicleKind.collectAsStateWithLifecycle()
             SettingActionRow(
                 title = stringResource(R.string.settings_tariff_periods_title),
-                description = currentTariffPeriodSummary(state),
+                description = currentTariffPeriodSummary(
+                    state, hybrid = vehicleKind == com.bydmate.app.data.nativestack.VehicleKind.HYBRID,
+                ),
                 buttonLabel = stringResource(R.string.settings_tariff_periods_button),
                 onClick = { viewModel.showTariffPeriods(); onOpenTariffPeriods() },
                 style = SettingButtonStyle.Primary
@@ -565,6 +568,13 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 onValueChange = { viewModel.updateAbrpUserToken(it) },
                 keyboardType = KeyboardType.Password,
                 secret = true
+            )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_abrp_location_label),
+                traceId = "abrp_location",
+                description = stringResource(R.string.settings_abrp_location_description),
+                checked = state.abrpSendLocation,
+                onCheckedChange = { viewModel.toggleAbrpSendLocation(it) },
             )
             SettingActionRow(
                 title = stringResource(R.string.settings_abrp_save_button),
@@ -4577,6 +4587,7 @@ private fun cloudOverWifiStatusText(state: CloudOverWifiState): String? = when (
     CloudOverWifiState.WaitingInternet -> stringResource(R.string.settings_cloud_wifi_status_waiting)
     CloudOverWifiState.ProfileRejected -> stringResource(R.string.settings_cloud_wifi_status_rejected)
     CloudOverWifiState.CloudSilent -> stringResource(R.string.settings_cloud_wifi_status_silent)
+    CloudOverWifiState.ServerRefused -> stringResource(R.string.settings_cloud_wifi_status_refused)
     CloudOverWifiState.Connected -> stringResource(R.string.settings_cloud_wifi_status_connected)
     CloudOverWifiState.ReturnPending -> stringResource(R.string.settings_cloud_wifi_status_return_pending)
 }

@@ -16,6 +16,12 @@ enum class Decoder {
     FLOAT_KW,
     FLOAT_KWH,
     FLOAT_AMP,
+    /** Range in km; 2046 is the "no value" word an EV answers on the fuel range. */
+    INT_RANGE_KM,
+    /** Engine rpm; 8191 is the "no engine" word. */
+    INT_RPM,
+    /** Litres; zero or negative means the counter is absent. */
+    FLOAT_LITERS,
 }
 
 object ParamDecoder {
@@ -30,6 +36,8 @@ object ParamDecoder {
             Decoder.INT_TEMP_C_OFS40 -> (cleaned - 40).takeIf { it in -50..80 }
             // INT_DIV10 is a float-producing decoder — callers should use decodeFloat
             Decoder.INT_DIV10 -> cleaned
+            Decoder.INT_RANGE_KM -> cleaned.takeIf { it != RANGE_ABSENT }
+            Decoder.INT_RPM -> cleaned.takeIf { it != RPM_ABSENT }
             else -> null
         }
     }
@@ -50,7 +58,14 @@ object ParamDecoder {
                 val f = SentinelDecoder.parseFloatFromShellInt(rawInt) ?: return null
                 f.toDouble()
             }
+            Decoder.FLOAT_LITERS -> {
+                val f = SentinelDecoder.parseFloatFromShellInt(rawInt) ?: return null
+                f.toDouble().takeIf { it > 0.0 }
+            }
             else -> null
         }
     }
+
+    private const val RANGE_ABSENT = 2046
+    private const val RPM_ABSENT = 8191
 }

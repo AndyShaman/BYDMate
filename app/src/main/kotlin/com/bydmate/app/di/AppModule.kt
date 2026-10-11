@@ -374,6 +374,38 @@ object AppModule {
         }
     }
 
+    /** DM-i hybrid (#184): fuel columns on trips, the open trip's start counters, counter snapshots. */
+    internal val MIGRATION_22_23 = object : Migration(22, 23) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_liters REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN hev_km REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_total_start REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_total_end REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN mileage_hev_start REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN mileage_hev_end REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_cost REAL")
+            db.execSQL("ALTER TABLE tariff_periods ADD COLUMN fuel_price_per_liter REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN trip_start_fuel_total REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN trip_start_mileage_hev REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN on_ts INTEGER")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN on_fuel_total REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN on_mileage_hev REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN on_mileage REAL")
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS counter_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    ts INTEGER NOT NULL,
+                    fuel_total REAL,
+                    mileage_hev REAL,
+                    mileage_ev REAL,
+                    odometer REAL,
+                    reason TEXT NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_counter_snapshots_ts ON counter_snapshots(ts)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -389,7 +421,7 @@ object AppModule {
 
     /** Every production migration: the app database and a restored archive of an older schema share them. */
     fun withMigrations(builder: RoomDatabase.Builder<AppDatabase>): RoomDatabase.Builder<AppDatabase> =
-        builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
+        builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
 
     @Provides fun provideTripDao(db: AppDatabase): TripDao = db.tripDao()
     @Provides fun provideTripPointDao(db: AppDatabase): TripPointDao = db.tripPointDao()
@@ -416,6 +448,10 @@ object AppModule {
 
     @Provides
     fun provideTariffPeriodDao(db: AppDatabase): TariffPeriodDao = db.tariffPeriodDao()
+
+    @Provides
+    fun provideCounterSnapshotDao(db: AppDatabase): com.bydmate.app.data.local.dao.CounterSnapshotDao =
+        db.counterSnapshotDao()
 
     @Provides
     @Singleton
@@ -523,18 +559,21 @@ object AppModule {
 
     @Provides
     @Singleton
+    @Suppress("LongParameterList") // one parameter per injected dependency
     fun provideTripRecorder(
         tripDao: TripDao,
         lastStateDao: LastStateDao,
         energyDataReader: EnergyDataReader,
         deadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector,
         settingsRepository: SettingsRepository,
+        vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor,
     ): TripRecorder = TripRecorder(
         tripDao = tripDao,
         lastStateDao = lastStateDao,
         energyDataReader = energyDataReader,
         deadDetector = deadDetector,
         batteryCapacityKwh = { settingsRepository.getBatteryCapacity() },
+        kind = { vehicleKindMonitor.kind.value },
     )
 
     @Provides

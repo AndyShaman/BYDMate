@@ -78,6 +78,11 @@ class CommandTranslatorTest {
         assertEquals(CommandTranslator.Resolved("hud_off", 2), one("关闭抬头显示"))
     }
 
+    @Test fun `battery preheat commands map to the stock toggle values`() {
+        assertEquals(CommandTranslator.Resolved("battery_preheat_on", 1), one("打开电池预热"))
+        assertEquals(CommandTranslator.Resolved("battery_preheat_off", 2), one("关闭电池预热"))
+    }
+
     @Test fun `drive mode commands map to their dev 1023 values`() {
         val expected = mapOf(
             "ECO模式" to ("drive_mode_eco" to 2),

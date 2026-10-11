@@ -286,6 +286,8 @@ val ACTION_COMMANDS = listOf(
         ActionOption("冰箱制冷", R.string.auto_act_fridge_cool, R.string.auto_cat_fridge),
         ActionOption("冰箱制热", R.string.auto_act_fridge_heat, R.string.auto_cat_fridge),
         ActionOption("冰箱关闭", R.string.auto_act_fridge_off, R.string.auto_cat_fridge),
+        ActionOption("打开电池预热", R.string.auto_act_battery_preheat_on, R.string.auto_cat_energy),
+        ActionOption("关闭电池预热", R.string.auto_act_battery_preheat_off, R.string.auto_cat_energy),
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")
@@ -678,6 +680,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             is ActionValidationError.MediaVolumeMissing -> ctx.getString(R.string.auto_msg_media_volume_missing, err.index)
             is ActionValidationError.SentryInvalid -> ctx.getString(R.string.auto_msg_sentry_invalid, err.index)
             is ActionValidationError.HotspotInvalid -> ctx.getString(R.string.auto_msg_hotspot_invalid, err.index)
+            is ActionValidationError.ScreenInvalid -> ctx.getString(R.string.auto_msg_screen_invalid, err.index)
             is ActionValidationError.MediaKeyInvalid -> ctx.getString(R.string.auto_msg_media_key_invalid, err.index)
             is ActionValidationError.SpeakTextEmpty -> ctx.getString(R.string.auto_msg_speak_text_empty, err.index)
             is ActionValidationError.AgentQueryPromptEmpty -> ctx.getString(R.string.auto_msg_agent_query_prompt_empty, err.index)
@@ -1654,6 +1657,17 @@ fun newHotspotAction(context: Context): ActionDef = ActionDef(
     displayName = context.getString(R.string.automation_action_hotspot),
     kind = "hotspot",
     payload = "1"
+)
+
+// --- Screen backlight helpers (#275): payload "1" on, "0" off ---
+
+fun newScreenAction(context: Context, on: Boolean): ActionDef = ActionDef(
+    command = "screen",
+    displayName = context.getString(
+        if (on) R.string.automation_action_screen_on else R.string.automation_action_screen_off
+    ),
+    kind = "screen",
+    payload = if (on) "1" else "0"
 )
 
 // --- Cluster projection helpers ---

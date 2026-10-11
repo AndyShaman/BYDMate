@@ -3,6 +3,8 @@ package com.bydmate.app.data.remote
 import android.util.Log
 import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.autoservice.ChargingReading
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -36,7 +38,8 @@ import kotlin.math.round
  */
 @Singleton
 class IternioTelemetryClient @Inject constructor(
-    private val httpClient: OkHttpClient
+    private val httpClient: OkHttpClient,
+    private val vehicleKindMonitor: VehicleKindMonitor,
 ) {
     companion object {
         private const val TAG = "IternioTelemetry"
@@ -95,9 +98,9 @@ class IternioTelemetryClient @Inject constructor(
      *                    the moment our HTTP call lands. Defaults to now when
      *                    null (call-time fallback).
      *
-     * NO position is ever part of this payload (wave 2026-09-16): ABRP merges a telemetry
-     * position with the GPS it reads on the head unit itself, and the car marker jumps between
-     * the two sources (ABRP tickets, June 2026). ABRP on DiLink reads GPS itself.
+     * The base payload carries no position. TrackingService adds `lat`/`lon`/`heading` per
+     * target behind each target's own toggle (ABRP opt-in, webhook opt-in): ABRP on the head
+     * unit reads GPS itself, and two sources make the car marker jump (ABRP tickets, June 2026).
      */
     suspend fun send(
         apiKey: String,
@@ -163,7 +166,9 @@ class IternioTelemetryClient @Inject constructor(
         // and tag the chosen source in logcat so a missing live source
         // shows up as `power_source=zero_fallback`, distinct from a
         // genuine 0 kW snapshot during coast/standstill.
-        val sanePower = enginePowerKw?.takeIf { it in POWER_MIN_KW..POWER_MAX_KW }
+        // On a DM-i only the pack power (V × A) goes out: never the motor's ENG_POW, DiPars or 0.
+        val hybrid = vehicleKindMonitor.kind.value == VehicleKind.HYBRID
+        val sanePower = enginePowerKw?.takeIf { !hybrid && it in POWER_MIN_KW..POWER_MAX_KW }
         val isChargingNow = isCharging(data, charging)
         // Traction battery V/A. Our hvCurrent already follows the Iternio convention —
         // discharge positive, charge negative (FidMap: «negative = charging», #153) — so the
@@ -175,14 +180,20 @@ class IternioTelemetryClient @Inject constructor(
         val chargePowerKw = if (isChargingNow && hvVolt != null && hvAmp != null) {
             -(abs(hvVolt * hvAmp) / 1000.0).let { kw -> round(kw * 10) / 10 }
         } else null
-        val powerKw: Double = chargePowerKw ?: sanePower?.toDouble() ?: data.power ?: 0.0
+        // On a DM-i V × A is the pack power.
+        val hybridPowerKw = if (hybrid && hvVolt != null && hvAmp != null) {
+            (hvVolt * hvAmp / 1000.0).let { kw -> round(kw * 10) / 10 }
+        } else null
+        val powerKw: Double? = if (hybrid) chargePowerKw ?: hybridPowerKw else chargePowerKw ?: sanePower?.toDouble() ?: data.power ?: 0.0
         val powerSource = when {
             chargePowerKw != null -> "hv_charging"
+            hybridPowerKw != null -> "hv_hybrid"
+            hybrid -> "none"
             sanePower != null -> "autoservice"
             data.power != null -> "diplus"
             else -> "zero_fallback"
         }
-        telemetry.put("power", powerKw)
+        powerKw?.let { telemetry.put("power", it) }
         hvVolt?.let { telemetry.put("voltage", it) }
         hvAmp?.let { telemetry.put("current", it) }
         // Climate set point — what the driver asked for, not the cabin reading.

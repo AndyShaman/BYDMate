@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.R
@@ -39,7 +41,11 @@ data class MonthGroup(
     val totalKwh: Double,
     val avgConsumption: Double,
     val totalCost: Double,
-    val days: List<DayGroup>
+    val days: List<DayGroup>,
+    /** DM-i: litres of the month's trips, null when no trip carries a litre figure. */
+    val totalLiters: Double? = null,
+    /** DM-i: km of the month's trips that know their litres. */
+    val litersKm: Double? = null,
 )
 
 data class DayGroup(
@@ -48,7 +54,9 @@ data class DayGroup(
     val totalKwh: Double,
     val avgConsumption: Double,
     val totalCost: Double,
-    val trips: List<TripEntity>
+    val trips: List<TripEntity>,
+    val totalLiters: Double? = null,
+    val litersKm: Double? = null,
 )
 
 data class TripsUiState(
@@ -77,13 +85,15 @@ data class TripsUiState(
     val expandedTripId: Long? = null,
     val expandedTripPoints: List<TripPointEntity> = emptyList(),
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
+    val vehicleKind: VehicleKind = VehicleKind.UNKNOWN,
 )
 
 @HiltViewModel
 class TripsViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val tripPointDao: TripPointDao,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val vehicleKindMonitor: VehicleKindMonitor,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TripsUiState())
@@ -97,6 +107,9 @@ class TripsViewModel @Inject constructor(
             _uiState.update { it.copy(currencySymbol = symbol, mapTileSource = tileSource) }
         }
         loadTrips()
+        viewModelScope.launch {
+            vehicleKindMonitor.kind.collect { kind -> _uiState.update { it.copy(vehicleKind = kind) } }
+        }
     }
 
     fun setPeriod(period: TripPeriod) {
@@ -336,7 +349,9 @@ class TripsViewModel @Inject constructor(
                     totalKwh = kwh,
                     avgConsumption = if (km > 0) kwh / km * 100.0 else 0.0,
                     totalCost = dayTrips.sumOf { it.cost ?: 0.0 },
-                    trips = dayTrips
+                    trips = dayTrips,
+                    totalLiters = sumLiters(dayTrips),
+                    litersKm = litersKm(dayTrips),
                 )
             }
 
@@ -348,7 +363,9 @@ class TripsViewModel @Inject constructor(
                 totalKwh = kwh,
                 avgConsumption = if (km > 0) kwh / km * 100.0 else 0.0,
                 totalCost = monthTrips.sumOf { it.cost ?: 0.0 },
-                days = days
+                days = days,
+                totalLiters = sumLiters(monthTrips),
+                litersKm = litersKm(monthTrips),
             )
         }
     }

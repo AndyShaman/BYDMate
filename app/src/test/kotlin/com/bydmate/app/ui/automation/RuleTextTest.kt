@@ -265,6 +265,25 @@ class RuleTextTest {
         assertEquals("Медиа: пауза не выполнено", journalLine(run(recorded(pause, success = false), success = false), ctx, now, zone).what)
     }
 
+    @Test fun `a screen step reads as its picker entry in all six languages, also in the journal`() {
+        val off = ActionDef("screen", "x", "screen", "0")
+        val on = ActionDef("screen", "x", "screen", "1")
+        val labels = mapOf(
+            "en" to ("Screen: off" to "Screen: on"),
+            "be" to ("Экран: выключыць" to "Экран: уключыць"),
+            "pl" to ("Ekran: wyłącz" to "Ekran: włącz"),
+            "pt" to ("Tela: desligar" to "Tela: ligar"),
+            "zh" to ("关闭屏幕" to "打开屏幕"),
+            "ru" to ("Экран: выключить" to "Экран: включить"),
+        )
+        for ((tag, expected) in labels) {
+            LocalePreferences(ctx).setLanguage(tag)
+            val lc = ctx.appLocalizedContext()
+            assertEquals(tag, expected, actionText(off, lc) to actionText(on, lc))
+        }
+        assertEquals("Экран: выключить не выполнено", journalLine(run(recorded(off, success = false), success = false), ctx, now, zone).what)
+    }
+
     @Test fun `a run shows the parameters it recorded`() {
         val pause = ActionDef("", "Пауза", "delay", "30000")
         val note = ActionDef("", "Уведомление", "notification", """{"title":"Заряд","text":"t"}""")

@@ -28,7 +28,14 @@ data class ReportInputs(
     val lastTrip: TripEntity?,
     val trip1: TripCounterUi? = null,
     val trip2: TripCounterUi? = null,
+    /** A DM-i: the range comes from the car's own fields, the counters get a fuel line. */
+    val hybrid: Boolean = false,
+    val trip1Fuel: FuelTotals? = null,
+    val trip2Fuel: FuelTotals? = null,
 )
+
+/** Litres the recorded trips of a counter burned, over the kilometers of those trips. */
+data class FuelTotals(val liters: Double, val km: Double)
 
 /** The message in Telegram HTML plus what went into it, for the log (never the text itself). */
 data class BuiltReport(val text: String, val taken: List<ReportField>, val skipped: List<ReportField>)
@@ -192,7 +199,7 @@ object TelegramReportBuilder {
         val locale = Locale.forLanguageTag(lang)
         return when (field) {
             ReportField.SOC -> socPart(d?.soc, strings)
-            ReportField.RANGE -> rangePart(inputs.rangeKm, strings)
+            ReportField.RANGE -> rangeHtml(inputs, strings)
             ReportField.ODOMETER -> odometerLine(d?.mileage, strings)
             ReportField.TRIP -> tripBlock(inputs, strings, nowMs)
             ReportField.TRIP1, ReportField.TRIP2 -> counterBlock(field, inputs, strings)
@@ -211,6 +218,23 @@ object TelegramReportBuilder {
     /** «запас <b>312 км</b>», null for no range. */
     private fun rangePart(km: Double?, strings: ReportStrings): String? = km?.takeIf { it > 0.0 }?.let {
         markup(strings, R.string.tg_report_range, bold(escape(text(strings, R.string.tg_report_trip_km_whole, it.roundToInt()))))
+    }
+
+    /** A DM-i reports its own ranges; an EV shows the app's estimate. */
+    private fun rangeHtml(inputs: ReportInputs, strings: ReportStrings): String? =
+        if (inputs.hybrid) hybridRangePart(inputs.data, strings) else rangePart(inputs.rangeKm, strings)
+
+    /** «запас <b>46 км</b> на батарее, <b>512 км</b> на топливе», either half alone; null for neither. */
+    private fun hybridRangePart(d: DiParsData?, strings: ReportStrings): String? {
+        fun km(v: Int?) = v?.takeIf { it > 0 }?.let { bold(escape(text(strings, R.string.tg_report_trip_km_whole, it))) }
+        val ev = km(d?.evRangeKm)
+        val fuel = km(d?.fuelRangeKm)
+        return when {
+            ev != null && fuel != null -> markup(strings, R.string.tg_report_range_hybrid, ev, fuel)
+            ev != null -> markup(strings, R.string.tg_report_range_hybrid_ev, ev)
+            fuel != null -> markup(strings, R.string.tg_report_range_hybrid_fuel, fuel)
+            else -> null
+        }
     }
 
     /** «🧭 Пробег 23 456 км»: whole kilometers cut like the car's own odometer, grouped by the language. */
@@ -262,7 +286,9 @@ object TelegramReportBuilder {
         val durationMs = last.endTs?.let { it - last.startTs }?.takeIf { it > 0 }
         val start = text(strings, R.string.tg_report_trip_when, formatDate(last.startTs), formatTime(last.startTs))
         val title = "🚗 ${bold(escape(text(strings, R.string.tg_report_trip_last)))} ${escape(start)}"
-        return tripLines(title, km, last.kwhPer100km?.takeIf { it > 0.0 }, durationMs, strings)
+        val block = tripLines(title, km, last.kwhPer100km?.takeIf { it > 0.0 }, durationMs, strings)
+        val liters = last.fuelLiters?.takeIf { inputs.hybrid } ?: return block
+        return block + "\n" + INDENT + escape(text(strings, R.string.tg_report_trip_fuel, liters))
     }
 
     /**
@@ -278,7 +304,11 @@ object TelegramReportBuilder {
         val since = if (c.resetTs <= 0L) text(strings, R.string.dashboard_trip_since_all_time)
         else text(strings, R.string.tg_report_counter_since, formatDate(c.resetTs))
         val title = "🔁 ${bold(escape(text(strings, field.labelRes)))} ${escape(since)}"
-        return tripLines(title, c.km, consumption, c.drivingMs.takeIf { it > 0L }, strings)
+        val block = tripLines(title, c.km, consumption, c.drivingMs.takeIf { it > 0L }, strings)
+        val fuel = (if (field == ReportField.TRIP1) inputs.trip1Fuel else inputs.trip2Fuel)
+            ?.takeIf { inputs.hybrid && it.km > 0.0 }
+            ?: return block
+        return block + "\n" + INDENT + escape(text(strings, R.string.tg_report_fuel_period, fuel.liters, fuel.liters / fuel.km * 100.0))
     }
 
     /** [title] (HTML) and the indented «14 км за 35 мин» / «Расход …» lines under it. */

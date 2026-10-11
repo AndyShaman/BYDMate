@@ -99,7 +99,10 @@ class MediaSessionListenerService : NotificationListenerService() {
         }
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+    // Android 10 delivers a removal whose notification it could not fetch as null (#301); the
+    // parameter check of a non-null signature would throw before runCatching.
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        if (sbn == null) return
         runCatching {
             if (sbn.packageName !in NavPackages.GUIDANCE_SOURCES) return
             // Donor removal semantics: never deactivate immediately - Navigator

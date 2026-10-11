@@ -2,6 +2,7 @@ package com.bydmate.app.data.autoservice
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -245,6 +246,102 @@ class CloudOverWifiManagerTest {
         m.attemptIfNeeded("test")
 
         assertEquals(CloudOverWifiState.CloudSilent, m.state.value)
+    }
+
+    @Test
+    fun `registration stuck at step 5 is reported as the server refusing the car`() = runTest {
+        val adb = nativeSimCar().apply {
+            cloudComesUp = false
+            props[TCP_STEP] = "5"
+            props[REG_ERRCODE] = "1"
+        }
+        val m = manager(FakePrefs(), adb)
+
+        m.attemptIfNeeded("test")
+
+        assertEquals(CloudOverWifiState.ServerRefused, m.state.value)
+    }
+
+    @Test
+    fun `registration error code 7 is reported as the server refusing the car`() = runTest {
+        val adb = nativeSimCar().apply {
+            cloudComesUp = false
+            props[TCP_STEP] = "0"
+            props[REG_ERRCODE] = "7"
+        }
+        val m = manager(FakePrefs(), adb)
+
+        m.attemptIfNeeded("test")
+
+        assertEquals(CloudOverWifiState.ServerRefused, m.state.value)
+    }
+
+    @Test
+    fun `sticky success code 1 or attempt in progress code 10 is not a refusal`() = runTest {
+        for (code in listOf("1", "10", "0", "")) {
+            val adb = nativeSimCar().apply {
+                cloudComesUp = false
+                props[TCP_STEP] = "3"
+                props[REG_ERRCODE] = code
+            }
+            val m = manager(FakePrefs(), adb)
+
+            m.attemptIfNeeded("test")
+
+            assertEquals("code '$code'", CloudOverWifiState.CloudSilent, m.state.value)
+        }
+    }
+
+    @Test
+    fun `step 5 with an attempt in flight code 10 is not a refusal`() = runTest {
+        val adb = nativeSimCar().apply {
+            cloudComesUp = false
+            props[TCP_STEP] = "5"
+            props[REG_ERRCODE] = "10"
+        }
+        val m = manager(FakePrefs(), adb)
+
+        m.attemptIfNeeded("test")
+
+        assertEquals(CloudOverWifiState.CloudSilent, m.state.value)
+    }
+
+    @Test
+    fun `toggle off during the verdict wait stops polling and returns the profile right away`() = runTest {
+        val adb = nativeSimCar().apply { cloudComesUp = false }
+        val prefs = FakePrefs()
+        val m = manager(prefs, adb)
+        backgroundScope.launch { m.attemptIfNeeded("test") }
+        advanceTimeBy(PROFILE_AND_FIRST_POLL_MS)
+        runCurrent()
+        val readsBeforeOff = adb.execs.count { it == "service call cloudmanager 7" }
+
+        m.setEnabled(false)
+        advanceTimeBy(CloudOverWifiManager.CLOUD_SETTLE_MS + 1)
+        runCurrent()
+
+        val pollsAfterOff = adb.execs.count { it == "service call cloudmanager 7" } - readsBeforeOff
+        assertTrue("polled $pollsAfterOff times after toggle off", pollsAfterOff == 0)
+        assertTrue(adb.execs.contains(CLOUD_STOP))
+        settle()
+        assertEquals(CloudOverWifiState.Disabled, m.state.value)
+        assertNull(prefs.saved)
+    }
+
+    @Test
+    fun `cloud that comes up within the verdict window is connected, not silent`() = runTest {
+        val adb = nativeSimCar().apply { cloudComesUp = false }
+        var statusReads = 0
+        adb.onExec = { cmd ->
+            // Read 1 is before the start. The switch lands after read 4 is answered, so the
+            // cloud is first seen up on the fourth poll after the start (20 s), inside the window.
+            if (cmd == "service call cloudmanager 7" && ++statusReads == 4) adb.cloud7 = CLOUD_ON
+        }
+        val m = manager(FakePrefs(), adb)
+
+        m.attemptIfNeeded("test")
+
+        assertEquals(CloudOverWifiState.Connected, m.state.value)
     }
 
     @Test
@@ -552,6 +649,11 @@ class CloudOverWifiManagerTest {
         const val APN1_DISABLE = "persist.radio.net.lte.apn1.disable"
         const val APN1_STATE = "net.lte.apn1.state"
         const val APN3_STATE = "net.lte.apn3.state"
+        const val TCP_STEP = "sys.tcp_step"
+
+        // Profile settle 3 s plus the first 5 s poll after the start, plus a margin.
+        const val PROFILE_AND_FIRST_POLL_MS = 8_500L
+        const val REG_ERRCODE = "sys.tcp_reg_errcode"
         const val CLOUD_ON = "Result: Parcel(00000000 00000001   '........')"
         const val CLOUD_OFF = "Result: Parcel(00000000 00000000   '........')"
     }

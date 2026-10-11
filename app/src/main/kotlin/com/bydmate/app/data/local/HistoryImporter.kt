@@ -2,16 +2,22 @@ package com.bydmate.app.data.local
 
 import android.content.Context
 import android.util.Log
+import com.bydmate.app.data.local.dao.CounterSnapshotDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.OdometerMarks
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.data.trips.CounterSnapshotWriter
+import com.bydmate.app.data.trips.TripFuel
 import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -34,6 +40,10 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
     private val tripTombstoneDao: TripTombstoneDao,
     private val costCalculator: CostCalculator,
     private val odometerMarks: OdometerMarks,
+    private val vehicleKind: VehicleKindMonitor,
+    private val counterSnapshotDao: CounterSnapshotDao,
+    private val counterSnapshotWriter: CounterSnapshotWriter,
+    private val lastStateDao: LastStateDao,
 ) {
     companion object {
         private const val TAG = "HistoryImporter"
@@ -42,6 +52,12 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         // Mirror of TrackingService.SESSION_IDLE_CLOSE_MS — the idle gap after which an
         // open SOC session is considered finished and promotable to a completed bookmark.
         private const val PENDING_SESSION_IDLE_CLOSE_MS = 10_000L
+
+        /** A counter snapshot belongs to a trip edge only this close to it (DM-i, #184). */
+        internal const val COUNTER_EDGE_WINDOW_MS = 90_000L
+
+        /** Only trips this recent are offered counters; snapshots are kept 90 days, so it is safe. */
+        internal const val COUNTER_ATTACH_LOOKBACK_MS = 7L * 24 * 60 * 60 * 1000
 
         /** A just-finished trip may borrow the live outside temperature; an older one may not. */
         internal const val FRESH_TEMP_WINDOW_MS = 10 * 60 * 1000L
@@ -297,7 +313,12 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         socEnd: Int?,
         capacity: Double,
     ): Double? {
-        val sane = TripEnergySanity.kwhFor(raw, km, socStart, socEnd, capacity)
+        // DM-i: the engine charges the pack on the way, so a SOC delta is no trip figure.
+        val sane = if (vehicleKind.kind.value == VehicleKind.HYBRID) {
+            raw.takeIf { TripEnergySanity.isPlausible(it, km) }
+        } else {
+            TripEnergySanity.kwhFor(raw, km, socStart, socEnd, capacity)
+        }
         if (sane != raw) {
             Log.w(TAG, "energydata kwh implausible: id=$bydId kwh=$raw km=$km " +
                 "soc=$socStart->$socEnd -> ${sane ?: "null"}")
@@ -398,7 +419,9 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
      */
     suspend fun calculateMissingCosts() {
         try {
-            val calculated = costCalculator.priceUncostedTrips(tripDao.getTripsWithoutCost())
+            val hybrid = vehicleKind.kind.value == VehicleKind.HYBRID
+            val trips = if (hybrid) tripDao.getHybridTripsWithoutCost() else tripDao.getTripsWithoutCost()
+            val calculated = costCalculator.priceUncostedTrips(trips)
             Log.d(TAG, "calculateMissingCosts: $calculated trips")
         } catch (e: Exception) {
             Log.e(TAG, "calculateMissingCosts failed", e)
@@ -420,6 +443,39 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             Log.d(TAG, "attachGpsPoints: attached $attached points")
         } catch (e: Exception) {
             Log.e(TAG, "attachGpsPoints failed", e)
+        }
+    }
+
+    /**
+     * DM-i only: gives energydata trips the fuel counters of a snapshot pair taken at their own
+     * start and end (within ±[COUNTER_EDGE_WINDOW_MS]). No pair, no litres: a snapshot further
+     * away is never used and litres are never spread between trips.
+     */
+    suspend fun attachCounters() {
+        if (vehicleKind.kind.value != VehicleKind.HYBRID) return
+        try {
+            var attached = 0
+            val since = System.currentTimeMillis() - COUNTER_ATTACH_LOOKBACK_MS
+            for (trip in tripDao.getEnergyDataTripsWithoutCounters(since)) {
+                val endTs = trip.endTs ?: continue
+                val start = counterSnapshotDao.nearest(trip.startTs, COUNTER_EDGE_WINDOW_MS) ?: continue
+                val end = counterSnapshotDao.nearest(endTs, COUNTER_EDGE_WINDOW_MS) ?: continue
+                if (end.ts <= start.ts) continue
+                tripDao.update(
+                    trip.copy(
+                        fuelLiters = TripFuel.liters(start.fuelTotal, end.fuelTotal),
+                        hevKm = TripFuel.hevKm(start.mileageHev, end.mileageHev, trip.distanceKm),
+                        fuelTotalStart = start.fuelTotal,
+                        fuelTotalEnd = end.fuelTotal,
+                        mileageHevStart = start.mileageHev,
+                        mileageHevEnd = end.mileageHev,
+                    )
+                )
+                attached++
+            }
+            Log.d(TAG, "attachCounters: $attached trips")
+        } catch (e: Exception) {
+            Log.e(TAG, "attachCounters failed", e)
         }
     }
 
@@ -558,6 +614,12 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
      */
     suspend fun recalculateConsumptionFromEnergyData(): Int {
         if (settingsRepository.isConsumptionRecalcDone()) return 0
+        // No folder (Song, Atto: #301): nothing to recalculate, not a failure. The flag stays unset,
+        // so a Leopard 3 whose folder is only missing right now still gets its recalculation.
+        if (!energyDataReader.energyDataDir().exists()) {
+            Log.d(TAG, "recalculateConsumption: no energydata directory, skipped")
+            return 0
+        }
 
         return try {
             val bydRecords = energyDataReader.readTrips()
@@ -645,11 +707,23 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
      * Unified sync entry point — always uses energydata pipeline.
      */
     suspend fun runSync(): ImportResult {
+        // runSync starts at app and service start, before the poll loop has loaded the cached car
+        // type: an UNKNOWN kind would SOC-repair a hybrid trip's kWh for good. Then (DM-i) the end
+        // edge of the trip that ended at power-off, before attachCounters() looks for it.
+        runCatching { vehicleKind.awaitCache() }
+            .onFailure { Log.w(TAG, "vehicle kind cache load failed", it) }
+        val kind = vehicleKind.kind.value
+        if (kind == VehicleKind.HYBRID) {
+            runCatching { counterSnapshotWriter.onColdStart(lastStateDao.getCurrent(), kind) }
+                .onFailure { Log.w(TAG, "CounterSnapshotWriter.onColdStart failed", it) }
+        }
         cleanupIdleDrainV2()
         val r = syncFromEnergyData()
         recalculateConsumptionFromEnergyData()
         repairImplausibleKwh()
         fillOdometerFromMarks()
+        // Before the costs: a trip priced without its litres is never priced again.
+        attachCounters()
         calculateMissingCosts()
         attachGpsPoints()
         return r

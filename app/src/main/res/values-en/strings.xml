@@ -95,14 +95,15 @@
     <string name="settings_adb_restore_status_failed">Error: %1$s</string>
     <string name="settings_adb_restore_status_unsupported">Not available on Android 10. If ADB is gone after a reboot, turn it on again following the guide on GitHub, section “Enable ADB”.</string>
     <string name="settings_cloud_wifi_title">BYD cloud over Wi-Fi</string>
-    <string name="settings_cloud_wifi_desc">The BYD phone app sees the car while it is on Wi-Fi. Needs the original Chinese SIM.</string>
+    <string name="settings_cloud_wifi_desc">The BYD phone app sees the car while it is on Wi-Fi. Cars on the new BYD servers need a Chinese VPN.</string>
     <string name="settings_cloud_wifi_help_title">How the BYD cloud over Wi-Fi works</string>
-    <string name="settings_cloud_wifi_help_body">When the original Chinese SIM in the car has no network, the car is cut off from the BYD cloud: no over-the-air updates, no NFC key and no control from the BYD phone app.\n\nWith this setting BYDMate connects the car to the cloud over Wi-Fi: your home network, a phone hotspot or any other network with internet.\n\nConditions:\n\n1. The car has its original Chinese SIM. The BYD cloud only lets that SIM in.\n\n2. Some cars need a Chinese VPN on the router. It is set up on the router, not in the app.\n\n3. If the car already has its own mobile data, nothing changes: the cloud works anyway.\n\nWhen you switch the setting off, the app returns the car\'s previous connection settings.</string>
+    <string name="settings_cloud_wifi_help_body">Without a link to the BYD cloud there are no over-the-air updates, no NFC key and no control from the BYD phone app.\n\nWith this setting BYDMate connects the car to the cloud over Wi-Fi: your home network, a phone hotspot or any other network with internet.\n\nConditions:\n\n1. Cars on the new BYD servers need a Chinese VPN: the server only lets in connections from a Chinese address. A VPN on the router the car connects to is the most reliable, because it does not depend on the head unit. A VPN app on the head unit itself works only while the head unit is on.\n\n2. If the car already has its own mobile data, nothing changes: the cloud works anyway.\n\nWhen you switch the setting off, the app returns the car\'s previous connection settings.</string>
     <string name="settings_cloud_wifi_status_connected">Connected to the BYD cloud</string>
     <string name="settings_cloud_wifi_status_own_cellular">The car has its own mobile data, the cloud works anyway</string>
     <string name="settings_cloud_wifi_status_waiting">Waiting for Wi-Fi with internet</string>
     <string name="settings_cloud_wifi_status_rejected">The car did not accept the connection setting</string>
     <string name="settings_cloud_wifi_status_silent">The BYD cloud did not answer. We will try again on the next Wi-Fi connection</string>
+    <string name="settings_cloud_wifi_status_refused">The BYD server refuses the car. It needs a Chinese VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">No ADB access: turn on ADB to use this setting</string>
     <string name="settings_cloud_wifi_status_return_pending">The car\'s previous connection settings are not back yet. We will try again next time Wi-Fi connects</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
@@ -221,6 +222,8 @@
     <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent by default.</string>
     <string name="settings_abrp_token_label">Live data token from ABRP</string>
     <string name="settings_abrp_save_button">Save ABRP</string>
+    <string name="settings_abrp_location_label">Send coordinates to ABRP</string>
+    <string name="settings_abrp_location_description">For a rare case: following the car in ABRP on a phone while ABRP in the car itself is not running. If ABRP is open in the car, it takes GPS on its own, and with this setting the car marker on the map starts jumping. Off by default.</string>
     <string name="settings_webhook_section_header">Webhook - telemetry</string>
     <string name="settings_webhook_label">Live data -> your own server</string>
     <string name="settings_webhook_description">The same JSON that goes to ABRP (SOC, power, temperatures, odometer, tire pressure, charging) is sent as a POST request to your URL: once per second while driving, once every 8 seconds while charging, once every 30 seconds while parked. Coordinates are not sent by default.</string>
@@ -513,6 +516,8 @@
     <string name="automation_action_hotspot">Wi-Fi hotspot</string>
     <string name="automation_action_hotspot_on">Enable</string>
     <string name="automation_action_hotspot_off">Disable</string>
+    <string name="automation_action_screen_off">Screen: off</string>
+    <string name="automation_action_screen_on">Screen: on</string>
     <string name="automation_action_speak">Speak text</string>
     <string name="automation_action_agent_query">Ask the agent</string>
     <string name="auto_act_speak">Speak text</string>
@@ -1077,6 +1082,11 @@
     <string name="auto_act_hud_on">HUD: on</string>
     <string name="auto_act_hud_off">HUD: off</string>
     <string name="hud_not_equipped">This car has no HUD</string>
+    <string name="auto_act_battery_preheat_on">Battery warm-up: on</string>
+    <string name="auto_act_battery_preheat_off">Battery warm-up: off</string>
+    <string name="battery_preheat_not_equipped">This car has no battery warm-up</string>
+    <string name="battery_preheat_not_needed">The car reports that battery warm-up is not needed right now</string>
+    <string name="battery_preheat_gun_connected">Battery warm-up is unavailable while the charging cable is connected</string>
     <string name="auto_act_ambient_light_on">Ambient Light On</string>
     <string name="auto_act_ambient_light_off">Ambient Light Off</string>
     <string name="auto_act_drl_on">DRL On</string>
@@ -1141,6 +1151,7 @@
     <string name="auto_msg_sentry_invalid">Action #%1$d: invalid sentry mode state</string>
     <string name="auto_msg_media_key_invalid">Action #%1$d: choose play or pause</string>
     <string name="auto_msg_hotspot_invalid">Action #%1$d: invalid hotspot state</string>
+    <string name="auto_msg_screen_invalid">Action #%1$d: invalid screen state</string>
     <string name="auto_msg_speak_text_empty">Action #%1$d: speak text is not set</string>
     <string name="auto_msg_agent_query_prompt_empty">Action #%1$d: agent query prompt is not set</string>
     <string name="auto_msg_name_cond_action_required">Name and at least one condition and action are required</string>
@@ -1706,6 +1717,8 @@
     <string name="dispatch_sentry_failed">Could not switch sentry mode</string>
     <string name="dispatch_hotspot_invalid_state">Invalid Wi-Fi hotspot state</string>
     <string name="dispatch_hotspot_failed">Could not switch the Wi-Fi hotspot</string>
+    <string name="dispatch_screen_invalid_state">Invalid screen state</string>
+    <string name="dispatch_screen_not_available">Screen control is not available on this car</string>
     <string name="dispatch_cluster_invalid_state">Invalid cluster projection state</string>
     <string name="dispatch_cluster_daemon_restarting">the service process is restarting</string>
     <string name="dispatch_cluster_not_on">projection to the cluster did not turn on</string>
@@ -1954,4 +1967,36 @@
     <string name="auto_ui_test_park">Not run: this rule works only when parked. Shift to P.</string>
     <string name="auto_ui_confirm_rule">Rule «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Cancels in %1$d s</string>
+    <!-- DM-i hybrid (#184) -->
+    <string name="dashboard_range_label_battery">on battery</string>
+    <string name="dashboard_fuel_tank">tank</string>
+    <string name="dashboard_fuel_range">on fuel</string>
+    <string name="dashboard_fuel_popup_tank">Tank</string>
+    <string name="dashboard_fuel_popup_fuel_range">Range on fuel</string>
+    <string name="dashboard_fuel_popup_ev_range">Range on battery</string>
+    <string name="dashboard_fuel_popup_engine_rpm">Engine speed</string>
+    <string name="dashboard_fuel_rpm_value">%1$d rpm</string>
+    <string name="dashboard_fuel_engine_off">Engine off</string>
+    <string name="dashboard_fuel_popup_mileage_hev">Distance on engine</string>
+    <string name="dashboard_fuel_popup_mileage_ev">Distance on battery</string>
+    <string name="dashboard_fuel_popup_fuel_total">Fuel used, all time</string>
+    <string name="dashboard_fuel_popup_price">Price per litre</string>
+    <string name="dashboard_fuel_price_edit">edit</string>
+    <string name="dashboard_fuel_footer">Car data</string>
+    <string name="dashboard_fuel_percent_value">%1$d %%</string>
+    <string name="dashboard_fuel_liters_value">%1$.1f L</string>
+    <string name="dashboard_unit_liters">L</string>
+    <string name="dashboard_distance_hev_subtitle">%1$s · engine %2$.1f km</string>
+    <string name="dashboard_energy_fuel_subtitle">+ %1$.1f L</string>
+    <string name="dashboard_consumption_fuel_value">%1$.1f L/100</string>
+    <string name="dashboard_consumption_elec_subtitle">%1$.1f kWh/100 · all km</string>
+    <string name="dashboard_cost_split_subtitle">%1$.2f elec. + %2$.2f fuel</string>
+    <string name="trip_detail_fuel_label">Fuel</string>
+    <string name="trip_detail_hev_ev_label">On engine / on battery</string>
+    <string name="trip_detail_hev_ev_value">%1$.0f / %2$.0f km</string>
+    <string name="trip_detail_fuel_cost_label">Fuel cost</string>
+    <string name="tech_label_engine_rpm">engine rpm</string>
+    <string name="tech_card_fuel">Fuel</string>
+    <string name="settings_fuel_price_label">Price per litre</string>
+    <string name="settings_fuel_price_hint">per litre, for trips from this date</string>
 </resources>

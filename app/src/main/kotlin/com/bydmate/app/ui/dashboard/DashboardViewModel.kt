@@ -7,6 +7,9 @@ import com.bydmate.app.data.autoservice.AdbVerdict
 import com.bydmate.app.data.autoservice.AdbVerdictMonitor
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.local.dao.TariffPeriodDao
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
@@ -20,7 +23,9 @@ import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
+import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.ui.trips.litersKm
 import com.bydmate.app.util.CalendarPeriods
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -101,7 +107,53 @@ data class DashboardUiState(
     // Auto-reset after charging, per counter (#235).
     val trip1AutoReset: TripAutoResetMode = TripAutoResetMode.OFF,
     val trip2AutoReset: TripAutoResetMode = TripAutoResetMode.OFF,
+    // DM-i hybrid (#184): every field below stays null on an EV and on an unconfirmed car.
+    val vehicleKind: VehicleKind = VehicleKind.UNKNOWN,
+    val fuelPercent: Int? = null,
+    val fuelRangeKm: Int? = null,
+    val evRangeKm: Int? = null,
+    val engineRpm: Int? = null,
+    val mileageHevKm: Int? = null,
+    val mileageEvKm: Int? = null,
+    val fuelTotalL: Double? = null,
+    val fuelPricePerLiter: Double? = null,
+    // Period sums over the selected period's trips, null when no trip carries the figure.
+    val periodLiters: Double? = null,
+    /** Km of the period trips that know their litres: what [periodLiters] per 100 divides by. */
+    val periodLitersKm: Double? = null,
+    val periodHevKm: Double? = null,
+    val periodFuelCost: Double? = null,
+    val periodElecCost: Double? = null,
 )
+
+/** Fuel sums of a period's trips (DM-i); a sum no trip contributes to is null, never 0. */
+internal data class HybridPeriodTotals(
+    val liters: Double?,
+    val litersKm: Double?,
+    val hevKm: Double?,
+    val fuelCost: Double?,
+    val elecCost: Double?,
+)
+
+/** Sums the trips; a trip's electricity part is its cost minus the fuel part when both are known, else the cost. */
+internal fun hybridPeriodTotals(trips: List<TripEntity>): HybridPeriodTotals {
+    fun sumOrNull(values: List<Double?>): Double? = values.filterNotNull().takeIf { it.isNotEmpty() }?.sum()
+    return HybridPeriodTotals(
+        liters = sumOrNull(trips.map { it.fuelLiters }),
+        litersKm = litersKm(trips),
+        hevKm = sumOrNull(trips.map { it.hevKm }),
+        fuelCost = sumOrNull(trips.map { it.fuelCost }),
+        elecCost = sumOrNull(trips.map { t ->
+            val cost = t.cost
+            val fuel = t.fuelCost
+            if (cost != null && fuel != null) cost - fuel else cost
+        }),
+    )
+}
+
+/** Litres per 100 km over [km], the km of the trips that know their litres; null without litres or km. */
+internal fun periodLitersPer100(liters: Double?, km: Double?): Double? =
+    if (liters != null && km != null && km > 0.0) liters / km * 100.0 else null
 
 @HiltViewModel
 @Suppress("LongParameterList") // Hilt-injected dependencies
@@ -114,6 +166,8 @@ class DashboardViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
     private val adbVerdictMonitor: AdbVerdictMonitor,
     private val tripCounterResets: TripCounterResets,
+    private val vehicleKindMonitor: VehicleKindMonitor,
+    private val tariffPeriodDao: TariffPeriodDao,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -129,6 +183,18 @@ class DashboardViewModel @Inject constructor(
         loadPeriodSummary()
         viewModelScope.launch { loadAutoserviceFlag() }
         observeTripCounters()
+        observeVehicleKind()
+    }
+
+    /** The period cards read fuel sums only on a hybrid, so a kind change reloads them. */
+    private fun observeVehicleKind() {
+        viewModelScope.launch {
+            vehicleKindMonitor.kind.collect { kind ->
+                if (_uiState.value.vehicleKind == kind) return@collect
+                _uiState.update { it.copy(vehicleKind = kind) }
+                loadPeriodSummary()
+            }
+        }
     }
 
     fun setPeriod(period: DashboardPeriod) {
@@ -253,6 +319,15 @@ class DashboardViewModel @Inject constructor(
                         // gun-connected AND negative motor power. Regen has gun=0, so
                         // it's filtered. Gun pull → gunState=0 within ≤3s → bolt off.
                         isCharging = data?.chargeGunState == 2 && (data.power ?: 0.0) < -0.3,
+                        // DM-i: the newest reading as it is, a missing one included; an old
+                        // rpm or range shown as current would be a guess.
+                        fuelPercent = data?.fuelPercent,
+                        fuelRangeKm = data?.fuelRangeKm,
+                        evRangeKm = data?.evRangeKm,
+                        engineRpm = data?.engineRpm,
+                        mileageHevKm = data?.mileageHevKm,
+                        mileageEvKm = data?.mileageEvKm,
+                        fuelTotalL = data?.fuelTotalL,
                     )
                 }
             }
@@ -297,6 +372,13 @@ class DashboardViewModel @Inject constructor(
             val (from, to) = periodRange(period)
             val summary = tripRepository.getPeriodSummary(from, to)
             val avg = if (summary.totalKm > 0) summary.totalKwh / summary.totalKm * 100.0 else 0.0
+            // Fuel sums are read only on a hybrid: an EV keeps exactly the one summary query.
+            val hybrid = _uiState.value.vehicleKind == VehicleKind.HYBRID
+            val totals = if (hybrid) hybridPeriodTotals(tripRepository.getTripsByDateRange(from, to).first()) else null
+            // The litre price of the tariff period in force today.
+            val fuelPrice = if (hybrid) {
+                TariffSchedule(tariffPeriodDao.getAllAsc()).periodAt(System.currentTimeMillis())?.fuelPricePerLiter
+            } else null
 
             _uiState.update {
                 it.copy(
@@ -306,7 +388,13 @@ class DashboardViewModel @Inject constructor(
                     totalCost = summary.totalCost,
                     tripCount = summary.tripCount,
                     totalKmToday = if (period == DashboardPeriod.TODAY) summary.totalKm else it.totalKmToday,
-                    totalKwhToday = if (period == DashboardPeriod.TODAY) summary.totalKwh else it.totalKwhToday
+                    totalKwhToday = if (period == DashboardPeriod.TODAY) summary.totalKwh else it.totalKwhToday,
+                    periodLiters = totals?.liters,
+                    periodLitersKm = totals?.litersKm,
+                    periodHevKm = totals?.hevKm,
+                    periodFuelCost = totals?.fuelCost,
+                    periodElecCost = totals?.elecCost,
+                    fuelPricePerLiter = fuelPrice,
                 )
             }
         }

@@ -49,6 +49,28 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE soc_start IS NULL AND source = 'energydata'")
     suspend fun getTripsWithoutSoc(): List<TripEntity>
 
+    /**
+     * DM-i: energydata trips since [sinceTs] that have no fuel counters attached yet. Older
+     * trips are left out: their snapshot pair can no longer appear.
+     */
+    @Query("""
+        SELECT * FROM trips
+        WHERE source = 'energydata' AND fuel_total_start IS NULL AND end_ts IS NOT NULL
+          AND start_ts >= :sinceTs
+    """)
+    suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity>
+
+    /**
+     * DM-i: [getTripsWithoutCost] plus trips that burned fuel but carry no kWh, plus priced trips
+     * whose litres arrived after their electricity was priced (no fuel part yet).
+     */
+    @Query("""
+        SELECT * FROM trips
+        WHERE (cost IS NULL AND (kwh_consumed IS NOT NULL OR fuel_liters IS NOT NULL))
+           OR (fuel_liters > 0 AND fuel_cost IS NULL)
+    """)
+    suspend fun getHybridTripsWithoutCost(): List<TripEntity>
+
     @Query("SELECT * FROM trips WHERE cost IS NULL AND kwh_consumed IS NOT NULL")
     suspend fun getTripsWithoutCost(): List<TripEntity>
 
@@ -71,10 +93,10 @@ interface TripDao {
     @Query("SELECT * FROM trips ORDER BY start_ts")
     suspend fun getAllSnapshot(): List<TripEntity>
 
-    /** Recalculation input: trips inside the range that carry an energy figure to price. */
+    /** Recalculation input: trips inside the range that carry kWh or (DM-i) litres to price. */
     @Query("""
         SELECT * FROM trips
-        WHERE start_ts >= :from AND start_ts <= :to AND kwh_consumed IS NOT NULL
+        WHERE start_ts >= :from AND start_ts <= :to AND (kwh_consumed IS NOT NULL OR fuel_liters > 0)
         ORDER BY start_ts ASC
     """)
     suspend fun getWithEnergyInRange(from: Long, to: Long): List<TripEntity>

@@ -121,9 +121,38 @@ interface LastStateDao {
             trip_start_soc = NULL,
             trip_start_mileage = NULL,
             trip_start_total_elec = NULL,
-            trip_start_exterior_temp = NULL
+            trip_start_exterior_temp = NULL,
+            trip_start_fuel_total = NULL,
+            trip_start_mileage_hev = NULL
         WHERE id = 1
         """
     )
     suspend fun clearOpenTrip()
+
+    /** DM-i only: the fuel and engine-km counters of the trip [openTrip] just opened. */
+    @Query(
+        """
+        UPDATE last_state
+        SET trip_start_fuel_total = :fuelTotal,
+            trip_start_mileage_hev = :mileageHev
+        WHERE id = 1
+        """
+    )
+    suspend fun setOpenTripCounters(fuelTotal: Double?, mileageHev: Double?)
+
+    /**
+     * DM-i only: time, counters and odometer of the trip's end edge (TripRecorder, ReadableOnTick),
+     * read by the next cold start; a counter that tick missed is stored as null.
+     */
+    @Query(
+        """
+        UPDATE last_state
+        SET on_ts = :ts,
+            on_fuel_total = :fuelTotal,
+            on_mileage_hev = :mileageHev,
+            on_mileage = :mileage
+        WHERE id = 1
+        """
+    )
+    suspend fun setLastOn(ts: Long, fuelTotal: Double?, mileageHev: Double?, mileage: Double?)
 }

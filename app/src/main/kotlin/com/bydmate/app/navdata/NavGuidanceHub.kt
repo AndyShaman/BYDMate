@@ -13,9 +13,12 @@ import com.bydmate.app.diagnostics.TraceArea
  *  - field-wise merge: a partial update never wipes known values;
  *  - active expires 90 s after the last update of any source;
  *  - speed limit has its own 30 s freshness (a limit sign must not outlive its road);
- *  - the maneuver has its own 30 s freshness (a passed turn must not outlive its balloon);
+ *  - the maneuver has its own 30 s freshness (a passed turn must not outlive its balloon),
+ *    counted only once a source spoke without a maneuver: silent sources expire nothing (#301);
  *  - a read naming another next street without a maneuver of its own drops the held one at
  *    once (#294: a stale arrow outlived its street); a read without a street keeps it (#198);
+ *  - a read without a maneuver whose distance jumped up, by 50 m or more and to twice the held
+ *    one or more, drops the held one at once too (#294); a rounding step never doubles it;
  *  - a Navigator-window read WITHOUT guidance widgets ends nothing, as in the donor: on some
  *    cars the window loses its widgets mid-route (issue #199), so only silence ends a route;
  *  - a read whose widgets are there but carry no text keeps the route alive (keepAlive).
@@ -31,8 +34,19 @@ object NavGuidanceHub {
      *  is known) and then falls back to its SEPARATE notification-enum maneuver; here both
      *  lanes write one merged field, and the notification lane refreshes maneuverGaodeMs
      *  only when it parsed a maneuver AND a11y is not fresher - so the donor's window
-     *  would drop the arrow during an a11y blind spell. 30 s, same as the speed limit. */
+     *  would drop the arrow during an a11y blind spell. 30 s, same as the speed limit.
+     *  The age counts only once a source entered the hub without merging a maneuver after the
+     *  held one was read (a read without a maneuver, a keep-alive, an empty or ignored
+     *  notification, a no-guidance read): a car standing before its turn while the Navigator
+     *  posts nothing keeps the arrow (#301) until [ACTIVE_TIMEOUT_MS] ends the route. */
     const val MANEUVER_TIMEOUT_MS = 30_000L
+    /** The least rise of a maneuver-less read's distance over the held one that can mean the
+     *  held turn is behind (#294); the read must also be at least twice the held distance. The
+     *  margin alone is not enough: the Navigator rounds in steps that grow with the distance
+     *  (100 m above 1 km, 1 km above 10 km), so a car standing at a rounding boundary reads
+     *  1100 m and then 1200 m with nothing passed. A passed turn is close ahead when it goes,
+     *  so the distance to the next maneuver multiplies it. */
+    const val DISTANCE_JUMP_M = 50
     const val A11Y_PRIORITY_MS = 10_000L
 
     enum class Source { A11Y, NOTIFICATION }
@@ -83,6 +97,12 @@ object NavGuidanceHub {
     /** The last genuine next street, apart from the displayed road a current-street fallback
      *  also overwrites: the street-change drop compares against this one only (#294). */
     private var nextStreet = ""
+    /** The source of the last read that set the distance: the distance-jump drop compares
+     *  within one source only, the two round distances differently (#294). */
+    private var distanceSource: Source? = null
+    /** True once a source entered the hub without merging a maneuver since the held one was
+     *  read: only then [MANEUVER_TIMEOUT_MS] applies (#301). */
+    private var maneuverExpiryArmed = false
 
     /** The HUD way (1..3) the output runs, 0 while it is off: for the route-summary line only. */
     @Volatile var hudWay: Int = 0
@@ -124,7 +144,7 @@ object NavGuidanceHub {
         // keeps prev), so without an age limit a passed turn stays on the glass for the
         // rest of the route. Icon goes with it: donor sends no f8 without a maneuver.
         // Distance is NOT reset - the donor keeps counting it down in that state too.
-        if (s.maneuverGaode > 0 && nowMs - s.maneuverGaodeMs > MANEUVER_TIMEOUT_MS) {
+        if (maneuverExpired(s, nowMs)) {
             if (s.active) {
                 stats.expiries++
                 Trace.event(TraceArea.HUD, "maneuver-expired", "after_s" to ((nowMs - s.maneuverGaodeMs) / 1000).toInt(),
@@ -137,13 +157,24 @@ object NavGuidanceHub {
         return s
     }
 
+    /** The held maneuver is past [MANEUVER_TIMEOUT_MS] and a source spoke without one since it
+     *  was read (#301); a route that ended takes its maneuver with it either way. */
+    private fun maneuverExpired(s: Snapshot, nowMs: Long): Boolean {
+        if (s.maneuverGaode <= 0 || nowMs - s.maneuverGaodeMs <= MANEUVER_TIMEOUT_MS) return false
+        return maneuverExpiryArmed || !s.active
+    }
+
     /** The stored active flag as it is, without applying any expiry: for field diagnostics that
      *  must not write hub state the way [snapshot] does. */
     fun isActiveNow(): Boolean = current.active
 
     @Synchronized
     fun update(data: NavGuidance, source: Source, nowMs: Long = System.currentTimeMillis()) {
-        val prev = dropOnStreetChange(current, data.maneuverGaode, if (data.roadIsNextStreet) data.road else "", source)
+        val prev = dropOnDistanceJump(
+            dropOnStreetChange(current, data.maneuverGaode, if (data.roadIsNextStreet) data.road else "", source),
+            data.maneuverGaode, data.distanceMeters, source, nowMs,
+        )
+        maneuverExpiryArmed = data.maneuverGaode <= 0
         if (!prev.active) {
             Log.i(TAG, "guidance active (source=$source)")
             traceOn(source, nowMs)
@@ -186,6 +217,7 @@ object NavGuidanceHub {
             rich.etaSeconds == 0 && rich.totalDistMeters == 0 && rich.cameraAlert.isEmpty()
         ) {
             if (current.active) stats.notifEmpty++
+            maneuverExpiryArmed = true
             return
         }
         val prev = current
@@ -203,7 +235,11 @@ object NavGuidanceHub {
             stats.notifRich++
             countRead(prev, rich.maneuverGaode, rich.distanceMeters)
         }
-        val held = if (a11yFresh) prev else dropOnStreetChange(prev, rich.maneuverGaode, rich.road, Source.NOTIFICATION)
+        maneuverExpiryArmed = a11yFresh || rich.maneuverGaode <= 0
+        val held = if (a11yFresh) prev else dropOnDistanceJump(
+            dropOnStreetChange(prev, rich.maneuverGaode, rich.road, Source.NOTIFICATION),
+            rich.maneuverGaode, rich.distanceMeters, Source.NOTIFICATION, nowMs,
+        )
         val base = if (a11yFresh) prev else held.copy(
             maneuverGaode = if (rich.maneuverGaode > 0) rich.maneuverGaode else held.maneuverGaode,
             maneuverGaodeMs = if (rich.maneuverGaode > 0) nowMs else held.maneuverGaodeMs,
@@ -250,6 +286,34 @@ object NavGuidanceHub {
         return prev.copy(maneuverGaode = 0, maneuverPng = null, maneuverSource = "", maneuverRaw = "")
     }
 
+    /** #294: on a car whose reads name no next street the passed turn shows only in the distance:
+     *  a read without a maneuver, from the source that set the held distance, at least
+     *  [DISTANCE_JUMP_M] further away AND at least twice as far means the next maneuver is counted
+     *  now, so the arrow goes with its metres instead of after [MANEUVER_TIMEOUT_MS]. Both are
+     *  needed: rounding steps grow with the distance and alone exceed the margin above 1 km,
+     *  while a passed turn close ahead multiplies the distance. A smaller rise is left to the
+     *  expiry, as before. A held maneuver already older than
+     *  that is left to the expiry: on a car the output loops take a snapshot about every second,
+     *  so an armed expiry has taken such an arrow before the jump read arrives; the read only arms
+     *  the expiry, and the next snapshot expires it and counts it as an expiry. Records [source]
+     *  as the one the next read's distance is compared within. */
+    private fun dropOnDistanceJump(
+        prev: Snapshot, maneuverGaode: Int, distanceMeters: Int, source: Source, nowMs: Long,
+    ): Snapshot {
+        val from = distanceSource
+        if (distanceMeters > 0) distanceSource = source
+        if (maneuverGaode > 0 || prev.maneuverGaode <= 0) return prev
+        if (nowMs - prev.maneuverGaodeMs > MANEUVER_TIMEOUT_MS) return prev
+        val heldMeters = prev.distanceMeters
+        if (from != source || heldMeters <= 0) return prev
+        if (distanceMeters - heldMeters < DISTANCE_JUMP_M || distanceMeters < 2 * heldMeters) return prev
+        Log.i(TAG, "maneuver dropped: distance jumped up without a maneuver " +
+            "(held=${prev.maneuverGaode} from ${prev.maneuverSource.ifEmpty { "?" }}, read by ${source.label()}, " +
+            "${prev.distanceMeters} m to $distanceMeters m)")
+        if (prev.active) stats.drops++
+        return prev.copy(maneuverGaode = 0, maneuverPng = null, maneuverSource = "", maneuverRaw = "")
+    }
+
     private fun Source.label(): String = name.lowercase()
 
     /** A Navigator window still shows the guidance widgets but they carry no text (issue #199,
@@ -257,6 +321,7 @@ object NavGuidanceHub {
      *  active and not yet expired; never starts or revives one, and touches no other field. */
     @Synchronized
     fun keepAlive(nowMs: Long = System.currentTimeMillis()) {
+        maneuverExpiryArmed = true
         val s = current
         if (!s.active || nowMs - s.lastUpdateMs > ACTIVE_TIMEOUT_MS) return
         stats.kept++
@@ -269,6 +334,7 @@ object NavGuidanceHub {
      *  ACTIVE_TIMEOUT_MS. Fresh state = no-op. */
     @Synchronized
     fun deactivateFromNotificationGrace(nowMs: Long = System.currentTimeMillis()) {
+        maneuverExpiryArmed = true
         val s = current
         if (!s.active) return
         if (nowMs - s.lastUpdateMs < ACTIVE_TIMEOUT_MS) return
@@ -283,6 +349,7 @@ object NavGuidanceHub {
     /** NavA11yFeed: a navigator read without guidance. */
     @Synchronized
     fun countA11yNoGuidance() {
+        maneuverExpiryArmed = true
         if (current.active) stats.a11yNoGuidance++
     }
 
@@ -290,6 +357,7 @@ object NavGuidanceHub {
     @Synchronized
     fun a11yBlind(blind: Boolean, nowMs: Long = System.currentTimeMillis()) {
         a11yBlindNow = blind
+        maneuverExpiryArmed = true
         if (!current.active) return
         if (blind) stats.blind(nowMs) else stats.seen(nowMs)
     }
@@ -297,6 +365,7 @@ object NavGuidanceHub {
     /** The notification listener: a navigator post that carried nothing for the hub. */
     @Synchronized
     fun countNotifEmpty() {
+        maneuverExpiryArmed = true
         if (current.active) stats.notifEmpty++
     }
 
@@ -352,6 +421,8 @@ object NavGuidanceHub {
         lastOffTraceId = 0L
         a11yBlindNow = false
         nextStreet = ""
+        distanceSource = null
+        maneuverExpiryArmed = false
         stats.reset(0L)
     }
 

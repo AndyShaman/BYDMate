@@ -99,14 +99,15 @@
     <string name="settings_adb_restore_status_failed">Błąd: %1$s</string>
     <string name="settings_adb_restore_status_unsupported">Niedostępne na Androidzie 10. Jeśli ADB zniknęło po ponownym uruchomieniu, włącz je ponownie według instrukcji na GitHubie, sekcja „Enable ADB”.</string>
     <string name="settings_cloud_wifi_title">Chmura BYD przez Wi-Fi</string>
-    <string name="settings_cloud_wifi_desc">Aplikacja BYD na telefonie widzi auto, gdy jest w sieci Wi-Fi. Wymaga oryginalnej chińskiej karty SIM.</string>
+    <string name="settings_cloud_wifi_desc">Aplikacja BYD na telefonie widzi auto, gdy jest w sieci Wi-Fi. Auta na nowych serwerach BYD potrzebują chińskiego VPN.</string>
     <string name="settings_cloud_wifi_help_title">Jak działa chmura BYD przez Wi-Fi</string>
-    <string name="settings_cloud_wifi_help_body">Gdy oryginalna chińska karta SIM w aucie nie ma zasięgu, auto nie łączy się z chmurą BYD: nie przychodzą aktualizacje przez internet, nie działają klucz NFC i sterowanie autem z aplikacji BYD na telefonie.\n\nZ tym ustawieniem BYDMate łączy auto z chmurą przez Wi-Fi: domową sieć, hotspot z telefonu lub dowolną inną sieć z internetem.\n\nWarunki:\n\n1. W aucie jest oryginalna chińska karta SIM. Chmura BYD wpuszcza tylko ją.\n\n2. Niektóre auta potrzebują chińskiego VPN na routerze. Ustawia się go na routerze, nie w aplikacji.\n\n3. Jeśli auto ma już własną transmisję danych, nic się nie zmienia: chmura i tak działa.\n\nPo wyłączeniu ustawienia aplikacja przywraca poprzednie ustawienia łączności auta.</string>
+    <string name="settings_cloud_wifi_help_body">Bez połączenia z chmurą BYD nie przychodzą aktualizacje przez internet, nie działają klucz NFC i sterowanie autem z aplikacji BYD na telefonie.\n\nZ tym ustawieniem BYDMate łączy auto z chmurą przez Wi-Fi: domową sieć, hotspot z telefonu lub dowolną inną sieć z internetem.\n\nWarunki:\n\n1. Auta na nowych serwerach BYD potrzebują chińskiego VPN: serwer wpuszcza tylko połączenia z chińskiego adresu. Najpewniejszy jest VPN na routerze, do którego podłączone jest auto, bo nie zależy od radia. Aplikacja VPN na samym radiu działa tylko wtedy, gdy radio jest włączone.\n\n2. Jeśli auto ma już własną transmisję danych, nic się nie zmienia: chmura i tak działa.\n\nPo wyłączeniu ustawienia aplikacja przywraca poprzednie ustawienia łączności auta.</string>
     <string name="settings_cloud_wifi_status_connected">Połączono z chmurą BYD</string>
     <string name="settings_cloud_wifi_status_own_cellular">Auto ma własną transmisję danych, chmura i tak działa</string>
     <string name="settings_cloud_wifi_status_waiting">Czekamy na Wi-Fi z internetem</string>
     <string name="settings_cloud_wifi_status_rejected">Auto nie przyjęło ustawienia łączności</string>
     <string name="settings_cloud_wifi_status_silent">Chmura BYD nie odpowiedziała. Spróbujemy ponownie przy następnym połączeniu z Wi-Fi</string>
+    <string name="settings_cloud_wifi_status_refused">Serwer BYD nie wpuszcza auta. Potrzebny jest chiński VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">Brak dostępu ADB: włącz ADB, aby korzystać z tego ustawienia</string>
     <string name="settings_cloud_wifi_status_return_pending">Poprzednie ustawienia łączności jeszcze nie wróciły. Spróbujemy ponownie przy następnym połączeniu z Wi-Fi</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
@@ -231,6 +232,8 @@
     <string name="settings_abrp_telemetry_description">Dane na żywo (SOC, moc, temperatury, licznik, ciśnienie w oponach) trafiają do Iternio Telemetry API, żeby plan w ABRP był aktualny. GPS domyślnie nie jest wysyłany.</string>
     <string name="settings_abrp_token_label">Token danych na żywo z ABRP</string>
     <string name="settings_abrp_save_button">Zapisz ABRP</string>
+    <string name="settings_abrp_location_label">Wysyłaj współrzędne do ABRP</string>
+    <string name="settings_abrp_location_description">Na rzadki przypadek: śledzenie samochodu w ABRP na telefonie, gdy ABRP w samym samochodzie nie jest uruchomiony. Jeśli ABRP jest otwarty w samochodzie, sam pobiera GPS, a z tym ustawieniem znacznik na mapie zaczyna skakać. Domyślnie wyłączone.</string>
     <string name="settings_webhook_section_header">Webhook - telemetria</string>
     <string name="settings_webhook_label">Dane na żywo -> własny serwer</string>
     <string name="settings_webhook_description">Ten sam JSON, który trafia do ABRP (SOC, moc, temperatury, licznik, ciśnienie w oponach, ładowanie), jest wysyłany żądaniem POST na Twój URL: raz na sekundę podczas jazdy, raz na 8 sekund podczas ładowania, raz na 30 sekund na postoju. Współrzędne domyślnie nie są wysyłane.</string>
@@ -570,6 +573,8 @@
     <string name="automation_action_hotspot">Hotspot Wi-Fi</string>
     <string name="automation_action_hotspot_on">Włącz</string>
     <string name="automation_action_hotspot_off">Wyłącz</string>
+    <string name="automation_action_screen_off">Ekran: wyłącz</string>
+    <string name="automation_action_screen_on">Ekran: włącz</string>
     <string name="automation_action_speak">Odczytaj tekst</string>
     <string name="automation_action_agent_query">Zapytanie do agenta</string>
     <string name="auto_act_speak">Odczytaj tekst</string>
@@ -1229,6 +1234,11 @@
     <string name="auto_act_hud_on">HUD: włącz</string>
     <string name="auto_act_hud_off">HUD: wyłącz</string>
     <string name="hud_not_equipped">Ten samochód nie ma HUD</string>
+    <string name="auto_act_battery_preheat_on">Podgrzewanie baterii: włącz</string>
+    <string name="auto_act_battery_preheat_off">Podgrzewanie baterii: wyłącz</string>
+    <string name="battery_preheat_not_equipped">Ten samochód nie ma podgrzewania baterii</string>
+    <string name="battery_preheat_not_needed">Samochód zgłasza, że podgrzewanie baterii nie jest teraz potrzebne</string>
+    <string name="battery_preheat_gun_connected">Podgrzewanie baterii jest niedostępne, gdy podłączony jest kabel ładowania</string>
     <string name="auto_act_ambient_light_on">Oświetlenie ambient wł.</string>
     <string name="auto_act_ambient_light_off">Oświetlenie ambient wył.</string>
     <string name="auto_act_drl_on">Światła dzienne wł.</string>
@@ -1293,6 +1303,7 @@
     <string name="auto_msg_sentry_invalid">Akcja #%1$d: nieprawidłowy stan trybu strażnika</string>
     <string name="auto_msg_media_key_invalid">Akcja #%1$d: wybierz odtwarzanie lub pauzę</string>
     <string name="auto_msg_hotspot_invalid">Akcja #%1$d: nieprawidłowy stan hotspotu</string>
+    <string name="auto_msg_screen_invalid">Akcja #%1$d: nieprawidłowy stan ekranu</string>
     <string name="auto_msg_speak_text_empty">Akcja #%1$d: nie podano tekstu do odczytania</string>
     <string name="auto_msg_agent_query_prompt_empty">Akcja #%1$d: nie podano zapytania do agenta</string>
     <string name="auto_msg_name_cond_action_required">Nazwa oraz co najmniej jeden warunek i jedna akcja są wymagane</string>
@@ -1858,6 +1869,8 @@
     <string name="dispatch_sentry_failed">Nie udało się przełączyć trybu ochrony</string>
     <string name="dispatch_hotspot_invalid_state">Nieprawidłowy stan hotspotu Wi-Fi</string>
     <string name="dispatch_hotspot_failed">Nie udało się przełączyć hotspotu Wi-Fi</string>
+    <string name="dispatch_screen_invalid_state">Nieprawidłowy stan ekranu</string>
+    <string name="dispatch_screen_not_available">W tym samochodzie sterowanie ekranem jest niedostępne</string>
     <string name="dispatch_cluster_invalid_state">Nieprawidłowy stan wyświetlania na wskaźnikach</string>
     <string name="dispatch_cluster_daemon_restarting">proces usługi uruchamia się ponownie</string>
     <string name="dispatch_cluster_not_on">wyświetlanie na wskaźnikach nie włączyło się</string>
@@ -2106,4 +2119,36 @@
     <string name="auto_ui_test_park">Nie wykonano: reguła działa tylko na postoju. Włącz P.</string>
     <string name="auto_ui_confirm_rule">Reguła „%1$s”</string>
     <string name="auto_ui_confirm_countdown">Anulowanie za %1$d s</string>
+    <!-- DM-i hybrid (#184) -->
+    <string name="dashboard_range_label_battery">na baterii</string>
+    <string name="dashboard_fuel_tank">zbiornik</string>
+    <string name="dashboard_fuel_range">na paliwie</string>
+    <string name="dashboard_fuel_popup_tank">Zbiornik</string>
+    <string name="dashboard_fuel_popup_fuel_range">Zasięg na paliwie</string>
+    <string name="dashboard_fuel_popup_ev_range">Zasięg na baterii</string>
+    <string name="dashboard_fuel_popup_engine_rpm">Obroty silnika spalinowego</string>
+    <string name="dashboard_fuel_rpm_value">%1$d obr/min</string>
+    <string name="dashboard_fuel_engine_off">Silnik spalinowy wyłączony</string>
+    <string name="dashboard_fuel_popup_mileage_hev">Przebieg na silniku spalinowym</string>
+    <string name="dashboard_fuel_popup_mileage_ev">Przebieg na baterii</string>
+    <string name="dashboard_fuel_popup_fuel_total">Paliwo od początku</string>
+    <string name="dashboard_fuel_popup_price">Cena litra</string>
+    <string name="dashboard_fuel_price_edit">zmień</string>
+    <string name="dashboard_fuel_footer">Dane samochodu</string>
+    <string name="dashboard_fuel_percent_value">%1$d%%</string>
+    <string name="dashboard_fuel_liters_value">%1$.1f l</string>
+    <string name="dashboard_unit_liters">l</string>
+    <string name="dashboard_distance_hev_subtitle">%1$s · silnik %2$.1f km</string>
+    <string name="dashboard_energy_fuel_subtitle">+ %1$.1f l</string>
+    <string name="dashboard_consumption_fuel_value">%1$.1f l/100</string>
+    <string name="dashboard_consumption_elec_subtitle">%1$.1f kWh/100 · wszystkie km</string>
+    <string name="dashboard_cost_split_subtitle">%1$.2f prąd + %2$.2f paliwo</string>
+    <string name="trip_detail_fuel_label">Paliwo</string>
+    <string name="trip_detail_hev_ev_label">Na silniku / na baterii</string>
+    <string name="trip_detail_hev_ev_value">%1$.0f / %2$.0f km</string>
+    <string name="trip_detail_fuel_cost_label">Koszt paliwa</string>
+    <string name="tech_label_engine_rpm">obroty silnika spalinowego</string>
+    <string name="tech_card_fuel">Paliwo</string>
+    <string name="settings_fuel_price_label">Cena litra</string>
+    <string name="settings_fuel_price_hint">za litr, dla podróży od tej daty</string>
 </resources>

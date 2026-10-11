@@ -87,7 +87,7 @@ class NativeParsReaderBatchTest {
         coEvery { helper.readBatch(any()) } returns allOkPairs()
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -107,7 +107,7 @@ class NativeParsReaderBatchTest {
         coEvery { helper.readBatch(any()) } returns null
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -123,7 +123,7 @@ class NativeParsReaderBatchTest {
         coEvery { helper.readBatch(any()) } returns allFailedPairs()
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -141,11 +141,11 @@ class NativeParsReaderBatchTest {
 
         // Reference: what fetchViaAdb alone (via OFF dispatch) would have produced, from the
         // exact same autoservice + settings mocks.
-        val referenceReader = NativeParsReader(auto, settings, helper, gateFixedAt(BatchMode.OFF))
+        val referenceReader = NativeParsReader(auto, settings, helper, gateFixedAt(BatchMode.OFF), kindMonitor())
         val expectedAdb = referenceReader.fetch()
         assertNotNull(expectedAdb)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertEquals("VALIDATING must still return the proven ADB snapshot", expectedAdb, data)
@@ -174,7 +174,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -199,7 +199,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -225,7 +225,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -250,7 +250,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -275,7 +275,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+        val data = NativeParsReader(auto, settings, helper, gate, kindMonitor()).fetch()
 
         assertNotNull("fetch() returned null", data)
         assertNull("a transient sentinel must not borrow the other generation's fid", data!!.windowRR)
@@ -298,7 +298,7 @@ class NativeParsReaderBatchTest {
         coEvery { helper.readBatch(any()) } returns pairs
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+        val data = NativeParsReader(auto, settings, helper, gate, kindMonitor()).fetch()
 
         assertNotNull("fetch() returned null", data)
         assertNull(data!!.windowRR)
@@ -319,7 +319,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -343,7 +343,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -365,7 +365,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull("fetch() returned null", data)
@@ -387,7 +387,7 @@ class NativeParsReaderBatchTest {
                 fid("driveMode").field to driveMode,
             ),
         )
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
 
         coEvery { helper.readBatch(any()) } returns pairs(3)
         assertEquals(3, reader.fetch()!!.driveMode)
@@ -409,7 +409,7 @@ class NativeParsReaderBatchTest {
         val settings = settingsWithCapacity()
         val helper = mockk<HelperClient>()
         val gate = gateFixedAt(BatchMode.ACTIVE)
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
 
         coEvery { helper.readBatch(any()) } returns mostlySentinelPairs(
             mapOf(
@@ -433,7 +433,7 @@ class NativeParsReaderBatchTest {
         val helper = mockk<HelperClient>()
         val gate = gateFixedAt(BatchMode.OFF)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         val data = reader.fetch()
 
         assertNotNull(data)
@@ -455,7 +455,7 @@ class NativeParsReaderBatchTest {
         val helper = mockk<HelperClient>()
         val gate = gateFixedAt(BatchMode.OFF)
 
-        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+        val data = NativeParsReader(auto, settings, helper, gate, kindMonitor()).fetch()
 
         assertNotNull("fetch() returned null", data)
         assertEquals("the fallback must come from that same sample", 80, data!!.windowRR)
@@ -477,7 +477,7 @@ class NativeParsReaderBatchTest {
                 fid("driveMode").field to driveMode,
             ),
         )
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
 
         coEvery { helper.readBatch(any()) } returns pairs(3)
         assertNull("VALIDATING returns the ADB snapshot, which has no driveMode", reader.fetch()!!.driveMode)
@@ -502,7 +502,7 @@ class NativeParsReaderBatchTest {
         coEvery { helper.readBatch(any()) } returns null
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val reader = NativeParsReader(auto, settings, helper, gate)
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         assertNull(reader.fetch())
     }
 
@@ -534,7 +534,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+        val data = NativeParsReader(auto, settings, helper, gate, kindMonitor()).fetch()
 
         assertNotNull("fetch() returned null", data)
         checkNotNull(data)
@@ -578,7 +578,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val data = checkNotNull(NativeParsReader(auto, settings, helper, gate).fetch())
+        val data = checkNotNull(NativeParsReader(auto, settings, helper, gate, kindMonitor()).fetch())
 
         assertEquals(-39, data.motorTempFront)
         assertEquals(12, data.inverterTempFront)
@@ -624,7 +624,7 @@ class NativeParsReaderBatchTest {
         )
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+        val data = NativeParsReader(auto, settings, helper, gate, kindMonitor()).fetch()
 
         assertNotNull("fetch() returned null", data)
         checkNotNull(data)
@@ -644,7 +644,7 @@ class NativeParsReaderBatchTest {
         coEvery { helper.readBatch(capture(items)) } returns allOkPairs()
         val gate = gateFixedAt(BatchMode.ACTIVE)
 
-        NativeParsReader(auto, settings, helper, gate).fetch()
+        NativeParsReader(auto, settings, helper, gate, kindMonitor()).fetch()
 
         coVerify(exactly = 1) { helper.readBatch(any()) }
         // Every decoder indexes the reply by FidMap position, so the request is the map itself.
@@ -668,7 +668,7 @@ class NativeParsReaderBatchTest {
         )
 
         val data = NativeParsReader(
-            mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE)
+            mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE), kindMonitor()
         ).fetch()
 
         assertEquals(2, data?.chargerConnectState)
@@ -703,7 +703,7 @@ class NativeParsReaderBatchTest {
         )
         val polled = checkNotNull(
             NativeParsReader(
-                mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE)
+                mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE), kindMonitor()
             ).fetch()
         )
 
@@ -750,7 +750,7 @@ class NativeParsReaderBatchTest {
             )
         )
         val reader = NativeParsReader(
-            mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE)
+            mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE), kindMonitor()
         )
 
         val data = reader.fetch()

@@ -32,10 +32,14 @@ import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.CommandTranslator
 import com.bydmate.app.data.vehicle.DriveMode
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.data.vehicle.ScreenBacklightReply
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.vehicle.VehicleWriteError
 import com.bydmate.app.data.vehicle.WindowPane
 import com.bydmate.app.data.vehicle.WriteAllowlist
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.media.KnobPlayPause
 import com.bydmate.app.media.MediaSessionListenerService
 import com.bydmate.app.navdata.NavPackages
@@ -308,6 +312,23 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             else -> null
         }
 
+        /** «Экран: выключить / включить» (#275): payload "0" / "1". */
+        internal fun screenNameRes(payload: String?): Int? = when (payload) {
+            "0" -> R.string.automation_action_screen_off
+            "1" -> R.string.automation_action_screen_on
+            else -> null
+        }
+
+        /** One word per answer of the daemon for the log and the trace; no answer is told apart by [daemonAlive]. */
+        internal fun screenVerdict(reply: ScreenBacklightReply?, daemonAlive: Boolean): String = when (reply?.outcome) {
+            null -> if (daemonAlive) "daemon_outdated" else "daemon_unreachable"
+            HelperBinderProtocol.SCREEN_BACKLIGHT_CONFIRMED -> "confirmed"
+            HelperBinderProtocol.SCREEN_BACKLIGHT_NOT_FOLLOWED -> "not_followed"
+            HelperBinderProtocol.SCREEN_BACKLIGHT_ABSENT -> "absent"
+            HelperBinderProtocol.SCREEN_BACKLIGHT_THREW -> "threw"
+            else -> "unknown_${reply.outcome}"
+        }
+
         internal fun mediaKeyNameRes(payload: String?): Int? = when (payload) {
             "play" -> R.string.automation_action_media_play
             "pause" -> R.string.automation_action_media_pause
@@ -371,10 +392,12 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
 
         /** Why a param dispatch failed, as the step reason, always in the app language. Besides
-         *  drive mode, the steering heat and HUD channels report NotEquipped. The raw error
-         *  (`value=-10011 sentinel returned` and the like) stays in the log only. */
+         *  drive mode and the battery warm-up, the steering heat and HUD channels report
+         *  NotEquipped. The raw error (`value=-10011 sentinel returned` and the like) stays in
+         *  the log only. */
         internal fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when {
             err is VehicleWriteError && DriveMode.ofAction(err.action) != null -> driveModeFailureReason(err, strings)
+            err is VehicleWriteError && err.action.startsWith("battery_preheat_") -> batteryPreheatFailureReason(err, strings)
             err is VehicleWriteError.NotEquipped && err.action.startsWith("hud_") -> strings.get(R.string.hud_not_equipped)
             err is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
             err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
@@ -424,6 +447,14 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             is VehicleWriteError.StateBlocked -> strings.get(R.string.drive_mode_flotation)
             is VehicleWriteError.ReadbackMismatch -> strings.get(R.string.drive_mode_not_changed)
             else -> strings.get(R.string.drive_mode_failed)
+        }
+
+        /** A refused battery warm-up (#311): not on this car, a charge gun connected, or a warm battery. */
+        private fun batteryPreheatFailureReason(err: VehicleWriteError, strings: AppStrings): String = when (err) {
+            is VehicleWriteError.NotEquipped -> strings.get(R.string.battery_preheat_not_equipped)
+            is VehicleWriteError.StateBlocked -> strings.get(R.string.battery_preheat_gun_connected)
+            is VehicleWriteError.NotNeeded -> strings.get(R.string.battery_preheat_not_needed)
+            else -> strings.get(writeErrorText(err))
         }
 
         /** «окно водителя не сдвинулось…» for one pane, «не сдвинулись с места: …» for several. */
@@ -653,6 +684,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             "media_key" -> dispatchMediaKey(action)
             "sentry" -> dispatchSentry(action)
             "hotspot" -> dispatchHotspot(action)
+            "screen" -> dispatchScreen(action)
             "cluster_projection" -> dispatchClusterProjection(action)
             "toggle" -> dispatchToggle(action, data)
             "speak" -> dispatchSpeak(action)
@@ -754,6 +786,38 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val ok = helper.setHotspot(enable)
         return if (ok) DispatchResult(true)
         else DispatchResult(false, appStrings.get(R.string.dispatch_hotspot_failed))
+    }
+
+    // --- screen backlight (#275, the stock screen-off call inside the helper daemon; no speed gate, as the stock button) ---
+
+    /**
+     * Only a status the daemon read back makes the step a success. No answer is the same text
+     * for the driver whether the daemon is gone or is an old one still running after an update
+     * (it does not know the transaction); the log and the trace tell the two apart.
+     */
+    private suspend fun dispatchScreen(action: ActionDef): DispatchResult {
+        val on = when (action.payload) {
+            "1" -> true
+            "0" -> false
+            else -> return DispatchResult(false, appStrings.get(R.string.dispatch_screen_invalid_state))
+        }
+        val reply = helper.setScreenBacklight(on)
+        val verdict = screenVerdict(reply, daemonAlive = reply != null || helper.isAlive())
+        val want = if (on) "on" else "off"
+        Log.i(TAG, "screen want=$want verdict=$verdict status=${reply?.status} detail=${reply?.detail}")
+        Trace.event(
+            TraceArea.CAR, "screen", "want" to want, "verdict" to verdict, "status" to reply?.status,
+            "detail" to reply?.detail, by = Trace.cause(),
+        )
+        return when (reply?.outcome) {
+            HelperBinderProtocol.SCREEN_BACKLIGHT_CONFIRMED -> DispatchResult(true)
+            null -> DispatchResult(false, appStrings.get(R.string.auto_err_unreachable))
+            HelperBinderProtocol.SCREEN_BACKLIGHT_NOT_FOLLOWED ->
+                DispatchResult(false, appStrings.get(R.string.auto_err_not_confirmed))
+            HelperBinderProtocol.SCREEN_BACKLIGHT_ABSENT ->
+                DispatchResult(false, appStrings.get(R.string.dispatch_screen_not_available))
+            else -> DispatchResult(false, appStrings.get(R.string.auto_err_failed))
+        }
     }
 
     // --- cluster projection (steering-wheel star key path, via ClusterVoiceControl) ---

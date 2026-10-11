@@ -2573,6 +2573,8 @@ private fun ActionRow(
                     SentryActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 "hotspot" ->
                     HotspotActionControls(action = action, onUpdate = onUpdate, modifier = fill)
+                "screen" ->
+                    ScreenActionControls(payload = action.payload, modifier = fill)
                 "cluster_projection" ->
                     ClusterActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 // A toggle on sentry or the cluster goes back to its own three-state row, so the
@@ -2917,6 +2919,32 @@ private fun HotspotActionControls(
     }
 }
 
+// --- Screen Action Controls (#275) ---
+
+/** «Экран: выключить / включить»: nothing to configure, the row only names the step. */
+@Composable
+private fun ScreenActionControls(payload: String?, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Tune, null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = stringResource(
+                if (payload == "1") R.string.automation_action_screen_on else R.string.automation_action_screen_off
+            ),
+            fontSize = 16.sp,
+            color = TextPrimary,
+            maxLines = 1,
+        )
+    }
+}
+
 // --- Cluster Projection Action Controls ---
 
 @Composable
@@ -3115,6 +3143,8 @@ private fun pickerSections(): List<PickerSection> {
             PickerSection(lc.getString(R.string.auto_ui_section_system), listOf(
                 PickerTile(lc.getString(R.string.automation_action_sentry)) { newSentryAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_hotspot)) { newHotspotAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_screen_off)) { newScreenAction(it, on = false) },
+                PickerTile(lc.getString(R.string.automation_action_screen_on)) { newScreenAction(it, on = true) },
                 PickerTile(lc.getString(R.string.automation_action_media_volume)) { newMediaVolumeAction(it) },
             )),
             PickerSection(lc.getString(R.string.auto_ui_wait), DELAY_OPTION_MS.map { ms ->

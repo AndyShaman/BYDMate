@@ -34,6 +34,8 @@ import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.remote.InsightStatsAggregator
 import com.bydmate.app.data.nativestack.MotorSplit
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
@@ -179,6 +181,16 @@ class AgentTools @Inject constructor(
     @Inject
     internal fun injectSettlementSearch(client: SettlementSearchClient) {
         settlementSearchClient = client
+    }
+
+    // Same method-injection reason as splitPrefs above. Null until Hilt injects it; the car then
+    // counts as not a hybrid and get_vehicle_state answers as on an EV.
+    private var vehicleKindMonitor: VehicleKindMonitor? = null
+
+    /** Called by Hilt after construction; call manually in unit tests of the hybrid fields. */
+    @Inject
+    internal fun injectVehicleKind(monitor: VehicleKindMonitor) {
+        vehicleKindMonitor = monitor
     }
 
     /** Sorted names of the enabled automations, kept in step with the rules table by
@@ -735,6 +747,15 @@ class AgentTools @Inject constructor(
             listOf("on"),
         ))
         put(tool(
+            "set_screen",
+            "Погасить или зажечь центральный экран магнитолы (приборку и HUD не трогает). Гаснет только " +
+                "подсветка: музыка и приложения продолжают работать, касание экрана зажигает его снова. " +
+                "\"выключи экран\", \"погаси экран\" = off; \"включи экран\" = on.",
+            JSONObject().put("on", JSONObject().put("type", "boolean")
+                .put("description", "true = включить экран, false = выключить")),
+            listOf("on"),
+        ))
+        put(tool(
             "split_screen",
             "Разделённый экран: два приложения рядом (1/3 + 2/3). " +
                 "action=start — запустить пару (без narrow_app/wide_app = восстановить последнюю пару); " +
@@ -825,7 +846,7 @@ class AgentTools @Inject constructor(
                                     .put("enum", JSONArray(listOf(
                                         "param", "delay", "media_volume", "notification",
                                         "call", "navigate", "url",
-                                        "yandex_music", "sentry", "hotspot", "app_launch", "app_close", "media_key",
+                                        "yandex_music", "sentry", "hotspot", "screen", "app_launch", "app_close", "media_key",
                                         "cluster_projection", "speak", "agent_query",
                                         "split_screen", "split_screen_close",
                                         "split_screen_toggle", "youtube", "go_home")))
@@ -865,7 +886,7 @@ class AgentTools @Inject constructor(
                                 .put("query", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=youtube: что искать на YouTube"))
                                 .put("on", JSONObject().put("type", "boolean")
-                                    .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать. Для kind=hotspot: включить/выключить точку доступа Wi-Fi"))
+                                    .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать. Для kind=hotspot: включить/выключить точку доступа Wi-Fi. Для kind=screen: включить/выключить центральный экран"))
                                 .put("app", JSONObject().put("type", "string")
                                     .put("description", "Для kind=app_launch и kind=app_close: название приложения, как на домашнем экране. " +
                                         "app_close закрывает приложение полностью"))
@@ -954,6 +975,7 @@ class AgentTools @Inject constructor(
                 "set_cluster_projection" -> setClusterProjection(args)
                 "set_sentry" -> setSentry(args)
                 "set_hotspot" -> setHotspot(args)
+                "set_screen" -> setScreen(args)
                 "split_screen" -> splitScreen(args)
                 "set_automation_enabled" -> setAutomationEnabled(args)
                 "create_automation" -> createAutomation(args)
@@ -1107,7 +1129,19 @@ class AgentTools @Inject constructor(
             putIf("lifetime_km", b.lifetimeKm?.toDouble())
             putIf("lifetime_kwh", b.lifetimeKwh?.toDouble())
         }
-        runCatchingCancellable { rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.avgBatTemp) }
+        // A DM-i reports its own ranges; SOC x capacity would be an invented range there.
+        val hybrid = vehicleKindMonitor?.kind?.value == VehicleKind.HYBRID
+        if (hybrid) {
+            putIf("range_km", d.evRangeKm)
+            putIf("ev_range_km", d.evRangeKm)
+            putIf("fuel_percent", d.fuelPercent)
+            putIf("fuel_range_km", d.fuelRangeKm)
+            putIf("engine_rpm", d.engineRpm)
+            putIf("mileage_hev_km", d.mileageHevKm)
+            putIf("mileage_ev_km", d.mileageEvKm)
+        }
+        // Every figure below is SOC x capacity, so a DM-i gets none of them.
+        if (!hybrid) runCatchingCancellable { rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.avgBatTemp) }
             .getOrNull()?.let { est ->
                 o.put("range_km", est.rangeKm.roundToInt())
                 o.put("battery_capacity_kwh", est.capacityKwh)
@@ -2325,6 +2359,18 @@ class AgentTools @Inject constructor(
         return dispatchJson(result)
     }
 
+    // Immediate screen backlight off/on (#275): same ActionDispatcher path as a "screen"
+    // automation action, so the reported result is the real one.
+    private suspend fun setScreen(args: JSONObject): String {
+        val on = requireBoolArg(args, "on")
+            ?: return """{"error":"не указано, включить или выключить экран"}"""
+        val action = ActionDef(command = "screen",
+            displayName = if (on) "Включить экран" else "Выключить экран",
+            kind = "screen", payload = if (on) "1" else "0")
+        val result = actionDispatcher.dispatch(action, data = null)
+        return dispatchJson(result)
+    }
+
     // Accepts a JSON boolean or the strings "true"/"false" (some LLMs emit stringified
     // booleans); anything else (missing key, null, number) is treated as unspecified so a
     // malformed call can never silently disable a rule.
@@ -2805,6 +2851,12 @@ class AgentTools @Inject constructor(
                     displayName = if (on) "Включить точку доступа" else "Выключить точку доступа",
                     kind = "hotspot", payload = if (on) "1" else "0"))
             }
+            "screen" -> {
+                val on = requireBoolArg(a, "on") ?: return Built.Error("для screen укажи on: true или false")
+                Built.Value(ActionDef(command = "screen",
+                    displayName = if (on) "Включить экран" else "Выключить экран",
+                    kind = "screen", payload = if (on) "1" else "0"))
+            }
             "app_launch", "app_close" -> {
                 val name = a.optString("app").trim()
                 if (name.isEmpty()) return Built.Error("не указано приложение (поле app)")
@@ -2907,6 +2959,8 @@ class AgentTools @Inject constructor(
                 "некорректное состояние охранного режима (действие ${err.index})"
             is ActionValidationError.HotspotInvalid ->
                 "некорректное состояние точки доступа (действие ${err.index})"
+            is ActionValidationError.ScreenInvalid ->
+                "некорректное состояние экрана (действие ${err.index})"
             is ActionValidationError.MediaKeyInvalid ->
                 "для media_key нужен key: play или pause (действие ${err.index})"
             is ActionValidationError.SpeakTextEmpty ->

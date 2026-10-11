@@ -21,7 +21,7 @@ class HybridProbeDiagnosticsTest {
         }
     }
 
-    @Test fun `the table holds the twelve probed addresses`() {
+    @Test fun `the table holds the fourteen probed addresses`() {
         assertEquals(
             listOf(
                 "engine_rpm" to 339738642,
@@ -36,12 +36,14 @@ class HybridProbeDiagnosticsTest {
                 "mileage_hev" to 1246773264,
                 "mileage_ev" to 1246773284,
                 "fuel_tank_cap" to 1336934422,
+                "ev_range_km" to 1246765118,
+                "elec_phm" to 1032863794,
             ),
             HybridProbeDiagnostics.FIDS.map { it.name to it.fid },
         )
         assertEquals(
-            "the three consumption fids are float reads",
-            listOf("fuel_instant", "fuel_total", "fuel_avg_phm"),
+            "the four consumption fids are float reads",
+            listOf("fuel_instant", "fuel_total", "fuel_avg_phm", "elec_phm"),
             HybridProbeDiagnostics.FIDS.filter { it.tx == 7 }.map { it.name },
         )
     }

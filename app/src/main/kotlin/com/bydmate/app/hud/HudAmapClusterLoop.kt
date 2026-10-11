@@ -38,14 +38,6 @@ class HudAmapClusterLoop(
         fun isAdapterPresent(pm: PackageManager): Boolean =
             runCatching { pm.getPackageInfo(PACKAGE, 0) }.isSuccess
 
-        /** The adapter parses only 天/时/分; "20 min" would leave the time unwritten. */
-        internal fun remainTimeAuto(etaSeconds: Int): String {
-            val totalMin = etaSeconds / 60
-            val hours = totalMin / 60
-            val mins = totalMin % 60
-            return if (hours > 0) "${hours}时${mins}分" else "${mins}分"
-        }
-
         // Same receiver flags as HudAmapBroadcaster (0x11000000: RECEIVER_FOREGROUND | hidden
         // RECEIVER_INCLUDE_BACKGROUND), so this channel differs from it only in TYPE, IS_BYD_MAP and addressing.
         private const val RECEIVER_FLAGS = 285212672
@@ -70,7 +62,11 @@ class HudAmapClusterLoop(
             intent.putExtra("NEXT_ROAD_NAME", s.road)
             intent.putExtra("ROUTE_REMAIN_DIS", routeRemDis)
             intent.putExtra("ROUTE_REMAIN_TIME", routeRemTime)
-            if (routeRemTime != -1) intent.putExtra("ROUTE_REMAIN_TIME_AUTO", remainTimeAuto(routeRemTime))
+            // The cluster draws the three *_AUTO strings as they are, and the adapter puts "-1" where
+            // one did not come (#301): the gateway path's strings, the route ones only when known.
+            intent.putExtra("SEG_REMAIN_DIS_AUTO", HudAmapBroadcaster.distanceAuto(segDis))
+            if (routeRemDis != -1) intent.putExtra("ROUTE_REMAIN_DIS_AUTO", HudAmapBroadcaster.distanceAuto(routeRemDis))
+            if (routeRemTime != -1) intent.putExtra("ROUTE_REMAIN_TIME_AUTO", HudAmapBroadcaster.remainTimeAuto(routeRemTime))
             intent.addFlags(RECEIVER_FLAGS)
             return intent
         }

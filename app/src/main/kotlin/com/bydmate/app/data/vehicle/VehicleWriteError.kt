@@ -44,18 +44,25 @@ sealed class VehicleWriteError(
 
     /**
      * The car reports the function as absent (state 0; 65535 = no CAN link is not). Raised by
-     * SteeringHeatChannel, DriveModeChannel (support flag != 0) and HudSwitchChannel (no HUD
-     * config); ActionDispatcher words it
+     * SteeringHeatChannel, DriveModeChannel (support flag != 0), HudSwitchChannel (no HUD
+     * config) and BatteryPreheatChannel (function config != 0); ActionDispatcher words it
      * per action, so a new producer must extend that mapping.
      */
     class NotEquipped(action: String, details: String = "function absent on this car")
         : VehicleWriteError(action, details)
 
     /**
-     * The car's own state forbids the command right now. Raised only by DriveModeChannel: no
-     * drive mode change while the car holds the emergency flotation mode.
+     * The car's own state forbids the command right now. Raised by DriveModeChannel (no drive
+     * mode change while the car holds the emergency flotation mode) and BatteryPreheatChannel
+     * (a charge gun is connected); ActionDispatcher words it per action.
      */
     class StateBlocked(action: String, details: String) : VehicleWriteError(action, details)
+
+    /**
+     * The car says the function has nothing to do right now. Raised only by
+     * BatteryPreheatChannel: the car does not permit the warm-up, or reports it finished.
+     */
+    class NotNeeded(action: String, details: String) : VehicleWriteError(action, details)
 
     /**
      * Refused by a speed limit enforced below ActionDispatcher: a terrain drive mode above

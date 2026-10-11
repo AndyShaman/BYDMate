@@ -1064,6 +1064,7 @@ class AutoserviceChargingDetectorTest {
         assertEquals(2, lines.size)
         assertTrue(lines[0].contains("SESSION_CREATED"))
         assertTrue(lines[0].contains("soc=80->91"))
+        assertTrue(lines[0].contains("km=") && lines[0].contains("plug="))
         assertTrue(lines[1].contains("NO_DELTA soc=91 prev=91"))
     }
 

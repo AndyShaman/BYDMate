@@ -33,5 +33,17 @@ data class TripEntity(
     /** Odometer at the finish, km. */
     @ColumnInfo(name = "odometer_end_km") val odometerEndKm: Double? = null,
     @ColumnInfo(name = "source", defaultValue = "live") val source: String = "live",
-    @ColumnInfo(name = "byd_id") val bydId: Long? = null
+    @ColumnInfo(name = "byd_id") val bydId: Long? = null,
+    // DM-i hybrid (#184), null on every EV trip. Litres and engine km come only from the car's
+    // own counters read at both edges of the trip; a missing edge leaves them null, never a guess.
+    @ColumnInfo(name = "fuel_liters") val fuelLiters: Double? = null,
+    @ColumnInfo(name = "hev_km") val hevKm: Double? = null,
+    /** Lifetime fuel counter at the start of the trip, L. */
+    @ColumnInfo(name = "fuel_total_start") val fuelTotalStart: Double? = null,
+    @ColumnInfo(name = "fuel_total_end") val fuelTotalEnd: Double? = null,
+    /** Engine odometer at the start of the trip, km. */
+    @ColumnInfo(name = "mileage_hev_start") val mileageHevStart: Double? = null,
+    @ColumnInfo(name = "mileage_hev_end") val mileageHevEnd: Double? = null,
+    /** Fuel part of [cost]; null while the price per litre is not set. */
+    @ColumnInfo(name = "fuel_cost") val fuelCost: Double? = null,
 )
