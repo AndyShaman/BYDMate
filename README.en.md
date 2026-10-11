@@ -93,6 +93,7 @@ The main changes in version 3.19.3.
 | **AI** | Insights | Driving analysis: on-device rules, no internet |
 | **TRIP** | TRIP 1/2 counters | Distance, consumption, time, and cost since the last reset (like in the car); long-press to reset, tap for details |
 | **Bat** | Battery health and "Tech" | Card: SoH (Leopard 3, DiLink 3.0), temperature, 12V, cell balance, insulation. Tap opens the "Tech" screen with live battery, motor, climate, and tire parameters, including the front/rear power split in percent |
+| **DM-i** | Hybrids | The app detects a hybrid from the car's own counters. Battery and fuel range from the car, a «Fuel» card (tank, range, rpm, engine and battery mileage), litres and engine kilometres per trip from the car's counter, fuel price in Tariffs. Nothing changes on EVs |
 | **Map** | Route map | osmdroid (OpenStreetMap) in trip details |
 | **Rules** | Automation | WHEN→THEN rules: parameter triggers → vehicle control commands |
 | **Cluster** | Projection to cluster | Mirrors the chosen app onto the instrument cluster with a steering-wheel button (right star by default) |
@@ -100,7 +101,7 @@ The main changes in version 3.19.3.
 | **Split** | Split screen | Two apps at once: BYDMate windows in a 1/3 and 2/3 layout, or the firmware's own split |
 | **Cam** | Blind-spot cameras | The camera of the matching side while the turn signal is on: on the cluster or in a small window on the screen |
 | **Voice** | Voice agent | Russian offline assistant: on-device speech recognition, AI agent (32 tools), neural TTS |
-| **Widget** | Floating widget | 7 fields over other apps: SOC, range, consumption + trend, time, cabin t°, battery t°, 12V |
+| **Widget** | Floating widget | 7 fields over other apps: SOC, range, consumption + trend, time, cabin t°, battery t°, 12V; on a hybrid the fuel range and tank level replace consumption |
 | **Auto** | Autostart | WorkManager, starts on boot |
 | **Backup** | Configuration backup | Trips, charges, settings, and keys in one archive in Download, restore by parts, scheduled auto-save with a copy in your Telegram bot |
 | **Share** | Automation sharing | A rule saved to a file without phone numbers, contacts, or your places; import someone else's rule with a preview |
