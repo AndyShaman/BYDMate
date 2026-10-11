@@ -2150,5 +2150,5 @@
     <string name="tech_label_engine_rpm">obroty silnika spalinowego</string>
     <string name="tech_card_fuel">Paliwo</string>
     <string name="settings_fuel_price_label">Cena litra</string>
-    <string name="settings_fuel_price_hint">za litr, w walucie taryfy</string>
+    <string name="settings_fuel_price_hint">za litr, dla podróży od tej daty</string>
 </resources>

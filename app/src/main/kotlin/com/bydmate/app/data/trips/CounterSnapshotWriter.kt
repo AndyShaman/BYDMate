@@ -59,24 +59,26 @@ class CounterSnapshotWriter @Inject constructor(
 
     /**
      * At a service start: the head unit dies with the car, so the ignition_off row is often never
-     * written. The counters [LastStateEntity] kept at its last snapshot become the end edge of the
+     * written. The last ON tick TripRecorder kept in [LastStateEntity] becomes the end edge of the
      * trip that ended at power-off, unless a row within [COLD_START_WINDOW_MS] already covers it.
      */
     suspend fun onColdStart(state: LastStateEntity?, kind: VehicleKind) {
-        if (kind != VehicleKind.HYBRID || state?.fuelTotal == null) return
-        if (dao.nearest(state.ts, COLD_START_WINDOW_MS) != null) return
+        if (kind != VehicleKind.HYBRID || state == null) return
+        if (state.onFuelTotal == null && state.onMileageHev == null) return
+        val ts = state.onTs ?: state.ts
+        if (dao.nearest(ts, COLD_START_WINDOW_MS) != null) return
         dao.insert(
             CounterSnapshotEntity(
-                ts = state.ts,
-                fuelTotal = state.fuelTotal,
-                mileageHev = state.mileageHev,
+                ts = ts,
+                fuelTotal = state.onFuelTotal,
+                mileageHev = state.onMileageHev,
                 mileageEv = null,
                 odometer = state.mileage,
                 reason = CounterSnapshotEntity.REASON_COLD_START,
             )
         )
-        Log.i(TAG, "snapshot ${CounterSnapshotEntity.REASON_COLD_START} ts=${state.ts} " +
-            "fuel=${state.fuelTotal} hev=${state.mileageHev} odo=${state.mileage}")
+        Log.i(TAG, "snapshot ${CounterSnapshotEntity.REASON_COLD_START} ts=$ts onTs=${state.onTs} " +
+            "fuel=${state.onFuelTotal} hev=${state.onMileageHev} odo=${state.mileage}")
     }
 
     /** Why this tick writes a row, or null when it does not. */

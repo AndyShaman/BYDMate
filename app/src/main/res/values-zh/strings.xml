@@ -2112,5 +2112,5 @@
     <string name="tech_label_engine_rpm">发动机转速</string>
     <string name="tech_card_fuel">燃油</string>
     <string name="settings_fuel_price_label">每升油价</string>
-    <string name="settings_fuel_price_hint">每升价格，使用电价的货币</string>
+    <string name="settings_fuel_price_hint">每升价格，适用于此日期起的行程</string>
 </resources>

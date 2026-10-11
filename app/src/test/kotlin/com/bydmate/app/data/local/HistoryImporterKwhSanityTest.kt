@@ -29,6 +29,8 @@ class HistoryImporterKwhSanityTest {
 
     private fun importer(
         kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
+        monitor: com.bydmate.app.data.nativestack.VehicleKindMonitor =
+            com.bydmate.app.data.nativestack.kindMonitor(kind),
     ) = HistoryImporter(
         context = mockk<Context>(relaxed = true),
         energyDataReader = energyDataReader,
@@ -41,8 +43,10 @@ class HistoryImporterKwhSanityTest {
         tripTombstoneDao = mockk<TripTombstoneDao>(relaxed = true),
         costCalculator = mockk(relaxed = true),
         odometerMarks = mockk(relaxed = true),
-        vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(kind),
+        vehicleKind = monitor,
         counterSnapshotDao = mockk(relaxed = true),
+        counterSnapshotWriter = mockk(relaxed = true),
+        lastStateDao = mockk(relaxed = true),
     )
 
     // VadimV, 2026-09-12: 54681,2 kWh on 38,2 km with SOC 92 -> 84.
@@ -86,6 +90,23 @@ class HistoryImporterKwhSanityTest {
         assertNull("the engine charged the pack on the way: SOC delta is no trip figure", updated.captured.kwhConsumed)
         assertNull(updated.captured.kwhPer100km)
         assertNull(updated.captured.cost)
+    }
+
+    @Test fun `runSync waits for the cached car type, so a cached hybrid is never SOC-repaired`() = runTest {
+        coEvery { settingsRepository.isEnergyKwhSanityDone() } returns false
+        coEvery { settingsRepository.getBatteryCapacity() } returns 60.0
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_VEHICLE_KIND, any()) } returns "HYBRID"
+        coEvery { tripDao.getAllSnapshot() } returns listOf(poisoned, healthy)
+        // A real monitor whose cache is not loaded yet: it still says UNKNOWN.
+        val monitor = com.bydmate.app.data.nativestack.VehicleKindMonitor(settingsRepository, mockk(relaxed = true))
+        assertEquals(com.bydmate.app.data.nativestack.VehicleKind.UNKNOWN, monitor.kind.value)
+
+        val updated = slot<TripEntity>()
+        importer(monitor = monitor).runSync()
+
+        coVerify(exactly = 1) { tripRepository.updateTrip(capture(updated)) }
+        assertEquals(7L, updated.captured.id)
+        assertNull("no SOC repair on a hybrid", updated.captured.kwhConsumed)
     }
 
     @Test fun `repair leaves plausible trips alone`() = runTest {

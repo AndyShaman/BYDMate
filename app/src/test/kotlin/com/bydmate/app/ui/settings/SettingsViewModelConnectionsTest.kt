@@ -120,7 +120,6 @@ class SettingsViewModelConnectionsTest {
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
-        override suspend fun getTripsWithFuel(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
@@ -237,6 +236,7 @@ class SettingsViewModelConnectionsTest {
             mockk<TripTombstoneDao>(relaxed = true), mockk(relaxed = true),
             com.bydmate.app.data.repository.OdometerMarks(ctx),
             com.bydmate.app.data.nativestack.kindMonitor(), mockk(relaxed = true),
+            mockk(relaxed = true), mockk(relaxed = true),
         )
 
         val insightsClient = OpenRouterClient(httpClient)

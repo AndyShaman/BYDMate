@@ -412,7 +412,7 @@ private fun RailItem(
  * button so the section stays compact but still tells the driver what is being charged.
  */
 @Composable
-private fun currentTariffPeriodSummary(state: SettingsUiState): String {
+private fun currentTariffPeriodSummary(state: SettingsUiState, hybrid: Boolean): String {
     val current = state.tariffPeriods.firstOrNull { it.startTs <= System.currentTimeMillis() }
         ?: state.tariffPeriods.lastOrNull()
         ?: return stringResource(R.string.settings_tariff_periods_empty)
@@ -424,7 +424,7 @@ private fun currentTariffPeriodSummary(state: SettingsUiState): String {
         R.string.settings_tariff_periods_summary,
         "%.2f".format(current.homeRate), "%.2f".format(current.dcRate), state.currencySymbol,
         "%.0f".format(current.acLossPct), "%.0f".format(current.dcLossPct),
-    )
+    ) + fuelPriceSuffix(current.fuelPricePerLiter, hybrid, stringResource(R.string.dashboard_unit_liters))
     return if (date == null) rates
     else stringResource(R.string.settings_tariff_periods_summary_since, date, rates)
 }
@@ -461,9 +461,12 @@ private fun BatterySection(
                 onSelect = { idx -> viewModel.saveChargeConnector(ChargeConnector.entries[idx]) },
             )
             SettingDivider()
+            val vehicleKind by viewModel.vehicleKind.collectAsStateWithLifecycle()
             SettingActionRow(
                 title = stringResource(R.string.settings_tariff_periods_title),
-                description = currentTariffPeriodSummary(state),
+                description = currentTariffPeriodSummary(
+                    state, hybrid = vehicleKind == com.bydmate.app.data.nativestack.VehicleKind.HYBRID,
+                ),
                 buttonLabel = stringResource(R.string.settings_tariff_periods_button),
                 onClick = { viewModel.showTariffPeriods(); onOpenTariffPeriods() },
                 style = SettingButtonStyle.Primary
@@ -471,17 +474,6 @@ private fun BatterySection(
             SettingHint(stringResource(R.string.settings_tariff_periods_hint))
             state.tariffRecalcStatus?.let {
                 Text(it, color = AccentGreen, fontSize = 12.sp)
-            }
-            val vehicleKind by viewModel.vehicleKind.collectAsStateWithLifecycle()
-            if (vehicleKind == com.bydmate.app.data.nativestack.VehicleKind.HYBRID) {
-                SettingDivider()
-                SettingsTextField(
-                    label = stringResource(R.string.settings_fuel_price_label),
-                    value = state.fuelPricePerLiter,
-                    onValueChange = { viewModel.saveFuelPricePerLiter(it) },
-                    keyboardType = KeyboardType.Decimal
-                )
-                SettingHint(stringResource(R.string.settings_fuel_price_hint))
             }
         }
     }

@@ -30,6 +30,8 @@ data class TariffPeriodEntity(
     @ColumnInfo(name = "dc_loss_pct") val dcLossPct: Double = DEFAULT_DC_LOSS_PCT,
     /** How a trip is priced: [TRIP_RULE_HOME], [TRIP_RULE_DC], [TRIP_RULE_CHARGES] or a number. */
     @ColumnInfo(name = "trip_rule") val tripRule: String = TRIP_RULE_HOME,
+    /** DM-i: price of one litre of fuel; null when the period has none. */
+    @ColumnInfo(name = "fuel_price_per_liter") val fuelPricePerLiter: Double? = null,
 ) {
     companion object {
         /** Typical on-board-charger + cable loss on AC (ADAC/DLR measurements: 8-15%). */

@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.data.local.entity.CounterSnapshotEntity
+import com.bydmate.app.data.local.entity.LastStateEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_HOME
@@ -69,6 +70,8 @@ class HistoryImporterCountersTest {
         odometerMarks = mockk(relaxed = true),
         vehicleKind = kindMonitor(kind),
         counterSnapshotDao = db.counterSnapshotDao(),
+        counterSnapshotWriter = com.bydmate.app.data.trips.CounterSnapshotWriter(db.counterSnapshotDao()),
+        lastStateDao = db.lastStateDao(),
     )
 
     private suspend fun insertTrip(kwh: Double? = 6.0, source: String = "energydata"): Long =
@@ -86,6 +89,11 @@ class HistoryImporterCountersTest {
     }
 
     private suspend fun trip(id: Long): TripEntity = db.tripDao().getById(id)!!
+
+    /** Puts a litre price into the one period the setup created. */
+    private suspend fun setFuelPrice(price: Double) {
+        db.tariffPeriodDao().update(db.tariffPeriodDao().getAllAsc().single().copy(fuelPricePerLiter = price))
+    }
 
     @Test fun `a snapshot pair inside the window gives the trip its litres`() = runBlocking {
         val id = insertTrip()
@@ -146,7 +154,7 @@ class HistoryImporterCountersTest {
     }
 
     @Test fun `a hybrid trip with litres but no kWh is priced by its fuel alone`() = runBlocking {
-        db.settingsDao().set(SettingEntity(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "2.55"))
+        setFuelPrice(2.55)
         val id = insertTrip(kwh = null)
         snapshot(start, 302.4, 3812.0)
         snapshot(end, 305.2, 3850.0)
@@ -171,10 +179,25 @@ class HistoryImporterCountersTest {
         assertEquals(listOf(withKwh), db.tripDao().getTripsWithoutCost().map { it.id })
         assertEquals(setOf(withKwh, fuelOnly), db.tripDao().getHybridTripsWithoutCost().map { it.id }.toSet())
 
-        db.settingsDao().set(SettingEntity(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "2.55"))
+        setFuelPrice(2.55)
         importer(VehicleKind.EV).calculateMissingCosts()
         assertNull("an EV never prices a litres-only row", trip(fuelOnly).cost)
         assertEquals(0.6, trip(withKwh).cost!!, 1e-9)
+    }
+
+    @Test fun `one runSync writes the cold_start row before it attaches the counters`() = runBlocking {
+        val id = insertTrip()
+        snapshot(start, 302.4, 3812.0)
+        // The process died with the car: no ignition_off row, only the last ON tick in last_state.
+        db.lastStateDao().upsert(
+            LastStateEntity(id = 1, ts = end + 30_000L, onTs = end, onFuelTotal = 305.2, onMileageHev = 3850.0)
+        )
+
+        importer(VehicleKind.HYBRID).runSync()
+
+        assertEquals(CounterSnapshotEntity.REASON_COLD_START, db.counterSnapshotDao().nearest(end, 0L)!!.reason)
+        assertEquals(2.8, trip(id).fuelLiters!!, 1e-9)
+        assertEquals(305.2, trip(id).fuelTotalEnd!!, 1e-9)
     }
 
     @Test fun `an EV car skips the step and writes nothing`() = runBlocking {
@@ -190,7 +213,7 @@ class HistoryImporterCountersTest {
     }
 
     @Test fun `with a price the trip cost is electricity plus fuel`() = runBlocking {
-        db.settingsDao().set(SettingEntity(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "2,55"))
+        setFuelPrice(2.55)
         val id = insertTrip(kwh = 6.0)
         snapshot(start, 302.4, 3812.0)
         snapshot(end, 305.2, 3850.0)
@@ -204,8 +227,15 @@ class HistoryImporterCountersTest {
         assertEquals(0.6 + 7.14, t.cost!!, 1e-9)          // 6 kWh × 0.10 + fuel
     }
 
-    @Test fun `litres attached after the first sync are priced on the next one`() = runBlocking {
-        db.settingsDao().set(SettingEntity(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "2.55"))
+    @Test fun `litres attached after the first sync are priced from the trip's own period`() = runBlocking {
+        setFuelPrice(2.55)
+        // A period starting after the trip: its price must not reach it.
+        db.tariffPeriodDao().insert(
+            TariffPeriodEntity(
+                startTs = end + 60 * 60_000L, homeRate = 0.10, dcRate = 0.50,
+                acLossPct = 0.0, dcLossPct = 0.0, tripRule = TRIP_RULE_HOME, fuelPricePerLiter = 9.99,
+            )
+        )
         val id = insertTrip(kwh = 6.0)
         val importer = importer(VehicleKind.HYBRID)
 
@@ -232,7 +262,7 @@ class HistoryImporterCountersTest {
     }
 
     @Test fun `a trip that already has both cost parts is not offered again`() = runBlocking {
-        val priced = db.tripDao().insert(
+        db.tripDao().insert(
             TripEntity(startTs = start, endTs = end, distanceKm = 40.0, kwhConsumed = 6.0, fuelLiters = 2.8,
                 cost = 7.74, fuelCost = 7.14, source = "energydata")
         )
@@ -247,7 +277,6 @@ class HistoryImporterCountersTest {
 
         val offered = db.tripDao().getHybridTripsWithoutCost().map { it.id }.toSet()
         assertEquals(setOf(pending), offered)
-        assertEquals(setOf(priced, pending), db.tripDao().getTripsWithFuel().map { it.id }.toSet())
         assertNull(trip(zeroLitres).fuelCost)
     }
 
@@ -265,21 +294,13 @@ class HistoryImporterCountersTest {
         assertEquals(0.6, t.cost!!, 1e-9)
     }
 
-    @Test fun `an EV trip costs exactly what it cost before, price set or not`() = runBlocking {
-        db.settingsDao().set(SettingEntity(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "2.55"))
+    @Test fun `an EV trip costs exactly what it cost before, period price set or not`() = runBlocking {
+        setFuelPrice(2.55)
         val ev = insertTrip(kwh = 6.0)
         importer(VehicleKind.EV).calculateMissingCosts()
 
         val t = trip(ev)
         assertEquals(6.0 * 0.10, t.cost!!, 0.0)
         assertNull(t.fuelCost)
-    }
-
-    @Test fun `the fuel price setting is null while empty or not a number`() = runBlocking {
-        assertNull(settings.getFuelPricePerLiter())
-        db.settingsDao().set(SettingEntity(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "abc"))
-        assertNull(settings.getFuelPricePerLiter())
-        db.settingsDao().set(SettingEntity(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, " 2,55 "))
-        assertEquals(2.55, settings.getFuelPricePerLiter()!!, 1e-9)
     }
 }

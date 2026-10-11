@@ -2165,5 +2165,5 @@
     <string name="tech_label_engine_rpm">обороты ДВС</string>
     <string name="tech_card_fuel">Топливо</string>
     <string name="settings_fuel_price_label">Цена литра</string>
-    <string name="settings_fuel_price_hint">за литр, в валюте тарифа</string>
+    <string name="settings_fuel_price_hint">за литр, на поездки с этой даты</string>
 </resources>

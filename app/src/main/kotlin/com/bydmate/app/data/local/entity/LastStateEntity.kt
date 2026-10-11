@@ -30,8 +30,10 @@ data class LastStateEntity(
     @ColumnInfo(name = "trip_start_fuel_total") val tripStartFuelTotal: Double? = null,
     /** DM-i only: engine odometer when the open trip started, km. */
     @ColumnInfo(name = "trip_start_mileage_hev") val tripStartMileageHev: Double? = null,
-    /** DM-i only: lifetime fuel counter at [ts], L; the end edge of a trip closed at cold start. */
-    @ColumnInfo(name = "fuel_total") val fuelTotal: Double? = null,
-    /** DM-i only: engine odometer at [ts], km. */
-    @ColumnInfo(name = "mileage_hev") val mileageHev: Double? = null,
+    /** DM-i only: time of the last tick the car was on; the end edge of a trip closed at cold start. */
+    @ColumnInfo(name = "on_ts") val onTs: Long? = null,
+    /** DM-i only: lifetime fuel counter at [onTs], L; null when that tick missed it. */
+    @ColumnInfo(name = "on_fuel_total") val onFuelTotal: Double? = null,
+    /** DM-i only: engine odometer at [onTs], km. */
+    @ColumnInfo(name = "on_mileage_hev") val onMileageHev: Double? = null,
 )

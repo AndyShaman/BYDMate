@@ -1520,11 +1520,13 @@ class TrackingService : Service(), LocationListener {
     private fun startPolling() {
         Log.i(TAG, "Starting polling via SharedAdaptiveLoop")
         pollingJob = serviceScope.launch {
-            // DM-i: the counters last_state kept when the previous process died are the end edge
-            // of the energydata trip that ended at power-off. Read before the loop's first write,
-            // and only once the cached car type is known: onServiceStart loads it concurrently.
+            // The cold-start reconciliation decides by the car type whether the open trip gets
+            // litres; onServiceStart loads the cached type concurrently.
             runCatching { vehicleKindMonitor.awaitCache() }
                 .onFailure { Log.w(TAG, "vehicle kind cache load failed", it) }
+            // DM-i: the last ON tick of the previous process becomes the cold_start counter row
+            // before the first tick of this one can rewrite it. HistoryImporter.runSync() makes
+            // the same call; the ±90 s check keeps it to one row.
             runCatching { counterSnapshotWriter.onColdStart(lastStateDao.getCurrent(), vehicleKindMonitor.kind.value) }
                 .onFailure { Log.w(TAG, "CounterSnapshotWriter.onColdStart failed", it) }
             // Cold-start reconciliation BEFORE subscribing — so we never receive

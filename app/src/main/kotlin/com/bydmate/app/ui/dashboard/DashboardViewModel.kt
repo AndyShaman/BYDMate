@@ -7,6 +7,7 @@ import com.bydmate.app.data.autoservice.AdbVerdict
 import com.bydmate.app.data.autoservice.AdbVerdictMonitor
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.local.dao.TariffPeriodDao
 import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.remote.DynamicMetric
@@ -22,6 +23,7 @@ import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
+import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.trips.litersKm
 import com.bydmate.app.util.CalendarPeriods
@@ -165,6 +167,7 @@ class DashboardViewModel @Inject constructor(
     private val adbVerdictMonitor: AdbVerdictMonitor,
     private val tripCounterResets: TripCounterResets,
     private val vehicleKindMonitor: VehicleKindMonitor,
+    private val tariffPeriodDao: TariffPeriodDao,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -372,7 +375,10 @@ class DashboardViewModel @Inject constructor(
             // Fuel sums are read only on a hybrid: an EV keeps exactly the one summary query.
             val hybrid = _uiState.value.vehicleKind == VehicleKind.HYBRID
             val totals = if (hybrid) hybridPeriodTotals(tripRepository.getTripsByDateRange(from, to).first()) else null
-            val fuelPrice = if (hybrid) settingsRepository.getFuelPricePerLiter() else null
+            // The litre price of the tariff period in force today.
+            val fuelPrice = if (hybrid) {
+                TariffSchedule(tariffPeriodDao.getAllAsc()).periodAt(System.currentTimeMillis())?.fuelPricePerLiter
+            } else null
 
             _uiState.update {
                 it.copy(

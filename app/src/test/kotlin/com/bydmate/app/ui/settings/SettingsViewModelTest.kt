@@ -139,7 +139,6 @@ class SettingsViewModelTest {
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
-        override suspend fun getTripsWithFuel(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
@@ -313,6 +312,7 @@ class SettingsViewModelTest {
             mockk<TripTombstoneDao>(relaxed = true), mockk(relaxed = true),
             com.bydmate.app.data.repository.OdometerMarks(ctx),
             com.bydmate.app.data.nativestack.kindMonitor(), mockk(relaxed = true),
+            mockk(relaxed = true), mockk(relaxed = true),
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
@@ -442,49 +442,6 @@ class SettingsViewModelTest {
 
         assertEquals(ChargeConnector.CHADEMO, vm.uiState.value.chargeConnector)
         assertEquals("chademo", settingsDao.map[SettingsRepository.KEY_CHARGE_CONNECTOR])
-    }
-
-    // DM-i (#184): «Цена литра» starts empty and is stored as typed, like the tariffs.
-    @Test
-    fun `price per litre starts empty and is saved as typed`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals("", vm.uiState.value.fuelPricePerLiter)
-
-        vm.saveFuelPricePerLiter("2.35")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("2.35", vm.uiState.value.fuelPricePerLiter)
-        assertEquals("2.35", settingsDao.map[SettingsRepository.KEY_FUEL_PRICE_PER_LITER])
-    }
-
-    @Test
-    fun `on a hybrid a saved litre price re-prices the fuel of the trips, on an EV it does not`() = runTest {
-        val calc = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
-        exportCostCalculator = calc
-        vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID
-        val hybrid = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        hybrid.saveFuelPricePerLiter("2,5")
-        hybrid.saveFuelPricePerLiter("2,55")
-        testDispatcher.scheduler.advanceUntilIdle()
-        hybrid.saveFuelPricePerLiter("")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // In typing order, so the last price typed is the one the trips end up with.
-        io.mockk.coVerifyOrder {
-            calc.repriceFuel(2.5)
-            calc.repriceFuel(2.55)
-            calc.repriceFuel(null)
-        }
-
-        vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV
-        val ev = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-        ev.saveFuelPricePerLiter("3")
-        testDispatcher.scheduler.advanceUntilIdle()
-        io.mockk.coVerify(exactly = 0) { calc.repriceFuel(3.0) }
     }
 
     // Issue #23: pressing "Close" while an update is downloading must cancel the
@@ -2043,6 +2000,29 @@ class SettingsViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify { calculator.recalculate(septemberStart, Long.MAX_VALUE) }
+    }
+
+    // DM-i (#184): the litre price is part of a period, so a new price re-prices from its date only.
+    @Test
+    fun `a new period with a litre price recalculates only from its own date`() = runTest {
+        val dao = twoPeriods()
+        tariffPeriodDaoOverride = dao
+        val calculator = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
+        exportCostCalculator = calculator
+        vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val octoberStart = 1_759_276_800_000L // 01.10.2026
+
+        vm.saveTariffPeriod(
+            TariffPeriodEntity(startTs = octoberStart, homeRate = 0.20, dcRate = 0.60, fuelPricePerLiter = 2.5)
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { calculator.recalculate(octoberStart, Long.MAX_VALUE) }
+        coVerify(exactly = 0) { calculator.recalculate(0L, any()) }
+        assertEquals(2.5, dao.rows.single { it.startTs == octoberStart }.fuelPricePerLiter!!, 0.0)
+        assertNull(dao.rows.single { it.startTs == septemberStart }.fuelPricePerLiter)
     }
 
     // --- Telegram backup bot «Проверить» (#237) ---

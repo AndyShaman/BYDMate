@@ -91,7 +91,6 @@ class LastStateDaoTest {
         )
         dao.writeSnapshot(
             ts = 2000L, soc = 78, mileage = 102.0, totalElec = 501.0, ignition = 2, energydataAvailable = 1,
-            fuelTotal = null, mileageHev = null,
         )
         val row = dao.getCurrent()!!
         assertEquals(1500L, row.openTripId)
@@ -111,7 +110,6 @@ class LastStateDaoTest {
         assertNull(dao.getCurrent())
         dao.writeSnapshot(
             ts = 1000L, soc = 80, mileage = 100.0, totalElec = 500.0, ignition = 2, energydataAvailable = 1,
-            fuelTotal = null, mileageHev = null,
         )
         val row = dao.getCurrent()!!
         assertEquals(80, row.soc)
@@ -130,7 +128,6 @@ class LastStateDaoTest {
         dao.clearOpenTrip()
         dao.writeSnapshot(
             ts = 2000L, soc = 78, mileage = 102.0, totalElec = 501.0, ignition = 0, energydataAvailable = 1,
-            fuelTotal = null, mileageHev = null,
         )
         val row = dao.getCurrent()!!
         assertNull(row.openTripId)
@@ -139,19 +136,22 @@ class LastStateDaoTest {
         assertEquals(78, row.soc) // the snapshot write still applied
     }
 
-    @Test fun `writeSnapshot keeps the DM-i counters of the tick, null as null`() = runBlocking {
+    @Test fun `setLastOn keeps the last ON tick through snapshot writes and a trip close`() = runBlocking {
+        dao.upsert(LastStateEntity(id = 1, ts = 1000L, soc = 60, openTripId = 900L, tripStartTs = 900L))
+        dao.setLastOn(1500L, 305.2, 3850.0)
         dao.writeSnapshot(
-            ts = 1000L, soc = 60, mileage = 1040.0, totalElec = null, ignition = 2, energydataAvailable = 0,
-            fuelTotal = 305.2, mileageHev = 3850.0,
+            ts = 2000L, soc = 60, mileage = 1040.0, totalElec = null, ignition = 0, energydataAvailable = 0,
         )
-        assertEquals(305.2, dao.getCurrent()!!.fuelTotal)
-        assertEquals(3850.0, dao.getCurrent()!!.mileageHev)
+        dao.clearOpenTrip()
 
-        dao.writeSnapshot(
-            ts = 2000L, soc = 60, mileage = 1040.0, totalElec = null, ignition = 2, energydataAvailable = 0,
-            fuelTotal = null, mileageHev = null,
-        )
-        assertNull(dao.getCurrent()!!.fuelTotal)
-        assertNull(dao.getCurrent()!!.mileageHev)
+        val row = dao.getCurrent()!!
+        assertEquals(2000L, row.ts)
+        assertEquals(1500L, row.onTs)
+        assertEquals(305.2, row.onFuelTotal!!, 1e-9)
+        assertEquals(3850.0, row.onMileageHev!!, 1e-9)
+
+        dao.setLastOn(2500L, null, 3851.0)
+        assertEquals(2500L, dao.getCurrent()!!.onTs)
+        assertNull("a counter the ON tick missed is stored as missing", dao.getCurrent()!!.onFuelTotal)
     }
 }

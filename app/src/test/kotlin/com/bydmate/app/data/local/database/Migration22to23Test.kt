@@ -24,13 +24,17 @@ class Migration22to23Test {
     )
 
     @Test
-    fun `22 to 23 adds the fuel columns empty and keeps every EV trip as it was`() {
+    fun `22 to 23 adds the fuel columns empty and keeps every EV trip and period as it was`() {
         helper.createDatabase(dbName, 22).use { old ->
             old.execSQL(
                 "INSERT INTO trips (start_ts, end_ts, distance_km, kwh_consumed, cost, source) " +
                     "VALUES (1000, 2000, 50.5, 9.1, 1.82, 'energydata')"
             )
             old.execSQL("INSERT INTO last_state (id, ts, energydata_available) VALUES (1, 5000, 1)")
+            old.execSQL(
+                "INSERT INTO tariff_periods (start_ts, home_rate, dc_rate, ac_loss_pct, dc_loss_pct, trip_rule) " +
+                    "VALUES (0, 0.2, 0.73, 10.0, 5.0, 'home')"
+            )
         }
 
         val migrated = helper.runMigrationsAndValidate(dbName, 23, true, AppModule.MIGRATION_22_23)
@@ -46,7 +50,8 @@ class Migration22to23Test {
             assertEquals(50.5, c.getDouble(9), 1e-9)
         }
         migrated.query(
-            "SELECT trip_start_fuel_total, trip_start_mileage_hev, ts, fuel_total, mileage_hev FROM last_state"
+            "SELECT trip_start_fuel_total, trip_start_mileage_hev, ts, on_ts, on_fuel_total, on_mileage_hev " +
+                "FROM last_state"
         ).use { c ->
             c.moveToFirst()
             assertTrue(c.isNull(0))
@@ -54,6 +59,15 @@ class Migration22to23Test {
             assertEquals(5000L, c.getLong(2))
             assertTrue(c.isNull(3))
             assertTrue(c.isNull(4))
+            assertTrue(c.isNull(5))
+        }
+
+        // The litre price belongs to a period; a migrated period has none.
+        migrated.query("SELECT fuel_price_per_liter, home_rate FROM tariff_periods").use { c ->
+            assertEquals(1, c.count)
+            c.moveToFirst()
+            assertTrue(c.isNull(0))
+            assertEquals(0.2, c.getDouble(1), 1e-9)
         }
 
         migrated.execSQL(

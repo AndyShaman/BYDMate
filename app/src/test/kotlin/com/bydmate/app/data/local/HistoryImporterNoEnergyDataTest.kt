@@ -50,6 +50,8 @@ class HistoryImporterNoEnergyDataTest {
         odometerMarks = mockk<OdometerMarks>(relaxed = true),
         vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(),
         counterSnapshotDao = mockk(relaxed = true),
+        counterSnapshotWriter = mockk(relaxed = true),
+        lastStateDao = mockk(relaxed = true),
     )
 
     private fun readerWithDir(dir: File): EnergyDataReader {

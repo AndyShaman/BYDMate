@@ -95,6 +95,8 @@ fun TariffPeriodsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val vehicleKind by viewModel.vehicleKind.collectAsStateWithLifecycle()
+    val hybrid = vehicleKind == com.bydmate.app.data.nativestack.VehicleKind.HYBRID
     // Newest first, mirroring the list order the view model keeps.
     val sorted = remember(state.tariffPeriods) { state.tariffPeriods.sortedByDescending { it.startTs } }
     var draft by remember { mutableStateOf(sorted.firstOrNull()) }
@@ -150,6 +152,7 @@ fun TariffPeriodsScreen(
                 periods = sorted,
                 selectedId = draft?.id,
                 currencySymbol = state.currencySymbol,
+                hybrid = hybrid,
                 measuredLosses = state.measuredLosses,
                 onSelect = { draft = it; formKey++ },
                 onAdd = { draft = newPeriodDraft(sorted); formKey++ },
@@ -162,6 +165,7 @@ fun TariffPeriodsScreen(
                         period = current,
                         formKey = formKey,
                         currencySymbol = state.currencySymbol,
+                        hybrid = hybrid,
                         onChange = { draft = it },
                         onPickDate = { showDatePicker = true },
                     )
@@ -250,6 +254,7 @@ private fun PeriodList(
     periods: List<TariffPeriodEntity>,
     selectedId: Long?,
     currencySymbol: String,
+    hybrid: Boolean,
     measuredLosses: MeasuredLosses?,
     onSelect: (TariffPeriodEntity) -> Unit,
     onAdd: () -> Unit,
@@ -285,6 +290,8 @@ private fun PeriodList(
                             R.string.settings_tariff_periods_summary,
                             "%.2f".format(period.homeRate), "%.2f".format(period.dcRate), currencySymbol,
                             "%.0f".format(period.acLossPct), "%.0f".format(period.dcLossPct),
+                        ) + fuelPriceSuffix(
+                            period.fuelPricePerLiter, hybrid, stringResource(R.string.dashboard_unit_liters),
                         ),
                         color = TextMuted,
                         fontSize = 11.sp,
@@ -319,6 +326,7 @@ private fun PeriodForm(
     period: TariffPeriodEntity,
     formKey: Int,
     currencySymbol: String,
+    hybrid: Boolean,
     onChange: (TariffPeriodEntity) -> Unit,
     onPickDate: () -> Unit,
 ) {
@@ -357,6 +365,25 @@ private fun PeriodForm(
                 onValue = { onChange(period.copy(dcRate = it)) },
                 modifier = Modifier.weight(1f),
             )
+        }
+        if (hybrid) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                NumberField(
+                    formKey = formKey,
+                    label = stringResource(R.string.settings_fuel_price_label),
+                    value = period.fuelPricePerLiter,
+                    decimals = RATE_DECIMALS,
+                    onValue = { onChange(period.copy(fuelPricePerLiter = it)) },
+                    modifier = Modifier.weight(1f),
+                    onBlank = { onChange(period.copy(fuelPricePerLiter = null)) },
+                )
+                Text(
+                    stringResource(R.string.settings_fuel_price_hint),
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
             NumberField(
@@ -440,25 +467,29 @@ private fun RuleChip(label: String, selected: Boolean, onClick: () -> Unit) {
 /**
  * Decimal field that keeps the raw text while typing, so "0," does not snap back. [formKey]
  * changes when another period is selected: that is the only moment the text is re-seeded, with
- * [decimals] places.
+ * [decimals] places. A field with [onBlank] may be emptied: a null [value] shows blank.
  */
 @Composable
 private fun NumberField(
     formKey: Int,
     label: String,
-    value: Double,
+    value: Double?,
     decimals: Int,
     onValue: (Double) -> Unit,
     modifier: Modifier = Modifier,
+    onBlank: (() -> Unit)? = null,
 ) {
-    var text by remember(formKey, label) { mutableStateOf("%.${decimals}f".format(Locale.US, value)) }
+    var text by remember(formKey, label) {
+        mutableStateOf(value?.let { "%.${decimals}f".format(Locale.US, it) } ?: "")
+    }
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(FIELD_LABEL_WIDTH))
         OutlinedTextField(
             value = text,
             onValueChange = { raw ->
                 text = raw.filter { it.isDigit() || it == '.' || it == ',' }
-                text.replace(',', '.').toDoubleOrNull()?.let(onValue)
+                if (text.isEmpty() && onBlank != null) onBlank()
+                else text.replace(',', '.').toDoubleOrNull()?.let(onValue)
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.width(FIELD_INPUT_WIDTH),
@@ -484,6 +515,7 @@ private fun newPeriodDraft(existing: List<TariffPeriodEntity>): TariffPeriodEnti
         acLossPct = latest?.acLossPct ?: TariffPeriodEntity.DEFAULT_AC_LOSS_PCT,
         dcLossPct = latest?.dcLossPct ?: TariffPeriodEntity.DEFAULT_DC_LOSS_PCT,
         tripRule = latest?.tripRule ?: TRIP_RULE_HOME,
+        fuelPricePerLiter = latest?.fuelPricePerLiter,
     )
 }
 

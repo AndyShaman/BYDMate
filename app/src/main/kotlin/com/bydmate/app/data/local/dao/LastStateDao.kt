@@ -44,9 +44,7 @@ interface LastStateDao {
             mileage = :mileage,
             total_elec = :totalElec,
             ignition = :ignition,
-            energydata_available = :energydataAvailable,
-            fuel_total = :fuelTotal,
-            mileage_hev = :mileageHev
+            energydata_available = :energydataAvailable
         WHERE id = 1
         """
     )
@@ -58,14 +56,11 @@ interface LastStateDao {
         totalElec: Double?,
         ignition: Int?,
         energydataAvailable: Int,
-        fuelTotal: Double?,
-        mileageHev: Double?,
     )
 
     /**
      * SharedAdaptiveLoop's per-tick write: touches only the loop-owned columns (ts, soc,
-     * mileage, total_elec, ignition, energydata_available, and the DM-i fuel_total /
-     * mileage_hev, null on any other car) and never open_trip_id /
+     * mileage, total_elec, ignition, energydata_available) and never open_trip_id /
      * trip_start_*, which TripRecorder owns. A whole-row REPLACE (the old [upsert] path)
      * raced with TripRecorder's openTrip()/clearOpenTrip() UPDATEs between this method's
      * getCurrent() read and its write, and could wipe out a trip opened or closed
@@ -82,11 +77,9 @@ interface LastStateDao {
         totalElec: Double?,
         ignition: Int?,
         energydataAvailable: Int,
-        fuelTotal: Double?,
-        mileageHev: Double?,
     ) {
         insertSnapshotRowIfAbsent(ts, soc, mileage, totalElec, ignition, energydataAvailable)
-        updateSnapshotColumns(ts, soc, mileage, totalElec, ignition, energydataAvailable, fuelTotal, mileageHev)
+        updateSnapshotColumns(ts, soc, mileage, totalElec, ignition, energydataAvailable)
     }
 
     /**
@@ -146,4 +139,19 @@ interface LastStateDao {
         """
     )
     suspend fun setOpenTripCounters(fuelTotal: Double?, mileageHev: Double?)
+
+    /**
+     * DM-i only: time and counters of the last tick the car was on (TripRecorder). The end edge
+     * of a trip the next cold start closes; a counter that tick missed is stored as null.
+     */
+    @Query(
+        """
+        UPDATE last_state
+        SET on_ts = :ts,
+            on_fuel_total = :fuelTotal,
+            on_mileage_hev = :mileageHev
+        WHERE id = 1
+        """
+    )
+    suspend fun setLastOn(ts: Long, fuelTotal: Double?, mileageHev: Double?)
 }

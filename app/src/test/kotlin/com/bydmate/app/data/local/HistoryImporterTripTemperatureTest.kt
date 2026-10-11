@@ -45,6 +45,8 @@ class HistoryImporterTripTemperatureTest {
         odometerMarks = mockk(relaxed = true),
         vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(),
         counterSnapshotDao = mockk(relaxed = true),
+        counterSnapshotWriter = mockk(relaxed = true),
+        lastStateDao = mockk(relaxed = true),
     )
 
     private val record = BydTripRecord(

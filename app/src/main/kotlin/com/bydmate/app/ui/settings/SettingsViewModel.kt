@@ -141,8 +141,6 @@ data class SettingsUiState(
     val batteryCapacity: String = SettingsRepository.DEFAULT_BATTERY_CAPACITY,
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
-    /** DM-i: price of one litre as typed, empty until set. */
-    val fuelPricePerLiter: String = "",
     val units: String = SettingsRepository.DEFAULT_UNITS,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
@@ -502,7 +500,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 SettingsRepository.KEY_DC_TARIFF,
                 SettingsRepository.DEFAULT_DC_TARIFF
             )
-            val fuelPricePerLiter = settingsRepository.getString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "")
             val units = settingsRepository.getString(
                 SettingsRepository.KEY_UNITS,
                 SettingsRepository.DEFAULT_UNITS
@@ -617,7 +614,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     batteryCapacity = capacity,
                     homeTariff = homeTariff,
                     dcTariff = dcTariff,
-                    fuelPricePerLiter = fuelPricePerLiter,
                     units = units,
                     currency = currency.code,
                     currencySymbol = currency.symbol,
@@ -716,25 +712,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         }
     }
 
-    /** The last litre-price save; the next one waits for it so the trips end at the last price typed. */
-    private var fuelRepriceJob: Job? = null
-
-    /**
-     * DM-i: price of one litre, stored as typed (numeric string, empty allowed) like the tariffs.
-     * On a hybrid the fuel part of every trip that burned fuel follows it, as a tariff change does.
-     */
-    fun saveFuelPricePerLiter(value: String) {
-        _uiState.update { it.copy(fuelPricePerLiter = value) }
-        val previous = fuelRepriceJob
-        fuelRepriceJob = viewModelScope.launch {
-            previous?.join()
-            settingsRepository.setString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, value)
-            if (vehicleKindMonitor.kind.value == com.bydmate.app.data.nativestack.VehicleKind.HYBRID) {
-                costCalculator.repriceFuel(settingsRepository.getFuelPricePerLiter())
-            }
-        }
-    }
-
     /** Switch between the learned (auto) and user-edited (manual) range calculators. */
     fun saveRangeCalcMethod(value: String) {
         _uiState.update { it.copy(rangeCalcMethod = value) }
@@ -804,7 +781,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val wasEarliest = before.firstOrNull()?.id == period.id
             if (period.id == 0L) tariffPeriodDao.insert(period) else tariffPeriodDao.update(period)
             Log.i(CostCalculator.TAG, "period saved start=${period.startTs} home=${period.homeRate} " +
-                "dc=${period.dcRate} loss=${period.acLossPct}/${period.dcLossPct} rule=${period.tripRule}")
+                "dc=${period.dcRate} loss=${period.acLossPct}/${period.dcLossPct} rule=${period.tripRule} " +
+                "fuel=${period.fuelPricePerLiter}")
             // The earliest period also covers everything before its own date, so touching it
             // has to re-price the whole history, not just the span from its start_ts.
             val becameEarliest = tariffPeriodDao.getAllAsc().firstOrNull()?.startTs == period.startTs
@@ -1903,10 +1881,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     "start=${it.startTs} home=${it.homeRate} dc=${it.dcRate} " +
                         "loss=${it.acLossPct}/${it.dcLossPct} rule=${it.tripRule}"
                 } ?: "(none)"))
-                appendLine(
-                    "fuel_price_per_liter=" +
-                        settingsRepository.getString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, "")
-                )
+                appendLine("fuel_price_per_liter=" + (current?.fuelPricePerLiter?.toString() ?: ""))
             } catch (e: Exception) {
                 appendLine("(failed to gather tariff periods: ${e.message})")
             }

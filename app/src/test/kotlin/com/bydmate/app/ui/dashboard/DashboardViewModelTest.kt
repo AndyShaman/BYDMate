@@ -105,7 +105,6 @@ class DashboardViewModelTest {
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
-        override suspend fun getTripsWithFuel(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
@@ -308,8 +307,14 @@ class DashboardViewModelTest {
             adbVerdictMonitor = adbVerdictMonitor,
             tripCounterResets = TripCounterResets(settingsRepo).also { lastTripCounterResets = it },
             vehicleKindMonitor = com.bydmate.app.data.nativestack.kindMonitor(vehicleKind),
+            tariffPeriodDao = mockk<com.bydmate.app.data.local.dao.TariffPeriodDao> {
+                io.mockk.coEvery { getAllAsc() } returns tariffPeriods
+            },
         )
     }
+
+    // Tariff periods handed to the next built VM.
+    private var tariffPeriods: List<com.bydmate.app.data.local.entity.TariffPeriodEntity> = emptyList()
 
     // The shared reset owner handed to the last built VM, for resets from outside it.
     private var lastTripCounterResets: TripCounterResets? = null
@@ -395,6 +400,28 @@ class DashboardViewModelTest {
         assertEquals(2.0, state.periodFuelCost!!, 1e-9)
         // 3.0 − 2.0 from the fuel trip plus the plain 1.0 of the electric one.
         assertEquals(2.0, state.periodElecCost!!, 1e-9)
+    }
+
+    @Test
+    fun `on a hybrid the litre price is the one of the period in force today`() = runTest {
+        val now = System.currentTimeMillis()
+        val day = 24 * 60 * 60_000L
+        tariffPeriods = listOf(
+            com.bydmate.app.data.local.entity.TariffPeriodEntity(
+                startTs = 0L, homeRate = 0.2, dcRate = 0.7, fuelPricePerLiter = 2.0),
+            com.bydmate.app.data.local.entity.TariffPeriodEntity(
+                startTs = now - day, homeRate = 0.2, dcRate = 0.7, fuelPricePerLiter = 2.5),
+            com.bydmate.app.data.local.entity.TariffPeriodEntity(
+                startTs = now + 10 * day, homeRate = 0.2, dcRate = 0.7, fuelPricePerLiter = 3.0),
+        )
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(battery = null, available = false),
+            tripDaoOverride = daoWithPeriodTrips(fuelTrips),
+            vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2.5, vm.uiState.value.fuelPricePerLiter!!, 0.0)
     }
 
     private fun liveDataFlow(): MutableStateFlow<com.bydmate.app.data.remote.DiParsData?> {

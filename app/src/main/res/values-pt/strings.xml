@@ -1994,5 +1994,5 @@
     <string name="tech_label_engine_rpm">rotação do motor a combustão</string>
     <string name="tech_card_fuel">Combustível</string>
     <string name="settings_fuel_price_label">Preço por litro</string>
-    <string name="settings_fuel_price_hint">por litro, na moeda da tarifa</string>
+    <string name="settings_fuel_price_hint">por litro, para viagens a partir desta data</string>
 </resources>

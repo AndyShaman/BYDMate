@@ -384,10 +384,12 @@ object AppModule {
             db.execSQL("ALTER TABLE trips ADD COLUMN mileage_hev_start REAL")
             db.execSQL("ALTER TABLE trips ADD COLUMN mileage_hev_end REAL")
             db.execSQL("ALTER TABLE trips ADD COLUMN fuel_cost REAL")
+            db.execSQL("ALTER TABLE tariff_periods ADD COLUMN fuel_price_per_liter REAL")
             db.execSQL("ALTER TABLE last_state ADD COLUMN trip_start_fuel_total REAL")
             db.execSQL("ALTER TABLE last_state ADD COLUMN trip_start_mileage_hev REAL")
-            db.execSQL("ALTER TABLE last_state ADD COLUMN fuel_total REAL")
-            db.execSQL("ALTER TABLE last_state ADD COLUMN mileage_hev REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN on_ts INTEGER")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN on_fuel_total REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN on_mileage_hev REAL")
             db.execSQL("""
                 CREATE TABLE IF NOT EXISTS counter_snapshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

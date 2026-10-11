@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.bydmate.app.data.local.dao.CounterSnapshotDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.dao.TripTombstoneDao
@@ -15,6 +16,7 @@ import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.OdometerMarks
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.data.trips.CounterSnapshotWriter
 import com.bydmate.app.data.trips.TripFuel
 import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.service.TrackingService
@@ -40,6 +42,8 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
     private val odometerMarks: OdometerMarks,
     private val vehicleKind: VehicleKindMonitor,
     private val counterSnapshotDao: CounterSnapshotDao,
+    private val counterSnapshotWriter: CounterSnapshotWriter,
+    private val lastStateDao: LastStateDao,
 ) {
     companion object {
         private const val TAG = "HistoryImporter"
@@ -416,9 +420,8 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
     suspend fun calculateMissingCosts() {
         try {
             val hybrid = vehicleKind.kind.value == VehicleKind.HYBRID
-            val fuelPrice = if (hybrid) settingsRepository.getFuelPricePerLiter() else null
             val trips = if (hybrid) tripDao.getHybridTripsWithoutCost() else tripDao.getTripsWithoutCost()
-            val calculated = costCalculator.priceUncostedTrips(trips, fuelPrice)
+            val calculated = costCalculator.priceUncostedTrips(trips)
             Log.d(TAG, "calculateMissingCosts: $calculated trips")
         } catch (e: Exception) {
             Log.e(TAG, "calculateMissingCosts failed", e)
@@ -704,6 +707,16 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
      * Unified sync entry point — always uses energydata pipeline.
      */
     suspend fun runSync(): ImportResult {
+        // runSync starts at app and service start, before the poll loop has loaded the cached car
+        // type: an UNKNOWN kind would SOC-repair a hybrid trip's kWh for good. Then (DM-i) the end
+        // edge of the trip that ended at power-off, before attachCounters() looks for it.
+        runCatching { vehicleKind.awaitCache() }
+            .onFailure { Log.w(TAG, "vehicle kind cache load failed", it) }
+        val kind = vehicleKind.kind.value
+        if (kind == VehicleKind.HYBRID) {
+            runCatching { counterSnapshotWriter.onColdStart(lastStateDao.getCurrent(), kind) }
+                .onFailure { Log.w(TAG, "CounterSnapshotWriter.onColdStart failed", it) }
+        }
         cleanupIdleDrainV2()
         val r = syncFromEnergyData()
         recalculateConsumptionFromEnergyData()

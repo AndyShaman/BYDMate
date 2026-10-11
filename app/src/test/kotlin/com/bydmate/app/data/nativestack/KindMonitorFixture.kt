@@ -6,4 +6,4 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 /** A [VehicleKindMonitor] that reports [kind] and nothing else. */
 internal fun kindMonitor(kind: VehicleKind = VehicleKind.EV): VehicleKindMonitor =
-    mockk { every { this@mockk.kind } returns MutableStateFlow(kind) }
+    mockk(relaxed = true) { every { this@mockk.kind } returns MutableStateFlow(kind) }
