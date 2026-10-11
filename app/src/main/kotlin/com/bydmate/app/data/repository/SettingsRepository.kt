@@ -129,6 +129,12 @@ open class SettingsRepository @Inject constructor(
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
         /** "true" hides the native BYD voice assistant (pm disable-user); default "false". */
         const val KEY_DISABLE_NATIVE_ASSISTANT = "disable_native_assistant"
+        /** Confirmed car type (VehicleKindMonitor): "EV" or "HYBRID"; absent until confirmed. */
+        const val KEY_VEHICLE_KIND = "vehicle_kind"
+        /** The raw words that confirmed it: "hev=…;ev=…;fuel=…". */
+        const val KEY_VEHICLE_KIND_EVIDENCE = "vehicle_kind_evidence"
+        /** Epoch ms of the confirmation. */
+        const val KEY_VEHICLE_KIND_CONFIRMED_AT = "vehicle_kind_confirmed_at"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
         const val KEY_LAST_STATE_TS = "last_state_ts"

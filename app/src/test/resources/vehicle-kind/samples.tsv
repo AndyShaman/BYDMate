@@ -1,0 +1,8 @@
+label	hev	ev	fuel	expected
+song-pro-dmi-parking	6658	9893	20	HYBRID
+song-pro-dmi-driving	6659	9894	19	HYBRID
+hybrid-20260925	7583	4443	99	HYBRID
+hybrid-20261011-a	24875	40197	56	HYBRID
+hybrid-20261011-b	24875	40197	56	HYBRID
+leopard8-20261011	18396	23502	94	HYBRID
+dilink5-ev-198	1048575	1048575	255	EV

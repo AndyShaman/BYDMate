@@ -133,6 +133,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var appStrings: com.bydmate.app.util.AppStrings
     @Inject lateinit var telegramReporter: com.bydmate.app.data.telegram.TelegramReporter
     @Inject lateinit var powerOffArmer: com.bydmate.app.data.telegram.PowerOffArmer
+    @Inject lateinit var vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -840,6 +841,8 @@ class TrackingService : Service(), LocationListener {
         // The power-off report: keeps the helper daemon armed while the car is on (it sends the
         // report itself at the power-off, when this process is already killed).
         serviceScope.launch { powerOffArmer.run() }
+        // Car type (EV / DM-i hybrid): cache first, then a read round; the poll tick continues it.
+        serviceScope.launch { vehicleKindMonitor.onServiceStart(System.currentTimeMillis()) }
         startPolling()
         startCameraMonitor()
         // Pushed fid values are laid into the live snapshot as they arrive; the poll above is
@@ -1581,6 +1584,12 @@ class TrackingService : Service(), LocationListener {
                     // lives in gunEdgeDetector; runCatchUp's mutex serializes us
                     // against the cold-start path.
                     pollTickCount++
+                    // Car type read round: one batch read at most every 10 s until confirmed,
+                    // then once a day. claimProbe is a cheap check, the read runs off-tick.
+                    val kindProbeAt = System.currentTimeMillis()
+                    if (vehicleKindMonitor.claimProbe(kindProbeAt)) {
+                        serviceScope.launch { vehicleKindMonitor.probe(kindProbeAt) }
+                    }
                     if (pollTickCount % GUN_STATE_POLL_EVERY_N_TICKS == 0L) {
                         serviceScope.launch {
                             pollGunStateForEdge(data)

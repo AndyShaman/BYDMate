@@ -387,6 +387,7 @@ class SettingsViewModelTest {
             telegramReporter = mockk(relaxed = true),
             clusterMusicBridge = mockk(relaxed = true),
             vehicleWriteLogDao = mockk(relaxed = true),
+            vehicleKindMonitor = mockk(relaxed = true),
         )
     }
 

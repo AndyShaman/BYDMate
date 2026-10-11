@@ -511,11 +511,15 @@ class AutoserviceChargingDetector @Inject constructor(
             )
             stateStore.setChargePending(false)
 
-            android.util.Log.i(TAG, "runCatchUp: SESSION_CREATED id=$chargeId, delta=${"%.3f".format(delta)}, source=$detectionSource, type=$type, socStart=$socStart, socEnd=$socEnd")
+            val kmNow = battery?.lifetimeMileageKm?.let { "%.1f".format(it) } ?: "?"
+            val kmPrev = prev.mileageKm?.let { "%.1f".format(it) } ?: "?"
+            val plugInfo = "${charging?.chargerConnectState ?: "?"}/" +
+                "${charging?.chargeConnectIndicator ?: "?"}/${charging?.gunConnectState ?: "?"}"
+            android.util.Log.i(TAG, "runCatchUp: SESSION_CREATED id=$chargeId, delta=${"%.3f".format(delta)}, source=$detectionSource, type=$type, socStart=$socStart, socEnd=$socEnd, km=$kmNow prev_km=$kmPrev plug=$plugInfo")
             logJournal(
                 now,
                 "SESSION_CREATED kwh=${"%.2f".format(delta)} src=$detectionSource " +
-                    "type=$type soc=$socStart->$socEnd"
+                    "type=$type soc=$socStart->$socEnd km=$kmNow prev_km=$kmPrev plug=$plugInfo"
             )
             _state.value = DetectorState.IDLE
             return CatchUpResult(CatchUpOutcome.SESSION_CREATED, chargeId, delta)

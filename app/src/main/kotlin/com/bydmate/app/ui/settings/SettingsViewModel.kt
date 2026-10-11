@@ -371,6 +371,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter,
     private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge,
     private val vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao,
+    private val vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor,
 ) : ViewModel() {
 
     /** ADB control-channel verdict for the line under the ADB-restore toggle. */
@@ -1936,6 +1937,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     .format(helperClient.readBatch(HybridProbeDiagnostics.batchItems()))
                     .forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
+            try {
+                appendLine(vehicleKindMonitor.dumpLine())
+            } catch (e: Exception) { appendLine("vehicle_kind: error ${e.message}") }
 
             appendLine(automationEngine.serviceStartDumpLine())
             // Automation rules (#177): issue reports about a rule that "does nothing"
