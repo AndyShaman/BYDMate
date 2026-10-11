@@ -195,6 +195,7 @@ data class SettingsUiState(
     val abrpApiKey: String = "",
     val abrpUserToken: String = "",
     val abrpCarModel: String = "",
+    val abrpSendLocation: Boolean = false,
     val abrpSaveStatus: String? = null,
     val webhookEnabled: Boolean = false,
     val webhookUrl: String = "",
@@ -531,6 +532,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
             val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+            val abrpSendLocation = settingsRepository.getString(SettingsRepository.KEY_ABRP_SEND_LOCATION, "false") == "true"
 
             val webhookEnabled = settingsRepository.getString(SettingsRepository.KEY_WEBHOOK_ENABLED, "false") == "true"
             val webhookUrl = settingsRepository.getString(SettingsRepository.KEY_WEBHOOK_URL, "")
@@ -630,6 +632,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     abrpApiKey = abrpApiKey,
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
+                    abrpSendLocation = abrpSendLocation,
                     webhookEnabled = webhookEnabled,
                     webhookUrl = webhookUrl,
                     webhookSecret = webhookSecret,
@@ -1215,6 +1218,13 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(webhookEnabled = effective) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_WEBHOOK_ENABLED, effective.toString())
+        }
+    }
+
+    fun toggleAbrpSendLocation(enabled: Boolean) {
+        _uiState.update { it.copy(abrpSendLocation = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_SEND_LOCATION, enabled.toString())
         }
     }
 
@@ -1830,9 +1840,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
                 val abrpTokenLen = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "").length
                 val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+                val abrpSendLocation = settingsRepository.getString(SettingsRepository.KEY_ABRP_SEND_LOCATION, "false") == "true"
                 appendLine("data_source: $dataSource")
                 appendLine("battery_capacity: raw=\"$capacityRaw\" parsed=$capacityParsed")
-                appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
+                appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\" send_location=$abrpSendLocation")
                 appendLine("route_navigator=" + com.bydmate.app.data.automation.RouteNavigatorUris.normalize(
                     appContext.getSharedPreferences(
                         com.bydmate.app.data.automation.RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE

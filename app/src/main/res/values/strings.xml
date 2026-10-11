@@ -232,6 +232,8 @@
     <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS по умолчанию не передаётся.</string>
     <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
     <string name="settings_abrp_save_button">Сохранить ABRP</string>
+    <string name="settings_abrp_location_label">Отправлять координаты в ABRP</string>
+    <string name="settings_abrp_location_description">Для редкого случая: следить за машиной в ABRP с телефона, когда ABRP в самой машине не запущен. Если ABRP открыт в машине, он берёт GPS сам, и с этой настройкой метка на карте начинает прыгать. По умолчанию выключено.</string>
     <string name="settings_webhook_section_header">Вебхук - телеметрия</string>
     <string name="settings_webhook_label">Живые данные -> свой сервер</string>
     <string name="settings_webhook_description">Тот же JSON, что уходит в ABRP (SOC, мощность, температуры, одометр, давление шин, зарядка), отправляется POST-запросом на ваш URL: раз в секунду в движении, раз в 8 секунд на зарядке, раз в 30 секунд на стоянке. Координаты по умолчанию не передаются.</string>

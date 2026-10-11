@@ -135,6 +135,8 @@
     <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。默认不发送 GPS 坐标。</string>
     <string name="settings_abrp_token_label">ABRP 实时数据令牌</string>
     <string name="settings_abrp_save_button">保存 ABRP</string>
+    <string name="settings_abrp_location_label">向 ABRP 发送坐标</string>
+    <string name="settings_abrp_location_description">适用于少见的情况：车内的 ABRP 没有运行时，用手机上的 ABRP 查看车辆位置。如果车内打开了 ABRP，它会自己获取 GPS，开启此项后地图上的车辆标记会来回跳动。默认关闭。</string>
     <string name="settings_webhook_section_header">Webhook - 遥测</string>
     <string name="settings_webhook_label">实时数据 -> 自己的服务器</string>
     <string name="settings_webhook_description">与发送至 ABRP 相同的 JSON（SOC、功率、温度、里程表、胎压、充电）通过 POST 请求发送到您的 URL：行驶时每秒一次，充电时每 8 秒一次，停车时每 30 秒一次。默认不发送坐标。</string>

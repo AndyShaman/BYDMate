@@ -95,9 +95,9 @@ class IternioTelemetryClient @Inject constructor(
      *                    the moment our HTTP call lands. Defaults to now when
      *                    null (call-time fallback).
      *
-     * NO position is ever part of this payload (wave 2026-09-16): ABRP merges a telemetry
-     * position with the GPS it reads on the head unit itself, and the car marker jumps between
-     * the two sources (ABRP tickets, June 2026). ABRP on DiLink reads GPS itself.
+     * The base payload carries no position. TrackingService adds `lat`/`lon`/`heading` per
+     * target behind each target's own toggle (ABRP opt-in, webhook opt-in): ABRP on the head
+     * unit reads GPS itself, and two sources make the car marker jump (ABRP tickets, June 2026).
      */
     suspend fun send(
         apiKey: String,

@@ -222,6 +222,8 @@
     <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent by default.</string>
     <string name="settings_abrp_token_label">Live data token from ABRP</string>
     <string name="settings_abrp_save_button">Save ABRP</string>
+    <string name="settings_abrp_location_label">Send coordinates to ABRP</string>
+    <string name="settings_abrp_location_description">For a rare case: following the car in ABRP on a phone while ABRP in the car itself is not running. If ABRP is open in the car, it takes GPS on its own, and with this setting the car marker on the map starts jumping. Off by default.</string>
     <string name="settings_webhook_section_header">Webhook - telemetry</string>
     <string name="settings_webhook_label">Live data -> your own server</string>
     <string name="settings_webhook_description">The same JSON that goes to ABRP (SOC, power, temperatures, odometer, tire pressure, charging) is sent as a POST request to your URL: once per second while driving, once every 8 seconds while charging, once every 30 seconds while parked. Coordinates are not sent by default.</string>

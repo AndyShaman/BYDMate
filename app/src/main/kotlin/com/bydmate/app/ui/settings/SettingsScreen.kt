@@ -566,6 +566,13 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 keyboardType = KeyboardType.Password,
                 secret = true
             )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_abrp_location_label),
+                traceId = "abrp_location",
+                description = stringResource(R.string.settings_abrp_location_description),
+                checked = state.abrpSendLocation,
+                onCheckedChange = { viewModel.toggleAbrpSendLocation(it) },
+            )
             SettingActionRow(
                 title = stringResource(R.string.settings_abrp_save_button),
                 buttonLabel = stringResource(R.string.settings_abrp_save_button),

@@ -863,7 +863,7 @@ autoservice (命令写入)         ←  AutomationEngine   ←  Rules (Room DB)
 | 在线语音合成 | MiniMax / fal.ai / Replicate / OpenRouter | 要朗读的回答文本 | 仅在选择在线语音时 |
 | 行程详情地图 | OpenStreetMap 瓦片服务器（或 Amap，如果在设置里选择了它） | 当前可见地图区域的坐标 | 打开行程地图或地点编辑器时 |
 | 更新检查 | GitHub API | 不发送任何内容（只获取发布列表，版本比较在本地完成） | 自动进行 |
-| ABRP 实时遥测 | abetterrouteplanner.com | SOC、功率、车速、各项温度、里程、胎压、充电状态、电池容量、SoH、本次充电的 kWh、车型（GPS 故意不发送） | 仅在输入令牌后 |
+| ABRP 实时遥测 | abetterrouteplanner.com | SOC、功率、车速、各项温度、里程、胎压、充电状态、电池容量、SoH、本次充电的 kWh、车型（坐标只有单独开关开启时才发送，用于在手机上查看车辆位置） | 仅在输入令牌后 |
 | Telegram 配置备份 | api.telegram.org、你的机器人 | 你选择包含的配置压缩包，以及连接机器人时的一条消息 | 仅在连接机器人后 |
 | 遥测 Webhook | 设置 → 集成 → Webhook | 和发给 ABRP 一样的 JSON，每 1/8/30 秒 POST 到你的地址一次（行驶/充电/停车）；坐标只有单独开关开启时才发送 | 默认关闭 |
 
@@ -1025,6 +1025,8 @@ BYDMate 可以通过官方 Iternio Telemetry API，把车辆的实时数据发�
 
 这个功能是**可选的**，默认关闭，需要在设置里手动开启。
 
+车机上的 ABRP 版本：请安装 7.1.2 或更早的版本，例如从 [APKMirror](https://www.apkmirror.com/apk/iternio-planning-ab/a-better-routeplanner-abrp/a-better-routeplanner-abrp-7-1-2-release/) 下载。在 7.1.4 及更新的版本中，地图上的车辆标记会跳动着更新或者卡住不动。这是 ABRP 自身的问题，与 BYDMate 无关。
+
 ### 如何获取令牌
 
 ABRP 使用「Generic Live Data Token」，车库里每辆车都要单独申请一个：
@@ -1063,7 +1065,7 @@ ABRP 使用「Generic Live Data Token」，车库里每辆车都要单独申请�
 
 ### 没有发送什么
 
-- **不发送 GPS 坐标。** ABRP 是 DiLink 上一个独立的 Android 应用，自己从系统读取位置。以前 BYDMate 也会发坐标过去，结果 ABRP 地图上的车在两个数据源之间跳来跳去，所以从 3.16 版本起坐标发送连同这个设置一起去掉了。Webhook 那边的坐标开关还保留着。
+- **默认不发送 GPS 坐标。** ABRP 是 DiLink 上一个独立的 Android 应用，自己从系统读取位置。如果 BYDMate 也发送坐标，ABRP 地图上的车会在两个数据源之间跳来跳去。「向 ABRP 发送坐标」设置只用于一种情况：车内的 ABRP 没有运行时，用手机上的 ABRP 查看车辆位置。如果车内打开了 ABRP，请不要开启它。
 - 不发送：VIN、设备标识符、行程历史、路线、个人设置。
 
 ### ABRP 如何计算续航

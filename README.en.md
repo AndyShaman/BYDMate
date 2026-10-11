@@ -870,7 +870,7 @@ autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 | Online TTS voices | MiniMax / fal.ai / Replicate / OpenRouter | text of the spoken reply | only if an online voice is chosen |
 | Map in trip details | OpenStreetMap tile servers (or Amap, if chosen in Settings) | coordinates of the visible map area | when the trip map or the places editor is opened |
 | Update check | GitHub API | nothing (fetches the release list, version comparison is local) | automatically |
-| ABRP live telemetry | abetterrouteplanner.com | SOC, power, speed, temperatures, odometer, tire pressure, charging status, battery capacity, SoH, kWh of the current charging session, car model (GPS is deliberately not sent) | only after entering a token |
+| ABRP live telemetry | abetterrouteplanner.com | SOC, power, speed, temperatures, odometer, tire pressure, charging status, battery capacity, SoH, kWh of the current charging session, car model (coordinates only with a separate toggle, for following the car from a phone) | only after entering a token |
 | Configuration copies to Telegram | api.telegram.org, your bot | the configuration archive with the chosen parts, and a message when the bot connects | only after connecting a bot |
 | Telemetry webhook | Settings → Integrations → Webhook | the same JSON as ABRP, POST to your URL every 1/8/30 s (driving/charging/parked); coordinates only with a separate toggle | off by default |
 
@@ -1034,6 +1034,8 @@ BYDMate can send live vehicle data to [A Better Route Planner](https://abetterro
 
 The feature is **optional**, off by default, and turned on by hand in Settings.
 
+ABRP version on the head unit: install 7.1.2 or older, for example from [APKMirror](https://www.apkmirror.com/apk/iternio-planning-ab/a-better-routeplanner-abrp/a-better-routeplanner-abrp-7-1-2-release/). In 7.1.4 and newer the car marker on the map moves in jumps or freezes. This is a bug in ABRP itself, BYDMate does not affect it.
+
 ### How to Get the Token
 
 ABRP uses a "Generic Live Data Token", a separate token for each car in the garage:
@@ -1072,7 +1074,7 @@ Only aggregated vehicle figures, no identifiers:
 
 ### What Is NOT Sent
 
-- **No GPS coordinates.** ABRP runs as a separate Android app right on DiLink and reads its own location from the OS. When coordinates also came from BYDMate, the car on ABRP's map jumped between the two sources, so since version 3.16 sending them has been removed entirely, along with the setting. The webhook still has its own coordinates toggle.
+- **No GPS coordinates by default.** ABRP runs as a separate Android app right on DiLink and reads its own location from the OS. When coordinates also come from BYDMate, the car on ABRP's map jumps between the two sources. The "Send coordinates to ABRP" setting is for one case: following the car in ABRP on a phone while ABRP in the car itself is not running. If ABRP is open in the car, leave it off.
 - Also not sent: VIN, device ID, trip history, routes, user settings.
 
 ### How ABRP Figures the Remaining Range

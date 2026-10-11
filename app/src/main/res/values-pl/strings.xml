@@ -232,6 +232,8 @@
     <string name="settings_abrp_telemetry_description">Dane na żywo (SOC, moc, temperatury, licznik, ciśnienie w oponach) trafiają do Iternio Telemetry API, żeby plan w ABRP był aktualny. GPS domyślnie nie jest wysyłany.</string>
     <string name="settings_abrp_token_label">Token danych na żywo z ABRP</string>
     <string name="settings_abrp_save_button">Zapisz ABRP</string>
+    <string name="settings_abrp_location_label">Wysyłaj współrzędne do ABRP</string>
+    <string name="settings_abrp_location_description">Na rzadki przypadek: śledzenie samochodu w ABRP na telefonie, gdy ABRP w samym samochodzie nie jest uruchomiony. Jeśli ABRP jest otwarty w samochodzie, sam pobiera GPS, a z tym ustawieniem znacznik na mapie zaczyna skakać. Domyślnie wyłączone.</string>
     <string name="settings_webhook_section_header">Webhook - telemetria</string>
     <string name="settings_webhook_label">Dane na żywo -> własny serwer</string>
     <string name="settings_webhook_description">Ten sam JSON, który trafia do ABRP (SOC, moc, temperatury, licznik, ciśnienie w oponach, ładowanie), jest wysyłany żądaniem POST na Twój URL: raz na sekundę podczas jazdy, raz na 8 sekund podczas ładowania, raz na 30 sekund na postoju. Współrzędne domyślnie nie są wysyłane.</string>

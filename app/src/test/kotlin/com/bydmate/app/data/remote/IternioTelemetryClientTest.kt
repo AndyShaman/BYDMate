@@ -523,10 +523,9 @@ class IternioTelemetryClientTest {
     }
 
     @Test
-    fun `Iternio payload never carries lat lon even when a fresh location exists`() = runTest {
-        // The position is deliberately absent from this sink: ABRP merges a telemetry position
-        // with the GPS it reads on the head unit itself, and the car marker jumps between the
-        // two. TrackingService keeps a fresh fix for the webhook, and passes none here.
+    fun `base Iternio payload never carries lat lon, the position is added per target`() = runTest {
+        // The client never puts a position in: TrackingService adds lat/lon/heading per target
+        // behind each target's own toggle (ABRP opt-in, webhook opt-in), see withLocation.
         val cap = CapturingInterceptor()
         val client = makeClient(cap)
 

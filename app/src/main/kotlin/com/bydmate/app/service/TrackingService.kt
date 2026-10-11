@@ -1259,6 +1259,10 @@ class TrackingService : Service(), LocationListener {
                     ""
                 ).trim().takeIf { it.isNotEmpty() }
 
+                val abrpSendLocation = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_SEND_LOCATION,
+                    "false"
+                ) == "true"
                 val webhookSendLocation = settingsRepository.getString(
                     com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_SEND_LOCATION,
                     "false"
@@ -1281,7 +1285,7 @@ class TrackingService : Service(), LocationListener {
                 // 1 Hz. Null → client falls back to DiPars power.
                 val enginePowerKw: Int? = enginePowerKwFromSnapshot(data)
 
-                // Built once per tick and shared: the webhook's own GPS toggle is the only
+                // Built once per tick and shared: each target's own GPS toggle is the only
                 // per-target difference, so those fields go into a copy (see [withLocation]).
                 val telemetry = iternioTelemetryClient.buildTelemetry(
                     data = data,
@@ -1298,9 +1302,16 @@ class TrackingService : Service(), LocationListener {
                 var delivered = false
 
                 if (sendToIternio) {
-                    // NO position ever goes to ABRP: it merges telemetry position with the GPS it
-                    // reads on the head unit itself, and the car marker jumps between the two
-                    // sources (ABRP tickets, June 2026). The webhook keeps its own toggle.
+                    // Position goes to ABRP only behind its own opt-in toggle, off by default.
+                    // ABRP open on the head unit reads GPS itself and merges it with the telemetry
+                    // position, so two sources make the car marker jump (ABRP tickets, June 2026).
+                    // The toggle is for the narrow case of watching the car from ABRP on a phone
+                    // while ABRP in the car is not running (@ptuchik, #302).
+                    // Gate against the clock now, not snapshotMs: the settings and autoservice reads
+                    // above suspend, and a fix that arrived meanwhile is newer than the snapshot.
+                    val abrpLocation = locationForTelemetry(
+                        abrpSendLocation, _lastLocation.value, System.currentTimeMillis(),
+                    )
                     // A sample send every 10 min plus the tally below: without them a trip log shows
                     // nothing between two ABRP failures, and «данных нет» has no diagnosis. A line
                     // per send was thousands an hour.
@@ -1308,13 +1319,13 @@ class TrackingService : Service(), LocationListener {
                         Log.i(TAG, "Iternio send: state=$state interval=${intervalSec}s " +
                             "gear=${data.gear} speed=${data.speed} soc=${data.soc} " +
                             "hv=${data.hvVoltage ?: "-"}/${data.hvCurrent ?: "-"} " +
-                            "setpoint=${data.acTemp ?: "-"}")
+                            "setpoint=${data.acTemp ?: "-"} gps=${abrpLocation != null}")
                     }
                     val sentAtMs = System.currentTimeMillis()
                     iternioTelemetryClient.sendTelemetry(
                         apiKey = apiKey,
                         userToken = token,
-                        telemetry = telemetry,
+                        telemetry = withLocation(telemetry, abrpLocation),
                     ).onSuccess {
                         delivered = true
                         iternioConsecutive5xx = 0
@@ -1350,7 +1361,9 @@ class TrackingService : Service(), LocationListener {
                 }
 
                 if (sendToWebhook) {
-                    val location = locationForTelemetry(webhookSendLocation, _lastLocation.value, snapshotMs)
+                    val location = locationForTelemetry(
+                        webhookSendLocation, _lastLocation.value, System.currentTimeMillis(),
+                    )
                     webhookTelemetryClient.send(
                         url = webhookUrl,
                         secret = webhookSecret,
@@ -1376,19 +1389,6 @@ class TrackingService : Service(), LocationListener {
             } finally {
                 iternioInFlight.set(false)
             }
-        }
-    }
-
-    /**
-     * Копия [telemetry] с GPS-полями. Базовый payload координат не содержит —
-     * тумблер «отправлять координаты» у ABRP и вебхука свой, а объект один на оба.
-     */
-    private fun withLocation(telemetry: JSONObject, location: Location?): JSONObject {
-        if (location == null) return telemetry
-        return JSONObject(telemetry.toString()).apply {
-            put("lat", location.latitude)
-            put("lon", location.longitude)
-            if (location.hasBearing()) put("heading", location.bearing.toDouble())
         }
     }
 
@@ -2265,3 +2265,16 @@ internal fun nextSnapshotOnRestart(
     lastKnown: Location?,
 ): TrackingService.LocationFix? =
     lastKnown?.let { TrackingService.LocationFix(it, isLive = false) } ?: previous?.copy(isLive = false)
+
+/**
+ * Копия [telemetry] с GPS-полями. Базовый payload координат не содержит —
+ * тумблер «отправлять координаты» у ABRP и вебхука свой, а объект один на оба.
+ */
+internal fun withLocation(telemetry: JSONObject, location: Location?): JSONObject {
+    if (location == null) return telemetry
+    return JSONObject(telemetry.toString()).apply {
+        put("lat", location.latitude)
+        put("lon", location.longitude)
+        if (location.hasBearing()) put("heading", location.bearing.toDouble())
+    }
+}
