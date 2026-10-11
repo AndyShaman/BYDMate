@@ -19,7 +19,7 @@
 
 Split screen 1/3 and 2/3, navigation on the instrument cluster, Yandex Navigator guidance on the windshield, turn-signal blind-spot cameras, a Russian voice assistant, ABRP telemetry.
 
-Tested on Leopard 3 (Fangchengbao Tai 3), with support for Sea Lion 07, Song, Atto 3, Seal, Han. DiLink 3.0, 4.0, 5.0, 5.1, and firmware with the new UI7 interface (OTA V1.6).
+Tested on Leopard 3 (Fangchengbao Tai 3), with support for Sea Lion 07, Song, Atto 3, Seal, Han and the DM-i and DM-o hybrids (Song Pro DM-i, Leopard 5, Leopard 8, Sealion 06). DiLink 3.0, 4.0, 5.0, 5.1, and firmware with the new UI7 interface (OTA V1.6).
 
 [Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [Voice AI Agent](#voice-ai-agent) | [AI Insights](#ai-insights) | [ABRP](#abrp-live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Releases](https://github.com/AndyShaman/BYDMate/releases) | [Sponsor](SUPPORT.md)
 
@@ -37,49 +37,23 @@ All core features (trips, charges, automations, local insights, offline voice ag
 
 ## What's New
 
-The main changes in version 3.19.6.
+The main changes in version 4.0.0.
 
-**Yandex track on the cluster.** The track title and artist from Yandex Music and from the music in Yandex Navigator (Alice) are shown on the music card on the cluster; the car used to leave that card blank. Turned on with the “Yandex track on the cluster” switch in **Settings → Display**, off by default. Thanks to @vladh91 for this contribution. Not checked on cars in its final form yet.
+**DM-i and DM-o hybrids.** The app detects a hybrid by itself, from the car's own counters: there are no settings or profiles for it. On the home screen, under the charge ring, sits the car's own battery range instead of our calculation, next to it a “Fuel” card with the tank level and the fuel range; a tap shows engine rpm, engine and battery mileage, litres for all time. The widget shows the tank level and the fuel range, and the “Tech” screen shows rpm and the “Fuel” card. Consumption for a period is counted as on the instrument cluster: l/100 and kWh/100 over all kilometres. Trips get an “l” column; litres come from the car's counter at the trip boundaries, and if the app did not see one of the boundaries, a dash is shown: someone else's petrol is never put on a trip. The litre price is set in tariff periods, like the electricity tariff: if you refuelled at a higher price, add a period from the refuelling date. This is the first version of the support, built from the dumps of two cars, and some values may show a dash. If you see a dash where the car knows the number, send a parameter dump and a photo of the cluster with the ranges. Nothing changed on EVs. Thanks to baileileicn and bolatbekb for the dumps.
 
-**HUD, way 3 gives the car more.** Besides the arrow, the meters and the street it now sends the remaining time and distance to the end of the route and the arrival time, and it sends the arrow, the meters and the street by a second path as well. If way 2 shows the meters and the street on the glass but no arrow, try way 3. Ways 1 and 2 did not change. Not checked on cars yet.
+**Battery preheating in automation.** New actions “Battery preheating: on” and “off”, also available to the voice assistant. It is the same preheating as in the car's own menu “Energy”, “Charge and discharge”: it helps the battery charge faster in the cold. It works on EVs that have this item in the car's menu. If the battery is warm or a charging cable is connected, the car itself will not let you turn it on, and the rule will say why. Not checked on a car in the cold yet, we are waiting for feedback.
 
-**HUD understands more maneuvers.** Navigator hints in English, the roundabout exit number in words (“second exit”), “sharp left”, “slight right” and others. Maneuvers the app understood before are read the same way.
+**Screen: off and on.** Two new actions in automation and for the voice assistant. Only the central screen goes dark: music and the app keep working, and a touch turns the screen on again. Handy for a rule that turns the screen off when you lock the car. Not checked on cars yet.
 
-**HUD holds the hint longer.** If the app stops seeing the hint in the Navigator window for a while, the glass no longer goes dark after 10 seconds: it waits up to a minute and a half. After a route is cancelled, the last distance and street may stay on the glass for the same time. On cars without Google services the Navigator notification “Install Google Play services” no longer turns the HUD on without a route.
+**Coordinates in ABRP.** The setting “Send coordinates to ABRP” is back, off by default. It is for one case: watching the car in ABRP from a phone while ABRP is not running in the car itself, for example when someone else has taken the car. If ABRP is open in the car, better leave the setting off: it takes GPS by itself, and the marker on the map starts jumping between two sources. Thanks to @ptuchik.
 
-The main changes in version 3.19.5.
+**BYD cloud over Wi-Fi.** If the BYD server does not let the car in, the line under the setting now says so and suggests that a Chinese VPN is needed. Before, that looked the same as “the cloud did not answer”. The app now waits for the cloud up to 30 seconds, not 5. The hint is fixed: you need Wi-Fi, and cars on the new BYD servers also need a Chinese VPN, better on the router.
 
-**New automation actions.** “Close app” closes the chosen app completely; a route or music in it that is not saved will be lost. “Media: play” and “Media: pause” resume or pause what is playing in a player that is already running. If no player is running, put “Launch app” before this step. One rule now holds up to 20 actions.
+**Navigator hints on the cluster of DiLink 3.0 cars.** Instead of “-1” the cluster shows the distance to the maneuver and the rest of the route, and the travel time is written as “3 min”, without the Chinese character “分”.
 
-**TRIP 1 and TRIP 2 in the Telegram report.** The report settings have two new checkboxes: each Dashboard counter is added to the report separately.
+**Maneuver arrow on the HUD and the cluster.** After a turn is passed, it no longer stays next to the distance to the next maneuver, and on a standing car it does not disappear while the navigator is silent.
 
-**Cluster output on Han and Tang 2024.** On cars with Android 12 where the app itself cannot see the cluster screen, the output stopped right away. Now that screen is found. Not checked on cars yet.
-
-**HUD, ways 2 and 3.** A “slight right” maneuver is drawn as an arrow to the right; the car used to draw it as “slight left”. If the app was closed in the middle of a route, on the next start it removes the navigation card from the cluster.
-
-The main changes in version 3.19.4.
-
-**Three ways to draw on the glass.** The HUD settings now offer three ways instead of two modes. Way 1 is the default and works as before: hints go to the glass and the app does not touch the cluster. Way 2 puts the car into navigation mode and passes the arrow, the meters and the street to the navigation card on the cluster; the street is written in Latin letters there. Way 3 is experimental: everything as in Way 2, plus one more path that OpenBYD uses. Ways 2 and 3 are new and have not been checked on cars yet. When the route ends, the way is changed or the HUD is turned off, the app removes from the glass and the cluster everything it put there.
-
-**HUD check picks the way for you.** The check shows the numbers 111, 222, 333 and 444 on the glass one after another, each by its own way, and at the end asks which number you saw and sets the right way. If the glass showed nothing, the app will ask you to send a log. The test distance 333 m is cleared after the check.
-
-**The window no longer lowers by itself.** After parking, the window no longer opens by itself when the car starts, and repeated "vent" and "halfway" commands work the first time: after each command to open a window by a fraction, the app clears it from the car the same way the factory BYD voice assistant does.
-
-**Yandex Music without the internet.** The phrases "turn on Yandex Music", "launch Yandex Music" and just "Yandex Music" start "My Wave" right away, without the cloud assistant.
-
-The main changes in version 3.19.3.
-
-**The agent closes by itself.** The voice agent settings have a new switch, "Close the agent after a completed command", off by default. When it is on, the agent closes on its own after a completed command or an answer. If the agent asked you a question, it waits for your reply.
-
-**Close the agent with words.** Say "close the agent", "turn off", or "that's all, thanks, rest", and the agent closes. This goes through the model, so it needs the internet.
-
-**Two HUD modes.** The HUD card now has a mode choice. Mode 1 is the default: hints go to the glass and the app does not touch the cluster. Mode 2 puts the car into navigation mode for the length of the route; try it if the glass is empty in Mode 1. Showing apps and cameras on the cluster works again during a route. The test text after "HUD check" is now cleared from the glass.
-
-**"Climate auto".** The phrases "climate auto" and "climate in automatic" switch the climate to automatic mode instead of only turning it on.
-
-**Windows by a fraction.** A repeated command to open a window by a fraction, such as venting or halfway, now works even where the car used to skip it.
-
-**Head units with Android 10.** A steering wheel button assigned in an automation works after the car is turned off and on. The widget no longer disappears for half a minute after the car starts. Log recording now also keeps the work of the blind-spot cameras.
+**Widget on Leopard 8 and DiLink 5.1.** On these cars the cluster and the projection screens live in their own apps, and their background windows were taken for an app change on the central screen. Because of that the widget in the “main screen only” mode disappeared by itself, and without that mode it could pop up over YouTube or an app from the “hide in these apps” list. Now an app change counts only when its window is visible on the central screen. The camera works as before.
 
 ---
 
@@ -93,7 +67,7 @@ The main changes in version 3.19.3.
 | **AI** | Insights | Driving analysis: on-device rules, no internet |
 | **TRIP** | TRIP 1/2 counters | Distance, consumption, time, and cost since the last reset (like in the car); long-press to reset, tap for details |
 | **Bat** | Battery health and "Tech" | Card: SoH (Leopard 3, DiLink 3.0), temperature, 12V, cell balance, insulation. Tap opens the "Tech" screen with live battery, motor, climate, and tire parameters, including the front/rear power split in percent |
-| **DM-i** | Hybrids | The app detects a hybrid from the car's own counters. Battery and fuel range from the car, a «Fuel» card (tank, range, rpm, engine and battery mileage), litres and engine kilometres per trip from the car's counter, fuel price in Tariffs. Nothing changes on EVs |
+| **DM-i** | Hybrids | The app detects a hybrid from the car's own counters. Battery and fuel range from the car, a «Fuel» card (tank, range, rpm, engine and battery mileage), litres and engine kilometres per trip from the car's counter, litre price per tariff period. Nothing changes on EVs |
 | **Map** | Route map | osmdroid (OpenStreetMap) in trip details |
 | **Rules** | Automation | WHEN→THEN rules: parameter triggers → vehicle control commands |
 | **Cluster** | Projection to cluster | Mirrors the chosen app onto the instrument cluster with a steering-wheel button (right star by default) |
@@ -115,7 +89,7 @@ The main changes in version 3.19.3.
 
 <img src="docs/screenshots/dashboard.jpg" alt="Dashboard" width="800">
 
-Around the SOC ring there are four fields laid out like the floating widget: at the top, trip duration, odometer, and temperature (cabin and outside temperature share one slot; if the car does not report outside temperature, the slot shows only cabin temperature, as before); at the bottom, the current trip's distance, the estimated range, and the current trip's consumption with a trend arrow. The colors and trend logic are the same as in the floating widget, so the information reads the same on the home screen and over other apps.
+Around the SOC ring there are four fields laid out like the floating widget: at the top, trip duration, odometer, and temperature (cabin and outside temperature share one slot; if the car does not report outside temperature, the slot shows only cabin temperature, as before); at the bottom, the current trip's distance, the estimated range, and the current trip's consumption with a trend arrow. The colors and trend logic are the same as in the floating widget, so the information reads the same on the home screen and over other apps. On a hybrid, the car's own battery range sits under the ring, with no calculation of ours, and below it is a “Fuel” card: the tank level and the fuel range; a tap shows engine rpm, engine and battery mileage, litres for all time and the litre price of the current period. Consumption for a period on a hybrid is shown as l/100 and kWh/100 over all kilometres, as on the instrument cluster.
 
 Below the ring: an AI insight, a small battery health card (SoH on Leopard 3 and DiLink 3.0, temperature, 12V), the two TRIP 1 and TRIP 2 counters, recent trips, a period filter. Each counter shows distance, consumption in kWh (including parked drain), time on the road, and cost since the last reset. A long press resets the counter, a tap opens the details. In the counter's window you can turn on reset after charging: after any charge, AC only, DC only, or only after charging to 100%.
 
@@ -140,6 +114,8 @@ Below the ring: an AI insight, a small battery health card (SoH on Leopard 3 and
 The **"Temperature"** chip above the list opens the "Consumption and Temperature" screen: a dot for every trip longer than 5 km, a median line over 5-degree bands, medians for cold (below 0 °C), mid-season (0 to 15 °C), and warm (above 15 °C), and a note on how many percent higher consumption is in the cold. Trips under 5 km never make it into the chart, warm-up eats up everything there. It takes 8 trips with temperature data and a spread of at least 15 °C, otherwise the screen honestly says what is missing.
 
 The trip window shows the odometer at the start and finish, time in motion, cost per 100 km, the charge change in percent, and the outside temperature at the start and end. The odometer is recorded only for trips after the update.
+
+On a hybrid the list has an “l” column. In the “/100” column a trip with petrol shows litres per 100 km with an “l” mark and no color, an electric trip shows kWh/100 with color as before. Litres are the difference of the car's fuel counter at the trip boundaries, in 0.1 l steps; if one of the boundaries has no snapshot, a dash is shown, and someone else's petrol is never put on the trip. In the trip window litres, engine and battery kilometres and fuel cost are separate rows.
 
 **Automation**
 
@@ -556,6 +532,7 @@ Seven fields across 3 rows. Colors: icons gray, values white. The frame and SOC%
 **Center row** (large, key values):
 - **SOC %** (18sp bold, colored): traction battery charge. Green above 50%, yellow 20-50%, red below 20%
 - **~N km** (28sp white): estimated range, `SOC × battery capacity ÷ baseline consumption × 100`. The tilde marks it as an estimate, not the onboard computer's reading. More on how baseline consumption is figured is below, in "Range"
+- **On a hybrid**: `~N km` is the car's own battery range, not our calculation; the fuel range from the car stands instead of consumption, and the tank level is shown in the top row.
 - **X.X ↓** (18sp, colored by trend): **current trip consumption**, kWh/100km, with a trend arrow (see below)
 
 **Bottom row** (small, 13sp):
@@ -677,13 +654,13 @@ If a record did not appear automatically, or the numbers look off:
 
 ## Tariffs and Cost
 
-BYDMate figures the cost of every charge and every trip itself. For the numbers to be honest, it needs two things: your price per kilowatt-hour, and the date that price started applying.
+BYDMate figures the cost of every charge and every trip itself. For the numbers to be honest, it needs two things: your price per kilowatt-hour, and the date that price started applying. On a hybrid, also the litre price.
 
 ### Where to Set the Tariff
 
 **Settings → Car and Battery → "Tariffs and periods" → "Open"**. A separate window opens with the list of periods, it does not clutter Settings.
 
-A period is "the date a price starts applying". A period has a start date, a home (AC) price, a fast-charging (DC) price, losses, and a trip cost rule. A period has no end: it applies until the next period, or until today if there is no next one. The very first period covers all the history before it, so old trips never end up without a price.
+A period is "the date a price starts applying". A period has a start date, a home (AC) price, a fast-charging (DC) price, on a hybrid the litre price, losses, and a trip cost rule. A period has no end: it applies until the next period, or until today if there is no next one. The very first period covers all the history before it, so old trips never end up without a price.
 
 When you set a tariff for the first time (or update from an older version), BYDMate creates one period "from the start of history" with your current numbers. Until you add a second period, everything works as before.
 
@@ -696,6 +673,8 @@ The price went up on September 1, but you only remembered on the 16th? No proble
 3. Enter the new prices and save.
 
 Everything that happened on September 1 and later recalculates automatically: both charges and trips. August stays at the old price. There is no separate "recalculate" button, and none is needed, the recalculation runs by itself when you save the period.
+
+It works the same with petrol. You refuelled at a new price: add a period from the refuelling date and enter the litre price. Trips before that date stay at the old price, trips from it on are counted at the new one. History is not rewritten.
 
 Editing works the same way: changing the price in an existing period recalculates everything from its date to the end of history.
 
@@ -721,6 +700,8 @@ A trip has no receipt, so its kilowatt-hour price has to come from somewhere. A 
 | **By charges** | By the actual price of what went into the battery | You charge both at home and on the road and want accuracy |
 
 The "By charges" rule tracks the price of the energy in the battery: after every charge the new energy mixes with what is left, and the price becomes a weighted average. A cheap night charge makes the kilowatt-hour cheaper, an expensive fast charge makes it more expensive. If there were no charges before a trip, or the last one was more than 60 days ago, BYDMate uses the period's home price so the trip is never left without a cost.
+
+On a hybrid, fuel is added to electricity: the trip's litres are multiplied by the litre price of the period the trip falls into. If the period has no litre price, the fuel part is not counted and the trip cost is for electricity only; if the trip has no litres, it is counted as on an EV.
 
 ### What Never Gets Recalculated
 
@@ -815,6 +796,7 @@ SoH and automatic charge logging on Leopard 3 work automatically, there is nothi
 BYDMate is developed and tested on BYD Leopard 3 (Fangchengbao Tai 3). On other BYD models most features work too, but there are differences. Before the first launch, check:
 
 - **Trip history**: on Leopard 3 (Fangchengbao Tai 3) BYDMate reads trips from the built-in BMS database `energydata`. On models without this database (Song, Yuan, and similar) trips are now recorded natively, by polling the car's parameters in the background (source NATIVE_POLLING), so the list is no longer empty. Consumption in such trips is figured from the SoC delta, so it is a bit coarser than on Leopard 3, where the data comes from the BMS.
+- **DM-i and DM-o hybrids**: the app detects them by itself from the engine mileage and the tank level, there are no settings; until the type is confirmed, the screen is the same as on an EV. This is the first version of the support, built from the dumps of two cars: some values may show a dash. If you see a dash where the car knows the number, attach the parameter catalog (below) to the Issue, and a photo of the cluster with the battery and fuel ranges.
 - **Battery capacity**: defaults to 72.9 kWh for Leopard 3. Go to **Settings → Car and Battery** and set your own capacity. For example, Atto 3 is 60.5 kWh, Seal AWD is 82.5 kWh, Han EV is 85.4 kWh. Without this, range and trip cost calculations will be off.
 - **SoH**: confirmed on Leopard 3 and on DiLink 3.0 (Yuan UP). On other models the "Battery health" card works without the SoH field.
 - **Charges**: the AC and DC algorithm was designed around Leopard 3. On other models a record may appear late or with imprecise power, especially for DC. Use manual add and edit when the automation misses.
@@ -1062,7 +1044,7 @@ Only aggregated vehicle figures, no identifiers:
 
 - **SOC**: current traction battery percent
 - **Speed**: km/h
-- **Power**: current traction power (negative while charging, as Iternio requires)
+- **Power**: current traction power (negative while charging, as Iternio requires). On a hybrid the power is taken only from the battery voltage and current or from charging; if the car does not give them, the field is not sent.
 - **Voltage / current**: traction battery voltage and current
 - **HVAC setpoint**: the set climate temperature
 - **Battery / cabin / exterior temp**: battery, cabin, and outside temperatures
