@@ -4,7 +4,7 @@
 
 # BYDMate
 
-### Trip Logger & Energy Analytics for BYD DiLink 5.0
+### Trip Logger & Energy Analytics & Touch of Magic for BYD DiLink
 
 [![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
