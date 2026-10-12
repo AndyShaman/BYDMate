@@ -4,7 +4,7 @@
 
 # BYDMate
 
-### BYD DiLink 5.0 行程记录与能耗分析
+### BYD DiLink 行程记录、能耗分析与一点魔法
 
 [![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
