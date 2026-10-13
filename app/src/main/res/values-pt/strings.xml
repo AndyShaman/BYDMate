@@ -1995,4 +1995,20 @@
     <string name="tech_card_fuel">Combustível</string>
     <string name="settings_fuel_price_label">Preço por litro</string>
     <string name="settings_fuel_price_hint">por litro, para viagens a partir desta data</string>
+    <string name="stock_weather_title">Clima original BYD</string>
+    <string name="stock_weather_enable">Clima local</string>
+    <string name="stock_weather_description">Atualiza o cartão original pelo GPS com Open-Meteo. As coordenadas são enviadas ao provedor apenas enquanto esta opção estiver ativa.</string>
+    <string name="stock_weather_interval">Intervalo de atualização</string>
+    <string name="stock_weather_minutes">%1$d min</string>
+    <string name="stock_weather_refresh">Atualizar agora</string>
+    <string name="stock_weather_current_location">Localização atual</string>
+    <string name="stock_weather_wait_location">Aguardando localização recente</string>
+    <string name="stock_weather_wait_internet">Aguardando internet</string>
+    <string name="stock_weather_no_permission">Permissão de localização necessária</string>
+    <string name="stock_weather_updating">Atualizando o clima…</string>
+    <string name="stock_weather_updated">Clima original atualizado</string>
+    <string name="stock_weather_unavailable">Provedor de clima original indisponível neste firmware</string>
+    <string name="stock_weather_failed">Falha na atualização. Nova tentativa em 5 minutos.</string>
+    <string name="stock_weather_last_update">Última atualização: %1$s</string>
+    <string name="stock_weather_refresh_hint">O botão de atualização do clima original funciona pelo serviço de Acessibilidade BYDMate. Dados: Open-Meteo.com.</string>
 </resources>

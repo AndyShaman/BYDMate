@@ -1999,4 +1999,20 @@
     <string name="tech_card_fuel">Fuel</string>
     <string name="settings_fuel_price_label">Price per litre</string>
     <string name="settings_fuel_price_hint">per litre, for trips from this date</string>
+    <string name="stock_weather_title">Stock BYD weather</string>
+    <string name="stock_weather_enable">Local weather</string>
+    <string name="stock_weather_description">Update the stock card from GPS using Open-Meteo. Coordinates are sent to the provider only while this setting is enabled.</string>
+    <string name="stock_weather_interval">Update interval</string>
+    <string name="stock_weather_minutes">%1$d min</string>
+    <string name="stock_weather_refresh">Refresh now</string>
+    <string name="stock_weather_current_location">Current location</string>
+    <string name="stock_weather_wait_location">Waiting for a fresh location</string>
+    <string name="stock_weather_wait_internet">Waiting for internet</string>
+    <string name="stock_weather_no_permission">Location permission required</string>
+    <string name="stock_weather_updating">Updating weather…</string>
+    <string name="stock_weather_updated">Stock weather updated</string>
+    <string name="stock_weather_unavailable">Stock weather provider unavailable on this firmware</string>
+    <string name="stock_weather_failed">Update failed. Retrying in 5 minutes.</string>
+    <string name="stock_weather_last_update">Last update: %1$s</string>
+    <string name="stock_weather_refresh_hint">The stock weather Refresh button works through the BYDMate Accessibility service. Weather data: Open-Meteo.com.</string>
 </resources>

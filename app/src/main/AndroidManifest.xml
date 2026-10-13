@@ -43,6 +43,7 @@
         android:required="false" />
 
     <queries>
+        <provider android:authorities="com.byd.weatherdata.utils.WeatherContentProvider" />
         <!-- ACTION_DIAL (call action — user taps green button to actually dial) -->
         <intent>
             <action android:name="android.intent.action.DIAL" />

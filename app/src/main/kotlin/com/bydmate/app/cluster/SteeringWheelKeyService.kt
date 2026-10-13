@@ -255,6 +255,20 @@ class SteeringWheelKeyService : AccessibilityService() {
     // Single volatile read when the HUD feature is off - see NavA11yFeed.enabled.
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         NavA11yFeed.onEvent(this, event)
+        if (event?.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED &&
+            event.packageName?.toString() == com.bydmate.app.data.weather.StockWeatherClient.PACKAGE
+        ) {
+            val weather = entryPoint().stockWeatherManager()
+            if (weather.preferences.enabled.value) {
+                val source = event.source
+                try {
+                    weather.onRefreshClick(event.packageName?.toString(), source?.viewIdResourceName)
+                } finally {
+                    @Suppress("DEPRECATION")
+                    source?.recycle()
+                }
+            }
+        }
         // Whoever just took the MAIN screen, reported the moment it happens: the blind-spot
         // window has to be gone before the native 360 view is drawn, and the UsageStats poll is
         // half a second behind. Events from the cluster are dropped by the filter, and the poll

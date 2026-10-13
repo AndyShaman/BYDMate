@@ -104,6 +104,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient
     @Inject lateinit var adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager
     @Inject lateinit var cloudOverWifiManager: com.bydmate.app.data.autoservice.CloudOverWifiManager
+    @Inject lateinit var stockWeatherManager: com.bydmate.app.data.weather.StockWeatherManager
     @Inject lateinit var adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor
     @Inject lateinit var iternioTelemetryClient: IternioTelemetryClient
     @Inject lateinit var webhookTelemetryClient: WebhookTelemetryClient
@@ -565,6 +566,13 @@ class TrackingService : Service(), LocationListener {
             context.startForegroundService(intent)
         }
 
+        /** Reuses the shared GPS listener after location is granted from weather settings. */
+        fun refreshLocationPermission(context: Context) {
+            val service = instance
+            if (service != null) service.startLocationUpdates()
+            else start(context, "weather_location_permission")
+        }
+
         fun stop(context: Context) {
             context.stopService(Intent(context, TrackingService::class.java))
         }
@@ -834,6 +842,7 @@ class TrackingService : Service(), LocationListener {
         // Start the network monitor BEFORE polling so the first evaluate() tick
         // already has access to the latest VALIDATED edge state.
         networkAvailableMonitor.start()
+        stockWeatherManager.start(serviceScope, lastLocation, networkAvailableMonitor.edges)
         // Telegram reports that met no network go out now and whenever the internet comes back;
         // the edge at 0 is the start value, drained by the first line already.
         serviceScope.launch {
@@ -1433,6 +1442,7 @@ class TrackingService : Service(), LocationListener {
         _youtubeForeground.value = false
         _foregroundPackage.value = null
         networkAvailableMonitor.stop()
+        stockWeatherManager.stop()
         unregisterWifiRestoreCallback()
         unregisterWakeReceivers()
         // AutomationEngine is @Singleton — its scope must outlive the service

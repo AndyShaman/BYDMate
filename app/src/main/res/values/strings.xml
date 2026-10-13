@@ -2166,4 +2166,20 @@
     <string name="tech_card_fuel">Топливо</string>
     <string name="settings_fuel_price_label">Цена литра</string>
     <string name="settings_fuel_price_hint">за литр, на поездки с этой даты</string>
+    <string name="stock_weather_title">Штатная погода BYD</string>
+    <string name="stock_weather_enable">Местная погода</string>
+    <string name="stock_weather_description">Обновлять штатную карточку по GPS через Open-Meteo. Координаты передаются провайдеру только при включённой настройке.</string>
+    <string name="stock_weather_interval">Интервал обновления</string>
+    <string name="stock_weather_minutes">%1$d мин</string>
+    <string name="stock_weather_refresh">Обновить</string>
+    <string name="stock_weather_current_location">Текущая геопозиция</string>
+    <string name="stock_weather_wait_location">Ждём свежую геопозицию</string>
+    <string name="stock_weather_wait_internet">Ждём интернет</string>
+    <string name="stock_weather_no_permission">Нужен доступ к геолокации</string>
+    <string name="stock_weather_updating">Обновляем погоду…</string>
+    <string name="stock_weather_updated">Штатная погода обновлена</string>
+    <string name="stock_weather_unavailable">Штатный поставщик погоды недоступен на этой прошивке</string>
+    <string name="stock_weather_failed">Не удалось обновить. Повторим через 5 минут.</string>
+    <string name="stock_weather_last_update">Последнее обновление: %1$s</string>
+    <string name="stock_weather_refresh_hint">Кнопка обновления в штатной погоде работает через службу специальных возможностей BYDMate. Данные: Open-Meteo.com.</string>
 </resources>

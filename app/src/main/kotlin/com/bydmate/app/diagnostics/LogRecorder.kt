@@ -432,6 +432,7 @@ class LogRecorder internal constructor(
             "HistoryImporter:*", "EnergyDataReader:*",
             "AutoserviceClient:*", "AdbOnDevice:*",
             "IternioTelemetryClient:*", "BatteryHealthRepository:*",
+            "StockWeather:*",
             "ChargesViewModel:*", "ChargeRepository:*",
             // v3.0.3: widen coverage to write/daemon/automation subsystems
             "HelperClient:*", "HelperBootstrap:*",

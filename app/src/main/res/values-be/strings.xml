@@ -2151,4 +2151,20 @@
     <string name="tech_card_fuel">Паліва</string>
     <string name="settings_fuel_price_label">Цана літра</string>
     <string name="settings_fuel_price_hint">за літр, на паездкі з гэтай даты</string>
+    <string name="stock_weather_title">Штатнае надвор’е BYD</string>
+    <string name="stock_weather_enable">Мясцовае надвор’е</string>
+    <string name="stock_weather_description">Абнаўляць штатную картку паводле GPS праз Open-Meteo. Каардынаты перадаюцца толькі пры ўключанай наладзе.</string>
+    <string name="stock_weather_interval">Інтэрвал абнаўлення</string>
+    <string name="stock_weather_minutes">%1$d хв</string>
+    <string name="stock_weather_refresh">Абнавіць</string>
+    <string name="stock_weather_current_location">Бягучае месцазнаходжанне</string>
+    <string name="stock_weather_wait_location">Чакаем свежае месцазнаходжанне</string>
+    <string name="stock_weather_wait_internet">Чакаем інтэрнэт</string>
+    <string name="stock_weather_no_permission">Патрэбны доступ да геалакацыі</string>
+    <string name="stock_weather_updating">Абнаўляем надвор’е…</string>
+    <string name="stock_weather_updated">Штатнае надвор’е абноўлена</string>
+    <string name="stock_weather_unavailable">Штатны пастаўшчык надвор’я недаступны ў гэтай прашыўцы</string>
+    <string name="stock_weather_failed">Не ўдалося абнавіць. Паўторым праз 5 хвілін.</string>
+    <string name="stock_weather_last_update">Апошняе абнаўленне: %1$s</string>
+    <string name="stock_weather_refresh_hint">Кнопка абнаўлення штатнага надвор’я працуе праз службу спецыяльных магчымасцяў BYDMate. Даныя: Open-Meteo.com.</string>
 </resources>

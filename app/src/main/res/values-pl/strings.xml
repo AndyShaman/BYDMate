@@ -2151,4 +2151,20 @@
     <string name="tech_card_fuel">Paliwo</string>
     <string name="settings_fuel_price_label">Cena litra</string>
     <string name="settings_fuel_price_hint">za litr, dla podróży od tej daty</string>
+    <string name="stock_weather_title">Fabryczna pogoda BYD</string>
+    <string name="stock_weather_enable">Lokalna pogoda</string>
+    <string name="stock_weather_description">Aktualizuje fabryczną kartę na podstawie GPS przez Open-Meteo. Współrzędne są wysyłane tylko przy włączonej opcji.</string>
+    <string name="stock_weather_interval">Odstęp aktualizacji</string>
+    <string name="stock_weather_minutes">%1$d min</string>
+    <string name="stock_weather_refresh">Odśwież teraz</string>
+    <string name="stock_weather_current_location">Bieżąca lokalizacja</string>
+    <string name="stock_weather_wait_location">Oczekiwanie na aktualną lokalizację</string>
+    <string name="stock_weather_wait_internet">Oczekiwanie na internet</string>
+    <string name="stock_weather_no_permission">Wymagane uprawnienie do lokalizacji</string>
+    <string name="stock_weather_updating">Aktualizowanie pogody…</string>
+    <string name="stock_weather_updated">Fabryczna pogoda zaktualizowana</string>
+    <string name="stock_weather_unavailable">Fabryczny dostawca pogody niedostępny w tym oprogramowaniu</string>
+    <string name="stock_weather_failed">Aktualizacja nieudana. Ponowna próba za 5 minut.</string>
+    <string name="stock_weather_last_update">Ostatnia aktualizacja: %1$s</string>
+    <string name="stock_weather_refresh_hint">Przycisk odświeżania fabrycznej pogody działa przez usługę ułatwień dostępu BYDMate. Dane: Open-Meteo.com.</string>
 </resources>

@@ -27,6 +27,7 @@ interface ClusterEntryPoint {
     fun splitPreferences(): SplitPreferences
     fun adbRestoreManager(): AdbRestoreManager
     fun cloudOverWifiManager(): CloudOverWifiManager
+    fun stockWeatherManager(): com.bydmate.app.data.weather.StockWeatherManager
     fun cameraStateMonitor(): CameraStateMonitor
     fun hudCheck(): HudCheck
 }

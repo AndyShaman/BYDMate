@@ -87,6 +87,7 @@ class BackupManager(
             BlindSpotPreferences.PREFS_NAME,
             SplitPreferencesImpl.PREFS_NAME,
             HudController.PREFS_NAME,
+            com.bydmate.app.data.weather.StockWeatherPreferences.FILE,
         )
 
         /** SharedPreferences files carried by a backup. */
@@ -144,6 +145,7 @@ class BackupManager(
             // Media volume saved while the voice agent speaks: another car would get it raised
             // back to the source device's level.
             "voice" to setOf(AudioCapture.KEY_PRE_DUCK_VOLUME),
+            com.bydmate.app.data.weather.StockWeatherPreferences.FILE to setOf("last_success_ms"),
         )
 
         internal fun isExcluded(patterns: Set<String>, key: String): Boolean =

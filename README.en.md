@@ -844,11 +844,16 @@ autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 
 ## Data & Network
 
+**Stock BYD weather correction:** Settings → Integrations → "Stock BYD weather". Off by default. When enabled, BYDMate fetches an Open-Meteo forecast for the current GPS position and updates the stock weather app and launcher card on supported DiLink firmware. It needs precise location permission, a position no older than 30 minutes, and internet; no API key is needed. Weather provider availability depends on the car's firmware.
+
+The default interval is 15 minutes, adjustable from 5 to 180 minutes. "Refresh now" starts a manual update. Enable BYDMate's accessibility service to refresh using the stock app's button; automatic updates also work without it. Turning the setting off stops updates. The settings show the current status and last successful update time.
+
 | Feature | Destination | What is sent | When active |
 |---|---|---|---|
 | Voice agent (LLM) | OpenRouter / z.ai / your own server | command text, vehicle state (SOC, climate, etc.), GPS coordinates for navigation requests | only after setting up a provider |
 | Agent web search | Exa / z.ai / OpenRouter | search query text | a key is entered and the agent called the tool |
 | Weather (agent) | Open-Meteo | GPS coordinates or a place name (geocoding) | the agent called the tool |
+| Stock BYD weather correction | Open-Meteo, Android system geocoder | GPS coordinates | only when enabled, on the interval or manually; off by default |
 | Charging stations (agent) | Overpass (overpass-api.de / maps.mail.ru) | GPS coordinates | the agent called the tool |
 | Online TTS voices | MiniMax / fal.ai / Replicate / OpenRouter | text of the spoken reply | only if an online voice is chosen |
 | Map in trip details | OpenStreetMap tile servers (or Amap, if chosen in Settings) | coordinates of the visible map area | when the trip map or the places editor is opened |
@@ -857,7 +862,7 @@ autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 | Configuration copies to Telegram | api.telegram.org, your bot | the configuration archive with the chosen parts, and a message when the bot connects | only after connecting a bot |
 | Telemetry webhook | Settings → Integrations → Webhook | the same JSON as ABRP, POST to your URL every 1/8/30 s (driving/charging/parked); coordinates only with a separate toggle | off by default |
 
-Without any keys entered, only the update check (GitHub) and map tiles when viewing a trip route leave the device, along with voice model downloads on your explicit request (github.com). API keys are stored locally in the app's database and are never sent anywhere except the provider itself.
+Without any keys entered, traffic includes the update check (GitHub), map tiles when viewing a trip route, voice model downloads on your explicit request (github.com), and weather requests if stock weather correction is enabled. API keys are stored locally in the app's database and are never sent anywhere except the provider itself.
 
 ---
 

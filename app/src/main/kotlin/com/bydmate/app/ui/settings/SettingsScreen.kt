@@ -545,6 +545,8 @@ private fun BatterySection(
 
 @Composable
 private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    SectionHeader(text = stringResource(R.string.stock_weather_title))
+    StockWeatherSettings()
     SectionHeader(text = stringResource(R.string.settings_abrp_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
