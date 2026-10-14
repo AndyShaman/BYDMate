@@ -153,6 +153,10 @@ data class SettingsUiState(
     val diagnosticLog: String? = null,
     val logSaveStatus: String? = null,
     val isRecordingLogs: Boolean = false,
+    /** File of the last finished log recording; null = none since the app started. */
+    val lastLogPath: String? = null,
+    /** «Отправить в Telegram» for the saved log is uploading (#324). */
+    val logSending: Boolean = false,
     /** The fid recorder row is a diagnostic tool: shown on -test and local debug builds only. */
     val fidRecorderVisible: Boolean = fidRecorderEnabled(BuildConfig.VERSION_NAME, BuildConfig.DEBUG),
     val fidRecorderRunning: Boolean = false,
@@ -313,6 +317,8 @@ data class SettingsUiState(
         "custom" -> customConfigured
         else -> openRouterConfigured
     }
+    /** The saved log can go to the user's own bot: a finished recording, none running, a bot bound (#324). */
+    val canSendLogToTelegram: Boolean get() = lastLogPath != null && !isRecordingLogs && tgBackupBinding != null
 }
 
 @HiltViewModel
@@ -2574,11 +2580,56 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                             appStrings.get(R.string.settings_log_saved, stopped.path, stopped.sizeKb)
                         } ?: it.logSaveStatus
                     }
-                    it.copy(isRecordingLogs = state.isRecording, logSaveStatus = status)
+                    it.copy(
+                        isRecordingLogs = state.isRecording,
+                        logSaveStatus = status,
+                        lastLogPath = state.lastStopped?.path,
+                    )
                 }
                 first = false
             }
         }
+    }
+
+    /** Uploads the saved log to the bound bot chat once per tap; the file stays in Download (#324). */
+    fun sendLogToTelegram() {
+        val path = _uiState.value.lastLogPath ?: return
+        if (_uiState.value.logSending) return
+        _uiState.update {
+            it.copy(logSending = true, logSaveStatus = appStrings.get(R.string.settings_log_tg_sending))
+        }
+        viewModelScope.launch {
+            val status = sendLog(File(path))
+            _uiState.update { it.copy(logSending = false, logSaveStatus = status) }
+        }
+    }
+
+    private suspend fun sendLog(file: File): String {
+        val config = settingsRepository.getTgBackupConfig()
+        // The button shows only with a bound bot; this covers a disconnect racing the tap.
+        val chatId = config.chatId ?: return appStrings.get(R.string.settings_log_tg_failed, "?")
+        val size = if (file.isFile) file.length() else -1L
+        if (size > TelegramBackupSink.MAX_UPLOAD_BYTES) {
+            Log.w(TAG, "log to telegram: too big ${size / 1024} KB")
+            return appStrings.get(R.string.settings_log_tg_too_big)
+        }
+        if (size < 0) {
+            Log.w(TAG, "log to telegram: file missing")
+            return appStrings.get(R.string.settings_log_tg_missing)
+        }
+        return telegramBackupSink.sendDocument(config.token, chatId, file, file.name).fold(
+            onSuccess = {
+                Log.i(TAG, "log to telegram: sent ${size / 1024} KB")
+                appStrings.get(R.string.settings_log_tg_sent)
+            },
+            onFailure = { error ->
+                Log.w(TAG, "log to telegram: failed ${(error as? TelegramSinkException)?.key ?: error.javaClass.simpleName}")
+                appStrings.get(
+                    R.string.settings_log_tg_failed,
+                    (error as? TelegramSinkException)?.let { telegramErrorText(appStrings.context, it.key) } ?: "?",
+                )
+            },
+        )
     }
 
     fun showUpdateDialog() {

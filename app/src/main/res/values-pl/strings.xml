@@ -853,6 +853,12 @@
     <!-- %1$s = file path, %2$d = size KB -->
     <string name="settings_log_saved">Zapisano: %1$s (%2$d KB)</string>
     <string name="settings_log_error_no_fs_access">Błąd: brak dostępu do systemu plików</string>
+    <string name="settings_log_tg_send">Wyślij do Telegrama</string>
+    <string name="settings_log_tg_sending">Wysyłam do Telegrama…</string>
+    <string name="settings_log_tg_sent">Plik wysłany do Telegrama</string>
+    <string name="settings_log_tg_failed">Nie udało się wysłać: %1$s</string>
+    <string name="settings_log_tg_too_big">Plik jest za duży dla Telegrama. Leży w folderze Download.</string>
+    <string name="settings_log_tg_missing">Nie znaleziono pliku. Mógł zostać usunięty z folderu Download.</string>
     <string name="settings_update_check_in_progress">Sprawdzanie...</string>
     <!-- %1$s = version string -->
     <string name="settings_update_available_short">Dostępna v%1$s</string>

@@ -857,6 +857,12 @@
     <!-- %1$s = file path, %2$d = size KB -->
     <string name="settings_log_saved">Сохранено: %1$s (%2$d КБ)</string>
     <string name="settings_log_error_no_fs_access">Ошибка: нет доступа к файловой системе</string>
+    <string name="settings_log_tg_send">Отправить в Telegram</string>
+    <string name="settings_log_tg_sending">Отправляю в Telegram…</string>
+    <string name="settings_log_tg_sent">Файл отправлен в Telegram</string>
+    <string name="settings_log_tg_failed">Не удалось отправить: %1$s</string>
+    <string name="settings_log_tg_too_big">Файл слишком большой для Telegram. Он лежит в папке Download.</string>
+    <string name="settings_log_tg_missing">Файл не найден. Возможно, его удалили из папки Download.</string>
     <string name="settings_update_check_in_progress">Проверка...</string>
     <!-- %1$s = version string -->
     <string name="settings_update_available_short">Доступна v%1$s</string>

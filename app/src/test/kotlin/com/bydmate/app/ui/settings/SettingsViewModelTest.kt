@@ -247,6 +247,8 @@ class SettingsViewModelTest {
     // Car type handed to the next built VM; null keeps the relaxed monitor.
     private var vehicleKind: com.bydmate.app.data.nativestack.VehicleKind? = null
     private var tariffPeriodDaoOverride: TariffPeriodDao? = null
+    // Recorder state handed to the next built VM; null keeps the real recorder that never records.
+    private var logRecorderState: kotlinx.coroutines.flow.MutableStateFlow<com.bydmate.app.diagnostics.LogRecorder.State>? = null
 
     /** In-memory stand-in for the Room DAO, including the unique `start_ts` constraint. */
     private class FakeTariffPeriodDao(initial: List<TariffPeriodEntity>) : TariffPeriodDao {
@@ -357,7 +359,9 @@ class SettingsViewModelTest {
             energyDataDeadDetector = energyDataDeadDetector,
             hudController = mockk(relaxed = true),
             // Real recorder with an exec seam that would blow up: these tests never record.
-            logRecorder = com.bydmate.app.diagnostics.LogRecorder(ctx) {
+            logRecorder = logRecorderState?.let { flow ->
+                mockk<com.bydmate.app.diagnostics.LogRecorder>(relaxed = true) { every { state } returns flow }
+            } ?: com.bydmate.app.diagnostics.LogRecorder(ctx) {
                 throw UnsupportedOperationException("no logcat in tests")
             },
             fidPushChannel = mockk(relaxed = true),
@@ -2273,5 +2277,104 @@ class SettingsViewModelTest {
         assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME])
         assertEquals("", vm.uiState.value.tgBackupToken)
         assertNull(vm.uiState.value.tgBackupBinding)
+    }
+
+    // --- «Отправить в Telegram» for a saved log (#324) ---
+
+    private fun savedLog(bytes: Long = 10): File =
+        File.createTempFile("bydmate_logs_", ".txt").apply {
+            deleteOnExit()
+            java.io.RandomAccessFile(this, "rw").use { it.setLength(bytes) }
+        }
+
+    /** A VM whose recorder goes idle -> recording -> stopped at [log]; [connected] stores a bound bot. */
+    private fun vmWithStoppedLog(log: File, connected: Boolean = true): SettingsViewModel {
+        val recorder = kotlinx.coroutines.flow.MutableStateFlow(com.bydmate.app.diagnostics.LogRecorder.State())
+        logRecorderState = recorder
+        val vm = buildViewModel()
+        if (connected) {
+            settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN] = "123:abc"
+            settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID] = "777"
+            settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME] = "my_car_bot"
+            settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_NAME] = "Andy"
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+        recorder.value = com.bydmate.app.diagnostics.LogRecorder.State(isRecording = true, filePath = log.absolutePath)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(vm.uiState.value.canSendLogToTelegram)
+        recorder.value = com.bydmate.app.diagnostics.LogRecorder.State(
+            lastStopped = com.bydmate.app.diagnostics.LogRecorder.Stopped(log.absolutePath, 0),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        return vm
+    }
+
+    @Test
+    fun `the send button shows only for a saved log with a connected bot`() = runTest {
+        val log = savedLog()
+        assertTrue(vmWithStoppedLog(log).uiState.value.canSendLogToTelegram)
+        assertFalse(vmWithStoppedLog(log, connected = false).uiState.value.canSendLogToTelegram)
+
+        logRecorderState = null
+        val idle = buildViewModel()
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN] = "123:abc"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID] = "777"
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(idle.uiState.value.canSendLogToTelegram)
+    }
+
+    @Test
+    fun `sending a saved log uploads it once with the file name as caption`() = runTest {
+        val log = savedLog()
+        val sink = tgSinkFake()
+        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
+        val vm = vmWithStoppedLog(log)
+
+        vm.sendLogToTelegram()
+        vm.sendLogToTelegram()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { sink.sendDocument("123:abc", 777L, log, log.name) }
+        assertFalse(vm.uiState.value.logSending)
+        assertEquals(
+            ctxForTg.getString(com.bydmate.app.R.string.settings_log_tg_sent),
+            vm.uiState.value.logSaveStatus,
+        )
+    }
+
+    @Test
+    fun `a failed log upload names the reason`() = runTest {
+        val log = savedLog()
+        val sink = tgSinkFake()
+        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.failure(
+            com.bydmate.app.data.backup.TelegramSinkException(com.bydmate.app.data.backup.TelegramError.NO_NETWORK)
+        )
+        val vm = vmWithStoppedLog(log)
+
+        vm.sendLogToTelegram()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.logSending)
+        val reason = ctxForTg.getString(com.bydmate.app.R.string.settings_tg_error_no_network)
+        assertEquals(
+            ctxForTg.getString(com.bydmate.app.R.string.settings_log_tg_failed, reason),
+            vm.uiState.value.logSaveStatus,
+        )
+    }
+
+    @Test
+    fun `a log over the Telegram limit is not uploaded`() = runTest {
+        val log = savedLog(com.bydmate.app.data.backup.TelegramBackupSink.MAX_UPLOAD_BYTES + 1)
+        val sink = tgSinkFake()
+        val vm = vmWithStoppedLog(log)
+
+        vm.sendLogToTelegram()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { sink.sendDocument(any(), any(), any(), any()) }
+        assertEquals(
+            ctxForTg.getString(com.bydmate.app.R.string.settings_log_tg_too_big),
+            vm.uiState.value.logSaveStatus,
+        )
     }
 }
