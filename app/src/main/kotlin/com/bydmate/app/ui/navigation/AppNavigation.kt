@@ -277,17 +277,24 @@ fun AppNavigation(
                 )
             }
             composable(Screen.Dashboard.route) {
+                // Same tab switch as the bottom bar's Settings item.
+                val openSettingsTab = {
+                    navController.navigate(Screen.Settings.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
                 DashboardScreen(
                     onOpenTechPanel = { navController.navigate("tech_panel") },
-                    // Same tab switch as the bottom bar's Settings item.
-                    onOpenSettings = {
-                        navController.navigate(Screen.Settings.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
+                    onOpenSettings = openSettingsTab,
+                    // Settings first: the periods screen takes its view model from that entry,
+                    // and Back lands on Settings.
+                    onOpenTariffPeriods = {
+                        openSettingsTab()
+                        navController.navigate("tariff_periods")
                     },
                 )
             }
