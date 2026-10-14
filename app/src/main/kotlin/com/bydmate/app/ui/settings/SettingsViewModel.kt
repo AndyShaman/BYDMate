@@ -2600,7 +2600,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         }
         viewModelScope.launch {
             val status = sendLog(File(path))
-            _uiState.update { it.copy(logSending = false, logSaveStatus = status) }
+            // A recording started during the upload owns the status line.
+            _uiState.update {
+                it.copy(logSending = false, logSaveStatus = if (it.isRecordingLogs) it.logSaveStatus else status)
+            }
         }
     }
 

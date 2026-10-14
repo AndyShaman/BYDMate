@@ -294,7 +294,8 @@ fun AppNavigation(
                     // and Back lands on Settings.
                     onOpenTariffPeriods = {
                         openSettingsTab()
-                        navController.navigate("tariff_periods")
+                        // The restored Settings stack may already end on the periods screen.
+                        navController.navigate("tariff_periods") { launchSingleTop = true }
                     },
                 )
             }
