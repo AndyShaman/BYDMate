@@ -1,0 +1,6 @@
+# Issue #329 (Titanium 7 / Hiace 06, Android 14, user Di150VCP): `service call` replies carry
+# whitespace between "Parcel(" and the first word, so the old parse rule rejected every read.
+# Raw lines from the author's log (the whitespace may also be a tab).
+getInt(1014,1145045032): parse failed: Result: Parcel(    00000000 00000064   ....d...)
+getFloat(1014,1032871984): parse failed: Result: Parcel(    00000000 44124667   ....gF.D)
+getFloat(1014,1246777400): parse failed: Result: Parcel(    00000000 42960000   .......B)
