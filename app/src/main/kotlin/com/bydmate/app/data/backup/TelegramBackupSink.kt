@@ -94,6 +94,7 @@ class TelegramBackupSink internal constructor(
         /** `link_preview_options` for a message whose links get no preview card. */
         const val NO_LINK_PREVIEW = """{"is_disabled":true}"""
         private val ZIP_MEDIA = "application/zip".toMediaType()
+        private val TEXT_MEDIA = "text/plain".toMediaType()
     }
 
     // Uploads of a multi-MB zip over a car modem need far more than the shared 15 s write timeout.
@@ -162,7 +163,7 @@ class TelegramBackupSink internal constructor(
             .setType(MultipartBody.FORM)
             .addFormDataPart("chat_id", chatId.toString())
             .addFormDataPart("caption", caption)
-            .addFormDataPart("document", file.name, file.asRequestBody(ZIP_MEDIA))
+            .addFormDataPart("document", file.name, file.asRequestBody(if (file.extension == "txt") TEXT_MEDIA else ZIP_MEDIA))
             .build()
         return call(token, "sendDocument", body) { }
     }
