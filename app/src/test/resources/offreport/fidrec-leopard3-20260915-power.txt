@@ -1,0 +1,10 @@
+# Power fids from the Leopard 3 fid recording of 2026-09-15 (bydmate_fidrec_20260915_150136.txt), Andy's car.
+# 15:04:47 the real power-off: both fids to 0. 15:58:45 power on. 16:01:26 brake + start button (OK lamp lights):
+# SET_VEHICLE_STATE dips to 0 for 0.6 s while BODYWORK_POWER_LEVEL stays 2. The same dip sent a false
+# power-off Telegram report on 2026-10-14 07:27 (bydmate_logs_20261014_072740.txt: last_off off=14.10 07:27).
+15:04:47.966 dev=1023 fid=315621408 Setting.SET_VEHICLE_STATE int=0 dbl=0.0
+15:04:47.966 dev=1001 fid=315621418 Bodywork.BODYWORK_POWER_LEVEL int=0 dbl=0.0
+15:58:45.898 dev=1001 fid=315621418 Bodywork.BODYWORK_POWER_LEVEL int=2 dbl=0.0
+15:58:47.516 dev=1023 fid=315621408 Setting.SET_VEHICLE_STATE int=2 dbl=0.0
+16:01:26.802 dev=1023 fid=315621408 Setting.SET_VEHICLE_STATE int=0 dbl=0.0
+16:01:27.429 dev=1023 fid=315621408 Setting.SET_VEHICLE_STATE int=2 dbl=0.0

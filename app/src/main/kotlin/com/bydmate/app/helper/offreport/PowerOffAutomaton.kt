@@ -1,14 +1,13 @@
 package com.bydmate.app.helper.offreport
 
 /**
- * Decides when the car was switched off, from the values of the power fids
- * (`BODYWORK_POWER_LEVEL` and `SET_VEHICLE_STATE`, both drop to 0 in the same millisecond).
+ * Decides when the car was switched off, from the values of the power fids ([OffReport.POWER_FIDS],
+ * today `BODYWORK_POWER_LEVEL` alone, the fid the firmware itself goes off on).
  *
  * Fires when a fid goes to 0 after it was non-zero in this power cycle, once per cycle: firing
- * forgets every fid, so the second fid's 0 that follows is not a second power-off. A non-zero
+ * forgets every fid, so a repeated 0 that follows is not a second power-off. A non-zero
  * value starts the next cycle. A daemon that starts with the car already off has seen nothing
- * non-zero, so it never fires. Each fid counts on its own, because on DM-i hybrids powerState reads
- * 0 on a running car and only the power level moves. Not thread-safe; the owner locks.
+ * non-zero, so it never fires. Not thread-safe; the owner locks.
  */
 internal class PowerOffAutomaton {
 

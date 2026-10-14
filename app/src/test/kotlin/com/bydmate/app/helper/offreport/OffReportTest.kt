@@ -179,13 +179,18 @@ class OffReportTest {
         assertEquals(OffReportState.ARMED, OffReport.status("a1").queried.state)
     }
 
-    @Test fun `one power-off sends one report even when both fids drop`() {
+    @Test fun `the powerState dip of the start button is no power-off, only the power level is (fid recording)`() {
+        // Both fids, as recorded: the real power-off (15:04), power on (15:58), the start button (16:01).
+        val events = javaClass.getResource("/offreport/fidrec-leopard3-20260915-power.txt")!!.readText().lines()
+            .mapNotNull { Regex("""^(\S+) .*fid=(\d+) .*int=(\d+)""").find(it)?.destructured }
         reads[level] = 2
-        reads[powerState] = 1
         arm("a1")
-        push(level, 0)
-        push(powerState, 0)
-        assertEquals(1, sent.size)
+        events.filter { it.component1() < "15:58" }.forEach { (_, fid, v) -> push(fid.toInt(), v.toInt()) }
+        assertEquals(1, sent.size) // the real power-off at 15:04:47
+        arm("b1") // the app re-arms on the next drive
+        events.filter { it.component1() >= "15:58" }.forEach { (_, fid, v) -> push(fid.toInt(), v.toInt()) }
+        assertEquals(1, sent.size) // 16:01:26, brake + start: powerState 0 for 0.6 s, power level stays 2
+        assertEquals(OffReportState.ARMED, OffReport.status("b1").queried.state)
     }
 
     @Test fun `the report is used up by its power-off, a quick off-on-off sends nothing more`() {
@@ -378,8 +383,8 @@ class OffReportTest {
         reads[level] = 2
         arm("a1")
         arm("a2")
-        assertEquals(listOf(level, powerState), registered)
-        assertEquals(2, OffReport.status("a2").listening)
+        assertEquals(listOf(level), registered)
+        assertEquals(1, OffReport.status("a2").listening)
         assertEquals(OffReportState.ARMED, OffReport.status("a2").queried.state)
         assertEquals(OffReportState.UNKNOWN, OffReport.status("a1").queried.state)
     }
@@ -399,10 +404,10 @@ class OffReportTest {
         assertTrue(registered.isEmpty())
         val before = OffReport.status("a1")
         assertEquals(OffReportState.ARMED, before.queried.state)
-        assertEquals(listOf(OffReport.FID_PENDING, OffReport.FID_PENDING), before.fids.map { it.outcome })
+        assertEquals(listOf(OffReport.FID_PENDING), before.fids.map { it.outcome })
         assertEquals(0, before.listening)
         work()
-        assertEquals(listOf(FID_PUSH_OK, FID_PUSH_OK), OffReport.status("a1").fids.map { it.outcome })
+        assertEquals(listOf(FID_PUSH_OK), OffReport.status("a1").fids.map { it.outcome })
     }
 
     @Test fun `a re-arm while the car reads 0 does not swallow the pending power-off push`() {
@@ -441,23 +446,23 @@ class OffReportTest {
 
     @Test fun `a missing fid is retried every 30 s until it registers, one retry at a time`() {
         var fail = true
-        registerAnswer = { fid -> if (fid == powerState && fail) "-10011" else FID_PUSH_OK }
+        registerAnswer = { fid -> if (fid == level && fail) "-10011" else FID_PUSH_OK }
         arm("a1")
         arm("a2")
         assertEquals(1, delayed.size)
         assertEquals(OffReport.REGISTER_RETRY_MS, delayed.single().first)
-        assertEquals(listOf(level, powerState), registered)
-        assertEquals(1, OffReport.status("a2").listening)
+        assertEquals(listOf(level), registered)
+        assertEquals(0, OffReport.status("a2").listening)
 
         delayed.removeAt(0).second.run()
-        assertEquals(listOf(level, powerState, powerState), registered)
+        assertEquals(listOf(level, level), registered)
         assertEquals(1, delayed.size)
 
         fail = false
         delayed.removeAt(0).second.run()
         assertTrue(delayed.isEmpty())
-        assertEquals(2, OffReport.status("a2").listening)
-        assertEquals(listOf(level, powerState, powerState, powerState), registered)
+        assertEquals(1, OffReport.status("a2").listening)
+        assertEquals(listOf(level, level, level), registered)
     }
 
     // --- one sender ---
