@@ -247,6 +247,8 @@ class SettingsViewModelTest {
     // Car type handed to the next built VM; null keeps the relaxed monitor.
     private var vehicleKind: com.bydmate.app.data.nativestack.VehicleKind? = null
     private var tariffPeriodDaoOverride: TariffPeriodDao? = null
+    // The log sender of the last built VM, to play the automatic upload (#324).
+    private lateinit var logTelegramSender: com.bydmate.app.diagnostics.LogTelegramSender
     // Recorder state handed to the next built VM; null keeps the real recorder that never records.
     private var logRecorderState: kotlinx.coroutines.flow.MutableStateFlow<com.bydmate.app.diagnostics.LogRecorder.State>? = null
 
@@ -327,6 +329,15 @@ class SettingsViewModelTest {
         val continuousAsr = mockk<com.bydmate.app.voice.ContinuousAsr>(relaxed = true)
         val voiceController = mockk<com.bydmate.app.voice.VoiceController>(relaxed = true)
 
+        // Real recorder with an exec seam that would blow up: these tests never record.
+        val logRecorder = logRecorderState?.let { flow ->
+            mockk<com.bydmate.app.diagnostics.LogRecorder>(relaxed = true) { every { state } returns flow }
+        } ?: com.bydmate.app.diagnostics.LogRecorder(ctx) {
+            throw UnsupportedOperationException("no logcat in tests")
+        }
+        logTelegramSender = com.bydmate.app.diagnostics.LogTelegramSender(
+            logRecorder, settingsRepo, telegramBackupSink, com.bydmate.app.util.AppStrings(ctx),
+        )
         return SettingsViewModel(
             appContext = ctx,
             settingsRepository = settingsRepo,
@@ -358,12 +369,7 @@ class SettingsViewModelTest {
             placeRepository = mockk(relaxed = true),
             energyDataDeadDetector = energyDataDeadDetector,
             hudController = mockk(relaxed = true),
-            // Real recorder with an exec seam that would blow up: these tests never record.
-            logRecorder = logRecorderState?.let { flow ->
-                mockk<com.bydmate.app.diagnostics.LogRecorder>(relaxed = true) { every { state } returns flow }
-            } ?: com.bydmate.app.diagnostics.LogRecorder(ctx) {
-                throw UnsupportedOperationException("no logcat in tests")
-            },
+            logRecorder = logRecorder,
             fidPushChannel = mockk(relaxed = true),
             splitPreferences = mockk(relaxed = true),
             splitSessionManager = mockk(relaxed = true),
@@ -395,6 +401,7 @@ class SettingsViewModelTest {
             telegramBackupSink = telegramBackupSink,
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
+            logTelegramSender = logTelegramSender,
             telegramReporter = mockk(relaxed = true),
             clusterMusicBridge = mockk(relaxed = true),
             vehicleWriteLogDao = mockk(relaxed = true),
@@ -2376,5 +2383,35 @@ class SettingsViewModelTest {
             ctxForTg.getString(com.bydmate.app.R.string.settings_log_tg_too_big),
             vm.uiState.value.logSaveStatus,
         )
+    }
+
+    @Test
+    fun `an automatic log upload shows its result under the log row`() = runTest {
+        val log = savedLog()
+        val sink = tgSinkFake()
+        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
+        val vm = vmWithStoppedLog(log)
+
+        logTelegramSender.send(log)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.logSending)
+        assertEquals(
+            ctxForTg.getString(com.bydmate.app.R.string.settings_log_tg_sent),
+            vm.uiState.value.logSaveStatus,
+        )
+    }
+
+    @Test
+    fun `the log auto-send switch is stored and read back`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(vm.uiState.value.tgLogAutoSendEnabled)
+
+        vm.setTgLogAutoSendEnabled(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("true", settingsDao.map[SettingsRepository.KEY_TG_LOG_AUTO_SEND])
+        assertTrue(vm.uiState.value.tgLogAutoSendEnabled)
     }
 }

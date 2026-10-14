@@ -859,6 +859,8 @@
     <string name="settings_log_tg_failed">Nie udało się wysłać: %1$s</string>
     <string name="settings_log_tg_too_big">Plik jest za duży dla Telegrama. Leży w folderze Download.</string>
     <string name="settings_log_tg_missing">Nie znaleziono pliku. Mógł zostać usunięty z folderu Download.</string>
+    <string name="settings_tg_log_auto_title">Wysyłaj nagrany log do Telegrama</string>
+    <string name="settings_tg_log_auto_hint">Gdy nagrywanie logu się skończy, plik sam trafi do Twojego bota.</string>
     <string name="settings_update_check_in_progress">Sprawdzanie...</string>
     <!-- %1$s = version string -->
     <string name="settings_update_available_short">Dostępna v%1$s</string>

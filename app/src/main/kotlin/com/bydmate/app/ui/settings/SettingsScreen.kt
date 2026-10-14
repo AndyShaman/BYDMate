@@ -2862,6 +2862,17 @@ private fun AutoBackupRows(state: SettingsUiState, viewModel: SettingsViewModel)
     TelegramBotRows(state, viewModel, tokenFocus, botBringer)
     SettingDivider()
     PowerOffReportRows(state, viewModel, tokenFocus, botBringer)
+    SettingDivider()
+    // Needs the bot above too; the link to connect it already sits under the power-off report.
+    val connected = state.tgBackupBinding != null
+    SettingToggleRow(
+        title = stringResource(R.string.settings_tg_log_auto_title),
+        traceId = "tg_log_auto_send",
+        description = stringResource(R.string.settings_tg_log_auto_hint),
+        checked = connected && state.tgLogAutoSendEnabled,
+        onCheckedChange = { viewModel.setTgLogAutoSendEnabled(it) },
+        enabled = connected,
+    )
 }
 
 /**

@@ -695,6 +695,8 @@
     <string name="settings_log_tg_failed">发送失败：%1$s</string>
     <string name="settings_log_tg_too_big">文件太大，无法通过 Telegram 发送。文件在 Download 文件夹中。</string>
     <string name="settings_log_tg_missing">找不到文件，可能已从 Download 文件夹中删除。</string>
+    <string name="settings_tg_log_auto_title">将录制的日志发送到 Telegram</string>
+    <string name="settings_tg_log_auto_hint">日志录制结束后，文件会自动发送到你的机器人。</string>
     <string name="settings_update_check_in_progress">检查中...</string>
     <string name="settings_update_available_short">可更新至 v%1$s</string>
 

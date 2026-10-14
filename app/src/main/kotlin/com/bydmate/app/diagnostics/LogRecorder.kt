@@ -62,8 +62,11 @@ class LogRecorder internal constructor(
     constructor(@ApplicationContext appContext: Context, endSnapshot: EndSnapshotSource) :
         this(appContext, endSnapshot = endSnapshot, exec = { Runtime.getRuntime().exec(it) })
 
-    /** What a finished recording left behind, for the status line. */
-    data class Stopped(val path: String, val sizeKb: Long)
+    /**
+     * What a finished recording left behind, for the status line. [finished] is false for a
+     * logcat that died on its own: the pending record stays and the recording may resume.
+     */
+    data class Stopped(val path: String, val sizeKb: Long, val finished: Boolean = true)
 
     data class State(
         val isRecording: Boolean = false,
@@ -302,6 +305,7 @@ class LogRecorder internal constructor(
         val stopped = Stopped(
             path = current.file.absolutePath,
             sizeKb = current.file.length() / 1024,
+            finished = !keepPending,
         )
         _state.value = State(lastStopped = stopped)
         return stopped

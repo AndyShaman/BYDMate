@@ -709,6 +709,8 @@
     <string name="settings_log_tg_failed">Não foi possível enviar: %1$s</string>
     <string name="settings_log_tg_too_big">O arquivo é grande demais para o Telegram. Ele está na pasta Download.</string>
     <string name="settings_log_tg_missing">Arquivo não encontrado. Talvez tenha sido apagado da pasta Download.</string>
+    <string name="settings_tg_log_auto_title">Enviar o log gravado ao Telegram</string>
+    <string name="settings_tg_log_auto_hint">Quando a gravação do log terminar, o arquivo chega sozinho ao seu bot.</string>
     <string name="settings_update_check_in_progress">Verificando...</string>
     <string name="settings_update_available_short">v%1$s disponível</string>
     <string name="update_downloading_progress">Baixando: %1$d%%</string>

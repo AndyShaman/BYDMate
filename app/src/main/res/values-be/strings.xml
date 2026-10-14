@@ -859,6 +859,8 @@
     <string name="settings_log_tg_failed">Не ўдалося адправіць: %1$s</string>
     <string name="settings_log_tg_too_big">Файл занадта вялікі для Telegram. Ён ляжыць у папцы Download.</string>
     <string name="settings_log_tg_missing">Файл не знойдзены. Магчыма, яго выдалілі з папкі Download.</string>
+    <string name="settings_tg_log_auto_title">Адпраўляць запісаны лог у Telegram</string>
+    <string name="settings_tg_log_auto_hint">Калі запіс лога скончыцца, файл сам прыйдзе ў ваш бот.</string>
     <string name="settings_update_check_in_progress">Праверка...</string>
     <!-- %1$s = version string -->
     <string name="settings_update_available_short">Даступна v%1$s</string>
