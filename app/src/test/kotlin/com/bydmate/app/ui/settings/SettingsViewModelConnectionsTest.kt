@@ -249,6 +249,10 @@ class SettingsViewModelConnectionsTest {
         val continuousAsr = mockk<com.bydmate.app.voice.ContinuousAsr>(relaxed = true)
         val voiceController = mockk<com.bydmate.app.voice.VoiceController>(relaxed = true)
 
+        // Real recorder with an exec seam that would blow up: these tests never record.
+        val logRecorder = com.bydmate.app.diagnostics.LogRecorder(ctx) {
+            throw UnsupportedOperationException("no logcat in tests")
+        }
         return SettingsViewModel(
             appContext = ctx,
             settingsRepository = settingsRepo,
@@ -280,10 +284,7 @@ class SettingsViewModelConnectionsTest {
             placeRepository = mockk(relaxed = true),
             energyDataDeadDetector = mockk(relaxed = true),
             hudController = mockk(relaxed = true),
-            // Real recorder with an exec seam that would blow up: these tests never record.
-            logRecorder = com.bydmate.app.diagnostics.LogRecorder(ctx) {
-                throw UnsupportedOperationException("no logcat in tests")
-            },
+            logRecorder = logRecorder,
             fidPushChannel = mockk(relaxed = true),
             splitPreferences = mockk(relaxed = true),
             splitSessionManager = mockk(relaxed = true),
@@ -315,6 +316,9 @@ class SettingsViewModelConnectionsTest {
             telegramBackupSink = mockk(relaxed = true),
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
+            logTelegramSender = com.bydmate.app.diagnostics.LogTelegramSender(
+                logRecorder, settingsRepo, mockk(relaxed = true), com.bydmate.app.util.AppStrings(ctx),
+            ),
             telegramReporter = mockk(relaxed = true),
             clusterMusicBridge = mockk(relaxed = true),
             vehicleWriteLogDao = mockk(relaxed = true),

@@ -73,8 +73,14 @@ internal object OffReport {
 
     private const val TAG = "OffReport"
 
-    /** `BODYWORK_POWER_LEVEL` and `SET_VEHICLE_STATE` (powerState): (device, fid). */
-    val POWER_FIDS = listOf(1001 to 315621418, 1023 to 315621408)
+    /**
+     * `BODYWORK_POWER_LEVEL` (0 off, 1 acc, 2 on): (device, fid). The firmware itself takes the
+     * car for off on this fid alone (AccModeManagerService.onPowerLevelChanged, value 0 starts the
+     * quickboot). powerState (`SET_VEHICLE_STATE`, 1023/315621408) is not a power-off signal: it
+     * dips to 0 for ~0.6 s when the driver presses the start button on a car already on, which sent
+     * a false power-off report (fid recording 2026-09-15 16:01:26, report 2026-10-14 07:27).
+     */
+    val POWER_FIDS = listOf(1001 to 315621418)
 
     /** Outcomes kept per id, for the dump. */
     private const val MAX_OUTCOMES = 8

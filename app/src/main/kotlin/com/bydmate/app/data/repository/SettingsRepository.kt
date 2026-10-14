@@ -124,6 +124,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_TG_REPORT_ODOMETER_ADDED = "tg_report_odometer_added"
         /** Telegram reports waiting for the network: a JSON array, see TelegramReporter. */
         const val KEY_TG_REPORT_OUTBOX = "tg_report_outbox"
+        /** "true" = a finished log recording goes to the bot by itself (#324). */
+        const val KEY_TG_LOG_AUTO_SEND = "tg_log_auto_send"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
@@ -603,6 +605,12 @@ open class SettingsRepository @Inject constructor(
     suspend fun getTgReportOutbox(): String = getString(KEY_TG_REPORT_OUTBOX, "")
 
     suspend fun setTgReportOutbox(json: String) = setString(KEY_TG_REPORT_OUTBOX, json)
+
+    suspend fun isTgLogAutoSendEnabled(): Boolean = getString(KEY_TG_LOG_AUTO_SEND, "false") == "true"
+
+    suspend fun setTgLogAutoSendEnabled(enabled: Boolean) = setString(KEY_TG_LOG_AUTO_SEND, enabled.toString())
+
+    fun observeTgLogAutoSendEnabled(): Flow<Boolean> = observeString(KEY_TG_LOG_AUTO_SEND).map { it == "true" }
 
     suspend fun getTechCardOrder(): String =
         getString(KEY_TECH_CARD_ORDER, "")

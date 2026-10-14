@@ -3,6 +3,7 @@ package com.bydmate.app.split
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.Split37AreaInfo
 import com.bydmate.app.data.vehicle.Split37Root
+import com.bydmate.app.data.vehicle.Split37RootState
 import com.bydmate.app.data.vehicle.SplitTaskState
 import com.bydmate.app.data.vehicle.TopTaskInfo
 import android.graphics.Rect
@@ -222,6 +223,67 @@ class Split37EngineTest {
                 it.contains("split37 place wide pkg.wide task=20 already in root 102 - bounced")
             },
         )
+    }
+
+    @Test fun `place journals what stands in the root before it bounces a task already there`() = runTest {
+        // Field 2026-10-13: Navi vanished from the wide pane while its task still read as in the
+        // root. The line must catch the root as it stood, so it is read before the bounce.
+        stubSplitUp(splitInfo())
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(20) } returns 2
+        coEvery { helper.split37TaskArea(21) } returns 4
+        coEvery { helper.split37RootState(102, 20) } returns Split37RootState(
+            rootTop = "com.byd.sr/.SrActivity",
+            rootVisible = true,
+            children = listOf(20 to "pkg.wide/.Main", 31 to "com.byd.sr/.SrActivity"),
+            taskVisible = false,
+            taskTop = "pkg.wide/.Main",
+        )
+
+        val outcome = engine().place(SplitPair("pkg.narrow", "pkg.wide", SplitSide.LEFT))
+
+        assertTrue(outcome is Split37Engine.PlaceOutcome.Placed)
+        coVerifyOrder {
+            helper.split37RootState(102, 20)
+            helper.split37MoveTask(20, 100, null, false)
+        }
+        val state = journal.lines.indexOf(
+            "split37 place wide pkg.wide task=20 already in root 102 - state: " +
+                "top=com.byd.sr/.SrActivity rootVisible=1 " +
+                "children=[20 pkg.wide/.Main, 31 com.byd.sr/.SrActivity] " +
+                "taskVisible=0 taskTop=pkg.wide/.Main"
+        )
+        val bounced = journal.lines.indexOf("split37 place wide pkg.wide task=20 already in root 102 - bounced")
+        assertTrue(journal.lines.toString(), state >= 0 && bounced > state)
+        // Only the pane that was already home is read; the narrow task was out in fullscreen.
+        coVerify(exactly = 0) { helper.split37RootState(101, 21) }
+    }
+
+    @Test fun `place journals question marks when the root state read fails and still bounces`() = runTest {
+        stubSplitUp(splitInfo())
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(20) } returns 2
+        coEvery { helper.split37TaskArea(21) } returns 4
+        // An old daemon does not know the verb; the client answers null.
+        coEvery { helper.split37RootState(any(), any()) } returns null
+
+        val outcome = engine().place(SplitPair("pkg.narrow", "pkg.wide", SplitSide.LEFT))
+
+        assertTrue(outcome is Split37Engine.PlaceOutcome.Placed)
+        coVerifyOrder {
+            helper.split37MoveTask(20, 100, null, false)
+            helper.split37MoveTask(20, 102, rectOf(wideRight))
+        }
+        val state = journal.lines.indexOf(
+            "split37 place wide pkg.wide task=20 already in root 102 - state: " +
+                "top=? rootVisible=? children=? taskVisible=? taskTop=?"
+        )
+        val bounced = journal.lines.indexOf("split37 place wide pkg.wide task=20 already in root 102 - bounced")
+        assertTrue(journal.lines.toString(), state >= 0 && bounced > state)
     }
 
     @Test fun `place does not bounce a task it has just launched`() = runTest {

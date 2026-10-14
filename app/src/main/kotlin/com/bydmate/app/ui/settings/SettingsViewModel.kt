@@ -153,6 +153,10 @@ data class SettingsUiState(
     val diagnosticLog: String? = null,
     val logSaveStatus: String? = null,
     val isRecordingLogs: Boolean = false,
+    /** File of the last finished log recording; null = none since the app started. */
+    val lastLogPath: String? = null,
+    /** «Отправить в Telegram» for the saved log is uploading (#324). */
+    val logSending: Boolean = false,
     /** The fid recorder row is a diagnostic tool: shown on -test and local debug builds only. */
     val fidRecorderVisible: Boolean = fidRecorderEnabled(BuildConfig.VERSION_NAME, BuildConfig.DEBUG),
     val fidRecorderRunning: Boolean = false,
@@ -236,6 +240,8 @@ data class SettingsUiState(
     /** Power-off Telegram report (3.19): the switch and its items. */
     val tgReportOffEnabled: Boolean = false,
     val tgReportOffFields: Set<ReportField> = ReportField.DEFAULT,
+    /** «Отправлять записанный лог в Telegram» (#324). */
+    val tgLogAutoSendEnabled: Boolean = false,
     /** Status of the last fid-catalog dump. Null = idle. Red if starts with error prefix. */
     val fidDumpStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
@@ -313,6 +319,8 @@ data class SettingsUiState(
         "custom" -> customConfigured
         else -> openRouterConfigured
     }
+    /** The saved log can go to the user's own bot: a finished recording, none running, a bot bound (#324). */
+    val canSendLogToTelegram: Boolean get() = lastLogPath != null && !isRecordingLogs && tgBackupBinding != null
 }
 
 @HiltViewModel
@@ -368,6 +376,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val telegramBackupSink: TelegramBackupSink,
     private val autoBackupScheduler: AutoBackupScheduler,
     private val appStrings: AppStrings,
+    private val logTelegramSender: com.bydmate.app.diagnostics.LogTelegramSender,
     private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter,
     private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge,
     private val vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao,
@@ -442,6 +451,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         observeAutoBackup()
         loadTariffPeriods()
         observeLogRecorder()
+        observeLogSender()
         refreshFidRecorder()
     }
 
@@ -2574,9 +2584,43 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                             appStrings.get(R.string.settings_log_saved, stopped.path, stopped.sizeKb)
                         } ?: it.logSaveStatus
                     }
-                    it.copy(isRecordingLogs = state.isRecording, logSaveStatus = status)
+                    it.copy(
+                        isRecordingLogs = state.isRecording,
+                        logSaveStatus = status,
+                        lastLogPath = state.lastStopped?.path,
+                    )
                 }
                 first = false
+            }
+        }
+    }
+
+    /**
+     * The upload's status lines, from the button and the automatic path alike (#324). A recording
+     * started during the upload owns the status line.
+     */
+    private fun observeLogSender() {
+        viewModelScope.launch {
+            logTelegramSender.sending.collect { sending -> _uiState.update { it.copy(logSending = sending) } }
+        }
+        viewModelScope.launch {
+            logTelegramSender.results.collect { status ->
+                _uiState.update { if (it.isRecordingLogs) it else it.copy(logSaveStatus = status) }
+            }
+        }
+    }
+
+    /** Uploads the saved log to the bound bot chat once per tap; the file stays in Download (#324). */
+    fun sendLogToTelegram() {
+        val path = _uiState.value.lastLogPath ?: return
+        if (_uiState.value.logSending) return
+        // Set here, not only from the sender: a second tap before the upload starts is a no-op.
+        _uiState.update { it.copy(logSending = true) }
+        viewModelScope.launch {
+            try {
+                logTelegramSender.send(File(path))
+            } finally {
+                _uiState.update { it.copy(logSending = logTelegramSender.sending.value) }
             }
         }
     }
@@ -2811,6 +2855,17 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     _uiState.update { it.copy(tgReportOffEnabled = enabled, tgReportOffFields = fields) }
                 }
         }
+        viewModelScope.launch {
+            settingsRepository.observeTgLogAutoSendEnabled()
+                .collect { enabled -> _uiState.update { it.copy(tgLogAutoSendEnabled = enabled) } }
+        }
+    }
+
+    /** «Отправлять записанный лог в Telegram»: the sender reads it at the end of each recording. */
+    fun setTgLogAutoSendEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(tgLogAutoSendEnabled = enabled) }
+        Log.i(TAG_TG_REPORT, "log auto-send: enabled=$enabled")
+        viewModelScope.launch { settingsRepository.setTgLogAutoSendEnabled(enabled) }
     }
 
     /** «Отчёт при выключении машины»; phase B arms the helper daemon from these settings. */

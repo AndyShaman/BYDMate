@@ -710,6 +710,14 @@
     <string name="settings_log_recording_started">Recording (auto-stop after 2h)... - %1$s</string>
     <string name="settings_log_saved">Saved: %1$s (%2$d KB)</string>
     <string name="settings_log_error_no_fs_access">Error: no file system access</string>
+    <string name="settings_log_tg_send">Send to Telegram</string>
+    <string name="settings_log_tg_sending">Sending to Telegram…</string>
+    <string name="settings_log_tg_sent">File sent to Telegram</string>
+    <string name="settings_log_tg_failed">Could not send: %1$s</string>
+    <string name="settings_log_tg_too_big">The file is too big for Telegram. It is in the Download folder.</string>
+    <string name="settings_log_tg_missing">File not found. It may have been deleted from the Download folder.</string>
+    <string name="settings_tg_log_auto_title">Send the recorded log to Telegram</string>
+    <string name="settings_tg_log_auto_hint">When a log recording ends, the file arrives in your bot by itself.</string>
     <string name="settings_update_check_in_progress">Checking...</string>
     <string name="settings_update_available_short">v%1$s available</string>
     <string name="update_downloading_progress">Downloading: %1$d%%</string>

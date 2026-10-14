@@ -128,6 +128,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
     @Inject lateinit var clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge
     @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
+    @Inject lateinit var logTelegramSender: com.bydmate.app.diagnostics.LogTelegramSender
     @Inject lateinit var autoBackupScheduler: com.bydmate.app.data.backup.AutoBackupScheduler
     @Inject lateinit var postRestoreCheck: com.bydmate.app.data.backup.PostRestoreCheck
     @Inject lateinit var appStrings: com.bydmate.app.util.AppStrings
@@ -843,6 +844,8 @@ class TrackingService : Service(), LocationListener {
         // The power-off report: keeps the helper daemon armed while the car is on (it sends the
         // report itself at the power-off, when this process is already killed).
         serviceScope.launch { powerOffArmer.run() }
+        // A log recording that ends for good goes to the bot when the user asked for it (#324).
+        serviceScope.launch { logTelegramSender.run() }
         // Car type (EV / DM-i hybrid): cache first, then a read round; the poll tick continues it.
         serviceScope.launch { vehicleKindMonitor.onServiceStart(System.currentTimeMillis()) }
         startPolling()

@@ -361,7 +361,7 @@ The agent has 32 tools. Example phrases:
 
 **Car and climate**
 - "Сколько заряда?" (How much charge is left?), "Какая температура за бортом?" (What's the temperature outside?), "Какой запас хода?" (What's my range?) (live vehicle status)
-- "Открой окна" (Open the windows), "Включи подогрев сиденья" (Turn on seat heating), "Поставь климат на 22" (Set the climate to 22) (full catalog of 97 commands, see below)
+- "Открой окна" (Open the windows), "Включи подогрев сиденья" (Turn on seat heating), "Поставь климат на 22" (Set the climate to 22) (full catalog of 110 commands, see below)
 - "Сделай музыку громче" (Turn the music up), "Потише" (Quieter) (media volume)
 
 **Trips, charges, statistics**
@@ -393,7 +393,7 @@ The agent has 32 tools. Example phrases:
 - "Какая погода?" (What's the weather?), "Какая погода в Москве завтра?" (What's the weather in Moscow tomorrow?)
 - "Поищи в интернете, когда выйдет обновление DiLink" (Search the web for when the DiLink update comes out)
 
-### Vehicle Control: A Catalog of 97 Commands
+### Vehicle Control: A Catalog of 110 Commands
 
 | Group | What's available |
 |--------|--------------|
@@ -410,6 +410,9 @@ The agent has 32 tools. Example phrases:
 | Front trunk | open, close |
 | Fridge | cooling from -6 to +6, heating from 35 to 50, off |
 | Hazard lights | on, off |
+| Drive mode | ECO, Normal, Sport; Snow, Sand, Mud, Mountain, Rock and the smart mode only below 15 km/h |
+| HUD | windshield projection: on, off |
+| Battery preheating | on, off |
 
 Safety: window opening is blocked above 120 km/h, the sunroof above 80 km/h, door unlocking above 30 km/h; the front trunk only opens while the car is parked.
 

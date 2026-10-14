@@ -2554,6 +2554,10 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
             if (state.isRecordingLogs) viewModel.stopLogRecording()
             else viewModel.startLogRecording()
         },
+        // The saved log to the user's own bot, on a tap only: it holds trips and coordinates (#324).
+        secondButtonLabel = if (state.canSendLogToTelegram) stringResource(R.string.settings_log_tg_send) else null,
+        onSecondClick = { viewModel.sendLogToTelegram() },
+        secondButtonEnabled = !state.logSending,
         onHelp = { help = R.string.settings_log_recording_start_button to R.string.settings_log_recording_help },
     )
     if (state.logSaveStatus != null) {
@@ -2858,6 +2862,17 @@ private fun AutoBackupRows(state: SettingsUiState, viewModel: SettingsViewModel)
     TelegramBotRows(state, viewModel, tokenFocus, botBringer)
     SettingDivider()
     PowerOffReportRows(state, viewModel, tokenFocus, botBringer)
+    SettingDivider()
+    // Needs the bot above too; the link to connect it already sits under the power-off report.
+    val connected = state.tgBackupBinding != null
+    SettingToggleRow(
+        title = stringResource(R.string.settings_tg_log_auto_title),
+        traceId = "tg_log_auto_send",
+        description = stringResource(R.string.settings_tg_log_auto_hint),
+        checked = connected && state.tgLogAutoSendEnabled,
+        onCheckedChange = { viewModel.setTgLogAutoSendEnabled(it) },
+        enabled = connected,
+    )
 }
 
 /**

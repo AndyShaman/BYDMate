@@ -148,6 +148,55 @@ data class Split37AreaInfo(
     val full: Split37Root?,
 )
 
+/**
+ * Diagnostic snapshot of one native split root and one task in it (TX_SPLIT37_ROOT_STATE), for
+ * the journal only. Components are short flattened names (`pkg/.Activity`); every field is null
+ * when the daemon could not read it. [children] are (taskId, name) in the framework's order.
+ */
+data class Split37RootState(
+    val rootTop: String?,
+    val rootVisible: Boolean?,
+    val children: List<Pair<Int, String>>?,
+    val taskVisible: Boolean?,
+    val taskTop: String?,
+)
+
+/** Sanity cap on TX_SPLIT37_ROOT_STATE children: a pane root holds a handful of tasks. */
+private const val MAX_SPLIT37_ROOT_CHILDREN = 64
+
+/** Parses a TX_SPLIT37_ROOT_STATE reply; null on a non-OK status or a truncated parcel. */
+private fun readSplit37RootState(reply: Parcel): Split37RootState? {
+    if (reply.dataAvail() < 4) return null
+    if (reply.readInt() != HelperBinderProtocol.SPLIT37_OK) return null
+    val rootTop = reply.readString()
+    if (reply.dataAvail() < 8) return null
+    val rootVisible = visibilityFlag(reply.readInt())
+    val count = reply.readInt()
+    // A count past any real root is a foreign or corrupt parcel, not children to allocate.
+    if (count > MAX_SPLIT37_ROOT_CHILDREN) return null
+    val children = if (count < 0) null else List(count) {
+        if (reply.dataAvail() < 4) return null
+        reply.readInt() to reply.readString().orEmpty()
+    }
+    if (reply.dataAvail() < 4) return null
+    val taskVisible = visibilityFlag(reply.readInt())
+    val taskTop = reply.readString()
+    return Split37RootState(
+        rootTop?.takeIf { it.isNotEmpty() },
+        rootVisible,
+        children,
+        taskVisible,
+        taskTop?.takeIf { it.isNotEmpty() },
+    )
+}
+
+/** Daemon visibility flag: 1 / 0, anything else (-1) = not read. */
+private fun visibilityFlag(value: Int): Boolean? = when (value) {
+    1 -> true
+    0 -> false
+    else -> null
+}
+
 /** Result of the daemon's direct freeform launch (TX_LAUNCH_FREEFORM). */
 enum class FreeformLaunchResult { OK, UNAVAILABLE, FAILED }
 
@@ -548,6 +597,13 @@ interface HelperClient {
      * outdated", never as a firmware verdict. Null also covers every non-OK daemon status.
      */
     suspend fun split37ChangeMode(mode: Int): Int?
+
+    /**
+     * What stands in the split root [rootTaskId] and whether [taskId] is visible
+     * (TX_SPLIT37_ROOT_STATE) — a read for the journal, never a decision input. Null on any
+     * transport failure, any non-OK status and on a daemon that does not know the verb.
+     */
+    suspend fun split37RootState(rootTaskId: Int, taskId: Int): Split37RootState?
 
     /**
      * Installs the fid push subscription (TX_PUSH_SUBSCRIBE): [callback] is the app binder the
@@ -1137,6 +1193,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             val areaMode = reply.readInt()
             if (status == HelperBinderProtocol.SPLIT37_OK) areaMode else null
         }
+
+    override suspend fun split37RootState(rootTaskId: Int, taskId: Int): Split37RootState? =
+        transactParsed(HelperBinderProtocol.TX_SPLIT37_ROOT_STATE, { d ->
+            d.writeInt(rootTaskId); d.writeInt(taskId)
+        }, parse = ::readSplit37RootState)
 
     /** Reads one (rootTaskId, l, t, r, b) block of a TX_SPLIT37_AREA_INFO reply; null = area absent. */
     private fun readSplit37Root(reply: Parcel): Split37Root? {

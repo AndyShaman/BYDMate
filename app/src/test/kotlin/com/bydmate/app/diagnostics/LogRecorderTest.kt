@@ -481,6 +481,20 @@ class LogRecorderTest {
     }
 
     @Test
+    fun `only a recording that ends for good is reported finished`() = runTest {
+        // A logcat dying on its own keeps the pending record: the recording may still resume.
+        val died = recorder(stdout = { ByteArrayInputStream(ByteArray(0)) })
+        died.startWithHeader()
+        assertFalse(died.awaitStopped().lastStopped!!.finished)
+        died.stop()
+
+        val stopped = recorder()
+        stopped.startWithHeader()
+        assertTrue(stopped.stop()!!.finished)
+        assertTrue(stopped.state.value.lastStopped!!.finished)
+    }
+
+    @Test
     fun `the size limit forgets the pending recording`() = runTest {
         val line = "x".repeat(200)
         val recorder = recorder(
