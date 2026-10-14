@@ -5,6 +5,7 @@ import android.util.Log
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.Split37AreaInfo
 import com.bydmate.app.data.vehicle.Split37Root
+import com.bydmate.app.data.vehicle.Split37RootState
 import com.bydmate.app.data.vehicle.TopTaskInfo
 import kotlinx.coroutines.delay
 
@@ -620,6 +621,10 @@ class Split37Engine(
     ) {
         if (helper.split37TaskArea(taskId) != targetArea) return
         val where = "split37 place $pane $pkg task=$taskId already in root ${root.rootTaskId}"
+        // Diagnostic only, read before the bounce reorders the root (field 2026-10-13: Navi gone
+        // from the wide pane, gray backdrop left, while its task still read as in the root). The
+        // line tells "another task on top of the root" from "the pane task itself not visible".
+        journal.append("$where - state: ${rootStateText(helper.split37RootState(root.rootTaskId, taskId))}")
         if (fullRootId == null) {
             journal.append("$where - no full root, no bounce")
             return
@@ -749,6 +754,21 @@ class Split37Engine(
     }
 
     private fun okText(ok: Boolean): String = if (ok) "ok" else "fail"
+
+    /** One-line form of a [Split37RootState]; "?" for anything the daemon did not read. */
+    private fun rootStateText(state: Split37RootState?): String {
+        val children = state?.children?.joinToString(", ", "[", "]") { (id, name) ->
+            "$id ${name.ifEmpty { "?" }}"
+        } ?: "?"
+        return "top=${state?.rootTop ?: "?"} rootVisible=${flagText(state?.rootVisible)} " +
+            "children=$children taskVisible=${flagText(state?.taskVisible)} taskTop=${state?.taskTop ?: "?"}"
+    }
+
+    private fun flagText(flag: Boolean?): String = when (flag) {
+        true -> "1"
+        false -> "0"
+        null -> "?"
+    }
 
     companion object {
         /**

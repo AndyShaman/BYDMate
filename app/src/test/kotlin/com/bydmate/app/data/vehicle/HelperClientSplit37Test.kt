@@ -5,6 +5,8 @@ import android.os.IBinder
 import android.os.IInterface
 import android.os.Parcel
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.helper.Split37RootStateReading
+import com.bydmate.app.helper.writeSplit37RootState
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,7 +18,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Wire tests of the six TX_SPLIT37_* verbs: request layout and reply parsing against a fake
+ * Wire tests of the seven TX_SPLIT37_* verbs: request layout and reply parsing against a fake
  * IBinder. Every non-OK status and every transport failure must collapse into null/false.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -227,5 +229,68 @@ class HelperClientSplit37Test {
             assertNull(clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK)).split37ChangeMode(102))
             // An old daemon does not know the verb at all.
             assertNull(clientWith(rejectingFake).split37ChangeMode(102))
+        }
+
+    // --- split37RootState ---
+
+    /** Fake binder whose reply is [status] followed by the daemon's own writer of [reading]. */
+    private fun rootStateFake(
+        reading: Split37RootStateReading,
+        status: Int = HelperBinderProtocol.SPLIT37_OK,
+        captured: MutableList<Int>? = null,
+    ): IBinder = object : FakeIBinder() {
+        override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            assertEquals(HelperBinderProtocol.TX_SPLIT37_ROOT_STATE, code)
+            data.setDataPosition(0)
+            data.enforceInterface(HelperBinderProtocol.DESCRIPTOR)
+            while (captured != null && data.dataAvail() >= 4) captured += data.readInt()
+            reply!!.writeInt(status)
+            writeSplit37RootState(reply, reading)
+            reply.setDataPosition(0)
+            return true
+        }
+    }
+
+    @Test
+    fun `split37RootState passes root and task and round-trips the daemon reply`() = runBlocking {
+        val captured = mutableListOf<Int>()
+        val reading = Split37RootStateReading(
+            rootTop = "com.byd.sr/.SrActivity",
+            rootVisible = 1,
+            children = listOf(23 to "ru.yandex.yandexnavi/.map.MapActivity", 31 to "com.byd.sr/.SrActivity"),
+            taskVisible = 0,
+            taskTop = "ru.yandex.yandexnavi/.map.MapActivity",
+        )
+        val state = clientWith(rootStateFake(reading, captured = captured)).split37RootState(3, 23)
+        assertEquals(listOf(3, 23), captured)
+        assertEquals(
+            Split37RootState(
+                rootTop = "com.byd.sr/.SrActivity",
+                rootVisible = true,
+                children = listOf(23 to "ru.yandex.yandexnavi/.map.MapActivity", 31 to "com.byd.sr/.SrActivity"),
+                taskVisible = false,
+                taskTop = "ru.yandex.yandexnavi/.map.MapActivity",
+            ),
+            state,
+        )
+    }
+
+    @Test
+    fun `split37RootState reads the daemon's unknown markers as null`() = runBlocking {
+        val unknown = Split37RootStateReading("", -1, null, -1, "")
+        assertEquals(
+            Split37RootState(null, null, null, null, null),
+            clientWith(rootStateFake(unknown)).split37RootState(3, 23),
+        )
+    }
+
+    @Test
+    fun `split37RootState returns null on a non-OK status, a truncated reply and a rejected transact`() =
+        runBlocking {
+            assertNull(clientWith(replyFake(HelperBinderProtocol.SPLIT37_UNSUPPORTED)).split37RootState(3, 23))
+            assertNull(clientWith(replyFake(HelperBinderProtocol.SPLIT37_FAILED)).split37RootState(3, 23))
+            assertNull(clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK)).split37RootState(3, 23))
+            // An old daemon does not know the verb at all.
+            assertNull(clientWith(rejectingFake).split37RootState(3, 23))
         }
 }

@@ -874,6 +874,25 @@ fun main(args: Array<String>) {
                     reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); reply?.writeInt(-1); true
                 }
 
+                HelperBinderProtocol.TX_SPLIT37_ROOT_STATE -> runCatching {
+                    val rootTaskId = data.readInt(); val taskId = data.readInt()
+                    val iAtm = activityTaskManager()
+                    val infos = rootTaskInfosSnapshot(iAtm)
+                    if (infos == null) {
+                        android.util.Log.w("bydmate_helper", "TX_SPLIT37_ROOT_STATE: getAllRootTaskInfos absent")
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_UNSUPPORTED)
+                    } else {
+                        // Read before the first write — see TX_SPLIT37_ENTER.
+                        val reading = split37RootStateReading(infos, rootTaskId, atmGetTasks(iAtm, 100), taskId)
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_OK)
+                        reply?.let { writeSplit37RootState(it, reading) }
+                    }
+                    true
+                }.getOrElse { e ->
+                    android.util.Log.w("bydmate_helper", "TX_SPLIT37_ROOT_STATE failed", e)
+                    reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); true
+                }
+
                 HelperBinderProtocol.TX_REGISTER_CLIENT -> runCatching {
                     registerHelperClient(data.readStrongBinder())
                     reply?.writeInt(0)
@@ -1848,6 +1867,80 @@ private fun writeAreaInfoFailure(reply: Parcel?, status: Int) {
     SPLIT37_AREA_IDS.forEach { _ ->
         reply?.writeInt(-1)              // rootTaskId = absent
         repeat(4) { reply?.writeInt(0) } // bounds
+    }
+}
+
+/**
+ * One TX_SPLIT37_ROOT_STATE reading. Unknown values: "" for a component, -1 for a visibility
+ * flag, null [children] when the root is not listed (or lists no children array).
+ */
+internal data class Split37RootStateReading(
+    val rootTop: String,
+    val rootVisible: Int,
+    val children: List<Pair<Int, String>>?,
+    val taskVisible: Int,
+    val taskTop: String,
+)
+
+/**
+ * Testable core of TX_SPLIT37_ROOT_STATE: picks the RootTaskInfo of [rootTaskId] out of
+ * [rootInfos] and the RunningTaskInfo of [taskId] out of [tasks], and reads the few fields the
+ * journal line needs. Every field is read on its own, so a ROM missing one still reports the rest.
+ */
+internal fun split37RootStateReading(
+    rootInfos: List<Any>,
+    rootTaskId: Int,
+    tasks: List<*>?,
+    taskId: Int,
+): Split37RootStateReading {
+    val root = rootInfos.firstOrNull { readField(it, "taskId") == rootTaskId }
+    val task = tasks?.filterNotNull()?.firstOrNull {
+        (readField(it, "taskId") ?: readField(it, "id")) == taskId
+    }
+    return Split37RootStateReading(
+        rootTop = root?.let { componentText(readField(it, "topActivity")) } ?: "",
+        rootVisible = root?.let { flagInt(readField(it, "visible")) } ?: -1,
+        children = root?.let { rootChildren(it) },
+        taskVisible = task?.let { flagInt(readField(it, "isVisible")) } ?: -1,
+        taskTop = task?.let { componentText(readField(it, "topActivity")) } ?: "",
+    )
+}
+
+/** Writes [r] after the status, in the TX_SPLIT37_ROOT_STATE reply layout. */
+internal fun writeSplit37RootState(reply: Parcel, r: Split37RootStateReading) {
+    reply.writeString(r.rootTop)
+    reply.writeInt(r.rootVisible)
+    val children = r.children
+    reply.writeInt(children?.size ?: -1)
+    children?.forEach { (id, name) -> reply.writeInt(id); reply.writeString(name) }
+    reply.writeInt(r.taskVisible)
+    reply.writeString(r.taskTop)
+}
+
+private fun readField(target: Any, name: String): Any? = runCatching {
+    fieldByName(target, name)?.let { f -> f.isAccessible = true; f.get(target) }
+}.getOrNull()
+
+private fun flagInt(value: Any?): Int = when (value as? Boolean) {
+    true -> 1
+    false -> 0
+    null -> -1
+}
+
+private fun componentText(value: Any?): String =
+    (value as? android.content.ComponentName)?.flattenToShortString() ?: ""
+
+/**
+ * RootTaskInfo.childTaskIds paired with childTaskNames (flattened components, shortened here so
+ * the journal line stays readable); null when the ids array is unreadable.
+ */
+private fun rootChildren(root: Any): List<Pair<Int, String>>? {
+    val ids = readField(root, "childTaskIds") as? IntArray ?: return null
+    val names = readField(root, "childTaskNames") as? Array<*>
+    return ids.mapIndexed { i, id ->
+        val raw = names?.getOrNull(i) as? String
+        val short = raw?.let { android.content.ComponentName.unflattenFromString(it)?.flattenToShortString() }
+        id to (short ?: raw ?: "")
     }
 }
 

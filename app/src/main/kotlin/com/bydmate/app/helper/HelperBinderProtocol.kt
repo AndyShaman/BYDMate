@@ -526,6 +526,23 @@ object HelperBinderProtocol {
      */
     val TX_SET_SCREEN_BACKLIGHT: Int = IBinder.FIRST_CALL_TRANSACTION + 58  // 59
 
+    /**
+     * Diagnostic read of one native split root and one task in it, for the journal line the split
+     * engine writes when a pane task is "already in root" (field 2026-10-13: Navi vanished from
+     * the wide pane leaving the gray backdrop while its task still read as in the root). Read-only.
+     * Root data comes from the getAllRootTaskInfos() entry of [rootTaskId]: topActivity (the
+     * root's top running activity), `visible`, and the leaf children (childTaskIds/childTaskNames,
+     * in the framework's order — bottom to top on API 31/32). The task data comes from the
+     * getTasks() entry of [taskId]: isVisible and topActivity.
+     *
+     * Request: [int rootTaskId, int taskId]
+     * Reply:   [int status (see SPLIT37_*), String rootTop ("" = unknown), int rootVisible (1/0/-1),
+     *           int childCount (-1 = root not listed), childCount × (int taskId, String name),
+     *           int taskVisible (1/0/-1), String taskTop ("" = unknown)]
+     * An old daemon without this handler makes transact return false → the client returns null.
+     */
+    val TX_SPLIT37_ROOT_STATE: Int = IBinder.FIRST_CALL_TRANSACTION + 59  // 60
+
     /** TX_SET_SCREEN_BACKLIGHT outcomes: called and the status shows the wanted state; called but
      *  the status did not follow (or could not be read); no such method on this firmware; the
      *  PowerManager or the call threw. */
