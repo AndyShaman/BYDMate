@@ -33,6 +33,7 @@ internal interface VadHandle {
     fun empty(): Boolean
     /** Oldest queued speech segment's samples; caller must pop() after consuming it. */
     fun front(): FloatArray
+    fun frontWithStart(): Pair<Long, FloatArray> = 0L to front()
     fun pop()
     fun close()
 }
@@ -85,6 +86,7 @@ private class RealVadHandle(modelManager: GigaAmModelManager) : VadHandle {
     override fun isSpeechDetected(): Boolean = vad.isSpeechDetected()
     override fun empty(): Boolean = vad.empty()
     override fun front(): FloatArray = vad.front().samples
+    override fun frontWithStart(): Pair<Long, FloatArray> = vad.front().let { it.start.toLong() to it.samples }
     override fun pop() = vad.pop()
     override fun close() = vad.release()
 }
@@ -95,7 +97,7 @@ private class RealVadHandle(modelManager: GigaAmModelManager) : VadHandle {
  *  released in transcribe()'s finally block, so neither cancellation nor a second collect can
  *  leak or clobber a VAD handle. With [warmVad] (Android 10 head units) that per-collection VAD
  *  is built ahead of the session instead of on its path, see spareVad. */
-internal class GigaAmAsrEngine(
+internal class GigaAmAsrEngine @Suppress("LongParameterList") constructor(
     private val modelManager: GigaAmModelManager,
     private val recognizerFactory: () -> RecognizerHandle = { RealRecognizerHandle(modelManager) },
     private val vadFactory: () -> VadHandle = { RealVadHandle(modelManager) },
@@ -105,6 +107,7 @@ internal class GigaAmAsrEngine(
     private val prewarmExecutor: Executor = Executor { task ->
         thread(name = "gigaam-vad-prewarm", isDaemon = true) { task.run() }
     },
+    private val preRollMs: Int = 0,
 ) : ContinuousAsr {
 
     // A tripped guard means the last loads aborted the whole process from native code
@@ -229,10 +232,14 @@ internal class GigaAmAsrEngine(
             if (warmVad) prewarmNextVad()
             var speaking = false
             var silentMs = 0L
+            val preRoll = if (preRollMs > 0) SpeechPreRoll(preRollMs * SAMPLE_RATE / 1000) else null
             pcm.collect { shorts ->
-                vad.acceptWaveform(FloatArray(shorts.size) { i -> shorts[i] / 32768f })
+                val frame = FloatArray(shorts.size) { i -> shorts[i] / 32768f }
+                vad.acceptWaveform(frame)
+                preRoll?.append(frame)
                 if (vad.isSpeechDetected()) {
                     if (!speaking) {
+                        preRoll?.speechStart()
                         speaking = true
                         silentMs = 0L
                         emit(ContinuousAsrEvent.SpeechStart)
@@ -242,7 +249,10 @@ internal class GigaAmAsrEngine(
                     emit(ContinuousAsrEvent.SilenceTick(silentMs))
                 }
                 while (!vad.empty()) {
-                    val segment = vad.front()
+                    val segment = if (preRoll == null) vad.front() else {
+                        val (start, samples) = vad.frontWithStart()
+                        preRoll.finish(start, samples)
+                    }
                     vad.pop()
                     speaking = false
                     val text = recognizer.decode(segment)
