@@ -109,6 +109,9 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
 
     private val syncMutex = Mutex()
 
+    /** Set by doSync when it skipped a row from the future; guarded by [syncMutex]. */
+    private var skippedFutureRow = false
+
     data class ImportResult(
         val trips: Int,
         val idleDrains: Int = 0,
@@ -143,10 +146,12 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
                 Log.d(TAG, "syncFromEnergyData: source unchanged, skipping")
                 return ImportResult(trips = 0, details = "Без изменений")
             }
+            skippedFutureRow = false
             val result = doSync()
             // Mark only on success — a thrown EnergyDataException leaves the
-            // watermark untouched so the next event retries this file.
-            if (!result.isError) energyDataReader.markSourceProcessed(context)
+            // watermark untouched so the next event retries this file. A skipped future row
+            // (#348) leaves it unmarked too: the next sync re-reads the file once the clock is right.
+            if (!result.isError && !skippedFutureRow) energyDataReader.markSourceProcessed(context)
             result
         } catch (e: EnergyDataException) {
             Log.w(TAG, "syncFromEnergyData failed: ${e.message}", e)
@@ -199,6 +204,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             // Before maxTs and before any filter: a future row must not move the watermark (#348)
             if (isFromFuture(byd.startTimestamp, nowMs / 1000L)) {
                 Log.w(TAG, "energydata row from the future skipped: id=${byd.id} start=${byd.startTimestamp}")
+                skippedFutureRow = true
                 continue
             }
             val startTsMs = byd.startTimestamp * 1000L

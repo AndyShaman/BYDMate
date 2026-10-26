@@ -1713,7 +1713,7 @@
     <string name="settings_split_wide_app_title">Широкая часть (2/3)</string>
     <string name="settings_split_narrow_app_title">Узкая часть (1/3)</string>
     <string name="settings_split_app_not_selected">не выбрано</string>
-    <string name="settings_split_howto_body">Разделение экрана можно включить тремя способами.\nСамый простой: тап по левой трети плавающего виджета. Для этого в разделе «Тап по виджету» включите «Зонирование тапов», а в пункте «Действие левого тапа» выберите «Запускать разделение экрана».\nЧерез автоматизации: добавьте в правило действие «Разделение экрана». Рядом есть «Закрыть разделение экрана» и «Переключить разделение экрана».\nГолосом: просто попросите голос-агента включить разделение экрана.</string>
+    <string name="settings_split_howto_body">Выберите два приложения и способ запуска в блоке «Как запускать».</string>
     <string name="settings_split_mechanism_title">Механизм разделения</string>
     <string name="settings_split_mechanism_freeform">Окна BYDMate</string>
     <string name="settings_split_mechanism_native">Родное разделение</string>

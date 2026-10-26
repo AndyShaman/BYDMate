@@ -31,6 +31,17 @@ fun steeringKeyOwner(keyCode: Int, o: SteeringKeyOwners): SteeringKeyOwner? = wh
     else -> null
 }
 
+/**
+ * Owner of [keyCode] for the split key chooser: a feature's SAVED key counts whether or not the
+ * feature is on, so switching it on later cannot let its earlier filter stage eat the split key.
+ */
+fun splitKeyChooserOwner(keyCode: Int, o: SteeringKeyOwners): SteeringKeyOwner? = when {
+    keyCode == o.voiceKey || keyCode in o.voiceCompanions -> SteeringKeyOwner.VOICE
+    keyCode == VOLUME_KNOB_PRESS_KEYCODE -> SteeringKeyOwner.KNOB
+    keyCode == o.projectionKey -> SteeringKeyOwner.PROJECTION
+    else -> null
+}
+
 /** Reads the owners from the features' prefs (cluster, "voice", "bydmate_split"). */
 fun readSteeringKeyOwners(context: Context): SteeringKeyOwners {
     val clusterPrefs = context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
