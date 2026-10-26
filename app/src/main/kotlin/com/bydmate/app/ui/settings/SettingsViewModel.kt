@@ -1380,10 +1380,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     /** Rules for the split key's occupancy and conflict checks, read when its learn dialog opens. */
     suspend fun automationRulesSnapshot(): List<RuleEntity> = ruleDao.getAllList()
 
-    /** Saves the split key; [disableRuleIds] are the split rules on it the user chose to turn off. */
-    fun saveSplitKey(keyCode: Int, disableRuleIds: List<Long>) {
+    /**
+     * Saves the split key with [companions] (other codes of the same press, always replacing the
+     * stored ones); [disableRuleIds] are the split rules on it the user chose to turn off.
+     */
+    fun saveSplitKey(keyCode: Int, companions: Set<Int>, disableRuleIds: List<Long>) {
         splitPreferences.setSteeringKeyCode(keyCode)
-        Log.i(TAG, "split key=$keyCode rules_off=$disableRuleIds")
+        splitPreferences.setSteeringKeyCompanions(companions)
+        Log.i(TAG, "split key=$keyCode companions=${voiceCompanionsToCsv(companions).ifEmpty { "-" }} " +
+            "rules_off=$disableRuleIds")
         if (disableRuleIds.isNotEmpty()) {
             viewModelScope.launch { disableRuleIds.forEach { ruleDao.setEnabled(it, false) } }
         }
@@ -1391,6 +1396,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
     fun clearSplitKey() {
         splitPreferences.setSteeringKeyCode(0)
+        splitPreferences.setSteeringKeyCompanions(emptySet())
         Log.i(TAG, "split key cleared")
     }
 
