@@ -1994,7 +1994,7 @@ class TrackingService : Service(), LocationListener {
 
         // Immediate fix from GPS last-known only (like TripInfo).
         try {
-            val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
+            val lastKnown = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
             // A seed is never live; with no fresh seed (GPS off, no fix yet), any snapshot kept
             // from a previous run of this service is demoted too, so a restart never keeps
             // serving a stale point as if the listener just delivered it.
@@ -2011,7 +2011,7 @@ class TrackingService : Service(), LocationListener {
         }
 
         if (!gpsEnabled) {
-            Log.e(TAG, "GPS provider not enabled! GPS tracking will not work.")
+            Log.e(TAG, "GPS provider not enabled! Listener registered, waiting for the provider.")
         }
     }
 
@@ -2271,27 +2271,29 @@ class TrackingService : Service(), LocationListener {
     }
 }
 
+/** GPS listener registration, whatever the provider state at this instant (#361): DiLink 3.0/4.0
+ *  switch the provider off with the ignition, and a service created during an ignition-off wake
+ *  lives on into the next drive. Android keeps a request made for a disabled provider and starts
+ *  delivering once it comes back on. A unit with no GPS provider at all throws; that is logged. */
+@Suppress("TooGenericExceptionCaught") // a vendor LocationManager must not take the service down
+internal fun registerGpsUpdates(lm: LocationManager, listener: LocationListener, looper: Looper) {
+    try {
+        lm.requestLocationUpdates(
+            LocationManager.GPS_PROVIDER,
+            2000L, 8.0f,
+            listener, looper
+        )
+        Log.i("TrackingService", "requestLocationUpdates(GPS_PROVIDER) registered")
+    } catch (e: Exception) {
+        Log.e("TrackingService", "GPS provider registration failed: ${e.message}", e)
+    }
+}
+
 /** [TrackingService.lastLocationFix] at service (re)start: a fresh [lastKnown] seed replaces it,
  *  never live; with no fresh seed (GPS off, or no fix yet), [previous] is kept but demoted to
  *  not-live, since a seed from a prior run of the same process is not this run's data either.
  *  Pure top-level function (not a Companion member, to stay under detekt's function-count
  *  threshold there) so a restart never leaves a stale point wrongly marked live. */
-internal fun registerGpsUpdates(lm: LocationManager, listener: LocationListener, looper: Looper) {
-    val gpsEnabled = try { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) } catch (_: Exception) { false }
-    if (gpsEnabled) {
-        try {
-            lm.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                2000L, 8.0f,
-                listener, looper
-            )
-            Log.i("TrackingService", "requestLocationUpdates(GPS_PROVIDER) registered")
-        } catch (e: Exception) {
-            Log.e("TrackingService", "GPS provider registration failed: ${e.message}", e)
-        }
-    }
-}
-
 internal fun nextSnapshotOnRestart(
     previous: TrackingService.LocationFix?,
     lastKnown: Location?,

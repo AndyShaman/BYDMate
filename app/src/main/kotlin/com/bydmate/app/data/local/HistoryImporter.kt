@@ -53,6 +53,30 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         // open SOC session is considered finished and promotable to a completed bookmark.
         private const val PENDING_SESSION_IDLE_CLOSE_MS = 10_000L
 
+        /**
+         * An energydata row starting later than now + this is from the future (head unit clock
+         * jumped forward, #348). It must never become the import watermark: every real trip
+         * after it would start "before" the watermark and be skipped forever. Kept small, since
+         * an accepted row at now + skew hides every trip that starts within that skew. A skipped
+         * row is not lost: the watermark stays below it, so it is read again once the clock
+         * passes it.
+         */
+        internal const val FUTURE_SKEW_SEC = 60L
+
+        internal fun isFromFuture(startTimestampSec: Long, nowSec: Long): Boolean =
+            startTimestampSec > nowSec + FUTURE_SKEW_SEC
+
+        /** The importer line of the log dump: watermark and the energydata rows it reads (#348). */
+        internal fun importStateLine(watermarkSec: Long, rows: List<BydTripRecord>, nowSec: Long): String {
+            val latest = rows.maxOfOrNull { it.startTimestamp }
+            val future = rows.count { isFromFuture(it.startTimestamp, nowSec) }
+            return "import: watermark=$watermarkSec (${dumpDate(watermarkSec)}) rows=${rows.size} " +
+                "latest_start=${latest ?: "-"} (${latest?.let(::dumpDate) ?: "-"}) future_rows=$future"
+        }
+
+        private fun dumpDate(sec: Long): String =
+            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(sec * 1000L))
+
         /** A counter snapshot belongs to a trip edge only this close to it (DM-i, #184). */
         internal const val COUNTER_EDGE_WINDOW_MS = 90_000L
 
@@ -106,7 +130,16 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             return ImportResult(trips = 0, details = "Синхронизация уже идёт")
         }
         return try {
-            if (!energyDataReader.peekSourceChanged(context)) {
+            // A watermark already in the future (set before #348 was fixed) heals here, before the
+            // unchanged-file shortcut: the file may stay untouched until the next drive ends.
+            // The full re-read is safe: imported rows stop at bydId, deleted ones at the tombstone.
+            val watermark = settingsRepository.getLastEnergyImportTs()
+            val healed = isFromFuture(watermark, System.currentTimeMillis() / 1000L)
+            if (healed) {
+                Log.w(TAG, "syncFromEnergyData: watermark $watermark is in the future, resetting")
+                clearImportWatermark()
+            }
+            if (!healed && !energyDataReader.peekSourceChanged(context)) {
                 Log.d(TAG, "syncFromEnergyData: source unchanged, skipping")
                 return ImportResult(trips = 0, details = "Без изменений")
             }
@@ -163,6 +196,11 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         val marks = odometerMarks.snapshot()
 
         for (byd in bydRecords) {
+            // Before maxTs and before any filter: a future row must not move the watermark (#348)
+            if (isFromFuture(byd.startTimestamp, nowMs / 1000L)) {
+                Log.w(TAG, "energydata row from the future skipped: id=${byd.id} start=${byd.startTimestamp}")
+                continue
+            }
             val startTsMs = byd.startTimestamp * 1000L
             val endTsMs = byd.endTimestamp * 1000L
 
@@ -485,7 +523,9 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
      */
     suspend fun deduplicateWithExisting() {
         try {
-            val bydRecords = energyDataReader.readTrips()
+            // Future rows neither import nor set the watermark below (#348)
+            val nowSec = System.currentTimeMillis() / 1000L
+            val bydRecords = energyDataReader.readTrips().filterNot { isFromFuture(it.startTimestamp, nowSec) }
             val liveTrips = tripDao.getLiveTrips()
             val capacity = settingsRepository.getBatteryCapacity()
             var updated = 0
@@ -669,6 +709,27 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             Log.e(TAG, "recalculateConsumption failed", e)
             0
         }
+    }
+
+    /**
+     * Re-read energydata from the start on the next sync (Settings reset, #348). Rows already
+     * imported stop at bydId, deleted ones at the tombstone.
+     */
+    suspend fun resetImportWatermark() = syncMutex.withLock { clearImportWatermark() }
+
+    /** Import watermark to 0 and the source fingerprint forgotten, so the unchanged-file gate passes. */
+    private suspend fun clearImportWatermark() {
+        settingsRepository.setLastEnergyImportTs(0L)
+        energyDataReader.resetWatermark(context)
+    }
+
+    /** One line for the log dump: watermark and the energydata rows behind it (#348). */
+    suspend fun importStateLine(): String = syncMutex.withLock {
+        importStateLine(
+            settingsRepository.getLastEnergyImportTs(),
+            energyDataReader.readTrips(),
+            System.currentTimeMillis() / 1000L,
+        )
     }
 
     /**

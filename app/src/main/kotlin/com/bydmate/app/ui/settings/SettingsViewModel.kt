@@ -430,8 +430,12 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     /** Forget the remembered seat write-channel; next seat command re-probes primary→fallback. */
     fun resetSeatChannel() = seatChannelStore.setWinner(SeatChannel.UNKNOWN)
 
-    /** Forget the dead-energydata verdict; the next drives re-detect the trip source (#63). */
-    fun resetTripSourceDetection() = energyDataDeadDetector.reset()
+    /** Forget the dead-energydata verdict; the next drives re-detect the trip source (#63).
+     *  The import watermark goes too, so the next sync re-reads energydata from the start (#348). */
+    fun resetTripSourceDetection() {
+        energyDataDeadDetector.reset()
+        viewModelScope.launch { historyImporter.resetImportWatermark() }
+    }
 
     private val _uiState = MutableStateFlow(SettingsUiState(
         appVersion = getVersion(),
@@ -2035,6 +2039,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                         files.forEach { appendLine("  ${it.name} (${it.length()}B, mtime=${it.lastModified()})") }
                     }
                     appendLine("liveness: ${energyDataDeadDetector.debugState()}")
+                    appendLine(historyImporter.importStateLine())
                 }
             } catch (e: Exception) {
                 appendLine("(failed to gather vehicle data sources: ${e.message})")
