@@ -33,6 +33,12 @@ class BootReceiver : BroadcastReceiver() {
         const val KEY_CHAIN_LOG = "chain_log"
         /** Explicit restart request from the helper daemon after the Android 10 a11y recovery. */
         const val ACTION_RECOVER_START = "com.bydmate.app.action.RECOVER_START"
+
+        // Unlock arrives only while the service is down (see onReceive), so whatever job is
+        // queued or running has not started it: replace it rather than be dropped behind a
+        // parked-restart job that skipped because the screen still read as off at car-on.
+        fun workPolicyFor(action: String?): ExistingWorkPolicy =
+            if (action == Intent.ACTION_USER_PRESENT) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -69,7 +75,7 @@ class BootReceiver : BroadcastReceiver() {
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 ServiceStartWorker.WORK_NAME,
-                ExistingWorkPolicy.KEEP,
+                workPolicyFor(intent.action),
                 request
             )
             updateBootMethod(context, "WorkManager")
