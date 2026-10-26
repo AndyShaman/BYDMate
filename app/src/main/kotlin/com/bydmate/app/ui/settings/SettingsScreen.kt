@@ -90,6 +90,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -142,6 +143,10 @@ import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import com.bydmate.app.cluster.DEFAULT_TRIGGER_KEYCODE
 import com.bydmate.app.cluster.SteeringWheelKeyService
+import com.bydmate.app.cluster.readSteeringKeyOwners
+import com.bydmate.app.cluster.steeringKeyOwner
+import com.bydmate.app.data.local.entity.RuleEntity
+import com.bydmate.app.ui.automation.steeringKeyOwnerText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import com.bydmate.app.R
@@ -169,7 +174,9 @@ import com.bydmate.app.hud.HudCheck
 import com.bydmate.app.hud.HudController
 import com.bydmate.app.split.Split37Engine
 import com.bydmate.app.split.SplitFreeformVerdict
+import com.bydmate.app.split.SplitKeyRuleVerdict
 import com.bydmate.app.split.SplitRole
+import com.bydmate.app.split.splitKeyRuleVerdict
 import com.bydmate.app.split.applyPick
 import java.io.File
 import java.text.SimpleDateFormat
@@ -301,7 +308,7 @@ fun SettingsScreen(
                         )
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
-                        SettingsSection.SPLIT -> SplitSection()
+                        SettingsSection.SPLIT -> SplitSection(viewModel)
                         SettingsSection.SERVICE -> ServiceSection(state, viewModel)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
@@ -1411,6 +1418,7 @@ private fun DisplaySection() {
                 learning = false
             },
             onDismiss = { learning = false },
+            occupiedReason = splitKeyOccupiedReason(context),
         )
     }
 
@@ -1709,9 +1717,13 @@ private fun steeringButtonLabel(keyCode: Int): String {
  *      (flag is read once at boot). Mirrors the projection section's mechanism.
  *   3. Clear-last-pair row — lets the user discard the saved pair so the next launch
  *      opens the picker instead of the saved apps.
+ *   4. «Как запускать» — see [SplitLaunchBlock].
+ *
+ * The app rows edit the MENU pair; a launch with other apps changes only the session pair, which
+ * the next process (car power cycle) forgets (SplitPreferences).
  */
 @Composable
-private fun SplitSection() {
+private fun SplitSection(viewModel: SettingsViewModel) {
     val context = LocalContext.current
     val entryPoint = remember {
         EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
@@ -1723,7 +1735,7 @@ private fun SplitSection() {
 
     var splitEnabled by remember { mutableStateOf(splitPrefs.isFeatureEnabled()) }
     var nativeMode by remember { mutableStateOf(splitPrefs.isNativeModeEnabled()) }
-    var hasLastPair by remember { mutableStateOf(splitPrefs.getLastPair() != null) }
+    var hasLastPair by remember { mutableStateOf(splitPrefs.getMenuPair() != null) }
     var splitRebootPending by remember {
         mutableStateOf(clusterPrefs.getBoolean(ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false))
     }
@@ -1740,8 +1752,8 @@ private fun SplitSection() {
     var howToOpen by remember { mutableStateOf(false) }
 
     // App pair picker state. Initialized from the stored pair; updated on every pick or clear.
-    var displayWidePkg by remember { mutableStateOf(splitPrefs.getLastPair()?.widePkg) }
-    var displayNarrowPkg by remember { mutableStateOf(splitPrefs.getLastPair()?.narrowPkg) }
+    var displayWidePkg by remember { mutableStateOf(splitPrefs.getMenuPair()?.widePkg) }
+    var displayNarrowPkg by remember { mutableStateOf(splitPrefs.getMenuPair()?.narrowPkg) }
     // Non-null while a picker dialog is open; identifies which role is being configured.
     var openPicker by remember { mutableStateOf<SplitRole?>(null) }
 
@@ -1838,7 +1850,7 @@ private fun SplitSection() {
                     onClick = {
                         // Refresh display from the stored pair so the exclusion set and
                         // current-app highlight reflect any external change (e.g. overlay picker).
-                        splitPrefs.getLastPair()?.let {
+                        splitPrefs.getMenuPair()?.let {
                             displayWidePkg = it.widePkg
                             displayNarrowPkg = it.narrowPkg
                         }
@@ -1851,7 +1863,7 @@ private fun SplitSection() {
                     value = displayNarrowPkg?.let { resolveAppLabel(context, it) }
                         ?: stringResource(R.string.settings_split_app_not_selected),
                     onClick = {
-                        splitPrefs.getLastPair()?.let {
+                        splitPrefs.getMenuPair()?.let {
                             displayWidePkg = it.widePkg
                             displayNarrowPkg = it.narrowPkg
                         }
@@ -1865,7 +1877,7 @@ private fun SplitSection() {
                 description = stringResource(R.string.settings_split_clear_pair_desc),
                 buttonLabel = stringResource(R.string.settings_split_clear_pair_title),
                 onClick = {
-                    splitPrefs.clearLastPair()
+                    splitPrefs.clearMenuPair()
                     hasLastPair = false
                     displayWidePkg = null
                     displayNarrowPkg = null
@@ -1880,22 +1892,24 @@ private fun SplitSection() {
         }
     }
 
+    if (splitEnabled) SplitLaunchBlock(viewModel)
+
     // Picker for the wide (2/3) app.
     if (openPicker == SplitRole.WIDE) {
         val excludedPkg = displayNarrowPkg
         AppLaunchPickerDialog(
-            currentPackage = splitPrefs.getLastPair()?.widePkg ?: "",
+            currentPackage = splitPrefs.getMenuPair()?.widePkg ?: "",
             excludedPackages = if (excludedPkg != null) setOf(excludedPkg) else emptySet(),
             onDismiss = { openPicker = null },
             onSelect = { pkg, _ ->
                 val result = applyPick(
-                    stored = splitPrefs.getLastPair(),
+                    stored = splitPrefs.getMenuPair(),
                     pendingOther = displayNarrowPkg,
                     role = SplitRole.WIDE,
                     pkg = pkg,
                 )
                 if (result != null) {
-                    splitPrefs.saveLastPair(result)
+                    splitPrefs.saveMenuPair(result)
                     hasLastPair = true
                     displayWidePkg = result.widePkg
                     displayNarrowPkg = result.narrowPkg
@@ -1912,18 +1926,18 @@ private fun SplitSection() {
     if (openPicker == SplitRole.NARROW) {
         val excludedPkg = displayWidePkg
         AppLaunchPickerDialog(
-            currentPackage = splitPrefs.getLastPair()?.narrowPkg ?: "",
+            currentPackage = splitPrefs.getMenuPair()?.narrowPkg ?: "",
             excludedPackages = if (excludedPkg != null) setOf(excludedPkg) else emptySet(),
             onDismiss = { openPicker = null },
             onSelect = { pkg, _ ->
                 val result = applyPick(
-                    stored = splitPrefs.getLastPair(),
+                    stored = splitPrefs.getMenuPair(),
                     pendingOther = displayWidePkg,
                     role = SplitRole.NARROW,
                     pkg = pkg,
                 )
                 if (result != null) {
-                    splitPrefs.saveLastPair(result)
+                    splitPrefs.saveMenuPair(result)
                     hasLastPair = true
                     displayWidePkg = result.widePkg
                     displayNarrowPkg = result.narrowPkg
@@ -1932,6 +1946,175 @@ private fun SplitSection() {
                 }
                 clearStatus = null
                 openPicker = null
+            },
+        )
+    }
+}
+
+/**
+ * Voice and projection learn dialogs: the split key is taken, as in the rule editor; otherwise the
+ * earlier filter stage would win and the split key would silently stop working. Only the split
+ * owner is checked here, so these dialogs keep accepting what they accepted before.
+ */
+private fun splitKeyOccupiedReason(context: Context): (Int) -> String? = { code ->
+    val owners = readSteeringKeyOwners(context)
+        .copy(voiceEnabled = false, knobEnabled = false, projectionEnabled = false)
+    steeringKeyOwner(code, owners)?.let { steeringKeyOwnerText(context, it) }
+}
+
+/**
+ * «Как запускать» block of the split section: the steering key that toggles the split, the
+ * widget's left-third tap (a switch with restore over the Widget section's own setting), and where
+ * voice and automation fit in. The key's learn dialog refuses keys of other features and of rules
+ * that do something else; split rules already on the key are offered for turning off.
+ */
+@Composable
+private fun SplitLaunchBlock(viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    val entryPoint = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
+    }
+    val splitPrefs = remember { entryPoint.splitPreferences() }
+    val widgetPrefs = remember { WidgetPreferences(context) }
+    val scope = rememberCoroutineScope()
+    var splitKey by remember { mutableIntStateOf(splitPrefs.getSteeringKeyCode()) }
+    // Rules are read when the learn dialog opens: occupancy and conflicts are checked against them.
+    var rulesForKey by remember { mutableStateOf<List<RuleEntity>>(emptyList()) }
+    var learningSplitKey by remember { mutableStateOf(false) }
+    var pendingKeyConflict by remember { mutableStateOf<Pair<Int, List<RuleEntity>>?>(null) }
+    // Non-null while asking whether the split tap may replace the app the left tap opens now.
+    var replaceAppLabel by remember { mutableStateOf<String?>(null) }
+    val widgetOn by widgetPrefs.enabledFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.isEnabled())
+    val leftTap by widgetPrefs.leftTapAppFlow().collectAsStateWithLifecycle(
+        initialValue = WidgetPreferences.LeftTapAppState(
+            enabled = widgetPrefs.isLeftTapZoningEnabled(),
+            packageName = widgetPrefs.getLeftTapAppPackage(),
+            label = widgetPrefs.getLeftTapAppLabel(),
+            mode = widgetPrefs.getLeftTapMode(),
+        ),
+    )
+
+    SectionHeader(text = stringResource(R.string.settings_split_launch_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SettingActionRow(
+                title = stringResource(R.string.settings_split_key_title),
+                description = if (splitKey > 0) steeringButtonLabel(splitKey)
+                else stringResource(R.string.settings_split_key_none),
+                buttonLabel = stringResource(R.string.settings_split_key_assign),
+                onClick = {
+                    // The key is caught by our a11y filter; on a car with no projection, voice or
+                    // knob it may not be bound yet, and the learn dialog would never see a press.
+                    ClusterProjectionManager.enableStarControl(entryPoint.helperClient(), entryPoint.helperBootstrap())
+                    scope.launch {
+                        rulesForKey = viewModel.automationRulesSnapshot()
+                        learningSplitKey = true
+                    }
+                },
+                secondButtonLabel = stringResource(R.string.settings_split_key_remove).takeIf { splitKey > 0 },
+                onSecondClick = {
+                    viewModel.clearSplitKey()
+                    splitKey = 0
+                },
+            )
+            SettingDivider()
+            SettingToggleRow(
+                title = stringResource(R.string.settings_split_tap_title),
+                traceId = "split_widget_tap",
+                checked = leftTap.enabled && leftTap.mode == LeftTapMode.SPLIT,
+                onCheckedChange = { on ->
+                    if (on && widgetPrefs.leftTapOpensApp()) replaceAppLabel = widgetPrefs.getLeftTapAppLabel()
+                    else widgetPrefs.setSplitTapOn(on)
+                },
+            )
+            // The widget itself is switched on only in its own section.
+            if (!widgetOn) SettingHint(text = stringResource(R.string.settings_split_tap_widget_off_hint))
+            SettingDivider()
+            SettingHint(text = stringResource(R.string.settings_split_voice_line))
+            SettingHint(text = stringResource(R.string.settings_split_automation_line))
+        }
+    }
+
+    if (learningSplitKey) {
+        LearnButtonDialog(
+            onSave = { code ->
+                learningSplitKey = false
+                when (val verdict = splitKeyRuleVerdict(code, rulesForKey)) {
+                    is SplitKeyRuleVerdict.Conflicts -> pendingKeyConflict = code to verdict.rules
+                    // Occupied never reaches onSave: occupiedReason below keeps the dialog waiting.
+                    else -> {
+                        viewModel.saveSplitKey(code, emptyList())
+                        splitKey = code
+                    }
+                }
+            },
+            onDismiss = { learningSplitKey = false },
+            occupiedReason = { code ->
+                // splitEnabled = false: re-learning the split key itself is not "occupied".
+                steeringKeyOwner(code, readSteeringKeyOwners(context).copy(splitEnabled = false))
+                    ?.let { steeringKeyOwnerText(context, it) }
+                    ?: (splitKeyRuleVerdict(code, rulesForKey) as? SplitKeyRuleVerdict.Occupied)
+                        ?.let { context.getString(R.string.settings_split_key_occupied_rule, it.ruleName) }
+            },
+        )
+    }
+
+    pendingKeyConflict?.let { (code, rules) ->
+        // Tapping outside saves nothing: the key stays as it was.
+        AppAlertDialog(
+            onDismissRequest = { pendingKeyConflict = null },
+            containerColor = CardSurface,
+            text = {
+                Text(
+                    if (rules.size == 1) {
+                        stringResource(R.string.settings_split_key_rule_conflict_one, rules.first().name)
+                    } else {
+                        stringResource(R.string.settings_split_key_rule_conflict_many, rules.joinToString(", ") { it.name })
+                    },
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.saveSplitKey(code, rules.map { it.id })
+                    splitKey = code
+                    pendingKeyConflict = null
+                }) { Text(stringResource(R.string.settings_split_key_rule_disable), color = AccentGreen) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    viewModel.saveSplitKey(code, emptyList())
+                    splitKey = code
+                    pendingKeyConflict = null
+                }) { Text(stringResource(R.string.settings_split_key_rule_keep), color = TextSecondary) }
+            },
+        )
+    }
+
+    replaceAppLabel?.let { label ->
+        AppAlertDialog(
+            onDismissRequest = { replaceAppLabel = null },
+            containerColor = CardSurface,
+            text = {
+                Text(
+                    stringResource(R.string.settings_split_tap_replace_text, label),
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    widgetPrefs.setSplitTapOn(true)
+                    replaceAppLabel = null
+                }) { Text(stringResource(R.string.settings_split_tap_replace_confirm), color = AccentGreen) }
+            },
+            dismissButton = {
+                TextButton(onClick = { replaceAppLabel = null }) {
+                    Text(stringResource(R.string.settings_split_tap_replace_cancel), color = TextSecondary)
+                }
             },
         )
     }
@@ -3808,6 +3991,7 @@ private fun VoiceSettingsContent(
                 learningVoiceKey = false
             },
             onDismiss = { learningVoiceKey = false },
+            occupiedReason = splitKeyOccupiedReason(context),
         )
     }
 

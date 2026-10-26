@@ -449,6 +449,7 @@
     <string name="automation_steering_key_occupied_projection">Esta tecla liga a navegação no painel de instrumentos. Libere-a em Configurações, seção Tela, ou escolha outra.</string>
     <string name="automation_steering_key_occupied_voice">Esta tecla chama o assistente de voz do BYDMate. Altere a tecla em Configurações, seção Agente de voz, ou escolha outra.</string>
     <string name="automation_steering_key_occupied_knob">O toque no botão giratório está ocupado pela função play/pause. Desative-a em Configurações, seção Tela, ou escolha outra tecla.</string>
+    <string name="automation_steering_key_occupied_split">Esta tecla alterna a tela dividida. Libere-a em Configurações, seção Tela dividida, ou escolha outra.</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Exato</string>
@@ -1557,6 +1558,23 @@
     <string name="settings_split_mechanism_native_hint">A divisão é feita pelo firmware do carro. O resultado depende do firmware: dois painéis de 1/3 e 2/3 ou metade a metade, escolhendo o segundo aplicativo na tela.</string>
     <string name="settings_split_mechanism_platformized_hint">Neste firmware o próprio carro divide a tela: os painéis de 1/3 e 2/3, o divisor e o gesto de troca são nativos. O BYDMate apenas inicia o par escolhido e devolve o aplicativo ao seu painel.</string>
     <string name="settings_split_try_native_hint">Experimente o modo Divisão nativa.</string>
+    <string name="settings_split_launch_header">Como iniciar</string>
+    <string name="settings_split_key_title">Botão do volante</string>
+    <string name="settings_split_key_none">não atribuído</string>
+    <string name="settings_split_key_assign">Atribuir</string>
+    <string name="settings_split_key_remove">Remover</string>
+    <string name="settings_split_key_occupied_rule">Esta tecla executa a regra “%1$s”. Escolha outra tecla ou altere-a na regra.</string>
+    <string name="settings_split_key_rule_conflict_one">Já existe a regra “%1$s” neste botão. Agora o botão alterna a tela dividida sozinho e a regra deixará de disparar. Desativar a regra?</string>
+    <string name="settings_split_key_rule_conflict_many">Já existem regras neste botão: %1$s. Agora o botão alterna a tela dividida sozinho e as regras deixarão de disparar. Desativá-las?</string>
+    <string name="settings_split_key_rule_disable">Desativar</string>
+    <string name="settings_split_key_rule_keep">Manter</string>
+    <string name="settings_split_tap_title">Toque no terço esquerdo do widget</string>
+    <string name="settings_split_tap_replace_text">Agora o toque esquerdo abre “%1$s”. Substituir pela tela dividida?</string>
+    <string name="settings_split_tap_replace_confirm">Substituir</string>
+    <string name="settings_split_tap_replace_cancel">Cancelar</string>
+    <string name="settings_split_tap_widget_off_hint">Ative o widget na seção Widget</string>
+    <string name="settings_split_voice_line">Por voz: peça ao Agente de voz para ligar a tela dividida.</string>
+    <string name="settings_split_automation_line">Pelas automações: a ação Alternar tela dividida inicia os apps deste menu.</string>
     <string name="split_feature_disabled">Tela dividida desativada nas configurações</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">isolamento</string>

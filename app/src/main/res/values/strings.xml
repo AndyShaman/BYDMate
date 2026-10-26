@@ -505,6 +505,7 @@
     <string name="automation_steering_key_occupied_projection">Эта клавиша включает навигацию на приборке. Освободите её в Настройках, раздел Дисплей, или выберите другую.</string>
     <string name="automation_steering_key_occupied_voice">Эта клавиша вызывает голосового помощника BYDMate. Измените клавишу в Настройках, раздел Голос-агент, или выберите другую.</string>
     <string name="automation_steering_key_occupied_knob">Нажатие колёсика занято функцией play/pause. Выключите её в Настройках, раздел Дисплей, или выберите другую клавишу.</string>
+    <string name="automation_steering_key_occupied_split">Эта клавиша переключает разделение экрана. Освободите её в Настройках, раздел Разделение экрана, или выберите другую.</string>
     <string name="automation_trigger_type_voice">Голос</string>
     <string name="automation_trigger_voice_phrase_label">Фраза-триггер</string>
     <string name="automation_voice_phrase_empty">Голосовая фраза пуста</string>
@@ -1717,6 +1718,23 @@
     <string name="settings_split_mechanism_native_hint">Разделение выполняет прошивка машины. Вид зависит от прошивки: две панели 1/3 и 2/3 или пополам с выбором второго приложения на экране.</string>
     <string name="settings_split_mechanism_platformized_hint">На этой прошивке экран делит сама машина: панели 1/3 и 2/3, разделитель и жест обмена родные. BYDMate только запускает выбранную пару и возвращает приложение в его панель.</string>
     <string name="settings_split_try_native_hint">Попробуйте режим Родное разделение.</string>
+    <string name="settings_split_launch_header">Как запускать</string>
+    <string name="settings_split_key_title">Кнопка на руле</string>
+    <string name="settings_split_key_none">не назначена</string>
+    <string name="settings_split_key_assign">Назначить</string>
+    <string name="settings_split_key_remove">Убрать</string>
+    <string name="settings_split_key_occupied_rule">Эта клавиша запускает правило «%1$s». Выберите другую клавишу или смените её в правиле.</string>
+    <string name="settings_split_key_rule_conflict_one">На этой кнопке уже есть правило «%1$s». Теперь кнопка сама переключает разделение экрана, и правило перестанет срабатывать. Отключить его?</string>
+    <string name="settings_split_key_rule_conflict_many">На этой кнопке уже есть правила: %1$s. Теперь кнопка сама переключает разделение экрана, и правила перестанут срабатывать. Отключить их?</string>
+    <string name="settings_split_key_rule_disable">Отключить</string>
+    <string name="settings_split_key_rule_keep">Оставить</string>
+    <string name="settings_split_tap_title">Тап по левой трети виджета</string>
+    <string name="settings_split_tap_replace_text">Сейчас левый тап открывает «%1$s». Заменить на разделение экрана?</string>
+    <string name="settings_split_tap_replace_confirm">Заменить</string>
+    <string name="settings_split_tap_replace_cancel">Отмена</string>
+    <string name="settings_split_tap_widget_off_hint">Включите виджет в разделе «Виджет»</string>
+    <string name="settings_split_voice_line">Голосом: попросите голос-агента включить разделение экрана.</string>
+    <string name="settings_split_automation_line">Автоматизацией: действие «Переключить разделение экрана» запускает приложения из этого меню.</string>
     <string name="split_feature_disabled">Разделение экрана выключено в настройках</string>
     <!-- Tech panel («Техника»): compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">изоляция</string>

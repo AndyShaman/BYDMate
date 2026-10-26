@@ -505,6 +505,7 @@
     <string name="automation_steering_key_occupied_projection">Ten klawisz włącza nawigację na zestawie wskaźników. Zwolnij go w Ustawieniach, sekcja Ekran, albo wybierz inny.</string>
     <string name="automation_steering_key_occupied_voice">Ten klawisz wywołuje asystenta głosowego BYDMate. Zmień klawisz w Ustawieniach, sekcja Asystent głosowy, albo wybierz inny.</string>
     <string name="automation_steering_key_occupied_knob">Naciśnięcie pokrętła jest zajęte przez funkcję play/pause. Wyłącz ją w Ustawieniach, sekcja Ekran, albo wybierz inny klawisz.</string>
+    <string name="automation_steering_key_occupied_split">Ten klawisz przełącza podział ekranu. Zwolnij go w Ustawieniach, sekcja Podział ekranu, albo wybierz inny.</string>
     <string name="automation_trigger_type_voice">Głos</string>
     <string name="automation_trigger_voice_phrase_label">Fraza wyzwalająca</string>
     <string name="automation_voice_phrase_empty">Fraza głosowa jest pusta</string>
@@ -1713,6 +1714,23 @@
     <string name="settings_split_mechanism_native_hint">Podziałem zajmuje się oprogramowanie auta. Wygląd zależy od oprogramowania: dwa panele 1/3 i 2/3 albo pół na pół z wyborem drugiej aplikacji na ekranie.</string>
     <string name="settings_split_mechanism_platformized_hint">Na tym oprogramowaniu ekran dzieli samo auto: panele 1/3 i 2/3, separator oraz gest zamiany są systemowe. BYDMate tylko uruchamia wybraną parę i przywraca aplikację do jej panelu.</string>
     <string name="settings_split_try_native_hint">Spróbuj trybu Podział systemowy.</string>
+    <string name="settings_split_launch_header">Jak uruchamiać</string>
+    <string name="settings_split_key_title">Przycisk na kierownicy</string>
+    <string name="settings_split_key_none">nie przypisano</string>
+    <string name="settings_split_key_assign">Przypisz</string>
+    <string name="settings_split_key_remove">Usuń</string>
+    <string name="settings_split_key_occupied_rule">Ten klawisz uruchamia regułę „%1$s”. Wybierz inny klawisz albo zmień go w regule.</string>
+    <string name="settings_split_key_rule_conflict_one">Na tym przycisku jest już reguła „%1$s”. Teraz przycisk sam przełącza podział ekranu i reguła przestanie działać. Wyłączyć ją?</string>
+    <string name="settings_split_key_rule_conflict_many">Na tym przycisku są już reguły: %1$s. Teraz przycisk sam przełącza podział ekranu i reguły przestaną działać. Wyłączyć je?</string>
+    <string name="settings_split_key_rule_disable">Wyłącz</string>
+    <string name="settings_split_key_rule_keep">Zostaw</string>
+    <string name="settings_split_tap_title">Dotknięcie lewej jednej trzeciej widżetu</string>
+    <string name="settings_split_tap_replace_text">Teraz lewe dotknięcie otwiera „%1$s”. Zastąpić podziałem ekranu?</string>
+    <string name="settings_split_tap_replace_confirm">Zastąp</string>
+    <string name="settings_split_tap_replace_cancel">Anuluj</string>
+    <string name="settings_split_tap_widget_off_hint">Włącz widżet w sekcji „Widżet”</string>
+    <string name="settings_split_voice_line">Głosem: poproś asystenta głosowego o włączenie podziału ekranu.</string>
+    <string name="settings_split_automation_line">Przez automatyzacje: akcja „Przełącz podział ekranu” uruchamia aplikacje z tego menu.</string>
     <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">izolacja</string>

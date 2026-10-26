@@ -82,6 +82,46 @@ private data class WidgetHybrid(
         copy(fuelPercent = data?.fuelPercent, fuelRangeKm = data?.fuelRangeKm, evRangeKm = data?.evRangeKm)
 }
 
+/**
+ * A person's own split gesture: the widget's left tap or the split steering key. [WidgetController.runSplitTap]
+ * toggle; no saved pair opens the first-pair picker; errors go to the overlay, in the language
+ * of [context] (the caller passes a context localized to the app language).
+ */
+@Suppress("TooGenericExceptionCaught") // callers' scopes have no exception handler
+internal suspend fun toggleSplitByUser(context: Context, fromWidget: Boolean) {
+    try {
+        val ep = EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            SplitWidgetEntryPoint::class.java,
+        )
+        val manager = ep.splitSessionManager()
+        WidgetController.runSplitTap(
+            manager = manager,
+            onNoPair = { ep.splitOverlayController().showFirstPairPicker() },
+            onError = { res ->
+                OverlayNotificationManager.show(
+                    context.applicationContext,
+                    context.getString(res),
+                    "",
+                )
+            },
+            adbBlocked = {
+                // Only a daemon that is dead RIGHT NOW makes the recorded reason
+                // relevant: a later successful spawn leaves the old record in place
+                // for the dump, but isHealthy() then keeps it out of the UI.
+                val bootstrap = ep.helperBootstrap()
+                !bootstrap.isHealthy() && bootstrap.lastSpawnFailure()?.reason ==
+                    HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE
+            },
+            alwaysStart = WidgetController.splitAlwaysStart(fromWidget, manager.isNativePanesFirmware()),
+        )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w("WidgetController", "split toggle failed (widget=$fromWidget): ${e.message}")
+    }
+}
+
 /** Car type through the split entry point; on failure the widget simply stays EV. */
 @Suppress("TooGenericExceptionCaught") // runs on the widget scope, which has no exception handler
 private suspend fun collectVehicleKind(appCtx: Context, onKind: (VehicleKind) -> Unit) {
@@ -910,6 +950,9 @@ object WidgetController {
         }
     }
 
+    /** The UI7 always-start rule is the widget tap's only; the split key toggles everywhere (owner). */
+    internal fun splitAlwaysStart(fromWidget: Boolean, nativePanes: Boolean): Boolean = fromWidget && nativePanes
+
     // --- Touch handling ---
 
     private class WidgetTouchListener(
@@ -1119,37 +1162,7 @@ object WidgetController {
          * overlay. Error states are shown via [OverlayNotificationManager].
          */
         private fun launchSplit() {
-            dataScope?.launch {
-                try {
-                    val ep = EntryPointAccessors.fromApplication(
-                        context.applicationContext,
-                        SplitWidgetEntryPoint::class.java,
-                    )
-                    val manager = ep.splitSessionManager()
-                    runSplitTap(
-                        manager = manager,
-                        onNoPair = { ep.splitOverlayController().showFirstPairPicker() },
-                        onError = { res ->
-                            OverlayNotificationManager.show(
-                                context.applicationContext,
-                                context.getString(res),
-                                "",
-                            )
-                        },
-                        adbBlocked = {
-                            // Only a daemon that is dead RIGHT NOW makes the recorded reason
-                            // relevant: a later successful spawn leaves the old record in place
-                            // for the dump, but isHealthy() then keeps it out of the UI.
-                            val bootstrap = ep.helperBootstrap()
-                            !bootstrap.isHealthy() && bootstrap.lastSpawnFailure()?.reason ==
-                                HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE
-                        },
-                        alwaysStart = manager.isNativePanesFirmware(),
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "launchSplit failed: ${e.message}")
-                }
-            }
+            dataScope?.launch { toggleSplitByUser(context, fromWidget = true) }
         }
     }
 }

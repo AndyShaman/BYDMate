@@ -43,6 +43,7 @@ import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.local.dao.TariffPeriodDao
 import com.bydmate.app.data.local.entity.PlaceEntity
+import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.domain.cost.MeasuredLosses
@@ -1370,6 +1371,25 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             .edit().putBoolean("close_after_command", enabled).apply()
     }
 
+    // --- Split screen: steering key ---
+
+    /** Rules for the split key's occupancy and conflict checks, read when its learn dialog opens. */
+    suspend fun automationRulesSnapshot(): List<RuleEntity> = ruleDao.getAllList()
+
+    /** Saves the split key; [disableRuleIds] are the split rules on it the user chose to turn off. */
+    fun saveSplitKey(keyCode: Int, disableRuleIds: List<Long>) {
+        splitPreferences.setSteeringKeyCode(keyCode)
+        Log.i(TAG, "split key=$keyCode rules_off=$disableRuleIds")
+        if (disableRuleIds.isNotEmpty()) {
+            viewModelScope.launch { disableRuleIds.forEach { ruleDao.setEnabled(it, false) } }
+        }
+    }
+
+    fun clearSplitKey() {
+        splitPreferences.setSteeringKeyCode(0)
+        Log.i(TAG, "split key cleared")
+    }
+
     // --- TTS (offline synthesis of agent replies) ---
 
     /**
@@ -2322,6 +2342,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     com.bydmate.app.cluster.ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
                 appendLine("mirror_enabled: ${clusterPrefs.getBoolean(
                     com.bydmate.app.cluster.ClusterProjectionManager.KEY_MIRROR_ENABLED, false)}")
+                appendLine("split_key: enabled=${splitPreferences.isFeatureEnabled()} " +
+                    "keycode=${splitPreferences.getSteeringKeyCode()}")
                 appendLine(com.bydmate.app.cluster.SteeringWheelKeyService.keyCounters.line())
             } catch (e: Exception) { appendLine("(failed to gather steering key state: ${e.message})") }
 
@@ -2423,6 +2445,12 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 val lastPair = splitPreferences.getLastPair()
                 appendLine("last_pair: " + if (lastPair == null) "(none)" else
                     "narrow=${lastPair.narrowPkg} wide=${lastPair.widePkg} side=${lastPair.narrowSide}")
+                // last_pair = what the next start-from-saved opens: the session pair, else the menu one.
+                val menuPair = splitPreferences.getMenuPair()
+                val sessionPair = splitPreferences.getSessionPair()
+                appendLine("menu_pair: " + if (menuPair == null) "(none)" else "${menuPair.narrowPkg}+${menuPair.widePkg}")
+                appendLine("session_pair: " + if (sessionPair == null) "(none)" else
+                    "${sessionPair.narrowPkg}+${sessionPair.widePkg}")
                 when (val session = splitSessionManager.state.value) {
                     is com.bydmate.app.split.SplitSessionState.Idle -> appendLine("session: idle")
                     is com.bydmate.app.split.SplitSessionState.Active -> {
