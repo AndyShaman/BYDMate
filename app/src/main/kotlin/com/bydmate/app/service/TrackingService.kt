@@ -1990,18 +1990,7 @@ class TrackingService : Service(), LocationListener {
         // track — while parked the GPS provider goes quiet (8 m filter) and only
         // network kept firing far-away points that got recorded into the route.
         // Same params as TripInfo (2000ms, 8m, explicit MainLooper).
-        if (gpsEnabled) {
-            try {
-                lm.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    2000L, 8.0f,
-                    this, Looper.getMainLooper()
-                )
-                Log.i(TAG, "requestLocationUpdates(GPS_PROVIDER) registered")
-            } catch (e: Exception) {
-                Log.e(TAG, "GPS provider registration failed: ${e.message}", e)
-            }
-        }
+        registerGpsUpdates(lm, this, Looper.getMainLooper())
 
         // Immediate fix from GPS last-known only (like TripInfo).
         try {
@@ -2287,6 +2276,22 @@ class TrackingService : Service(), LocationListener {
  *  not-live, since a seed from a prior run of the same process is not this run's data either.
  *  Pure top-level function (not a Companion member, to stay under detekt's function-count
  *  threshold there) so a restart never leaves a stale point wrongly marked live. */
+internal fun registerGpsUpdates(lm: LocationManager, listener: LocationListener, looper: Looper) {
+    val gpsEnabled = try { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) } catch (_: Exception) { false }
+    if (gpsEnabled) {
+        try {
+            lm.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                2000L, 8.0f,
+                listener, looper
+            )
+            Log.i("TrackingService", "requestLocationUpdates(GPS_PROVIDER) registered")
+        } catch (e: Exception) {
+            Log.e("TrackingService", "GPS provider registration failed: ${e.message}", e)
+        }
+    }
+}
+
 internal fun nextSnapshotOnRestart(
     previous: TrackingService.LocationFix?,
     lastKnown: Location?,
