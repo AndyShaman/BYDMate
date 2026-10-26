@@ -12,6 +12,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * Name-based calls need the head unit's Bluetooth phonebook, which the app cannot read yet (#91):
+ * the contacts permission request (voice settings card, post-restore item) stays hidden until it can.
+ */
+const val SHOW_CONTACTS_PERMISSION_REQUEST = false
+
+/**
  * Local contact-book lookup for the call_contact voice tool. Reads ONLY the
  * contacts matching a requested name — the phone book as a whole is never
  * queried in bulk, and phone numbers never leave [Match] into the LLM-facing

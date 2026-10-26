@@ -1234,7 +1234,7 @@ class AgentTools @Inject constructor(
         val name = args.optString("name").trim()
         if (name.isEmpty()) return """{"error":"не указано имя"}"""
         val hasPermission = runCatchingCancellable { contactLookup.hasPermission() }.getOrDefault(false)
-        if (!hasPermission) return """{"error":"нет доступа к контактам, включите в Настройках"}"""
+        if (!hasPermission) return """{"error":"звонок по имени пока недоступен: нет доступа к контактам"}"""
         val matches = runCatchingCancellable { contactLookup.findByName(name) }
             .getOrElse { return """{"error":"не удалось прочитать контакты"}""" }
         return when {
@@ -2267,7 +2267,8 @@ class AgentTools @Inject constructor(
         val needle = name.lowercase()
         // Alias hit: resolve to the first candidate package present in the launcher list, so an
         // alias never launches an app this car does not have; miss falls through to label match.
-        val aliasMatch = APP_ALIASES[needle]?.firstNotNullOfOrNull { pkg ->
+        val candidates = if (needle == NAVIGATOR_ALIAS) chosenNavigatorPackages() else APP_ALIASES[needle]
+        val aliasMatch = candidates?.firstNotNullOfOrNull { pkg ->
             apps.firstOrNull { it.second == pkg }
         }
         if (aliasMatch != null) return Built.Value(aliasMatch)
@@ -2279,6 +2280,22 @@ class AgentTools @Inject constructor(
                 "несколько совпадений: ${matches.take(5).joinToString(", ") { it.first }}. Уточни название")
             else -> Built.Value(matches.single())
         }
+    }
+
+    /** "навигатор" = the app chosen in «Навигатор для маршрутов» (#334); the Yandex Navigator is the
+     *  last candidate, so a chosen app that is not installed falls back the way routes do. */
+    private fun chosenNavigatorPackages(): List<String> {
+        val chosen = RouteNavigatorUris.normalize(
+            runCatching {
+                context.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
+                    .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null)
+            }.getOrNull())
+        val preferred = when (chosen) {
+            RouteNavigatorUris.MAPS -> YANDEX_MAPS_PACKAGES
+            RouteNavigatorUris.DGIS, RouteNavigatorUris.WAZE -> listOf(RouteNavigatorUris.packageOf(chosen))
+            else -> emptyList()
+        }
+        return preferred + RouteNavigatorUris.YANDEX_PACKAGE
     }
 
     private suspend fun launchAppTool(args: JSONObject): String {
@@ -3072,12 +3089,14 @@ class AgentTools @Inject constructor(
         // alias never drifts from the guidance-source set.
         private val YANDEX_MAPS_PACKAGES = NavPackages.YANDEX_MAPS.toList()
 
+        // Bare "навигатор" is not in APP_ALIASES: it follows the route-navigator setting.
+        private const val NAVIGATOR_ALIAS = "навигатор"
+
         // RU aliases for stock DiLink apps whose launcher labels are Chinese/English and thus
         // unreachable by label match. Values are candidate packages in priority order; an alias
         // fires only when one of them is actually installed on this car (fleet cars differ).
         // App store and fridge app are excluded deliberately (user decision, 2026-07-05).
         internal val APP_ALIASES: Map<String, List<String>> = mapOf(
-            "навигатор" to listOf("ru.yandex.yandexnavi"),
             "яндекс навигатор" to listOf("ru.yandex.yandexnavi"),
             "яндекс карты" to YANDEX_MAPS_PACKAGES,
             "карты" to YANDEX_MAPS_PACKAGES,
