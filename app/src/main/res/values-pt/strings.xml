@@ -1574,7 +1574,7 @@
     <string name="settings_split_tap_replace_cancel">Cancelar</string>
     <string name="settings_split_tap_widget_off_hint">Ative o widget na seção Widget</string>
     <string name="settings_split_voice_line">Por voz: peça ao Agente de voz para ligar a tela dividida.</string>
-    <string name="settings_split_automation_line">Pelas automações: a ação Alternar tela dividida inicia os apps deste menu.</string>
+    <string name="settings_split_automation_line">Pelas automações: a ação Alternar tela dividida inicia os apps deste menu ou, se você os trocou depois de ligar o carro, os últimos escolhidos.</string>
     <string name="split_feature_disabled">Tela dividida desativada nas configurações</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">isolamento</string>

@@ -1734,7 +1734,7 @@
     <string name="settings_split_tap_replace_cancel">Отмена</string>
     <string name="settings_split_tap_widget_off_hint">Включите виджет в разделе «Виджет»</string>
     <string name="settings_split_voice_line">Голосом: попросите голос-агента включить разделение экрана.</string>
-    <string name="settings_split_automation_line">Автоматизацией: действие «Переключить разделение экрана» запускает приложения из этого меню.</string>
+    <string name="settings_split_automation_line">Автоматизацией: действие «Переключить разделение экрана» запускает приложения из этого меню, а если вы меняли их после включения машины, последние выбранные.</string>
     <string name="split_feature_disabled">Разделение экрана выключено в настройках</string>
     <!-- Tech panel («Техника»): compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">изоляция</string>

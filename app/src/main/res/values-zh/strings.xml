@@ -1692,7 +1692,7 @@
     <string name="settings_split_tap_replace_cancel">取消</string>
     <string name="settings_split_tap_widget_off_hint">请在“小组件”部分开启小组件</string>
     <string name="settings_split_voice_line">语音：让语音智能体打开分屏。</string>
-    <string name="settings_split_automation_line">自动化：“切换分屏”动作会启动此菜单中的应用。</string>
+    <string name="settings_split_automation_line">自动化：“切换分屏”动作会启动此菜单中的应用；如果开车后更换过应用，则启动最近选择的应用。</string>
     <string name="split_feature_disabled">分屏功能已在设置中关闭</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">绝缘</string>

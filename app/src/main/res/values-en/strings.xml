@@ -1578,7 +1578,7 @@
     <string name="settings_split_tap_replace_cancel">Cancel</string>
     <string name="settings_split_tap_widget_off_hint">Turn the widget on in the Widget section</string>
     <string name="settings_split_voice_line">By voice: ask the Voice agent to turn on split screen.</string>
-    <string name="settings_split_automation_line">From automations: the Toggle Split Screen action launches the apps from this menu.</string>
+    <string name="settings_split_automation_line">From automations: the Toggle Split Screen action launches the apps from this menu, or the last ones you picked if you changed them since the car was switched on.</string>
     <string name="split_feature_disabled">Split screen is disabled in settings</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">insulation</string>

@@ -1730,7 +1730,7 @@
     <string name="settings_split_tap_replace_cancel">Anuluj</string>
     <string name="settings_split_tap_widget_off_hint">Włącz widżet w sekcji „Widżet”</string>
     <string name="settings_split_voice_line">Głosem: poproś asystenta głosowego o włączenie podziału ekranu.</string>
-    <string name="settings_split_automation_line">Przez automatyzacje: akcja „Przełącz podział ekranu” uruchamia aplikacje z tego menu.</string>
+    <string name="settings_split_automation_line">Przez automatyzacje: akcja „Przełącz podział ekranu” uruchamia aplikacje z tego menu, a jeśli zmieniłeś je po włączeniu auta, ostatnio wybrane.</string>
     <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">izolacja</string>

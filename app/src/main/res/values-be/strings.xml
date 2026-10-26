@@ -1730,7 +1730,7 @@
     <string name="settings_split_tap_replace_cancel">Скасаваць</string>
     <string name="settings_split_tap_widget_off_hint">Уключыце віджэт у раздзеле «Віджэт»</string>
     <string name="settings_split_voice_line">Голасам: папрасіце голас-агента ўключыць падзел экрана.</string>
-    <string name="settings_split_automation_line">Аўтаматызацыяй: дзеянне «Пераключыць падзел экрана» запускае праграмы з гэтага меню.</string>
+    <string name="settings_split_automation_line">Аўтаматызацыяй: дзеянне «Пераключыць падзел экрана» запускае праграмы з гэтага меню, а калі вы мянялі іх пасля ўключэння машыны, апошнія выбраныя.</string>
     <string name="split_feature_disabled">Падзел экрана выключаны ў наладах</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">ізаляцыя</string>
