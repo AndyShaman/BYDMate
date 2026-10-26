@@ -1945,6 +1945,9 @@
     <string name="tg_report_field_range">Zasięg</string>
     <string name="tg_report_field_odometer">Przebieg</string>
     <string name="tg_report_field_trip">Podróż</string>
+    <string name="tg_report_field_trip_time">Czas podróży</string>
+    <string name="tg_report_field_trip_kwh">Energia podróży</string>
+    <string name="tg_report_field_trip_cost">Koszt podróży</string>
     <string name="tg_report_field_temps">Temperatura</string>
     <string name="tg_report_field_openings">Co jest otwarte</string>
     <string name="tg_report_field_tires">Ciśnienie w oponach</string>
@@ -1962,6 +1965,9 @@
     <string name="tg_report_trip_km_whole">%1$d km</string>
     <string name="tg_report_odometer">Przebieg %1$,d km</string>
     <string name="tg_report_trip_consumption">Zużycie %1$.1f kWh/100 km</string>
+    <string name="tg_report_trip_time">Czas od %1$s do %2$s</string>
+    <string name="tg_report_trip_energy">Energia %1$.1f kWh</string>
+    <string name="tg_report_trip_cost">Koszt %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">na zewnątrz %1$+d°</string>
     <string name="tg_report_temp_inside">w kabinie %1$+d°</string>
     <string name="tg_report_open_list">Otwarte: %1$s</string>
@@ -1990,6 +1996,9 @@
     <string name="tg_report_field_range_desc">Kilometry, jak na ekranie głównym</string>
     <string name="tg_report_field_odometer_desc">Całkowity przebieg auta</string>
     <string name="tg_report_field_trip_desc">Kilometry, zużycie i czas jazdy</string>
+    <string name="tg_report_field_trip_time_desc">Godzina rozpoczęcia i zakończenia</string>
+    <string name="tg_report_field_trip_kwh_desc">Ile kWh zużyto w podróży</string>
+    <string name="tg_report_field_trip_cost_desc">Ile kosztowała podróż według Twojej taryfy</string>
     <string name="tg_report_field_trip1_desc">Licznik TRIP 1 z ekranu Główna: kilometry, czas jazdy i zużycie</string>
     <string name="tg_report_field_trip2_desc">Licznik TRIP 2 z ekranu Główna: kilometry, czas jazdy i zużycie</string>
     <string name="tg_report_field_temps_desc">Na zewnątrz i w kabinie</string>

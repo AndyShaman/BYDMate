@@ -54,7 +54,13 @@ class TelegramReportBuilderTest {
         last: TripEntity? = null,
         trip1: TripCounterUi? = null,
         trip2: TripCounterUi? = null,
-    ) = ReportInputs(data, rangeKm, location?.first, location?.second, live, last, trip1, trip2)
+        tariff: Double? = null,
+        currency: String = "",
+        hybrid: Boolean = false,
+    ) = ReportInputs(
+        data, rangeKm, location?.first, location?.second, live, last, trip1, trip2,
+        hybrid = hybrid, tripTariff = tariff, currencySymbol = currency,
+    )
 
     /** A dashboard counter reset [daysAgo] days before [now]. */
     private fun counter(km: Double, kwh: Double, drivingMs: Long, daysAgo: Int = 6) = TripCounterUi(
@@ -82,7 +88,7 @@ class TelegramReportBuilderTest {
     }
 
     @Test fun `every item present gives the approved layout with the map link last`() {
-        val report = build(inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L), trip1 = counter1, trip2 = counter2))
+        val report = build(inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L), trip1 = counter1, trip2 = counter2, tariff = 0.30, currency = "BYN"))
         assertEquals(
             listOf(
                 "<b>BYDMate: Где машина</b>",
@@ -95,6 +101,9 @@ class TelegramReportBuilderTest {
                 "🚗 <b>Поездка</b>",
                 "${em}23 км за 34 мин",
                 "${em}Расход 16,2 кВт·ч/100 км",
+                "${em}Время с ${TelegramReportBuilder.formatTime(now - 34 * 60_000L)} до ${TelegramReportBuilder.formatTime(now)}",
+                "${em}Энергия 3,8 кВт·ч",
+                "${em}Стоимость 1,14 BYN",
                 "",
                 "🔁 <b>TRIP 1</b> с ${dayOf(counter1.resetTs)}",
                 "${em}412 км за 9 ч 20 мин",
@@ -156,6 +165,7 @@ class TelegramReportBuilderTest {
         assertEquals(
             listOf(
                 ReportField.LOCATION, ReportField.RANGE, ReportField.ODOMETER, ReportField.TRIP,
+                ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST,
                 ReportField.TRIP1, ReportField.TRIP2, ReportField.TEMPS, ReportField.OPENINGS, ReportField.TIRES,
             ),
             report.skipped,
@@ -277,7 +287,7 @@ class TelegramReportBuilderTest {
                 lang = lang,
                 inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L), trip1 = counter1, trip2 = counter2),
             )
-            assertEquals(lang, 22, report.text.lines().size)
+            assertEquals(lang, 24, report.text.lines().size)
             assertFalse(lang, report.text.contains("%1"))
             assertFalse(lang, report.text.contains('\u0000'))
             assertTrue(lang, report.text.lines().last().startsWith("📍 <a href="))
@@ -373,7 +383,10 @@ class TelegramReportBuilderTest {
 
     @Test fun `the counters come right after the trip in the pickers, off by default, with their own descriptions`() {
         val ids = ReportField.entries.map { it.id }
-        assertEquals(listOf("trip", "trip1", "trip2"), ids.subList(ids.indexOf("trip"), ids.indexOf("trip") + 3))
+        assertEquals(
+            listOf("trip", "trip_time", "trip_kwh", "trip_cost", "trip1", "trip2"),
+            ids.subList(ids.indexOf("trip"), ids.indexOf("trip") + 6),
+        )
         assertFalse(ReportField.TRIP1 in ReportField.DEFAULT)
         assertFalse(ReportField.TRIP2 in ReportField.DEFAULT)
         assertFalse(ReportField.TRIP1 in newTelegramReportAction(ctx).reportFields())
@@ -484,5 +497,153 @@ class TelegramReportBuilderTest {
         val filled = TelegramReportBuilder.fillTime(text, now)
         assertTrue(filled, filled.startsWith("<b>BYDMate: машина выключена в ${TelegramReportBuilder.formatTime(now)}</b>"))
         assertFalse(filled.contains(TelegramReportBuilder.TIME_PLACEHOLDER))
+    }
+
+    // --- trip time, energy and cost ---
+
+    private val tripFields = listOf(ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST)
+    private val liveStart = now - 34 * 60_000L
+    private fun hhmm(ms: Long) = TelegramReportBuilder.formatTime(ms)
+
+    @Test fun `new trip fields are off by default and sit right after the trip`() {
+        val ids = ReportField.entries.map { it.id }
+        assertEquals(listOf("trip_time", "trip_kwh", "trip_cost"), ids.subList(ids.indexOf("trip") + 1, ids.indexOf("trip") + 4))
+        for (f in tripFields) {
+            assertFalse(f in ReportField.DEFAULT)
+            assertFalse(f in newTelegramReportAction(ctx).reportFields())
+        }
+        assertEquals(ReportField.DEFAULT, ReportField.parseCsv("location,soc,range,odometer,trip"))
+        val fields = tripFields.toSet()
+        assertEquals(fields, ReportField.parseCsv(ReportField.toCsv(fields)))
+        assertEquals(fields, ReportField.fromJson(ReportField.toJson(fields)))
+        val langs = listOf("ru", "be", "en", "pl", "pt", "zh")
+        for (f in tripFields) {
+            val labels = langs.map { ctx.localizedContext(it).getString(f.labelRes) }
+            val descs = langs.map { ctx.localizedContext(it).getString(f.descRes) }
+            assertEquals("each language has its own label: $labels", langs.size, labels.toSet().size)
+            assertEquals("each language has its own description: $descs", langs.size, descs.toSet().size)
+        }
+    }
+
+    @Test fun `a live trip lists its time, energy and cost under the trip title`() {
+        val report = build(
+            fields = setOf(ReportField.TRIP, ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST),
+            inputs = inputs(live = LiveTrip(23.4, 3.79, liveStart), tariff = 0.30, currency = "BYN"),
+        )
+        assertEquals(
+            listOf(
+                "<b>BYDMate: Где машина</b>",
+                "",
+                "🚗 <b>Поездка</b>",
+                "${em}23 км за 34 мин",
+                "${em}Расход 16,2 кВт·ч/100 км",
+                "${em}Время с ${hhmm(liveStart)} до ${hhmm(now)}",
+                "${em}Энергия 3,8 кВт·ч",
+                "${em}Стоимость 1,14 BYN",
+            ),
+            report.text.lines(),
+        )
+        assertEquals(
+            listOf(ReportField.TRIP, ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST),
+            report.taken,
+        )
+    }
+
+    @Test fun `a new field alone gets the trip title and only its line`() {
+        val report = build(
+            fields = setOf(ReportField.TRIP_KWH),
+            inputs = inputs(live = LiveTrip(23.4, 3.79, liveStart), tariff = 0.30, currency = "BYN"),
+        )
+        assertEquals(
+            listOf("<b>BYDMate: Где машина</b>", "", "🚗 <b>Поездка</b>", "${em}Энергия 3,8 кВт·ч"),
+            report.text.lines(),
+        )
+    }
+
+    @Test fun `the power-off end time is the daemon placeholder`() {
+        val text = TelegramReportBuilder.build(
+            TelegramReportBuilder.ruleHeader("x"), "", setOf(ReportField.TRIP_TIME),
+            inputs(live = LiveTrip(23.4, 3.79, liveStart)), "ru", strings("ru"), now,
+            tripEndLabel = TelegramReportBuilder.TIME_PLACEHOLDER,
+        ).text
+        assertTrue(text, text.contains("до {{time}}"))
+        val offMs = now + 90_000L
+        val filled = TelegramReportBuilder.fillTime(text, offMs)
+        assertTrue(filled, filled.contains("до ${hhmm(offMs)}"))
+        assertFalse(filled, filled.contains(TelegramReportBuilder.TIME_PLACEHOLDER))
+    }
+
+    @Test fun `the last trip uses its own end, energy and price`() {
+        val start = now - 3 * 3_600_000L
+        val end = start + 80 * 60_000L
+        val last = TripEntity(startTs = start, endTs = end, distanceKm = 41.6, kwhConsumed = 6.2, cost = 1.86)
+        val report = build(
+            fields = tripFields.toSet(),
+            inputs = inputs(live = LiveTrip(0.05, null, now), last = last, tariff = 0.30, currency = "BYN"),
+        )
+        val stamp = TelegramReportBuilder.formatDateTime(start).split(' ')
+        assertEquals(
+            listOf(
+                "<b>BYDMate: Где машина</b>",
+                "",
+                "🚗 <b>Последняя поездка</b> ${stamp[0]} в ${stamp[1]}",
+                "${em}Время с ${hhmm(start)} до ${hhmm(end)}",
+                "${em}Энергия 6,2 кВт·ч",
+                "${em}Стоимость 1,86 BYN",
+            ),
+            report.text.lines(),
+        )
+    }
+
+    @Test fun `a trip over midnight shows the date on both ends`() {
+        val cal = java.util.Calendar.getInstance().apply {
+            timeInMillis = now
+            set(java.util.Calendar.HOUR_OF_DAY, 23); set(java.util.Calendar.MINUTE, 50)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val start = cal.timeInMillis
+        val end = start + 30 * 60_000L
+        val last = TripEntity(startTs = start, endTs = end, distanceKm = 20.0, kwhConsumed = 3.0)
+        val text = build(
+            fields = setOf(ReportField.TRIP_TIME),
+            inputs = inputs(live = LiveTrip(0.05, null, now), last = last),
+        ).text
+        assertTrue(
+            text,
+            text.contains("Время с ${TelegramReportBuilder.formatDateTime(start)} до ${TelegramReportBuilder.formatDateTime(end)}"),
+        )
+    }
+
+    @Test fun `missing values drop only their line and are reported skipped`() {
+        val fields = tripFields.toSet()
+        val cases = listOf(
+            // live kWh unknown: no energy, no cost
+            inputs(live = LiveTrip(5.0, null, liveStart), tariff = 0.30, currency = "BYN") to
+                listOf(ReportField.TRIP_KWH, ReportField.TRIP_COST),
+            // no tariff: no cost
+            inputs(live = LiveTrip(5.0, 1.0, liveStart), tariff = null, currency = "BYN") to listOf(ReportField.TRIP_COST),
+            // a hybrid live trip has no fuel part: no cost
+            inputs(live = LiveTrip(5.0, 1.0, liveStart), tariff = 0.30, currency = "BYN", hybrid = true) to
+                listOf(ReportField.TRIP_COST),
+            // last trip not priced yet
+            inputs(
+                live = LiveTrip(0.05, null, now),
+                last = TripEntity(startTs = liveStart, endTs = now, distanceKm = 5.0, kwhConsumed = 1.0, cost = null),
+                tariff = 0.30, currency = "BYN",
+            ) to listOf(ReportField.TRIP_COST),
+        )
+        for ((input, dropped) in cases) {
+            val report = build(fields = fields, inputs = input)
+            assertEquals(dropped, report.skipped)
+            assertEquals(fields - dropped.toSet(), report.taken.toSet())
+            assertWellFormed(report.text)
+            assertTrue(report.text, report.text.contains("🚗"))
+            assertTrue(report.text, report.text.contains("Время с "))
+            assertFalse(report.text, report.text.contains("Стоимость") && ReportField.TRIP_COST in dropped)
+            assertFalse(report.text, report.text.contains("Энергия") && ReportField.TRIP_KWH in dropped)
+        }
+        val none = build(fields = fields, inputs = inputs(live = null, last = null))
+        assertEquals(listOf("<b>BYDMate: Где машина</b>"), none.text.lines())
+        assertEquals(tripFields, none.skipped)
     }
 }

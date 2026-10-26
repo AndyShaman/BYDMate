@@ -468,4 +468,28 @@ class TelegramReporterTest {
         assertNull(inputs.trip1Fuel)
         verify(exactly = 0) { tripDao.getByDateRange(any(), any()) }
     }
+
+    @Test fun `the live state carries the tariff and the currency symbol`() = runBlocking {
+        val tripDao = mockk<TripDao>()
+        every { tripDao.getRecent(any()) } returns flowOf(emptyList())
+        every { tripDao.observeCounterStats(any(), any()) } returns flowOf(emptyStats)
+        val live = TelegramReporter(ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState)
+        live.clock = { now }
+
+        val inputs = live.inputs()
+
+        assertEquals(settings.getTripCostTariff(), inputs.tripTariff!!, 1e-9)
+        assertEquals(settings.getCurrencySymbol(), inputs.currencySymbol)
+    }
+
+    @Test fun `the power-off report with a time field carries the placeholder`() = runBlocking {
+        settings.setTgReportOffEnabled(true)
+        connect()
+        settings.setTgReportOffFields(setOf(ReportField.TRIP_TIME))
+        reporter.inputs = {
+            ReportInputs(diParsData(soc = 64), 312.0, null, null, LiveTrip(5.0, 1.0, now - 600_000L), null)
+        }
+        val text = reporter.powerOffReport()!!.text
+        assertEquals(text, 2, text.split(TelegramReportBuilder.TIME_PLACEHOLDER).size - 1)
+    }
 }

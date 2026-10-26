@@ -3968,37 +3968,40 @@ private fun TelegramReportEditDialog(
             Text(stringResource(R.string.automation_action_tg_report_add), color = TextPrimary, fontSize = 16.sp)
         },
         text = {
-            // Scrolls, so the buttons stay reachable at the largest text size.
-            Column(
-                modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                ReportField.entries.forEach { field ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selected = if (field in selected) selected - field else selected + field }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(
-                            checked = field in selected,
-                            onCheckedChange = null,
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = AccentGreen,
-                                uncheckedColor = CardBorder,
-                                checkmarkColor = NavyDark,
-                            ),
-                        )
-                        Column(modifier = Modifier.padding(start = 10.dp)) {
-                            Text(
-                                stringResource(field.labelRes),
-                                color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            // Only the items scroll, so the buttons stay reachable at the largest text size; the own text
+            // sits outside the scroller, which otherwise jumps to the cursor on every key (#344).
+            Column {
+                Column(
+                    modifier = Modifier.weight(1f, fill = false).heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    ReportField.entries.forEach { field ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selected = if (field in selected) selected - field else selected + field }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = field in selected,
+                                onCheckedChange = null,
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = AccentGreen,
+                                    uncheckedColor = CardBorder,
+                                    checkmarkColor = NavyDark,
+                                ),
                             )
-                            Text(
-                                stringResource(field.descRes),
-                                color = TextSecondary, fontSize = 14.sp, lineHeight = 16.sp,
-                            )
+                            Column(modifier = Modifier.padding(start = 10.dp)) {
+                                Text(
+                                    stringResource(field.labelRes),
+                                    color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    stringResource(field.descRes),
+                                    color = TextSecondary, fontSize = 14.sp, lineHeight = 16.sp,
+                                )
+                            }
                         }
                     }
                 }
@@ -4007,6 +4010,7 @@ private fun TelegramReportEditDialog(
                     value = textValue,
                     onValueChange = { if (it.length <= TG_REPORT_TEXT_MAX) textValue = it },
                     label = { Text(stringResource(R.string.automation_tg_report_text_label)) },
+                    minLines = 2,
                     maxLines = 4,
                     shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(

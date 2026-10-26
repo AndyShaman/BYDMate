@@ -1945,6 +1945,9 @@
     <string name="tg_report_field_range">Запас ходу</string>
     <string name="tg_report_field_odometer">Прабег</string>
     <string name="tg_report_field_trip">Паездка</string>
+    <string name="tg_report_field_trip_time">Час паездкі</string>
+    <string name="tg_report_field_trip_kwh">Энергія паездкі</string>
+    <string name="tg_report_field_trip_cost">Кошт паездкі</string>
     <string name="tg_report_field_temps">Тэмпература</string>
     <string name="tg_report_field_openings">Што адчынена</string>
     <string name="tg_report_field_tires">Ціск у шынах</string>
@@ -1962,6 +1965,9 @@
     <string name="tg_report_trip_km_whole">%1$d км</string>
     <string name="tg_report_odometer">Прабег %1$,d км</string>
     <string name="tg_report_trip_consumption">Расход %1$.1f кВт·г/100 км</string>
+    <string name="tg_report_trip_time">Час з %1$s да %2$s</string>
+    <string name="tg_report_trip_energy">Энергія %1$.1f кВт·г</string>
+    <string name="tg_report_trip_cost">Кошт %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">звонку %1$+d°</string>
     <string name="tg_report_temp_inside">у салоне %1$+d°</string>
     <string name="tg_report_open_list">Адчынена: %1$s</string>
@@ -1990,6 +1996,9 @@
     <string name="tg_report_field_range_desc">Кіламетры, як на Галоўнай</string>
     <string name="tg_report_field_odometer_desc">Агульны прабег машыны</string>
     <string name="tg_report_field_trip_desc">Кіламетры, расход і час у дарозе</string>
+    <string name="tg_report_field_trip_time_desc">Калі пачалася і скончылася</string>
+    <string name="tg_report_field_trip_kwh_desc">Колькі кВт·г выдаткавана за паездку</string>
+    <string name="tg_report_field_trip_cost_desc">Колькі каштавала паездка па вашым тарыфе</string>
     <string name="tg_report_field_trip1_desc">Лічыльнік TRIP 1 з Галоўнай: кіламетры, час у дарозе і расход</string>
     <string name="tg_report_field_trip2_desc">Лічыльнік TRIP 2 з Галоўнай: кіламетры, час у дарозе і расход</string>
     <string name="tg_report_field_temps_desc">Звонку і ў салоне</string>

@@ -147,7 +147,10 @@ class TelegramReporter @Inject constructor(
         if (!config.configured || chatId == null) return null
         val header = TelegramReportBuilder.powerOffHeader(strings)
         val fields = settings.getTgReportOffFields()
-        val report = TelegramReportBuilder.build(header, "", fields, inputs(), language(), strings, clock())
+        val report = TelegramReportBuilder.build(
+            header, "", fields, inputs(), language(), strings, clock(),
+            tripEndLabel = TelegramReportBuilder.TIME_PLACEHOLDER,
+        )
         previous?.takeIf { it.token == config.token && it.chatId == chatId && it.text == report.text }
             ?.let { return it }
         val id = newId()
@@ -384,6 +387,8 @@ class TelegramReporter @Inject constructor(
             hybrid = hybrid,
             trip1Fuel = if (hybrid) counterFuel(1, trip1) else null,
             trip2Fuel = if (hybrid) counterFuel(2, trip2) else null,
+            tripTariff = tariff,
+            currencySymbol = settings.getCurrencySymbol(),
         )
     }
 

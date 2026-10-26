@@ -32,6 +32,9 @@ data class ReportInputs(
     val hybrid: Boolean = false,
     val trip1Fuel: FuelTotals? = null,
     val trip2Fuel: FuelTotals? = null,
+    /** Price of a kWh for the trip under way (`getTripCostTariff`); null or 0 = no cost line. */
+    val tripTariff: Double? = null,
+    val currencySymbol: String = "",
 )
 
 /** Litres the recorded trips of a counter burned, over the kilometers of those trips. */
@@ -53,8 +56,8 @@ data class MapPoint(val latitude: Double, val longitude: Double) {
  * Layout (approved 2026-09-27, the odometer 2026-09-28, TRIP 1/2 2026-10-01): blocks split by one
  * empty line, each only when it has something: the bold header; the user's own text; the car
  * (🔋 charge and range, 🧭 odometer, 🌡 temperatures, 🛞 tires, 🔒 all closed); 🚗 the trip, its
- * numbers indented below the title; 🔁 the dashboard counter TRIP 1, then 🔁 TRIP 2, each laid out
- * like the trip; ⚠️ what is open; 📍 the map link, always last.
+ * numbers indented below the title, then its time, energy and cost when those items are chosen;
+ * 🔁 the dashboard counter TRIP 1, then 🔁 TRIP 2, each laid out like the trip; ⚠️ what is open; 📍 the map link, always last.
  */
 @Suppress("TooManyFunctions") // one small function per report line
 object TelegramReportBuilder {
@@ -72,6 +75,9 @@ object TelegramReportBuilder {
     private const val WHOLE_KM_FROM = 10.0
 
     const val APP_NAME = "BYDMate"
+
+    /** The items of the 🚗 block, in the order of their lines. */
+    private val TRIP_FIELDS = listOf(ReportField.TRIP, ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST)
 
     private const val BLOCK_GAP = "\n\n"
 
@@ -141,9 +147,12 @@ object TelegramReportBuilder {
         lang: String,
         strings: ReportStrings,
         nowMs: Long,
+        /** End of a trip under way; the power-off report passes [TIME_PLACEHOLDER], null = [nowMs]. */
+        tripEndLabel: String? = null,
     ): BuiltReport {
-        val found = ReportField.entries.filter { it in fields }
-            .associateWith { itemLine(it, inputs, lang, strings, nowMs) }
+        val found = ReportField.entries.filter { it in fields && it !in TRIP_FIELDS }
+            .associateWith { itemLine(it, inputs, lang, strings) }
+        val trip = tripBlock(fields, inputs, strings, nowMs, tripEndLabel)
         val openings = found[ReportField.OPENINGS]
         val car = listOfNotNull(
             chargeLine(found[ReportField.SOC], found[ReportField.RANGE], Locale.forLanguageTag(lang)),
@@ -157,7 +166,7 @@ object TelegramReportBuilder {
             "<b>${escape(header)}</b>",
             customText.trim().takeIf { it.isNotEmpty() }?.let(::escape),
             car.takeIf { it.isNotEmpty() }?.joinToString("\n"),
-            found[ReportField.TRIP]?.html,
+            trip?.html,
             found[ReportField.TRIP1]?.html,
             found[ReportField.TRIP2]?.html,
             openings?.takeIf { it.alert }?.html,
@@ -167,8 +176,8 @@ object TelegramReportBuilder {
         val asked = ReportField.entries.filter { it in fields }
         return BuiltReport(
             text = blocks.joinToString(BLOCK_GAP),
-            taken = asked.filter { found[it] != null },
-            skipped = asked.filter { found[it] == null },
+            taken = asked.filter { found[it] != null || it in trip?.taken.orEmpty() },
+            skipped = asked.filter { found[it] == null && it !in trip?.taken.orEmpty() },
         )
     }
 
@@ -189,23 +198,23 @@ object TelegramReportBuilder {
     private class Line(val html: String, val alert: Boolean = false)
 
     /** One item's line, or null when the car does not report it. */
-    private fun itemLine(field: ReportField, inputs: ReportInputs, lang: String, strings: ReportStrings, nowMs: Long): Line? =
+    private fun itemLine(field: ReportField, inputs: ReportInputs, lang: String, strings: ReportStrings): Line? =
         if (field == ReportField.OPENINGS) inputs.data?.let { openingsLine(it, strings) }
-        else itemHtml(field, inputs, lang, strings, nowMs)?.let(::Line)
+        else itemHtml(field, inputs, lang, strings)?.let(::Line)
 
     /** Every item but the openings, as Telegram HTML. */
-    private fun itemHtml(field: ReportField, inputs: ReportInputs, lang: String, strings: ReportStrings, nowMs: Long): String? {
+    private fun itemHtml(field: ReportField, inputs: ReportInputs, lang: String, strings: ReportStrings): String? {
         val d = inputs.data
         val locale = Locale.forLanguageTag(lang)
         return when (field) {
             ReportField.SOC -> socPart(d?.soc, strings)
             ReportField.RANGE -> rangeHtml(inputs, strings)
             ReportField.ODOMETER -> odometerLine(d?.mileage, strings)
-            ReportField.TRIP -> tripBlock(inputs, strings, nowMs)
             ReportField.TRIP1, ReportField.TRIP2 -> counterBlock(field, inputs, strings)
             ReportField.TEMPS -> d?.let { tempsLine(it, strings, locale) }?.let { "🌡 ${escape(it)}" }
             ReportField.TIRES -> d?.let { tiresLine(it, strings, locale) }?.let { "🛞 ${escape(it)}" }
             ReportField.LOCATION -> locationLine(inputs, lang, strings)
+            ReportField.TRIP, ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST,
             ReportField.OPENINGS -> null
         }
     }
@@ -267,28 +276,96 @@ object TelegramReportBuilder {
         return "$MAP_PREFIX\"${escapeAttribute(mapUrl(lat, lon, lang))}\">$label</a>"
     }
 
+    /** The 🚗 block and the items that made it into it. */
+    private class TripBlock(val html: String, val taken: List<ReportField>)
+
     /**
      * The trip under way when it is at least [MIN_LIVE_TRIP_KM] long, else the last recorded one:
-     * «🚗 <b>Последняя поездка</b> 25.09 в 16:21», then «14 км за 35 мин» and «Расход 22,1 кВт·ч/100 км»
-     * indented; a line without its value is left out.
+     * «🚗 <b>Последняя поездка</b> 25.09 в 16:21», then, indented, «14 км за 35 мин» and «Расход 22,1
+     * кВт·ч/100 км» for TRIP, «Время с 16:21 до 16:55», «Энергия 3,8 кВт·ч», «Стоимость 1,14 BYN» for
+     * TRIP_TIME, TRIP_KWH, TRIP_COST; a line without its value is left out, a block without a line too.
      */
-    private fun tripBlock(inputs: ReportInputs, strings: ReportStrings, nowMs: Long): String? {
+    private fun tripBlock(
+        fields: Set<ReportField>,
+        inputs: ReportInputs,
+        strings: ReportStrings,
+        nowMs: Long,
+        endLabel: String?,
+    ): TripBlock? {
+        if (TRIP_FIELDS.none { it in fields }) return null
         val live = inputs.liveTrip?.takeIf { it.km >= MIN_LIVE_TRIP_KM }
-        if (live != null) {
-            val consumption = live.kwh
-                ?.takeIf { it > 0.0 && live.km >= MIN_LIVE_CONSUMPTION_KM }
-                ?.let { it / live.km * 100.0 }
-            val title = "🚗 ${bold(escape(text(strings, R.string.tg_report_trip_now)))}"
-            return tripLines(title, live.km, consumption, nowMs - live.startedAtMs, strings)
-        }
+        val (title, lines) = if (live != null) liveTripLines(live, inputs, strings, nowMs, endLabel)
+        else lastTripLines(inputs, strings) ?: return null
+        val chosen = lines.filterKeys { it in fields }
+        if (chosen.isEmpty()) return null
+        val html = (listOf(title) + chosen.values.flatten().map { INDENT + escape(it) }).joinToString("\n")
+        return TripBlock(html, chosen.keys.toList())
+    }
+
+    /** The title and the lines of the trip under way per item, in [TRIP_FIELDS] order; an item without a value is absent. */
+    private fun liveTripLines(
+        live: LiveTrip,
+        inputs: ReportInputs,
+        strings: ReportStrings,
+        nowMs: Long,
+        endLabel: String?,
+    ): Pair<String, Map<ReportField, List<String>>> {
+        val consumption = live.kwh
+            ?.takeIf { it > 0.0 && live.km >= MIN_LIVE_CONSUMPTION_KM }
+            ?.let { it / live.km * 100.0 }
+        val kwh = live.kwh?.takeIf { it > 0.0 }
+        // A DM-i trip also burns fuel the live counters do not know: no price rather than half of it.
+        val cost = kwh?.let { k -> inputs.tripTariff?.takeIf { it > 0.0 && !inputs.hybrid }?.let { k * it } }
+        return "🚗 ${bold(escape(text(strings, R.string.tg_report_trip_now)))}" to tripItems(
+            trip = distanceLines(live.km, consumption, nowMs - live.startedAtMs, strings),
+            time = timeLine(live.startedAtMs, nowMs, endLabel, strings),
+            kwh = kwh,
+            cost = cost,
+            currency = inputs.currencySymbol,
+            strings = strings,
+        )
+    }
+
+    /** The same for the last recorded trip, from its own row; null when there is no trip with kilometers. */
+    private fun lastTripLines(inputs: ReportInputs, strings: ReportStrings): Pair<String, Map<ReportField, List<String>>>? {
         val last = inputs.lastTrip ?: return null
         val km = last.distanceKm?.takeIf { it > 0.0 } ?: return null
         val durationMs = last.endTs?.let { it - last.startTs }?.takeIf { it > 0 }
+        val trip = distanceLines(km, last.kwhPer100km?.takeIf { it > 0.0 }, durationMs, strings)
+        val fuel = last.fuelLiters?.takeIf { inputs.hybrid }?.let { text(strings, R.string.tg_report_trip_fuel, it) }
         val start = text(strings, R.string.tg_report_trip_when, formatDate(last.startTs), formatTime(last.startTs))
         val title = "🚗 ${bold(escape(text(strings, R.string.tg_report_trip_last)))} ${escape(start)}"
-        val block = tripLines(title, km, last.kwhPer100km?.takeIf { it > 0.0 }, durationMs, strings)
-        val liters = last.fuelLiters?.takeIf { inputs.hybrid } ?: return block
-        return block + "\n" + INDENT + escape(text(strings, R.string.tg_report_trip_fuel, liters))
+        return title to tripItems(
+            trip = trip + listOfNotNull(fuel),
+            time = last.endTs?.takeIf { it >= last.startTs }?.let { timeLine(last.startTs, it, null, strings) },
+            kwh = last.kwhConsumed?.takeIf { it > 0.0 },
+            cost = last.cost?.takeIf { it > 0.0 },
+            currency = inputs.currencySymbol,
+            strings = strings,
+        )
+    }
+
+    @Suppress("LongParameterList") // one value per trip item
+    private fun tripItems(
+        trip: List<String>,
+        time: String?,
+        kwh: Double?,
+        cost: Double?,
+        currency: String,
+        strings: ReportStrings,
+    ): Map<ReportField, List<String>> = listOfNotNull(
+        ReportField.TRIP to trip,
+        time?.let { ReportField.TRIP_TIME to listOf(it) },
+        kwh?.let { ReportField.TRIP_KWH to listOf(text(strings, R.string.tg_report_trip_energy, it)) },
+        cost?.let { ReportField.TRIP_COST to listOf(text(strings, R.string.tg_report_trip_cost, it, currency)) },
+    ).toMap()
+
+    /** «Время с 16:21 до 16:55»; with the date on both ends when the trip crosses midnight. */
+    private fun timeLine(startMs: Long, endMs: Long, endLabel: String?, strings: ReportStrings): String {
+        val sameDay = formatDate(startMs) == formatDate(endMs)
+        val start = if (sameDay) formatTime(startMs) else formatDateTime(startMs)
+        val end = endLabel ?: if (sameDay) formatTime(endMs) else formatDateTime(endMs)
+        return text(strings, R.string.tg_report_trip_time, start, end)
     }
 
     /**
@@ -312,15 +389,18 @@ object TelegramReportBuilder {
     }
 
     /** [title] (HTML) and the indented «14 км за 35 мин» / «Расход …» lines under it. */
-    private fun tripLines(title: String, km: Double, kwhPer100: Double?, durationMs: Long?, strings: ReportStrings): String {
+    private fun tripLines(title: String, km: Double, kwhPer100: Double?, durationMs: Long?, strings: ReportStrings): String =
+        (listOf(title) + distanceLines(km, kwhPer100, durationMs, strings).map { INDENT + escape(it) }).joinToString("\n")
+
+    /** «14 км за 35 мин» and «Расход …», not escaped yet. */
+    private fun distanceLines(km: Double, kwhPer100: Double?, durationMs: Long?, strings: ReportStrings): List<String> {
         val distance = if (km >= WHOLE_KM_FROM) text(strings, R.string.tg_report_trip_km_whole, km.roundToInt())
         else text(strings, R.string.tg_report_trip_km, km)
         val took = durationMs?.takeIf { it >= 0 }?.let { duration(it, strings) }
-        val lines = listOfNotNull(
+        return listOfNotNull(
             took?.let { text(strings, R.string.tg_report_trip_distance_time, distance, it) } ?: distance,
             kwhPer100?.let { text(strings, R.string.tg_report_trip_consumption, it) },
         )
-        return (listOf(title) + lines.map { INDENT + escape(it) }).joinToString("\n")
     }
 
     private fun duration(ms: Long, strings: ReportStrings): String {

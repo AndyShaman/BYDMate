@@ -1793,6 +1793,9 @@
     <string name="tg_report_field_range">Range</string>
     <string name="tg_report_field_odometer">Odometer</string>
     <string name="tg_report_field_trip">Trip</string>
+    <string name="tg_report_field_trip_time">Trip time</string>
+    <string name="tg_report_field_trip_kwh">Trip energy</string>
+    <string name="tg_report_field_trip_cost">Trip cost</string>
     <string name="tg_report_field_temps">Temperature</string>
     <string name="tg_report_field_openings">What is open</string>
     <string name="tg_report_field_tires">Tire pressure</string>
@@ -1810,6 +1813,9 @@
     <string name="tg_report_trip_km_whole">%1$d km</string>
     <string name="tg_report_odometer">Odometer %1$,d km</string>
     <string name="tg_report_trip_consumption">Consumption %1$.1f kWh/100 km</string>
+    <string name="tg_report_trip_time">Time %1$s to %2$s</string>
+    <string name="tg_report_trip_energy">Energy %1$.1f kWh</string>
+    <string name="tg_report_trip_cost">Cost %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">outside %1$+d°</string>
     <string name="tg_report_temp_inside">cabin %1$+d°</string>
     <string name="tg_report_open_list">Open: %1$s</string>
@@ -1838,6 +1844,9 @@
     <string name="tg_report_field_range_desc">Kilometers, as on Home</string>
     <string name="tg_report_field_odometer_desc">Total distance of the car</string>
     <string name="tg_report_field_trip_desc">Kilometers, consumption and driving time</string>
+    <string name="tg_report_field_trip_time_desc">When the trip started and ended</string>
+    <string name="tg_report_field_trip_kwh_desc">kWh used on the trip</string>
+    <string name="tg_report_field_trip_cost_desc">What the trip cost at your tariff</string>
     <string name="tg_report_field_trip1_desc">TRIP 1 counter from the Dashboard: kilometers, driving time and consumption</string>
     <string name="tg_report_field_trip2_desc">TRIP 2 counter from the Dashboard: kilometers, driving time and consumption</string>
     <string name="tg_report_field_temps_desc">Outside and in the cabin</string>

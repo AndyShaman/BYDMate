@@ -1789,6 +1789,9 @@
     <string name="tg_report_field_range">Autonomia</string>
     <string name="tg_report_field_odometer">Hodômetro</string>
     <string name="tg_report_field_trip">Viagem</string>
+    <string name="tg_report_field_trip_time">Horário da viagem</string>
+    <string name="tg_report_field_trip_kwh">Energia da viagem</string>
+    <string name="tg_report_field_trip_cost">Custo da viagem</string>
     <string name="tg_report_field_temps">Temperatura</string>
     <string name="tg_report_field_openings">O que está aberto</string>
     <string name="tg_report_field_tires">Pressão dos pneus</string>
@@ -1806,6 +1809,9 @@
     <string name="tg_report_trip_km_whole">%1$d km</string>
     <string name="tg_report_odometer">Hodômetro %1$,d km</string>
     <string name="tg_report_trip_consumption">Consumo %1$.1f kWh/100 km</string>
+    <string name="tg_report_trip_time">Horário das %1$s às %2$s</string>
+    <string name="tg_report_trip_energy">Energia %1$.1f kWh</string>
+    <string name="tg_report_trip_cost">Custo %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">lado de fora %1$+d°</string>
     <string name="tg_report_temp_inside">cabine %1$+d°</string>
     <string name="tg_report_open_list">Aberto: %1$s</string>
@@ -1834,6 +1840,9 @@
     <string name="tg_report_field_range_desc">Quilômetros, como na tela inicial</string>
     <string name="tg_report_field_odometer_desc">Quilometragem total do carro</string>
     <string name="tg_report_field_trip_desc">Quilômetros, consumo e tempo de viagem</string>
+    <string name="tg_report_field_trip_time_desc">Quando a viagem começou e terminou</string>
+    <string name="tg_report_field_trip_kwh_desc">Quantos kWh a viagem gastou</string>
+    <string name="tg_report_field_trip_cost_desc">Quanto a viagem custou na sua tarifa</string>
     <string name="tg_report_field_trip1_desc">Contador TRIP 1 do Painel: quilômetros, tempo de viagem e consumo</string>
     <string name="tg_report_field_trip2_desc">Contador TRIP 2 do Painel: quilômetros, tempo de viagem e consumo</string>
     <string name="tg_report_field_temps_desc">Lado de fora e na cabine</string>
