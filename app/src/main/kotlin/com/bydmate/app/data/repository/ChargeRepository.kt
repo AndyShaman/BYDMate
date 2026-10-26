@@ -90,6 +90,9 @@ class ChargeRepository @Inject constructor(
     suspend fun getMaxLifetimeKwhAtFinish(): Double? =
         chargeDao.getMaxLifetimeKwhAtFinish()
 
+    suspend fun getCompletedSince(since: Long): List<ChargeEntity> =
+        chargeDao.getCompletedSince(since)
+
     suspend fun getLifetimeStats(): LifetimeChargingStats {
         val all = chargeDao.getAllAutoserviceCharges()
         val ac = all.filter { it.type == "AC" }.sumOf { it.kwhCharged ?: 0.0 }

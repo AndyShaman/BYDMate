@@ -1597,6 +1597,16 @@
     <string name="tech_label_full_cycles">ciclos completos</string>
     <string name="tech_caption_full_cycles">%1$s kWh ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">aparece após o primeiro carregamento</string>
+    <string name="tech_label_full_charge" formatted="false">Carga completa até 100 %</string>
+    <string name="tech_label_since_full_charge">Desde a carga completa</string>
+    <string name="tech_label_calibration">Calibração</string>
+    <string name="tech_value_date_days_ago">%1$s · há %2$d d</string>
+    <string name="tech_value_date_today">%1$s · hoje</string>
+    <string name="tech_value_days_hours">%1$d d %2$d h</string>
+    <string name="tech_value_hours">%d h</string>
+    <string name="tech_value_no_data">sem dados</string>
+    <string name="tech_hint_full_charge" formatted="false">Nos manuais dos seus carros, a BYD recomenda carregar a bateria até 100 % pelo menos uma vez por semana. No fim de uma carga completa o carro equilibra a carga das células, o que prolonga a vida útil da bateria.</string>
+    <string name="tech_hint_calibration" formatted="false">Calibração: descarregar a bateria abaixo de 10 % e carregá-la até 100 %. A BYD recomenda fazê-lo a cada 3–6 meses, pelo menos uma vez a cada seis meses, para que o carro mostre a carga e a capacidade com mais precisão. Os proprietários aconselham não interromper o carregamento. Data segundo os dados da aplicação, com precisão ao dia.</string>
     <string name="tech_label_battery_power">potência da bateria</string>
     <string name="tech_label_max_charge">potência máx. de carga</string>
     <string name="tech_label_max_discharge_allow">potência máx. de descarga</string>

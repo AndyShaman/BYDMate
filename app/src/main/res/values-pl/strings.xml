@@ -1753,6 +1753,16 @@
     <string name="tech_label_full_cycles">pełne cykle</string>
     <string name="tech_caption_full_cycles">%1$s kWh ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">pojawi się po pierwszym ładowaniu</string>
+    <string name="tech_label_full_charge" formatted="false">Pełne ładowanie do 100 %</string>
+    <string name="tech_label_since_full_charge">Od pełnego ładowania</string>
+    <string name="tech_label_calibration">Kalibracja</string>
+    <string name="tech_value_date_days_ago">%1$s · %2$d d temu</string>
+    <string name="tech_value_date_today">%1$s · dziś</string>
+    <string name="tech_value_days_hours">%1$d d %2$d h</string>
+    <string name="tech_value_hours">%d h</string>
+    <string name="tech_value_no_data">brak danych</string>
+    <string name="tech_hint_full_charge" formatted="false">BYD w instrukcjach swoich samochodów zaleca ładowanie akumulatora do 100 % co najmniej raz w tygodniu. Pod koniec pełnego ładowania samochód wyrównuje naładowanie ogniw, co wydłuża żywotność akumulatora.</string>
+    <string name="tech_hint_calibration" formatted="false">Kalibracja: rozładuj akumulator poniżej 10 % i naładuj do 100 %. BYD zaleca robić to co 3–6 miesięcy, nie rzadziej niż raz na pół roku, aby samochód dokładniej pokazywał naładowanie i pojemność. Właściciele radzą nie przerywać ładowania. Data według danych aplikacji, z dokładnością do dnia.</string>
     <string name="tech_label_battery_power">moc akumulatora</string>
     <string name="tech_label_max_charge">maks. moc ładowania</string>
     <string name="tech_label_max_discharge_allow">maks. moc rozładowania</string>

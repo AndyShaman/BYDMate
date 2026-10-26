@@ -1601,6 +1601,16 @@
     <string name="tech_label_full_cycles">full cycles</string>
     <string name="tech_caption_full_cycles">%1$s kWh ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">appears after the first charge</string>
+    <string name="tech_label_full_charge" formatted="false">Full charge to 100 %</string>
+    <string name="tech_label_since_full_charge">Since full charge</string>
+    <string name="tech_label_calibration">Calibration</string>
+    <string name="tech_value_date_days_ago">%1$s · %2$d d ago</string>
+    <string name="tech_value_date_today">%1$s · today</string>
+    <string name="tech_value_days_hours">%1$d d %2$d h</string>
+    <string name="tech_value_hours">%d h</string>
+    <string name="tech_value_no_data">no data</string>
+    <string name="tech_hint_full_charge" formatted="false">BYD manuals for its cars advise charging the battery to 100 % at least once a week. At the end of a full charge the car balances the cells, which extends battery life.</string>
+    <string name="tech_hint_calibration" formatted="false">Calibration: run the battery below 10 % and charge it to 100 %. BYD advises doing this every 3–6 months, at least once every six months, so the car shows charge and capacity more accurately. Owners advise not interrupting the charge. Date from the app\'s data, accurate to the day.</string>
     <string name="tech_label_battery_power">battery power</string>
     <string name="tech_label_max_charge">max charge power</string>
     <string name="tech_label_max_discharge_allow">max discharge power</string>

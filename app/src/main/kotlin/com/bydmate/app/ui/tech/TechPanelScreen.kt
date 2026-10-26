@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
+import com.bydmate.app.domain.battery.BatteryCalibration
 import com.bydmate.app.ui.components.HelpIcon
 import com.bydmate.app.ui.components.HintBlock
 import com.bydmate.app.ui.theme.AccentBlue
@@ -70,6 +72,12 @@ import com.bydmate.app.ui.theme.SocYellow
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.TextSecondary
+import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private const val DASH = "—"
@@ -597,6 +605,7 @@ private fun TyresCard(state: TechPanelUiState, onHint: (String) -> Unit, modifie
 @Composable
 private fun HistoryCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
     TechCard(stringResource(R.string.tech_card_history), modifier = modifier) {
+        CalibrationRows(state, onHint)
         TechRow(
             stringResource(R.string.battery_health_bms_mileage_label),
             state.lifetimeKm?.let { stringResource(R.string.battery_health_bms_mileage_value, it) } ?: DASH,
@@ -619,6 +628,68 @@ private fun HistoryCard(state: TechPanelUiState, onHint: (String) -> Unit, modif
         )
         Hint(state.openHint, "avgSoc", R.string.battery_health_avg_soc_hint)
     }
+}
+
+/**
+ * Last full charge, time since it and last calibration (#359), off the app's own charge log
+ * and to the day, then a thin line above the lifetime rows.
+ */
+@Composable
+private fun CalibrationRows(state: TechPanelUiState, onHint: (String) -> Unit) {
+    val now = System.currentTimeMillis()
+    val locale = LocalConfiguration.current.locales[0]
+    val full = state.lastFullChargeTs
+    val cal = state.lastCalibrationTs
+    TechRow(
+        stringResource(R.string.tech_label_full_charge),
+        full?.let { markDate(it, now, locale) } ?: DASH,
+    )
+    TechRow(
+        stringResource(R.string.tech_label_since_full_charge),
+        full?.let { elapsedDaysHours(it, now) } ?: DASH,
+        valueColor = calibrationLevelColor(BatteryCalibration.sinceFullChargeLevel(full, now)),
+        hintKey = "fullCharge", onHint = onHint,
+    )
+    Hint(state.openHint, "fullCharge", R.string.tech_hint_full_charge)
+    TechRow(
+        stringResource(R.string.tech_label_calibration),
+        cal?.let { markDate(it, now, locale) } ?: stringResource(R.string.tech_value_no_data),
+        valueColor = calibrationLevelColor(BatteryCalibration.calibrationLevel(cal, now)),
+        hintKey = "calibration", onHint = onHint,
+    )
+    Hint(state.openHint, "calibration", R.string.tech_hint_calibration)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .height(1.dp)
+            .background(CardBorder)
+    )
+}
+
+/** «22 окт · 4 дн назад»: short date in the app locale and calendar days back, 0 reads «сегодня». */
+@Composable
+private fun markDate(ts: Long, now: Long, locale: Locale): String {
+    val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMM")
+    // Short Russian months carry an abbreviation dot («окт.»); the agreed mock drops it.
+    val date = SimpleDateFormat(pattern, locale).format(Date(ts)).removeSuffix(".")
+    val zone = ZoneId.systemDefault()
+    val days = ChronoUnit.DAYS.between(
+        Instant.ofEpochMilli(ts).atZone(zone).toLocalDate(),
+        Instant.ofEpochMilli(now).atZone(zone).toLocalDate(),
+    ).coerceAtLeast(0)
+    return if (days == 0L) stringResource(R.string.tech_value_date_today, date)
+    else stringResource(R.string.tech_value_date_days_ago, date, days.toInt())
+}
+
+/** «4 дн 6 ч», under a day just «6 ч». */
+@Composable
+private fun elapsedDaysHours(ts: Long, now: Long): String {
+    val hoursTotal = (now - ts).coerceAtLeast(0) / 3_600_000L
+    val days = (hoursTotal / 24).toInt()
+    val hours = (hoursTotal % 24).toInt()
+    return if (days > 0) stringResource(R.string.tech_value_days_hours, days, hours)
+    else stringResource(R.string.tech_value_hours, hours)
 }
 
 // ============================================================================

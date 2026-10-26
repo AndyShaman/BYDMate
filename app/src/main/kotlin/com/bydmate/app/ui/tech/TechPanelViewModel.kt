@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.tech
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.nativestack.VehicleKind
@@ -7,6 +8,7 @@ import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.AvgSocProvider
+import com.bydmate.app.domain.battery.BatteryCalibration
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -84,6 +86,10 @@ data class TechPanelUiState(
     val lifetimeChargedKwh: Double? = null,
     /** Pack size from settings, the divisor of the full-cycle count. */
     val nominalCapacityKwh: Double = 0.0,
+    /** End of the latest logged charge that reached 100 % (#359); null when none is known. */
+    val lastFullChargeTs: Long? = null,
+    /** End of the latest logged 9 %-or-lower to 100 % charge; null when none is known. */
+    val lastCalibrationTs: Long? = null,
     // DM-i hybrid (#184): the car's own fuel readings, polled only on a confirmed hybrid.
     val vehicleKind: VehicleKind = VehicleKind.UNKNOWN,
     val engineRpm: Int? = null,
@@ -140,6 +146,7 @@ data class TechPanelUiState(
             // The «Полных циклов» row lives here; a car that logged charges but answers no
             // lifetime counter still has a number to show. A zero sum has nothing to divide.
             lifetimeChargedKwh?.takeIf { it > 0.0 },
+            lastFullChargeTs, lastCalibrationTs,
         )
 
     /** [cardOrder] without the cards this car has no data for. */
@@ -196,6 +203,7 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch { loadAvgSoc() }
         viewModelScope.launch { loadCardOrder() }
         viewModelScope.launch { loadFullCycles() }
+        viewModelScope.launch { loadCalibrationMarks() }
         viewModelScope.launch {
             vehicleKindMonitor.kind.collect { kind ->
                 _uiState.update { it.copy(vehicleKind = kind, cardOrder = TechCardOrder.forKind(it.cardOrder, kind)) }
@@ -325,10 +333,24 @@ class TechPanelViewModel @Inject constructor(
         }
     }
 
+    /** Last full charge and last calibration off the app's own charge log, read once on open. */
+    private suspend fun loadCalibrationMarks() {
+        val charges = runCatching { chargeRepository.getCompletedSince(0L) }.getOrNull() ?: return
+        val marks = BatteryCalibration.marks(charges)
+        Log.d(TAG, "calibration marks: full=${marks.lastFullChargeTs} cal=${marks.lastCalibrationTs} rows=${charges.size}")
+        _uiState.update {
+            it.copy(lastFullChargeTs = marks.lastFullChargeTs, lastCalibrationTs = marks.lastCalibrationTs)
+        }
+    }
+
     private suspend fun loadAvgSoc() {
         val avg = runCatching { avgSocProvider.compute() }.getOrNull() ?: return
         _uiState.update {
             it.copy(avgSocSinceCharge = avg.sinceCharge, avgSocAllTime = avg.allTime)
         }
+    }
+
+    private companion object {
+        const val TAG = "TechPanel"
     }
 }

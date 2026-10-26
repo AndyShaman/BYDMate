@@ -1715,6 +1715,16 @@
     <string name="tech_label_full_cycles">完整循环</string>
     <string name="tech_caption_full_cycles">%1$s 千瓦时 ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">首次充电后显示</string>
+    <string name="tech_label_full_charge" formatted="false">充满至 100 %</string>
+    <string name="tech_label_since_full_charge">距上次充满</string>
+    <string name="tech_label_calibration">校准</string>
+    <string name="tech_value_date_days_ago">%1$s · %2$d 天前</string>
+    <string name="tech_value_date_today">%1$s · 今天</string>
+    <string name="tech_value_days_hours">%1$d 天 %2$d 小时</string>
+    <string name="tech_value_hours">%d 小时</string>
+    <string name="tech_value_no_data">无数据</string>
+    <string name="tech_hint_full_charge" formatted="false">BYD 在其车型手册中建议至少每周将电池充至 100 % 一次。充满电的最后阶段车辆会均衡各电芯的电量，这能延长电池寿命。</string>
+    <string name="tech_hint_calibration" formatted="false">校准：将电池放电至 10 % 以下，再充至 100 %。BYD 建议每 3–6 个月进行一次，至少每半年一次，以便车辆更准确地显示电量和容量。车主建议不要中断充电。日期依据应用数据，精确到天。</string>
     <string name="tech_label_battery_power">电池功率</string>
     <string name="tech_label_max_charge">最大充电功率</string>
     <string name="tech_label_max_discharge_allow">最大放电功率</string>
