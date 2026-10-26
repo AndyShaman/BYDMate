@@ -70,7 +70,7 @@ class AgentToolsCallContactTest {
     @Test fun permission_denied_reports_error() = runTest {
         every { contactLookup.hasPermission() } returns false
         val out = JSONObject(tools().execute(call("call_contact", """{"name":"Мама"}""")))
-        assertEquals("нет доступа к контактам, включите в Настройках", out.getString("error"))
+        assertEquals("звонок по имени пока недоступен: нет доступа к контактам", out.getString("error"))
         coVerify(exactly = 0) { contactLookup.findByName(any()) }
     }
 
