@@ -1556,7 +1556,7 @@
     <string name="settings_split_wide_app_title">Wide pane (2/3)</string>
     <string name="settings_split_narrow_app_title">Narrow pane (1/3)</string>
     <string name="settings_split_app_not_selected">not selected</string>
-    <string name="settings_split_howto_body">There are three ways to turn on split screen.\nThe easiest one: tap the left third of the floating widget. To set that up, turn on Tap zoning in the Widget tap section and pick Launch split screen under Left tap action.\nFrom automations: add the Split Screen action to a rule. Close Split Screen and Toggle Split Screen sit right next to it.\nBy voice: just ask the Voice agent to turn on split screen.</string>
+    <string name="settings_split_howto_body">Pick two apps and how to launch the split in the How to launch block.</string>
 
     <string name="settings_split_mechanism_title">Split mechanism</string>
     <string name="settings_split_mechanism_freeform">BYDMate windows</string>

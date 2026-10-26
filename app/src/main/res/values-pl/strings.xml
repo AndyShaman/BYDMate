@@ -1709,7 +1709,7 @@
     <string name="settings_split_wide_app_title">Szeroka część (2/3)</string>
     <string name="settings_split_narrow_app_title">Wąska część (1/3)</string>
     <string name="settings_split_app_not_selected">nie wybrano</string>
-    <string name="settings_split_howto_body">Podział ekranu można włączyć na trzy sposoby.\nNajprościej: dotknięcie lewej jednej trzeciej pływającego widżetu. W tym celu w sekcji „Dotknięcie widżetu” włącz „Strefy dotknięć”, a w pozycji „Akcja lewego dotknięcia” wybierz „Uruchamiaj podział ekranu”.\nPrzez automatyzacje: dodaj do reguły akcję „Podział ekranu”. Obok są „Zamknij podział ekranu” i „Przełącz podział ekranu”.\nGłosem: po prostu poproś asystenta głosowego o włączenie podziału ekranu.</string>
+    <string name="settings_split_howto_body">Wybierz dwie aplikacje i sposób uruchamiania w bloku „Jak uruchamiać”.</string>
     <string name="settings_split_mechanism_title">Mechanizm podziału</string>
     <string name="settings_split_mechanism_freeform">Okna BYDMate</string>
     <string name="settings_split_mechanism_native">Podział systemowy</string>

@@ -66,4 +66,25 @@ class SteeringKeyOwnerTest {
         val owners = none.copy(splitEnabled = true, splitKey = 383)
         assertNull(steeringKeyOwner(383, owners.copy(splitEnabled = false)))
     }
+
+    // R1/F1: the split chooser must refuse a feature's SAVED key even while that feature is off,
+    // otherwise switching the feature on later makes its earlier filter stage eat the split key.
+    // New function the implementer creates: splitKeyChooserOwner(keyCode, owners): SteeringKeyOwner?
+    @Test fun `split chooser refuses the saved key of a disabled voice`() {
+        val off = none.copy(voiceKey = 320, voiceCompanions = setOf(327))
+        assertEquals(SteeringKeyOwner.VOICE, splitKeyChooserOwner(320, off))
+        assertEquals(SteeringKeyOwner.VOICE, splitKeyChooserOwner(327, off))
+    }
+    @Test fun `split chooser refuses the saved key of disabled projection and knob`() {
+        val off = none.copy(projectionKey = 351)
+        assertEquals(SteeringKeyOwner.PROJECTION, splitKeyChooserOwner(351, off))
+        assertEquals(SteeringKeyOwner.KNOB, splitKeyChooserOwner(VOLUME_KNOB_PRESS_KEYCODE, off))
+    }
+    @Test fun `split chooser accepts a code no feature has saved`() {
+        val off = none.copy(voiceKey = 320, voiceCompanions = setOf(327), projectionKey = 351)
+        assertNull(splitKeyChooserOwner(383, off))
+    }
+    @Test fun `split chooser ignores the split feature's own key`() {
+        assertNull(splitKeyChooserOwner(383, none.copy(splitEnabled = true, splitKey = 383)))
+    }
 }

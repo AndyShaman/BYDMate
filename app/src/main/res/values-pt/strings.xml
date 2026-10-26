@@ -1553,7 +1553,7 @@
     <string name="settings_split_wide_app_title">Painel largo (2/3)</string>
     <string name="settings_split_narrow_app_title">Painel estreito (1/3)</string>
     <string name="settings_split_app_not_selected">não selecionado</string>
-    <string name="settings_split_howto_body">Há três maneiras de ligar a tela dividida.\nA mais simples: toque no terço esquerdo do widget flutuante. Para isso, ative Zonas de toque na seção Toque no widget e escolha Iniciar tela dividida em Ação do toque esquerdo.\nPelas automações: adicione a ação Tela dividida a uma regra. Ao lado ficam Fechar tela dividida e Alternar tela dividida.\nPor voz: basta pedir ao Agente de voz para ligar a tela dividida.</string>
+    <string name="settings_split_howto_body">Escolha dois apps e como iniciar no bloco Como iniciar.</string>
     <string name="settings_split_mechanism_title">Mecanismo de divisão</string>
     <string name="settings_split_mechanism_freeform">Janelas do BYDMate</string>
     <string name="settings_split_mechanism_native">Divisão nativa</string>

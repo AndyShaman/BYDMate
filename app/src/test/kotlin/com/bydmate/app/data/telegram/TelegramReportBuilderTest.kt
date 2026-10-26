@@ -614,6 +614,28 @@ class TelegramReportBuilderTest {
         )
     }
 
+    @Test fun `the power-off end time carries the date when the trip started the day before`() {
+        val cal = java.util.Calendar.getInstance().apply {
+            timeInMillis = now
+            set(java.util.Calendar.HOUR_OF_DAY, 23); set(java.util.Calendar.MINUTE, 50)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val start = cal.timeInMillis
+        val built = start + 30 * 60_000L // 00:20 next day
+        val text = TelegramReportBuilder.build(
+            TelegramReportBuilder.ruleHeader("x"), "", setOf(ReportField.TRIP_TIME),
+            inputs(live = LiveTrip(23.4, 3.79, start)), "ru", strings("ru"), built,
+            tripEndLabel = TelegramReportBuilder.TIME_PLACEHOLDER,
+        ).text
+        val offMs = built + 90_000L
+        val filled = TelegramReportBuilder.fillTime(text, offMs)
+        assertTrue(
+            filled,
+            filled.contains(
+                "Время с ${TelegramReportBuilder.formatDateTime(start)} до ${TelegramReportBuilder.formatDateTime(offMs)}"),
+        )
+    }
+
     @Test fun `missing values drop only their line and are reported skipped`() {
         val fields = tripFields.toSet()
         val cases = listOf(
