@@ -249,6 +249,100 @@ class WidgetPreferencesTest {
     }
 
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---
+
+    // ── split launch panel: tap switch with restore ─────────────────────────────
+
+    @Test fun `split tap is off by default`() {
+        assertFalse(prefs.isSplitTapOn())
+    }
+    @Test fun `split tap on sets zoning and split mode`() {
+        prefs.setSplitTapOn(true)
+        assertTrue(prefs.isLeftTapZoningEnabled())
+        assertEquals(LeftTapMode.SPLIT, prefs.getLeftTapMode())
+        assertTrue(prefs.isSplitTapOn())
+    }
+    @Test fun `split tap off turns zoning back off when it was off`() {
+        prefs.setSplitTapOn(true)
+        prefs.setSplitTapOn(false)
+        assertFalse(prefs.isLeftTapZoningEnabled())
+        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
+    }
+    @Test fun `split tap off restores the app tap it replaced`() {
+        prefs.setLeftTapZoningEnabled(true)
+        prefs.setLeftTapApp("ru.yandex.music", "Музыка")
+        prefs.setSplitTapOn(true)
+        prefs.setSplitTapOn(false)
+        assertTrue(prefs.isLeftTapZoningEnabled())
+        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
+        assertEquals("ru.yandex.music", prefs.getLeftTapAppPackage())
+    }
+    @Test fun `turning split tap on twice keeps the first remembered state`() {
+        prefs.setLeftTapZoningEnabled(true)
+        prefs.setSplitTapOn(true)
+        prefs.setSplitTapOn(true)
+        prefs.setSplitTapOn(false)
+        assertTrue(prefs.isLeftTapZoningEnabled())
+        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
+    }
+    @Test fun `split tap off after the widget section changed the tap leaves it alone`() {
+        prefs.setSplitTapOn(true)
+        prefs.setLeftTapMode(LeftTapMode.APP)
+        prefs.setSplitTapOn(false)
+        assertTrue(prefs.isLeftTapZoningEnabled())
+        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
+    }
+    @Test fun `remembered state is forgotten after the restore`() {
+        prefs.setSplitTapOn(true)
+        prefs.setSplitTapOn(false)
+        assertFalse(store.containsKey(WidgetPreferences.KEY_SPLIT_TAP_PREV_ZONING))
+        assertFalse(store.containsKey(WidgetPreferences.KEY_SPLIT_TAP_PREV_MODE))
+    }
+    @Test fun `left tap opens an app only with zoning on in app mode`() {
+        assertFalse(prefs.leftTapOpensApp())
+        prefs.setLeftTapZoningEnabled(true)
+        assertTrue(prefs.leftTapOpensApp())
+        prefs.setLeftTapMode(LeftTapMode.SPLIT)
+        assertFalse(prefs.leftTapOpensApp())
+    }
+
+    // Decision 10: the snapshot is cleared by widget-section changes, never by the switch's own write.
+
+    @Test fun `the split switch own write keeps its snapshot`() {
+        prefs.setLeftTapZoningEnabled(true)
+        prefs.setSplitTapOn(true)
+        assertTrue(store.containsKey(WidgetPreferences.KEY_SPLIT_TAP_PREV_ZONING))
+        assertTrue(store.containsKey(WidgetPreferences.KEY_SPLIT_TAP_PREV_MODE))
+    }
+    @Test fun `a mode change in the widget section clears the snapshot`() {
+        prefs.setLeftTapZoningEnabled(true)
+        prefs.setSplitTapOn(true)
+        prefs.setLeftTapMode(LeftTapMode.APP)
+        assertFalse(store.containsKey(WidgetPreferences.KEY_SPLIT_TAP_PREV_ZONING))
+        assertFalse(store.containsKey(WidgetPreferences.KEY_SPLIT_TAP_PREV_MODE))
+    }
+    @Test fun `a zoning change in the widget section clears the snapshot`() {
+        prefs.setSplitTapOn(true)
+        prefs.setLeftTapZoningEnabled(false)
+        assertFalse(store.containsKey(WidgetPreferences.KEY_SPLIT_TAP_PREV_ZONING))
+        assertFalse(store.containsKey(WidgetPreferences.KEY_SPLIT_TAP_PREV_MODE))
+    }
+    @Test fun `on then widget section back to split then off does not restore the stale snapshot`() {
+        // Before the switch: zoning off, APP. The user then re-picks SPLIT in the widget section.
+        prefs.setSplitTapOn(true)
+        prefs.setLeftTapMode(LeftTapMode.APP)
+        prefs.setLeftTapMode(LeftTapMode.SPLIT)
+        prefs.setSplitTapOn(false)
+        assertTrue(prefs.isLeftTapZoningEnabled())
+        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
+    }
+    @Test fun `off without a snapshot leaves zoning as is and sets app mode`() {
+        prefs.setLeftTapZoningEnabled(true)
+        prefs.setLeftTapMode(LeftTapMode.SPLIT)
+        prefs.setSplitTapOn(false)
+        assertTrue(prefs.isLeftTapZoningEnabled())
+        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
+    }
+
     private fun fakeSharedPrefs(backing: MutableMap<String, Any?>): SharedPreferences {
         return object : SharedPreferences {
             override fun getAll(): MutableMap<String, *> = backing.toMutableMap()

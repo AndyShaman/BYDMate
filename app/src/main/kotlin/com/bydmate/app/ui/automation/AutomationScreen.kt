@@ -189,13 +189,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
-import com.bydmate.app.cluster.ClusterProjectionManager
-import com.bydmate.app.cluster.DEFAULT_TRIGGER_KEYCODE
-import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
-import com.bydmate.app.cluster.VOLUME_KNOB_PRESS_KEYCODE
+import com.bydmate.app.cluster.SteeringKeyOwner
 import com.bydmate.app.cluster.knownButtonNameRes
-import com.bydmate.app.cluster.voiceCompanionsFromCsv
-import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.cluster.readSteeringKeyOwners
+import com.bydmate.app.cluster.steeringKeyOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableLongStateOf
@@ -2462,34 +2459,23 @@ internal fun steeringKeyLabel(context: Context, keyCode: Int): String {
 
 /**
  * Keys already owned by another BYDMate feature. SteeringWheelKeyService handles projection, the
- * voice button and the volume knob BEFORE automation rules, so a rule bound to one of those keys
- * would never fire — the learn dialog says so instead of saving a dead binding.
+ * voice button, the volume knob and the split key BEFORE automation rules, so a rule bound to one
+ * of those keys would never fire — the learn dialog says so instead of saving a dead binding.
  */
 private fun steeringKeyOccupiedReason(context: Context): (Int) -> String? {
-    val clusterPrefs = context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
-    val voicePrefs = context.getSharedPreferences("voice", Context.MODE_PRIVATE)
-    return { keyCode ->
-        when {
-            clusterPrefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false) &&
-                keyCode == clusterPrefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE) ->
-                context.getString(R.string.automation_steering_key_occupied_projection)
-
-            // The companion codes of the voice button's press are swallowed by voice as well.
-            voicePrefs.getBoolean("voice_enabled", false) && (
-                keyCode == voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE) ||
-                    keyCode in voiceCompanionsFromCsv(
-                        voicePrefs.getString(SettingsRepository.KEY_VOICE_COMPANIONS, null))
-                ) ->
-                context.getString(R.string.automation_steering_key_occupied_voice)
-
-            clusterPrefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false) &&
-                keyCode == VOLUME_KNOB_PRESS_KEYCODE ->
-                context.getString(R.string.automation_steering_key_occupied_knob)
-
-            else -> null
-        }
-    }
+    val owners = readSteeringKeyOwners(context)
+    return { keyCode -> steeringKeyOwner(keyCode, owners)?.let { steeringKeyOwnerText(context, it) } }
 }
+
+/** Why a key cannot be learned: the feature that already owns it. */
+internal fun steeringKeyOwnerText(context: Context, owner: SteeringKeyOwner): String = context.getString(
+    when (owner) {
+        SteeringKeyOwner.VOICE -> R.string.automation_steering_key_occupied_voice
+        SteeringKeyOwner.KNOB -> R.string.automation_steering_key_occupied_knob
+        SteeringKeyOwner.PROJECTION -> R.string.automation_steering_key_occupied_projection
+        SteeringKeyOwner.SPLIT -> R.string.automation_steering_key_occupied_split
+    }
+)
 
 // --- Action Row ---
 

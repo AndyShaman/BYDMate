@@ -452,6 +452,7 @@
     <string name="automation_steering_key_occupied_projection">This key turns navigation on the instrument cluster on. Free it up in Settings, Display section, or pick another one.</string>
     <string name="automation_steering_key_occupied_voice">This key calls the BYDMate voice assistant. Change the key in Settings, Voice agent section, or pick another one.</string>
     <string name="automation_steering_key_occupied_knob">The knob press is taken by play/pause. Turn it off in Settings, Display section, or pick another key.</string>
+    <string name="automation_steering_key_occupied_split">This key toggles split screen. Free it up in Settings, Split screen section, or pick another one.</string>
     <string name="automation_trigger_type_voice">Voice</string>
     <string name="automation_trigger_voice_phrase_label">Trigger phrase</string>
     <string name="automation_voice_phrase_empty">Voice phrase is empty</string>
@@ -1563,6 +1564,23 @@
     <string name="settings_split_mechanism_native_hint">The split is done by the car\'s firmware. The look depends on the firmware: either two panes at one-third and two-thirds, or half and half with the second app picked on screen.</string>
     <string name="settings_split_mechanism_platformized_hint">On this firmware the car itself splits the screen: the 1/3 and 2/3 panes, the divider and the swap gesture are native. BYDMate only starts the chosen pair and returns an app to its pane.</string>
     <string name="settings_split_try_native_hint">Try the Native split mode.</string>
+    <string name="settings_split_launch_header">How to launch</string>
+    <string name="settings_split_key_title">Steering-wheel button</string>
+    <string name="settings_split_key_none">not assigned</string>
+    <string name="settings_split_key_assign">Assign</string>
+    <string name="settings_split_key_remove">Remove</string>
+    <string name="settings_split_key_occupied_rule">This key runs the rule “%1$s”. Pick another key or change it in the rule.</string>
+    <string name="settings_split_key_rule_conflict_one">There is already a rule “%1$s” on this button. The button will now toggle split screen itself and the rule will stop firing. Turn the rule off?</string>
+    <string name="settings_split_key_rule_conflict_many">There are already rules on this button: %1$s. The button will now toggle split screen itself and the rules will stop firing. Turn them off?</string>
+    <string name="settings_split_key_rule_disable">Turn off</string>
+    <string name="settings_split_key_rule_keep">Keep</string>
+    <string name="settings_split_tap_title">Tap on the left third of the widget</string>
+    <string name="settings_split_tap_replace_text">The left tap now opens “%1$s”. Replace it with split screen?</string>
+    <string name="settings_split_tap_replace_confirm">Replace</string>
+    <string name="settings_split_tap_replace_cancel">Cancel</string>
+    <string name="settings_split_tap_widget_off_hint">Turn the widget on in the Widget section</string>
+    <string name="settings_split_voice_line">By voice: ask the Voice agent to turn on split screen.</string>
+    <string name="settings_split_automation_line">From automations: the Toggle Split Screen action launches the apps from this menu, or the last ones you picked if you changed them since the car was switched on.</string>
     <string name="split_feature_disabled">Split screen is disabled in settings</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">insulation</string>

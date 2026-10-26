@@ -505,6 +505,7 @@
     <string name="automation_steering_key_occupied_projection">Гэтая клавіша ўключае навігацыю на прыборнай панэлі. Вызваліце яе ў Наладах, раздзел Дысплей, або выберыце іншую.</string>
     <string name="automation_steering_key_occupied_voice">Гэтая клавіша выклікае галасавога памочніка BYDMate. Змяніце клавішу ў Наладах, раздзел Голас-агент, або выберыце іншую.</string>
     <string name="automation_steering_key_occupied_knob">Націсканне кола занята функцыяй play/pause. Выключыце яе ў Наладах, раздзел Дысплей, або выберыце іншую клавішу.</string>
+    <string name="automation_steering_key_occupied_split">Гэтая клавіша пераключае падзел экрана. Вызваліце яе ў Наладах, раздзел Падзел экрана, або выберыце іншую.</string>
     <string name="automation_trigger_type_voice">Голас</string>
     <string name="automation_trigger_voice_phrase_label">Фраза-трыгер</string>
     <string name="automation_voice_phrase_empty">Галасавая фраза пустая</string>
@@ -1715,6 +1716,23 @@
     <string name="settings_split_mechanism_native_hint">Падзел выконвае прашыўка машыны. Выгляд залежыць ад прашыўкі: дзве панэлі 1/3 і 2/3 або папалам з выбарам другой праграмы на экране.</string>
     <string name="settings_split_mechanism_platformized_hint">На гэтай прашыўцы экран дзеліць сама машына: панэлі 1/3 і 2/3, падзяляльнік і жэст абмену родныя. BYDMate толькі запускае абраную пару і вяртае праграму ў яе панэль.</string>
     <string name="settings_split_try_native_hint">Паспрабуйце рэжым Родны падзел.</string>
+    <string name="settings_split_launch_header">Як запускаць</string>
+    <string name="settings_split_key_title">Кнопка на рулі</string>
+    <string name="settings_split_key_none">не прызначана</string>
+    <string name="settings_split_key_assign">Прызначыць</string>
+    <string name="settings_split_key_remove">Прыбраць</string>
+    <string name="settings_split_key_occupied_rule">Гэтая клавіша запускае правіла «%1$s». Выберыце іншую клавішу або змяніце яе ў правіле.</string>
+    <string name="settings_split_key_rule_conflict_one">На гэтай кнопцы ўжо ёсць правіла «%1$s». Цяпер кнопка сама пераключае падзел экрана, і правіла перастане спрацоўваць. Адключыць яго?</string>
+    <string name="settings_split_key_rule_conflict_many">На гэтай кнопцы ўжо ёсць правілы: %1$s. Цяпер кнопка сама пераключае падзел экрана, і правілы перастануць спрацоўваць. Адключыць іх?</string>
+    <string name="settings_split_key_rule_disable">Адключыць</string>
+    <string name="settings_split_key_rule_keep">Пакінуць</string>
+    <string name="settings_split_tap_title">Тап па левай трэці віджэта</string>
+    <string name="settings_split_tap_replace_text">Зараз левы тап адкрывае «%1$s». Замяніць на падзел экрана?</string>
+    <string name="settings_split_tap_replace_confirm">Замяніць</string>
+    <string name="settings_split_tap_replace_cancel">Скасаваць</string>
+    <string name="settings_split_tap_widget_off_hint">Уключыце віджэт у раздзеле «Віджэт»</string>
+    <string name="settings_split_voice_line">Голасам: папрасіце голас-агента ўключыць падзел экрана.</string>
+    <string name="settings_split_automation_line">Аўтаматызацыяй: дзеянне «Пераключыць падзел экрана» запускае праграмы з гэтага меню, а калі вы мянялі іх пасля ўключэння машыны, апошнія выбраныя.</string>
     <string name="split_feature_disabled">Падзел экрана выключаны ў наладах</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">ізаляцыя</string>

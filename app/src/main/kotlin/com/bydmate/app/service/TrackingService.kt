@@ -128,6 +128,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
     @Inject lateinit var clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge
     @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
+    @Inject lateinit var splitPreferences: com.bydmate.app.split.SplitPreferences
     @Inject lateinit var logTelegramSender: com.bydmate.app.diagnostics.LogTelegramSender
     @Inject lateinit var autoBackupScheduler: com.bydmate.app.data.backup.AutoBackupScheduler
     @Inject lateinit var postRestoreCheck: com.bydmate.app.data.backup.PostRestoreCheck
@@ -2149,6 +2150,8 @@ class TrackingService : Service(), LocationListener {
     }
 
     private suspend fun starServiceNeeded(prefs: android.content.SharedPreferences): Boolean {
+        // The split key is caught by the same a11y filter; without this a split-key-only car loses it on boot.
+        if (splitPreferences.isSteeringKeyActive()) return true
         val mirrorEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
         // Voice PTT depends on the same a11y service (SteeringWheelKeyService reads "voice" prefs
         // itself); without this, enabling Voice alone never re-binds the service (Finding 3).

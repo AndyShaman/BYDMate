@@ -406,6 +406,7 @@
     <string name="automation_steering_key_occupied_projection">该按键用于开启仪表盘导航。请在设置的显示部分释放该按键，或选择其他按键。</string>
     <string name="automation_steering_key_occupied_voice">该按键用于呼出 BYDMate 语音助手。请在设置的语音智能体部分更改按键，或选择其他按键。</string>
     <string name="automation_steering_key_occupied_knob">旋钮按下已被播放/暂停功能占用。请在设置的显示部分关闭该功能，或选择其他按键。</string>
+    <string name="automation_steering_key_occupied_split">该按键用于切换分屏。请在设置的分屏部分释放该按键，或选择其他按键。</string>
     <string name="automation_trigger_type_voice">语音</string>
     <string name="automation_trigger_voice_phrase_label">触发短语</string>
     <string name="automation_voice_phrase_empty">语音短语为空</string>
@@ -1677,6 +1678,23 @@
     <string name="settings_split_mechanism_native_hint">分屏由车机固件完成。显示效果取决于固件：可能是 1/3 和 2/3 两个窗口，也可能是左右对半并在屏幕上选择第二个应用。</string>
     <string name="settings_split_mechanism_platformized_hint">在该固件上由车机自己分屏：1/3 和 2/3 两个窗口、分隔条和左右交换手势都是原生的。BYDMate 只负责启动所选的应用组合，并把跑出去的应用送回它的窗口。</string>
     <string name="settings_split_try_native_hint">试试“系统分屏”方式。</string>
+    <string name="settings_split_launch_header">启动方式</string>
+    <string name="settings_split_key_title">方向盘按键</string>
+    <string name="settings_split_key_none">未分配</string>
+    <string name="settings_split_key_assign">分配</string>
+    <string name="settings_split_key_remove">移除</string>
+    <string name="settings_split_key_occupied_rule">该按键用于执行规则“%1$s”。请选择其他按键，或在规则中更换按键。</string>
+    <string name="settings_split_key_rule_conflict_one">该按键上已有规则“%1$s”。现在该按键会直接切换分屏，这条规则将不再触发。要停用它吗？</string>
+    <string name="settings_split_key_rule_conflict_many">该按键上已有规则：%1$s。现在该按键会直接切换分屏，这些规则将不再触发。要停用它们吗？</string>
+    <string name="settings_split_key_rule_disable">停用</string>
+    <string name="settings_split_key_rule_keep">保留</string>
+    <string name="settings_split_tap_title">点击小组件左侧三分之一</string>
+    <string name="settings_split_tap_replace_text">目前左侧点击会打开“%1$s”。要改为分屏吗？</string>
+    <string name="settings_split_tap_replace_confirm">替换</string>
+    <string name="settings_split_tap_replace_cancel">取消</string>
+    <string name="settings_split_tap_widget_off_hint">请在“小组件”部分开启小组件</string>
+    <string name="settings_split_voice_line">语音：让语音智能体打开分屏。</string>
+    <string name="settings_split_automation_line">自动化：“切换分屏”动作会启动此菜单中的应用；如果开车后更换过应用，则启动最近选择的应用。</string>
     <string name="split_feature_disabled">分屏功能已在设置中关闭</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">绝缘</string>

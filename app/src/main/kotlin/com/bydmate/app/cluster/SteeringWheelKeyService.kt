@@ -16,8 +16,15 @@ import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.media.KnobPlayPause
 import com.bydmate.app.navdata.NavA11yFeed
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.ui.widget.toggleSplitByUser
+import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * False for a key that types text (digits, letters, punctuation, numpad): the a11y filter also
@@ -52,6 +59,9 @@ class SteeringWheelKeyService : AccessibilityService() {
     private var cachedEntryPoint: ClusterEntryPoint? = null
     // Start of the companion window of the key in capturedKey (isLearnCompanion, learnWindowAnchor).
     private var learnCaptureAtMs = 0L
+    // The split key's toggle runs here; the start itself runs in SplitSessionManager's own scope.
+    private val keyScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val splitKeyGuard = SplitKeyBusyGuard()
     private val prefs: SharedPreferences by lazy {
         applicationContext.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -135,9 +145,9 @@ class SteeringWheelKeyService : AccessibilityService() {
                 traced(event, "cluster_toggle")
             }
             StarDecision.CONSUME -> true
-            // Automation rules bound to a key run LAST: projection, voice and the knob keep
-            // priority over a user assignment, and the settings UI warns about occupied keys.
-            StarDecision.PASS_THROUGH -> when (
+            // Automation rules bound to a key run LAST: projection, voice, the knob and the split
+            // key keep priority over a user assignment, and the settings UI warns about occupied keys.
+            StarDecision.PASS_THROUGH -> splitKeyVerdict(event, isDown) ?: when (
                 steeringKeyDecision(event.keyCode, isDown, TrackingService.steeringKeyAssigned(event.keyCode))
             ) {
                 SteeringKeyDecision.FIRE -> {
@@ -156,6 +166,27 @@ class SteeringWheelKeyService : AccessibilityService() {
                     false
                 }
             }
+        }
+    }
+
+    /** The split key: after voice, knob and projection, before the automation rules. Null = not it. */
+    private fun splitKeyVerdict(event: KeyEvent, isDown: Boolean): Boolean? {
+        val split = entryPoint().splitPreferences()
+        return when (splitKeyDecision(event.keyCode, isDown, event.repeatCount,
+            split.isFeatureEnabled(), split.getSteeringKeyCode())) {
+            SplitKeyDecision.TOGGLE -> {
+                val keyCode = event.keyCode
+                keyScope.launch {
+                    // A press while the previous start/exit still runs would decide on a stale state.
+                    val ran = splitKeyGuard.runIfIdle {
+                        toggleSplitByUser(applicationContext.appLocalizedContext(), fromWidget = false)
+                    }
+                    if (!ran) Log.i(TAG, "split key $keyCode: ignored, previous toggle still running")
+                }
+                traced(event, "split_toggle")
+            }
+            SplitKeyDecision.CONSUME -> true
+            SplitKeyDecision.PASS_THROUGH -> null
         }
     }
 
@@ -289,6 +320,7 @@ class SteeringWheelKeyService : AccessibilityService() {
     override fun onDestroy() {
         instance = null
         isConnected = false
+        keyScope.cancel()
         Trace.event(TraceArea.APP, "a11y-destroyed")
         super.onDestroy()
     }
