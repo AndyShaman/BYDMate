@@ -3,6 +3,7 @@ package com.bydmate.app.service
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.ExistingWorkPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -40,5 +41,15 @@ class BootReceiverTest {
             Intent(Intent.ACTION_MY_PACKAGE_REPLACED).setPackage(context.packageName), 0)
 
         assertTrue(receivers.any { it.activityInfo.name == BootReceiver::class.java.name })
+    }
+
+    /** A start job deferred by the parked-restart gate can run at car-on while the screen still
+     *  reads as off: it skips, and a KEEP unlock enqueued during that run is dropped, so nothing
+     *  starts the service. Unlock (sent only when the service is down) must replace the job. */
+    @Test fun `screen unlock replaces a pending start job, boot and update keep it`() {
+        assertEquals(ExistingWorkPolicy.REPLACE, BootReceiver.workPolicyFor(Intent.ACTION_USER_PRESENT))
+        assertEquals(ExistingWorkPolicy.KEEP, BootReceiver.workPolicyFor(Intent.ACTION_BOOT_COMPLETED))
+        assertEquals(ExistingWorkPolicy.KEEP, BootReceiver.workPolicyFor(Intent.ACTION_MY_PACKAGE_REPLACED))
+        assertEquals(ExistingWorkPolicy.KEEP, BootReceiver.workPolicyFor(null))
     }
 }
