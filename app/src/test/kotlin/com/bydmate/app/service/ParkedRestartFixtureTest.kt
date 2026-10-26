@@ -10,7 +10,7 @@ import org.junit.Test
  */
 class ParkedRestartFixtureTest {
 
-    private val lines = javaClass.getResource("/parked-restart/task-removed-parked-restart.log")!!
+    private val lines = javaClass.getResource("/parked-restart/task-removed-parked-restart.txt")!!
         .readText().lines().filter { it.isNotBlank() }
 
     @Test fun `the parked restart from the field log is skipped`() {

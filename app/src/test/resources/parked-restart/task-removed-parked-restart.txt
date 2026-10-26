@@ -1,0 +1,6 @@
+09-29 17:49:53.130 I/TrackingService(16806): onTaskRemoved: scheduling restart via WorkManager
+09-29 17:49:53.896 I/ActivityManager( 1143): Force stopping com.bydmate.app appid=10099 user=-1: quickboot
+09-29 17:50:04.218 I/Trace   (23024): app    start version=495 name=3.19.2 #961
+09-29 17:50:23.213 I/Trace   (23024): app    start-worker trigger=worker:task_removed attempt=1 result=ok #962
+09-29 17:50:23.287 I/TrackingService(23024): onCreate: starting TrackingService
+09-29 17:50:24.162 I/AutomationEngine(23024): service_start: screen off at start, waiting for screen on
