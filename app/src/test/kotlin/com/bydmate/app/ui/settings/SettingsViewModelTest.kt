@@ -1656,6 +1656,32 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `resetTripSourceDetection also clears the energydata import watermark (#348)`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        // A watermark poisoned by a future-dated energydata row, and a source fingerprint that
+        // would make the next sync skip the unchanged file.
+        settingsDao.map[SettingsRepository.KEY_LAST_ENERGYDATA_IMPORT_TS] = "4102444800" // 2100-01-01
+        ctx.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE).edit()
+            .putLong("lastModified", 1L).putLong("fileSize", 2L).putString("filePath", "/x").commit()
+
+        vm.resetTripSourceDetection()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        verify(exactly = 1) { energyDataDeadDetector.reset() }
+        assertEquals(
+            "reset must clear the import watermark",
+            0L,
+            SettingsRepository(settingsDao, mockk(relaxed = true)).getLastEnergyImportTs(),
+        )
+        assertFalse(
+            "reset must also forget the source fingerprint so the next sync re-reads the file",
+            ctx.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE).contains("lastModified"),
+        )
+    }
+
+    @Test
     fun `resetTripSourceDetection delegates to detector`() {
         val vm = buildViewModel()
         vm.resetTripSourceDetection()
