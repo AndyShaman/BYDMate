@@ -13,6 +13,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -149,5 +150,21 @@ class WidgetSplitTapTest {
         coEvery { manager.startLastPair() } returns SplitStartResult.DISABLED
         tap()
         assertEquals(listOf(R.string.split_feature_disabled), errors)
+    }
+
+    // ── steering key (owner: second press closes, also on UI7) ─────────────────
+
+    @Test fun `steering key exits a native-panes session the widget tap would restore`() {
+        stateIs(SplitSessionState.Active(pair, narrowTaskId = 11, wideTaskId = 10, nativePanes = true))
+        tap(alwaysStart = WidgetController.splitAlwaysStart(fromWidget = false, nativePanes = true))
+        coVerify(exactly = 1) { manager.exit() }
+        coVerify(exactly = 0) { manager.startLastPair() }
+    }
+
+    @Test fun `only the widget tap on native panes drops the exit half`() {
+        assertTrue(WidgetController.splitAlwaysStart(fromWidget = true, nativePanes = true))
+        assertFalse(WidgetController.splitAlwaysStart(fromWidget = true, nativePanes = false))
+        assertFalse(WidgetController.splitAlwaysStart(fromWidget = false, nativePanes = true))
+        assertFalse(WidgetController.splitAlwaysStart(fromWidget = false, nativePanes = false))
     }
 }
