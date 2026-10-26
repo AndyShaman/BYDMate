@@ -7,7 +7,7 @@
 #
 # Workflow:
 #   1. before a release, write the changes under "## [Unreleased]" in CHANGELOG.md
-#   2. ./scripts/prepare-release.sh 3.6.0
+#   2. ./scripts/prepare-release.sh 3.6.0  (first runs unit tests + lint + detekt, as CI does)
 #   3. copy the printed notes into `gh release create v3.6.0 ... --notes "..."`
 set -euo pipefail
 
@@ -23,6 +23,13 @@ if [ -z "$(printf '%s' "$UNREL" | tr -d '[:space:]')" ]; then
   echo "error: [Unreleased] is empty in CHANGELOG.md, nothing to release" >&2
   exit 1
 fi
+
+# --- gate: the same checks CI runs, so a release never ships what CI rejects ---
+# (main CI runs after the push, i.e. after the APK is already out)
+(cd "$ROOT" && ./gradlew :app:testDebugUnitTest :app:lintDebug :app:detekt --console=plain -q) || {
+  echo "error: tests/lint/detekt failed - fix before releasing (reports: app/build/reports/)" >&2
+  exit 1
+}
 
 # --- previous top version (first version heading after Unreleased) ---
 # matches both 2-part (3.5) and 3-part (3.2.2) versions the project uses

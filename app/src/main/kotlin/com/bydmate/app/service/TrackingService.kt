@@ -2287,6 +2287,8 @@ internal fun registerGpsUpdates(lm: LocationManager, listener: LocationListener,
             listener, looper
         )
         Log.i("TrackingService", "requestLocationUpdates(GPS_PROVIDER) registered")
+    } catch (e: SecurityException) {
+        Log.e("TrackingService", "GPS permission denied: ${e.message}", e)
     } catch (e: Exception) {
         Log.e("TrackingService", "GPS provider registration failed: ${e.message}", e)
     }
