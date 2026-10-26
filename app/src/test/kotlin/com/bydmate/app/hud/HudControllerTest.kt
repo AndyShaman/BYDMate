@@ -346,8 +346,36 @@ class HudControllerTest {
         assertFalse(bridgeBuilt)
         assertFalse(hudPrefs().getBoolean(HudController.KEY_SUPPORTED, true))
         assertFalse(c.requiresA11y())
-        assertFalse(NavA11yFeed.enabled)
+        assertTrue(NavA11yFeed.enabled)
         assertEquals(NavGuidanceHub.WAY_AMAP_CLUSTER, NavGuidanceHub.hudWay)
+        c.setEnabled(false)
+    }
+
+    @Test fun `#325 the cluster path reads the Navigator window too, still with zero helper calls`() {
+        installPkg("com.example.amapservice")
+        val c = controller()
+        c.setEnabled(true)
+        assertEquals(HudController.Status.CLUSTER_ONLY, c.status.value)
+        // Navigator posts guidance notifications only while it is NOT on screen: without the
+        // window read the cluster card gets nothing while the driver looks at the Navigator.
+        assertTrue(NavA11yFeed.enabled)
+        verify { helperClient wasNot Called }
+        verify { helperBootstrap wasNot Called }
+        c.setEnabled(false)
+        assertFalse(NavA11yFeed.enabled)
+    }
+
+    @Test fun `#325 a service restart on the cluster path turns the window read back on`() {
+        installPkg("com.example.amapservice")
+        hudPrefs().edit().putBoolean(HudController.KEY_ENABLED, true).commit()
+        val c = controller()
+        c.startIfEnabled()
+        assertTrue(NavA11yFeed.enabled)
+        c.stop()
+        assertFalse(NavA11yFeed.enabled)
+        c.startIfEnabled()
+        assertEquals(HudController.Status.CLUSTER_ONLY, c.status.value)
+        assertTrue(NavA11yFeed.enabled)
         c.setEnabled(false)
     }
 

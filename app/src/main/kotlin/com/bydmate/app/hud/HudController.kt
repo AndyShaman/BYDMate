@@ -369,6 +369,9 @@ class HudController @Inject constructor(
         // Fail closed: a probe that failed for any reason but "not installed" may hide a working gateway.
         if (clusterPathAvailable()) {
             amapCluster = HudAmapClusterLoop(context, prefs()).also { it.start(scope) }
+            // Navigator posts no hint notifications while it is on screen: the card follows the
+            // window read then (#325). A tree read only, no helper calls.
+            NavA11yFeed.enabled = true
             NavGuidanceHub.hudWay = NavGuidanceHub.WAY_AMAP_CLUSTER
             setStatus(Status.CLUSTER_ONLY)
             Log.i(TAG, "SOME/IP gateway absent; hints go to the cluster card via the Amap adapter")
