@@ -521,6 +521,10 @@ class LogRecorder internal constructor(
             "Split37Engine:*", "NativeSplitLauncher:*", "HudTextSanitizer:*", "KnobPlayPause:*",
             "SteeringHeatChannel:*", "HudSwitchChannel:*", "BatteryPreheatChannel:*", "NetworkAvailMon:*", "ConfirmOverlay:*", "ServiceStartWorker:*",
             "CrashLog:*", "MediaSessionGrant:*",
+            // Stock climate app seat writes (#327/#341): the BYD framework logs the seat and
+            // value it sets, the car's confirmation and AC device events. AbsBYDAutoDevice stays
+            // out: it floods (~20 lines/s on Leopard 3).
+            "BYDAutoSettingDevice:*", "AbsBYDAutoSettingListener:*", "BYDAutoAcDevice:*",
             // The event journal: one line per user action, decision and failure, by=#id links.
             "Trace:*"
         )

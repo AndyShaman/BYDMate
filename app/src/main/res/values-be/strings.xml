@@ -1262,6 +1262,8 @@
     <string name="auto_act_sunroof_close">Люк зачыніць</string>
     <string name="auto_act_sunshade_open">Шторка адкрыць</string>
     <string name="auto_act_sunshade_close">Шторка зачыніць</string>
+    <string name="auto_act_sunshade_open_50">Шторка адкрыць 50%</string>
+    <string name="auto_act_sunshade_stop">Шторка спыніць</string>
     <string name="auto_act_sunroof_stop">Люк спыніць</string>
     <string name="auto_act_sunroof_updip">Люк нахіл</string>
     <string name="auto_act_sunroof_comfort">Люк камфорт</string>

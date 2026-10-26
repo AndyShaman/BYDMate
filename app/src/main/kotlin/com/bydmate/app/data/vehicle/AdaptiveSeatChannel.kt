@@ -158,9 +158,9 @@ class AdaptiveSeatChannel(
     private fun detail(expected: Int, seen: List<String>) = "expect=$expected got=${seen.joinToString(",")}"
 
     /** Cached fallback: channel already known, write the requested stage value directly
-     *  (no re-probe, no flicker). 1=off, 2=lvl1 … 6=lvl5. */
+     *  (no re-probe, no flicker). 1=off, 2=lvl1 … 6=lvl5, see [fallbackValue]. */
     private suspend fun fallbackDirect(group: SeatGroup, a: Actions, level: Int): WriteOutcome {
-        val outcome = writer.write(a.fallback, if (level == 0) 1 else level + 1)
+        val outcome = writer.write(a.fallback, if (level == 0) 1 else fallbackValue(group, level))
         journal?.appendActuation(group, level, SeatChannel.FALLBACK, outcome, "n/a")
         return outcome
     }
@@ -174,14 +174,24 @@ class AdaptiveSeatChannel(
      */
     private suspend fun fallbackProbe(group: SeatGroup, a: Actions, level: Int): WriteOutcome {
         val outcome = writer.write(a.fallback, if (level == 0) 1 else 2)
-        if (level > 1 && outcome == WriteOutcome.REAL) writer.write(a.fallback, level + 1)
+        if (level > 1 && outcome == WriteOutcome.REAL) writer.write(a.fallback, fallbackValue(group, level))
         journal?.appendActuation(group, level, SeatChannel.FALLBACK, outcome, "n/a")
         return outcome
     }
 
+    /**
+     * Fallback stage value for an on [level]: level + 1, except driver heat level 3, which the
+     * stock climate app writes as 6 (SEAT_HEATING_LEVEL3_ON) — 4 does not heat the driver seat
+     * (#341). Passenger heat and both vents have no such code and keep level + 1.
+     */
+    private fun fallbackValue(group: SeatGroup, level: Int): Int =
+        if (group == SeatGroup.DRIVER_HEAT && level == DRIVER_HEAT_LEVEL3) DRIVER_HEAT_LEVEL3_ON else level + 1
+
     private companion object {
         const val STATUS_ON = 1
         const val STATUS_OFF = 2
+        const val DRIVER_HEAT_LEVEL3 = 3
+        const val DRIVER_HEAT_LEVEL3_ON = 6
         const val READBACK_ATTEMPTS = 2
         /** Per readback attempt. The whole verify runs inside the NonCancellable seat write, so
          *  this is added latency on every seat command — 2 × 400 ms is the budget that still

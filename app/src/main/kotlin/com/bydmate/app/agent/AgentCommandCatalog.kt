@@ -126,6 +126,8 @@ object AgentCommandCatalog {
         Cmd("sunroof_comfort", "открыть люк в комфортное положение (без сквозняка)", { "天窗舒适打开" }),
         Cmd("sunshade_open", "открыть шторку люка", { "遮阳帘打开" }),
         Cmd("sunshade_close", "закрыть шторку люка", { "遮阳帘关闭" }),
+        Cmd("sunshade_half", "открыть шторку люка наполовину", { "遮阳帘打开50" }),
+        Cmd("sunshade_stop", "остановить движение шторки люка", { "遮阳帘停止" }),
         // Trunk (rear tailgate)
         Cmd("trunk_open", "открыть задний багажник", { "开后备箱" }),
         Cmd("trunk_close", "закрыть задний багажник", { "关后备箱" }),
