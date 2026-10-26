@@ -287,7 +287,7 @@ class TelegramReportBuilderTest {
                 lang = lang,
                 inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L), trip1 = counter1, trip2 = counter2),
             )
-            assertEquals(lang, 22, report.text.lines().size)
+            assertEquals(lang, 24, report.text.lines().size)
             assertFalse(lang, report.text.contains("%1"))
             assertFalse(lang, report.text.contains('\u0000'))
             assertTrue(lang, report.text.lines().last().startsWith("📍 <a href="))
