@@ -1262,6 +1262,8 @@
     <string name="auto_act_sunroof_close">Szyberdach zamknij</string>
     <string name="auto_act_sunshade_open">Roleta otwórz</string>
     <string name="auto_act_sunshade_close">Roleta zamknij</string>
+    <string name="auto_act_sunshade_open_50">Roleta otwórz 50%</string>
+    <string name="auto_act_sunshade_stop">Roleta zatrzymaj</string>
     <string name="auto_act_sunroof_stop">Szyberdach zatrzymaj</string>
     <string name="auto_act_sunroof_updip">Szyberdach uchyl</string>
     <string name="auto_act_sunroof_comfort">Szyberdach komfort</string>

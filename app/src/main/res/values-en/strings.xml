@@ -1110,6 +1110,8 @@
     <string name="auto_act_sunroof_close">Sunroof Close</string>
     <string name="auto_act_sunshade_open">Sunshade Open</string>
     <string name="auto_act_sunshade_close">Sunshade Close</string>
+    <string name="auto_act_sunshade_open_50">Sunshade Open 50%</string>
+    <string name="auto_act_sunshade_stop">Sunshade Stop</string>
     <string name="auto_act_sunroof_stop">Sunroof Stop</string>
     <string name="auto_act_sunroof_updip">Sunroof Tilt</string>
     <string name="auto_act_sunroof_comfort">Sunroof Comfort</string>

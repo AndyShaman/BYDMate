@@ -400,6 +400,12 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_vent_fallback", 1001, 1125122072, null, 1, 6, "seats", false, "competitor-v80"),
+            // Sunshade half-open (3) and stop (4) on the live-validated open/close fid (#362).
+            // BYDAutoBodyworkDevice.voiceCtlSunshadePanel accepts 1..4 with the same voice
+            // constants as the sunroof fid, where 3/4 are live-validated. Stock voice sends only
+            // 1/2 here, so not tried on a car.
+            WriteEntry("sunshade_half", 1001, 1125122060, null, 3, 3, "sunshade", false, "byd-sdk BYDAutoBodyworkDevice.voiceCtlSunshadePanel"),
+            WriteEntry("sunshade_stop", 1001, 1125122060, null, 4, 4, "sunshade", false, "byd-sdk BYDAutoBodyworkDevice.voiceCtlSunshadePanel"),
         )
 
         /**

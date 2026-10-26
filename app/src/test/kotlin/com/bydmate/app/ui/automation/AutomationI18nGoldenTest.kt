@@ -6,6 +6,7 @@ import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.util.appLocalizedContext
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -98,8 +99,10 @@ class AutomationI18nGoldenTest {
         "天窗打开50" to Triple("Люк открыть 50%", "Sunroof Open 50%", "天窗半开"),
         "天窗打开0" to Triple("Люк закрыть", "Sunroof Close", "天窗关闭"),
         "遮阳帘打开" to Triple("Шторка открыть", "Sunshade Open", "遮阳帘打开"),
+        "遮阳帘打开50" to Triple("Шторка открыть 50%", "Sunshade Open 50%", "遮阳帘半开"),
         "遮阳帘关闭" to Triple("Шторка закрыть", "Sunshade Close", "遮阳帘关闭"),
         "天窗停止" to Triple("Люк остановить", "Sunroof Stop", "天窗停止"),
+        "遮阳帘停止" to Triple("Шторка остановить", "Sunshade Stop", "遮阳帘停止"),
         "天窗通风" to Triple("Люк наклон", "Sunroof Tilt", "天窗通风"),
         "天窗舒适打开" to Triple("Люк комфорт", "Sunroof Comfort", "天窗舒适打开"),
         "开后备箱" to Triple("Открыть багажник", "Open Trunk", "打开后备箱"),
@@ -185,6 +188,8 @@ class AutomationI18nGoldenTest {
         "天窗打开0" to Triple("Люк", "Sunroof", "天窗"),
         "遮阳帘打开" to Triple("Люк", "Sunroof", "天窗"),
         "遮阳帘关闭" to Triple("Люк", "Sunroof", "天窗"),
+        "遮阳帘打开50" to Triple("Люк", "Sunroof", "天窗"),
+        "遮阳帘停止" to Triple("Люк", "Sunroof", "天窗"),
         "天窗停止" to Triple("Люк", "Sunroof", "天窗"),
         "天窗通风" to Triple("Люк", "Sunroof", "天窗"),
         "天窗舒适打开" to Triple("Люк", "Sunroof", "天窗"),
@@ -380,6 +385,12 @@ class AutomationI18nGoldenTest {
         "LightLow" to listOf("0" to "Выкл", "1" to "Вкл"),
         "DRL" to listOf("0" to "Нет", "1" to "Вкл", "2" to "Выкл"),
     )
+
+    @Test fun sunshade_half_and_stop_are_in_the_action_catalog() {
+        for (cmd in listOf("遮阳帘打开50", "遮阳帘停止")) {
+            assertTrue("$cmd missing", ACTION_COMMANDS.any { it.command == cmd })
+        }
+    }
 
     @Test fun action_names_and_categories_match_baseline_all_locales() {
         // The «… переключить» entries carry no command of their own; their names are built

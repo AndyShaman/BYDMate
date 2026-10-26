@@ -132,6 +132,9 @@ object CommandTranslator {
         // ── Sunshade ── LIVE_VALIDATED ────────────────────────────────────────
         "遮阳帘打开" to Resolved("sunshade_open",  1),
         "遮阳帘关闭" to Resolved("sunshade_close", 2),
+        // Half-open / stop: same fid, values 3/4 from the BYD SDK, not live-validated (#362).
+        "遮阳帘打开50" to Resolved("sunshade_half", 3),
+        "遮阳帘停止"   to Resolved("sunshade_stop", 4),
 
         // ── Interior / ambient light ── LIVE_VALIDATED (dev=1023 carve-out) ──────
         "打开车内灯" to Resolved("interior_light_on",  2),

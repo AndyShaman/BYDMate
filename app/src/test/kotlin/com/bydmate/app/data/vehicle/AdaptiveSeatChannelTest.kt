@@ -392,4 +392,63 @@ class AdaptiveSeatChannelTest {
         assertEquals("no readback after a rejected write", 0, rb.reads)
         assertFalse(writer.calls.any { it.first.endsWith("_fallback") })
     }
+
+    // ── #341: the stock climate app writes driver heat UI level 3 as 6 (LEVEL3_ON), not 4. ──
+
+    @Test fun `cached FALLBACK driver heat level 3 writes 6, levels 1 and 2 unchanged`() = runTest {
+        val store = FakeStore(SeatChannel.FALLBACK)
+        val writer = RecordingWriter { _, _ -> WriteOutcome.REAL }
+        val ch = AdaptiveSeatChannel(writer, store)
+        assertTrue(ch.actuate(SeatGroup.DRIVER_HEAT, 3))
+        assertTrue(ch.actuate(SeatGroup.DRIVER_HEAT, 2))
+        assertTrue(ch.actuate(SeatGroup.DRIVER_HEAT, 1))
+        assertTrue(ch.actuate(SeatGroup.DRIVER_HEAT, 0))
+        assertEquals(
+            listOf(
+                "driver_seat_heat_fallback" to 6,
+                "driver_seat_heat_fallback" to 3,
+                "driver_seat_heat_fallback" to 2,
+                "driver_seat_heat_fallback" to 1,
+            ),
+            writer.calls,
+        )
+    }
+
+    @Test fun `fallback probe driver heat level 3 applies 6 after the universal stage-1 probe`() = runTest {
+        val store = FakeStore()
+        val writer = RecordingWriter { name, _ ->
+            if (name == "driver_seat_heat_switch") WriteOutcome.PERMANENT_DENIED else WriteOutcome.REAL
+        }
+        val ch = AdaptiveSeatChannel(writer, store)
+        assertTrue(ch.actuate(SeatGroup.DRIVER_HEAT, 3))
+        assertEquals(SeatChannel.FALLBACK, store.winner())
+        val fb = writer.calls.filter { it.first == "driver_seat_heat_fallback" }
+        assertEquals(listOf(2, 6), fb.map { it.second })
+    }
+
+    @Test fun `FALLBACK passenger heat and both vents keep level plus 1 at level 3`() = runTest {
+        val store = FakeStore(SeatChannel.FALLBACK)
+        val writer = RecordingWriter { _, _ -> WriteOutcome.REAL }
+        val ch = AdaptiveSeatChannel(writer, store)
+        assertTrue(ch.actuate(SeatGroup.PASSENGER_HEAT, 3))
+        assertTrue(ch.actuate(SeatGroup.DRIVER_VENT, 3))
+        assertTrue(ch.actuate(SeatGroup.PASSENGER_VENT, 3))
+        assertEquals(
+            listOf(
+                "passenger_seat_heat_fallback" to 4,
+                "driver_seat_vent_fallback" to 4,
+                "passenger_seat_vent_fallback" to 4,
+            ),
+            writer.calls,
+        )
+    }
+
+    @Test fun `cached PRIMARY driver heat level 3 is still level 3`() = runTest {
+        val store = FakeStore(SeatChannel.PRIMARY)
+        val writer = RecordingWriter { _, _ -> WriteOutcome.REAL }
+        val ch = AdaptiveSeatChannel(writer, store)
+        assertTrue(ch.actuate(SeatGroup.DRIVER_HEAT, 3))
+        assertTrue(writer.calls.contains("driver_seat_heat_level" to 3))
+        assertFalse(writer.calls.any { it.second == 6 })
+    }
 }

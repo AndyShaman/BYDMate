@@ -603,4 +603,32 @@ class WriteAllowlistTest {
     @Test fun `no translator command resolves to 255 on a window`() {
         assertTrue(CommandTranslator.allResolved().none { it.actionName.startsWith("window") && it.value == 255 })
     }
+
+    // ── #362: sunshade half/stop = values 3/4 on fid 1125122060, like the sunroof pair on ...056 ──
+    @Test fun `sunshade half and stop are dev 1001 fid 1125122060 values 3 and 4 unvalidated`() {
+        val al = WriteAllowlist(
+            (WriteAllowlist.LIVE_VALIDATED + WriteAllowlist.CANDIDATE_UNVALIDATED)
+                .associateBy { it.actionName.lowercase() }
+        )
+        for ((name, v) in listOf("sunshade_half" to 3, "sunshade_stop" to 4)) {
+            val e = al.find(name) ?: error("missing $name")
+            assertEquals(1001, e.dev)
+            assertEquals(1125122060, e.writeFid)
+            assertEquals(v, e.valueMin)
+            assertEquals(v, e.valueMax)
+            assertEquals("sunshade", e.category)
+            assertFalse("$name must not claim live validation", e.validated)
+            assertTrue(WriteAllowlist.valuesAllowed(e))
+        }
+        // The open/close pair stays live-validated.
+        assertTrue(al.find("sunshade_open")!!.validated)
+        assertTrue(al.find("sunshade_close")!!.validated)
+    }
+
+    @Test fun `loadProduction includes the sunshade half and stop entries`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        for (name in listOf("sunshade_half", "sunshade_stop")) {
+            assertNotNull("$name missing from production", al.find(name))
+        }
+    }
 }

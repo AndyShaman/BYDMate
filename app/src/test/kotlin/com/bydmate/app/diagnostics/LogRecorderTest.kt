@@ -119,6 +119,12 @@ class LogRecorderTest {
         // Log audit 2026-10-06: a sample of the tags that wrote only to logcat.
         assertTrue(spawned[0].contains("NavA11yExtractor:*"))
         assertTrue(spawned[0].contains("MediaSessionGrant:*"))
+        // #327/#341: stock climate seat writes seen through the framework tags; the flooding
+        // AbsBYDAutoDevice tag stays out.
+        assertTrue(spawned[0].contains("BYDAutoSettingDevice:*"))
+        assertTrue(spawned[0].contains("AbsBYDAutoSettingListener:*"))
+        assertTrue(spawned[0].contains("BYDAutoAcDevice:*"))
+        assertFalse(spawned[0].contains("AbsBYDAutoDevice:*"))
 
         val state = recorder.state.value
         assertTrue(state.isRecording)

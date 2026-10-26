@@ -1187,6 +1187,8 @@
     <string name="auto_act_sunroof_close">天窗关闭</string>
     <string name="auto_act_sunshade_open">遮阳帘打开</string>
     <string name="auto_act_sunshade_close">遮阳帘关闭</string>
+    <string name="auto_act_sunshade_open_50">遮阳帘半开</string>
+    <string name="auto_act_sunshade_stop">遮阳帘停止</string>
     <string name="auto_act_sunroof_stop">天窗停止</string>
     <string name="auto_act_sunroof_updip">天窗通风</string>
     <string name="auto_act_sunroof_comfort">天窗舒适打开</string>

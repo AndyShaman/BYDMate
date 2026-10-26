@@ -1103,6 +1103,8 @@
     <string name="auto_act_sunroof_close">Fechar teto solar</string>
     <string name="auto_act_sunshade_open">Abrir cortina</string>
     <string name="auto_act_sunshade_close">Fechar cortina</string>
+    <string name="auto_act_sunshade_open_50">Abrir cortina 50%</string>
+    <string name="auto_act_sunshade_stop">Parar cortina</string>
     <string name="auto_act_sunroof_stop">Parar teto solar</string>
     <string name="auto_act_sunroof_updip">Inclinar teto solar</string>
     <string name="auto_act_sunroof_comfort">Teto solar conforto</string>
