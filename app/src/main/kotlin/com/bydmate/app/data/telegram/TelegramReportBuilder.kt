@@ -360,11 +360,19 @@ object TelegramReportBuilder {
         cost?.let { ReportField.TRIP_COST to listOf(text(strings, R.string.tg_report_trip_cost, it, currency)) },
     ).toMap()
 
-    /** «Время с 16:21 до 16:55»; with the date on both ends when the trip crosses midnight. */
+    /**
+     * «Время с 16:21 до 16:55»; with the date on both ends when the trip crosses midnight. [endLabel]
+     * stands for the HH:MM of the end (the power-off placeholder): it gets [endMs]'s date in front,
+     * the report being rebuilt every few seconds until power-off.
+     */
     private fun timeLine(startMs: Long, endMs: Long, endLabel: String?, strings: ReportStrings): String {
         val sameDay = formatDate(startMs) == formatDate(endMs)
         val start = if (sameDay) formatTime(startMs) else formatDateTime(startMs)
-        val end = endLabel ?: if (sameDay) formatTime(endMs) else formatDateTime(endMs)
+        val end = when {
+            endLabel == null -> if (sameDay) formatTime(endMs) else formatDateTime(endMs)
+            sameDay -> endLabel
+            else -> "${formatDate(endMs)} $endLabel"
+        }
         return text(strings, R.string.tg_report_trip_time, start, end)
     }
 

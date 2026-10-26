@@ -144,6 +144,7 @@ import androidx.compose.ui.res.stringResource
 import com.bydmate.app.cluster.DEFAULT_TRIGGER_KEYCODE
 import com.bydmate.app.cluster.SteeringWheelKeyService
 import com.bydmate.app.cluster.readSteeringKeyOwners
+import com.bydmate.app.cluster.splitKeyChooserOwner
 import com.bydmate.app.cluster.steeringKeyOwner
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.ui.automation.steeringKeyOwnerText
@@ -2055,8 +2056,7 @@ private fun SplitLaunchBlock(viewModel: SettingsViewModel) {
             },
             onDismiss = { learningSplitKey = false },
             occupiedReason = { code ->
-                // splitEnabled = false: re-learning the split key itself is not "occupied".
-                steeringKeyOwner(code, readSteeringKeyOwners(context).copy(splitEnabled = false))
+                splitKeyChooserOwner(code, readSteeringKeyOwners(context))
                     ?.let { steeringKeyOwnerText(context, it) }
                     ?: (splitKeyRuleVerdict(code, rulesForKey) as? SplitKeyRuleVerdict.Occupied)
                         ?.let { context.getString(R.string.settings_split_key_occupied_rule, it.ruleName) }
@@ -2130,6 +2130,10 @@ internal sealed interface LearnUiState {
     data object TimedOut : LearnUiState
 }
 
+/** A capture is occupied when its primary code or any companion the same press sent is taken. */
+internal fun captureOccupiedReason(keyCode: Int, companions: Set<Int>, occupiedReason: (Int) -> String?): String? =
+    occupiedReason(keyCode) ?: companions.firstNotNullOfOrNull(occupiedReason)
+
 /**
  * Learn-the-button dialog. Puts SteeringWheelKeyService into learn mode while open and collects the
  * captured key from its StateFlow (same process). States: Waiting → (Rejected/Occupied loop) →
@@ -2167,7 +2171,7 @@ internal fun LearnButtonDialog(
         SteeringWheelKeyService.capturedKey
             .filterNotNull()
             .collect { r ->
-                val occupied = if (r.assignable) occupiedReason(r.keyCode) else null
+                val occupied = if (r.assignable) captureOccupiedReason(r.keyCode, r.companions, occupiedReason) else null
                 state = when {
                     !r.assignable -> LearnUiState.Rejected(r.keyCode)
                     // The service clears learn mode on capture; re-arm so the next press is caught.
