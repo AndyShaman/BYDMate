@@ -141,11 +141,14 @@ class LlmAgentBackend @Inject constructor(
         else -> false
     }
 
-    private fun userMessage(e: Throwable?): String = when {
-        e is LlmHttpException && (e.code == 401 || e.code == 403) ->
-            "Ключ подключения не подходит, проверь настройки"
-        e is LlmHttpException && e.code == 429 -> "Лимит запросов исчерпан, попробуй позже"
-        e is LlmHttpException && e.code >= 500 -> "Сервер модели недоступен, попробуй позже"
+    // Not an HTTP error (network, malformed body) maps to code 0 and lands in the generic text.
+    private fun userMessage(e: Throwable?): String = when ((e as? LlmHttpException)?.code ?: 0) {
+        401, 403 -> "Ключ подключения не подходит, проверь настройки"
+        429 -> "Лимит запросов исчерпан, попробуй позже"
+        in 500..Int.MAX_VALUE -> "Сервер модели недоступен, попробуй позже"
+        402 -> "У провайдера модели закончились средства: пополни баланс или лимит ключа"
+        404 -> "Провайдер не нашёл модель или она не работает с инструментами, выбери другую в настройках"
+        400 -> "Провайдер отклонил запрос: проверь название модели в настройках или выбери другую"
         else -> "Нет связи с сервером, скажи простую команду"
     }
 

@@ -146,6 +146,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import com.bydmate.app.R
 import com.bydmate.app.agent.LlmAgentBackend
+import com.bydmate.app.agent.SHOW_CONTACTS_PERMISSION_REQUEST
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.components.AdbVerdictDialog
@@ -3812,21 +3813,23 @@ private fun VoiceSettingsContent(
     }
 
     // Contacts permission (call_contact tool)
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-            SettingStatusRow(
-                title = stringResource(R.string.settings_voice_contacts_label),
-                description = stringResource(R.string.settings_voice_contacts_description),
-                ok = contactsPermGranted,
-                buttonLabel = if (!contactsPermGranted) stringResource(R.string.settings_voice_contacts_grant) else null,
-                onClick = if (!contactsPermGranted) {
-                    { contactsPermLauncher.launch(Manifest.permission.READ_CONTACTS) }
-                } else null,
-            )
+    if (SHOW_CONTACTS_PERMISSION_REQUEST) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+                SettingStatusRow(
+                    title = stringResource(R.string.settings_voice_contacts_label),
+                    description = stringResource(R.string.settings_voice_contacts_description),
+                    ok = contactsPermGranted,
+                    buttonLabel = if (!contactsPermGranted) stringResource(R.string.settings_voice_contacts_grant) else null,
+                    onClick = if (!contactsPermGranted) {
+                        { contactsPermLauncher.launch(Manifest.permission.READ_CONTACTS) }
+                    } else null,
+                )
+            }
         }
     }
 

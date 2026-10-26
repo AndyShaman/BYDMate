@@ -1,6 +1,7 @@
 package com.bydmate.app.agent
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
@@ -252,6 +253,58 @@ class AgentToolsLaunchTest {
         assertEquals("app_launch", captured.captured.kind)
         val payload = JSONObject(captured.captured.payload!!)
         assertEquals("ru.yandex.yandexnavi", payload.getString("packageName"))
+    }
+
+    // --- #334: "навигатор" follows «Навигатор для маршрутов» ---
+
+    private fun chooseNavigator(value: String) {
+        val prefs = mockk<SharedPreferences>()
+        every { prefs.getString("route_navigator", null) } returns value
+        every { context.getSharedPreferences("voice", Context.MODE_PRIVATE) } returns prefs
+    }
+
+    private val navigatorFixture = launcherFixture + listOf(
+        "Waze" to "com.waze",
+        "2ГИС" to "ru.dublgis.dgismobile",
+        "Яндекс Карты" to "ru.yandex.yandexmaps",
+    )
+
+    private suspend fun launchedPackage(name: String, apps: List<Pair<String, String>>): String {
+        val captured = slot<ActionDef>()
+        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
+        val t = tools().apply { launcherAppsProvider = { apps } }
+        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"$name"}""")))
+        assertTrue(out.toString(), out.getBoolean("ok"))
+        return JSONObject(captured.captured.payload!!).getString("packageName")
+    }
+
+    // Fails today: the alias is hardcoded to ru.yandex.yandexnavi.
+    @Test fun launch_app_navigator_opens_waze_when_waze_is_chosen() = runTest {
+        chooseNavigator("waze")
+        assertEquals("com.waze", launchedPackage("навигатор", navigatorFixture))
+    }
+
+    // Fails today for the same reason.
+    @Test fun launch_app_navigator_opens_2gis_when_2gis_is_chosen() = runTest {
+        chooseNavigator("dgis")
+        assertEquals("ru.dublgis.dgismobile", launchedPackage("навигатор", navigatorFixture))
+    }
+
+    @Test fun launch_app_navigator_opens_yandex_maps_when_maps_is_chosen() = runTest {
+        chooseNavigator("maps")
+        assertEquals("ru.yandex.yandexmaps", launchedPackage("навигатор", navigatorFixture))
+    }
+
+    // Guard: the chosen app is not installed -> Yandex Navigator, like routes do.
+    @Test fun launch_app_navigator_falls_back_to_yandex_when_chosen_app_is_missing() = runTest {
+        chooseNavigator("waze")
+        assertEquals("ru.yandex.yandexnavi", launchedPackage("навигатор", launcherFixture))
+    }
+
+    // Guard: the explicit name keeps meaning Yandex whatever is chosen.
+    @Test fun launch_app_yandex_navigator_name_stays_yandex_when_waze_is_chosen() = runTest {
+        chooseNavigator("waze")
+        assertEquals("ru.yandex.yandexnavi", launchedPackage("яндекс навигатор", navigatorFixture))
     }
 
     // (b) partial unambiguous match -> launches Settings.

@@ -159,11 +159,11 @@ class PostRestoreCheckTest {
     }
 
     @Test
-    fun `agent on without contacts - contacts item`() = runBlocking {
+    fun `agent on without contacts - no contacts item (row hidden, name calls unavailable)`() = runBlocking {
         markPending()
         probes.toggles = probes.toggles.copy(agent = true)
 
-        assertEquals(listOf(PostRestoreItem.Contacts), check.runIfPending()!!.items)
+        assertEquals(emptyList<PostRestoreItem>(), check.runIfPending()!!.items)
     }
 
     @Test

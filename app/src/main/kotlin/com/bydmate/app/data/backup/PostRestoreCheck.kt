@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.bydmate.app.agent.SHOW_CONTACTS_PERMISSION_REQUEST
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -116,11 +117,14 @@ class PostRestoreCheck(
 
     private fun needsOverlay(t: RestoredToggles) = t.widget || t.blindSpot || t.voice || t.agent
 
+    private fun needsContacts(t: RestoredToggles) = SHOW_CONTACTS_PERMISSION_REQUEST && t.agent &&
+        !probes.hasPermission(Manifest.permission.READ_CONTACTS)
+
     private fun evaluate(t: RestoredToggles, overlay: Boolean): PostRestoreReport {
         val items = buildList {
             if (needsOverlay(t) && !overlay) add(PostRestoreItem.Overlay)
             if (t.voice && !probes.hasPermission(Manifest.permission.RECORD_AUDIO)) add(PostRestoreItem.Mic)
-            if (t.agent && !probes.hasPermission(Manifest.permission.READ_CONTACTS)) add(PostRestoreItem.Contacts)
+            if (needsContacts(t)) add(PostRestoreItem.Contacts)
             if (t.voice && !probes.asrModelReady()) add(PostRestoreItem.AsrModel)
             if (t.tts && t.ttsOffline && !probes.ttsVoiceReady(t.ttsVoiceId)) {
                 add(PostRestoreItem.TtsVoice(t.ttsVoiceId))

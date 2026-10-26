@@ -362,4 +362,44 @@ class LlmAgentBackendTest {
         assertEquals("Ответ оборвался, попробуй ещё раз", err.userMessage)
         coVerify(exactly = 1) { client.chatStream(any(), any(), any(), any(), any(), any(), any()) }
     }
+
+    // #363: a provider-side refusal must not read as "no connection".
+    @Test
+    fun `402 404 400 give their own provider-side phrases`() = runTest {
+        val expected = mapOf(
+            402 to "У провайдера модели закончились средства: пополни баланс или лимит ключа",
+            404 to "Провайдер не нашёл модель или она не работает с инструментами, выбери другую в настройках",
+            400 to "Провайдер отклонил запрос: проверь название модели в настройках или выбери другую",
+        )
+        for ((code, text) in expected) {
+            coEvery { resolver.primary() } returns conn(LlmConnectionResolver.ID_CUSTOM)
+            coEvery { resolver.fallback() } returns null
+            coEvery { client.chatRaw(any(), any(), any(), any(), any(), any()) } returns
+                Result.failure(LlmHttpException(code))
+            val e = backend.chat(listOf(AgentMessage.User("q")), null).exceptionOrNull()
+            assertEquals("HTTP $code", text, (e as LlmError).userMessage)
+        }
+    }
+
+    @Test
+    fun `400 on openrouter after the plain retry says the provider rejected the request`() = runTest {
+        coEvery { resolver.primary() } returns conn(LlmConnectionResolver.ID_OPENROUTER)
+        coEvery { resolver.fallback() } returns null
+        coEvery { client.chatRaw(any(), any(), any(), any(), any(), any()) } returns
+            Result.failure(LlmHttpException(400))
+        val e = backend.chat(listOf(AgentMessage.User("q")), null).exceptionOrNull()
+        assertEquals("Провайдер отклонил запрос: проверь название модели в настройках или выбери другую",
+            (e as LlmError).userMessage)
+        coVerify(exactly = 2) { client.chatRaw(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `network failure still says no connection`() = runTest {
+        coEvery { resolver.primary() } returns conn(LlmConnectionResolver.ID_CUSTOM)
+        coEvery { resolver.fallback() } returns null
+        coEvery { client.chatRaw(any(), any(), any(), any(), any(), any()) } returns
+            Result.failure(java.io.IOException("boom"))
+        val e = backend.chat(listOf(AgentMessage.User("q")), null).exceptionOrNull()
+        assertEquals("Нет связи с сервером, скажи простую команду", (e as LlmError).userMessage)
+    }
 }
