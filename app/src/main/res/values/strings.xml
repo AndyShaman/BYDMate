@@ -1960,6 +1960,9 @@
     <string name="tg_report_field_range">Запас хода</string>
     <string name="tg_report_field_odometer">Пробег</string>
     <string name="tg_report_field_trip">Поездка</string>
+    <string name="tg_report_field_trip_time">Время поездки</string>
+    <string name="tg_report_field_trip_kwh">Энергия поездки</string>
+    <string name="tg_report_field_trip_cost">Стоимость поездки</string>
     <string name="tg_report_field_temps">Температура</string>
     <string name="tg_report_field_openings">Что открыто</string>
     <string name="tg_report_field_tires">Давление в шинах</string>
@@ -1977,6 +1980,9 @@
     <string name="tg_report_trip_km_whole">%1$d км</string>
     <string name="tg_report_odometer">Пробег %1$,d км</string>
     <string name="tg_report_trip_consumption">Расход %1$.1f кВт·ч/100 км</string>
+    <string name="tg_report_trip_time">Время с %1$s до %2$s</string>
+    <string name="tg_report_trip_energy">Энергия %1$.1f кВт·ч</string>
+    <string name="tg_report_trip_cost">Стоимость %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">снаружи %1$+d°</string>
     <string name="tg_report_temp_inside">в салоне %1$+d°</string>
     <string name="tg_report_open_list">Открыто: %1$s</string>
@@ -2005,6 +2011,9 @@
     <string name="tg_report_field_range_desc">Километры, как на Главной</string>
     <string name="tg_report_field_odometer_desc">Общий пробег машины</string>
     <string name="tg_report_field_trip_desc">Километры, расход и время в пути</string>
+    <string name="tg_report_field_trip_time_desc">Во сколько началась и закончилась</string>
+    <string name="tg_report_field_trip_kwh_desc">Сколько кВт·ч потрачено за поездку</string>
+    <string name="tg_report_field_trip_cost_desc">Во сколько обошлась поездка по вашему тарифу</string>
     <string name="tg_report_field_trip1_desc">Счётчик TRIP 1 с Главной: километры, время в пути и расход</string>
     <string name="tg_report_field_trip2_desc">Счётчик TRIP 2 с Главной: километры, время в пути и расход</string>
     <string name="tg_report_field_temps_desc">Снаружи и в салоне</string>

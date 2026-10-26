@@ -1907,6 +1907,9 @@
     <string name="tg_report_field_range">续航</string>
     <string name="tg_report_field_odometer">总里程</string>
     <string name="tg_report_field_trip">行程</string>
+    <string name="tg_report_field_trip_time">行程时间</string>
+    <string name="tg_report_field_trip_kwh">行程电量</string>
+    <string name="tg_report_field_trip_cost">行程费用</string>
     <string name="tg_report_field_temps">温度</string>
     <string name="tg_report_field_openings">未关闭项</string>
     <string name="tg_report_field_tires">胎压</string>
@@ -1924,6 +1927,9 @@
     <string name="tg_report_trip_km_whole">%1$d 公里</string>
     <string name="tg_report_odometer">总里程 %1$,d 公里</string>
     <string name="tg_report_trip_consumption">能耗 %1$.1f kWh/100 公里</string>
+    <string name="tg_report_trip_time">时间 %1$s 至 %2$s</string>
+    <string name="tg_report_trip_energy">电量 %1$.1f kWh</string>
+    <string name="tg_report_trip_cost">费用 %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">车外 %1$+d°</string>
     <string name="tg_report_temp_inside">车内 %1$+d°</string>
     <string name="tg_report_open_list">未关闭：%1$s</string>
@@ -1952,6 +1958,9 @@
     <string name="tg_report_field_range_desc">公里数，与主页相同</string>
     <string name="tg_report_field_odometer_desc">车辆的总行驶里程</string>
     <string name="tg_report_field_trip_desc">公里数、能耗和行驶时间</string>
+    <string name="tg_report_field_trip_time_desc">行程开始和结束的时间</string>
+    <string name="tg_report_field_trip_kwh_desc">本次行程消耗的 kWh</string>
+    <string name="tg_report_field_trip_cost_desc">按你的电价计算的行程费用</string>
     <string name="tg_report_field_trip1_desc">首页的 TRIP 1 计数器：公里数、行驶时间和能耗</string>
     <string name="tg_report_field_trip2_desc">首页的 TRIP 2 计数器：公里数、行驶时间和能耗</string>
     <string name="tg_report_field_temps_desc">车外和车内</string>
