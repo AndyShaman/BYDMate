@@ -1753,6 +1753,16 @@
     <string name="tech_label_full_cycles">поўных цыклаў</string>
     <string name="tech_caption_full_cycles">%1$s кВт·г ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">з\'явіцца пасля першай зарадкі</string>
+    <string name="tech_label_full_charge" formatted="false">Поўная зарадка да 100 %</string>
+    <string name="tech_label_since_full_charge">Пасля поўнай зарадкі</string>
+    <string name="tech_label_calibration">Каліброўка</string>
+    <string name="tech_value_date_days_ago">%1$s · %2$d дз таму</string>
+    <string name="tech_value_date_today">%1$s · сёння</string>
+    <string name="tech_value_days_hours">%1$d дз %2$d г</string>
+    <string name="tech_value_hours">%d г</string>
+    <string name="tech_value_no_data">няма даных</string>
+    <string name="tech_hint_full_charge" formatted="false">BYD у кіраўніцтвах да сваіх машын раіць зараджаць батарэю да 100 % не радзей за раз на тыдзень. У канцы поўнай зарадкі машына выраўноўвае зарад ячэек, гэта падаўжае тэрмін службы батарэі.</string>
+    <string name="tech_hint_calibration" formatted="false">Каліброўка: разрадзіць батарэю ніжэй за 10 % і зарадзіць да 100 %. BYD раіць рабіць гэта раз на 3–6 месяцаў, не радзей за раз на паўгода, каб машына дакладней паказвала зарад і ёмістасць. Уладальнікі раяць не перарываць зарадку. Дата паводле даных праграмы, з дакладнасцю да дня.</string>
     <string name="tech_label_battery_power">магутнасць батарэі</string>
     <string name="tech_label_max_charge">макс. магутнасць зарадкі</string>
     <string name="tech_label_max_discharge_allow">макс. магутнасць разрадкі</string>

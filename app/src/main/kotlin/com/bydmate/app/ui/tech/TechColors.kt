@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.tech
 
 import androidx.compose.ui.graphics.Color
+import com.bydmate.app.domain.battery.BatteryCalibration
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.SocYellow
@@ -40,6 +41,14 @@ internal fun cellMinVoltageColor(min: Double?): Color = when {
     min >= 3.0 -> AccentGreen
     min >= 2.8 -> SocYellow
     else -> SocRed
+}
+
+/** Full-charge and calibration rows (#359): the level's green/yellow/red, neutral when unknown. */
+internal fun calibrationLevelColor(level: BatteryCalibration.Level?): Color = when (level) {
+    null -> TextPrimary
+    BatteryCalibration.Level.GOOD -> AccentGreen
+    BatteryCalibration.Level.WARN -> SocYellow
+    BatteryCalibration.Level.BAD -> SocRed
 }
 
 /** LFP calendar-aging cue (approved mock): <65 green, 65-85 yellow, >85 red. */

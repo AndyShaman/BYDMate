@@ -1757,6 +1757,16 @@
     <string name="tech_label_full_cycles">полных циклов</string>
     <string name="tech_caption_full_cycles">%1$s кВт·ч ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">появится после первой зарядки</string>
+    <string name="tech_label_full_charge" formatted="false">Полная зарядка до 100 %</string>
+    <string name="tech_label_since_full_charge">После полной зарядки</string>
+    <string name="tech_label_calibration">Калибровка</string>
+    <string name="tech_value_date_days_ago">%1$s · %2$d дн назад</string>
+    <string name="tech_value_date_today">%1$s · сегодня</string>
+    <string name="tech_value_days_hours">%1$d дн %2$d ч</string>
+    <string name="tech_value_hours">%d ч</string>
+    <string name="tech_value_no_data">нет данных</string>
+    <string name="tech_hint_full_charge" formatted="false">BYD в руководствах к своим машинам советует заряжать батарею до 100 % не реже раза в неделю. В конце полной зарядки машина выравнивает заряд ячеек, это продлевает срок службы батареи.</string>
+    <string name="tech_hint_calibration" formatted="false">Калибровка: разрядить батарею ниже 10 % и зарядить до 100 %. BYD советует делать это раз в 3–6 месяцев, не реже раза в полгода, чтобы машина точнее показывала заряд и ёмкость. Владельцы советуют не прерывать зарядку. Дата по данным приложения, с точностью до дня.</string>
     <string name="tech_label_battery_power">мощность батареи</string>
     <string name="tech_label_max_charge">макс. мощность заряда</string>
     <string name="tech_label_max_discharge_allow">макс. мощность разряда</string>
