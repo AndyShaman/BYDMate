@@ -40,6 +40,18 @@ class SteeringKeyOwnerTest {
         assertEquals(SteeringKeyOwner.SPLIT, steeringKeyOwner(383, none.copy(splitEnabled = true, splitKey = 383)))
         assertNull(steeringKeyOwner(383, none.copy(splitEnabled = false, splitKey = 383)))
     }
+    @Test fun `split owns the companion codes of its press while on`() {
+        val on = none.copy(splitEnabled = true, splitKey = 304, splitCompanions = setOf(327))
+        assertEquals(SteeringKeyOwner.SPLIT, steeringKeyOwner(304, on))
+        assertEquals(SteeringKeyOwner.SPLIT, steeringKeyOwner(327, on))
+        assertNull(steeringKeyOwner(320, on))
+    }
+    @Test fun `split off frees its companion codes`() {
+        assertNull(steeringKeyOwner(327, none.copy(splitEnabled = false, splitKey = 304, splitCompanions = setOf(327))))
+    }
+    @Test fun `an unassigned split key owns no companions`() {
+        assertNull(steeringKeyOwner(327, none.copy(splitEnabled = true, splitKey = 0, splitCompanions = setOf(327))))
+    }
     @Test fun `an unassigned split key owns nothing`() {
         assertNull(steeringKeyOwner(0, none.copy(splitEnabled = true, splitKey = 0)))
     }

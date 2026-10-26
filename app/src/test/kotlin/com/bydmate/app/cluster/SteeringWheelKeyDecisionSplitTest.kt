@@ -34,4 +34,29 @@ class SteeringWheelKeyDecisionSplitTest {
         assertEquals(SplitKeyDecision.PASS_THROUGH,
             splitKeyDecision(351, isDown = false, repeatCount = 0, splitEnabled = true, splitKeyCode = 383))
     }
+
+    @Test fun `a companion code is consumed on down, up and repeat`() {
+        for ((down, repeat) in listOf(true to 0, false to 0, true to 1)) {
+            assertEquals(SplitKeyDecision.CONSUME,
+                splitKeyDecision(327, isDown = down, repeatCount = repeat, splitEnabled = true,
+                    splitKeyCode = 304, splitCompanions = setOf(327)))
+        }
+    }
+    @Test fun `the primary key still toggles when companions are set`() {
+        assertEquals(SplitKeyDecision.TOGGLE,
+            splitKeyDecision(304, isDown = true, repeatCount = 0, splitEnabled = true,
+                splitKeyCode = 304, splitCompanions = setOf(327)))
+    }
+    @Test fun `companions pass through with the feature off`() {
+        for (down in listOf(true, false)) {
+            assertEquals(SplitKeyDecision.PASS_THROUGH,
+                splitKeyDecision(327, isDown = down, repeatCount = 0, splitEnabled = false,
+                    splitKeyCode = 304, splitCompanions = setOf(327)))
+        }
+    }
+    @Test fun `companions pass through with no key assigned`() {
+        assertEquals(SplitKeyDecision.PASS_THROUGH,
+            splitKeyDecision(327, isDown = true, repeatCount = 0, splitEnabled = true,
+                splitKeyCode = 0, splitCompanions = setOf(327)))
+    }
 }
