@@ -56,7 +56,8 @@ object VoiceModule {
 
     @Provides @Singleton
     fun provideContinuousAsr(mm: GigaAmModelManager, guard: AsrLoadGuard): ContinuousAsr =
-        GigaAmAsrEngine(mm, loadGuard = guard, warmVad = LegacyHeadUnit.isAndroid10)
+        GigaAmAsrEngine(mm, loadGuard = guard, warmVad = LegacyHeadUnit.isAndroid10,
+            preRollMs = if (LegacyHeadUnit.isAndroid10) 400 else 0)
 
     @Provides @Singleton
     fun provideRuStressMarker(mm: TtsModelManager): RuStressMarker =

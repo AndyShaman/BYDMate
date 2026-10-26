@@ -32,6 +32,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 /**
  * The factory 360 view against our warm camera (tester dump 2026-10-03, fixture
@@ -112,6 +113,13 @@ class BlindSpotControllerNative360Test {
         idle(TICK)
     }
 
+    private fun awaitCameraEvents(count: Int) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        do {
+            ticks(1)
+        } while (cameraEvents().size < count && System.nanoTime() < deadline)
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun textureViews(): List<TextureView> {
         val global = Class.forName("android.view.WindowManagerGlobal")
@@ -136,7 +144,7 @@ class BlindSpotControllerNative360Test {
         val order = fixtureNative360Order()
         assertEquals(listOf(true, false), order)
         arm()
-        ticks(WARM_TICKS)
+        awaitCameraEvents(1)
         assertEquals(listOf("camera open ok=true id=7 indexes=2,3"), cameraEvents())
 
         nativeCamera.value = order[0]
@@ -147,7 +155,7 @@ class BlindSpotControllerNative360Test {
         )
 
         nativeCamera.value = order[1]
-        ticks(WARM_TICKS)
+        awaitCameraEvents(3)
         assertEquals(
             listOf(
                 "camera open ok=true id=7 indexes=2,3",
@@ -166,7 +174,7 @@ class BlindSpotControllerNative360Test {
         assertEquals(emptyList<String>(), cameraEvents())
 
         nativeCamera.value = false
-        ticks(WARM_TICKS)
+        awaitCameraEvents(1)
         assertEquals(listOf("camera open ok=true id=7 indexes=2,3"), cameraEvents())
     }
 
@@ -175,8 +183,6 @@ class BlindSpotControllerNative360Test {
         val ID = Regex(" #\\d+")
         val SPACES = Regex(" +")
         val TICK: Duration = Duration.ofMillis(150)
-        /** Ticks to attach the windows, see the surfaces and open the camera. */
-        const val WARM_TICKS = 6
         /** 6 s of the 360 held up, well past the old instant reopen. */
         const val HELD_TICKS = 40
     }
