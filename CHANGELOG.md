@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [4.0.2] - 2026-10-26
+
 ### Новое
 - «Техника», карточка «Батарея · история»: когда зарядка последний раз дошла до 100 %, сколько прошло с тех пор и когда была последняя калибровка (зарядка от 9 % и ниже до 100 %). Строки меняют цвет: полная зарядка желтеет с 7 дней и краснеет с 14, калибровка желтеет после 90 дней и краснеет после 180. Даты по данным приложения, с точностью до дня (#359).
 - Отчёт в Telegram: можно добавить время начала и конца поездки, сколько кВт·ч она заняла и сколько стоила по вашему тарифу. Пункты выключены по умолчанию, есть и в правилах, и в отчёте при выключении машины.
@@ -1457,7 +1459,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.0.1...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.0.2...HEAD
+[4.0.2]: https://github.com/AndyShaman/BYDMate/compare/v4.0.1...v4.0.2
 [4.0.1]: https://github.com/AndyShaman/BYDMate/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/AndyShaman/BYDMate/compare/v3.20.0...v4.0.0
 [3.20.0]: https://github.com/AndyShaman/BYDMate/compare/v3.19.9...v3.20.0
