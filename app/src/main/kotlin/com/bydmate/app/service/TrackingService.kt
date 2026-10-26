@@ -1990,22 +1990,11 @@ class TrackingService : Service(), LocationListener {
         // track — while parked the GPS provider goes quiet (8 m filter) and only
         // network kept firing far-away points that got recorded into the route.
         // Same params as TripInfo (2000ms, 8m, explicit MainLooper).
-        if (gpsEnabled) {
-            try {
-                lm.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    2000L, 8.0f,
-                    this, Looper.getMainLooper()
-                )
-                Log.i(TAG, "requestLocationUpdates(GPS_PROVIDER) registered")
-            } catch (e: Exception) {
-                Log.e(TAG, "GPS provider registration failed: ${e.message}", e)
-            }
-        }
+        registerGpsUpdates(lm, this, Looper.getMainLooper())
 
         // Immediate fix from GPS last-known only (like TripInfo).
         try {
-            val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
+            val lastKnown = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
             // A seed is never live; with no fresh seed (GPS off, no fix yet), any snapshot kept
             // from a previous run of this service is demoted too, so a restart never keeps
             // serving a stale point as if the listener just delivered it.
@@ -2022,7 +2011,7 @@ class TrackingService : Service(), LocationListener {
         }
 
         if (!gpsEnabled) {
-            Log.e(TAG, "GPS provider not enabled! GPS tracking will not work.")
+            Log.e(TAG, "GPS provider not enabled! Listener registered, waiting for the provider.")
         }
     }
 
@@ -2279,6 +2268,24 @@ class TrackingService : Service(), LocationListener {
         lastNotificationText = text
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification(text))
+    }
+}
+
+/** GPS listener registration, whatever the provider state at this instant (#361): DiLink 3.0/4.0
+ *  switch the provider off with the ignition, and a service created during an ignition-off wake
+ *  lives on into the next drive. Android keeps a request made for a disabled provider and starts
+ *  delivering once it comes back on. A unit with no GPS provider at all throws; that is logged. */
+@Suppress("TooGenericExceptionCaught") // a vendor LocationManager must not take the service down
+internal fun registerGpsUpdates(lm: LocationManager, listener: LocationListener, looper: Looper) {
+    try {
+        lm.requestLocationUpdates(
+            LocationManager.GPS_PROVIDER,
+            2000L, 8.0f,
+            listener, looper
+        )
+        Log.i("TrackingService", "requestLocationUpdates(GPS_PROVIDER) registered")
+    } catch (e: Exception) {
+        Log.e("TrackingService", "GPS provider registration failed: ${e.message}", e)
     }
 }
 

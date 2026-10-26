@@ -2,14 +2,18 @@ package com.bydmate.app.domain.tracker
 
 import android.location.Location
 import com.bydmate.app.data.local.dao.TripPointDao
+import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.remote.diParsData
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.unmockkAll
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -101,5 +105,29 @@ class TripTrackerTest {
         tracker.onData(data, null) // DRIVING
 
         assertEquals(TripState.DRIVING, tracker.state.value)
+    }
+
+    @Test
+    fun `a drive that starts without a fix keeps every point from the first fix on (#361)`() = runTest {
+        // Underground garage: the car moves (autoservice speed is readable) but there is no fix.
+        val tracker = tracker()
+        val data = diParsData(speed = 20)
+        nowMs = 1_000L
+        tracker.onData(data, null) // arm
+        nowMs = 7_000L
+        tracker.onData(data, null) // DRIVING, nothing to record yet
+        assertEquals(TripState.DRIVING, tracker.state.value)
+
+        // Out on the street: fixes arrive and every one of them is kept.
+        val fix = movingLocation(5f)
+        repeat(30) {
+            nowMs += 1_000L
+            tracker.onData(data, fix)
+        }
+
+        val saved = slot<List<TripPointEntity>>()
+        coVerify(exactly = 1) { dao.insertAll(capture(saved)) }
+        assertEquals(30, saved.captured.size)
+        assertTrue(saved.captured.all { it.timestamp > 7_000L })
     }
 }
