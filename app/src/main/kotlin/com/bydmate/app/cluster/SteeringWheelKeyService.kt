@@ -173,7 +173,7 @@ class SteeringWheelKeyService : AccessibilityService() {
     private fun splitKeyVerdict(event: KeyEvent, isDown: Boolean): Boolean? {
         val split = entryPoint().splitPreferences()
         return when (splitKeyDecision(event.keyCode, isDown, event.repeatCount,
-            split.isFeatureEnabled(), split.getSteeringKeyCode())) {
+            split.isFeatureEnabled(), split.getSteeringKeyCode(), split.getSteeringKeyCompanions())) {
             SplitKeyDecision.TOGGLE -> {
                 val keyCode = event.keyCode
                 keyScope.launch {

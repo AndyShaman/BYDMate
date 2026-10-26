@@ -17,17 +17,19 @@ data class SteeringKeyOwners(
     val knobEnabled: Boolean,
     val splitEnabled: Boolean,
     val splitKey: Int,
+    val splitCompanions: Set<Int> = emptySet(),
 )
 
 /**
  * Who owns [keyCode], in SteeringWheelKeyService's own order (voice, knob, projection, split);
- * null = free. The companion codes of the voice button's press are swallowed by voice as well.
+ * null = free. The companion codes of the voice and split buttons' presses go to their owner as well.
  */
 fun steeringKeyOwner(keyCode: Int, o: SteeringKeyOwners): SteeringKeyOwner? = when {
     o.voiceEnabled && (keyCode == o.voiceKey || keyCode in o.voiceCompanions) -> SteeringKeyOwner.VOICE
     o.knobEnabled && keyCode == VOLUME_KNOB_PRESS_KEYCODE -> SteeringKeyOwner.KNOB
     o.projectionEnabled && keyCode == o.projectionKey -> SteeringKeyOwner.PROJECTION
-    o.splitEnabled && o.splitKey > 0 && keyCode == o.splitKey -> SteeringKeyOwner.SPLIT
+    o.splitEnabled && o.splitKey > 0 && (keyCode == o.splitKey || keyCode in o.splitCompanions) ->
+        SteeringKeyOwner.SPLIT
     else -> null
 }
 
@@ -56,5 +58,6 @@ fun readSteeringKeyOwners(context: Context): SteeringKeyOwners {
         knobEnabled = clusterPrefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false),
         splitEnabled = split.isFeatureEnabled(),
         splitKey = split.getSteeringKeyCode(),
+        splitCompanions = split.getSteeringKeyCompanions(),
     )
 }

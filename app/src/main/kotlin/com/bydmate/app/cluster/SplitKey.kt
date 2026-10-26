@@ -10,15 +10,22 @@ enum class SplitKeyDecision { TOGGLE, CONSUME, PASS_THROUGH }
  * - feature off, no key, or another key → PASS_THROUGH (automation rules and native untouched).
  * - the key, feature on: TOGGLE on the first DOWN; CONSUME on its UP and on auto-repeat DOWNs,
  *   so a held button never opens and closes the split in a loop.
+ * - [splitCompanions] (other codes of the key's press), feature on and a key set: CONSUME on every
+ *   edge, so the stock assistant never sees them.
  */
+@Suppress("LongParameterList") // one flat input per gate, so tests pin each one
 fun splitKeyDecision(
     keyCode: Int,
     isDown: Boolean,
     repeatCount: Int,
     splitEnabled: Boolean,
     splitKeyCode: Int,
+    splitCompanions: Set<Int> = emptySet(),
 ): SplitKeyDecision {
-    if (!splitEnabled || splitKeyCode <= 0 || keyCode != splitKeyCode) return SplitKeyDecision.PASS_THROUGH
+    if (!splitEnabled || splitKeyCode <= 0) return SplitKeyDecision.PASS_THROUGH
+    if (keyCode != splitKeyCode) {
+        return if (keyCode in splitCompanions) SplitKeyDecision.CONSUME else SplitKeyDecision.PASS_THROUGH
+    }
     return if (isDown && repeatCount == 0) SplitKeyDecision.TOGGLE else SplitKeyDecision.CONSUME
 }
 

@@ -1983,7 +1983,8 @@ private fun SplitLaunchBlock(viewModel: SettingsViewModel) {
     // Rules are read when the learn dialog opens: occupancy and conflicts are checked against them.
     var rulesForKey by remember { mutableStateOf<List<RuleEntity>>(emptyList()) }
     var learningSplitKey by remember { mutableStateOf(false) }
-    var pendingKeyConflict by remember { mutableStateOf<Pair<Int, List<RuleEntity>>?>(null) }
+    // Key, its companion codes, and the split rules on the key.
+    var pendingKeyConflict by remember { mutableStateOf<Triple<Int, Set<Int>, List<RuleEntity>>?>(null) }
     // Non-null while asking whether the split tap may replace the app the left tap opens now.
     var replaceAppLabel by remember { mutableStateOf<String?>(null) }
     val widgetOn by widgetPrefs.enabledFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.isEnabled())
@@ -2043,13 +2044,13 @@ private fun SplitLaunchBlock(viewModel: SettingsViewModel) {
 
     if (learningSplitKey) {
         LearnButtonDialog(
-            onSave = { code ->
+            onSaveWithCompanions = { code, companions ->
                 learningSplitKey = false
                 when (val verdict = splitKeyRuleVerdict(code, rulesForKey)) {
-                    is SplitKeyRuleVerdict.Conflicts -> pendingKeyConflict = code to verdict.rules
+                    is SplitKeyRuleVerdict.Conflicts -> pendingKeyConflict = Triple(code, companions, verdict.rules)
                     // Occupied never reaches onSave: occupiedReason below keeps the dialog waiting.
                     else -> {
-                        viewModel.saveSplitKey(code, emptyList())
+                        viewModel.saveSplitKey(code, companions, emptyList())
                         splitKey = code
                     }
                 }
@@ -2064,7 +2065,7 @@ private fun SplitLaunchBlock(viewModel: SettingsViewModel) {
         )
     }
 
-    pendingKeyConflict?.let { (code, rules) ->
+    pendingKeyConflict?.let { (code, companions, rules) ->
         // Tapping outside saves nothing: the key stays as it was.
         AppAlertDialog(
             onDismissRequest = { pendingKeyConflict = null },
@@ -2081,14 +2082,14 @@ private fun SplitLaunchBlock(viewModel: SettingsViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.saveSplitKey(code, rules.map { it.id })
+                    viewModel.saveSplitKey(code, companions, rules.map { it.id })
                     splitKey = code
                     pendingKeyConflict = null
                 }) { Text(stringResource(R.string.settings_split_key_rule_disable), color = AccentGreen) }
             },
             dismissButton = {
                 TextButton(onClick = {
-                    viewModel.saveSplitKey(code, emptyList())
+                    viewModel.saveSplitKey(code, companions, emptyList())
                     splitKey = code
                     pendingKeyConflict = null
                 }) { Text(stringResource(R.string.settings_split_key_rule_keep), color = TextSecondary) }

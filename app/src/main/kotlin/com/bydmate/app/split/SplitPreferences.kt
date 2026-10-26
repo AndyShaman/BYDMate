@@ -2,6 +2,8 @@ package com.bydmate.app.split
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.bydmate.app.cluster.voiceCompanionsFromCsv
+import com.bydmate.app.cluster.voiceCompanionsToCsv
 
 /** Which side of the screen holds the narrow (one-third) pane. */
 enum class SplitSide { LEFT, RIGHT }
@@ -64,6 +66,12 @@ interface SplitPreferences {
 
     /** Persists the split key; 0 removes it. */
     fun setSteeringKeyCode(keyCode: Int) {}
+
+    /** Other keycodes the split key's button sends in the same press (Atto 3: 304 then 327). */
+    fun getSteeringKeyCompanions(): Set<Int> = emptySet()
+
+    /** Persists the companions; an empty set removes them. */
+    fun setSteeringKeyCompanions(codes: Set<Int>) {}
 
     /** True when a press of the split key does something: feature on and a key assigned. */
     fun isSteeringKeyActive(): Boolean = isFeatureEnabled() && getSteeringKeyCode() > 0
@@ -159,6 +167,13 @@ class SplitPreferencesImpl(context: Context) : SplitPreferences {
         prefs.edit().putInt(KEY_STEERING_KEYCODE, keyCode).apply()
     }
 
+    override fun getSteeringKeyCompanions(): Set<Int> =
+        voiceCompanionsFromCsv(prefs.getString(KEY_STEERING_COMPANIONS, null))
+
+    override fun setSteeringKeyCompanions(codes: Set<Int>) {
+        prefs.edit().putString(KEY_STEERING_COMPANIONS, voiceCompanionsToCsv(codes)).apply()
+    }
+
     companion object {
         const val PREFS_NAME = "bydmate_split"
         const val KEY_NARROW_PKG = "narrow_pkg"
@@ -167,6 +182,7 @@ class SplitPreferencesImpl(context: Context) : SplitPreferences {
         const val KEY_FEATURE_ENABLED = "feature_enabled"
         const val KEY_NATIVE_MODE = "native_mode"
         const val KEY_STEERING_KEYCODE = "steering_keycode"
+        const val KEY_STEERING_COMPANIONS = "steering_keycode_companions"
         const val DEFAULT_SIDE = "right"
     }
 }
