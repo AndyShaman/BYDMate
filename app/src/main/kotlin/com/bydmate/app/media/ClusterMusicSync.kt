@@ -22,7 +22,8 @@ import com.bydmate.app.media.ClusterMusicCard.Target
  * [ClusterMusicCard.SOURCE_THIRD_PARTY]: that cluster renders only the former, and the stock
  * firmware puts the latter back on its own ~10 s timer, which blanks the card. [watch] reads the
  * source back while our card is shown and rewrites the card as soon as it changed. Other firmware
- * never reads and keeps the source and write sequence it always had.
+ * never reads and keeps the source and write sequence it always had; there [reassert] rewrites
+ * the card after the stock controller blanked it on an active-sessions change.
  */
 @Suppress("TooManyFunctions") // one per transition: show, re-assert, watch, tick, clear, hand-off
 class ClusterMusicSync(private val port: Port, private val ui7: Boolean = false) {
@@ -46,6 +47,8 @@ class ClusterMusicSync(private val port: Port, private val ui7: Boolean = false)
         SOURCE_REASSERTED,
         /** [watch]: the source read failed; reported once per streak. */
         READ_FAILED,
+        /** [reassert]: the whole card was rewritten after an active-sessions change. */
+        SESSIONS_REASSERTED,
     }
 
     /** The music-source code this firmware's cluster renders. */
@@ -154,10 +157,32 @@ class ClusterMusicSync(private val port: Port, private val ui7: Boolean = false)
         lastSourceRead = source
         lastSourceReadAt = nowMs
         if (source == sourceCode) return Outcome.NONE
-        return rewrite(fids, shownCard, current(), nowMs, stillWanted)
+        val outcome = rewrite(fids, shownCard, current(), nowMs, stillWanted)
+        if (outcome != Outcome.SHOWN) return outcome
+        sourceReasserts++
+        return Outcome.SOURCE_REASSERTED
     }
 
-    /** [watch]'s answer to a changed source, by the owner read right before it. */
+    /**
+     * Non-UI7 only, shortly after an active-sessions change: the stock controller answers that
+     * change with an empty third-party card (~500 ms later), and [show] would bring ours back only
+     * after [REASSERT_MS]. Rewrites the whole card at once when it is ours, by the owner read right
+     * before, as [watch] does; nothing is written when nothing of ours is shown.
+     */
+    suspend fun reassert(
+        fids: ClusterMusicFids?,
+        nowMs: Long,
+        current: suspend () -> Target?,
+        stillWanted: () -> Boolean = { true },
+    ): Outcome {
+        if (ui7 || fids == null || refused) return Outcome.NONE
+        if (!stillWanted()) return Outcome.NONE
+        val shownCard = shown ?: return Outcome.NONE
+        val outcome = rewrite(fids, shownCard, current(), nowMs, stillWanted)
+        return if (outcome == Outcome.SHOWN) Outcome.SESSIONS_REASSERTED else outcome
+    }
+
+    /** A rewrite of the whole card by the owner read right before it; SHOWN when it landed. */
     private suspend fun rewrite(
         fids: ClusterMusicFids,
         shownCard: Card,
@@ -171,10 +196,8 @@ class ClusterMusicSync(private val port: Port, private val ui7: Boolean = false)
             Target.Idle, null -> return Outcome.NONE
         }
         val outcome = writeCard(fids, card, shownCard.steady() != card.steady(), nowMs, stillWanted)
-        if (outcome != Outcome.SHOWN) return outcome
-        lastWriteAt = nowMs
-        sourceReasserts++
-        return Outcome.SOURCE_REASSERTED
+        if (outcome == Outcome.SHOWN) lastWriteAt = nowMs
+        return outcome
     }
 
     private fun handOff(): Outcome =
