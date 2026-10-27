@@ -640,4 +640,53 @@ class ClusterMusicSyncTest {
         assertEquals(Outcome.NONE, sync.watch(fids, 10_000, current = { Target.Show(card()) }))
         assertEquals(reads, port.reads)
     }
+
+    // Issue #369 (Song L, non-UI7): the stock controller blanks the card ~500 ms after every
+    // active-sessions change; the rewrite after it must not wait for the 10 s re-assert.
+    @Test fun `non-ui7 sessions change rewrites the shown card before the re-assert interval`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card()), 0)
+        port.clearTakes()
+        assertEquals(Outcome.SESSIONS_REASSERTED, sync.reassert(fids, 2_300, current = { Target.Show(card()) }))
+        assertEquals(listOf(13 to 26, 12 to ClusterMusicCard.MUSIC_PLAYING, 11 to "Song", 21 to "Artist"), port.writes)
+        assertEquals(0, port.reads)
+        // The forced rewrite restarts the periodic re-assert: no second full write right after it.
+        port.clearTakes()
+        assertEquals(Outcome.NONE, sync.step(true, fids, Target.Show(card()), 3_000))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    @Test fun `ui7 ignores the sessions change, its watch covers it`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port, ui7 = true)
+        sync.step(true, fids, Target.Show(card()), 0)
+        port.clearTakes()
+        assertEquals(Outcome.NONE, sync.reassert(fids, 2_300, current = { Target.Show(card()) }))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    @Test fun `sessions change with nothing of ours shown writes nothing`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        assertEquals(Outcome.NONE, sync.reassert(fids, 800, current = { Target.Show(card()) }))
+        sync.step(true, fids, Target.Show(card()), 1_000)
+        sync.step(true, fids, Target.OtherPlaying("com.byd.mediacenter"), 2_500)
+        port.clearTakes()
+        assertEquals(Outcome.NONE, sync.reassert(fids, 3_300, current = { Target.Show(card()) }))
+        assertTrue(port.writes.isEmpty())
+    }
+
+    @Test fun `sessions change writes nothing over a player that is not ours`() = runTest {
+        val port = FakePort()
+        val sync = ClusterMusicSync(port)
+        sync.step(true, fids, Target.Show(card()), 0)
+        port.clearTakes()
+        assertEquals(Outcome.NONE, sync.reassert(fids, 800, current = { Target.Idle }))
+        assertEquals(Outcome.NONE, sync.reassert(fids, 900, current = { null }))
+        assertEquals(Outcome.NONE, sync.reassert(fids, 1_000, current = { Target.Show(card()) }, stillWanted = { false }))
+        assertEquals(Outcome.HANDED_OFF, sync.reassert(fids, 1_100, current = { Target.OtherPlaying("com.byd.mediacenter") }))
+        assertTrue(port.writes.isEmpty())
+        assertNull(sync.shown)
+    }
 }
