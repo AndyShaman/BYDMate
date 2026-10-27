@@ -13,6 +13,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -65,7 +67,10 @@ class VoiceControllerFirmwareDuckTest {
     private val unsupported = AutoVoiceReply(HelperBinderProtocol.AUTO_VOICE_UNSUPPORTED, "no method")
     private val calls: MutableList<Boolean> = Collections.synchronizedList(mutableListOf())
 
-    private fun duck(reply: AutoVoiceReply?) = AutoVoiceDuck({ on -> calls += on; reply }, null)
+    // Unconfined: daemon calls run inline on the calling thread, so `calls` is settled the moment
+    // the session ends, with no wait on a background thread.
+    private fun duck(reply: AutoVoiceReply?) =
+        AutoVoiceDuck({ on -> calls += on; reply }, null, scope = CoroutineScope(Dispatchers.Unconfined))
 
     private val rawFrames = MutableSharedFlow<ShortArray>(extraBufferCapacity = 8)
 

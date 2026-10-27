@@ -10,9 +10,14 @@ import com.bydmate.app.util.AppStrings
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -35,7 +40,11 @@ class VoiceAutomationActionsFirmwareDuckTest {
 
     private val calls = mutableListOf<Boolean>()
 
-    private fun duck(reply: AutoVoiceReply?) = AutoVoiceDuck({ on -> calls += on; reply }, null)
+    // Daemon calls run on the test scheduler: advanceUntilIdle() settles them without real time.
+    private fun TestScope.duck(onOn: suspend () -> AutoVoiceReply?) =
+        AutoVoiceDuck({ on -> calls += on; if (on) onOn() else applied }, null, scope = duckScope())
+
+    private fun TestScope.duck(reply: AutoVoiceReply?) = duck { reply }
 
     private val applied = AutoVoiceReply(HelperBinderProtocol.AUTO_VOICE_APPLIED, "ok")
 
@@ -73,6 +82,7 @@ class VoiceAutomationActionsFirmwareDuckTest {
     @Test fun `applied - media is not ducked and the firmware state goes on and off`() = runTest {
         val capture = capture()
         val r = makeActions(duck(applied), capture).speak("тест")
+        advanceUntilIdle()
 
         assertTrue(r.success)
         verify(exactly = 0) { capture.duckMusic() }
@@ -86,6 +96,7 @@ class VoiceAutomationActionsFirmwareDuckTest {
             every { speak(any()) } returns false
         }
         val r = makeActions(duck(applied), capture, tts).speak("тест")
+        advanceUntilIdle()
 
         assertFalse(r.success)
         verify(exactly = 0) { capture.duckMusic() }
@@ -102,6 +113,7 @@ class VoiceAutomationActionsFirmwareDuckTest {
         val job = launch { actions.speak("тест") }
         testScheduler.runCurrent()
         job.cancelAndJoin()
+        advanceUntilIdle()
 
         verify(exactly = 0) { capture.duckMusic() }
         assertEquals(listOf(true, false), calls)
@@ -113,6 +125,7 @@ class VoiceAutomationActionsFirmwareDuckTest {
         val actions = makeActions(d, capture)
         actions.speak("раз")
         actions.speak("два")
+        advanceUntilIdle()
 
         verify(exactly = 2) { capture.duckMusic() }
         verify(exactly = 2) { capture.restoreMusic(20) }
@@ -122,6 +135,7 @@ class VoiceAutomationActionsFirmwareDuckTest {
     @Test fun `helper down - media duck and restore as today, deactivate still sent`() = runTest {
         val capture = capture()
         makeActions(duck(null), capture).speak("тест")
+        advanceUntilIdle()
 
         io.mockk.verifyOrder {
             capture.duckMusic()
@@ -139,5 +153,27 @@ class VoiceAutomationActionsFirmwareDuckTest {
             capture.restoreMusic(20)
         }
         assertTrue(calls.isEmpty())
+    }
+
+    @Test fun `cancelled speak does not drop a session lease held at the same time`() = runTest {
+        val gate = CompletableDeferred<AutoVoiceReply?>()
+        val d = duck { gate.await() }
+        val tts = mockk<TtsEngine>(relaxed = true) {
+            every { speaking } returns MutableStateFlow(true)
+            every { speak(any()) } returns true
+        }
+        val session = async { d.activate({ 20 }, { }) }
+        testScheduler.runCurrent()
+        val speakJob = launch { makeActions(d, capture(), tts).speak("тест") }
+        testScheduler.runCurrent()
+        speakJob.cancelAndJoin()
+        gate.complete(applied)
+        advanceUntilIdle()
+
+        assertTrue(d.isActive())
+        assertEquals(listOf(true), calls)
+        d.deactivate(session.await())
+        advanceUntilIdle()
+        assertEquals(listOf(true, false), calls)
     }
 }
