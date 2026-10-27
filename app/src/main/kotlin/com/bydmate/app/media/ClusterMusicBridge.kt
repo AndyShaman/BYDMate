@@ -5,6 +5,8 @@ import android.content.Context
 import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import com.bydmate.app.cluster.ClusterProjectionManager
@@ -56,10 +58,14 @@ import javax.inject.Singleton
  * card blank for source 26 and renders it for 11, and the stock firmware puts 26 back every
  * ~10 s. There the card is written with 11 and a second loop ([WATCH_MS]) reads the source back
  * while our card is shown, rewriting the card as soon as it changed ([ClusterMusicSync.watch]).
- * Other firmware runs no watch and writes exactly what it did before.
+ * Other firmware runs no watch and writes exactly what it did before. There the stock controller
+ * blanks the card ~500 ms after every active-sessions change (each activity start, issue #369), so a
+ * passive [MediaSessionManager.OnActiveSessionsChangedListener] schedules one full rewrite
+ * [SESSIONS_REASSERT_DELAY_MS] after it ([ClusterMusicSync.reassert]) instead of waiting for the
+ * periodic re-assert.
  */
 @Singleton
-@Suppress("TooManyFunctions") // the poll, the UI7 watch, the session reads and the dump
+@Suppress("TooManyFunctions") // the poll, the UI7 watch, the sessions listener, the session reads and the dump
 class ClusterMusicBridge @Inject constructor(
     @ApplicationContext private val context: Context,
     private val helper: HelperClient,
@@ -84,6 +90,12 @@ class ClusterMusicBridge @Inject constructor(
     private val ownScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile private var job: Job? = null
+    /** The poll's scope: a rewrite scheduled by the sessions listener is its child, so stop() joins it. */
+    @Volatile private var pollScope: CoroutineScope? = null
+    /** Non-UI7: registered after the first successful session read, removed in stop(). */
+    @Volatile private var sessionsListener: MediaSessionManager.OnActiveSessionsChangedListener? = null
+    /** The pending rewrite; a newer sessions change replaces it, so a burst gives one rewrite. */
+    @Volatile private var pendingReassert: Job? = null
     @Volatile private var ensureAccess: (suspend (String) -> Unit)? = null
     private val access = ClusterMusicAccess(ACCESS_RETRY_MS)
     private var wasEnabled = false
@@ -104,6 +116,7 @@ class ClusterMusicBridge @Inject constructor(
         this.ensureAccess = ensureAccess
         job?.cancel()
         job = scope.launch {
+            pollScope = this
             // A child of the poll: stop() cancels and joins both before its clear.
             if (ui7) launch {
                 while (isActive) {
@@ -128,6 +141,8 @@ class ClusterMusicBridge @Inject constructor(
     fun stop() {
         val running = job ?: return
         job = null
+        pollScope = null
+        removeSessionsListener()
         ownScope.launch {
             running.cancelAndJoin()
             val outcome = withTimeoutOrNull(STOP_CLEAR_TIMEOUT_MS) {
@@ -164,6 +179,7 @@ class ClusterMusicBridge @Inject constructor(
             return
         }
         val sessions = readSessions() ?: return
+        if (!ui7 && sessionsListener == null) addSessionsListener()
         val target = observe(sessions, via = "poll")
         val outcome = sync.step(true, fids, target, SystemClock.elapsedRealtime()) { enabled() && job?.isActive == true }
         report(outcome, target)
@@ -195,6 +211,63 @@ class ClusterMusicBridge @Inject constructor(
             current = { readSessions(rearm = false)?.let { observe(it, via = "watch") } },
         ) { enabled() && job?.isActive == true }
         report(outcome, null, reason = "watch")
+    }
+
+    /**
+     * Non-UI7 only. Passive: the listener only learns that the active sessions changed, which is
+     * the stock controller's cue to blank the card; nothing is sent to any session.
+     */
+    private fun addSessionsListener() {
+        val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+        val listener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
+            scheduleReassert(controllers?.size)
+        }
+        try {
+            msm.addOnActiveSessionsChangedListener(
+                listener,
+                ComponentName(context, MediaSessionListenerService::class.java),
+                Handler(Looper.getMainLooper()),
+            )
+        } catch (e: SecurityException) {
+            // The next poll that reads the sessions tries again.
+            Log.w(TAG, "sessions listener refused: ${e.message}")
+            return
+        }
+        sessionsListener = listener
+        Log.i(TAG, "sessions listener on: rewrite $SESSIONS_REASSERT_DELAY_MS ms after an active-sessions change")
+    }
+
+    private fun removeSessionsListener() {
+        val listener = sessionsListener ?: return
+        sessionsListener = null
+        pendingReassert = null
+        val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+        runCatching { msm.removeOnActiveSessionsChangedListener(listener) }
+            .onFailure { Log.w(TAG, "sessions listener remove failed: ${it.message}") }
+    }
+
+    /** One rewrite after the stock blank; a change while one is pending moves it later. */
+    private fun scheduleReassert(sessions: Int?) {
+        val scope = pollScope ?: return
+        pendingReassert?.cancel()
+        pendingReassert = scope.launch {
+            delay(SESSIONS_REASSERT_DELAY_MS)
+            runCatching { mutex.withLock { if (isActive) reassertTick(sessions) } }.onFailure {
+                if (it is CancellationException) throw it
+                Log.w(TAG, "sessions rewrite failed: ${it.message}")
+            }
+        }
+    }
+
+    /** Non-UI7: the forced rewrite, the owner decided again right before it, as the watch does. */
+    private suspend fun reassertTick(sessions: Int?) {
+        val outcome = sync.reassert(
+            lastFids,
+            SystemClock.elapsedRealtime(),
+            current = { readSessions(rearm = false)?.let { observe(it, via = "sessions") } },
+        ) { enabled() && job?.isActive == true }
+        if (outcome == Outcome.NONE) Log.d(TAG, "sessions changed ($sessions active), nothing of ours to rewrite")
+        report(outcome, null, reason = "sessions changed, $sessions active")
     }
 
     /** The catalog arrives some time after start; until it has every required symbol nothing is written. */
@@ -326,6 +399,11 @@ class ClusterMusicBridge @Inject constructor(
         const val POLL_MS = 1_500L
         /** UI7 source watch: the firmware flips the source every ~10 s, a read a second catches it. */
         const val WATCH_MS = 1_000L
+        /**
+         * Non-UI7: the stock controller sends its empty card ~500 ms after an active-sessions
+         * change (issue #369 log); ours goes after it.
+         */
+        const val SESSIONS_REASSERT_DELAY_MS = 800L
         /** Source rewrites between two log lines (~5 min at the firmware's pace). */
         private const val SOURCE_LOG_EVERY = 30
         /** How long stop() keeps retrying its clear before giving up. */
