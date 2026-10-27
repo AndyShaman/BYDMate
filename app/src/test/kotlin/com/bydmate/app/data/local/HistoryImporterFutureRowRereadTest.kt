@@ -66,7 +66,7 @@ class HistoryImporterFutureRowRereadTest {
         coEvery { settingsRepository.setLastEnergyImportTs(any()) } answers { watermark = firstArg() }
         coEvery { settingsRepository.getBatteryCapacity() } returns 72.9
         coEvery { tripDao.getByBydId(any()) } returns null
-        coEvery { tripDao.getByStartTsRange(any(), any()) } returns null
+        coEvery { tripDao.getSameTripByTime(any(), any()) } returns null
         coEvery { tripDao.getLiveTrips() } returns emptyList()
 
         importer().syncFromEnergyData()

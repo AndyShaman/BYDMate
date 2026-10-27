@@ -65,7 +65,7 @@ class HistoryImporterRecycledIdTest {
         coEvery { energyDataReader.readTripsSince(any()) } returns listOf(record)
         coEvery { settingsRepository.getBatteryCapacity() } returns 72.9
         coEvery { tripDao.getByBydId(record.id) } returns byId
-        coEvery { tripDao.getByStartTsRange(any(), any()) } returns byTime
+        coEvery { tripDao.getSameTripByTime(any(), any()) } returns byTime
         coEvery { tombstoneDao.exists(record.id) } returns tombstoned
     }
 
