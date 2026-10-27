@@ -9,9 +9,7 @@ import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.util.AppStrings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -88,13 +86,13 @@ class VoiceAutomationActions @Inject @Suppress("LongParameterList") constructor(
             // TtsEngine plays raw AudioTrack audio: no audio focus, no ducking -- duck here.
             // restoreMusic and hideOrb are in a finally so cancellation mid-drain never leaks
             // the duck (music stuck silent) or the orb (stranded on screen). #353: the firmware
-            // ducks instead when it takes the stock assistant's call.
-            val askFirmwareDuck = autoVoiceDuck.mayApply()
-            var saved: Int? = null
+            // ducks instead when it takes the stock assistant's call; otherwise the duck runs the
+            // media duck and gives it back on deactivate.
+            var duckLease: AutoVoiceDuck.Lease? = null
             var ok = false
             var timedOut = false
             try {
-                saved = duckForSpeech(askFirmwareDuck)
+                duckLease = autoVoiceDuck.activate(audioCapture::duckMusic, audioCapture::restoreMusic)
                 ok = runCatching { ttsEngine.speak(text) }.getOrDefault(false)
                 if (ok) {
                     val completed = withTimeoutOrNull(SPEAK_TIMEOUT_MS) {
@@ -109,7 +107,7 @@ class VoiceAutomationActions @Inject @Suppress("LongParameterList") constructor(
                     }
                 }
             } finally {
-                releaseDuck(saved, askFirmwareDuck)
+                duckLease?.let { autoVoiceDuck.deactivate(it) }
                 if (showedOrb) runCatching { hideOrb() }
             }
             return when {
@@ -120,15 +118,6 @@ class VoiceAutomationActions @Inject @Suppress("LongParameterList") constructor(
         } finally {
             ownBusy.set(false)
         }
-    }
-
-    /** The media duck unless the firmware took the voice duck; the volume to restore or null. */
-    private suspend fun duckForSpeech(askFirmwareDuck: Boolean): Int? =
-        if (askFirmwareDuck && autoVoiceDuck.activate()) null else audioCapture.duckMusic()
-
-    private suspend fun releaseDuck(saved: Int?, askFirmwareDuck: Boolean) {
-        audioCapture.restoreMusic(saved)
-        if (askFirmwareDuck) withContext(NonCancellable) { runCatching { autoVoiceDuck.deactivate() } }
     }
 
     /** Automation action "agent_query": run [prompt] through an isolated agent turn and speak

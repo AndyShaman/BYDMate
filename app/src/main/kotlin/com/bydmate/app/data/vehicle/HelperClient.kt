@@ -415,7 +415,8 @@ interface HelperClient {
     suspend fun setScreenBacklight(on: Boolean): ScreenBacklightReply?
 
     /** Stock-assistant voice duck state inside the daemon (TX_SET_AUTO_VOICE, #353).
-     *  Null when the daemon is unreachable or too old to know the transaction. */
+     *  Null when the daemon is unreachable; AUTO_VOICE_UNSUPPORTED when it is too old to know
+     *  the transaction. */
     suspend fun setAutoVoiceActive(active: Boolean): AutoVoiceReply?
 
     /**
@@ -880,7 +881,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         }
 
     override suspend fun setAutoVoiceActive(active: Boolean): AutoVoiceReply? =
-        transactParsed(HelperBinderProtocol.TX_SET_AUTO_VOICE, { it.writeInt(if (active) 1 else 0) }) { reply ->
+        // A daemon started by an older APK does not handle the code: same as a firmware without
+        // the method for the caller (fallback, verdict cached, marker cleared).
+        transactParsed(
+            HelperBinderProtocol.TX_SET_AUTO_VOICE, { it.writeInt(if (active) 1 else 0) },
+            notHandled = AutoVoiceReply(HelperBinderProtocol.AUTO_VOICE_UNSUPPORTED, "daemon does not handle TX_SET_AUTO_VOICE"),
+        ) { reply ->
             if (reply.dataAvail() < 4) return@transactParsed null
             AutoVoiceReply(reply.readInt(), reply.readString().orEmpty())
         }
@@ -1331,17 +1337,19 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         transact(code, writeArgs)?.let { (status, _) -> readAccepted(status) } ?: false
 
     /** Returns the parsed reply or null on any failure. Retries ONCE on a dead cached binder. */
+    @Suppress("LongParameterList") // the transact knobs, all defaulted but code and parse
     private suspend fun <T> transactParsed(
         code: Int,
         writeArgs: (Parcel) -> Unit,
         timeoutMs: Long = REQ_TIMEOUT_MS,
         beforeSend: (suspend (LockedReader) -> Boolean)? = null,
+        notHandled: T? = null,
         parse: (Parcel) -> T?,
     ): T? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(timeoutMs) {
                 onBeforeLock?.invoke()
-                mutex.withLock { transactBodyUnlocked(code, writeArgs, beforeSend, parse) }
+                mutex.withLock { transactBodyUnlocked(code, writeArgs, beforeSend, notHandled, parse) }
             }
         }
 
@@ -1353,11 +1361,14 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
      * verdict from before the retry never reaches the second send (2026-09-27, review round 2).
      * It is handed [lockedReader], bound to THIS already-held lock via a direct
      * [transactBodyUnlocked] call, never [readBatch] (which would re-take the mutex and deadlock).
+     * [notHandled] is returned instead of null when the daemon refuses the code (uid gate, or a
+     * daemon too old to know it).
      */
     private suspend fun <T> transactBodyUnlocked(
         code: Int,
         writeArgs: (Parcel) -> Unit,
         beforeSend: (suspend (LockedReader) -> Boolean)? = null,
+        notHandled: T? = null,
         parse: (Parcel) -> T?,
     ): T? {
         repeat(2) { attempt ->
@@ -1369,7 +1380,7 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
                 data.writeInterfaceToken(HelperBinderProtocol.DESCRIPTOR)
                 writeArgs(data)
                 val ok = binder.transact(code, data, reply, 0)
-                if (!ok) return null                          // uid gate rejected / not handled
+                if (!ok) return notHandled                    // uid gate rejected / not handled
                 return parse(reply)
             } catch (e: DeadObjectException) {
                 cached = null                                 // stale binder; loop re-resolves once

@@ -618,6 +618,8 @@ class TrackingService : Service(), LocationListener {
             // A binder that just arrived carries no subscription yet: the daemon clears its
             // listener table when it dies, and a fresh one starts empty.
             serviceScope.launch { fidPushChannel.resubscribe("binder accepted") { fidCatalogManager.catalog } }
+            // An off call of the firmware voice duck that found no daemon lands now (#353).
+            runCatching { autoVoiceDuck.recoverStuck() }
             // Tell the daemon we hold its binder so it stops re-announcing it (#64/#148).
             // Must not block the receiver thread — registerClient is a binder transact.
             serviceScope.launch { helperClient.registerClient() }
@@ -723,7 +725,7 @@ class TrackingService : Service(), LocationListener {
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
                 // Companion of restoreStuckDuck() above (#353): turn the firmware voice duck off
                 // if a process died with it on. Needs the daemon, hence here; without an answer
-                // the marker stays for the next start.
+                // the duck retries, and so does every later daemon arrival.
                 runCatching { autoVoiceDuck.recoverStuck() }
                 // Not gated on ok: a cached catalog resolves over the ADB read path without the
                 // daemon, and without one the call just returns and the respawn path retries.

@@ -21,7 +21,6 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -35,7 +34,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
@@ -351,12 +349,12 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         scope.launch { runCatching { agentOrchestrator.prewarm() } }
         sessionJob = scope.launch {
             val session = coroutineContext[Job]
-            var earlyDuck = syncDuck
-            // Before the orb: the duck must not wait for the overlay. Applied = STREAM_MUSIC is
-            // left alone (its volume is the amp's); any other answer ducks the media as before.
-            if (askFirmwareDuck && !runCatching { autoVoiceDuck.activate() }.getOrDefault(false)) {
-                earlyDuck = runCatching { audioCapture.duckMusic() }.getOrNull()
-            }
+            // Before the orb: the duck must not wait for the overlay (bounded by the duck's
+            // budget). Applied = STREAM_MUSIC is left alone (its volume is the amp's); otherwise
+            // the duck runs the media duck as before and gives it back on deactivate.
+            val duckLease = if (askFirmwareDuck) {
+                runCatching { autoVoiceDuck.activate(audioCapture::duckMusic, audioCapture::restoreMusic) }.getOrNull()
+            } else null
             runCatching { showListeningOverlay(appStrings.get(R.string.voice_listening)) }
             var lastEventMs = System.currentTimeMillis()
             var wasAudible = false   // capture thread only
@@ -511,8 +509,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 routingJob = null
                 cancellableAskJob = null
                 processingUtterance = false
-                runCatching { audioCapture.restoreMusic(earlyDuck) }
-                if (askFirmwareDuck) withContext(NonCancellable) { runCatching { autoVoiceDuck.deactivate() } }
+                runCatching { audioCapture.restoreMusic(syncDuck) }
+                duckLease?.let { runCatching { autoVoiceDuck.deactivate(it) } }
                 _listening.value = false
                 _state.value = VoiceUiState.Idle
                 // Distinct off-cue so the driver can tell session start (ok) and stop apart by ear.
