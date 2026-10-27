@@ -15,7 +15,6 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -87,12 +86,9 @@ class HistoryImporterRecycledIdTest {
 
         importer().syncFromEnergyData()
 
-        val updated = slot<TripEntity>()
-        coVerify(exactly = 1) { tripRepository.updateTrip(capture(updated)) }
-        assertEquals(11L, updated.captured.id)
-        assertNull("old trip no longer claims the recycled id", updated.captured.bydId)
-        assertEquals(stale.startTs, updated.captured.startTs)
-        assertEquals(stale.kwhConsumed!!, updated.captured.kwhConsumed!!, 1e-9)
+        // A conditional UPDATE, not a full-row write: the old trip's other columns are never touched
+        coVerify(exactly = 1) { tripDao.unlinkBydId(11L, 3L) }
+        coVerify(exactly = 0) { tripRepository.updateTrip(any()) }
     }
 
     @Test fun `same id with a start inside the window is still a duplicate`() = runTest {
@@ -102,6 +98,7 @@ class HistoryImporterRecycledIdTest {
 
         coVerify(exactly = 0) { tripRepository.insertTrip(any()) }
         coVerify(exactly = 0) { tripRepository.updateTrip(any()) }
+        coVerify(exactly = 0) { tripDao.unlinkBydId(any(), any()) }
         assertEquals(0, result.trips)
     }
 
@@ -113,6 +110,7 @@ class HistoryImporterRecycledIdTest {
 
         coVerify(exactly = 0) { tripRepository.insertTrip(any()) }
         coVerify(exactly = 0) { tripRepository.updateTrip(any()) }
+        coVerify(exactly = 0) { tripDao.unlinkBydId(any(), any()) }
     }
 
     @Test fun `time overlap path is unchanged`() = runTest {
@@ -135,7 +133,7 @@ class HistoryImporterRecycledIdTest {
 
         importer().syncFromEnergyData()
 
-        coVerify(exactly = 1) { tripRepository.updateTrip(match { it.id == 11L && it.bydId == null }) }
+        coVerify(exactly = 1) { tripDao.unlinkBydId(11L, 3L) }
         coVerify(exactly = 1) { tripRepository.updateTrip(match { it.id == 20L && it.bydId == 3L }) }
         coVerify(exactly = 0) { tripRepository.insertTrip(any()) }
     }
@@ -166,6 +164,8 @@ class HistoryImporterRecycledIdTest {
         stubSync(byId = null, tombstoned = true)
         coEvery { energyDataReader.readTripsSince(any()) } returns listOf(record, other)
         coEvery { tripDao.getByBydId(4L) } returns stale.copy(id = 12L, bydId = 4L)
+        // The collision is found in the trips snapshot
+        coEvery { tripDao.getAllSnapshot() } returns listOf(stale.copy(id = 12L, bydId = 4L))
         coEvery { tombstoneDao.exists(4L) } returns false
         coEvery { tombstoneDao.isForAnotherTrip(3L, startMs, 300_000L, true) } returns true
         coEvery { tombstoneDao.isForAnotherTrip(3L, startMs, 300_000L, false) } returns false
@@ -189,11 +189,12 @@ class HistoryImporterRecycledIdTest {
         coEvery { energyDataReader.readTrips() } returns listOf(record)
         coEvery { tripDao.getLiveTrips() } returns emptyList()
         coEvery { tripDao.getByBydId(record.id) } returns stale
+        coEvery { tripDao.getAllSnapshot() } returns listOf(stale)
         coEvery { tombstoneDao.exists(record.id) } returns false
 
         importer().deduplicateWithExisting()
 
-        coVerify(exactly = 1) { tripRepository.updateTrip(match { it.id == 11L && it.bydId == null }) }
+        coVerify(exactly = 1) { tripDao.unlinkBydId(11L, 3L) }
         coVerify(exactly = 1) { tripRepository.insertTrip(match { it.startTs == startMs && it.bydId == 3L }) }
     }
 
@@ -206,6 +207,7 @@ class HistoryImporterRecycledIdTest {
 
         coVerify(exactly = 0) { tripRepository.insertTrip(any()) }
         coVerify(exactly = 0) { tripRepository.updateTrip(any()) }
+        coVerify(exactly = 0) { tripDao.unlinkBydId(any(), any()) }
     }
 
     @Test fun `consumption recalculation never takes kWh from a recycled id`() = runTest {
@@ -253,6 +255,7 @@ class HistoryImporterRecycledIdTest {
         stubSync(byId = null)
         coEvery { energyDataReader.readTripsSince(any()) } returns listOf(other)
         coEvery { tripDao.getByBydId(4L) } returns stale.copy(id = 12L, bydId = 4L)
+        coEvery { tripDao.getAllSnapshot() } returns listOf(stale.copy(id = 12L, bydId = 4L))
         importer().syncFromEnergyData()
         assertEquals(true, flag)
 
