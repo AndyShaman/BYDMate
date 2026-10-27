@@ -651,9 +651,10 @@ class ClusterMusicSyncTest {
         assertEquals(Outcome.SESSIONS_REASSERTED, sync.reassert(fids, 2_300, current = { Target.Show(card()) }))
         assertEquals(listOf(13 to 26, 12 to ClusterMusicCard.MUSIC_PLAYING, 11 to "Song", 21 to "Artist"), port.writes)
         assertEquals(0, port.reads)
-        // The forced rewrite restarts the periodic re-assert: no second full write right after it.
+        // The forced rewrite restarts the periodic re-assert: 11 s after the first write, but under
+        // REASSERT_MS after the forced one, nothing is written.
         port.clearTakes()
-        assertEquals(Outcome.NONE, sync.step(true, fids, Target.Show(card()), 3_000))
+        assertEquals(Outcome.NONE, sync.step(true, fids, Target.Show(card()), 11_000))
         assertTrue(port.writes.isEmpty())
     }
 

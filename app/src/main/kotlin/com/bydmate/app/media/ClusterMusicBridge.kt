@@ -234,6 +234,12 @@ class ClusterMusicBridge @Inject constructor(
             return
         }
         sessionsListener = listener
+        // stop() runs outside the mutex: a poll that read the sessions before it must not leave
+        // a registration behind.
+        if (pollScope == null) {
+            removeSessionsListener()
+            return
+        }
         Log.i(TAG, "sessions listener on: rewrite $SESSIONS_REASSERT_DELAY_MS ms after an active-sessions change")
     }
 
@@ -246,12 +252,15 @@ class ClusterMusicBridge @Inject constructor(
             .onFailure { Log.w(TAG, "sessions listener remove failed: ${it.message}") }
     }
 
-    /** One rewrite after the stock blank; a change while one is pending moves it later. */
+    /** One rewrite after the stock blank; a change while one is waiting moves it later. */
     private fun scheduleReassert(sessions: Int?) {
         val scope = pollScope ?: return
         pendingReassert?.cancel()
         pendingReassert = scope.launch {
             delay(SESSIONS_REASSERT_DELAY_MS)
+            // Past the wait: a newer change schedules its own rewrite instead of cutting this
+            // one off mid-card.
+            if (pendingReassert === coroutineContext[Job]) pendingReassert = null
             runCatching { mutex.withLock { if (isActive) reassertTick(sessions) } }.onFailure {
                 if (it is CancellationException) throw it
                 Log.w(TAG, "sessions rewrite failed: ${it.message}")
@@ -312,6 +321,9 @@ class ClusterMusicBridge @Inject constructor(
         val controllers = try {
             msm.getActiveSessions(ComponentName(context, MediaSessionListenerService::class.java))
         } catch (e: SecurityException) {
+            // Losing the access drops the sessions listener without telling us: forget it, so the
+            // first poll that reads the sessions again registers a new one (#369).
+            removeSessionsListener()
             if (rearm && access.onRefused(SystemClock.elapsedRealtime())) {
                 Log.w(TAG, "no notification-listener access, re-arming: ${e.message}")
                 Trace.event(TraceArea.CAR, "cluster_music", "access" to "missing")
