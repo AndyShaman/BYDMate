@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.data.local.entity.TripTombstoneEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertFalse
@@ -59,5 +60,29 @@ class TripRepositoryDeleteTest {
         repo.deleteTrip(TripEntity(id = id, startTs = 3000L, bydId = 99L))
         assertNull("trip entity must not exist", db.tripDao().getById(id))
         assertTrue("tombstone for bydId=99 must exist", db.tripTombstoneDao().exists(99L))
+    }
+
+    @Test fun `delete stores the trip start on the tombstone`() = runBlocking {
+        val id = db.tripDao().insert(TripEntity(startTs = 1000L, bydId = 42L))
+        repo.deleteTrip(TripEntity(id = id, startTs = 1000L, bydId = 42L))
+        val dao = db.tripTombstoneDao()
+        assertFalse("own trip at the edge of the window", dao.isForAnotherTrip(42L, 1000L + 300_000L, 300_000L, true))
+        assertTrue("another trip", dao.isForAnotherTrip(42L, 1000L + 300_001L, 300_000L, false))
+    }
+
+    @Test fun `legacy tombstone without a start is for another trip only when legacy is ignored`() = runBlocking {
+        val dao = db.tripTombstoneDao()
+        dao.insert(TripTombstoneEntity(42L))
+        assertFalse(dao.isForAnotherTrip(42L, 5L, 300_000L, false))
+        assertTrue(dao.isForAnotherTrip(42L, 5L, 300_000L, true))
+    }
+
+    @Test fun `a later delete of a trip holding the same id replaces the tombstone`() = runBlocking {
+        val dao = db.tripTombstoneDao()
+        dao.insert(TripTombstoneEntity(42L))
+        val id = db.tripDao().insert(TripEntity(startTs = 9_000_000L, bydId = 42L))
+        repo.deleteTrip(TripEntity(id = id, startTs = 9_000_000L, bydId = 42L))
+        assertTrue(dao.isForAnotherTrip(42L, 1000L, 300_000L, false))
+        assertFalse(dao.isForAnotherTrip(42L, 9_000_000L, 300_000L, false))
     }
 }

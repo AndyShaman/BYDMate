@@ -48,6 +48,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_LAST_ENERGYDATA_IMPORT_TS = "last_energydata_import_ts"
         const val KEY_SETUP_COMPLETED = "setup_completed"
         const val KEY_DEDUP_CLEANUP_DONE = "dedup_cleanup_done"
+        const val KEY_ENERGY_IDS_RECYCLED = "energy_ids_recycled"
         const val KEY_IDLE_DRAIN_CLEANUP_DONE = "idle_drain_cleanup_done"
         const val KEY_CONSUMPTION_RECALC_DONE = "consumption_recalc_done"
         const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
@@ -377,6 +378,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setDedupCleanupDone() =
         setString(KEY_DEDUP_CLEANUP_DONE, "true")
+
+    suspend fun isEnergyIdsRecycled(): Boolean =
+        getString(KEY_ENERGY_IDS_RECYCLED, "false") == "true"
+
+    suspend fun setEnergyIdsRecycled() =
+        setString(KEY_ENERGY_IDS_RECYCLED, "true")
 
     suspend fun isIdleDrainCleanupDone(): Boolean =
         getString(KEY_IDLE_DRAIN_CLEANUP_DONE, "false") == "true"
