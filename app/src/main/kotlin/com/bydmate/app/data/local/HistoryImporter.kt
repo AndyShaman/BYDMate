@@ -190,6 +190,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         var tripsImported = 0
         var idleDrainsImported = 0
         var skippedDuplicate = 0
+        var recycledIds = 0
         var implausibleKwh = 0
         var tempFromSession = 0
         var maxTs = lastImportTs
@@ -199,6 +200,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         val nowMs = System.currentTimeMillis()
         val liveExteriorTemp = TrackingService.lastData.value?.exteriorTemp
         val marks = odometerMarks.snapshot()
+        val sourceRecycled = hasRecycledIds(bydRecords)
 
         for (byd in bydRecords) {
             // Before maxTs and before any filter: a future row must not move the watermark (#348)
@@ -216,15 +218,19 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             // Skip very short sessions
             if (byd.duration < MIN_TRIP_DURATION_SEC) continue
 
-            // Check duplicate by byd_id
+            // Check duplicate by byd_id; a recycled id falls through to the checks below
             val existingById = tripDao.getByBydId(byd.id)
-            if (existingById != null) {
+            if (existingById != null && !isRecycledId(existingById, byd)) {
                 skippedDuplicate++
                 continue
             }
+            if (existingById != null) {
+                releaseRecycledId(existingById, byd)
+                recycledIds++
+            }
 
             // Manually deleted by the user — never re-import (issue #81)
-            if (tripTombstoneDao.exists(byd.id)) {
+            if (isTombstoned(byd, sourceRecycled)) {
                 skippedDuplicate++
                 continue
             }
@@ -334,7 +340,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         settingsRepository.setLastEnergyImportTs(maxTs)
 
         Log.d(TAG, "Sync done: $tripsImported trips, $idleDrainsImported idle, $skippedDuplicate dups, " +
-            "$implausibleKwh implausible kwh")
+            "$recycledIds recycled ids (source recycled=$sourceRecycled), $implausibleKwh implausible kwh")
         Log.i(TAG, "import temp: from_session=$tempFromSession/$tripsImported " +
             "live=${liveExteriorTemp ?: "-"} window=${FRESH_TEMP_WINDOW_MS / 60_000}min")
         return ImportResult(
@@ -342,6 +348,45 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             idleDrains = idleDrainsImported,
             details = "+$tripsImported поездок, +$idleDrainsImported стоянок, $skippedDuplicate дублей"
         )
+    }
+
+    /**
+     * energydata `_id` restarts from 1 when the car recreates its DB (reset, firmware update, a
+     * backup restored onto it), while the trips table keeps the old ids (#348). A real match
+     * starts within [DEDUP_WINDOW_MS] of the record (energydata trips store its start, live trips
+     * were linked inside that window); a far-off start means the id was recycled.
+     */
+    private fun isRecycledId(existing: TripEntity, byd: BydTripRecord): Boolean =
+        kotlin.math.abs(existing.startTs - byd.startTimestamp * 1000L) > DEDUP_WINDOW_MS
+
+    /** Unlinks the old trip from a recycled id, so later lookups and tombstones by id mean the new record. */
+    private suspend fun releaseRecycledId(existing: TripEntity, byd: BydTripRecord) {
+        Log.w(TAG, "energydata id recycled: id=${byd.id} start=${byd.startTimestamp * 1000L} " +
+            "held by trip=${existing.id} start=${existing.startTs} -> old trip unlinked, record not a duplicate")
+        tripRepository.updateTrip(existing.copy(bydId = null))
+    }
+
+    /**
+     * Any recycled id in the batch proves the source DB was recreated: then every record in it is
+     * new, and a tombstone without a start time (written before schema 24) belongs to an old trip.
+     * Checked before the import loop releases the ids, so the order of records does not matter.
+     */
+    private suspend fun hasRecycledIds(records: List<BydTripRecord>): Boolean {
+        val recycled = records.count { byd -> tripDao.getByBydId(byd.id)?.let { isRecycledId(it, byd) } == true }
+        if (recycled > 0) Log.w(TAG, "energydata source recycled: $recycled/${records.size} ids held by older trips")
+        return recycled > 0
+    }
+
+    /** Deleted by the user (issue #81): a tombstone hides only the trip it was left for (#348). */
+    private suspend fun isTombstoned(byd: BydTripRecord, sourceRecycled: Boolean): Boolean {
+        if (!tripTombstoneDao.exists(byd.id)) return false
+        val startTsMs = byd.startTimestamp * 1000L
+        if (tripTombstoneDao.isForAnotherTrip(byd.id, startTsMs, DEDUP_WINDOW_MS, sourceRecycled)) {
+            Log.w(TAG, "tombstone for id=${byd.id} left by another trip, record start=$startTsMs " +
+                "imported (source recycled=$sourceRecycled)")
+            return false
+        }
+        return true
     }
 
     /**
@@ -536,6 +581,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             val capacity = settingsRepository.getBatteryCapacity()
             var updated = 0
             var inserted = 0
+            val sourceRecycled = hasRecycledIds(bydRecords)
 
             for (byd in bydRecords) {
                 if (byd.duration < MIN_TRIP_DURATION_SEC) continue
@@ -543,11 +589,13 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
                 val startTsMs = byd.startTimestamp * 1000L
                 val endTsMs = byd.endTimestamp * 1000L
 
-                // Already imported?
-                if (tripDao.getByBydId(byd.id) != null) continue
+                // Already imported? A recycled id is not (#348)
+                val existingById = tripDao.getByBydId(byd.id)
+                if (existingById != null && !isRecycledId(existingById, byd)) continue
+                if (existingById != null) releaseRecycledId(existingById, byd)
 
                 // Manually deleted by the user — never re-import (issue #81)
-                if (tripTombstoneDao.exists(byd.id)) continue
+                if (isTombstoned(byd, sourceRecycled)) continue
 
                 // Find matching live trip (startTs within ±5 min)
                 val match = liveTrips.firstOrNull { live ->
@@ -680,9 +728,9 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             var updated = 0
 
             for (trip in allTrips) {
-                // Match by bydId first
+                // Match by bydId first; a recycled id carries another trip's kWh (#348)
                 val match = if (trip.bydId != null) {
-                    bydRecords.firstOrNull { it.id == trip.bydId }
+                    bydRecords.firstOrNull { it.id == trip.bydId && !isRecycledId(trip, it) }
                 } else {
                     // Fallback: match by start_timestamp ±5 min
                     val startTsSec = trip.startTs / 1000L
