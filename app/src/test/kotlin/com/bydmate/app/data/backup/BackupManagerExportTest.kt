@@ -8,6 +8,7 @@ import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl
 import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.util.AppStrings
+import com.bydmate.app.voice.AutoVoiceDuck
 import com.bydmate.app.hud.HudController
 import com.bydmate.app.split.SplitPreferencesImpl
 import io.mockk.every
@@ -246,6 +247,23 @@ class BackupManagerExportTest {
         every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
         context.getSharedPreferences("voice", Context.MODE_PRIVATE).edit()
             .putInt("pre_duck_volume", 3).putBoolean("voice_enabled", true).commit()
+
+        val zip = BackupManager(
+            context, appDatabase, AppStrings(context), BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS,
+        ).export()
+
+        val exported = ZipFile(zip).use { z ->
+            BackupManager.deserializePrefs(z.getInputStream(z.getEntry("prefs.json")).readBytes().decodeToString())
+        }
+        assertEquals(mapOf("voice_enabled" to true), exported["voice"])
+    }
+
+    @Test
+    fun `export leaves the firmware voice duck marker and last status behind`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+        context.getSharedPreferences("voice", Context.MODE_PRIVATE).edit()
+            .putBoolean(AutoVoiceDuck.KEY_MARKER, true).putString(AutoVoiceDuck.KEY_LAST, "activate APPLIED")
+            .putBoolean("voice_enabled", true).commit()
 
         val zip = BackupManager(
             context, appDatabase, AppStrings(context), BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS,
