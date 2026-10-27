@@ -2082,9 +2082,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 val bttsMax = runCatching { am.getStreamMaxVolume(17) }.getOrNull()
                 val bttsVol = runCatching { am.getStreamVolume(17) }.getOrNull()
                 appendLine("byd_btts_stream17: " + if (bttsMax != null) "present vol=$bttsVol/$bttsMax" else "absent")
-                val preDuck = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
-                    .getInt("pre_duck_volume", -1)
+                val voicePrefs = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                val preDuck = voicePrefs.getInt("pre_duck_volume", -1)
                 appendLine("pre_duck_volume: " + if (preDuck >= 0) "$preDuck" else "(none)")
+                // #353: the firmware voice duck state; the amp type tells which cars needed it.
+                val ampType = com.bydmate.app.split.readSystemProperty("sys.ext.amp.type") ?: "(none)"
+                val autoVoiceMarker = voicePrefs.getBoolean(com.bydmate.app.voice.AutoVoiceDuck.KEY_MARKER, false)
+                val autoVoiceLast = voicePrefs.getString(com.bydmate.app.voice.AutoVoiceDuck.KEY_LAST, null) ?: "(none)"
+                appendLine("auto_voice: ext_amp_type=$ampType marker=${if (autoVoiceMarker) "set" else "none"} last=$autoVoiceLast")
             } catch (e: Exception) { appendLine("(failed to gather audio state: ${e.message})") }
 
             appendLine("--- displays ---")

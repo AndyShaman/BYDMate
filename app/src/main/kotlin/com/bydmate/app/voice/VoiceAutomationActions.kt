@@ -33,6 +33,7 @@ class VoiceAutomationActions @Inject @Suppress("LongParameterList") constructor(
     private val voiceController: dagger.Lazy<VoiceController>,
     @ApplicationContext private val context: Context,
     private val strings: AppStrings,
+    private val autoVoiceDuck: AutoVoiceDuck = AutoVoiceDuck.OFF,
 ) {
     private val ownBusy = AtomicBoolean(false)
     @Volatile private var lastAgentQueryAt = 0L
@@ -84,11 +85,14 @@ class VoiceAutomationActions @Inject @Suppress("LongParameterList") constructor(
             if (showedOrb) runCatching { showOrbAnswer(text) }
             // TtsEngine plays raw AudioTrack audio: no audio focus, no ducking -- duck here.
             // restoreMusic and hideOrb are in a finally so cancellation mid-drain never leaks
-            // the duck (music stuck silent) or the orb (stranded on screen).
-            val saved = audioCapture.duckMusic()
+            // the duck (music stuck silent) or the orb (stranded on screen). #353: the firmware
+            // ducks instead when it takes the stock assistant's call; otherwise the duck runs the
+            // media duck and gives it back on deactivate.
+            var duckLease: AutoVoiceDuck.Lease? = null
             var ok = false
             var timedOut = false
             try {
+                duckLease = autoVoiceDuck.activate(audioCapture::duckMusic, audioCapture::restoreMusic)
                 ok = runCatching { ttsEngine.speak(text) }.getOrDefault(false)
                 if (ok) {
                     val completed = withTimeoutOrNull(SPEAK_TIMEOUT_MS) {
@@ -103,7 +107,7 @@ class VoiceAutomationActions @Inject @Suppress("LongParameterList") constructor(
                     }
                 }
             } finally {
-                audioCapture.restoreMusic(saved)
+                duckLease?.let { autoVoiceDuck.deactivate(it) }
                 if (showedOrb) runCatching { hideOrb() }
             }
             return when {
