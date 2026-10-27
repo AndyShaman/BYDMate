@@ -200,7 +200,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         val nowMs = System.currentTimeMillis()
         val liveExteriorTemp = TrackingService.lastData.value?.exteriorTemp
         val marks = odometerMarks.snapshot()
-        val sourceRecycled = hasRecycledIds(bydRecords)
+        val sourceRecycled = sourceRecycled(bydRecords)
 
         for (byd in bydRecords) {
             // Before maxTs and before any filter: a future row must not move the watermark (#348)
@@ -375,6 +375,18 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         val recycled = records.count { byd -> tripDao.getByBydId(byd.id)?.let { isRecycledId(it, byd) } == true }
         if (recycled > 0) Log.w(TAG, "energydata source recycled: $recycled/${records.size} ids held by older trips")
         return recycled > 0
+    }
+
+    /**
+     * Detected recycling is remembered: once old trips are unlinked, a later batch shows no signal,
+     * yet a legacy tombstone must keep being ignored for the recreated DB.
+     */
+    private suspend fun sourceRecycled(records: List<BydTripRecord>): Boolean {
+        val detected = hasRecycledIds(records)
+        if (detected) settingsRepository.setEnergyIdsRecycled()
+        val remembered = !detected && settingsRepository.isEnergyIdsRecycled()
+        if (remembered) Log.d(TAG, "energydata source recycled earlier (remembered flag)")
+        return detected || remembered
     }
 
     /** Deleted by the user (issue #81): a tombstone hides only the trip it was left for (#348). */
@@ -581,7 +593,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             val capacity = settingsRepository.getBatteryCapacity()
             var updated = 0
             var inserted = 0
-            val sourceRecycled = hasRecycledIds(bydRecords)
+            val sourceRecycled = sourceRecycled(bydRecords)
 
             for (byd in bydRecords) {
                 if (byd.duration < MIN_TRIP_DURATION_SEC) continue
