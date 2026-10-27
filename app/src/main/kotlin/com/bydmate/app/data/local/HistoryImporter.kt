@@ -647,8 +647,9 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             val capacity = settingsRepository.getBatteryCapacity()
             var updated = 0
             var inserted = 0
-            // A full read already: the first detection needs no catch-up here
-            val sourceRecycled = sourceRecycled(bydRecords, 0L)
+            // A full read already, but it may not finish: the first detection resets the watermark
+            // before the flag is stored, so the next sync still re-reads everything (#348)
+            val sourceRecycled = sourceRecycled(bydRecords, 0L) { clearImportWatermark() }
 
             for (byd in bydRecords) {
                 if (byd.duration < MIN_TRIP_DURATION_SEC) continue
