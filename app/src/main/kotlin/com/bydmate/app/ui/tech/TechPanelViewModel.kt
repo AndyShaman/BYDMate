@@ -15,7 +15,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -203,7 +205,7 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch { loadAvgSoc() }
         viewModelScope.launch { loadCardOrder() }
         viewModelScope.launch { loadFullCycles() }
-        viewModelScope.launch { loadCalibrationMarks() }
+        observeCalibrationMarks()
         viewModelScope.launch {
             vehicleKindMonitor.kind.collect { kind ->
                 _uiState.update { it.copy(vehicleKind = kind, cardOrder = TechCardOrder.forKind(it.cardOrder, kind)) }
@@ -333,13 +335,21 @@ class TechPanelViewModel @Inject constructor(
         }
     }
 
-    /** Last full charge and last calibration off the app's own charge log, read once on open. */
-    private suspend fun loadCalibrationMarks() {
-        val charges = runCatching { chargeRepository.getCompletedSince(0L) }.getOrNull() ?: return
-        val marks = BatteryCalibration.marks(charges)
-        Log.d(TAG, "calibration marks: full=${marks.lastFullChargeTs} cal=${marks.lastCalibrationTs} rows=${charges.size}")
-        _uiState.update {
-            it.copy(lastFullChargeTs = marks.lastFullChargeTs, lastCalibrationTs = marks.lastCalibrationTs)
+    /**
+     * Last full charge and last calibration off the app's own charge log, kept live: the unplug
+     * catch-up writes the row up to ~30 s after the gun comes out, often with this screen open.
+     */
+    private fun observeCalibrationMarks() {
+        viewModelScope.launch {
+            chargeRepository.getAllCharges()
+                .map { charges -> BatteryCalibration.marks(charges) to charges.size }
+                .catch { Log.w(TAG, "calibration marks failed: ${it.message}") }
+                .collect { (marks, rows) ->
+                    Log.d(TAG, "calibration marks: full=${marks.lastFullChargeTs} cal=${marks.lastCalibrationTs} rows=$rows")
+                    _uiState.update {
+                        it.copy(lastFullChargeTs = marks.lastFullChargeTs, lastCalibrationTs = marks.lastCalibrationTs)
+                    }
+                }
         }
     }
 
