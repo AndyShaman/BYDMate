@@ -135,10 +135,15 @@ object VoiceModule {
     }
 
     @Provides @Singleton
-    fun provideAudioCapture(@ApplicationContext ctx: Context) =
+    fun provideAutoVoiceDuck(@ApplicationContext ctx: Context, helper: com.bydmate.app.data.vehicle.HelperClient) =
+        AutoVoiceDuck(helper::setAutoVoiceActive, ctx.getSharedPreferences("voice", Context.MODE_PRIVATE))
+
+    @Provides @Singleton
+    fun provideAudioCapture(@ApplicationContext ctx: Context, autoVoiceDuck: AutoVoiceDuck) =
         AudioCapture(
             ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager,
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE),
+            autoVoiceDuck::isActive,
         )
 
     @Provides @Singleton

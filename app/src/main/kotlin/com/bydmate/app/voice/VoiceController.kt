@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
@@ -62,6 +64,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     private val appStrings: AppStrings,
     private val echoFilter: SelfEchoFilter = SelfEchoFilter(),
     private val userPhrases: VoiceUserPhrases = VoiceUserPhrases(),
+    private val autoVoiceDuck: AutoVoiceDuck = AutoVoiceDuck.OFF,
 ) {
     // Process-lifetime scope (@Singleton): intentionally never cancelled.
     private val scope = CoroutineScope(SupervisorJob())
@@ -338,13 +341,22 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // the GigaAM recognizer is constructed (~1.3 s, field defect APK 337). duckMusic() is
         // idempotent (volume already at the duck target returns null), so the inner call becomes
         // a no-op and this early saved volume is the one restored at session teardown.
-        val earlyDuck = runCatching { audioCapture.duckMusic() }.getOrNull()
+        // #353: first ask the firmware to duck the stock assistant's way (session coroutine
+        // below); once a car is known not to take it, the duck stays right here.
+        val askFirmwareDuck = autoVoiceDuck.mayApply()
+        val syncDuck = if (askFirmwareDuck) null else runCatching { audioCapture.duckMusic() }.getOrNull()
         // Warm the model and online-voice connections while the driver is still speaking: a cold
         // turn otherwise pays DNS + TLS on both hosts inside the reply latency.
         runCatching { if (gate.ttsEnabled()) ttsEngine.prewarmNetwork() }
         scope.launch { runCatching { agentOrchestrator.prewarm() } }
         sessionJob = scope.launch {
             val session = coroutineContext[Job]
+            var earlyDuck = syncDuck
+            // Before the orb: the duck must not wait for the overlay. Applied = STREAM_MUSIC is
+            // left alone (its volume is the amp's); any other answer ducks the media as before.
+            if (askFirmwareDuck && !runCatching { autoVoiceDuck.activate() }.getOrDefault(false)) {
+                earlyDuck = runCatching { audioCapture.duckMusic() }.getOrNull()
+            }
             runCatching { showListeningOverlay(appStrings.get(R.string.voice_listening)) }
             var lastEventMs = System.currentTimeMillis()
             var wasAudible = false   // capture thread only
@@ -500,6 +512,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                 cancellableAskJob = null
                 processingUtterance = false
                 runCatching { audioCapture.restoreMusic(earlyDuck) }
+                if (askFirmwareDuck) withContext(NonCancellable) { runCatching { autoVoiceDuck.deactivate() } }
                 _listening.value = false
                 _state.value = VoiceUiState.Idle
                 // Distinct off-cue so the driver can tell session start (ok) and stop apart by ear.

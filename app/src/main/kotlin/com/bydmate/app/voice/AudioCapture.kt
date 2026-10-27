@@ -11,7 +11,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlin.concurrent.thread
 
-class AudioCapture(private val audioManager: AudioManager, private val prefs: SharedPreferences) {
+class AudioCapture(
+    private val audioManager: AudioManager,
+    private val prefs: SharedPreferences,
+    // True while the firmware ducks media for the voice session (AutoVoiceDuck, #353).
+    private val firmwareDuckActive: () -> Boolean = { false },
+) {
 
     companion object {
         private const val SAMPLE_RATE = 16000
@@ -73,8 +78,12 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
         // we lower STREAM_MUSIC directly and restore it on every exit path. duckedFrom holds the
         // pre-duck volume to restore, or null if nothing was ducked (no music / already low).
         // Ducking must precede openRecord(): that iterates up to 5 mic sources and would otherwise
-        // delay the volume drop by a perceptible beat.
-        val duckedFrom = duckMusic()
+        // delay the volume drop by a perceptible beat. While the firmware ducks for the session,
+        // STREAM_MUSIC stays put: on external-amp cars its volume is the amp's (#353).
+        val duckedFrom = if (firmwareDuckActive()) {
+            Log.i(TAG, "captureSession: media duck skipped, firmware voice duck active")
+            null
+        } else duckMusic()
 
         // If the mic cannot open, restore the volume we just ducked before bailing — otherwise
         // media would stay stuck at the duck level with no listen window to justify it.

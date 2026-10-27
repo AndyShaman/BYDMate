@@ -543,6 +543,27 @@ object HelperBinderProtocol {
      */
     val TX_SPLIT37_ROOT_STATE: Int = IBinder.FIRST_CALL_TRANSACTION + 59  // 60
 
+    /**
+     * Voice session duck the stock assistant's way (#353): the hidden
+     * IAudioService.setAutoVoiceActiveState(isActive, isDuckMedia, callingPackageName) that
+     * com.byd.autovoice calls. The firmware then ducks media at track level and makes stream 17
+     * the active one, so on cars with an external amplifier (which gets the active stream's
+     * volume only) our reply plays at the "Голос" volume instead of the ducked media one. The
+     * method is looked up by name (its transaction number differs between firmwares) and gets
+     * the stock assistant's package, the only check the firmware makes.
+     *
+     * Request: [int active: 1=on, 0=off]
+     * Reply:   [int outcome (AUTO_VOICE_*), String detail (amp type, the call or the exception)]
+     * An old daemon without this handler makes transact return false → the client returns null.
+     */
+    val TX_SET_AUTO_VOICE: Int = IBinder.FIRST_CALL_TRANSACTION + 60  // 61
+
+    /** TX_SET_AUTO_VOICE outcomes: called; no such method on this firmware; the audio service or
+     *  the call threw. */
+    const val AUTO_VOICE_APPLIED = 0
+    const val AUTO_VOICE_UNSUPPORTED = 2
+    const val AUTO_VOICE_FAILED = -1
+
     /** TX_SET_SCREEN_BACKLIGHT outcomes: called and the status shows the wanted state; called but
      *  the status did not follow (or could not be read); no such method on this firmware; the
      *  PowerManager or the call threw. */

@@ -123,6 +123,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var ttsModelManager: com.bydmate.app.voice.TtsModelManager
     @Inject lateinit var ttsEngine: com.bydmate.app.voice.TtsEngine
     @Inject lateinit var audioCapture: com.bydmate.app.voice.AudioCapture
+    @Inject lateinit var autoVoiceDuck: com.bydmate.app.voice.AutoVoiceDuck
     @Inject lateinit var hudController: com.bydmate.app.hud.HudController
     @Inject lateinit var fidPushChannel: com.bydmate.app.data.push.FidPushChannel
     @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
@@ -720,6 +721,10 @@ class TrackingService : Service(), LocationListener {
                 }
                 adbVerdictMonitor.recompute()
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
+                // Companion of restoreStuckDuck() above (#353): turn the firmware voice duck off
+                // if a process died with it on. Needs the daemon, hence here; without an answer
+                // the marker stays for the next start.
+                runCatching { autoVoiceDuck.recoverStuck() }
                 // Not gated on ok: a cached catalog resolves over the ADB read path without the
                 // daemon, and without one the call just returns and the respawn path retries.
                 resolveFidCatalog()

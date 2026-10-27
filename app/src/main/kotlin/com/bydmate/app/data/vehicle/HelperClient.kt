@@ -71,6 +71,12 @@ data class HudNaviReply(val outcome: Int, val sdkReturn: Int) {
  */
 data class ScreenBacklightReply(val outcome: Int, val status: Int, val detail: String)
 
+/**
+ * TX_SET_AUTO_VOICE answer (#353): [outcome] is one of HelperBinderProtocol.AUTO_VOICE_*, [detail]
+ * the amp type the daemon read and the call it made, or the exception.
+ */
+data class AutoVoiceReply(val outcome: Int, val detail: String)
+
 /** One TX_HUD_SDK call: the instrument SDK method way 3 makes after its raw writes, as OpenBYD does. */
 sealed class HudSdkCall(val method: Int, val sdkName: String) {
     data class Guidance(val turnKind: Int, val distanceM: Int) :
@@ -407,6 +413,10 @@ interface HelperClient {
      *  when the daemon is unreachable or too old to know the transaction; [isAlive] tells the
      *  two apart. */
     suspend fun setScreenBacklight(on: Boolean): ScreenBacklightReply?
+
+    /** Stock-assistant voice duck state inside the daemon (TX_SET_AUTO_VOICE, #353).
+     *  Null when the daemon is unreachable or too old to know the transaction. */
+    suspend fun setAutoVoiceActive(active: Boolean): AutoVoiceReply?
 
     /**
      * Direct freeform launch: find-or-launch [packageName], switch its task to freeform,
@@ -867,6 +877,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         transactParsed(HelperBinderProtocol.TX_SET_SCREEN_BACKLIGHT, { it.writeInt(if (on) 1 else 0) }) { reply ->
             if (reply.dataAvail() < 8) return@transactParsed null
             ScreenBacklightReply(reply.readInt(), reply.readInt(), reply.readString().orEmpty())
+        }
+
+    override suspend fun setAutoVoiceActive(active: Boolean): AutoVoiceReply? =
+        transactParsed(HelperBinderProtocol.TX_SET_AUTO_VOICE, { it.writeInt(if (active) 1 else 0) }) { reply ->
+            if (reply.dataAvail() < 4) return@transactParsed null
+            AutoVoiceReply(reply.readInt(), reply.readString().orEmpty())
         }
 
     // Two-stage budget instead of the single transactParsed timeout: the daemon plans its own work

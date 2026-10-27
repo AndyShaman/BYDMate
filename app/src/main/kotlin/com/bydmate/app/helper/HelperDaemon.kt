@@ -16,6 +16,7 @@ import com.bydmate.app.helper.push.readSubscribeRequest
 import com.bydmate.app.helper.push.writeRecStatus
 import com.bydmate.app.helper.push.writeResultTable
 import com.bydmate.app.helper.push.writeStatusTable
+import com.bydmate.app.split.readSystemProperty
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -418,6 +419,13 @@ fun main(args: Array<String>) {
                     }
                     reply?.writeInt(result.outcome); reply?.writeInt(result.status)
                     reply?.writeString(result.detail)
+                    true
+                }
+
+                HelperBinderProtocol.TX_SET_AUTO_VOICE -> {
+                    val active = runCatching { data.readInt() != 0 }.getOrDefault(false)
+                    val result = setAutoVoiceActive(active, { readSystemProperty(EXT_AMP_TYPE_PROP) }, ::audioServiceProxy)
+                    reply?.writeInt(result.outcome); reply?.writeString(result.detail)
                     true
                 }
 
