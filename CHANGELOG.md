@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [4.0.3] - 2026-10-27
+
 ### Исправления
 - «Техника», «Батарея · история»: строки о последней полной зарядке и калибровке теперь обновляются сами, как только зарядка записана. Раньше экран, открытый сразу после того, как вынули пистолет, показывал прошлую полную зарядку, пока его не откроешь заново.
 - Карточка музыки на приборке (Song L и другие машины без UI7): после смены приложения на экране карточка возвращается меньше чем через секунду. Раньше штатная прошивка стирала её и она пропадала до 10 секунд (#369).
@@ -1465,7 +1467,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.0.2...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.0.3...HEAD
+[4.0.3]: https://github.com/AndyShaman/BYDMate/compare/v4.0.2...v4.0.3
 [4.0.2]: https://github.com/AndyShaman/BYDMate/compare/v4.0.1...v4.0.2
 [4.0.1]: https://github.com/AndyShaman/BYDMate/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/AndyShaman/BYDMate/compare/v3.20.0...v4.0.0
