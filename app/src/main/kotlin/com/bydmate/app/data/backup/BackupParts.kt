@@ -48,6 +48,7 @@ object BackupParts {
     val TABLES_SETTINGS_KEYS: Set<String> = setOf(
         "last_energydata_import_ts",
         "dedup_cleanup_done",
+        "energy_ids_recycled",
         "idle_drain_cleanup_done",
         "consumption_recalc_done",
         "idle_drain_v2_cleanup",

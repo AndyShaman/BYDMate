@@ -11,7 +11,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlin.concurrent.thread
 
-class AudioCapture(private val audioManager: AudioManager, private val prefs: SharedPreferences) {
+class AudioCapture(
+    private val audioManager: AudioManager,
+    private val prefs: SharedPreferences,
+    // Owns the media duck while a firmware voice duck lease is live (#353).
+    private val autoVoiceDuck: AutoVoiceDuck = AutoVoiceDuck.OFF,
+) {
 
     companion object {
         private const val SAMPLE_RATE = 16000
@@ -73,13 +78,18 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
         // we lower STREAM_MUSIC directly and restore it on every exit path. duckedFrom holds the
         // pre-duck volume to restore, or null if nothing was ducked (no music / already low).
         // Ducking must precede openRecord(): that iterates up to 5 mic sources and would otherwise
-        // delay the volume drop by a perceptible beat.
-        val duckedFrom = duckMusic()
+        // delay the volume drop by a perceptible beat. While a firmware duck lease is live, the
+        // duck goes through AutoVoiceDuck: STREAM_MUSIC stays put once the firmware ducks (on
+        // external-amp cars its volume is the amp's), and a late apply restores it (#353).
+        val nested = autoVoiceDuck.nest(::duckMusic, ::restoreMusic)
+        val duckedFrom = if (nested == null) duckMusic() else null
+        if (nested != null) Log.i(TAG, "captureSession: media duck left to the firmware voice duck lease")
+        val restoreDuck = { if (nested != null) autoVoiceDuck.deactivate(nested) else restoreMusic(duckedFrom) }
 
         // If the mic cannot open, restore the volume we just ducked before bailing — otherwise
         // media would stay stuck at the duck level with no listen window to justify it.
         val record = openRecord(minBuf) ?: run {
-            restoreMusic(duckedFrom)
+            restoreDuck()
             close(IllegalStateException("mic unavailable"))
             return@callbackFlow
         }
@@ -93,7 +103,7 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
         } catch (t: Throwable) {
             runCatching { record.release() }
             runCatching { audioManager.abandonAudioFocus(null) }
-            restoreMusic(duckedFrom)
+            restoreDuck()
             close(t)
             return@callbackFlow
         }
@@ -118,7 +128,7 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
             // Each cleanup step is independent: a throw in one must not skip the
             // volume restore below (otherwise media stays ducked at 15%).
             runCatching { audioManager.abandonAudioFocus(null) }
-            restoreMusic(duckedFrom)
+            restoreDuck()
             worker.interrupt()
         }
     }

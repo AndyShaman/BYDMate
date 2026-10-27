@@ -54,14 +54,14 @@ import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
         TariffPeriodEntity::class,
         CounterSnapshotEntity::class
     ],
-    version = 23,
+    version = 24,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         /** Current Room schema version. Must match the @Database(version = ...) annotation above. */
-        const val SCHEMA_VERSION = 23
+        const val SCHEMA_VERSION = 24
     }
 
     abstract fun tripDao(): TripDao

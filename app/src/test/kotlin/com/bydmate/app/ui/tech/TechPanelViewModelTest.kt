@@ -6,6 +6,7 @@ import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.domain.battery.AvgSoc
 import com.bydmate.app.domain.battery.AvgSocProvider
 import com.bydmate.app.domain.battery.BatteryState
+import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.LifetimeChargingStats
 import com.bydmate.app.data.remote.DiParsData
@@ -17,6 +18,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -47,6 +49,7 @@ class TechPanelViewModelTest {
         savedOrder = ""
         hintSeen = false
         hintFlagWrites = 0
+        chargeLog.value = emptyList()
     }
 
     @After fun tearDown() {
@@ -89,6 +92,9 @@ class TechPanelViewModelTest {
     private var hintSeen = false
     private var hintFlagWrites = 0
 
+    /** The live charge log the calibration rows observe. */
+    private val chargeLog = MutableStateFlow<List<ChargeEntity>>(emptyList())
+
     private fun settings(): SettingsRepository = mockk<SettingsRepository>(relaxed = true).also { r ->
         coEvery { r.getTechCardOrder() } answers { savedOrder }
         coEvery { r.setTechCardOrder(any()) } answers { savedOrder = firstArg() }
@@ -113,6 +119,7 @@ class TechPanelViewModelTest {
         coEvery { charges.getLifetimeStats() } returns (
             lifetimeCharged ?: LifetimeChargingStats(0.0, 0.0, 0.0, 0)
             )
+        every { charges.getAllCharges() } returns chargeLog
         val settings = settings().also { coEvery { it.getBatteryCapacity() } returns capacityKwh }
         return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind)))
     }
@@ -522,5 +529,23 @@ class TechPanelViewModelTest {
         val state = vm.uiState.value
         assertNull(state.lifetimeKwh)
         assertTrue(state.showHistory)
+    }
+
+    /** The unplug catch-up lands the charge row up to ~30 s after the gun comes out; a screen
+     *  opened in that window must pick the row up instead of keeping the previous full charge. */
+    @Test
+    fun `a full charge logged while the screen is open updates the marks`() = runTest {
+        val dayMs = 86_400_000L
+        val older = ChargeEntity(startTs = 10 * dayMs, endTs = 10 * dayMs, socStart = 30, socEnd = 100, status = "COMPLETED")
+        chargeLog.value = listOf(older)
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(10 * dayMs, vm.uiState.value.lastFullChargeTs)
+
+        val fresh = ChargeEntity(startTs = 15 * dayMs, endTs = 15 * dayMs, socStart = 25, socEnd = 100, status = "COMPLETED")
+        chargeLog.value = listOf(fresh, older)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(15 * dayMs, vm.uiState.value.lastFullChargeTs)
     }
 }
