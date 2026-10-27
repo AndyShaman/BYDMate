@@ -880,15 +880,29 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             ScreenBacklightReply(reply.readInt(), reply.readInt(), reply.readString().orEmpty())
         }
 
+    // Only the wait for the channel is bounded, not the transact: a timeout cannot interrupt a
+    // blocking binder.transact, it would only drop an answer the daemon already gave, and a lost
+    // APPLIED leaves AutoVoiceDuck's media fallback on for the whole session (#353). The caller
+    // (AutoVoiceDuck's own queue) waits for the real reply; a dead daemon fails the transact at once.
     override suspend fun setAutoVoiceActive(active: Boolean): AutoVoiceReply? =
-        // A daemon started by an older APK does not handle the code: same as a firmware without
-        // the method for the caller (fallback, verdict cached, marker cleared).
-        transactParsed(
-            HelperBinderProtocol.TX_SET_AUTO_VOICE, { it.writeInt(if (active) 1 else 0) },
-            notHandled = AutoVoiceReply(HelperBinderProtocol.AUTO_VOICE_UNSUPPORTED, "daemon does not handle TX_SET_AUTO_VOICE"),
-        ) { reply ->
-            if (reply.dataAvail() < 4) return@transactParsed null
-            AutoVoiceReply(reply.readInt(), reply.readString().orEmpty())
+        withContext(Dispatchers.IO) {
+            if (withTimeoutOrNull(AUTO_VOICE_LOCK_WAIT_MS) { mutex.lock() } == null) {
+                Log.w(TAG, "setAutoVoiceActive: helper channel busy for ${AUTO_VOICE_LOCK_WAIT_MS}ms, not sent")
+                return@withContext null
+            }
+            try {
+                // A daemon started by an older APK does not handle the code: same as a firmware
+                // without the method for the caller (fallback, verdict cached, marker cleared).
+                transactBodyUnlocked(
+                    HelperBinderProtocol.TX_SET_AUTO_VOICE, { it.writeInt(if (active) 1 else 0) },
+                    notHandled = AutoVoiceReply(HelperBinderProtocol.AUTO_VOICE_UNSUPPORTED, "daemon does not handle TX_SET_AUTO_VOICE"),
+                ) { reply ->
+                    if (reply.dataAvail() < 4) return@transactBodyUnlocked null
+                    AutoVoiceReply(reply.readInt(), reply.readString().orEmpty())
+                }
+            } finally {
+                mutex.unlock()
+            }
         }
 
     // Two-stage budget instead of the single transactParsed timeout: the daemon plans its own work
@@ -1337,19 +1351,17 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         transact(code, writeArgs)?.let { (status, _) -> readAccepted(status) } ?: false
 
     /** Returns the parsed reply or null on any failure. Retries ONCE on a dead cached binder. */
-    @Suppress("LongParameterList") // the transact knobs, all defaulted but code and parse
     private suspend fun <T> transactParsed(
         code: Int,
         writeArgs: (Parcel) -> Unit,
         timeoutMs: Long = REQ_TIMEOUT_MS,
         beforeSend: (suspend (LockedReader) -> Boolean)? = null,
-        notHandled: T? = null,
         parse: (Parcel) -> T?,
     ): T? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(timeoutMs) {
                 onBeforeLock?.invoke()
-                mutex.withLock { transactBodyUnlocked(code, writeArgs, beforeSend, notHandled, parse) }
+                mutex.withLock { transactBodyUnlocked(code, writeArgs, beforeSend, parse = parse) }
             }
         }
 
@@ -1516,6 +1528,9 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
          *  FORCE_TIMEOUT_MS so a queued launch still gets the full daemon budget; the caller's
          *  worst case is the sum (20s), which the split/cluster callers absorb fail-soft. */
         private const val MUTEX_WAIT_MS = 5_000L
+        /** How long [setAutoVoiceActive] waits for the channel; NO_ANSWER after that, which
+         *  AutoVoiceDuck retries for an off call. */
+        private const val AUTO_VOICE_LOCK_WAIT_MS = 5_000L
         /** TX_READ_BATCH budget: 58 in-process transacts typically take ~100 ms; 5 s is a 50× margin. */
         const val BATCH_TIMEOUT_MS = 5_000L
         /** TX_RAISE_FREEFORM_TASK budget: two shell spawns (resolve-activity + am start).

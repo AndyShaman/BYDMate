@@ -41,6 +41,7 @@ internal const val FIRMWARE_VOICE_DUCK_ENABLED = true
  * definite answer to an off call keeps the off call coming: retried with [offRetryDelaysMs],
  * again on every daemon arrival and service start ([recoverStuck]), until it lands.
  */
+@Suppress("TooManyFunctions") // one state machine under one lock: its transitions stay together
 class AutoVoiceDuck(
     private val setActive: suspend (Boolean) -> AutoVoiceReply?,
     private val prefs: SharedPreferences?,
@@ -150,6 +151,24 @@ class AutoVoiceDuck(
             }
         }
         return lease
+    }
+
+    /**
+     * An inner media duck inside a live nesting (the capture session's own duck), decided under
+     * the same lock as a late apply, so that apply undoes it too and both ducks are never on at
+     * once. Applied: nothing is ducked. Null when no level is held (firmware duck off, cached
+     * UNSUPPORTED, no live session): the caller ducks the media itself. Release with [deactivate].
+     */
+    fun nest(duckMedia: () -> Int?, restoreMedia: (Int?) -> Unit): Lease? = synchronized(state) {
+        if (depth == 0) return null
+        val lease = Lease(level = true, restoreMedia)
+        leases += lease
+        depth++
+        if (!applied) {
+            lease.mediaDucked = true
+            lease.mediaSaved = runCatching(duckMedia).getOrNull()
+        }
+        lease
     }
 
     /** Gives [lease] back: restores its media duck, and the last level turns the firmware state

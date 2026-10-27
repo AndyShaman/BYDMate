@@ -143,7 +143,7 @@ object VoiceModule {
         AudioCapture(
             ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager,
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE),
-            autoVoiceDuck::isActive,
+            autoVoiceDuck,
         )
 
     @Provides @Singleton
