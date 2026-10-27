@@ -46,6 +46,10 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE byd_id = :bydId LIMIT 1")
     suspend fun getByBydId(bydId: Long): TripEntity?
 
+    /** Frees a recycled energydata id (#348); conditional, so a stale full-row write cannot be undone by it. */
+    @Query("UPDATE trips SET byd_id = NULL WHERE id = :id AND byd_id = :bydId")
+    suspend fun unlinkBydId(id: Long, bydId: Long): Int
+
     @Query("SELECT * FROM trips WHERE soc_start IS NULL AND source = 'energydata'")
     suspend fun getTripsWithoutSoc(): List<TripEntity>
 

@@ -15,6 +15,12 @@ interface TripTombstoneDao {
     @Query("SELECT EXISTS(SELECT 1 FROM trip_tombstones WHERE byd_id = :bydId)")
     suspend fun exists(bydId: Long): Boolean
 
+    @Query("SELECT MAX(byd_id) FROM trip_tombstones")
+    suspend fun maxBydId(): Long?
+
+    @Query("SELECT MAX(start_ts) FROM trip_tombstones")
+    suspend fun maxStartTs(): Long?
+
     /**
      * True when the tombstone for [bydId] was left by another trip that had this id (#348): its
      * start is outside [windowMs] of [startTs], or it has no start and [ignoreLegacy] is set.
