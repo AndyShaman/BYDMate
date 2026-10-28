@@ -1085,8 +1085,6 @@ ABRP 根据自己数据库里的车型加上实时数据（当前 SOC、电池�
 
 Webhook 和 ABRP 是独立的：可以只开一个，也可以两个都开。
 
-**Home Assistant。** 第三方集成 [byd-leopard3-ha-integration](https://github.com/vasyl127/byd-leopard3-ha-integration) 可以接收这个 Webhook，并在 Home Assistant 中显示车辆。这是一个独立项目，相关问题请联系它的作者。
-
 ---
 
 ## 从源码编译
