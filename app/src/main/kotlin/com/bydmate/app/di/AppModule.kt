@@ -590,6 +590,25 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideDtcScanRepository(
+        @ApplicationContext context: Context,
+        helper: com.bydmate.app.data.vehicle.HelperClient,
+        settings: SettingsRepository,
+        sink: com.bydmate.app.data.backup.TelegramBackupSink,
+    ): com.bydmate.app.data.dtc.DtcScanRepository = com.bydmate.app.data.dtc.DtcScanRepository(
+        helper = helper,
+        prefs = context.getSharedPreferences("dtc_scan", Context.MODE_PRIVATE),
+        settings = settings,
+        sink = sink,
+        scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+        liveSample = { com.bydmate.app.service.TrackingService.lastSample },
+        serviceRunning = { com.bydmate.app.service.TrackingService.isRunning.value },
+        elapsedNow = { android.os.SystemClock.elapsedRealtime() },
+        wallNow = { System.currentTimeMillis() },
+    )
+
+    @Provides
+    @Singleton
     fun provideWriteAllowlist(@ApplicationContext context: Context): com.bydmate.app.data.vehicle.WriteAllowlist =
         com.bydmate.app.data.vehicle.WriteAllowlist.loadProduction {
             context.assets.open("competitor-actions.json").bufferedReader().use { it.readText() }

@@ -2,6 +2,9 @@ package com.bydmate.app.ui.tech
 
 import com.bydmate.app.data.carstatus.CarServiceStatus
 import com.bydmate.app.data.carstatus.CarStatusReader
+import com.bydmate.app.data.dtc.DtcScanPhase
+import com.bydmate.app.data.dtc.DtcScanRepository
+import com.bydmate.app.data.dtc.DtcScanState
 import com.bydmate.app.data.nativestack.HybridTechFixture
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
@@ -54,12 +57,14 @@ class TechPanelViewModelTest {
         hintSeen = false
         hintFlagWrites = 0
         chargeLog.value = emptyList()
+        dtcScanState = MutableStateFlow(DtcScanState())
     }
 
     @After fun tearDown() {
         store.clear()
         connectedFlow().value = true
         liveDataFlow().value = null
+        runningFlow().value = false
         Dispatchers.resetMain()
     }
 
@@ -80,6 +85,23 @@ class TechPanelViewModelTest {
             .getDeclaredField("_lastData")
             .apply { isAccessible = true }
             .get(null) as MutableStateFlow<DiParsData?>
+    }
+
+    /** The scan repository the Diagnostics card reads; [dtcScanState] is the state it reports. */
+    private var dtcScanState = MutableStateFlow(DtcScanState())
+
+    private fun dtcRepo(): DtcScanRepository = mockk<DtcScanRepository>(relaxed = true).also {
+        every { it.state } returns dtcScanState
+        every { it.last } returns MutableStateFlow(null)
+    }
+
+    /** The service's own running flag, reached the same way as the transport flag. */
+    private fun runningFlow(): MutableStateFlow<Boolean> {
+        @Suppress("UNCHECKED_CAST")
+        return TrackingService::class.java
+            .getDeclaredField("_isRunning")
+            .apply { isAccessible = true }
+            .get(null) as MutableStateFlow<Boolean>
     }
 
     /** Scoped so [store] can clear it; a bare constructor call leaks its viewModelScope. */
@@ -133,7 +155,7 @@ class TechPanelViewModelTest {
             )
         every { charges.getAllCharges() } returns chargeLog
         val settings = settings().also { coEvery { it.getBatteryCapacity() } returns capacityKwh }
-        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind), carStatusReader(carStatus)))
+        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind), carStatusReader(carStatus), dtcRepo()))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -294,7 +316,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null)))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null), dtcRepo()))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
@@ -634,5 +656,50 @@ class TechPanelViewModelTest {
         assertFalse(TechPanelUiState(serviceDaysLeft = null, serviceKmLeft = null).hasServiceRow)
         assertTrue(TechPanelUiState(serviceDaysLeft = 90).hasServiceRow)
         assertTrue(TechPanelUiState(serviceKmLeft = 3500).hasServiceRow)
+    }
+
+    // --- «Сканировать» button ---------------------------------------------------------
+
+    private suspend fun TestScope.openScan(gear: Int?, running: Boolean = true): TechPanelUiState {
+        runningFlow().value = running
+        return openWith(noData.copy(gear = gear))
+    }
+
+    @Test
+    fun `the scan button is enabled in P on a running service`() = runTest {
+        val state = openScan(gear = 1)
+        assertTrue(state.canScan)
+        assertEquals(DtcScanLabel.SCAN, state.scanLabel)
+    }
+
+    @Test
+    fun `the scan button is disabled outside P with the park caption`() = runTest {
+        for (gear in intArrayOf(2, 3, 4)) {
+            val state = openScan(gear = gear)
+            assertFalse("gear $gear", state.canScan)
+            assertEquals("gear $gear", DtcScanLabel.ONLY_PARK, state.scanLabel)
+        }
+    }
+
+    @Test
+    fun `the scan button is disabled when the gear is unknown`() = runTest {
+        val state = openScan(gear = null)
+        assertFalse(state.canScan)
+        assertEquals(DtcScanLabel.ONLY_PARK, state.scanLabel)
+    }
+
+    @Test
+    fun `the scan button is disabled when the service is not running`() = runTest {
+        val state = openScan(gear = 1, running = false)
+        assertFalse(state.canScan)
+        assertEquals(DtcScanLabel.ONLY_PARK, state.scanLabel)
+    }
+
+    @Test
+    fun `while scanning the button is disabled and says so`() = runTest {
+        dtcScanState.value = DtcScanState(phase = DtcScanPhase.SCANNING, done = 4, total = 18)
+        val state = openScan(gear = 1)
+        assertFalse(state.canScan)
+        assertEquals(DtcScanLabel.SCANNING, state.scanLabel)
     }
 }

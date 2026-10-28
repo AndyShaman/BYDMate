@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.carstatus.CarStatusReader
+import com.bydmate.app.data.dtc.DtcScanRepository
+import com.bydmate.app.data.dtc.DtcScanState
 import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.ChargeRepository
@@ -23,6 +25,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** Caption of the «Сканировать» button. */
+enum class DtcScanLabel { SCAN, SCANNING, ONLY_PARK }
 
 /**
  * Live state of the «Техника» screen. Everything vehicle-side rides the poller that already
@@ -112,7 +117,18 @@ data class TechPanelUiState(
     val faultCount: Int? = null,
     val serviceDaysLeft: Int? = null,
     val serviceKmLeft: Int? = null,
+    // Диагностика: manual block-fault scan
+    val gear: Int? = null,
+    val serviceRunning: Boolean = false,
+    val dtcScan: DtcScanState = DtcScanState(),
 ) {
+    /** The scan button is enabled on a running service in P and while no scan runs. */
+    val canScan: Boolean
+        get() = false
+
+    val scanLabel: DtcScanLabel
+        get() = DtcScanLabel.SCAN
+
     /** PM2.5 value to draw: only with a valid level 1..6, null otherwise. */
     val pm25InShown: Int?
         get() = pm25In?.takeIf { pm25LevelIn in PM25_LEVELS }
@@ -217,6 +233,7 @@ internal fun remainKwhForDisplay(remainKwh: Double?, soc: Int?): Double? =
     remainKwh?.takeUnless { it <= 0.0 && soc != null && soc > 0 }
 
 @HiltViewModel
+@Suppress("LongParameterList", "UnusedPrivateProperty") // Hilt constructor; the scan card reads the repository next
 class TechPanelViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
     private val avgSocProvider: AvgSocProvider,
@@ -224,6 +241,7 @@ class TechPanelViewModel @Inject constructor(
     private val chargeRepository: ChargeRepository,
     private val vehicleKindMonitor: VehicleKindMonitor,
     private val carStatusReader: CarStatusReader,
+    private val dtcScanRepository: DtcScanRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TechPanelUiState())

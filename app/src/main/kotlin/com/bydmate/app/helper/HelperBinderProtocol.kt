@@ -558,6 +558,25 @@ object HelperBinderProtocol {
      */
     val TX_SET_AUTO_VOICE: Int = IBinder.FIRST_CALL_TRANSACTION + 60  // 61
 
+    /**
+     * Manual ECU fault-code scan, start: the daemon runs the whole job on its own thread so the
+     * shared client mutex is held for milliseconds only. No address or payload bytes come from
+     * the app, only where to read the gear fid.
+     *
+     * Request: [int gearDev, int gearFid]
+     * Reply:   [int status: 0 = started, 1 = busy (poll it), -1 = refused]
+     * An old daemon without this handler makes transact return false → the client returns null.
+     */
+    val TX_DTC_SCAN_START: Int = IBinder.FIRST_CALL_TRANSACTION + 61  // 62
+
+    /**
+     * Fault-code scan, status (see [TX_DTC_SCAN_START]).
+     *
+     * Reply: [int state, int done, int total, String reason, int count,
+     *         count × (int addr, String outcome, byte[] countUds, byte[] listUds, byte[] idUds)]
+     */
+    val TX_DTC_SCAN_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 62  // 63
+
     /** TX_SET_AUTO_VOICE outcomes: called; no such method on this firmware; the audio service or
      *  the call threw. */
     const val AUTO_VOICE_APPLIED = 0

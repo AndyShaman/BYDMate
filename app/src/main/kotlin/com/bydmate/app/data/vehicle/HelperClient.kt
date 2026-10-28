@@ -419,6 +419,13 @@ interface HelperClient {
      *  the transaction. */
     suspend fun setAutoVoiceActive(active: Boolean): AutoVoiceReply?
 
+    /** Starts the daemon's manual fault-code scan (TX_DTC_SCAN_START): 0 started, 1 busy, -1 refused,
+     *  -2 daemon too old to know the code; null when the daemon is unreachable. */
+    suspend fun dtcScanStart(gearDev: Int, gearFid: Int): Int? = null
+
+    /** State and raw answers of the fault-code scan (TX_DTC_SCAN_STATUS); null when unreachable. */
+    suspend fun dtcScanStatus(): com.bydmate.app.helper.dtc.DtcScanStatus? = null
+
     /**
      * Direct freeform launch: find-or-launch [packageName], switch its task to freeform,
      * move it to [displayId] with the given window bounds and focus it. UNAVAILABLE = the
