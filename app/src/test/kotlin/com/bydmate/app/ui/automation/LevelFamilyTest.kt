@@ -2,6 +2,7 @@ package com.bydmate.app.ui.automation
 
 import com.bydmate.app.data.vehicle.AdaptiveSeatChannel
 import com.bydmate.app.data.vehicle.CommandTranslator
+import com.bydmate.app.data.vehicle.RearSeatHeat
 import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import com.bydmate.app.data.vehicle.SeatCommand
@@ -13,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.io.File
 
@@ -153,7 +155,7 @@ class LevelFamilyTest {
     )
 
     @Test fun `every non-seat value resolves inside its allowlist range`() {
-        for (f in LevelFamily.entries.filter { it !in seatGroups }) for (v in f.grid()) {
+        for (f in LevelFamily.entries.filter { it !in seatGroups && !it.name.startsWith("SEAT_HEAT_REAR") }) for (v in f.grid()) {
             val cmd = f.command(v)
             val resolved = CommandTranslator.resolve(cmd)
             assertTrue("$cmd resolves to nothing", resolved.isNotEmpty())
@@ -204,6 +206,42 @@ class LevelFamilyTest {
             val entry = allowlist.find(name)
             assertTrue("$what → $name not in allowlist", entry != null)
             assertTrue("$what → $name=$value outside [${entry!!.valueMin}..${entry.valueMax}]", value in entry.valueMin..entry.valueMax)
+        }
+    }
+
+    // --- Rear seat heat (#327): two families, off + 1..2 ---
+
+    private fun rear(name: String): LevelFamily? = LevelFamily.entries.firstOrNull { it.name == name }
+
+    @Test fun `rear seat heat families and ranges`() {
+        for (name in listOf("SEAT_HEAT_REAR_LEFT", "SEAT_HEAT_REAR_RIGHT")) {
+            val f = rear(name)
+            assertTrue("$name missing", f != null)
+            assertEquals(name, listOf(0, 2, 1, 1), listOf(f!!.range.first, f.range.last, f.step, f.default))
+        }
+    }
+
+    @Test fun `rear seat heat commands keep the seat shape and round trip`() {
+        val left = rear("SEAT_HEAT_REAR_LEFT") ?: return fail("SEAT_HEAT_REAR_LEFT missing")
+        val right = rear("SEAT_HEAT_REAR_RIGHT") ?: return fail("SEAT_HEAT_REAR_RIGHT missing")
+        assertEquals("后左座椅加热1档", left.command(1))
+        assertEquals("后右座椅加热关闭", right.command(0))
+        assertEquals(LevelValue(left, 1), LevelFamily.of("后左座椅加热1档"))
+        assertEquals(LevelValue(right, 0), LevelFamily.of("后右座椅加热关闭"))
+        assertNull(LevelFamily.of("后左座椅加热0档"))
+    }
+
+    @Test fun `every rear value reaches the allowlist inside 1 to 3`() {
+        for (name in listOf("SEAT_HEAT_REAR_LEFT", "SEAT_HEAT_REAR_RIGHT")) {
+            val f = rear(name) ?: return fail("$name missing")
+            for (v in f.grid()) {
+                val cmd = f.command(v)
+                val rc = CommandTranslator.resolveRearSeatHeat(cmd)
+                assertTrue("$cmd does not resolve", rc != null)
+                val entry = allowlist.find(RearSeatHeat.actionName(rc!!.seat))
+                assertTrue("$cmd not in allowlist", entry != null)
+                assertTrue("$cmd outside range", RearSeatHeat.writeValue(rc.level) in entry!!.valueMin..entry.valueMax)
+            }
         }
     }
 }

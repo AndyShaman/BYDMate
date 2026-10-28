@@ -345,4 +345,7 @@ object CommandTranslator {
         }
         return null
     }
+
+    /** STUB (#327): parse a rear seat heat command into (seat, level), or null. */
+    fun resolveRearSeatHeat(commandString: String): RearSeatCommand? = null
 }

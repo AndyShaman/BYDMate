@@ -40,6 +40,8 @@ class VehicleApiImpl @Inject constructor(
     private val windowStore: WindowChannelStore,
     // Null in unit tests (no SharedPreferences); production gets the singleton from AppModule.
     private val seatJournal: SeatCommandJournal? = null,
+    // Unused stub param (#327): the rear seat heat gate reads this car's catalog.
+    private val rearCatalog: () -> com.bydmate.app.data.nativestack.FidCatalog? = { null },
 ) : VehicleApi {
 
     private val seatChannel = AdaptiveSeatChannel(

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.annotation.StringRes
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.vehicle.RearSeat
 import com.bydmate.app.util.appLocalizedContext
 
 /** One entry of the car's action catalog, as a row's dropdown and the picker offer it. */
@@ -21,7 +22,7 @@ internal val CATALOG_SECTIONS = listOf(
  * family's [LevelFamily.pickerBefore] entry, or after the category's last entry when it has none.
  * The editor's dropdown and the picker both build from this, so they cannot drift apart.
  */
-internal fun catalogEntries(lc: Context): List<CatalogEntry> {
+internal fun catalogEntries(lc: Context, rearSeats: Set<RearSeat> = emptySet()): List<CatalogEntry> {
     val lastOfCategory = ACTION_COMMANDS.indices.associateBy { ACTION_COMMANDS[it].categoryRes }
     return ACTION_COMMANDS.flatMapIndexed { i, option ->
         val cat = option.categoryRes
@@ -32,7 +33,7 @@ internal fun catalogEntries(lc: Context): List<CatalogEntry> {
 }
 
 /** [catalogEntries] grouped by [CATALOG_SECTIONS], empty sections left out. */
-internal fun catalogSections(lc: Context): List<Pair<Int, List<CatalogEntry>>> {
+internal fun catalogSections(lc: Context, rearSeats: Set<RearSeat> = emptySet()): List<Pair<Int, List<CatalogEntry>>> {
     val entries = catalogEntries(lc)
     return CATALOG_SECTIONS.map { cat -> cat to entries.filter { it.categoryRes == cat } }.filter { it.second.isNotEmpty() }
 }

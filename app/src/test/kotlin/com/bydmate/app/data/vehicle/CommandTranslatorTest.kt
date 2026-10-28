@@ -3,6 +3,7 @@ package com.bydmate.app.data.vehicle
 import com.bydmate.app.data.automation.ActionDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -543,5 +544,24 @@ class CommandTranslatorTest {
     }
     @Test fun `seat commands no longer in composite fan-out`() {
         assertEquals(emptyList<CommandTranslator.Resolved>(), CommandTranslator.resolve("主驾座椅通风1档"))
+    }
+
+    // ── Rear seat heat (#327) ─────────────────────────────────────────────────
+    @Test fun `rear seat heat commands parse to seat and level`() {
+        assertEquals(RearSeatCommand(RearSeat.LEFT, 1), CommandTranslator.resolveRearSeatHeat("后左座椅加热1档"))
+        assertEquals(RearSeatCommand(RearSeat.RIGHT, 2), CommandTranslator.resolveRearSeatHeat("后右座椅加热2档"))
+        assertEquals(RearSeatCommand(RearSeat.LEFT, 0), CommandTranslator.resolveRearSeatHeat("后左座椅加热关闭"))
+        assertEquals(RearSeatCommand(RearSeat.RIGHT, 0), CommandTranslator.resolveRearSeatHeat("迪加后右座椅加热关闭"))
+    }
+
+    @Test fun `rear seat heat rejects what is not a rear stage`() {
+        for (cmd in listOf("后左座椅加热3档", "后左座椅加热0档", "后左座椅加热", "后左打开30", "主驾座椅加热1档")) {
+            assertNull(cmd, CommandTranslator.resolveRearSeatHeat(cmd))
+        }
+    }
+
+    @Test fun `rear seat heat is no front seat and no table command`() {
+        assertNull(CommandTranslator.resolveSeat("后左座椅加热1档"))
+        assertTrue(CommandTranslator.resolve("后左座椅加热1档").isEmpty())
     }
 }
