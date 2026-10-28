@@ -1,6 +1,6 @@
-@file:Suppress("UnusedParameter", "UnusedPrivateProperty") // compile stub, remove with the implementation
-
 package com.bydmate.app.helper.dtc
+
+import android.os.Parcel
 
 /**
  * Wire types and pure helpers of the manual ECU fault-code scan, shared by the daemon (which
@@ -67,19 +67,123 @@ object DtcWire {
         0x7E1, 0x7E2, 0x7E3, 0x7E4, 0x7E5, 0x7E6, 0x7E7, 0x7F1, 0x7F2,
     )
 
+    /** Services of the only requests ever built: read DTC information, read data by identifier. */
+    const val SERVICE_READ_DTC = 0x19
+    const val SERVICE_READ_DID = 0x22
+    const val SUB_COUNT = 0x01
+    const val SUB_LIST = 0x02
+    const val DID_IDENTITY = 0xF194
+
+    /** List masks: pending|confirmed|failed, confirmed|failed, everything (the validated fallback). */
+    val LIST_MASKS: IntArray = intArrayOf(0x0D, 0x09, 0xFF)
+
+    /** `0A rid(2) len frames idx result`, then the UDS bytes. */
+    private const val HEADER = 7
+    private const val FRAME_PREFIX = 0x0A
+    private const val REQUEST_LEN = 0x03
+    private const val REPLY_ID_OFFSET = 8
+    private const val POSITIVE_OFFSET = 0x40
+    private const val NEGATIVE = 0x7F
+    private const val NRC_PENDING = 0x78
+    private const val RESULT_GATEWAY_TIMEOUT = 3
+
     /** `19 01 FF`: count and availability mask. */
-    fun countRequest(addr: Int): ByteArray = TODO()
+    fun countRequest(addr: Int): ByteArray = request(addr, SERVICE_READ_DTC, SUB_COUNT, 0xFF)
 
     /** `19 02 <mask>`; [mask] is one of 0x0D, 0x09, 0xFF, anything else throws. */
-    fun listRequest(addr: Int, mask: Int): ByteArray = TODO()
+    fun listRequest(addr: Int, mask: Int): ByteArray {
+        require(mask in LIST_MASKS) { "list mask not allowed" }
+        return request(addr, SERVICE_READ_DTC, SUB_LIST, mask)
+    }
 
     /** `22 F1 94`: the block's identity. */
-    fun identityRequest(addr: Int): ByteArray = TODO()
+    fun identityRequest(addr: Int): ByteArray =
+        request(addr, SERVICE_READ_DID, DID_IDENTITY shr 8, DID_IDENTITY and 0xFF)
+
+    private fun request(addr: Int, service: Int, b1: Int, b2: Int): ByteArray {
+        require(addr in ADDRESSES) { "address not in read whitelist" }
+        return byteArrayOf(
+            FRAME_PREFIX.toByte(), (addr shr 8).toByte(), addr.toByte(), REQUEST_LEN.toByte(),
+            service.toByte(), b1.toByte(), b2.toByte(),
+        )
+    }
 
     /**
      * Matches [raw] (`0A rid(2) len frames idx result uds…tail`) against the request whose reply
      * is awaited: reply id = [addr] + 8, positive service = [service] + 0x40 with its [sub] echo
      * (one byte for 0x19, the 16-bit DID for 0x22).
      */
-    fun match(raw: ByteArray, addr: Int, service: Int, sub: Int): DtcMatch = TODO()
+    fun match(raw: ByteArray, addr: Int, service: Int, sub: Int): DtcMatch {
+        if (raw.size < HEADER) return DtcMatch.NotMine
+        if (replyId(raw) != addr + REPLY_ID_OFFSET) return DtcMatch.NotMine
+        if (u(raw, 4) > 1) return DtcMatch.Multiframe(raw.copyOf())
+        val len = u(raw, 3)
+        if (raw.size < HEADER + len) return DtcMatch.Truncated
+        val uds = raw.copyOfRange(HEADER, HEADER + len)
+        if (u(raw, 6) == RESULT_GATEWAY_TIMEOUT && echoes(uds, service, service, sub)) return DtcMatch.GatewayTimeout
+        if (uds.size >= 3 && u(uds, 0) == NEGATIVE && u(uds, 1) == service) {
+            return if (u(uds, 2) == NRC_PENDING) DtcMatch.Pending else DtcMatch.Nrc(u(uds, 2))
+        }
+        if (echoes(uds, service + POSITIVE_OFFSET, service, sub)) return DtcMatch.Answer(uds)
+        return DtcMatch.NotMine
+    }
+
+    /** `rid` of a frame of at least the header's size. */
+    fun replyId(raw: ByteArray): Int = (u(raw, 1) shl 8) or u(raw, 2)
+
+    /** [head] first, then the sub-function byte (0x19) or the DID (0x22). */
+    private fun echoes(uds: ByteArray, head: Int, service: Int, sub: Int): Boolean =
+        if (service == SERVICE_READ_DID) {
+            uds.size >= 3 && u(uds, 0) == head && ((u(uds, 1) shl 8) or u(uds, 2)) == sub
+        } else {
+            uds.size >= 2 && u(uds, 0) == head && u(uds, 1) == sub
+        }
+
+    private fun u(b: ByteArray, i: Int): Int = b[i].toInt() and 0xFF
+}
+
+/** Upper bound of one UDS answer the parcel carries; a frame is at most 1024 bytes. */
+private const val MAX_UDS_BYTES = 1024
+private const val MAX_TEXT = 256
+private const val INT_BYTES = 4
+
+/** TX_DTC_SCAN_STATUS reply: see HelperBinderProtocol.TX_DTC_SCAN_STATUS. */
+fun writeDtcScanStatus(p: Parcel, status: DtcScanStatus) {
+    p.writeInt(status.state)
+    p.writeInt(status.done)
+    p.writeInt(status.total)
+    p.writeString(status.reason.take(MAX_TEXT))
+    p.writeInt(status.results.size)
+    status.results.forEach {
+        p.writeInt(it.addr)
+        p.writeString(it.outcome)
+        p.writeByteArray(it.countUds)
+        p.writeByteArray(it.listUds)
+        p.writeByteArray(it.idUds)
+    }
+}
+
+/** Null on a truncated, oversized or unknown-state reply (the daemon writes -1 when it failed). */
+fun readDtcScanStatus(p: Parcel): DtcScanStatus? {
+    if (p.dataAvail() < 3 * INT_BYTES) return null
+    val state = p.readInt()
+    if (state !in DtcWire.STATE_IDLE..DtcWire.STATE_ABORTED) return null
+    val done = p.readInt()
+    val total = p.readInt()
+    val reason = p.readString()?.takeIf { it.length <= MAX_TEXT } ?: return null
+    if (p.dataAvail() < INT_BYTES) return null
+    val count = p.readInt()
+    if (count !in 0..DtcWire.ADDRESSES.size) return null
+    val results = ArrayList<DtcAddressResult>(count)
+    repeat(count) {
+        if (p.dataAvail() < INT_BYTES) return null
+        val addr = p.readInt()
+        val outcome = p.readString()?.takeIf { it.length <= MAX_TEXT } ?: return null
+        val countUds = p.createByteArray()
+        val listUds = p.createByteArray()
+        val idUds = p.createByteArray()
+        if (listOf(countUds, listUds, idUds).any { (it?.size ?: 0) > MAX_UDS_BYTES }) return null
+        results += DtcAddressResult(addr, outcome, countUds, listUds, idUds)
+    }
+    return DtcScanStatus(state, done, total, reason, results)
 }

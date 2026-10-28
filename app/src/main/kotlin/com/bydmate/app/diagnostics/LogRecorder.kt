@@ -468,6 +468,8 @@ class LogRecorder internal constructor(
             // Diagnostic fid recorder (-test builds): summary only — the events go to its own
             // file in /sdcard/Download, not here.
             "FidRec:*",
+            // Manual fault-code scan: the daemon's requests, frames and outcomes (app and daemon share the tag).
+            "DtcScan:*",
             // Split-screen wave: session/watchdog decisions, pill+picker overlay, widget tap.
             "SplitSessionMgr:*", "SplitOverlayCtrl:*", "SplitPillView:*",
             "WidgetController:*",
