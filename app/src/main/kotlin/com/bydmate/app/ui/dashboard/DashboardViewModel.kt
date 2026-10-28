@@ -521,11 +521,13 @@ class DashboardViewModel @Inject constructor(
      *  rows within the current session window are subtracted from the live delta.
      *  liveWholeSession from TrackingService guards coverage: when false (baseline gap after
      *  a restart) compute() suppresses live km/kWh to avoid unknown-window inflation.
-     *  The live trip is priced at the rate of its session start (no session: now). */
+     *  The live trip is priced at the rate of its session start (no session: now), re-read
+     *  when the tariff periods are edited. */
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun collectTripCounter(n: Int, resetFlow: StateFlow<TripResetState?>) {
         resetFlow.filterNotNull()
             .combine(TrackingService.sessionStartedAt) { reset, sessionStart -> reset to sessionStart }
+            .combine(tariffPeriodDao.observeAll()) { key, _ -> key }
             .flatMapLatest { (reset, sessionStart) ->
                 val landedFrom = sessionStart ?: Long.MAX_VALUE
                 val tariff = costCalculator.tripRateAt(sessionStart ?: System.currentTimeMillis())

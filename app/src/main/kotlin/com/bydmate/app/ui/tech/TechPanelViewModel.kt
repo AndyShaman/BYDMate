@@ -286,18 +286,20 @@ class TechPanelViewModel @Inject constructor(
         }
     }
 
+    @Volatile private var pm25Seen = false
+
     /**
      * PM2.5 only while the screen is on display, never in the global poll: the screen runs this
      * from a LaunchedEffect, so leaving the tab cancels it (the view model itself outlives the
      * tab). A car without the sensor gets one read and no more; with it, once a minute, and a
-     * failed read after that clears the values but keeps polling.
+     * failed read after that clears the values but keeps polling, also when the screen comes
+     * back (the sensor is remembered for the view model's life).
      */
     suspend fun pollPm25() {
-        var seen = false
         while (true) {
             val pm = runCatching { pm25Reader.read() }.getOrNull()
-            if (pm == null && !seen) return
-            seen = true
+            if (pm == null && !pm25Seen) return
+            pm25Seen = true
             _uiState.update {
                 it.copy(pm25In = pm?.inside, pm25Out = pm?.outside, pm25LevelIn = pm?.levelIn, pm25LevelOut = pm?.levelOut)
             }
