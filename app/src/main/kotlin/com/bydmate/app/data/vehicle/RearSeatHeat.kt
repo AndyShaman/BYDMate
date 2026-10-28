@@ -160,7 +160,8 @@ class RearSeatHeatChannel(
             }
         }
         val state = after.last()
-        val outcome = if (state == before && before != want) {
+        // Only a real stage that stayed put is "no effect"; failed or sentinel reads prove nothing.
+        val outcome = if (state == before && before in 1..RearSeatHeat.MAX_LEVEL + 1 && before != want) {
             Outcome(Result.NO_EFFECT, "no effect", true, state)
         } else {
             Outcome(Result.UNCONFIRMED, "unconfirmed read=${render(state)}", true, state)

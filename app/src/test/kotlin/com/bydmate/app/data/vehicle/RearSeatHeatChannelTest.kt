@@ -90,6 +90,11 @@ class RearSeatHeatChannelTest {
         assertEquals(RearSeatHeatChannel.Result.UNCONFIRMED, out.result)
     }
 
+    @Test fun `unreadable states before and after are unconfirmed, not no effect`() = runTest {
+        assertEquals(RearSeatHeatChannel.Result.UNCONFIRMED, channel(states(1, null, null, null)).actuate(RearSeat.LEFT, 1).result)
+        assertEquals(RearSeatHeatChannel.Result.UNCONFIRMED, channel(states(1, 65535, 65535, 65535)).actuate(RearSeat.LEFT, 1).result)
+    }
+
     @Test fun `a late state is still OK`() = runTest {
         val out = channel(states(1, 1, 1, 2)).actuate(RearSeat.LEFT, 1)
         assertEquals(RearSeatHeatChannel.Result.OK, out.result)
