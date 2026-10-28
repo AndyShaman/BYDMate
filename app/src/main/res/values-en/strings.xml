@@ -2053,7 +2053,7 @@
     <string name="tech_card_car_state">Car status</string>
     <string name="tech_card_diagnostics">Diagnostics</string>
     <string name="tech_dtc_scan">Scan</string>
-    <string name="tech_hint_diagnostics">Cluster warnings: what the car itself shows on the instrument cluster. No “Next service” row means the service reminder is off in the car. To turn it on: car settings → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) or Service Mileage (保养里程).</string>
+    <string name="tech_hint_diagnostics">Cluster warnings: what the car itself shows on the instrument cluster. No “Next service” row means the service reminder is off in the car. To turn it on: car settings → Vehicle → Maintenance → Maintenance Interval or Maintenance Mileage.</string>
     <string name="tech_label_dash_warnings">Cluster warnings</string>
     <string name="tech_value_none">none</string>
     <string name="tech_label_service">Next service</string>
@@ -2119,5 +2119,13 @@
     <plurals name="tech_dtc_answered">
         <item quantity="one">%1$d of %2$d modules answered</item>
         <item quantity="other">%1$d of %2$d modules answered</item>
+    </plurals>
+    <plurals name="tech_dtc_unread">
+        <item quantity="one">Could not read the codes of %1$d module</item>
+        <item quantity="other">Could not read the codes of %1$d modules</item>
+    </plurals>
+    <plurals name="tech_dtc_more_codes">
+        <item quantity="one">%1$d more code did not fit, all of them are in the “Diagnostics” window</item>
+        <item quantity="other">%1$d more codes did not fit, all of them are in the “Diagnostics” window</item>
     </plurals>
 </resources>

@@ -373,7 +373,7 @@ class TelegramReporter @Inject constructor(
         } else null
         val lastTrip = tripDao.getRecent(RECENT_TRIPS).first().firstOrNull { (it.distanceKm ?: 0.0) > 0.0 }
         tripCounterResets.load()
-        val tariff = costCalculator.tripRateAt(clock())
+        val tariff = costCalculator.tripRateAt(startedAt ?: clock())
         val hybrid = vehicleKindMonitor?.kind?.value == VehicleKind.HYBRID
         val trip1 = tripCounter(1, tariff)
         val trip2 = tripCounter(2, tariff)

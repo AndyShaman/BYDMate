@@ -2205,7 +2205,7 @@
     <string name="tech_card_car_state">Stan auta</string>
     <string name="tech_card_diagnostics">Diagnostyka</string>
     <string name="tech_dtc_scan">Skanuj</string>
-    <string name="tech_hint_diagnostics">Ostrzeżenia na zegarach: to, co samochód sam pokazuje na zestawie wskaźników. Wiersza „Do przeglądu” nie ma, jeśli przypomnienie o przeglądzie jest w aucie wyłączone. Włączenie: ustawienia auta → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) lub Service Mileage (保养里程).</string>
+    <string name="tech_hint_diagnostics">Ostrzeżenia na zegarach: to, co samochód sam pokazuje na zestawie wskaźników. Wiersza „Do przeglądu” nie ma, jeśli przypomnienie o przeglądzie jest w aucie wyłączone. Włączenie: ustawienia auta → Vehicle → Maintenance → Maintenance Interval lub Maintenance Mileage.</string>
     <string name="tech_label_dash_warnings">Ostrzeżenia na zegarach</string>
     <string name="tech_value_none">brak</string>
     <string name="tech_label_service">Do przeglądu</string>
@@ -2273,5 +2273,17 @@
         <item quantity="few">odpowiedziały %1$d moduły z %2$d</item>
         <item quantity="many">odpowiedziało %1$d modułów z %2$d</item>
         <item quantity="other">odpowiedziało %1$d modułu z %2$d</item>
+    </plurals>
+    <plurals name="tech_dtc_unread">
+        <item quantity="one">Nie udało się odczytać kodów %1$d modułu</item>
+        <item quantity="few">Nie udało się odczytać kodów %1$d modułów</item>
+        <item quantity="many">Nie udało się odczytać kodów %1$d modułów</item>
+        <item quantity="other">Nie udało się odczytać kodów %1$d modułu</item>
+    </plurals>
+    <plurals name="tech_dtc_more_codes">
+        <item quantity="one">Jeszcze %1$d kod się nie zmieścił, wszystkie w oknie „Diagnostyka”</item>
+        <item quantity="few">Jeszcze %1$d kody się nie zmieściły, wszystkie w oknie „Diagnostyka”</item>
+        <item quantity="many">Jeszcze %1$d kodów się nie zmieściło, wszystkie w oknie „Diagnostyka”</item>
+        <item quantity="other">Jeszcze %1$d kodu się nie zmieściło, wszystkie w oknie „Diagnostyka”</item>
     </plurals>
 </resources>

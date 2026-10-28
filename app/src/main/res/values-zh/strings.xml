@@ -2167,7 +2167,7 @@
     <string name="tech_card_car_state">车辆状态</string>
     <string name="tech_card_diagnostics">诊断</string>
     <string name="tech_dtc_scan">扫描</string>
-    <string name="tech_hint_diagnostics">仪表警告：车辆自己在仪表上显示的内容。没有“距保养”一行，说明车上的保养提醒已关闭。开启方法：车辆设置 → 车辆健康 → 智能保养 → 保养时间 或 保养里程。</string>
+    <string name="tech_hint_diagnostics">仪表警告：车辆自己在仪表上显示的内容。没有“距保养”一行，说明车上的保养提醒已关闭。开启方法：车辆设置 → Vehicle → Maintenance → Maintenance Interval 或 Maintenance Mileage。</string>
     <string name="tech_label_dash_warnings">仪表警告</string>
     <string name="tech_value_none">无</string>
     <string name="tech_label_service">距保养</string>
@@ -2232,5 +2232,11 @@
     <string name="tech_dtc_ftb_component">部件故障</string>
     <plurals name="tech_dtc_answered">
         <item quantity="other">%2$d 个模块中 %1$d 个有响应</item>
+    </plurals>
+    <plurals name="tech_dtc_unread">
+        <item quantity="other">%1$d 个模块的故障码未能读取</item>
+    </plurals>
+    <plurals name="tech_dtc_more_codes">
+        <item quantity="other">还有 %1$d 个故障码放不下，全部见“诊断”窗口</item>
     </plurals>
 </resources>

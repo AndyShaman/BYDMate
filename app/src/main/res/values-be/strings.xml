@@ -2205,7 +2205,7 @@
     <string name="tech_card_car_state">Стан машыны</string>
     <string name="tech_card_diagnostics">Дыягностыка</string>
     <string name="tech_dtc_scan">Сканаваць</string>
-    <string name="tech_hint_diagnostics">Папярэджанні прыборнай панэлі: тое, што машына сама паказвае на прыборнай панэлі. Радка «Да ТА» няма, калі напамін пра ТА ў машыне выключаны. Уключыць: налады машыны → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) або Service Mileage (保养里程).</string>
+    <string name="tech_hint_diagnostics">Папярэджанні прыборнай панэлі: тое, што машына сама паказвае на прыборнай панэлі. Радка «Да ТА» няма, калі напамін пра ТА ў машыне выключаны. Уключыць: налады машыны → Vehicle → Maintenance → Maintenance Interval або Maintenance Mileage.</string>
     <string name="tech_label_dash_warnings">Папярэджанні прыборнай панэлі</string>
     <string name="tech_value_none">няма</string>
     <string name="tech_label_service">Да ТА</string>
@@ -2273,5 +2273,17 @@
         <item quantity="few">адказалі %1$d блокі з %2$d</item>
         <item quantity="many">адказалі %1$d блокаў з %2$d</item>
         <item quantity="other">адказалі %1$d блока з %2$d</item>
+    </plurals>
+    <plurals name="tech_dtc_unread">
+        <item quantity="one">Коды %1$d блока прачытаць не ўдалося</item>
+        <item quantity="few">Коды %1$d блокаў прачытаць не ўдалося</item>
+        <item quantity="many">Коды %1$d блокаў прачытаць не ўдалося</item>
+        <item quantity="other">Коды %1$d блока прачытаць не ўдалося</item>
+    </plurals>
+    <plurals name="tech_dtc_more_codes">
+        <item quantity="one">Яшчэ %1$d код не змясціўся, усе ў акне «Дыягностыка»</item>
+        <item quantity="few">Яшчэ %1$d коды не змясціліся, усе ў акне «Дыягностыка»</item>
+        <item quantity="many">Яшчэ %1$d кодаў не змясціліся, усе ў акне «Дыягностыка»</item>
+        <item quantity="other">Яшчэ %1$d кода не змясціліся, усе ў акне «Дыягностыка»</item>
     </plurals>
 </resources>

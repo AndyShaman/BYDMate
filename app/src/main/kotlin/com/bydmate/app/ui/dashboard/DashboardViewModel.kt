@@ -499,9 +499,8 @@ class DashboardViewModel @Inject constructor(
     private fun observeTripCounters() {
         viewModelScope.launch {
             tripCounterResets.load()
-            val tariff = costCalculator.tripRateAt(System.currentTimeMillis())
-            launch { collectTripCounter(1, tripCounterResets.state(1), tariff) }
-            launch { collectTripCounter(2, tripCounterResets.state(2), tariff) }
+            launch { collectTripCounter(1, tripCounterResets.state(1)) }
+            launch { collectTripCounter(2, tripCounterResets.state(2)) }
         }
         viewModelScope.launch {
             settingsRepository.observeTripAutoResetMode(1).collect { mode ->
@@ -521,13 +520,15 @@ class DashboardViewModel @Inject constructor(
      *  a new session invalidates the landed-row query. The DAO receives sessionStart so only
      *  rows within the current session window are subtracted from the live delta.
      *  liveWholeSession from TrackingService guards coverage: when false (baseline gap after
-     *  a restart) compute() suppresses live km/kWh to avoid unknown-window inflation. */
+     *  a restart) compute() suppresses live km/kWh to avoid unknown-window inflation.
+     *  The live trip is priced at the rate of its session start (no session: now). */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private suspend fun collectTripCounter(n: Int, resetFlow: StateFlow<TripResetState?>, tariff: Double) {
+    private suspend fun collectTripCounter(n: Int, resetFlow: StateFlow<TripResetState?>) {
         resetFlow.filterNotNull()
             .combine(TrackingService.sessionStartedAt) { reset, sessionStart -> reset to sessionStart }
             .flatMapLatest { (reset, sessionStart) ->
                 val landedFrom = sessionStart ?: Long.MAX_VALUE
+                val tariff = costCalculator.tripRateAt(sessionStart ?: System.currentTimeMillis())
                 combine(
                     tripRepository.observeCounterStats(reset.resetTs, landedFrom),
                     TrackingService.tripDistanceKm,

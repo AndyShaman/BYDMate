@@ -2049,7 +2049,7 @@
     <string name="tech_card_car_state">Estado do carro</string>
     <string name="tech_card_diagnostics">Diagnóstico</string>
     <string name="tech_dtc_scan">Analisar</string>
-    <string name="tech_hint_diagnostics">Avisos do painel: o que o próprio carro mostra no painel de instrumentos. Sem a linha «Próxima revisão», o lembrete de revisão está desligado no carro. Para ligar: definições do carro → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) ou Service Mileage (保养里程).</string>
+    <string name="tech_hint_diagnostics">Avisos do painel: o que o próprio carro mostra no painel de instrumentos. Sem a linha «Próxima revisão», o lembrete de revisão está desligado no carro. Para ligar: definições do carro → Vehicle → Maintenance → Maintenance Interval ou Maintenance Mileage.</string>
     <string name="tech_label_dash_warnings">Avisos do painel</string>
     <string name="tech_value_none">nenhum</string>
     <string name="tech_label_service">Próxima revisão</string>
@@ -2116,5 +2116,15 @@
         <item quantity="one">respondeu %1$d módulo de %2$d</item>
         <item quantity="many">responderam %1$d módulos de %2$d</item>
         <item quantity="other">responderam %1$d módulos de %2$d</item>
+    </plurals>
+    <plurals name="tech_dtc_unread">
+        <item quantity="one">Não foi possível ler os códigos de %1$d módulo</item>
+        <item quantity="many">Não foi possível ler os códigos de %1$d módulos</item>
+        <item quantity="other">Não foi possível ler os códigos de %1$d módulos</item>
+    </plurals>
+    <plurals name="tech_dtc_more_codes">
+        <item quantity="one">Mais %1$d código não coube, todos estão na janela «Diagnóstico»</item>
+        <item quantity="many">Mais %1$d códigos não couberam, todos estão na janela «Diagnóstico»</item>
+        <item quantity="other">Mais %1$d códigos não couberam, todos estão na janela «Diagnóstico»</item>
     </plurals>
 </resources>

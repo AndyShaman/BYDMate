@@ -135,7 +135,7 @@ internal fun DtcScanDialog(
                         when {
                             scanning -> DtcProgress(state.dtcScan)
                             summary == null -> Unit
-                            summary.found.isEmpty() -> NoneText(R.string.tech_dtc_none_found)
+                            summary.found.isEmpty() -> NoneText(dtcNoRowsText(context, summary))
                             else -> {
                                 val now = summary.found.filter { it.row.kind == DtcKind.NOW }
                                 val old = summary.found.filter { it.row.kind != DtcKind.NOW }
@@ -199,8 +199,11 @@ private fun CodeRow(found: DtcFound) {
 }
 
 @Composable
-private fun NoneText(res: Int) {
-    Text(stringResource(res), color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp))
+private fun NoneText(res: Int) = NoneText(stringResource(res))
+
+@Composable
+private fun NoneText(text: String) {
+    Text(text, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp))
 }
 
 @Composable

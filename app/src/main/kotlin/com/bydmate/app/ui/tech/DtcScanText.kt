@@ -86,6 +86,8 @@ internal fun dtcLabels(context: Context): DtcLabels = object : DtcLabels {
     override val noErrors = context.getString(R.string.tech_dtc_none_found)
     override val footer = context.getString(R.string.tech_dtc_note)
     override fun blockName(name: DtcBlockName) = dtcBlockShort(context, name)
+    override fun unread(count: Int) = context.resources.getQuantityString(R.plurals.tech_dtc_unread, count, count)
+    override fun moreCodes(count: Int) = context.resources.getQuantityString(R.plurals.tech_dtc_more_codes, count, count)
 }
 
 /** One short line for an attempt that ended without a result; null when there is nothing to say. */

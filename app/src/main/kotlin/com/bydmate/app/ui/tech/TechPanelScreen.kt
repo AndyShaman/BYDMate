@@ -738,7 +738,7 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
         else -> Column(
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onOpen).padding(vertical = 2.dp),
         ) {
-            if (summary.found.isEmpty()) DtcNote(R.string.tech_dtc_none_found)
+            if (summary.found.isEmpty()) DtcNote(dtcNoRowsText(context, summary))
             summary.found.take(DTC_CARD_ROWS).forEach { found ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     Text(
@@ -787,8 +787,11 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
 }
 
 @Composable
-private fun DtcNote(res: Int) {
-    Text(stringResource(res), color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+private fun DtcNote(res: Int) = DtcNote(stringResource(res))
+
+@Composable
+private fun DtcNote(text: String) {
+    Text(text, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
 }
 
 /** Codes the card lists before «+N ещё». */

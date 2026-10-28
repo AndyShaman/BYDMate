@@ -114,6 +114,9 @@ class CarStatusReader @Inject constructor(
             CarStatusParser.HEV_MILE,
             CarStatusParser.TIME_SWITCH,
             CarStatusParser.MILE_SWITCH,
+            CarStatusParser.ISSUE,
+            CarStatusParser.SET_MILE,
+            CarStatusParser.SET_HEV_MILE,
         )
     }
 }

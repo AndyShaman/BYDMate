@@ -124,7 +124,16 @@ object DtcParser {
             old = found.count { it.row.kind == DtcKind.OLD },
             pending = found.count { it.row.kind == DtcKind.PENDING },
             found = found,
+            unreadBlocks = results.count { unread(it) },
         )
+    }
+
+    /** The count answer says there are codes, but no list was read (no answer, NRC, multiframe, cut). */
+    private fun unread(r: DtcAddressResult): Boolean {
+        val count = r.countUds?.let { parseCount(it) }?.count ?: return false
+        if (count == 0) return false
+        val list = r.listUds
+        return r.outcome != DtcWire.OUTCOME_OK || list == null || parseList(list, null).negative
     }
 
     private fun u(b: ByteArray, i: Int): Int = b[i].toInt() and 0xFF

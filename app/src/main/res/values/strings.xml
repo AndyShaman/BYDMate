@@ -2220,7 +2220,7 @@
     <string name="tech_card_car_state">Состояние машины</string>
     <string name="tech_card_diagnostics">Диагностика</string>
     <string name="tech_dtc_scan">Сканировать</string>
-    <string name="tech_hint_diagnostics">Предупреждения приборки: то, что машина сама показывает на приборке. Строки «До ТО» нет, если напоминание о ТО в машине выключено. Включить: настройки машины → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) или Service Mileage (保养里程).</string>
+    <string name="tech_hint_diagnostics">Предупреждения приборки: то, что машина сама показывает на приборке. Строки «До ТО» нет, если напоминание о ТО в машине выключено. Включить: настройки машины → Vehicle → Maintenance → Maintenance Interval или Maintenance Mileage.</string>
     <string name="tech_label_dash_warnings">Предупреждения приборки</string>
     <string name="tech_value_none">нет</string>
     <string name="tech_label_service">До ТО</string>
@@ -2289,6 +2289,18 @@
         <item quantity="few">ответили %1$d блока из %2$d</item>
         <item quantity="many">ответили %1$d блоков из %2$d</item>
         <item quantity="other">ответили %1$d блока из %2$d</item>
+    </plurals>
+    <plurals name="tech_dtc_unread">
+        <item quantity="one">Коды %1$d блока прочитать не удалось</item>
+        <item quantity="few">Коды %1$d блоков прочитать не удалось</item>
+        <item quantity="many">Коды %1$d блоков прочитать не удалось</item>
+        <item quantity="other">Коды %1$d блока прочитать не удалось</item>
+    </plurals>
+    <plurals name="tech_dtc_more_codes">
+        <item quantity="one">Ещё %1$d код не поместился, все в окне «Диагностика»</item>
+        <item quantity="few">Ещё %1$d кода не поместились, все в окне «Диагностика»</item>
+        <item quantity="many">Ещё %1$d кодов не поместились, все в окне «Диагностика»</item>
+        <item quantity="other">Ещё %1$d кода не поместились, все в окне «Диагностика»</item>
     </plurals>
     <string name="tech_value_pm25" translatable="false">%1$d µg/m³</string>
 </resources>
