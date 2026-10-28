@@ -30,6 +30,7 @@ import io.mockk.mockk
 import io.mockk.coVerify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -621,6 +622,7 @@ class TechPanelViewModelTest {
     fun `car-state card shows from pm25 alone`() = runTest {
         liveDataFlow().value = noData
         val vm = buildViewModel(pm25 = pm25Reader(Pm25(8, null, 1, null)))
+        backgroundScope.launch { vm.pollPm25() }
         testDispatcher.scheduler.advanceTimeBy(1)
         testDispatcher.scheduler.runCurrent()
         val state = vm.uiState.value
@@ -632,6 +634,7 @@ class TechPanelViewModelTest {
     fun `no sensor - the reader is asked once and never again while the screen stays open`() = runTest {
         val reader = pm25Reader(null)
         val vm = buildViewModel(pm25 = reader)
+        backgroundScope.launch { vm.pollPm25() }
         testDispatcher.scheduler.advanceTimeBy(5 * 60_000L)
         testDispatcher.scheduler.runCurrent()
         coVerify(exactly = 1) { reader.read() }
@@ -643,6 +646,7 @@ class TechPanelViewModelTest {
     fun `sensor present - shown at once and refreshed once a minute`() = runTest {
         val reader = pm25Reader(Pm25(8, null, 2, null))
         val vm = buildViewModel(pm25 = reader)
+        backgroundScope.launch { vm.pollPm25() }
         testDispatcher.scheduler.advanceTimeBy(1)
         testDispatcher.scheduler.runCurrent()
         assertEquals(8, vm.uiState.value.pm25InShown)
@@ -653,6 +657,21 @@ class TechPanelViewModelTest {
         testDispatcher.scheduler.advanceTimeBy(60_000L)
         testDispatcher.scheduler.runCurrent()
         coVerify(exactly = 3) { reader.read() }
+    }
+
+    @Test
+    fun `nothing reads pm25 until the screen is shown, and leaving it stops the refresh`() = runTest {
+        val reader = pm25Reader(Pm25(8, null, 2, null))
+        val vm = buildViewModel(pm25 = reader)
+        coVerify(exactly = 0) { reader.read() }
+        val shown = backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 1) { reader.read() }
+        shown.cancel()
+        testDispatcher.scheduler.advanceTimeBy(5 * 60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 1) { reader.read() }
     }
 
     @Test

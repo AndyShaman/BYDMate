@@ -1975,14 +1975,12 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             }
 
             // «Состояние машины» / «Диагностика»: the stock car status provider as read right now
-            // (raw keys and what the card makes of them) plus the PM2.5 words the poll kept.
+            // (raw keys and what the card makes of them). PM2.5 is read by the Tech screen only
+            // and logs its own `pm25 read:` lines under TechPanel.
             appendLine("--- car status ---")
             try {
                 appendLine(com.bydmate.app.data.carstatus.CarStatusReader(appContext).dumpLine())
             } catch (e: Exception) { appendLine("error: ${e.message}") }
-            TrackingService.lastData.value.let { d ->
-                appendLine("pm25 raw in=${d?.pm25In} out=${d?.pm25Out} lvlIn=${d?.pm25LevelIn} lvlOut=${d?.pm25LevelOut}")
-            }
 
             // ICE-side addresses nothing in the app reads yet (#184). A DM-i owner sends this
             // dump with the engine running and the raw words say which of them are live there.

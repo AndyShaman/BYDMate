@@ -16,6 +16,7 @@ import com.bydmate.app.domain.battery.BatteryCalibration
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -234,7 +235,7 @@ internal fun remainKwhForDisplay(remainKwh: Double?, soc: Int?): Double? =
     remainKwh?.takeUnless { it <= 0.0 && soc != null && soc > 0 }
 
 @HiltViewModel
-@Suppress("LongParameterList", "UnusedPrivateProperty") // Hilt constructor; the scan card reads the repository next
+@Suppress("LongParameterList", "UnusedPrivateProperty", "TooManyFunctions") // Hilt constructor; one loader per card; the scan card reads the repository next
 class TechPanelViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
     private val avgSocProvider: AvgSocProvider,
@@ -261,6 +262,21 @@ class TechPanelViewModel @Inject constructor(
             vehicleKindMonitor.kind.collect { kind ->
                 _uiState.update { it.copy(vehicleKind = kind, cardOrder = TechCardOrder.forKind(it.cardOrder, kind)) }
             }
+        }
+    }
+
+    /**
+     * PM2.5 only while the screen is on display, never in the global poll: the screen runs this
+     * from a LaunchedEffect, so leaving the tab cancels it (the view model itself outlives the
+     * tab). A car without the sensor gets one read and no more; with it, once a minute.
+     */
+    suspend fun pollPm25() {
+        while (true) {
+            val pm = runCatching { pm25Reader.read() }.getOrNull() ?: return
+            _uiState.update {
+                it.copy(pm25In = pm.inside, pm25Out = pm.outside, pm25LevelIn = pm.levelIn, pm25LevelOut = pm.levelOut)
+            }
+            delay(PM25_REFRESH_MS)
         }
     }
 
@@ -347,8 +363,6 @@ class TechPanelViewModel @Inject constructor(
                             mileageHevKm = data?.mileageHevKm,
                             mileageEvKm = data?.mileageEvKm,
                             fuelTotalL = data?.fuelTotalL,
-                            pm25In = data?.pm25In, pm25Out = data?.pm25Out,
-                            pm25LevelIn = data?.pm25LevelIn, pm25LevelOut = data?.pm25LevelOut,
                         )
                     }
                 }
@@ -457,6 +471,7 @@ class TechPanelViewModel @Inject constructor(
     }
 
     private companion object {
+        const val PM25_REFRESH_MS = 60_000L
         const val TAG = "TechPanel"
     }
 }

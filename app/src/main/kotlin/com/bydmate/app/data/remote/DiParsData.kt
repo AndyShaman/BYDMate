@@ -116,10 +116,6 @@ data class DiParsData(
     val fuelPercent: Int? = null,         // tank level, %
     val fuelRangeKm: Int? = null,         // range on fuel as the car reports it, km
     val fuelTotalL: Double? = null,       // lifetime fuel used, L (0.1 L step)
-    val pm25In: Int? = null,              // cabin PM2.5, ug/m3
-    val pm25Out: Int? = null,
-    val pm25LevelIn: Int? = null,         // 0 invalid, 1..6
-    val pm25LevelOut: Int? = null,
     val mileageHevKm: Int? = null,        // odometer driven on the engine, km
     val mileageEvKm: Int? = null,         // odometer driven on the battery, km
     val engineRpm: Int? = null,           // engine speed, rpm (0 = engine off)

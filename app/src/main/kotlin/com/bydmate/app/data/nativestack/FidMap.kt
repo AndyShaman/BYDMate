@@ -191,12 +191,6 @@ object FidMap {
         // the plug in says what these two report there.
         FidEntry("chargerConnectState",    1009, 89128973,  5, Decoder.INT_RAW, symbol = "Charging.CHARGING_CHARGER_CONNECT_STATE"),
         FidEntry("chargeConnectIndicator", 1007, 710934572, 5, Decoder.INT_RAW, symbol = "Instrument.INSTRUMENT_2IN1_FAULT_POWER_BATTERY_CHARGE_CONNECT_INDICATOR"),
-        // PM2.5 (dev 1008), «Состояние машины». Appended last so the batch order above stays as
-        // shipped. Value 0..3000 ug/m3; level 0 = invalid (no sensor), 1..6 = the SDK's grades.
-        FidEntry("pm25In",       1008, 1331691536, 5, Decoder.INT_RAW, symbol = "Pm2p5.PM2P5_VALUE_IN"),
-        FidEntry("pm25Out",      1008, 1331691548, 5, Decoder.INT_RAW, symbol = "Pm2p5.PM2P5_VALUE_OUT"),
-        FidEntry("pm25LevelIn",  1008, 1331691568, 5, Decoder.INT_RAW, symbol = "Pm2p5.PM2P5_LEVEL_IN"),
-        FidEntry("pm25LevelOut", 1008, 1331691571, 5, Decoder.INT_RAW, symbol = "Pm2p5.PM2P5_LEVEL_OUT"),
     )
 
     /**
