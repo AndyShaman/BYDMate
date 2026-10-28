@@ -10,6 +10,8 @@ import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_
 import com.bydmate.app.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToLong
@@ -51,7 +53,10 @@ class CostCalculator @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) {
 
-    val pricingVersion: StateFlow<Long> = MutableStateFlow(0L)
+    private val _pricingVersion = MutableStateFlow(0L)
+
+    /** Bumped after every [recalculate], so a screen holding a rate knows to read it again. */
+    val pricingVersion: StateFlow<Long> = _pricingVersion.asStateFlow()
 
     /**
      * Current periods. A fresh install has none (the seeding migration only runs on an
@@ -109,6 +114,7 @@ class CostCalculator @Inject constructor(
 
         Log.i(TAG, "recalc from=$fromTs to=$toTs charges=${chargePass.charges} trips=$tripsUpdated " +
             "skippedManual=${chargePass.skippedManual}")
+        _pricingVersion.update { it + 1 }
         return chargePass.copy(trips = tripsUpdated)
     }
 
