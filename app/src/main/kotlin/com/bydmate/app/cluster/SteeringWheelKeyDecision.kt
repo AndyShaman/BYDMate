@@ -134,17 +134,23 @@ fun voiceCompanionsFromCsv(csv: String?): Set<Int> {
  */
 const val VOLUME_KNOB_PRESS_KEYCODE = 353
 
+/** The knob press as DiLink 3/4 firmware reports it (#326, #367: Han 2022, Seal 2022). */
+const val VOLUME_KNOB_PRESS_KEYCODE_DILINK4 = 293
+
+/** Every code a volume-knob press arrives as, across firmware generations. */
+val VOLUME_KNOB_PRESS_KEYCODES = setOf(VOLUME_KNOB_PRESS_KEYCODE, VOLUME_KNOB_PRESS_KEYCODE_DILINK4)
+
 /** What the a11y filter should do with a volume-knob press. */
 enum class KnobDecision { CONSUME_AND_PLAY_PAUSE, CONSUME, PASS_THROUGH }
 
 /**
  * Pure gate for the volume-knob press, shaped like [starDecision].
- * - feature off, or any key other than [VOLUME_KNOB_PRESS_KEYCODE] → PASS_THROUGH (native intact).
+ * - feature off, or any key outside [VOLUME_KNOB_PRESS_KEYCODES] → PASS_THROUGH (native intact).
  * - knob key, enabled: CONSUME_AND_PLAY_PAUSE on the DOWN edge, CONSUME on the UP edge (so the
  *   native source switch never fires on either edge).
  */
 fun knobDecision(keyCode: Int, isDown: Boolean, enabled: Boolean): KnobDecision {
-    if (!enabled || keyCode != VOLUME_KNOB_PRESS_KEYCODE) return KnobDecision.PASS_THROUGH
+    if (!enabled || keyCode !in VOLUME_KNOB_PRESS_KEYCODES) return KnobDecision.PASS_THROUGH
     return if (isDown) KnobDecision.CONSUME_AND_PLAY_PAUSE else KnobDecision.CONSUME
 }
 
