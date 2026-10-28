@@ -17,6 +17,8 @@ internal class NavRouteStats {
     var notifRich = 0
     var notifIgnored = 0
     var notifEmpty = 0
+    /** Notifications whose arrow alone was taken while a11y was fresh (#325). */
+    var notifMan = 0
     var maneuvers = 0
     var unknown = 0
     var expiries = 0
@@ -30,7 +32,7 @@ internal class NavRouteStats {
     fun reset(nowMs: Long) {
         startMs = nowMs
         a11yGuidance = 0; a11yNoGuidance = 0; kept = 0
-        notifRich = 0; notifIgnored = 0; notifEmpty = 0
+        notifRich = 0; notifIgnored = 0; notifEmpty = 0; notifMan = 0
         maneuvers = 0; unknown = 0; expiries = 0; drops = 0
         frames = 0
         rcs.clear()
@@ -62,7 +64,7 @@ internal class NavRouteStats {
     /** The route-summary fields as of [endMs]; a blind spell still open counts up to it. */
     fun fields(way: Int, endMs: Long): List<Pair<String, Any>> {
         val blind = blindMs + if (blindSinceMs > 0L) (endMs - blindSinceMs).coerceAtLeast(0L) else 0L
-        return listOf(
+        return listOfNotNull(
             "way" to way,
             "dur_s" to ((endMs - startMs).coerceAtLeast(0L) / MS_PER_S).toInt(),
             "a11y_guid" to a11yGuidance,
@@ -72,6 +74,8 @@ internal class NavRouteStats {
             "notif_rich" to notifRich,
             "notif_ignored" to notifIgnored,
             "notif_empty" to notifEmpty,
+            // Only on a route that took one (#325): every other car's line stays as it was.
+            ("notif_man" to notifMan).takeIf { notifMan > 0 },
             "maneuvers" to maneuvers,
             "unknown" to unknown,
             "expiries" to expiries,
