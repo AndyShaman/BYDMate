@@ -11,3 +11,6 @@ internal fun dtcNoRowsText(context: Context, summary: DtcScanSummary): String =
     } else {
         context.getString(R.string.tech_dtc_none_found)
     }
+
+/** The line under the shown codes when some lists went unread; null when there is nothing to add. */
+internal fun dtcUnreadPartialText(context: Context, summary: DtcScanSummary): String? = null

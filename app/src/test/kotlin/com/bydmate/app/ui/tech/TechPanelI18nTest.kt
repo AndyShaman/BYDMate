@@ -121,6 +121,33 @@ class TechPanelI18nTest {
         assertTrue(text, text.contains("прочитать не удалось"))
     }
 
+    private fun partial(unread: Int, found: Int) = com.bydmate.app.data.dtc.DtcScanSummary(
+        answered = 12, total = 18, now = found, old = 0, pending = 0,
+        found = List(found) { io.mockk.mockk(relaxed = true) }, unreadBlocks = unread,
+    )
+
+    private fun partialText(l: String, unread: Int, found: Int = 1): String? {
+        LocalePreferences(ctx).setLanguage(l)
+        return dtcUnreadPartialText(ctx.appLocalizedContext(), partial(unread, found))
+    }
+
+    @Test fun codes_shown_with_unread_lists_say_how_many_blocks_were_not_read() {
+        assertEquals("1 блок не отдал список, его коды здесь не показаны", partialText("ru", 1))
+        assertEquals("3 блока не отдали список, их коды здесь не показаны", partialText("ru", 3))
+        assertEquals("5 блоков не отдали список, их коды здесь не показаны", partialText("ru", 5))
+        val ru = partialText("ru", 3)
+        for (l in listOf("be", "en", "pl", "pt", "zh")) {
+            val text = partialText(l, 3)
+            assertTrue("$l: $text", text != null && text != ru && text.contains("3"))
+            assertFalse("$l: $text", text!!.contains("\u2014"))
+        }
+    }
+
+    @Test fun no_partial_line_without_unread_lists_or_without_shown_codes() {
+        assertEquals(null, partialText("ru", unread = 0, found = 2))
+        assertEquals(null, partialText("ru", unread = 2, found = 0))
+    }
+
     @Test fun service_hint_names_the_menu_path_in_every_language() {
         val ru = get("ru", R.string.tech_hint_diagnostics)
         assertTrue(ru, ru.contains("Vehicle → Maintenance"))
