@@ -27,8 +27,14 @@ object TechCardOrder {
 
     val DEFAULT: List<TechCard> = TechCard.entries.filterNot { it == TechCard.FUEL }
 
+    /**
+     * Ids of cards merged away. «Шины» joined «Климат» in «Состояние машины», so a stored `tyres`
+     * becomes that card and the merged card takes the earlier of the two old slots.
+     */
+    private val LEGACY_IDS = mapOf("tyres" to TechCard.CAR_STATE)
+
     fun parse(raw: String): List<TechCard> {
-        val byId = TechCard.entries.associateBy { it.id }
+        val byId = TechCard.entries.associateBy { it.id } + LEGACY_IDS
         val saved = raw.split(',')
             .mapNotNull { byId[it.trim()] }
             .distinct()

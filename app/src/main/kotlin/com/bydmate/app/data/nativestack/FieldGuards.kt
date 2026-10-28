@@ -33,6 +33,11 @@ object FieldGuards {
         "tyreTempRR" to -50..150,
         "pedalAccel" to 0..100,
         "pedalBrake" to 0..100,
+        "pm25In" to 0..3000,
+        "pm25Out" to 0..3000,
+        // Level 0 is the SDK's own "invalid": a car without the sensor must not show a fake 0.
+        "pm25LevelIn" to 1..6,
+        "pm25LevelOut" to 1..6,
     )
 
     /** [value] as the snapshot holds it, or null when the field has a range and it falls outside. */

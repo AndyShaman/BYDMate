@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -114,13 +115,13 @@ data class TechPanelUiState(
 ) {
     /** PM2.5 value to draw: only with a valid level 1..6, null otherwise. */
     val pm25InShown: Int?
-        get() = null
+        get() = pm25In?.takeIf { pm25LevelIn in PM25_LEVELS }
     val pm25OutShown: Int?
-        get() = null
+        get() = pm25Out?.takeIf { pm25LevelOut in PM25_LEVELS }
 
     /** True when the «До ТО» row has at least one half to show. */
     val hasServiceRow: Boolean
-        get() = false
+        get() = serviceDaysLeft != null || serviceKmLeft != null
 
     val isHybrid: Boolean
         get() = vehicleKind == VehicleKind.HYBRID
@@ -152,7 +153,7 @@ data class TechPanelUiState(
             motorCurrentFront, motorCurrentRear, engineRpm,
         )
     val showClimate: Boolean
-        get() = anyOf(compressorW, acStatus, insideTemp, exteriorTemp)
+        get() = anyOf(compressorW, acStatus, insideTemp, exteriorTemp, pm25InShown, pm25OutShown)
     val showFuel: Boolean
         get() = isHybrid && anyOf(
             fuelPercent, fuelRangeKm, evRangeKm, engineRpm, mileageHevKm, mileageEvKm, fuelTotalL,
@@ -162,6 +163,9 @@ data class TechPanelUiState(
             tirePressFL, tirePressFR, tirePressRL, tirePressRR,
             tyreTempFL, tyreTempFR, tyreTempRL, tyreTempRR,
         )
+    /** Task A: the provider rows only; the block-fault scan widens this. */
+    val showDiagnostics: Boolean
+        get() = faultCount != null || hasServiceRow
     val showHistory: Boolean
         get() = anyOf(
             lifetimeKm, lifetimeKwh, avgSocSinceCharge, avgSocAllTime,
@@ -182,14 +186,19 @@ data class TechPanelUiState(
         TechCard.MOTORS -> showMotors
         TechCard.CAR_STATE -> showClimate || showTyres
         TechCard.FUEL -> showFuel
-        TechCard.DIAGNOSTICS -> false
+        TechCard.DIAGNOSTICS -> showDiagnostics
     }
 
     val hasAnyCard: Boolean
         get() = showBatteryNow || showLimitsAndCells || showMotors ||
-            showClimate || showTyres || showHistory || showFuel
+            showClimate || showTyres || showHistory || showFuel || showDiagnostics
 
     private fun anyOf(vararg values: Any?): Boolean = values.any { it != null }
+
+    private companion object {
+        /** The sensor's own grades; 0 is its "invalid", so a car without the sensor shows nothing. */
+        val PM25_LEVELS = 1..6
+    }
 }
 
 /**
@@ -227,6 +236,7 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch { loadCardOrder() }
         viewModelScope.launch { loadFullCycles() }
         observeCalibrationMarks()
+        observeCarStatus()
         viewModelScope.launch {
             vehicleKindMonitor.kind.collect { kind ->
                 _uiState.update { it.copy(vehicleKind = kind, cardOrder = TechCardOrder.forKind(it.cardOrder, kind)) }
@@ -317,6 +327,8 @@ class TechPanelViewModel @Inject constructor(
                             mileageHevKm = data?.mileageHevKm,
                             mileageEvKm = data?.mileageEvKm,
                             fuelTotalL = data?.fuelTotalL,
+                            pm25In = data?.pm25In, pm25Out = data?.pm25Out,
+                            pm25LevelIn = data?.pm25LevelIn, pm25LevelOut = data?.pm25LevelOut,
                         )
                     }
                 }
@@ -370,6 +382,49 @@ class TechPanelViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(lastFullChargeTs = marks.lastFullChargeTs, lastCalibrationTs = marks.lastCalibrationTs)
                     }
+                }
+        }
+    }
+
+    /**
+     * Warnings and the service countdown off the stock car status provider: one read on open,
+     * then a re-read per change of a watched key. A car without the provider gets no observer.
+     */
+    private fun observeCarStatus() {
+        suspend fun apply(): Boolean {
+            val status = runCatching { carStatusReader.read() }.getOrNull()
+            _uiState.update {
+                it.copy(faultCount = status?.faults, serviceDaysLeft = status?.daysLeft, serviceKmLeft = status?.kmLeft)
+            }
+            return status != null
+        }
+        viewModelScope.launch {
+            if (!apply()) return@launch
+            carStatusReader.changes().collect { apply() }
+        }
+        logCarStateChanges()
+    }
+
+    /**
+     * One line per change of what the car-state rows show. PM2.5 enters by level and visibility
+     * only: the raw value moves every tick on a car with the sensor, and is in the dump anyway.
+     */
+    private fun logCarStateChanges() {
+        viewModelScope.launch {
+            _uiState
+                .map { s ->
+                    listOf(
+                        s.faultCount, s.serviceDaysLeft, s.serviceKmLeft,
+                        s.pm25LevelIn, s.pm25LevelOut, s.pm25InShown != null, s.pm25OutShown != null,
+                    ) to s
+                }
+                .distinctUntilChanged { a, b -> a.first == b.first }
+                .collect { (_, s) ->
+                    Log.i(
+                        TAG,
+                        "carState: faults=${s.faultCount} days=${s.serviceDaysLeft} km=${s.serviceKmLeft} " +
+                            "pm25=${s.pm25In}/${s.pm25Out} lvl ${s.pm25LevelIn}/${s.pm25LevelOut}",
+                    )
                 }
         }
     }

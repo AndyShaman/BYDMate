@@ -112,6 +112,7 @@ class TechPanelViewModelTest {
         every { it.changes() } returns emptyFlow()
     }
 
+    @Suppress("LongParameterList") // test factory: every override is optional
     private fun buildViewModel(
         battery: BatteryState? = null,
         avg: AvgSoc = AvgSoc(null, null),

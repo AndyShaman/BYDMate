@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- «Состояние машины»: the car seen from above (mock car B). Wheels and leader lines are drawn
+     over it in Compose, coloured per tyre; viewport x 0..22 / 138..160 is where the wheels sit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="80dp"
+    android:height="130dp"
+    android:viewportWidth="160"
+    android:viewportHeight="260">
+    <group android:translateX="80">
+        <path
+            android:strokeColor="#2A3A52"
+            android:strokeWidth="2"
+            android:strokeLineJoin="round"
+            android:pathData="M-58,44C-52,14 -30,2 0,2C30,2 52,14 58,44L63,80L64,190L60,225C56,248 40,258 0,258C-40,258 -56,248 -60,225L-64,190L-63,80Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="0"
+                    android:startY="2"
+                    android:endX="0"
+                    android:endY="258"
+                    android:startColor="#2B3D58"
+                    android:endColor="#1F2D44" />
+            </aapt:attr>
+        </path>
+        <path
+            android:fillColor="#3B506C"
+            android:pathData="M-44,84C-30,74 30,74 44,84L40,112C20,106 -20,106 -40,112Z" />
+        <path
+            android:fillColor="#3B506C"
+            android:pathData="M-40,178C-20,184 20,184 40,178L44,204C30,212 -30,212 -44,204Z" />
+        <path
+            android:fillColor="#2A3B55"
+            android:pathData="M-38,118C-20,114 20,114 38,118L38,172C20,176 -20,176 -38,172Z" />
+        <path
+            android:strokeColor="#4B6285"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:pathData="M-46,30C-40,22 -30,16 -18,13M46,30C40,22 30,16 18,13M-48,246C-40,250 -28,252 -18,252M48,246C40,250 28,252 18,252" />
+        <path
+            android:fillColor="#22314A"
+            android:strokeColor="#2A3A52"
+            android:strokeWidth="2"
+            android:strokeLineJoin="round"
+            android:pathData="M-63,92L-74,94C-77,96 -74,101 -70,101L-63,101ZM63,92L74,94C77,96 74,101 70,101L63,101Z" />
+    </group>
+</vector>

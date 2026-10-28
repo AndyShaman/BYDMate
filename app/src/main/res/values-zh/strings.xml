@@ -1711,7 +1711,6 @@
     <string name="tech_card_limits">BMS 限值</string>
     <string name="tech_card_cells">电芯</string>
     <string name="tech_card_motors">电机与逆变器</string>
-    <string name="tech_card_climate">空调</string>
     <string name="tech_card_tyres">轮胎 · 胎压 / 温度</string>
     <string name="tech_card_history">电池 · 历史</string>
     <string name="tech_label_remain_kwh">剩余电量</string>
@@ -2165,4 +2164,18 @@
     <string name="tech_card_fuel">燃油</string>
     <string name="settings_fuel_price_label">每升油价</string>
     <string name="settings_fuel_price_hint">每升价格，适用于此日期起的行程</string>
+    <string name="tech_card_car_state">车辆状态</string>
+    <string name="tech_card_diagnostics">诊断</string>
+    <string name="tech_dtc_scan">扫描</string>
+    <string name="tech_hint_diagnostics">仪表警告：车辆自己在仪表上显示的内容。没有“距保养”一行，说明车上的保养提醒已关闭。开启方法：车辆设置 → 车辆健康 → 智能保养 → 保养时间 或 保养里程。</string>
+    <string name="tech_label_dash_warnings">仪表警告</string>
+    <string name="tech_value_none">无</string>
+    <string name="tech_label_service">距保养</string>
+    <string name="tech_value_service_days">%1$d 天</string>
+    <string name="tech_value_service_km">%1$d 公里</string>
+    <string name="tech_label_pm25_in">PM2.5 车内</string>
+    <string name="tech_label_pm25_out">PM2.5 车外</string>
+    <string name="tech_section_dtc">模块故障</string>
+    <string name="tech_dtc_never">尚未扫描</string>
+    <string name="tech_dtc_only_on_p">仅在 P 挡可扫描</string>
 </resources>

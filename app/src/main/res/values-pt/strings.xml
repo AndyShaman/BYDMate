@@ -1593,7 +1593,6 @@
     <string name="tech_card_limits">Limites do BMS</string>
     <string name="tech_card_cells">Células</string>
     <string name="tech_card_motors">Motores e inversores</string>
-    <string name="tech_card_climate">Climatização</string>
     <string name="tech_card_tyres">Pneus · pressão / temperatura</string>
     <string name="tech_card_history">Bateria · histórico</string>
     <string name="tech_label_remain_kwh">Restante</string>
@@ -2047,4 +2046,18 @@
     <string name="tech_card_fuel">Combustível</string>
     <string name="settings_fuel_price_label">Preço por litro</string>
     <string name="settings_fuel_price_hint">por litro, para viagens a partir desta data</string>
+    <string name="tech_card_car_state">Estado do carro</string>
+    <string name="tech_card_diagnostics">Diagnóstico</string>
+    <string name="tech_dtc_scan">Analisar</string>
+    <string name="tech_hint_diagnostics">Avisos do painel: o que o próprio carro mostra no painel de instrumentos. Sem a linha «Próxima revisão», o lembrete de revisão está desligado no carro. Para ligar: definições do carro → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) ou Service Mileage (保养里程).</string>
+    <string name="tech_label_dash_warnings">Avisos do painel</string>
+    <string name="tech_value_none">nenhum</string>
+    <string name="tech_label_service">Próxima revisão</string>
+    <string name="tech_value_service_days">%1$d d</string>
+    <string name="tech_value_service_km">%1$d km</string>
+    <string name="tech_label_pm25_in">PM2.5 interior</string>
+    <string name="tech_label_pm25_out">PM2.5 exterior</string>
+    <string name="tech_section_dtc">Erros nos módulos</string>
+    <string name="tech_dtc_never">Ainda não analisado</string>
+    <string name="tech_dtc_only_on_p">Análise só em P</string>
 </resources>

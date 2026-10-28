@@ -127,7 +127,7 @@ class PushStateTraceTest {
 
         val wave = FidPushApplier.PUSH_FIELDS.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
         assertEquals(wave, subs.captured)
-        assertEquals(122, subs.captured.size)
+        assertEquals(126, subs.captured.size)
 
         push(*ADAS.keys.map { it to 1 }.toTypedArray())
 

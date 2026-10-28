@@ -1753,7 +1753,6 @@
     <string name="tech_card_limits">Лимиты BMS</string>
     <string name="tech_card_cells">Ячейки</string>
     <string name="tech_card_motors">Моторы и инверторы</string>
-    <string name="tech_card_climate">Климат</string>
     <string name="tech_card_tyres">Шины · давление / температура</string>
     <string name="tech_card_history">Батарея · история</string>
     <string name="tech_label_remain_kwh">Остаток</string>
@@ -2222,4 +2221,15 @@
     <string name="tech_card_diagnostics">Диагностика</string>
     <string name="tech_dtc_scan">Сканировать</string>
     <string name="tech_hint_diagnostics">Предупреждения приборки: то, что машина сама показывает на приборке. Строки «До ТО» нет, если напоминание о ТО в машине выключено. Включить: настройки машины → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) или Service Mileage (保养里程).</string>
+    <string name="tech_label_dash_warnings">Предупреждения приборки</string>
+    <string name="tech_value_none">нет</string>
+    <string name="tech_label_service">До ТО</string>
+    <string name="tech_value_service_days">%1$d дн</string>
+    <string name="tech_value_service_km">%1$d км</string>
+    <string name="tech_label_pm25_in">PM2.5 салон</string>
+    <string name="tech_label_pm25_out">PM2.5 улица</string>
+    <string name="tech_section_dtc">Ошибки в блоках</string>
+    <string name="tech_dtc_never">Ещё не сканировали</string>
+    <string name="tech_dtc_only_on_p">Сканировать можно только на P</string>
+    <string name="tech_value_pm25" translatable="false">%1$d µg/m³</string>
 </resources>

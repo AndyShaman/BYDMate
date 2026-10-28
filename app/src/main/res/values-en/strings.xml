@@ -1597,7 +1597,6 @@
     <string name="tech_card_limits">BMS limits</string>
     <string name="tech_card_cells">Cells</string>
     <string name="tech_card_motors">Motors and inverters</string>
-    <string name="tech_card_climate">Climate</string>
     <string name="tech_card_tyres">Tyres · pressure / temperature</string>
     <string name="tech_card_history">Battery · history</string>
     <string name="tech_label_remain_kwh">Remaining</string>
@@ -2051,4 +2050,18 @@
     <string name="tech_card_fuel">Fuel</string>
     <string name="settings_fuel_price_label">Price per litre</string>
     <string name="settings_fuel_price_hint">per litre, for trips from this date</string>
+    <string name="tech_card_car_state">Car status</string>
+    <string name="tech_card_diagnostics">Diagnostics</string>
+    <string name="tech_dtc_scan">Scan</string>
+    <string name="tech_hint_diagnostics">Cluster warnings: what the car itself shows on the instrument cluster. No “Next service” row means the service reminder is off in the car. To turn it on: car settings → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) or Service Mileage (保养里程).</string>
+    <string name="tech_label_dash_warnings">Cluster warnings</string>
+    <string name="tech_value_none">none</string>
+    <string name="tech_label_service">Next service</string>
+    <string name="tech_value_service_days">%1$d d</string>
+    <string name="tech_value_service_km">%1$d km</string>
+    <string name="tech_label_pm25_in">PM2.5 cabin</string>
+    <string name="tech_label_pm25_out">PM2.5 outside</string>
+    <string name="tech_section_dtc">Module faults</string>
+    <string name="tech_dtc_never">Not scanned yet</string>
+    <string name="tech_dtc_only_on_p">Scanning only in P</string>
 </resources>

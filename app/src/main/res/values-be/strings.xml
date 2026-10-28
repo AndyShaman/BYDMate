@@ -1749,7 +1749,6 @@
     <string name="tech_card_limits">Ліміты BMS</string>
     <string name="tech_card_cells">Ячэйкі</string>
     <string name="tech_card_motors">Маторы і інвертары</string>
-    <string name="tech_card_climate">Клімат</string>
     <string name="tech_card_tyres">Шыны · ціск / тэмпература</string>
     <string name="tech_card_history">Батарэя · гісторыя</string>
     <string name="tech_label_remain_kwh">Астатак</string>
@@ -2203,4 +2202,18 @@
     <string name="tech_card_fuel">Паліва</string>
     <string name="settings_fuel_price_label">Цана літра</string>
     <string name="settings_fuel_price_hint">за літр, на паездкі з гэтай даты</string>
+    <string name="tech_card_car_state">Стан машыны</string>
+    <string name="tech_card_diagnostics">Дыягностыка</string>
+    <string name="tech_dtc_scan">Сканаваць</string>
+    <string name="tech_hint_diagnostics">Папярэджанні прыборнай панэлі: тое, што машына сама паказвае на прыборнай панэлі. Радка «Да ТА» няма, калі напамін пра ТА ў машыне выключаны. Уключыць: налады машыны → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) або Service Mileage (保养里程).</string>
+    <string name="tech_label_dash_warnings">Папярэджанні прыборнай панэлі</string>
+    <string name="tech_value_none">няма</string>
+    <string name="tech_label_service">Да ТА</string>
+    <string name="tech_value_service_days">%1$d дз</string>
+    <string name="tech_value_service_km">%1$d км</string>
+    <string name="tech_label_pm25_in">PM2.5 салон</string>
+    <string name="tech_label_pm25_out">PM2.5 вуліца</string>
+    <string name="tech_section_dtc">Памылкі ў блоках</string>
+    <string name="tech_dtc_never">Яшчэ не сканавалі</string>
+    <string name="tech_dtc_only_on_p">Сканаваць можна толькі на P</string>
 </resources>

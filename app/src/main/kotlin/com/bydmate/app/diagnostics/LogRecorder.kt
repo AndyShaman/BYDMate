@@ -463,6 +463,8 @@ class LogRecorder internal constructor(
             // Blindspot wave: AVM camera probe. FidPush carries the daemon's push
             // subscription (register results, events) and the app's apply lines.
             "FidPush:*", "TechPanel:*", "CameraProbe:*", "BlindSpot:*", "CameraMonitor:*",
+            // «Диагностика»: reads of the stock car status provider and its key observers.
+            "CarStatus:*",
             // Diagnostic fid recorder (-test builds): summary only — the events go to its own
             // file in /sdcard/Download, not here.
             "FidRec:*",

@@ -1749,7 +1749,6 @@
     <string name="tech_card_limits">Limity BMS</string>
     <string name="tech_card_cells">Ogniwa</string>
     <string name="tech_card_motors">Silniki i falowniki</string>
-    <string name="tech_card_climate">Klimatyzacja</string>
     <string name="tech_card_tyres">Opony · ciśnienie / temperatura</string>
     <string name="tech_card_history">Akumulator · historia</string>
     <string name="tech_label_remain_kwh">Pozostało</string>
@@ -2203,4 +2202,18 @@
     <string name="tech_card_fuel">Paliwo</string>
     <string name="settings_fuel_price_label">Cena litra</string>
     <string name="settings_fuel_price_hint">za litr, dla podróży od tej daty</string>
+    <string name="tech_card_car_state">Stan auta</string>
+    <string name="tech_card_diagnostics">Diagnostyka</string>
+    <string name="tech_dtc_scan">Skanuj</string>
+    <string name="tech_hint_diagnostics">Ostrzeżenia na zegarach: to, co samochód sam pokazuje na zestawie wskaźników. Wiersza „Do przeglądu” nie ma, jeśli przypomnienie o przeglądzie jest w aucie wyłączone. Włączenie: ustawienia auta → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) lub Service Mileage (保养里程).</string>
+    <string name="tech_label_dash_warnings">Ostrzeżenia na zegarach</string>
+    <string name="tech_value_none">brak</string>
+    <string name="tech_label_service">Do przeglądu</string>
+    <string name="tech_value_service_days">%1$d dni</string>
+    <string name="tech_value_service_km">%1$d km</string>
+    <string name="tech_label_pm25_in">PM2.5 kabina</string>
+    <string name="tech_label_pm25_out">PM2.5 na zewnątrz</string>
+    <string name="tech_section_dtc">Błędy w modułach</string>
+    <string name="tech_dtc_never">Jeszcze nie skanowano</string>
+    <string name="tech_dtc_only_on_p">Skanowanie tylko na P</string>
 </resources>

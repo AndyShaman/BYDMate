@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.tech
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,8 +26,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,19 +43,26 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -264,9 +279,9 @@ private fun TechCardContent(
         TechCard.LIMITS -> LimitsAndCellsCard(state, onHint, modifier)
         TechCard.HISTORY -> HistoryCard(state, onHint, modifier)
         TechCard.MOTORS -> MotorsCard(state, onHint, modifier)
-        TechCard.CAR_STATE -> if (state.showClimate) ClimateCard(state, onHint, modifier) else TyresCard(state, onHint, modifier)
+        TechCard.CAR_STATE -> CarStateCard(state, onHint, modifier)
         TechCard.FUEL -> FuelCard(state, modifier)
-        TechCard.DIAGNOSTICS -> Unit
+        TechCard.DIAGNOSTICS -> DiagnosticsCard(state, onHint, modifier)
     }
 }
 
@@ -564,43 +579,141 @@ private fun FuelCard(state: TechPanelUiState, modifier: Modifier = Modifier) {
     }
 }
 
+/** «Состояние машины»: climate on top, then the tyres; each part only when the car reports it. */
 @Composable
-private fun ClimateCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
-    TechCard(stringResource(R.string.tech_card_climate), modifier = modifier) {
-        TechRow(
-            stringResource(R.string.tech_label_compressor),
-            state.compressorW?.let { stringResource(R.string.tech_value_watt, it) } ?: DASH,
-            hintKey = "compressor", onHint = onHint,
-        )
-        TechRow(
-            stringResource(R.string.tech_label_climate),
-            when (state.acStatus) {
-                null -> DASH
-                0 -> stringResource(R.string.tech_off)
-                else -> stringResource(R.string.tech_on)
-            },
-        )
-        PairRow(
-            stringResource(R.string.tech_label_inside_outside),
-            state.insideTemp?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
-            state.exteriorTemp?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
-        )
-        Hint(state.openHint, "compressor", R.string.tech_hint_compressor)
+private fun CarStateCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
+    TechCard(stringResource(R.string.tech_card_car_state), modifier = modifier) {
+        if (state.showClimate) ClimateRows(state, onHint)
+        if (state.showTyres) TyresSection(state, onHint)
     }
 }
 
 @Composable
-private fun TyresCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun ClimateRows(state: TechPanelUiState, onHint: (String) -> Unit) {
+    TechRow(
+        stringResource(R.string.tech_label_compressor),
+        state.compressorW?.let { stringResource(R.string.tech_value_watt, it) } ?: DASH,
+        hintKey = "compressor", onHint = onHint,
+    )
+    TechRow(
+        stringResource(R.string.tech_label_climate),
+        when (state.acStatus) {
+            null -> DASH
+            0 -> stringResource(R.string.tech_off)
+            else -> stringResource(R.string.tech_on)
+        },
+    )
+    PairRow(
+        stringResource(R.string.tech_label_inside_outside),
+        state.insideTemp?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
+        state.exteriorTemp?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
+    )
+    // PM2.5 only where the car has the sensor: no valid level, no row.
+    state.pm25InShown?.let { Pm25Row(R.string.tech_label_pm25_in, it, state.pm25LevelIn) }
+    state.pm25OutShown?.let { Pm25Row(R.string.tech_label_pm25_out, it, state.pm25LevelOut) }
+    Hint(state.openHint, "compressor", R.string.tech_hint_compressor)
+}
+
+/** Colour from the sensor's own grade (1 excellent .. 6 serious), not a threshold of ours. */
+@Composable
+private fun Pm25Row(labelRes: Int, value: Int, level: Int?) {
+    TechRow(
+        stringResource(labelRes),
+        stringResource(R.string.tech_value_pm25, value),
+        valueColor = when (level) {
+            1, 2 -> AccentGreen
+            3, 4 -> SocYellow
+            else -> SocRed
+        },
+    )
+}
+
+@Composable
+private fun TyresSection(state: TechPanelUiState, onHint: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+        SectionHeader(stringResource(R.string.tech_card_tyres))
+        HelpIcon { onHint("tyres") }
+    }
+    TyreTopView(state)
+    Hint(state.openHint, "tyres", R.string.tech_hint_tyres)
+}
+
+/**
+ * «Диагностика»: what the car itself reports (cluster warnings, service countdown), then the
+ * block faults of the last manual scan. No red here: a warning reads yellow, «нет» green.
+ */
+@Composable
+private fun DiagnosticsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
     TechCard(
-        stringResource(R.string.tech_card_tyres),
-        hintKey = "tyres",
+        stringResource(R.string.tech_card_diagnostics),
+        hintKey = "diagnostics",
         onHint = onHint,
         modifier = modifier,
     ) {
-        TyreTopView(state)
-        Hint(state.openHint, "tyres", R.string.tech_hint_tyres)
+        // Fills what the row's tallest card leaves, so the scan button sits at the bottom.
+        Column(modifier = Modifier.fillMaxHeight()) {
+            state.faultCount?.let { n ->
+                TechRow(
+                    stringResource(R.string.tech_label_dash_warnings),
+                    if (n == 0) stringResource(R.string.tech_value_none) else n.toString(),
+                    valueColor = if (n == 0) AccentGreen else SocYellow,
+                )
+            }
+            if (state.hasServiceRow) {
+                val days = state.serviceDaysLeft
+                val km = state.serviceKmLeft
+                TechRow(
+                    stringResource(R.string.tech_label_service),
+                    listOfNotNull(
+                        days?.let { stringResource(R.string.tech_value_service_days, it) },
+                        km?.let { stringResource(R.string.tech_value_service_km, it) },
+                    ).joinToString(" / "),
+                    valueColor = if (days == 0 || km == 0) SocYellow else TextPrimary,
+                )
+            }
+            Hint(state.openHint, "diagnostics", R.string.tech_hint_diagnostics)
+            DtcScanBlock()
+        }
     }
 }
+
+/**
+ * «Ошибки в блоках». Task A draws only the never-scanned state with the button disabled; the
+ * manual scan (P only, never automatic) plugs in here.
+ */
+@Composable
+private fun ColumnScope.DtcScanBlock() {
+    Row(modifier = Modifier.padding(top = 10.dp)) { SectionHeader(stringResource(R.string.tech_section_dtc)) }
+    Text(
+        stringResource(R.string.tech_dtc_never),
+        color = TextMuted,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(vertical = 4.dp),
+    )
+    Box(modifier = Modifier.weight(1f))
+    OutlinedButton(
+        onClick = {},
+        enabled = false,
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, AccentGreen.copy(alpha = DISABLED_ALPHA)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            disabledContainerColor = CardSurfaceElevated,
+            disabledContentColor = AccentGreen.copy(alpha = DISABLED_ALPHA),
+        ),
+        modifier = Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp),
+    ) {
+        Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+        Text(
+            stringResource(R.string.tech_dtc_scan),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
+}
+
+/** How the disabled scan button fades, as in the approved mock. */
+private const val DISABLED_ALPHA = 0.45f
 
 @Composable
 private fun HistoryCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
@@ -880,74 +993,144 @@ private fun TempScaleTick(text: String) {
     Text(text, color = TextMuted, fontSize = 10.sp)
 }
 
-/** Top view of the car: pressure and temperature sit where the wheel is. */
+/** Height of the car silhouette; its viewport is 160 x 260, so 1 viewport unit = 0.5 dp. */
+private val CAR_HEIGHT = 130.dp
+private const val CAR_VIEWPORT_W = 160f
+private const val CAR_VIEWPORT_H = 260f
+
+/** Wheel rectangles in viewport units (x, top, bottom), front then rear axle; width 22, rx 5. */
+private const val WHEEL_W = 22f
+private const val WHEEL_RX = 5f
+private const val FRONT_TOP = 42f
+private const val FRONT_BOTTOM = 90f
+private const val REAR_TOP = 170f
+private const val REAR_BOTTOM = 220f
+
+/** Leader lines, viewport units: from the wheel side outwards at the axle's height. */
+private const val FRONT_LEAD_Y = 66f
+private const val REAR_LEAD_Y = 195f
+private const val LEAD_REACH = 36f
+
+/** Distance from the car's centre line to the inner edge of each tile. */
+private val TILE_GAP = 62.dp
+
+/**
+ * Top view of the car (mock car B): a line runs from each wheel to its tile, so it is plain
+ * which wheel each pressure belongs to. Tiles size to their text, so both lines show at any font
+ * scale; the block grows when the tiles outgrow the car.
+ */
 @Composable
 private fun TyreTopView(state: TechPanelUiState) {
     val deviates = TechPanelVisuals.tyreDeviates(
         listOf(state.tirePressFL, state.tirePressFR, state.tirePressRL, state.tirePressRR)
     )
-    Box(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
-        Box(modifier = Modifier.size(width = 200.dp, height = 120.dp)) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(width = 80.dp, height = 112.dp)
-                    .background(
-                        CardSurfaceElevated.copy(alpha = 0.6f),
-                        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
-                    )
-                    .border(
-                        1.dp,
-                        CardBorder,
-                        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
-                    )
-            )
-            TyreTile(
-                state.tirePressFL, state.tyreTempFL, deviates[0],
-                Modifier.align(Alignment.TopStart).padding(top = 6.dp),
-            )
-            TyreTile(
-                state.tirePressFR, state.tyreTempFR, deviates[1],
-                Modifier.align(Alignment.TopEnd).padding(top = 6.dp),
-            )
-            TyreTile(
-                state.tirePressRL, state.tyreTempRL, deviates[2],
-                Modifier.align(Alignment.BottomStart).padding(bottom = 2.dp),
-            )
-            TyreTile(
-                state.tirePressRR, state.tyreTempRR, deviates[3],
-                Modifier.align(Alignment.BottomEnd).padding(bottom = 2.dp),
-            )
+    Layout(
+        content = {
+            CarTopImage(deviates)
+            TyreTile(state.tirePressFL, state.tyreTempFL, deviates[0])
+            TyreTile(state.tirePressFR, state.tyreTempFR, deviates[1])
+            TyreTile(state.tirePressRL, state.tyreTempRL, deviates[2])
+            TyreTile(state.tirePressRR, state.tyreTempRR, deviates[3])
+        },
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
+    ) { measurables, constraints ->
+        val placeables = measurables.map { it.measure(Constraints()) }
+        val car = placeables[0]
+        val tiles = placeables.drop(1)
+        val k = car.height / CAR_VIEWPORT_H
+        val frontY = FRONT_LEAD_Y * k
+        val rearY = REAR_LEAD_Y * k
+        // Tall tiles (font 1,3) may reach past the car: move the car down and grow instead of clipping.
+        val top = maxOf(0f, tiles[0].height / 2f - frontY, tiles[1].height / 2f - frontY)
+        val height = maxOf(
+            car.height + top,
+            rearY + top + tiles[2].height / 2f,
+            rearY + top + tiles[3].height / 2f,
+        )
+        val centre = constraints.maxWidth / 2
+        val gap = TILE_GAP.roundToPx()
+        layout(constraints.maxWidth, height.roundToInt()) {
+            fun y(axle: Float, h: Int) = (axle + top - h / 2f).roundToInt()
+            car.place(centre - car.width / 2, top.roundToInt())
+            tiles[0].place(centre - gap - tiles[0].width, y(frontY, tiles[0].height))
+            tiles[1].place(centre + gap, y(frontY, tiles[1].height))
+            tiles[2].place(centre - gap - tiles[2].width, y(rearY, tiles[2].height))
+            tiles[3].place(centre + gap, y(rearY, tiles[3].height))
         }
     }
 }
 
+/** The silhouette with the leader lines under it and the wheels over it, wheels in the tile colour. */
 @Composable
-private fun TyreTile(pressureKpa: Int?, tempC: Int?, deviates: Boolean, modifier: Modifier = Modifier) {
+private fun CarTopImage(deviates: List<Boolean>) {
+    Image(
+        painter = painterResource(R.drawable.ic_tech_car_top),
+        contentDescription = null,
+        modifier = Modifier
+            .size(width = CAR_HEIGHT * (CAR_VIEWPORT_W / CAR_VIEWPORT_H), height = CAR_HEIGHT)
+            .drawWithContent {
+                val k = size.height / CAR_VIEWPORT_H
+                val line = 2f * k
+                for (y in listOf(FRONT_LEAD_Y, REAR_LEAD_Y)) {
+                    drawLine(CardBorder, Offset(0f, y * k), Offset(-LEAD_REACH * k, y * k), line)
+                    drawLine(CardBorder, Offset(size.width, y * k), Offset(size.width + LEAD_REACH * k, y * k), line)
+                }
+                drawContent()
+                val wheels = listOf(
+                    0f to (FRONT_TOP to FRONT_BOTTOM),
+                    CAR_VIEWPORT_W - WHEEL_W to (FRONT_TOP to FRONT_BOTTOM),
+                    0f to (REAR_TOP to REAR_BOTTOM),
+                    CAR_VIEWPORT_W - WHEEL_W to (REAR_TOP to REAR_BOTTOM),
+                )
+                wheels.forEachIndexed { i, (x, ys) ->
+                    val topLeft = Offset(x * k, ys.first * k)
+                    val wheel = Size(WHEEL_W * k, (ys.second - ys.first) * k)
+                    val radius = CornerRadius(WHEEL_RX * k)
+                    val (fill, stroke) = if (deviates[i]) SocYellow.copy(alpha = 0.45f) to SocYellow
+                        else NavyDark to WHEEL_STROKE
+                    drawRoundRect(fill, topLeft, wheel, radius)
+                    drawRoundRect(stroke, topLeft, wheel, radius, style = Stroke(line))
+                }
+            }
+    )
+}
+
+private val WHEEL_STROKE = Color(0xFF3A4D6B)
+
+@Composable
+private fun TyreTile(pressureKpa: Int?, tempC: Int?, deviates: Boolean) {
     val bar = pressureKpa?.let { it / 100.0 }
     Row(
-        modifier = modifier
-            .size(width = 70.dp, height = 44.dp)
+        modifier = Modifier
+            .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(8.dp))
             .background(CardSurfaceElevated)
     ) {
         Box(
             modifier = Modifier
-                .width(3.dp)
+                .width(4.dp)
                 .fillMaxHeight()
                 .background(if (deviates) SocYellow else AccentGreen)
         )
-        Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+        Column(modifier = Modifier.padding(start = 8.dp, end = 10.dp, top = 3.dp, bottom = 3.dp)) {
             Text(
                 bar?.let { stringResource(R.string.tech_value_tyre_pressure, it) } ?: DASH,
                 color = TextPrimary,
                 fontSize = 13.sp,
+                // Tight lines as in the mock: the theme's 22sp would push front and rear tiles
+                // into each other at font scale 1,3.
+                lineHeight = 16.sp,
                 fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
             )
             Text(
                 tempC?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
                 color = TextSecondary,
                 fontSize = 11.sp,
+                lineHeight = 14.sp,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
             )
         }
     }
