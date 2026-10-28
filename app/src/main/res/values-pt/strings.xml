@@ -2122,6 +2122,11 @@
         <item quantity="many">Não foi possível ler os códigos de %1$d módulos</item>
         <item quantity="other">Não foi possível ler os códigos de %1$d módulos</item>
     </plurals>
+    <plurals name="tech_dtc_unread_partial">
+        <item quantity="one">%1$d módulo não enviou a lista, os seus códigos não aparecem aqui</item>
+        <item quantity="many">%1$d módulos não enviaram a lista, os seus códigos não aparecem aqui</item>
+        <item quantity="other">%1$d módulos não enviaram a lista, os seus códigos não aparecem aqui</item>
+    </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="one">Mais %1$d código não coube, todos estão na janela «Diagnóstico»</item>
         <item quantity="many">Mais %1$d códigos não couberam, todos estão na janela «Diagnóstico»</item>

@@ -2280,6 +2280,12 @@
         <item quantity="many">Коды %1$d блокаў прачытаць не ўдалося</item>
         <item quantity="other">Коды %1$d блока прачытаць не ўдалося</item>
     </plurals>
+    <plurals name="tech_dtc_unread_partial">
+        <item quantity="one">%1$d блок не аддаў спіс, яго коды тут не паказаны</item>
+        <item quantity="few">%1$d блокі не аддалі спіс, іх коды тут не паказаны</item>
+        <item quantity="many">%1$d блокаў не аддалі спіс, іх коды тут не паказаны</item>
+        <item quantity="other">%1$d блока не аддалі спіс, іх коды тут не паказаны</item>
+    </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="one">Яшчэ %1$d код не змясціўся, усе ў акне «Дыягностыка»</item>
         <item quantity="few">Яшчэ %1$d коды не змясціліся, усе ў акне «Дыягностыка»</item>

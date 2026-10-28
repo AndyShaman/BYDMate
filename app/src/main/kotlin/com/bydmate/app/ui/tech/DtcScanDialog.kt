@@ -141,6 +141,7 @@ internal fun DtcScanDialog(
                                 val old = summary.found.filter { it.row.kind != DtcKind.NOW }
                                 DialogSection(R.string.tech_dtc_now_header, R.string.tech_dtc_now_sub, now)
                                 DialogSection(R.string.tech_dtc_old_header, R.string.tech_dtc_old_sub, old)
+                                dtcUnreadPartialText(context, summary)?.let { NoneText(it) }
                             }
                         }
                         if (!scanning) dtcErrorText(state.dtcScan.error)?.let { NoneText(it) }

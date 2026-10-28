@@ -2236,6 +2236,9 @@
     <plurals name="tech_dtc_unread">
         <item quantity="other">%1$d 个模块的故障码未能读取</item>
     </plurals>
+    <plurals name="tech_dtc_unread_partial">
+        <item quantity="other">%1$d 个模块未返回故障码列表，其故障码未在此显示</item>
+    </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="other">还有 %1$d 个故障码放不下，全部见“诊断”窗口</item>
     </plurals>

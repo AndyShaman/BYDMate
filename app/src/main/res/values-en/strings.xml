@@ -2124,6 +2124,10 @@
         <item quantity="one">Could not read the codes of %1$d module</item>
         <item quantity="other">Could not read the codes of %1$d modules</item>
     </plurals>
+    <plurals name="tech_dtc_unread_partial">
+        <item quantity="one">%1$d module did not send its list, its codes are not shown here</item>
+        <item quantity="other">%1$d modules did not send their lists, their codes are not shown here</item>
+    </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="one">%1$d more code did not fit, all of them are in the “Diagnostics” window</item>
         <item quantity="other">%1$d more codes did not fit, all of them are in the “Diagnostics” window</item>

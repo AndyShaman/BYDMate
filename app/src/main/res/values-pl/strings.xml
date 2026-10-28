@@ -2280,6 +2280,12 @@
         <item quantity="many">Nie udało się odczytać kodów %1$d modułów</item>
         <item quantity="other">Nie udało się odczytać kodów %1$d modułu</item>
     </plurals>
+    <plurals name="tech_dtc_unread_partial">
+        <item quantity="one">%1$d moduł nie przesłał listy, jego kody nie są tu pokazane</item>
+        <item quantity="few">%1$d moduły nie przesłały listy, ich kody nie są tu pokazane</item>
+        <item quantity="many">%1$d modułów nie przesłało listy, ich kody nie są tu pokazane</item>
+        <item quantity="other">%1$d modułu nie przesłało listy, ich kody nie są tu pokazane</item>
+    </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="one">Jeszcze %1$d kod się nie zmieścił, wszystkie w oknie „Diagnostyka”</item>
         <item quantity="few">Jeszcze %1$d kody się nie zmieściły, wszystkie w oknie „Diagnostyka”</item>
