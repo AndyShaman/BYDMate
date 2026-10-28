@@ -244,16 +244,9 @@ class FidMapTest {
         )
     }
 
-    // PM2.5 (dev 1008): appended at the end so the existing batch order stays as shipped.
-    @Test fun `pm25 entries are appended last and the batch stays under the cap`() {
-        val fields = FidMap.entries.map { it.field }
-        assertEquals(
-            listOf("pm25In", "pm25Out", "pm25LevelIn", "pm25LevelOut"),
-            fields.takeLast(4),
-        )
-        val pm = FidMap.entries.takeLast(4)
-        assertEquals(listOf(1008, 1008, 1008, 1008), pm.map { it.device })
-        assertEquals(listOf(1331691536, 1331691548, 1331691568, 1331691571), pm.map { it.fid })
-        assertTrue(FidMap.entries.size <= 128)
+    // PM2.5 is read on demand by Pm25Reader, never through the global poll.
+    @Test fun `no pm25 entry in FidMap and the batch is as before`() {
+        assertTrue(FidMap.entries.none { it.field.startsWith("pm25") })
+        assertEquals(94, FidMap.entries.size)
     }
 }

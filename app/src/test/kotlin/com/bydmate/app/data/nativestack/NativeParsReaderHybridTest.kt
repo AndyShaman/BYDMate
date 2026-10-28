@@ -83,10 +83,10 @@ class NativeParsReaderHybridTest {
             auto, settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE), kindMonitor(VehicleKind.HYBRID),
         ).fetch()
 
-        assertEquals(98 + 7, items.captured.size)
+        assertEquals(94 + 7, items.captured.size)
         assertEquals(
             FidMap.entries.map { Triple(it.transact, it.device, it.fid) },
-            items.captured.take(98).map { Triple(it.tx, it.dev, it.fid) },
+            items.captured.take(94).map { Triple(it.tx, it.dev, it.fid) },
         )
         assertEquals(
             listOf(
@@ -94,7 +94,7 @@ class NativeParsReaderHybridTest {
                 Triple(5, 1014, 1246773264), Triple(5, 1014, 1246773284), Triple(5, 1012, 339738642),
                 Triple(5, 1014, 1246765118),
             ),
-            items.captured.drop(98).map { Triple(it.tx, it.dev, it.fid) },
+            items.captured.drop(94).map { Triple(it.tx, it.dev, it.fid) },
         )
     }
 
@@ -109,7 +109,7 @@ class NativeParsReaderHybridTest {
             auto, settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE), kindMonitor(VehicleKind.UNKNOWN),
         ).fetch()
 
-        assertEquals(98, items.captured.size)
+        assertEquals(94, items.captured.size)
     }
 
     @Test

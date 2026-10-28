@@ -3,6 +3,7 @@ package com.bydmate.app.ui.tech
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.autoservice.Pm25Reader
 import com.bydmate.app.data.carstatus.CarStatusReader
 import com.bydmate.app.data.dtc.DtcScanRepository
 import com.bydmate.app.data.dtc.DtcScanState
@@ -242,6 +243,7 @@ class TechPanelViewModel @Inject constructor(
     private val vehicleKindMonitor: VehicleKindMonitor,
     private val carStatusReader: CarStatusReader,
     private val dtcScanRepository: DtcScanRepository,
+    private val pm25Reader: Pm25Reader,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TechPanelUiState())

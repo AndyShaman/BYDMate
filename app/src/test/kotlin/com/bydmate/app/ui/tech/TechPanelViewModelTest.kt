@@ -1,5 +1,7 @@
 package com.bydmate.app.ui.tech
 
+import com.bydmate.app.data.autoservice.Pm25
+import com.bydmate.app.data.autoservice.Pm25Reader
 import com.bydmate.app.data.carstatus.CarServiceStatus
 import com.bydmate.app.data.carstatus.CarStatusReader
 import com.bydmate.app.data.dtc.DtcScanPhase
@@ -25,10 +27,13 @@ import androidx.lifecycle.ViewModelStore
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.coVerify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -134,6 +139,11 @@ class TechPanelViewModelTest {
         every { it.changes() } returns emptyFlow()
     }
 
+    /** The on-demand PM2.5 read: [answer] is what every call returns (null = no sensor). */
+    private fun pm25Reader(answer: Pm25?): Pm25Reader = mockk<Pm25Reader>().also {
+        coEvery { it.read() } returns answer
+    }
+
     @Suppress("LongParameterList") // test factory: every override is optional
     private fun buildViewModel(
         battery: BatteryState? = null,
@@ -142,6 +152,7 @@ class TechPanelViewModelTest {
         capacityKwh: Double = 72.9,
         kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
         carStatus: CarServiceStatus? = null,
+        pm25: Pm25Reader = pm25Reader(null),
     ): TechPanelViewModel {
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } returns (
@@ -155,7 +166,7 @@ class TechPanelViewModelTest {
             )
         every { charges.getAllCharges() } returns chargeLog
         val settings = settings().also { coEvery { it.getBatteryCapacity() } returns capacityKwh }
-        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind), carStatusReader(carStatus), dtcRepo()))
+        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind), carStatusReader(carStatus), dtcRepo(), pm25))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -316,7 +327,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null), dtcRepo()))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null), dtcRepo(), pm25Reader(null)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
@@ -608,10 +619,40 @@ class TechPanelViewModelTest {
 
     @Test
     fun `car-state card shows from pm25 alone`() = runTest {
-        val state = openWith(noData.copy(pm25In = 8, pm25LevelIn = 1))
-        assertEquals(8, state.pm25In)
-        assertEquals(1, state.pm25LevelIn)
+        liveDataFlow().value = noData
+        val vm = buildViewModel(pm25 = pm25Reader(Pm25(8, null, 1, null)))
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        val state = vm.uiState.value
+        assertEquals(8, state.pm25InShown)
         assertTrue(state.isVisible(TechCard.CAR_STATE))
+    }
+
+    @Test
+    fun `no sensor - the reader is asked once and never again while the screen stays open`() = runTest {
+        val reader = pm25Reader(null)
+        val vm = buildViewModel(pm25 = reader)
+        testDispatcher.scheduler.advanceTimeBy(5 * 60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 1) { reader.read() }
+        assertNull(vm.uiState.value.pm25InShown)
+        assertNull(vm.uiState.value.pm25OutShown)
+    }
+
+    @Test
+    fun `sensor present - shown at once and refreshed once a minute`() = runTest {
+        val reader = pm25Reader(Pm25(8, null, 2, null))
+        val vm = buildViewModel(pm25 = reader)
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(8, vm.uiState.value.pm25InShown)
+        coVerify(exactly = 1) { reader.read() }
+        testDispatcher.scheduler.advanceTimeBy(60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 2) { reader.read() }
+        testDispatcher.scheduler.advanceTimeBy(60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 3) { reader.read() }
     }
 
     @Test

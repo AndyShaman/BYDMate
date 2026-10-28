@@ -215,6 +215,6 @@ class VehicleKindDetectorTest {
     }
 
     private companion object {
-        const val EV_POLL_BATCH_SIZE = 98
+        const val EV_POLL_BATCH_SIZE = 94
     }
 }
