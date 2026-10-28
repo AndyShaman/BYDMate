@@ -1091,6 +1091,7 @@
     <string name="auto_act_hud_on">HUD: on</string>
     <string name="auto_act_hud_off">HUD: off</string>
     <string name="hud_not_equipped">This car has no HUD</string>
+    <string name="rear_seat_heat_not_equipped">This car has no rear seat heating</string>
     <string name="auto_act_battery_preheat_on">Battery warm-up: on</string>
     <string name="auto_act_battery_preheat_off">Battery warm-up: off</string>
     <string name="battery_preheat_not_equipped">This car has no battery warm-up</string>
@@ -1130,6 +1131,8 @@
     <string name="auto_level_seat_heat_passenger">Passenger seat heating</string>
     <string name="auto_level_seat_vent_driver">Driver seat ventilation</string>
     <string name="auto_level_seat_vent_passenger">Passenger seat ventilation</string>
+    <string name="auto_level_seat_heat_rear_left">Rear left seat heating</string>
+    <string name="auto_level_seat_heat_rear_right">Rear right seat heating</string>
     <string name="auto_level_window_driver">Driver window</string>
     <string name="auto_level_window_passenger">Passenger window</string>
     <string name="auto_level_window_rear_left">Rear left window</string>
@@ -1142,6 +1145,8 @@
     <string name="auto_level_tile_seat_heat_passenger">Passenger seat heating off, 1–5</string>
     <string name="auto_level_tile_seat_vent_driver">Driver seat ventilation off, 1–5</string>
     <string name="auto_level_tile_seat_vent_passenger">Passenger seat ventilation off, 1–5</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Rear left seat heating off, 1–2</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Rear right seat heating off, 1–2</string>
     <string name="auto_level_tile_window_driver">Driver window: position 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Passenger window: position 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Rear left window: position 0–100 %</string>

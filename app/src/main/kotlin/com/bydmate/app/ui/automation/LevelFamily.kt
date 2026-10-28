@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.bydmate.app.R
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.vehicle.RearSeat
 import com.bydmate.app.util.appLocalizedContext
 import kotlin.math.roundToInt
 
@@ -27,7 +28,8 @@ data class LevelValue(val family: LevelFamily, val value: Int)
  * A graded car action edited as one row (minus, slider, plus, value) instead of a tile per value.
  * The command strings are the ones the fixed tiles stored, so old rules open as a row unchanged.
  * [pickerBefore] is the catalog entry (command or toggle target) the picker tile goes before;
- * null puts it at the end of its category.
+ * null puts it at the end of its category. [rearSeat] marks a rear seat family: the catalog offers
+ * it only on a car that reports that seat's heat.
  */
 enum class LevelFamily @Suppress("LongParameterList") constructor( // one catalog row per family
     private val prefix: String,
@@ -41,6 +43,7 @@ enum class LevelFamily @Suppress("LongParameterList") constructor( // one catalo
     @StringRes val categoryRes: Int,
     val offAtZero: Boolean = false,
     val pickerBefore: String? = null,
+    val rearSeat: RearSeat? = null,
 ) {
     TEMPERATURE("设置温度", "", 16..33, 1, 22, CELSIUS, R.string.auto_level_temp, R.string.auto_level_tile_temp, R.string.auto_cat_climate, pickerBefore = "吹面"),
     FAN("风量", "", 1..7, 1, 3, "", R.string.auto_level_fan, R.string.auto_level_tile_fan, R.string.auto_cat_climate, pickerBefore = "吹面"),
@@ -48,6 +51,8 @@ enum class LevelFamily @Suppress("LongParameterList") constructor( // one catalo
     SEAT_HEAT_PASSENGER("副驾座椅加热", "档", 0..5, 1, 3, "", R.string.auto_level_seat_heat_passenger, R.string.auto_level_tile_seat_heat_passenger, R.string.auto_cat_seats, true, ActionDispatcher.TOGGLE_SEAT_HEAT_PASSENGER),
     SEAT_VENT_DRIVER("主驾座椅通风", "档", 0..5, 1, 3, "", R.string.auto_level_seat_vent_driver, R.string.auto_level_tile_seat_vent_driver, R.string.auto_cat_seats, true, ActionDispatcher.TOGGLE_SEAT_VENT_DRIVER),
     SEAT_VENT_PASSENGER("副驾座椅通风", "档", 0..5, 1, 3, "", R.string.auto_level_seat_vent_passenger, R.string.auto_level_tile_seat_vent_passenger, R.string.auto_cat_seats, true, ActionDispatcher.TOGGLE_SEAT_VENT_PASSENGER),
+    SEAT_HEAT_REAR_LEFT("后左座椅加热", "档", 0..2, 1, 1, "", R.string.auto_level_seat_heat_rear_left, R.string.auto_level_tile_seat_heat_rear_left, R.string.auto_cat_seats, true, rearSeat = RearSeat.LEFT),
+    SEAT_HEAT_REAR_RIGHT("后右座椅加热", "档", 0..2, 1, 1, "", R.string.auto_level_seat_heat_rear_right, R.string.auto_level_tile_seat_heat_rear_right, R.string.auto_cat_seats, true, rearSeat = RearSeat.RIGHT),
     WINDOW_DRIVER("主驾打开", "", 0..100, 10, 50, PERCENT, R.string.auto_level_window_driver, R.string.auto_level_tile_window_driver, R.string.auto_cat_windows, pickerBefore = "主驾半开"),
     WINDOW_PASSENGER("副驾打开", "", 0..100, 10, 50, PERCENT, R.string.auto_level_window_passenger, R.string.auto_level_tile_window_passenger, R.string.auto_cat_windows, pickerBefore = "主驾半开"),
     WINDOW_REAR_LEFT("后左打开", "", 0..100, 10, 50, PERCENT, R.string.auto_level_window_rear_left, R.string.auto_level_tile_window_rear_left, R.string.auto_cat_windows, pickerBefore = "主驾半开"),
@@ -75,7 +80,8 @@ enum class LevelFamily @Suppress("LongParameterList") constructor( // one catalo
         get() = when (this) {
             TEMPERATURE -> Icons.Outlined.Thermostat
             FAN -> Icons.Outlined.Air
-            SEAT_HEAT_DRIVER, SEAT_HEAT_PASSENGER, SEAT_VENT_DRIVER, SEAT_VENT_PASSENGER -> Icons.Outlined.AirlineSeatReclineNormal
+            SEAT_HEAT_DRIVER, SEAT_HEAT_PASSENGER, SEAT_VENT_DRIVER, SEAT_VENT_PASSENGER,
+            SEAT_HEAT_REAR_LEFT, SEAT_HEAT_REAR_RIGHT -> Icons.Outlined.AirlineSeatReclineNormal
             WINDOW_DRIVER, WINDOW_PASSENGER, WINDOW_REAR_LEFT, WINDOW_REAR_RIGHT -> Icons.Outlined.Window
             FRIDGE_COOL -> Icons.Outlined.AcUnit
             FRIDGE_HEAT -> Icons.Outlined.Kitchen

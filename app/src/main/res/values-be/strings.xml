@@ -1243,6 +1243,7 @@
     <string name="auto_act_hud_on">HUD: уключыць</string>
     <string name="auto_act_hud_off">HUD: выключыць</string>
     <string name="hud_not_equipped">На гэтай машыне няма HUD</string>
+    <string name="rear_seat_heat_not_equipped">На гэтай машыне няма падагрэву задніх сядзенняў</string>
     <string name="auto_act_battery_preheat_on">Падагрэў батарэі: уключыць</string>
     <string name="auto_act_battery_preheat_off">Падагрэў батарэі: выключыць</string>
     <string name="battery_preheat_not_equipped">На гэтай машыне няма падагрэву батарэі</string>
@@ -1282,6 +1283,8 @@
     <string name="auto_level_seat_heat_passenger">Падагрэў сядзення пасажыра</string>
     <string name="auto_level_seat_vent_driver">Вентыляцыя сядзення кіроўцы</string>
     <string name="auto_level_seat_vent_passenger">Вентыляцыя сядзення пасажыра</string>
+    <string name="auto_level_seat_heat_rear_left">Падагрэў задняга левага сядзення</string>
+    <string name="auto_level_seat_heat_rear_right">Падагрэў задняга правага сядзення</string>
     <string name="auto_level_window_driver">Акно кіроўцы</string>
     <string name="auto_level_window_passenger">Акно пасажыра</string>
     <string name="auto_level_window_rear_left">Задняе левае акно</string>
@@ -1294,6 +1297,8 @@
     <string name="auto_level_tile_seat_heat_passenger">Падагрэў сядзення пасажыра выкл, 1–5</string>
     <string name="auto_level_tile_seat_vent_driver">Вентыляцыя сядзення кіроўцы выкл, 1–5</string>
     <string name="auto_level_tile_seat_vent_passenger">Вентыляцыя сядзення пасажыра выкл, 1–5</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Падагрэў задняга левага сядзення выкл, 1–2</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Падагрэў задняга правага сядзення выкл, 1–2</string>
     <string name="auto_level_tile_window_driver">Акно кіроўцы: становішча 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Акно пасажыра: становішча 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Задняе левае акно: становішча 0–100 %</string>

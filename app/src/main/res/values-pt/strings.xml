@@ -1084,6 +1084,7 @@
     <string name="auto_act_hud_on">HUD: ligar</string>
     <string name="auto_act_hud_off">HUD: desligar</string>
     <string name="hud_not_equipped">Este carro não tem HUD</string>
+    <string name="rear_seat_heat_not_equipped">Este carro não tem aquecimento dos bancos traseiros</string>
     <string name="auto_act_battery_preheat_on">Aquecimento da bateria: ligar</string>
     <string name="auto_act_battery_preheat_off">Aquecimento da bateria: desligar</string>
     <string name="battery_preheat_not_equipped">Este carro não tem aquecimento da bateria</string>
@@ -1123,6 +1124,8 @@
     <string name="auto_level_seat_heat_passenger">Aquecimento do banco do passageiro</string>
     <string name="auto_level_seat_vent_driver">Ventilação do banco do motorista</string>
     <string name="auto_level_seat_vent_passenger">Ventilação do banco do passageiro</string>
+    <string name="auto_level_seat_heat_rear_left">Aquecimento do banco traseiro esquerdo</string>
+    <string name="auto_level_seat_heat_rear_right">Aquecimento do banco traseiro direito</string>
     <string name="auto_level_window_driver">Vidro do motorista</string>
     <string name="auto_level_window_passenger">Vidro do passageiro</string>
     <string name="auto_level_window_rear_left">Vidro traseiro esquerdo</string>
@@ -1135,6 +1138,8 @@
     <string name="auto_level_tile_seat_heat_passenger">Aquecimento do banco do passageiro desl., 1–5</string>
     <string name="auto_level_tile_seat_vent_driver">Ventilação do banco do motorista desl., 1–5</string>
     <string name="auto_level_tile_seat_vent_passenger">Ventilação do banco do passageiro desl., 1–5</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Aquecimento do banco traseiro esquerdo desl., 1–2</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Aquecimento do banco traseiro direito desl., 1–2</string>
     <string name="auto_level_tile_window_driver">Vidro do motorista: posição 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Vidro do passageiro: posição 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Vidro traseiro esquerdo: posição 0–100 %</string>

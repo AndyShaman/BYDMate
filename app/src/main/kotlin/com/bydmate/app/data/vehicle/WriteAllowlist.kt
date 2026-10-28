@@ -400,6 +400,11 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_vent_fallback", 1001, 1125122072, null, 1, 6, "seats", false, "competitor-v80"),
+            // Rear seat heat (#327) — SET_REAR_*_SEAT_HEATING_STATE_SET, 1=off, 2=lvl1, 3=lvl2.
+            // No readbackFid: the state fid (dev=1023) differs per platform, so
+            // [RearSeatHeatChannel] resolves it from the car's catalog and reads it back itself.
+            WriteEntry("rear_left_seat_heat",  1001, 1125122091, null, 1, 3, "seats", false, "byd-sdk setSeatHeatingState seat 3 (#327)"),
+            WriteEntry("rear_right_seat_heat", 1001, 1125122099, null, 1, 3, "seats", false, "byd-sdk setSeatHeatingState seat 4 (#327)"),
             // Sunshade half-open (3) and stop (4) on the live-validated open/close fid (#362).
             // BYDAutoBodyworkDevice.voiceCtlSunshadePanel accepts 1..4 with the same voice
             // constants as the sunroof fid, where 3/4 are live-validated. Stock voice sends only

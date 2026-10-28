@@ -519,7 +519,7 @@ class LogRecorder internal constructor(
             // rule confirm overlay, the autostart worker, the crash log and the listener grant.
             "NavA11yExtractor:*", "HudAmapBroadcaster:*", "HudAmapClusterLoop:*", "ClusterFrameUi7:*", "ClusterProbe:*",
             "Split37Engine:*", "NativeSplitLauncher:*", "HudTextSanitizer:*", "KnobPlayPause:*",
-            "SteeringHeatChannel:*", "HudSwitchChannel:*", "BatteryPreheatChannel:*", "NetworkAvailMon:*", "ConfirmOverlay:*", "ServiceStartWorker:*",
+            "SteeringHeatChannel:*", "HudSwitchChannel:*", "RearSeatHeatChannel:*", "BatteryPreheatChannel:*", "NetworkAvailMon:*", "ConfirmOverlay:*", "ServiceStartWorker:*",
             "CrashLog:*", "MediaSessionGrant:*",
             // Stock climate app seat writes (#327/#341): the BYD framework logs the seat and
             // value it sets, the car's confirmation and AC device events. AbsBYDAutoDevice stays

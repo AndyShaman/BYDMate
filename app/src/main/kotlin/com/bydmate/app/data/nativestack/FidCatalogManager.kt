@@ -213,7 +213,7 @@ class FidCatalogManager @Inject constructor(
 
     /**
      * Persists the symbols this app can use (READ entries, the WRITE symbols the dump prints,
-     * the ADAS states the push channel confirms and the cluster music card's write fids) and the whole device table. Keeping only those turns a ~700 KB dump into a few
+     * the ADAS states the push channel confirms, the cluster music card's write fids and the rear seat heat symbols) and the whole device table. Keeping only those turns a ~700 KB dump into a few
      * KB; the original symbol count travels in the header so the log stays honest about what
      * the firmware reported.
      */
@@ -222,7 +222,7 @@ class FidCatalogManager @Inject constructor(
             val adas = PushStateTrace.ADAS_STATES.map { it.symbol }
             val wanted = (
                 FidMap.all.mapNotNull { it.symbol } + WriteFidSymbols.byFid.values + adas +
-                    com.bydmate.app.media.ClusterMusicFids.SYMBOLS
+                    com.bydmate.app.media.ClusterMusicFids.SYMBOLS + com.bydmate.app.data.vehicle.RearSeatHeat.SYMBOLS
             ).toSortedSet()
             val body = buildString {
                 append(FidCatalogCache.header(fingerprint, BuildConfig.VERSION_CODE, catalog.totalSymbols))

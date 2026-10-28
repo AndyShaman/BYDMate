@@ -45,6 +45,8 @@ class LevelFamilyTest {
             LevelFamily.SEAT_HEAT_PASSENGER to listOf(0, 5, 1, 3),
             LevelFamily.SEAT_VENT_DRIVER to listOf(0, 5, 1, 3),
             LevelFamily.SEAT_VENT_PASSENGER to listOf(0, 5, 1, 3),
+            LevelFamily.SEAT_HEAT_REAR_LEFT to listOf(0, 2, 1, 1),
+            LevelFamily.SEAT_HEAT_REAR_RIGHT to listOf(0, 2, 1, 1),
             LevelFamily.WINDOW_DRIVER to listOf(0, 100, 10, 50),
             LevelFamily.WINDOW_PASSENGER to listOf(0, 100, 10, 50),
             LevelFamily.WINDOW_REAR_LEFT to listOf(0, 100, 10, 50),

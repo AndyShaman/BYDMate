@@ -621,6 +621,7 @@ object AppModule {
 
     @Provides
     @Singleton
+    @Suppress("LongParameterList") // Hilt-injected dependencies
     fun provideVehicleApi(
         parsReader: com.bydmate.app.data.nativestack.ParsReader,
         autoservice: com.bydmate.app.data.autoservice.AutoserviceClient,
@@ -630,10 +631,11 @@ object AppModule {
         seatChannelStore: com.bydmate.app.data.vehicle.SeatChannelStore,
         windowChannelStore: com.bydmate.app.data.vehicle.WindowChannelStore,
         seatCommandJournal: com.bydmate.app.data.vehicle.SeatCommandJournal,
+        fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     ): com.bydmate.app.data.vehicle.VehicleApi =
         com.bydmate.app.data.vehicle.VehicleApiImpl(
             parsReader, autoservice, helper, allowlist, writeLogDao, seatChannelStore, windowChannelStore,
-            seatCommandJournal,
+            seatCommandJournal, rearCatalog = { fidCatalogManager.catalog },
         )
 
     @Provides

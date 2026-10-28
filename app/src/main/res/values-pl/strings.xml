@@ -1243,6 +1243,7 @@
     <string name="auto_act_hud_on">HUD: włącz</string>
     <string name="auto_act_hud_off">HUD: wyłącz</string>
     <string name="hud_not_equipped">Ten samochód nie ma HUD</string>
+    <string name="rear_seat_heat_not_equipped">Ten samochód nie ma podgrzewania tylnych foteli</string>
     <string name="auto_act_battery_preheat_on">Podgrzewanie baterii: włącz</string>
     <string name="auto_act_battery_preheat_off">Podgrzewanie baterii: wyłącz</string>
     <string name="battery_preheat_not_equipped">Ten samochód nie ma podgrzewania baterii</string>
@@ -1282,6 +1283,8 @@
     <string name="auto_level_seat_heat_passenger">Podgrzewanie fotela pasażera</string>
     <string name="auto_level_seat_vent_driver">Wentylacja fotela kierowcy</string>
     <string name="auto_level_seat_vent_passenger">Wentylacja fotela pasażera</string>
+    <string name="auto_level_seat_heat_rear_left">Podgrzewanie tylnego lewego fotela</string>
+    <string name="auto_level_seat_heat_rear_right">Podgrzewanie tylnego prawego fotela</string>
     <string name="auto_level_window_driver">Szyba kierowcy</string>
     <string name="auto_level_window_passenger">Szyba pasażera</string>
     <string name="auto_level_window_rear_left">Tylna lewa szyba</string>
@@ -1294,6 +1297,8 @@
     <string name="auto_level_tile_seat_heat_passenger">Podgrzewanie fotela pasażera wył., 1–5</string>
     <string name="auto_level_tile_seat_vent_driver">Wentylacja fotela kierowcy wył., 1–5</string>
     <string name="auto_level_tile_seat_vent_passenger">Wentylacja fotela pasażera wył., 1–5</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Podgrzewanie tylnego lewego fotela wył., 1–2</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Podgrzewanie tylnego prawego fotela wył., 1–2</string>
     <string name="auto_level_tile_window_driver">Szyba kierowcy: położenie 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Szyba pasażera: położenie 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Tylna lewa szyba: położenie 0–100 %</string>

@@ -1168,6 +1168,7 @@
     <string name="auto_act_hud_on">打开抬头显示</string>
     <string name="auto_act_hud_off">关闭抬头显示</string>
     <string name="hud_not_equipped">这辆车没有抬头显示</string>
+    <string name="rear_seat_heat_not_equipped">这辆车没有后排座椅加热</string>
     <string name="auto_act_battery_preheat_on">打开电池预热</string>
     <string name="auto_act_battery_preheat_off">关闭电池预热</string>
     <string name="battery_preheat_not_equipped">这辆车没有电池预热</string>
@@ -1207,6 +1208,8 @@
     <string name="auto_level_seat_heat_passenger">副驾座椅加热</string>
     <string name="auto_level_seat_vent_driver">主驾座椅通风</string>
     <string name="auto_level_seat_vent_passenger">副驾座椅通风</string>
+    <string name="auto_level_seat_heat_rear_left">后左座椅加热</string>
+    <string name="auto_level_seat_heat_rear_right">后右座椅加热</string>
     <string name="auto_level_window_driver">主驾车窗</string>
     <string name="auto_level_window_passenger">副驾车窗</string>
     <string name="auto_level_window_rear_left">后左车窗</string>
@@ -1219,6 +1222,8 @@
     <string name="auto_level_tile_seat_heat_passenger">副驾座椅加热 关、1–5</string>
     <string name="auto_level_tile_seat_vent_driver">主驾座椅通风 关、1–5</string>
     <string name="auto_level_tile_seat_vent_passenger">副驾座椅通风 关、1–5</string>
+    <string name="auto_level_tile_seat_heat_rear_left">后左座椅加热 关、1–2</string>
+    <string name="auto_level_tile_seat_heat_rear_right">后右座椅加热 关、1–2</string>
     <string name="auto_level_tile_window_driver">主驾车窗：开度 0–100 %</string>
     <string name="auto_level_tile_window_passenger">副驾车窗：开度 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">后左车窗：开度 0–100 %</string>

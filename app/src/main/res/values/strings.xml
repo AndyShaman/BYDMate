@@ -1247,6 +1247,7 @@
     <string name="auto_act_hud_on">HUD: включить</string>
     <string name="auto_act_hud_off">HUD: выключить</string>
     <string name="hud_not_equipped">На этой машине нет HUD</string>
+    <string name="rear_seat_heat_not_equipped">На этой машине нет подогрева задних сидений</string>
     <string name="auto_act_battery_preheat_on">Подогрев батареи: включить</string>
     <string name="auto_act_battery_preheat_off">Подогрев батареи: выключить</string>
     <string name="battery_preheat_not_equipped">На этой машине нет подогрева батареи</string>
@@ -1286,6 +1287,8 @@
     <string name="auto_level_seat_heat_passenger">Подогрев сиденья пассажира</string>
     <string name="auto_level_seat_vent_driver">Вентиляция сиденья водителя</string>
     <string name="auto_level_seat_vent_passenger">Вентиляция сиденья пассажира</string>
+    <string name="auto_level_seat_heat_rear_left">Подогрев заднего левого сиденья</string>
+    <string name="auto_level_seat_heat_rear_right">Подогрев заднего правого сиденья</string>
     <string name="auto_level_window_driver">Окно водителя</string>
     <string name="auto_level_window_passenger">Окно пассажира</string>
     <string name="auto_level_window_rear_left">Заднее левое окно</string>
@@ -1298,6 +1301,8 @@
     <string name="auto_level_tile_seat_heat_passenger">Подогрев сиденья пассажира выкл, 1–5</string>
     <string name="auto_level_tile_seat_vent_driver">Вентиляция сиденья водителя выкл, 1–5</string>
     <string name="auto_level_tile_seat_vent_passenger">Вентиляция сиденья пассажира выкл, 1–5</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Подогрев заднего левого сиденья выкл, 1–2</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Подогрев заднего правого сиденья выкл, 1–2</string>
     <string name="auto_level_tile_window_driver">Окно водителя: положение 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Окно пассажира: положение 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Заднее левое окно: положение 0–100 %</string>

@@ -91,7 +91,7 @@ class RearSeatHeatChannelTest {
     }
 
     @Test fun `a late state is still OK`() = runTest {
-        val out = channel(states(1, 1, 1, 2)).actuate(RearSeat.LEFT, 2)
+        val out = channel(states(1, 1, 1, 2)).actuate(RearSeat.LEFT, 1)
         assertEquals(RearSeatHeatChannel.Result.OK, out.result)
     }
 

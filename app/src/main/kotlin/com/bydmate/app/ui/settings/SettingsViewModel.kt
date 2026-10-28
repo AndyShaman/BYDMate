@@ -2502,6 +2502,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             appendLine("--- steering heat ---")
             SteeringHeatDiagnostics.format(helperDiag.steeringHeat).forEach { appendLine(it) }
 
+            // Rear seat heat (#327): the gate the editor's tiles follow, read only.
+            appendLine("--- rear seat heat ---")
+            try {
+                val catalog = fidCatalogManager.catalog
+                val items = RearSeatHeatDiagnostics.batchItems(RearSeatHeatDiagnostics.addresses(catalog))
+                val readings = if (items.isEmpty()) emptyList() else helperClient.readBatch(items)
+                RearSeatHeatDiagnostics.format(catalog, readings).forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
             appendLine("--- fid resolve ---")
             try {
                 com.bydmate.app.data.nativestack.FidResolveDiagnostics.format(
