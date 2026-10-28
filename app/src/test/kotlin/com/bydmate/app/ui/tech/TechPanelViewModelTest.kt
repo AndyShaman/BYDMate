@@ -1,5 +1,7 @@
 package com.bydmate.app.ui.tech
 
+import com.bydmate.app.data.carstatus.CarServiceStatus
+import com.bydmate.app.data.carstatus.CarStatusReader
 import com.bydmate.app.data.nativestack.HybridTechFixture
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
@@ -23,9 +25,11 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -102,12 +106,19 @@ class TechPanelViewModelTest {
         coEvery { r.setTechOrderHintSeen() } answers { hintFlagWrites++; hintSeen = true }
     }
 
+    /** The stock provider as the screen sees it: a snapshot, or null when the car has none. */
+    private fun carStatusReader(snapshot: CarServiceStatus?): CarStatusReader = mockk<CarStatusReader>().also {
+        coEvery { it.read() } returns snapshot
+        every { it.changes() } returns emptyFlow()
+    }
+
     private fun buildViewModel(
         battery: BatteryState? = null,
         avg: AvgSoc = AvgSoc(null, null),
         lifetimeCharged: LifetimeChargingStats? = null,
         capacityKwh: Double = 72.9,
         kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
+        carStatus: CarServiceStatus? = null,
     ): TechPanelViewModel {
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } returns (
@@ -121,7 +132,7 @@ class TechPanelViewModelTest {
             )
         every { charges.getAllCharges() } returns chargeLog
         val settings = settings().also { coEvery { it.getBatteryCapacity() } returns capacityKwh }
-        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind)))
+        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind), carStatusReader(carStatus)))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -282,7 +293,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor()))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
@@ -415,8 +426,8 @@ class TechPanelViewModelTest {
 
         assertEquals(
             listOf(
-                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
-                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+                TechCard.CAR_STATE, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.DIAGNOSTICS,
             ),
             vm.uiState.value.cardOrder,
         )
@@ -433,8 +444,8 @@ class TechPanelViewModelTest {
 
         assertEquals(
             listOf(
-                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
-                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+                TechCard.CAR_STATE, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.DIAGNOSTICS,
             ),
             vm.uiState.value.cardOrder,
         )
@@ -445,16 +456,16 @@ class TechPanelViewModelTest {
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        vm.moveCard(TechCard.TYRES, TechCard.BATTERY_NOW)
+        vm.moveCard(TechCard.CAR_STATE, TechCard.BATTERY_NOW)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(TechCard.TYRES, vm.uiState.value.cardOrder.first())
-        assertEquals("tyres,battery_now,limits,history,motors,climate", savedOrder)
+        assertEquals(TechCard.CAR_STATE, vm.uiState.value.cardOrder.first())
+        assertEquals("climate,battery_now,limits,history,motors,diagnostics", savedOrder)
         assertTrue(hintSeen)
         assertFalse(vm.uiState.value.showOrderHint)
 
         // The flag is already set: a second drag must not write it again.
-        vm.moveCard(TechCard.CLIMATE, TechCard.TYRES)
+        vm.moveCard(TechCard.DIAGNOSTICS, TechCard.CAR_STATE)
         testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(1, hintFlagWrites)
     }
@@ -464,8 +475,8 @@ class TechPanelViewModelTest {
     fun `only the cards with data are laid out`() {
         val state = TechPanelUiState(
             cardOrder = listOf(
-                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
-                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+                TechCard.CAR_STATE, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.DIAGNOSTICS,
             ),
             motorRpmFront = 1200,
             soc = 43,
@@ -481,9 +492,9 @@ class TechPanelViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(TechCard.FUEL, vm.uiState.value.cardOrder.last())
-        vm.moveCard(TechCard.FUEL, TechCard.TYRES)
+        vm.moveCard(TechCard.FUEL, TechCard.CAR_STATE)
         testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals("fuel,tyres,motors,battery_now,limits,history,climate", savedOrder)
+        assertEquals("fuel,climate,motors,battery_now,limits,history,diagnostics", savedOrder)
     }
 
     /** DM-i (#184): the fuel card needs a confirmed hybrid; an EV never lays it out. */
@@ -547,5 +558,80 @@ class TechPanelViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(15 * dayMs, vm.uiState.value.lastFullChargeTs)
+    }
+
+    // --- «Состояние машины» and «Диагностика» ------------------------------------
+
+    private val noData get() = diParsData()
+
+    private suspend fun TestScope.openWith(data: DiParsData?, carStatus: CarServiceStatus? = null): TechPanelUiState {
+        liveDataFlow().value = data
+        val vm = buildViewModel(carStatus = carStatus)
+        testDispatcher.scheduler.advanceUntilIdle()
+        return vm.uiState.value
+    }
+
+    @Test
+    fun `car-state card shows from tyres alone`() = runTest {
+        val state = openWith(noData.copy(tirePressFL = 245))
+        assertTrue(state.isVisible(TechCard.CAR_STATE))
+    }
+
+    @Test
+    fun `car-state card shows from climate alone`() = runTest {
+        val state = openWith(noData.copy(insideTemp = 22))
+        assertTrue(state.isVisible(TechCard.CAR_STATE))
+    }
+
+    @Test
+    fun `car-state card shows from pm25 alone`() = runTest {
+        val state = openWith(noData.copy(pm25In = 8, pm25LevelIn = 1))
+        assertEquals(8, state.pm25In)
+        assertEquals(1, state.pm25LevelIn)
+        assertTrue(state.isVisible(TechCard.CAR_STATE))
+    }
+
+    @Test
+    fun `pm25 value is shown only with a valid level`() {
+        val state = TechPanelUiState(pm25In = 8, pm25LevelIn = 1, pm25Out = 0, pm25LevelOut = 0)
+        assertEquals(8, state.pm25InShown)
+        assertNull(state.pm25OutShown)
+        assertNull(TechPanelUiState(pm25In = 8).pm25InShown)
+        assertEquals(40, TechPanelUiState(pm25Out = 40, pm25LevelOut = 6).pm25OutShown)
+    }
+
+    @Test
+    fun `pm25 with level zero hides the row`() {
+        assertNull(TechPanelUiState(pm25In = 0, pm25LevelIn = 0).pm25InShown)
+        assertNull(TechPanelUiState(pm25In = 12, pm25LevelIn = 0).pm25InShown)
+    }
+
+    @Test
+    fun `diagnostics card shows with provider rows and zero warnings`() = runTest {
+        val state = openWith(null, CarServiceStatus(faults = 0, daysLeft = null, kmLeft = null))
+        assertEquals(0, state.faultCount)
+        assertTrue(state.isVisible(TechCard.DIAGNOSTICS))
+    }
+
+    @Test
+    fun `diagnostics card carries the service countdown`() = runTest {
+        val state = openWith(null, CarServiceStatus(faults = 2, daysLeft = 278, kmLeft = 27609))
+        assertEquals(2, state.faultCount)
+        assertEquals(278, state.serviceDaysLeft)
+        assertEquals(27609, state.serviceKmLeft)
+    }
+
+    @Test
+    fun `diagnostics card is hidden when the provider is absent`() = runTest {
+        val state = openWith(null, null)
+        assertNull(state.faultCount)
+        assertFalse(state.isVisible(TechCard.DIAGNOSTICS))
+    }
+
+    @Test
+    fun `the service row needs at least one half`() {
+        assertFalse(TechPanelUiState(serviceDaysLeft = null, serviceKmLeft = null).hasServiceRow)
+        assertTrue(TechPanelUiState(serviceDaysLeft = 90).hasServiceRow)
+        assertTrue(TechPanelUiState(serviceKmLeft = 3500).hasServiceRow)
     }
 }

@@ -2218,4 +2218,8 @@
     <string name="tech_card_fuel">Топливо</string>
     <string name="settings_fuel_price_label">Цена литра</string>
     <string name="settings_fuel_price_hint">за литр, на поездки с этой даты</string>
+    <string name="tech_card_car_state">Состояние машины</string>
+    <string name="tech_card_diagnostics">Диагностика</string>
+    <string name="tech_dtc_scan">Сканировать</string>
+    <string name="tech_hint_diagnostics">Предупреждения приборки: то, что машина сама показывает на приборке. Строки «До ТО» нет, если напоминание о ТО в машине выключено. Включить: настройки машины → VehicleHealth (车辆健康) → Maintain (智能保养) → Maintenance Interval (保养时间) или Service Mileage (保养里程).</string>
 </resources>

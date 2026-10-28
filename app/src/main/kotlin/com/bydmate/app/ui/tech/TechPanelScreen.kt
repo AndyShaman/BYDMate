@@ -264,9 +264,9 @@ private fun TechCardContent(
         TechCard.LIMITS -> LimitsAndCellsCard(state, onHint, modifier)
         TechCard.HISTORY -> HistoryCard(state, onHint, modifier)
         TechCard.MOTORS -> MotorsCard(state, onHint, modifier)
-        TechCard.CLIMATE -> ClimateCard(state, onHint, modifier)
-        TechCard.TYRES -> TyresCard(state, onHint, modifier)
+        TechCard.CAR_STATE -> if (state.showClimate) ClimateCard(state, onHint, modifier) else TyresCard(state, onHint, modifier)
         TechCard.FUEL -> FuelCard(state, modifier)
+        TechCard.DIAGNOSTICS -> Unit
     }
 }
 

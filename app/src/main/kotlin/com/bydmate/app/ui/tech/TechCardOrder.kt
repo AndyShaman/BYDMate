@@ -11,10 +11,11 @@ enum class TechCard(val id: String) {
     LIMITS("limits"),
     HISTORY("history"),
     MOTORS("motors"),
-    CLIMATE("climate"),
-    TYRES("tyres"),
+    /** «Состояние машины»: climate on top, tyres below. Keeps the shipped climate id. */
+    CAR_STATE("climate"),
     /** DM-i hybrid only (#184): in the order only on a hybrid, see [TechCardOrder.forKind]. */
     FUEL("fuel"),
+    DIAGNOSTICS("diagnostics"),
 }
 
 /**

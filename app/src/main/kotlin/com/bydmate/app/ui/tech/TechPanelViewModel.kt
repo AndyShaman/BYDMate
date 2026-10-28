@@ -3,6 +3,7 @@ package com.bydmate.app.ui.tech
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.carstatus.CarStatusReader
 import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.ChargeRepository
@@ -101,7 +102,26 @@ data class TechPanelUiState(
     val mileageHevKm: Int? = null,
     val mileageEvKm: Int? = null,
     val fuelTotalL: Double? = null,
+    // Состояние машины: PM2.5 (value, then the sensor's own 0..6 level)
+    val pm25In: Int? = null,
+    val pm25Out: Int? = null,
+    val pm25LevelIn: Int? = null,
+    val pm25LevelOut: Int? = null,
+    // Диагностика: stock car status provider
+    val faultCount: Int? = null,
+    val serviceDaysLeft: Int? = null,
+    val serviceKmLeft: Int? = null,
 ) {
+    /** PM2.5 value to draw: only with a valid level 1..6, null otherwise. */
+    val pm25InShown: Int?
+        get() = null
+    val pm25OutShown: Int?
+        get() = null
+
+    /** True when the «До ТО» row has at least one half to show. */
+    val hasServiceRow: Boolean
+        get() = false
+
     val isHybrid: Boolean
         get() = vehicleKind == VehicleKind.HYBRID
 
@@ -160,9 +180,9 @@ data class TechPanelUiState(
         TechCard.LIMITS -> showLimitsAndCells
         TechCard.HISTORY -> showHistory
         TechCard.MOTORS -> showMotors
-        TechCard.CLIMATE -> showClimate
-        TechCard.TYRES -> showTyres
+        TechCard.CAR_STATE -> showClimate || showTyres
         TechCard.FUEL -> showFuel
+        TechCard.DIAGNOSTICS -> false
     }
 
     val hasAnyCard: Boolean
@@ -194,6 +214,7 @@ class TechPanelViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val chargeRepository: ChargeRepository,
     private val vehicleKindMonitor: VehicleKindMonitor,
+    private val carStatusReader: CarStatusReader,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TechPanelUiState())

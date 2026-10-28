@@ -94,4 +94,21 @@ class TechPanelI18nTest {
             }
         }
     }
+
+    /** The merged-card and diagnostics strings: present everywhere, no em dash, not the Russian text. */
+    @Test fun car_state_and_diagnostics_strings_are_translated() {
+        val ids = listOf(
+            R.string.tech_card_car_state, R.string.tech_card_diagnostics,
+            R.string.tech_dtc_scan, R.string.tech_hint_diagnostics,
+        )
+        for (id in ids) {
+            val ru = get("ru", id)
+            for (l in listOf("ru", "be", "en", "pl", "pt", "zh")) {
+                assertFalse("em dash in $l", get(l, id).contains("\u2014"))
+            }
+            for (l in listOf("be", "en", "pl", "pt", "zh")) {
+                assertFalse("not translated to $l", get(l, id) == ru)
+            }
+        }
+    }
 }
