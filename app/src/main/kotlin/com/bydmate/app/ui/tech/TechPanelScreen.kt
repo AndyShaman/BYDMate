@@ -32,11 +32,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -61,11 +59,13 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,6 +73,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
+import com.bydmate.app.data.dtc.DtcScanPhase
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.domain.battery.BatteryCalibration
@@ -146,6 +147,18 @@ fun TechPanelScreen(
             state = state,
             onHint = viewModel::toggleHint,
             onMove = viewModel::moveCard,
+            onScan = viewModel::scanDtc,
+            onOpenDtc = viewModel::openDtcDialog,
+        )
+    }
+
+    if (state.dtcDialogOpen) {
+        val context = LocalContext.current
+        DtcScanDialog(
+            state = state,
+            onScan = viewModel::scanDtc,
+            onSend = { viewModel.sendDtc(dtcLabels(context)) },
+            onDismiss = viewModel::closeDtcDialog,
         )
     }
 }
@@ -171,6 +184,8 @@ private fun TechCardGrid(
     state: TechPanelUiState,
     onHint: (String) -> Unit,
     onMove: (TechCard, TechCard) -> Unit,
+    onScan: () -> Unit,
+    onOpenDtc: () -> Unit,
 ) {
     val cards = state.visibleCards
     val slots = remember { mutableStateMapOf<Int, Rect>() }
@@ -228,7 +243,7 @@ private fun TechCardGrid(
                             offset.value = Offset.Zero
                         },
                     ) { cardModifier ->
-                        TechCardContent(card, state, onHint, cardModifier)
+                        TechCardContent(card, state, onHint, onScan, onOpenDtc, cardModifier)
                     }
                 }
             }
@@ -281,6 +296,8 @@ private fun TechCardContent(
     card: TechCard,
     state: TechPanelUiState,
     onHint: (String) -> Unit,
+    onScan: () -> Unit,
+    onOpenDtc: () -> Unit,
     modifier: Modifier,
 ) {
     when (card) {
@@ -290,7 +307,7 @@ private fun TechCardContent(
         TechCard.MOTORS -> MotorsCard(state, onHint, modifier)
         TechCard.CAR_STATE -> CarStateCard(state, onHint, modifier)
         TechCard.FUEL -> FuelCard(state, modifier)
-        TechCard.DIAGNOSTICS -> DiagnosticsCard(state, onHint, modifier)
+        TechCard.DIAGNOSTICS -> DiagnosticsCard(state, onHint, onScan, onOpenDtc, modifier)
     }
 }
 
@@ -652,7 +669,13 @@ private fun TyresSection(state: TechPanelUiState, onHint: (String) -> Unit) {
  * block faults of the last manual scan. No red here: a warning reads yellow, «нет» green.
  */
 @Composable
-private fun DiagnosticsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun DiagnosticsCard(
+    state: TechPanelUiState,
+    onHint: (String) -> Unit,
+    onScan: () -> Unit,
+    onOpenDtc: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     TechCard(
         stringResource(R.string.tech_card_diagnostics),
         hintKey = "diagnostics",
@@ -681,48 +704,98 @@ private fun DiagnosticsCard(state: TechPanelUiState, onHint: (String) -> Unit, m
                 )
             }
             Hint(state.openHint, "diagnostics", R.string.tech_hint_diagnostics)
-            DtcScanBlock()
+            DtcScanBlock(state, onScan, onOpenDtc)
         }
     }
 }
 
 /**
- * «Ошибки в блоках». Task A draws only the never-scanned state with the button disabled; the
- * manual scan (P only, never automatic) plugs in here.
+ * «Ошибки в блоках» of the last manual scan: up to three codes, the rest in the dialog. The scan
+ * runs only on a tap, only on P; a failed attempt keeps the last good scan and adds one line.
  */
 @Composable
-private fun ColumnScope.DtcScanBlock() {
-    Row(modifier = Modifier.padding(top = 10.dp)) { SectionHeader(stringResource(R.string.tech_section_dtc)) }
-    Text(
-        stringResource(R.string.tech_dtc_never),
-        color = TextMuted,
-        fontSize = 12.sp,
-        modifier = Modifier.padding(vertical = 4.dp),
-    )
+private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit, onOpen: () -> Unit) {
+    val context = LocalContext.current
+    val summary = state.dtcSummary
+    val scanning = state.dtcScan.phase == DtcScanPhase.SCANNING
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+        SectionHeader(stringResource(R.string.tech_section_dtc))
+        Box(modifier = Modifier.weight(1f))
+        val at = state.dtcCheckedAt
+        if (summary != null && at != null && !scanning) {
+            Text(stringResource(R.string.tech_dtc_checked_card, dtcWhen(context, at)), color = TextMuted, fontSize = 10.sp)
+        }
+    }
+    val error = dtcErrorText(state.dtcScan.error)
+        // The caption over the disabled button already says it.
+        ?.takeUnless { it == R.string.tech_dtc_only_on_p && state.scanLabel == DtcScanLabel.ONLY_PARK }
+    // Before any good scan, «Недоступно» replaces «Ещё не сканировали» instead of adding to it.
+    val unavailableOnly = summary == null && error == R.string.tech_dtc_unavailable
+    when {
+        scanning -> DtcProgress(state.dtcScan)
+        unavailableOnly -> DtcNote(R.string.tech_dtc_unavailable)
+        summary == null -> DtcNote(R.string.tech_dtc_never)
+        else -> Column(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onOpen).padding(vertical = 2.dp),
+        ) {
+            if (summary.found.isEmpty()) DtcNote(R.string.tech_dtc_none_found)
+            summary.found.take(DTC_CARD_ROWS).forEach { found ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                    Text(
+                        found.row.code,
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    Text(
+                        dtcBlockShort(context, found.block),
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                    )
+                    Text(stringResource(dtcKindText(found.row.kind)), color = dtcKindColor(found.row.kind), fontSize = 11.sp)
+                }
+            }
+            val more = summary.found.size - DTC_CARD_ROWS
+            if (more > 0) {
+                Text(stringResource(R.string.tech_dtc_more, more), color = TextMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+    }
+    if (!scanning && error != null && !unavailableOnly) DtcNote(error)
     Box(modifier = Modifier.weight(1f))
-    OutlinedButton(
-        onClick = {},
-        enabled = false,
-        shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, AccentGreen.copy(alpha = DISABLED_ALPHA)),
-        colors = ButtonDefaults.outlinedButtonColors(
-            disabledContainerColor = CardSurfaceElevated,
-            disabledContentColor = AccentGreen.copy(alpha = DISABLED_ALPHA),
-        ),
-        modifier = Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp),
-    ) {
-        Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+    if (state.scanLabel == DtcScanLabel.ONLY_PARK) {
         Text(
-            stringResource(R.string.tech_dtc_scan),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 8.dp),
+            stringResource(R.string.tech_dtc_only_on_p),
+            color = TextMuted,
+            fontSize = 10.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
         )
     }
+    DialogButton(
+        text = stringResource(if (scanning) R.string.tech_dtc_scanning else R.string.tech_dtc_scan),
+        icon = { Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+        enabled = state.canScan,
+        accent = true,
+        onClick = onScan,
+        modifier = Modifier.padding(top = 6.dp).fillMaxWidth(),
+    )
 }
 
+@Composable
+private fun DtcNote(res: Int) {
+    Text(stringResource(res), color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+}
+
+/** Codes the card lists before «+N ещё». */
+private const val DTC_CARD_ROWS = 3
+
 /** How the disabled scan button fades, as in the approved mock. */
-private const val DISABLED_ALPHA = 0.45f
+internal const val DISABLED_ALPHA = 0.45f
 
 @Composable
 private fun HistoryCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {

@@ -5,8 +5,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.autoservice.Pm25Reader
 import com.bydmate.app.data.carstatus.CarStatusReader
+import com.bydmate.app.data.dtc.DtcLabels
+import com.bydmate.app.data.dtc.DtcParser
+import com.bydmate.app.data.dtc.DtcScanPhase
 import com.bydmate.app.data.dtc.DtcScanRepository
 import com.bydmate.app.data.dtc.DtcScanState
+import com.bydmate.app.data.dtc.DtcScanSummary
+import com.bydmate.app.data.dtc.DtcSendResult
 import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.ChargeRepository
@@ -123,13 +128,27 @@ data class TechPanelUiState(
     val gear: Int? = null,
     val serviceRunning: Boolean = false,
     val dtcScan: DtcScanState = DtcScanState(),
+    /** The last finished scan, parsed; null before the first one. */
+    val dtcSummary: DtcScanSummary? = null,
+    /** When [dtcSummary] was taken, epoch ms. */
+    val dtcCheckedAt: Long? = null,
+    val dtcDialogOpen: Boolean = false,
+    /** «Отправить в Telegram» shows only with a bot bound; read when the dialog opens. */
+    val dtcTelegramReady: Boolean = false,
+    val dtcSending: Boolean = false,
+    /** Result of the last send from the open dialog, null until one is made. */
+    val dtcSendResult: DtcSendResult? = null,
 ) {
     /** The scan button is enabled on a running service in P and while no scan runs. */
     val canScan: Boolean
-        get() = false
+        get() = gear == GEAR_PARK && serviceRunning && dtcScan.phase != DtcScanPhase.SCANNING
 
     val scanLabel: DtcScanLabel
-        get() = DtcScanLabel.SCAN
+        get() = when {
+            dtcScan.phase == DtcScanPhase.SCANNING -> DtcScanLabel.SCANNING
+            canScan -> DtcScanLabel.SCAN
+            else -> DtcScanLabel.ONLY_PARK
+        }
 
     /** PM2.5 value to draw: only with a valid level 1..6, null otherwise. */
     val pm25InShown: Int?
@@ -181,9 +200,9 @@ data class TechPanelUiState(
             tirePressFL, tirePressFR, tirePressRL, tirePressRR,
             tyreTempFL, tyreTempFR, tyreTempRL, tyreTempRR,
         )
-    /** Task A: the provider rows only; the block-fault scan widens this. */
+    /** Provider rows, or a car that reports its gear (the scan needs it), or a saved scan. */
     val showDiagnostics: Boolean
-        get() = faultCount != null || hasServiceRow
+        get() = faultCount != null || hasServiceRow || gear != null || dtcSummary != null
     val showHistory: Boolean
         get() = anyOf(
             lifetimeKm, lifetimeKwh, avgSocSinceCharge, avgSocAllTime,
@@ -216,6 +235,7 @@ data class TechPanelUiState(
     private companion object {
         /** The sensor's own grades; 0 is its "invalid", so a car without the sensor shows nothing. */
         val PM25_LEVELS = 1..6
+        const val GEAR_PARK = 1
     }
 }
 
@@ -235,7 +255,7 @@ internal fun remainKwhForDisplay(remainKwh: Double?, soc: Int?): Double? =
     remainKwh?.takeUnless { it <= 0.0 && soc != null && soc > 0 }
 
 @HiltViewModel
-@Suppress("LongParameterList", "UnusedPrivateProperty", "TooManyFunctions") // Hilt constructor; one loader per card; the scan card reads the repository next
+@Suppress("LongParameterList", "TooManyFunctions") // Hilt constructor; one loader per card
 class TechPanelViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
     private val avgSocProvider: AvgSocProvider,
@@ -258,6 +278,7 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch { loadFullCycles() }
         observeCalibrationMarks()
         observeCarStatus()
+        observeDtcScan()
         viewModelScope.launch {
             vehicleKindMonitor.kind.collect { kind ->
                 _uiState.update { it.copy(vehicleKind = kind, cardOrder = TechCardOrder.forKind(it.cardOrder, kind)) }
@@ -363,6 +384,7 @@ class TechPanelViewModel @Inject constructor(
                             mileageHevKm = data?.mileageHevKm,
                             mileageEvKm = data?.mileageEvKm,
                             fuelTotalL = data?.fuelTotalL,
+                            gear = data?.gear,
                         )
                     }
                 }
@@ -460,6 +482,48 @@ class TechPanelViewModel @Inject constructor(
                             "pm25=${s.pm25In}/${s.pm25Out} lvl ${s.pm25LevelIn}/${s.pm25LevelOut}",
                     )
                 }
+        }
+    }
+
+    /** The scan's own state, the last finished scan and whether the service runs (the button needs it). */
+    private fun observeDtcScan() {
+        viewModelScope.launch {
+            dtcScanRepository.state.collect { scan -> _uiState.update { it.copy(dtcScan = scan) } }
+        }
+        viewModelScope.launch {
+            dtcScanRepository.last.collect { last ->
+                val summary = last?.let { DtcParser.summarize(it.results) }
+                _uiState.update { it.copy(dtcSummary = summary, dtcCheckedAt = last?.at) }
+            }
+        }
+        viewModelScope.launch {
+            TrackingService.isRunning.collect { running -> _uiState.update { it.copy(serviceRunning = running) } }
+        }
+    }
+
+    /** A tap on «Сканировать» or «Сканировать снова»; the repository re-checks P and ignores a second tap. */
+    fun scanDtc() = dtcScanRepository.start()
+
+    /** Opens the saved scan; never starts a new one. */
+    fun openDtcDialog() {
+        _uiState.update { it.copy(dtcDialogOpen = true, dtcSendResult = null) }
+        viewModelScope.launch {
+            val ready = runCatching { settingsRepository.getTgBackupConfig().configured }.getOrDefault(false)
+            _uiState.update { it.copy(dtcTelegramReady = ready) }
+        }
+    }
+
+    fun closeDtcDialog() {
+        _uiState.update { it.copy(dtcDialogOpen = false) }
+    }
+
+    /** One send per tap, nothing queued; a tap while one is on its way does nothing. */
+    fun sendDtc(labels: DtcLabels) {
+        if (_uiState.value.dtcSending) return
+        _uiState.update { it.copy(dtcSending = true, dtcSendResult = null) }
+        viewModelScope.launch {
+            val result = dtcScanRepository.sendLastScan(labels)
+            _uiState.update { it.copy(dtcSending = false, dtcSendResult = result) }
         }
     }
 

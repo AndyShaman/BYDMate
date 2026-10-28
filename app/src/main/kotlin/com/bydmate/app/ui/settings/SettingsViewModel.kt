@@ -2575,6 +2575,16 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
+            // The last manual block-fault scan, raw per address, and the daemon's scan state. Never scans.
+            appendLine("--- dtc scan ---")
+            try {
+                val prefs = appContext.getSharedPreferences(
+                    com.bydmate.app.data.dtc.DtcScanRepository.PREFS_NAME, Context.MODE_PRIVATE,
+                )
+                com.bydmate.app.data.dtc.DtcScanRepository.dumpLines(prefs, helperClient.dtcScanStatus())
+                    .forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
             appendLine("--- last crash ---")
             try {
                 val crashes = CrashLog.read(appContext)

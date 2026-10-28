@@ -597,7 +597,7 @@ object AppModule {
         sink: com.bydmate.app.data.backup.TelegramBackupSink,
     ): com.bydmate.app.data.dtc.DtcScanRepository = com.bydmate.app.data.dtc.DtcScanRepository(
         helper = helper,
-        prefs = context.getSharedPreferences("dtc_scan", Context.MODE_PRIVATE),
+        prefs = context.getSharedPreferences(com.bydmate.app.data.dtc.DtcScanRepository.PREFS_NAME, Context.MODE_PRIVATE),
         settings = settings,
         sink = sink,
         scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
