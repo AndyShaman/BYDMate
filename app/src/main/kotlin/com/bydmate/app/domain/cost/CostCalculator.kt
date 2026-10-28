@@ -8,6 +8,8 @@ import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_CHARGES
 import com.bydmate.app.data.repository.SettingsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToLong
@@ -48,6 +50,8 @@ class CostCalculator @Inject constructor(
     private val tripDao: TripDao,
     private val settingsRepository: SettingsRepository,
 ) {
+
+    val pricingVersion: StateFlow<Long> = MutableStateFlow(0L)
 
     /**
      * Current periods. A fresh install has none (the seeding migration only runs on an
