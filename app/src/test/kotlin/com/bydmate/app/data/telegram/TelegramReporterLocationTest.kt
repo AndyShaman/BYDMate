@@ -80,7 +80,7 @@ class TelegramReporterLocationTest {
         settings = SettingsRepository(FakeSettingsDao(), LocalePreferences(ctx))
         val sink = TelegramBackupSink(OkHttpClient(), server.url("/").toString().trimEnd('/'))
         reporter = TelegramReporter(
-            ctx, sink, settings, mockk(relaxed = true), TripCounterResets(settings), AppStrings(ctx), PowerOffArmState(mockk()),
+            ctx, sink, settings, mockk(relaxed = true), TripCounterResets(settings), AppStrings(ctx), PowerOffArmState(mockk()), mockk(relaxed = true),
         )
         place(minsk)
         reporter.language = { "ru" }

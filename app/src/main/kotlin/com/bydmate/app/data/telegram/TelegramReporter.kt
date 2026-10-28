@@ -13,6 +13,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.trips.TripCounterMath
 import com.bydmate.app.data.trips.TripCounterResets
 import com.bydmate.app.data.trips.TripCounterUi
+import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLanguageTag
@@ -75,6 +76,7 @@ class TelegramReporter @Inject constructor(
     private val tripCounterResets: TripCounterResets,
     private val appStrings: AppStrings,
     private val offState: PowerOffArmState,
+    private val costCalculator: CostCalculator,
     private val vehicleKindMonitor: VehicleKindMonitor? = null,
 ) {
     companion object {
@@ -371,7 +373,7 @@ class TelegramReporter @Inject constructor(
         } else null
         val lastTrip = tripDao.getRecent(RECENT_TRIPS).first().firstOrNull { (it.distanceKm ?: 0.0) > 0.0 }
         tripCounterResets.load()
-        val tariff = settings.getTripCostTariff()
+        val tariff = costCalculator.tripRateAt(clock())
         val hybrid = vehicleKindMonitor?.kind?.value == VehicleKind.HYBRID
         val trip1 = tripCounter(1, tariff)
         val trip2 = tripCounter(2, tariff)

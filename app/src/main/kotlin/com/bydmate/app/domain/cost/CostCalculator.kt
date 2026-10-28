@@ -200,6 +200,17 @@ class CostCalculator @Inject constructor(
         return (liters * pricePerLiter * 100.0).roundToLong() / 100.0
     }
 
+    /**
+     * Price per kWh for a trip starting at [ts], by the same rule a saved trip is priced with:
+     * the dashboard counters and the Telegram report put it on the trip under way.
+     */
+    suspend fun tripRateAt(ts: Long): Double {
+        val period = schedule().periodAt(ts) ?: return settingsRepository.getHomeTariff()
+        TariffSchedule.fixedTripRate(period)?.let { return it }
+        val timeline = BatteryPriceTimeline(chargeDao.getCompletedForPricing(ts), settingsRepository.getBatteryCapacity())
+        return tripRate(period, ts, timeline)
+    }
+
     /** Price per kWh for one trip under [period]; logs the `charges` rule decision. */
     private fun tripRate(
         period: TariffPeriodEntity,

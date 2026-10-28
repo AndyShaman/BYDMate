@@ -311,6 +311,7 @@ class DashboardViewModelTest {
             tariffPeriodDao = mockk<com.bydmate.app.data.local.dao.TariffPeriodDao> {
                 io.mockk.coEvery { getAllAsc() } returns tariffPeriods
             },
+            costCalculator = mockk(relaxed = true),
         )
     }
 

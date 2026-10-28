@@ -23,6 +23,7 @@ import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
+import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.trips.litersKm
@@ -168,6 +169,7 @@ class DashboardViewModel @Inject constructor(
     private val tripCounterResets: TripCounterResets,
     private val vehicleKindMonitor: VehicleKindMonitor,
     private val tariffPeriodDao: TariffPeriodDao,
+    private val costCalculator: CostCalculator,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -497,7 +499,7 @@ class DashboardViewModel @Inject constructor(
     private fun observeTripCounters() {
         viewModelScope.launch {
             tripCounterResets.load()
-            val tariff = settingsRepository.getTripCostTariff()
+            val tariff = costCalculator.tripRateAt(System.currentTimeMillis())
             launch { collectTripCounter(1, tripCounterResets.state(1), tariff) }
             launch { collectTripCounter(2, tripCounterResets.state(2), tariff) }
         }

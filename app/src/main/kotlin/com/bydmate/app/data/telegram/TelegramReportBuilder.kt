@@ -32,7 +32,7 @@ data class ReportInputs(
     val hybrid: Boolean = false,
     val trip1Fuel: FuelTotals? = null,
     val trip2Fuel: FuelTotals? = null,
-    /** Price of a kWh for the trip under way (`getTripCostTariff`); null or 0 = no cost line. */
+    /** Price of a kWh for the trip under way (`CostCalculator.tripRateAt`); null or 0 = no cost line. */
     val tripTariff: Double? = null,
     val currencySymbol: String = "",
 )
