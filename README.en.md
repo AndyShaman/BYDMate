@@ -1094,6 +1094,8 @@ Fields and units follow the Iternio Telemetry API: `utc` in seconds, `power` in 
 
 The webhook works independently of ABRP: you can turn on just the webhook, just ABRP, or both.
 
+**Home Assistant.** The third-party integration [byd-leopard3-ha-integration](https://github.com/vasyl127/byd-leopard3-ha-integration) receives this webhook and shows the car in Home Assistant. It is a separate project, please send questions about it to its author.
+
 ---
 
 ## Build From Source
