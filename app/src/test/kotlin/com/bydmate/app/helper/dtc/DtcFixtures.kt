@@ -74,6 +74,8 @@ object DtcFixtures {
         override val pendingMark = "ожидающая"
         override val noErrors = "Ошибок в блоках не найдено"
         override val footer = "Сканирование ничего не меняет в машине. Покажите коды сервису."
+        override fun unread(count: Int) = "Коды $count блока прочитать не удалось"
+        override fun moreCodes(count: Int) = "и ещё $count"
         override fun blockName(name: DtcBlockName) = when (name.block) {
             DtcBlock.ADAS -> "ассистенты (ADAS)"
             DtcBlock.URE -> "URE"

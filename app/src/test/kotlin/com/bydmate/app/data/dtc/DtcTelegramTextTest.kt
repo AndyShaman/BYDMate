@@ -64,4 +64,36 @@ class DtcTelegramTextTest {
         assertFalse(t.contains("Есть сейчас:") || t.contains("Старые:"))
         assertTrue(t.contains("ответили 12 блоков из 18"))
     }
+
+    @Test fun `a scan whose only codes are unread is not reported as clean`() {
+        val unread = DtcScanSummary(
+            answered = 12, total = 18, now = 0, old = 0, pending = 0, found = emptyList(), unreadBlocks = 1,
+        )
+        val t = text(unread)
+        assertTrue(t.contains("прочитать не удалось"))
+        assertFalse(t.contains("Ошибок в блоках не найдено"))
+    }
+
+    private fun manyCodes(n: Int) = DtcScanSummary(
+        answered = 14, total = 18, now = 0, old = n, pending = 0,
+        found = (0 until n).map {
+            DtcFound(0x747, DtcRow("B%04X-13".format(it), 0x08, DtcKind.OLD, 0x13), DtcBlockName(DtcBlock.BODY, 0x747))
+        },
+    )
+
+    @Test fun `a long list is cut to fit one Telegram message and says how many are left out`() {
+        val t = text(manyCodes(200))
+        assertTrue("length ${t.length}", t.length <= 4096)
+        val lines = t.lines()
+        val shown = lines.count { it.contains(" · кузовной блок") }
+        val last = lines.indexOfLast { it.contains(" · кузовной блок") }
+        assertTrue(shown in 1 until 200)
+        assertTrue(lines[last + 1], lines[last + 1].contains("ещё ${200 - shown}"))
+    }
+
+    @Test fun `a short list is unchanged, with no left-out line`() {
+        val t = text(manyCodes(3))
+        assertEquals(3, t.lines().count { it.contains(" · кузовной блок") })
+        assertFalse(t.contains("ещё"))
+    }
 }

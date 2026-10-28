@@ -26,6 +26,8 @@ data class DtcScanSummary(
     val old: Int,
     val pending: Int,
     val found: List<DtcFound>,
+    /** Blocks that counted codes but whose list could not be read. */
+    val unreadBlocks: Int = 0,
 )
 
 /**

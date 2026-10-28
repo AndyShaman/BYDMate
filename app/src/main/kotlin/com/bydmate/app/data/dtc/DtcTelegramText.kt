@@ -10,6 +10,9 @@ interface DtcLabels {
     val noErrors: String
     val footer: String
     fun blockName(name: DtcBlockName): String
+    // Stubs: the real texts are added with the fix.
+    fun unread(count: Int): String = ""
+    fun moreCodes(count: Int): String = ""
 }
 
 object DtcTelegramText {

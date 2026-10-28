@@ -111,4 +111,25 @@ class TechPanelI18nTest {
             }
         }
     }
+
+    @Test fun a_scan_with_only_unread_codes_is_not_called_clean() {
+        val unread = com.bydmate.app.data.dtc.DtcScanSummary(
+            answered = 12, total = 18, now = 0, old = 0, pending = 0, found = emptyList(), unreadBlocks = 1,
+        )
+        val text = dtcNoRowsText(ctx.appLocalizedContext(), unread)
+        assertFalse(text, text.contains("Ошибок в блоках не найдено"))
+        assertTrue(text, text.contains("прочитать не удалось"))
+    }
+
+    @Test fun service_hint_names_the_menu_path_in_every_language() {
+        val ru = get("ru", R.string.tech_hint_diagnostics)
+        assertTrue(ru, ru.contains("Vehicle → Maintenance"))
+        assertFalse(ru, ru.contains("VehicleHealth"))
+        for (l in listOf("ru", "be", "en", "pl", "pt", "zh")) {
+            val hint = get(l, R.string.tech_hint_diagnostics)
+            assertTrue("$l: $hint", hint.contains("Maintenance Interval"))
+            assertTrue("$l: $hint", hint.contains("Maintenance Mileage"))
+            assertFalse("$l: $hint", hint.contains("—"))
+        }
+    }
 }

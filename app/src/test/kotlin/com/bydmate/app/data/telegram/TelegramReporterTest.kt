@@ -485,6 +485,48 @@ class TelegramReporterTest {
         assertEquals(settings.getCurrencySymbol(), inputs.currencySymbol)
     }
 
+    private fun sessionFlow(name: String): MutableStateFlow<Any?> {
+        @Suppress("UNCHECKED_CAST")
+        return com.bydmate.app.service.TrackingService::class.java
+            .getDeclaredField(name)
+            .apply { isAccessible = true }
+            .get(null) as MutableStateFlow<Any?>
+    }
+
+    @Test fun `a trip under way is priced at its session start, with no session at the clock`() = runBlocking {
+        val sessionStart = now - 3_600_000L
+        val calc = mockk<CostCalculator> {
+            coEvery { tripRateAt(any()) } returns 0.9
+            coEvery { tripRateAt(sessionStart) } returns 0.5
+            coEvery { tripRateAt(now) } returns 0.8
+        }
+        val tripDao = mockk<TripDao>()
+        every { tripDao.getRecent(any()) } returns flowOf(emptyList())
+        every { tripDao.observeCounterStats(any(), any()) } returns flowOf(emptyStats)
+        val live = TelegramReporter(ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, calc)
+        live.clock = { now }
+        val session = sessionFlow("_sessionStartedAt")
+        val km = sessionFlow("_tripDistanceKm")
+        val kwh = sessionFlow("_tripKwhConsumed")
+        try {
+            session.value = sessionStart
+            km.value = 12.0
+            kwh.value = 2.0
+
+            assertEquals(0.5, live.inputs().tripTariff!!, 1e-9)
+
+            session.value = null
+            km.value = null
+            kwh.value = null
+
+            assertEquals(0.8, live.inputs().tripTariff!!, 1e-9)
+        } finally {
+            session.value = null
+            km.value = null
+            kwh.value = null
+        }
+    }
+
     @Test fun `the power-off report with a time field carries the placeholder`() = runBlocking {
         settings.setTgReportOffEnabled(true)
         connect()

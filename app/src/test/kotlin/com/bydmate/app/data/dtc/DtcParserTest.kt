@@ -1,5 +1,6 @@
 package com.bydmate.app.data.dtc
 
+import com.bydmate.app.helper.dtc.DtcAddressResult
 import com.bydmate.app.helper.dtc.DtcFixtures
 import com.bydmate.app.helper.dtc.DtcFixtures.hex
 import org.junit.Assert.assertEquals
@@ -125,5 +126,20 @@ class DtcParserTest {
         val s = DtcParser.summarize(DtcFixtures.preClearScan())
         assertEquals(DtcBlock.ADAS, s.found.first { it.addr == 0x712 }.block.block)
         assertEquals(DtcBlock.URE, s.found.first { it.addr == 0x7E0 }.block.block)
+    }
+
+    private fun countUds(count: Int) = byteArrayOf(0x59, 0x01, 0x0D, 0x00, (count shr 8).toByte(), count.toByte())
+
+    @Test fun `a block with codes counted but no readable list is an unread block`() {
+        for (outcome in listOf("no_answer", "nrc", "multiframe", "truncated")) {
+            val s = DtcParser.summarize(listOf(DtcAddressResult(0x712, outcome, countUds(2), null, null)))
+            assertEquals(outcome, 1, s.unreadBlocks)
+        }
+    }
+
+    @Test fun `a zero count is not an unread block, nor is a read list`() {
+        val zero = DtcParser.summarize(listOf(DtcAddressResult(0x712, "ok", countUds(0), null, null)))
+        assertEquals(0, zero.unreadBlocks)
+        assertEquals(0, DtcParser.summarize(DtcFixtures.preClearScan()).unreadBlocks)
     }
 }
