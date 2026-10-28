@@ -278,6 +278,7 @@ class DashboardViewModelTest {
         tripDaoOverride: TripDao? = null,
         vehicleKind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
         costCalculatorOverride: com.bydmate.app.domain.cost.CostCalculator? = null,
+        tariffPeriodsFlow: kotlinx.coroutines.flow.Flow<List<com.bydmate.app.data.local.entity.TariffPeriodEntity>>? = null,
     ): DashboardViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
@@ -311,6 +312,7 @@ class DashboardViewModelTest {
             vehicleKindMonitor = com.bydmate.app.data.nativestack.kindMonitor(vehicleKind),
             tariffPeriodDao = mockk<com.bydmate.app.data.local.dao.TariffPeriodDao> {
                 io.mockk.coEvery { getAllAsc() } returns tariffPeriods
+                io.mockk.every { observeAll() } returns (tariffPeriodsFlow ?: kotlinx.coroutines.flow.flowOf(tariffPeriods))
             },
             costCalculator = costCalculatorOverride ?: mockk(relaxed = true),
         )
@@ -693,6 +695,39 @@ class DashboardViewModelTest {
 
             coVerify { calc.tripRateAt(5000L) }
             assertEquals(7.0, vm.uiState.value.trip1!!.cost, 1e-9)
+        } finally {
+            session.value = null
+            kwh.value = null
+            km.value = null
+        }
+    }
+
+    @Test
+    fun `the live trip rate is re-read when the tariff periods change mid-session`() = runTest {
+        val session = trackingFlow("_sessionStartedAt")
+        val kwh = trackingFlow("_tripKwhConsumed")
+        val km = trackingFlow("_tripDistanceKm")
+        val periods = MutableStateFlow<List<com.bydmate.app.data.local.entity.TariffPeriodEntity>>(emptyList())
+        val calc = mockk<com.bydmate.app.domain.cost.CostCalculator> {
+            coEvery { tripRateAt(1000L) } returnsMany listOf(1.0, 2.0)
+        }
+        try {
+            session.value = 1000L
+            kwh.value = 10.0
+            km.value = 50.0
+            val vm = buildViewModel(
+                fakeAutoservice = FakeAutoservice(null, available = false),
+                tripDaoOverride = StubTripDaoWithCounterStats(zeroStats),
+                costCalculatorOverride = calc,
+                tariffPeriodsFlow = periods,
+            )
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(10.0, vm.uiState.value.trip1!!.cost, 1e-9)
+
+            periods.value = listOf(mockk(relaxed = true))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(20.0, vm.uiState.value.trip1!!.cost, 1e-9)
         } finally {
             session.value = null
             kwh.value = null

@@ -678,6 +678,26 @@ class TechPanelViewModelTest {
     }
 
     @Test
+    fun `back on the screen, a failed first read clears a sensor seen before and polling goes on`() = runTest {
+        val reader = mockk<Pm25Reader>()
+        coEvery { reader.read() } returnsMany listOf(Pm25(8, null, 2, null), null, Pm25(9, null, 2, null))
+        val vm = buildViewModel(pm25 = reader)
+        val first = backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(8, vm.uiState.value.pm25InShown)
+        first.cancel()
+
+        backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        assertNull(vm.uiState.value.pm25InShown)
+        testDispatcher.scheduler.advanceTimeBy(60_000L)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(9, vm.uiState.value.pm25InShown)
+    }
+
+    @Test
     fun `nothing reads pm25 until the screen is shown, and leaving it stops the refresh`() = runTest {
         val reader = pm25Reader(Pm25(8, null, 2, null))
         val vm = buildViewModel(pm25 = reader)
