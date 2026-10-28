@@ -1112,7 +1112,7 @@ ABRP подбирает прогноз на основе модели машин
 
 Вебхук работает независимо от ABRP: можно включить только его, только ABRP или оба.
 
-**Home Assistant.** Сторонняя интеграция [byd-leopard3-ha-integration](https://github.com/vasyl127/byd-leopard3-ha-integration) принимает этот вебхук и показывает машину в Home Assistant. Это отдельный проект, вопросы по нему задавайте его автору.
+**Home Assistant.** Этот вебхук умеет принимать сторонняя интеграция [byd-leopard3-ha-integration](https://github.com/vasyl127/byd-leopard3-ha-integration): она показывает машину в Home Assistant. Её делает другой автор, мы её код не проверяем и не поддерживаем, вопросы по ней задавайте ему.
 
 ---
 
