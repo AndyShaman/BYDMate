@@ -13,6 +13,8 @@ data class NavGuidance(
     /** False when [road] is a fallback (the current street), not the street after the maneuver:
      *  such a road never drops a held maneuver (#294). */
     val roadIsNextStreet: Boolean = true,
+    /** True when the maneuver node is on screen but carries no description (#325, Navigator 24.x). */
+    val maneuverUndescribed: Boolean = false,
 )
 
 /** Pure parsers: raw Navigator widget strings -> NavGuidance. Shared by the a11y

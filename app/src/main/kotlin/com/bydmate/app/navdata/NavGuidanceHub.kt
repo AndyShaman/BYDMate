@@ -110,6 +110,14 @@ object NavGuidanceHub {
     /** [hudWay] label of the gateway-less path (#301, Amap adapter to the cluster card); not a way from settings. */
     const val WAY_AMAP_CLUSTER = 10
 
+    /** Whether the gateway-less cluster path (#301) runs (#325); no behaviour reads it yet. */
+    private var gatewaylessClusterPath = false
+
+    @Synchronized
+    fun setGatewaylessClusterPath(active: Boolean) {
+        gatewaylessClusterPath = active
+    }
+
     /** Trace id of the last guidance-off line: the cause a disarm that follows it links to. */
     @Volatile var lastOffTraceId: Long = 0L
         private set
