@@ -708,8 +708,10 @@ class DashboardViewModelTest {
         val kwh = trackingFlow("_tripKwhConsumed")
         val km = trackingFlow("_tripDistanceKm")
         val periods = MutableStateFlow<List<com.bydmate.app.data.local.entity.TariffPeriodEntity>>(emptyList())
+        var rate = 1.0
         val calc = mockk<com.bydmate.app.domain.cost.CostCalculator> {
-            coEvery { tripRateAt(1000L) } returnsMany listOf(1.0, 2.0)
+            coEvery { tripRateAt(any()) } returns 0.9
+            coEvery { tripRateAt(1000L) } answers { rate }
         }
         try {
             session.value = 1000L
@@ -724,6 +726,7 @@ class DashboardViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
             assertEquals(10.0, vm.uiState.value.trip1!!.cost, 1e-9)
 
+            rate = 2.0
             periods.value = listOf(mockk(relaxed = true))
             testDispatcher.scheduler.advanceUntilIdle()
 
