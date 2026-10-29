@@ -23,10 +23,10 @@ class DtcTelegramTextTest {
         assertTrue(now in 1 until old)
         assertEquals("ассистенты (ADAS) (0x712)", lines[now + 1])
         assertEquals("  U1166-87", lines[now + 2])
-        // fourteen old rows between the header and the closing line
+        // fourteen old codes, under their block headers, between the header and the closing line
         val footer = lines.indexOf(labels.footer)
         assertTrue(footer > old)
-        assertEquals(14, lines.subList(old + 1, footer).count { it.isNotBlank() })
+        assertEquals(14, lines.subList(old + 1, footer).count { it.startsWith("  ") })
     }
 
     @Test fun `old rows carry the block name and the code`() {
@@ -87,13 +87,14 @@ class DtcTelegramTextTest {
     )
 
     @Test fun `a long list is cut to fit one Telegram message and says how many are left out`() {
-        val t = text(manyCodes(200))
+        // 500 codes of ~11 chars each do not fit in 4096
+        val t = text(manyCodes(500))
         assertTrue("length ${t.length}", t.length <= 4096)
         val lines = t.lines()
         val shown = lines.count { it.startsWith("  B") }
         val last = lines.indexOfLast { it.startsWith("  B") }
-        assertTrue(shown in 1 until 200)
-        assertTrue(lines[last + 1], lines[last + 1].contains("ещё ${200 - shown}"))
+        assertTrue(shown in 1 until 500)
+        assertTrue(lines[last + 1], lines[last + 1].contains("ещё ${500 - shown}"))
     }
 
     @Test fun `a short list is unchanged, with no left-out line`() {
