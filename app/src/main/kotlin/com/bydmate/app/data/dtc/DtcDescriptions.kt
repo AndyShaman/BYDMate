@@ -77,29 +77,30 @@ object DtcTablesLoader {
 
 /**
  * Description of a found code by (car model + block class + code). EXACT: the first manual of
- * the model (after the energy filter) that has the code in this block class (any block when the
- * class is unknown); one distinct text or nothing. SIMILAR: a known class only, all
- * manuals, every English text the same. Never picks one of two differing texts.
+ * the model (after the energy filter) that has the code in this block class; one distinct text or
+ * nothing. SIMILAR: all manuals, every English text the same. An unknown class has no description.
+ * Never picks one of two differing texts.
  */
 class DtcDescriptions(private val tables: DtcTables) {
 
     fun lookup(autoType: Int?, energy: DtcEnergy, blockClass: String?, code7: String): DtcDescription? {
+        // The same code means different things in different blocks: no block class, no description.
+        if (blockClass == null) return null
         val rows = tables.rowsByCode[code7] ?: return null
         exact(autoType, energy, blockClass, rows)?.let { return it }
         return similar(blockClass, rows)
     }
 
-    private fun exact(autoType: Int?, energy: DtcEnergy, blockClass: String?, rows: List<DtcTableRow>): DtcDescription? {
+    private fun exact(autoType: Int?, energy: DtcEnergy, blockClass: String, rows: List<DtcTableRow>): DtcDescription? {
         val manuals = autoType?.let { tables.manualsByModel[it] } ?: return null
-        val inBlock = rows.filter { blockClass == null || it.blockClass == blockClass }
+        val inBlock = rows.filter { it.blockClass == blockClass }
         val manual = manuals.filter { fits(it, energy) }.firstOrNull { m -> inBlock.any { it.manual == m } } ?: return null
         val texts = inBlock.filter { it.manual == manual }.map { it.text }.distinct()
         val text = texts.singleOrNull() ?: return null
         return DtcDescription(text.en.trim(), text.zh.trim(), DtcDescLevel.EXACT, manual)
     }
 
-    private fun similar(blockClass: String?, rows: List<DtcTableRow>): DtcDescription? {
-        if (blockClass == null) return null
+    private fun similar(blockClass: String, rows: List<DtcTableRow>): DtcDescription? {
         val same = rows.filter { it.blockClass == blockClass }
         val first = same.firstOrNull() ?: return null
         val en = first.text.en.trim()
