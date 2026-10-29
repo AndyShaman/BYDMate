@@ -62,7 +62,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -743,7 +746,6 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
             if (summary.found.isEmpty()) DtcNote(dtcNoRowsText(context, summary))
             val blocks = summary.found.groupBy { it.addr }.values.toList()
             blocks.take(DTC_CARD_BLOCKS).forEach { codes ->
-                val now = codes.any { it.row.kind == DtcKind.NOW }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     Text(
                         "0x%X".format(codes.first().addr),
@@ -759,10 +761,18 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                     )
+                    // Each code in its own color: yellow = now, gray = old.
                     Text(
-                        codes.take(DTC_CARD_CODES).joinToString(", ") { it.row.code } +
-                            if (codes.size > DTC_CARD_CODES) " +${codes.size - DTC_CARD_CODES}" else "",
-                        color = if (now) SocYellow else TextMuted,
+                        buildAnnotatedString {
+                            codes.take(DTC_CARD_CODES).forEachIndexed { i, f ->
+                                if (i > 0) append(", ")
+                                withStyle(SpanStyle(color = if (f.row.kind == DtcKind.NOW) SocYellow else TextMuted)) {
+                                    append(f.row.code)
+                                }
+                            }
+                            if (codes.size > DTC_CARD_CODES) append(" +${codes.size - DTC_CARD_CODES}")
+                        },
+                        color = TextMuted,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = FontFamily.Monospace,
