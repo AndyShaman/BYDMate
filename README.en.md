@@ -37,23 +37,17 @@ All core features (trips, charges, automations, local insights, offline voice ag
 
 ## What's New
 
-The main changes in version 4.0.0.
+The main changes in version 4.1.0.
 
-**DM-i and DM-o hybrids.** The app detects a hybrid by itself, from the car's own counters: there are no settings or profiles for it. On the home screen, under the charge ring, sits the car's own battery range instead of our calculation, next to it a “Fuel” card with the tank level and the fuel range; a tap shows engine rpm, engine and battery mileage, litres for all time. The widget shows the tank level and the fuel range, and the “Tech” screen shows rpm and the “Fuel” card. Consumption for a period is counted as on the instrument cluster: l/100 and kWh/100 over all kilometres. Trips get an “l” column; litres come from the car's counter at the trip boundaries, and if the app did not see one of the boundaries, a dash is shown: someone else's petrol is never put on a trip. The litre price is set in tariff periods, like the electricity tariff: if you refuelled at a higher price, add a period from the refuelling date. This is the first version of the support, built from the dumps of two cars, and some values may show a dash. If you see a dash where the car knows the number, send a parameter dump and a photo of the cluster with the ranges. Nothing changed on EVs. Thanks to baileileicn and bolatbekb for the dumps.
+**Module fault codes with descriptions.** The "Tech" screen has a new "Diagnostics" card. The "Scan" button reads fault codes from the car's modules, only in P and only when you press it, and changes nothing in the car. Codes are written the same way as in BYD manuals and service scanners, grouped by module, with a description from BYD diagnostic manuals next to each one, no internet needed. You can send the codes to yourself in Telegram. The same card shows cluster warnings and the time left until the next service. Tested on Leopard 3. Details in [Diagnostics: Module Faults](#diagnostics-module-faults).
 
-**Battery preheating in automation.** New actions “Battery preheating: on” and “off”, also available to the voice assistant. It is the same preheating as in the car's own menu “Energy”, “Charge and discharge”: it helps the battery charge faster in the cold. It works on EVs that have this item in the car's menu. If the battery is warm or a charging cable is connected, the car itself will not let you turn it on, and the rule will say why. Not checked on a car in the cold yet, we are waiting for feedback.
+**"Car status" card.** Climate and tires now share one card. The tires are drawn on a picture of the car, each wheel with its own pressure and temperature. If the car has a PM2.5 sensor, the cabin and outside air quality shows there too.
 
-**Screen: off and on.** Two new actions in automation and for the voice assistant. Only the central screen goes dark: music and the app keep working, and a touch turns the screen on again. Handy for a rule that turns the screen off when you lock the car. Not checked on cars yet.
+**Rear seat heating in automation.** Left and right separately, off, 1 or 2. The actions show only on cars that report having rear seat heating.
 
-**Coordinates in ABRP.** The setting “Send coordinates to ABRP” is back, off by default. It is for one case: watching the car in ABRP from a phone while ABRP is not running in the car itself, for example when someone else has taken the car. If ABRP is open in the car, better leave the setting off: it takes GPS by itself, and the marker on the map starts jumping between two sources. Thanks to @ptuchik.
+**Fixes.** Two short trips in a row no longer merge into one. Yandex Navigator turn arrows are back on the cluster of the Han 2022 and similar cars. Pressing the volume wheel pauses music on DiLink 3 and 4 as well. With the "By charges" tariff, the current trip is priced at the cost of the energy in the battery, not at the home tariff.
 
-**BYD cloud over Wi-Fi.** If the BYD server does not let the car in, the line under the setting now says so and suggests that a Chinese VPN is needed. Before, that looked the same as “the cloud did not answer”. The app now waits for the cloud up to 30 seconds, not 5. The hint is fixed: you need Wi-Fi, and cars on the new BYD servers also need a Chinese VPN, better on the router.
-
-**Navigator hints on the cluster of DiLink 3.0 cars.** Instead of “-1” the cluster shows the distance to the maneuver and the rest of the route, and the travel time is written as “3 min”, without the Chinese character “分”.
-
-**Maneuver arrow on the HUD and the cluster.** After a turn is passed, it no longer stays next to the distance to the next maneuver, and on a standing car it does not disappear while the navigator is silent.
-
-**Widget on Leopard 8 and DiLink 5.1.** On these cars the cluster and the projection screens live in their own apps, and their background windows were taken for an app change on the central screen. Because of that the widget in the “main screen only” mode disappeared by itself, and without that mode it could pop up over YouTube or an app from the “hide in these apps” list. Now an app change counts only when its window is visible on the central screen. The camera works as before.
+The full list of changes is in the [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -67,6 +61,7 @@ The main changes in version 4.0.0.
 | **AI** | Insights | Driving analysis: on-device rules, no internet |
 | **TRIP** | TRIP 1/2 counters | Distance, consumption, time, and cost since the last reset (like in the car); long-press to reset, tap for details |
 | **Bat** | Battery health and "Tech" | Card: SoH (Leopard 3, DiLink 3.0), temperature, 12V, cell balance, insulation. Tap opens the "Tech" screen with live battery, motor, climate, and tire parameters, including the front/rear power split in percent |
+| **DTC** | Module faults | "Diagnostics" card on the "Tech" screen: fault codes from the car's modules with descriptions from BYD manuals, cluster warnings, time until the next service. Scanning only in P and only on a press, it changes nothing in the car |
 | **DM-i** | Hybrids | The app detects a hybrid from the car's own counters. Battery and fuel range from the car, a «Fuel» card (tank, range, rpm, engine and battery mileage), litres and engine kilometres per trip from the car's counter, litre price per tariff period. Nothing changes on EVs |
 | **Map** | Route map | osmdroid (OpenStreetMap) in trip details |
 | **Rules** | Automation | WHEN→THEN rules: parameter triggers → vehicle control commands |
@@ -777,7 +772,7 @@ On **BYD Leopard 3 (Fangchengbao Tai 3)** BYDMate reads this value directly from
 
 On other BYD models, access to this value is not yet confirmed, so SoH does not show there. The rest of the card (battery temperature, 12V, cell balance, insulation resistance) works on every supported model.
 
-Tapping the card opens the **"Tech"** screen: traction battery voltage and current, remaining battery energy in kWh per BMS data, available battery power, BMS charge and discharge limits, cell balance, motor and inverter temperatures, front/rear power split in percent, climate, tire pressure and temperature, SoH and mileage history, the number of full battery charge cycles with a note on which kWh sum it is figured from. Every parameter has a "?" badge with a plain-language tip. If the car does not report a parameter, the line shows "-", and empty cards are hidden.
+Tapping the card opens the **"Tech"** screen: traction battery voltage and current, remaining battery energy in kWh per BMS data, available battery power, BMS charge and discharge limits, cell balance, motor and inverter temperatures, front/rear power split in percent, a "Car status" card with climate and the tires on a picture of the car (and PM2.5 if the car has the sensor), a "Diagnostics" card with cluster warnings, time until the next service and a "Scan" button for module fault codes (see [Diagnostics: Module Faults](#diagnostics-module-faults)), SoH and mileage history, the number of full battery charge cycles with a note on which kWh sum it is figured from. Every parameter has a "?" badge with a plain-language tip. If the car does not report a parameter, the line shows "-", and empty cards are hidden.
 
 If SoH is available on your car and you want to help add support, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your model and year.
 
@@ -791,6 +786,65 @@ SoH and automatic charge logging on Leopard 3 work automatically, there is nothi
 2. SoH shows up in the battery card on Home, and charges start logging automatically with real kWh values.
 
 > These features are confirmed on Leopard 3. On other BYD models access to this data is not confirmed, so SoH and precise charge power may not show up, but the rest of BYDMate works as usual.
+
+---
+
+## Diagnostics: Module Faults
+
+A car has dozens of electronic modules: battery, brakes, steering, airbags, driver assistance and more. When a module notices a problem, it stores a fault code. A service shop reads these codes with a scanner. Since version 4.1 BYDMate can read them too, right on the car's screen, with no scanner and no internet.
+
+<img src="docs/screenshots/tech-diagnostics.jpg" alt="The Car status and Diagnostics cards on the Tech screen" width="800">
+
+The screenshots show the app in Russian; in English the labels are the ones quoted below.
+
+### Where to find it
+
+Home → tap the battery card → the **"Tech"** screen → the **"Diagnostics"** card. The card has three parts:
+
+- **Cluster warnings**: what the car itself shows on the instrument cluster. "none" means the cluster shows nothing right now.
+- **Next service**: days and km left until the scheduled service. The row shows only if the service reminder is on in the car. On Leopard 3 it is turned on in the car settings: Vehicle → Maintenance → Maintenance Interval or Maintenance Mileage.
+- **Module faults**: the result of the last scan and the **"Scan"** button.
+
+### How to scan
+
+1. Stop and shift to **P**. While driving the button is inactive and says "Scanning only in P".
+2. Press **"Scan"**. The app asks the modules one by one, and the screen shows how many are done.
+3. A window with the result opens. You can close it and open it again by tapping the list in the card; the car is not asked again.
+
+Wireless ADB debugging has to be active, as for the rest of the car data (see "Install"). The app never scans on its own: not when the car turns on, not on a schedule, not before a Telegram report. Only when you press the button.
+
+### How to read the result
+
+<img src="docs/screenshots/dtc-window.jpg" alt="The Diagnostics · module faults window" width="800">
+
+- **At the top**: when the check ran and how many modules answered, for example "15 of 18 modules answered". That is normal: not every module exists on every model, and some modules do not always answer.
+- **"Present now"**: the fault is active right now. These codes are yellow.
+- **"Old"**: the fault happened before and the module remembers it. These are gray. Almost every car has old codes, a module remembers even a short loss of communication. If the cluster shows no warnings and the car behaves as usual, there is usually nothing to worry about.
+- **Codes are grouped by module**: the module address (for example 0x712) and its name (on Leopard 3; on other models some modules are labelled with the address only).
+- **The code** is written the same way as in BYD manuals and service scanners: **U1166-87**. The first letter tells where the problem is: P is the powertrain (motor, battery, charging), C is the chassis (brakes, steering, suspension), B is the body and cabin, U is communication between modules. The digits after the dash say what kind of fault it is.
+- **The description** sits next to the code, with a line under it saying where it comes from:
+  - "from the BYD manual for this model": text from the BYD diagnostic manual for your exact model;
+  - "from similar BYD models": we have no manual for your model, but in the manuals of other BYD models this code in this module has the same description;
+  - "No description of this code in the database": only the code is shown; you can look it up online or show it to a service.
+- **Description language**: English in every app language, the manual's Chinese original in Chinese. BYD manuals are written in Chinese; the English translation was made for BYDMate.
+- **A hint at U1166-87** in the driver assistance (ADAS) module: the car did not see the key. This happens after a remote start from the phone. If the code goes away when the key is near, nothing is broken.
+
+The descriptions are stored inside the app, no internet needed. They come from 54 diagnostic manuals of BYD, Denza and Fangchengbao: about 8,500 distinct codes, with a description for each module.
+
+### Send to yourself in Telegram
+
+The **"Send to Telegram"** button in the window sends the codes with their descriptions to your bot, handy to show a mechanic or forward to a chat. Connect the bot first (see "How to Connect a Telegram Bot"), otherwise the app says "No Telegram bot connected". The app never sends the codes anywhere by itself.
+
+### Good to know
+
+- **Scanning only reads.** It changes nothing in the car, does not erase faults and does not change module settings. The app sends the modules read requests only.
+- **The app cannot erase faults.** The codes stay in the modules; a service erases them with its own equipment.
+- **This is not a repair or a diagnosis.** A code says what a module noticed, not what broke or what to replace. The service decides: show them the codes.
+- **Tested only on Leopard 3** (Fangchengbao Tai 3). On other BYD models the scan may not work and show "Not available on this car", fewer modules may answer, and module names will show as addresses. If you have another model, tell us in an [Issue](https://github.com/AndyShaman/BYDMate/issues) what the scan showed and attach a log recording.
+- **Only in P and only on a press.** We chose not to query the car's modules while driving.
+- **"Could not check"** happens if the gear left P during the scan or the app lost its connection to the car. Press "Scan" again. If it keeps happening, send a log recording in an [Issue](https://github.com/AndyShaman/BYDMate/issues).
+
+At the bottom of the window there is a line about supporting the project. Diagnostic apps are usually paid, BYDMate is free, and every description is available without a donation.
 
 ---
 
@@ -1151,6 +1205,7 @@ Common cases:
 - **[@klimuts](https://github.com/klimuts)**: pointed out the auto_container mechanism for projecting the navigator to the cluster
 - **@RBGboost**: reverse-engineered the factory HUD's SOME/IP protocol and built the original YandexHUD implementation. Yandex Navigator guidance on the head-up display in BYDMate is his code and his achievement. You can thank him on Telegram: [@RBGboost](https://t.me/RBGboost)
 - **[byd-turnsignal-cameraview](https://github.com/sunlixWhyNotAvailable/byd-turnsignal-cameraview)** by sunlixWhyNotAvailable: open research into the DiLink camera and window interfaces that the turn-signal blind-spot camera feature is built on. The BYDMate implementation is written from scratch, but this research saved weeks of reverse engineering, thank you!
+- **[denza-lab](https://github.com/xor777/denza-lab)** by xor777 (MIT licence): the way to read the car modules' fault codes and parse their answers. The manual scan in the "Diagnostics" card is built on his research and code.
 - **[danijar2000](https://github.com/danijar2000)**: fix for 2GIS's projection to the cluster (2GIS used to quit when its task moved to the cluster display)
 
 ---
