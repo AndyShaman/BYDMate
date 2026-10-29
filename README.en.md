@@ -21,7 +21,7 @@ Split screen 1/3 and 2/3, navigation on the instrument cluster, Yandex Navigator
 
 Tested on Leopard 3 (Fangchengbao Tai 3), with support for Sea Lion 07, Song, Atto 3, Seal, Han and the DM-i and DM-o hybrids (Song Pro DM-i, Leopard 5, Leopard 8, Sealion 06). DiLink 3.0, 4.0, 5.0, 5.1, and firmware with the new UI7 interface (OTA V1.6).
 
-[Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [Voice AI Agent](#voice-ai-agent) | [Diagnostics](#diagnostics-module-faults) | [AI Insights](#ai-insights) | [ABRP](#abrp-live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Releases](https://github.com/AndyShaman/BYDMate/releases) | [Sponsor](SUPPORT.md)
+[Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [Voice AI Agent](#voice-ai-agent) | [Tech](#the-tech-screen) | [Diagnostics](#diagnostics-module-faults) | [AI Insights](#ai-insights) | [ABRP](#abrp-live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Releases](https://github.com/AndyShaman/BYDMate/releases) | [Sponsor](SUPPORT.md)
 
 </div>
 
@@ -94,11 +94,11 @@ Below the ring: an AI insight, a small battery health card (SoH on Leopard 3 and
 
 *Driving efficiency analysis: consumption, trends, battery, recommendations (computed on the device)*
 
-**Battery Health**
+**Tech**
 
-<img src="docs/screenshots/dashboard-battery.jpg" alt="Battery health" width="800">
+<img src="docs/screenshots/tech-screen-en.jpg" alt="The Tech screen" width="800">
 
-*Temperature, SoH (Leopard 3, DiLink 3.0), 12V battery, cell balance, voltage*
+*Battery, motors, BMS limits, cells, battery history, climate, tyres, diagnostics. Opens with a tap on the battery card on the Dashboard*
 
 **Trips**
 
@@ -772,7 +772,7 @@ On **BYD Leopard 3 (Fangchengbao Tai 3)** BYDMate reads this value directly from
 
 On other BYD models, access to this value is not yet confirmed, so SoH does not show there. The rest of the card (battery temperature, 12V, cell balance, insulation resistance) works on every supported model.
 
-Tapping the card opens the **"Tech"** screen: traction battery voltage and current, remaining battery energy in kWh per BMS data, available battery power, BMS charge and discharge limits, cell balance, motor and inverter temperatures, front/rear power split in percent, a "Car status" card with climate and the tires on a picture of the car (and PM2.5 if the car has the sensor), a "Diagnostics" card with cluster warnings, time until the next service and a "Scan" button for module fault codes (see [Diagnostics: Module Faults](#diagnostics-module-faults)), SoH and mileage history, the number of full battery charge cycles with a note on which kWh sum it is figured from. Every parameter has a "?" badge with a plain-language tip. If the car does not report a parameter, the line shows "-", and empty cards are hidden.
+Tapping the card opens the **"Tech"** screen with detailed battery, motor, climate and tyre data plus diagnostics, see [The "Tech" Screen](#the-tech-screen).
 
 If SoH is available on your car and you want to help add support, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your model and year.
 
@@ -786,6 +786,42 @@ SoH and automatic charge logging on Leopard 3 work automatically, there is nothi
 2. SoH shows up in the battery card on Home, and charges start logging automatically with real kWh values.
 
 > These features are confirmed on Leopard 3. On other BYD models access to this data is not confirmed, so SoH and precise charge power may not show up, but the rest of BYDMate works as usual.
+
+---
+
+## The "Tech" Screen
+
+"Tech" is the screen with the car's detailed data: battery, motors, battery limits, climate, tyres and diagnostics. The values come from the car itself and update live.
+
+### How to Open It
+
+1. Open the **"Dashboard"** tab.
+2. Tap the battery card: the row with SoH, battery temperature, 12V system, cell delta and insulation. It has a yellow outline in the picture.
+3. The **"Tech"** screen opens. The arrow in the top left corner takes you back.
+
+<img src="docs/screenshots/tech-entry-en.jpg" alt="Dashboard: the battery card that opens Tech" width="400">
+
+### What Is on the Screen
+
+<img src="docs/screenshots/tech-screen-en.jpg" alt="The whole Tech screen" width="900">
+
+Six cards, three per row. You can change their order: hold a card and drag it.
+
+- **Battery · now**: charge (SoC), remaining energy in kWh as the battery itself estimates it, SoH, battery temperature, traction battery voltage, power at the motors, how much the battery is giving out right now and how many percent of charge per hour that eats, the 12V system, insulation resistance.
+- **Motors and inverters**: front and rear separately. Motor and inverter temperatures on a scale, rpm, accelerator and brake pedal, power.
+- **BMS limits**: the charge and discharge power the battery controller (BMS) allows right now and how much power the battery can give. Below are the cells: the weakest, the strongest and the difference between them.
+- **Battery · history**: when the last full charge to 100 % and the last calibration happened, mileage by battery data, how much energy has passed through the battery in total, the number of full cycles (with the numbers it is figured from), average charge since the last charge and over all time.
+- **Car status**: how much the A/C compressor draws, whether climate is on, cabin and outside temperature. Below are the pressure and temperature of each tyre on a picture of the car. If the car has a PM2.5 sensor, it is shown too.
+- **Diagnostics**: cluster warnings, time left until the next service, and module fault codes with the **"Scan"** button. Details in [Diagnostics: Module Faults](#diagnostics-module-faults).
+
+Hybrids get a seventh card, **"Fuel"**.
+
+### How to Read It
+
+- Parameters have a **"?"** badge next to them. Tap it for a plain-language tip: what the number means and what value is normal.
+- If the car does not report a parameter, the line shows "-". A card with no data is hidden.
+- The set of parameters depends on the model. Everything on the screen is tested on Leopard 3; on other cars some lines may be empty.
+- The screen only reads data and changes nothing in the car. It needs active wireless ADB debugging, like the rest of the car data (see "Install").
 
 ---
 
