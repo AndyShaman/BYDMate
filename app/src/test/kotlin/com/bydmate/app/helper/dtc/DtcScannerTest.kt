@@ -245,6 +245,20 @@ class DtcScannerTest {
         assertEquals(1, w.device.unregisterCalls)
     }
 
+    @Test fun `an exception on a name request keeps the scan DONE and asks no more names`() {
+        val w = world()
+        w.device.respond = { p ->
+            if (isName(p)) error("vendor send failed")
+            recorded(p)
+        }
+        val s = w.run()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(18, s.done)
+        assertEquals(DtcWire.OUTCOME_OK, s.of(0x712).outcome)
+        assertEquals(1, w.device.sent.count(::isName))
+        assertEquals(1, w.device.unregisterCalls)
+    }
+
     @Test fun `the budget running out during the names keeps the scan DONE`() {
         val w = world()
         w.device.respond = { p ->

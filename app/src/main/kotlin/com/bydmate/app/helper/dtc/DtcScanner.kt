@@ -198,15 +198,19 @@ class DtcScanner(
 
     /**
      * The blocks' own F197 names, for the log only (other models), once every address is read: a
-     * stop here (budget, gear, guard, rejected send) ends the names and never the scan. The gate
+     * stop here (budget, gear, guard, rejected send) or any exception ends the names, never the scan. The gate
      * still runs before each request, so nothing is sent outside P.
      */
+    @Suppress("TooGenericExceptionCaught") // an optional log step: whatever it throws, the scan stays
     private fun readNames(run: Run) {
         for (addr in run.named) {
             val name = try {
                 exchange(run, addr, DtcWire.nameRequest(addr), DtcWire.SERVICE_READ_DID, DtcWire.DID_NAME)
             } catch (e: Stop) {
                 log("names stopped ${e.reason}, the scan result stays")
+                return
+            } catch (e: Exception) {
+                log("names stopped exception ${e.javaClass.simpleName}, the scan result stays")
                 return
             }
             log("name addr=${hexAddr(addr)} ${DtcWire.nameText(name)}")
