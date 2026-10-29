@@ -26,6 +26,7 @@ interface DtcDevice {
  * the whitelisted addresses with the fixed requests of [DtcWire]. Checks the guard property, the
  * gear and the budget before every request.
  */
+@Suppress("TooManyFunctions") // one scan job: each step of the run is its own small function
 class DtcScanner(
     private val device: DtcDevice,
     private val clock: DtcClock,
@@ -51,6 +52,8 @@ class DtcScanner(
         var frames = 0
         var foreign = 0
         var current: Acc? = null
+        /** Blocks with a visible row, whose F197 name is asked after the whole scan. */
+        val named = ArrayList<Int>()
     }
 
     private val lock = Any()
@@ -150,6 +153,7 @@ class DtcScanner(
             }
             run.current = null
         }
+        readNames(run)
         return if (run.frames == 0) {
             Stop(DtcWire.STATE_UNAVAILABLE, "no_frames")
         } else {
@@ -160,7 +164,7 @@ class DtcScanner(
     /**
      * `19 01 FF` first; a positive count asks for the list with the block's own mask (0x0D when it
      * supports the pending bit, else 0x09) and, on a negative answer, once more with FF; a list with
-     * a row the app would show asks for the identity and the name.
+     * a row the app would show asks for the identity (the name comes after the scan, [readNames]).
      */
     private fun readAddress(run: Run, acc: Acc) {
         val addr = acc.addr
@@ -189,10 +193,24 @@ class DtcScanner(
         )
         // The identity only names the block: no answer leaves the address's outcome as it is.
         if (id is DtcMatch.Answer) acc.idUds = id.uds
+        run.named += addr
+    }
 
-        // The block's own name, for the log only (other models): never changes the outcome.
-        val name = exchange(run, addr, DtcWire.nameRequest(addr), DtcWire.SERVICE_READ_DID, DtcWire.DID_NAME)
-        log("name addr=${hexAddr(addr)} ${DtcWire.nameText(name)}")
+    /**
+     * The blocks' own F197 names, for the log only (other models), once every address is read: a
+     * stop here (budget, gear, guard, rejected send) ends the names and never the scan. The gate
+     * still runs before each request, so nothing is sent outside P.
+     */
+    private fun readNames(run: Run) {
+        for (addr in run.named) {
+            val name = try {
+                exchange(run, addr, DtcWire.nameRequest(addr), DtcWire.SERVICE_READ_DID, DtcWire.DID_NAME)
+            } catch (e: Stop) {
+                log("names stopped ${e.reason}, the scan result stays")
+                return
+            }
+            log("name addr=${hexAddr(addr)} ${DtcWire.nameText(name)}")
+        }
     }
 
     /**

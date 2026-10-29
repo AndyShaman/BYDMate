@@ -221,6 +221,50 @@ class DtcScannerTest {
         assertEquals(DtcWire.STATE_DONE, s.state)
     }
 
+    private fun isName(p: ByteArray) = (p[4].toInt() and 0xFF) == 0x22 && (p[6].toInt() and 0xFF) == 0x97
+
+    @Test fun `the names are asked only after every address was read`() {
+        val w = world()
+        w.run()
+        val firstName = w.device.sent.indexOfFirst(::isName)
+        val lastCount = w.device.sent.indexOfLast(::isCount)
+        assertTrue("$firstName after $lastCount", firstName > lastCount)
+    }
+
+    @Test fun `a rejected name request keeps the scan DONE with every address and asks no more names`() {
+        val w = world()
+        w.device.respond = { p ->
+            if (isName(p)) w.device.rc = 1
+            recorded(p)
+        }
+        val s = w.run()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(18, s.done)
+        assertEquals(DtcWire.OUTCOME_OK, s.of(0x712).outcome)
+        assertEquals(1, w.device.sent.count(::isName))
+        assertEquals(1, w.device.unregisterCalls)
+    }
+
+    @Test fun `the budget running out during the names keeps the scan DONE`() {
+        val w = world()
+        w.device.respond = { p ->
+            if (isName(p)) w.clock.t += 91_000
+            recorded(p)
+        }
+        val s = w.run()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(18, s.done)
+        assertEquals(1, w.device.sent.count(::isName))
+    }
+
+    @Test fun `the gear leaving P during the names sends nothing more and keeps the scan DONE`() {
+        val w = world()
+        w.gear = { if (w.device.sent.any(::isName)) 4 else 1 }
+        val s = w.run()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(1, w.device.sent.count(::isName))
+    }
+
     @Test fun `only the six fixed request shapes are ever sent`() {
         val w = world()
         w.run()
