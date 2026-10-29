@@ -21,7 +21,7 @@
 
 已在 Leopard 3（方程豹豹3）上测试，支持 Sea Lion 07、Song、Atto 3、Seal、Han，以及 DM-i 和 DM-o 混动车型（Song Pro DM-i、Leopard 5、Leopard 8、Sealion 06）。适配 DiLink 3.0、4.0、5.0、5.1 及搭载新版 UI7 界面的固件（OTA V1.6）。
 
-[功能](#功能) | [截图](#截图) | [自动化](#自动化) | [投射到仪表盘](#投射到仪表盘) | [HUD](#hud) | [分屏](#分屏) | [语音AI助手](#语音ai助手) | [AI 洞察](#ai-洞察) | [ABRP](#abrp实时遥测) | [安装](#安装) | [编译](#从源码编译) | [发布](https://github.com/AndyShaman/BYDMate/releases) | [赞助](SUPPORT.md)
+[功能](#功能) | [截图](#截图) | [自动化](#自动化) | [投射到仪表盘](#投射到仪表盘) | [HUD](#hud) | [分屏](#分屏) | [语音AI助手](#语音ai助手) | [诊断](#诊断模块故障) | [AI 洞察](#ai-洞察) | [ABRP](#abrp实时遥测) | [安装](#安装) | [编译](#从源码编译) | [发布](https://github.com/AndyShaman/BYDMate/releases) | [赞助](SUPPORT.md)
 
 </div>
 
