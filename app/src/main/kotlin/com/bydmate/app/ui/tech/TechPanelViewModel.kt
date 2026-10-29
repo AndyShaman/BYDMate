@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.autoservice.Pm25Reader
 import com.bydmate.app.data.carstatus.CarStatusReader
+import com.bydmate.app.data.dtc.DtcDescription
+import com.bydmate.app.data.dtc.DtcFound
 import com.bydmate.app.data.dtc.DtcLabels
 import com.bydmate.app.data.dtc.DtcParser
 import com.bydmate.app.data.dtc.DtcScanPhase
@@ -132,6 +134,8 @@ data class TechPanelUiState(
     val dtcSummary: DtcScanSummary? = null,
     /** When [dtcSummary] was taken, epoch ms. */
     val dtcCheckedAt: Long? = null,
+    /** Descriptions of [dtcSummary]'s codes that have one, by model + block + code. */
+    val dtcDescriptions: Map<DtcFound, DtcDescription> = emptyMap(),
     val dtcDialogOpen: Boolean = false,
     /** «Отправить в Telegram» shows only with a bot bound; read when the dialog opens. */
     val dtcTelegramReady: Boolean = false,
@@ -499,7 +503,11 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch {
             dtcScanRepository.last.collect { last ->
                 val summary = last?.let { DtcParser.summarize(it.results) }
-                _uiState.update { it.copy(dtcSummary = summary, dtcCheckedAt = last?.at) }
+                _uiState.update { it.copy(dtcSummary = summary, dtcCheckedAt = last?.at, dtcDescriptions = emptyMap()) }
+                if (summary == null) return@collect
+                // The tables load once, off the main thread; the codes show without text until then.
+                val descriptions = runCatching { dtcScanRepository.describe(summary) }.getOrDefault(emptyMap())
+                _uiState.update { if (it.dtcSummary === summary) it.copy(dtcDescriptions = descriptions) else it }
             }
         }
         viewModelScope.launch {

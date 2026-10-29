@@ -2225,11 +2225,6 @@
     <string name="tech_dtc_full_ure">动力总成单元 URE</string>
     <string name="tech_dtc_full_body">车身模块 0x%1$X</string>
     <string name="tech_dtc_full_unknown">模块 0x%1$X</string>
-    <string name="tech_dtc_ftb_no_signal">未收到其他模块的信息</string>
-    <string name="tech_dtc_ftb_open">电路断路</string>
-    <string name="tech_dtc_ftb_ground">对地短路</string>
-    <string name="tech_dtc_ftb_plus">对电源正极短路</string>
-    <string name="tech_dtc_ftb_component">部件故障</string>
     <plurals name="tech_dtc_answered">
         <item quantity="other">%2$d 个模块中 %1$d 个有响应</item>
     </plurals>
@@ -2238,6 +2233,16 @@
     </plurals>
     <plurals name="tech_dtc_unread_partial">
         <item quantity="other">%1$d 个模块未返回故障码列表，其故障码未在此显示</item>
+    </plurals>
+    <string name="tech_dtc_key_hint">车辆没有检测到钥匙：远程启动后会出现这种情况。如果钥匙在旁边时该码消失，就不是故障。</string>
+    <string name="tech_dtc_similar_note">描述来自相似的比亚迪车型。</string>
+    <string name="tech_dtc_src_exact">来自该车型的比亚迪手册</string>
+    <string name="tech_dtc_src_similar">来自相似的比亚迪车型</string>
+    <string name="tech_dtc_no_desc">数据库中没有该故障码的描述</string>
+    <string name="tech_dtc_support_text">诊断应用通常是收费的，而 BYDMate 免费且非商业。您的支持帮助我们加入新的实用功能。</string>
+    <string name="tech_dtc_support_button">支持</string>
+    <plurals name="tech_dtc_codes">
+        <item quantity="other">%1$d 个故障码</item>
     </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="other">还有 %1$d 个故障码放不下，全部见“诊断”窗口</item>

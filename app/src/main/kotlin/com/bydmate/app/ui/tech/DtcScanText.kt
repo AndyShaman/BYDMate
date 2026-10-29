@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Color
 import com.bydmate.app.R
 import com.bydmate.app.data.dtc.DtcBlock
 import com.bydmate.app.data.dtc.DtcBlockName
-import com.bydmate.app.data.dtc.DtcFault
 import com.bydmate.app.data.dtc.DtcKind
 import com.bydmate.app.data.dtc.DtcLabels
 import com.bydmate.app.data.dtc.DtcScanError
@@ -19,7 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Short block name for the card rows and the Telegram text. */
+/** Short block name for the card rows. */
 internal fun dtcBlockShort(context: Context, name: DtcBlockName): String = when (name.block) {
     DtcBlock.ADAS -> context.getString(R.string.tech_dtc_block_adas)
     DtcBlock.BRAKES -> context.getString(R.string.tech_dtc_block_brakes)
@@ -33,7 +32,7 @@ internal fun dtcBlockShort(context: Context, name: DtcBlockName): String = when 
     DtcBlock.UNKNOWN -> context.getString(R.string.tech_dtc_block_unknown, name.addr)
 }
 
-/** Full block name for the dialog. */
+/** Full block name for the dialog and the Telegram text. */
 internal fun dtcBlockFull(context: Context, name: DtcBlockName): String = when (name.block) {
     DtcBlock.ADAS -> context.getString(R.string.tech_dtc_full_adas)
     DtcBlock.BRAKES -> context.getString(R.string.tech_dtc_full_brakes)
@@ -45,14 +44,6 @@ internal fun dtcBlockFull(context: Context, name: DtcBlockName): String = when (
     DtcBlock.URE -> context.getString(R.string.tech_dtc_full_ure)
     DtcBlock.BODY -> context.getString(R.string.tech_dtc_full_body, name.addr)
     DtcBlock.UNKNOWN -> context.getString(R.string.tech_dtc_full_unknown, name.addr)
-}
-
-internal fun faultText(fault: DtcFault): Int = when (fault) {
-    DtcFault.NO_SIGNAL -> R.string.tech_dtc_ftb_no_signal
-    DtcFault.OPEN_CIRCUIT -> R.string.tech_dtc_ftb_open
-    DtcFault.SHORT_TO_GROUND -> R.string.tech_dtc_ftb_ground
-    DtcFault.SHORT_TO_PLUS -> R.string.tech_dtc_ftb_plus
-    DtcFault.COMPONENT -> R.string.tech_dtc_ftb_component
 }
 
 internal fun dtcKindText(kind: DtcKind): Int = when (kind) {
@@ -85,10 +76,16 @@ internal fun dtcLabels(context: Context): DtcLabels = object : DtcLabels {
     override val pendingMark = context.getString(R.string.tech_dtc_kind_pending)
     override val noErrors = context.getString(R.string.tech_dtc_none_found)
     override val footer = context.getString(R.string.tech_dtc_note)
-    override fun blockName(name: DtcBlockName) = dtcBlockShort(context, name)
+    override fun blockName(name: DtcBlockName) = dtcBlockFull(context, name)
     override fun unread(count: Int) = context.resources.getQuantityString(R.plurals.tech_dtc_unread, count, count)
     override fun moreCodes(count: Int) = context.resources.getQuantityString(R.plurals.tech_dtc_more_codes, count, count)
+    override val keyHint = context.getString(R.string.tech_dtc_key_hint)
+    override val similarNote = context.getString(R.string.tech_dtc_similar_note)
+    override val zh = dtcZh(context)
 }
+
+/** Descriptions follow the app language: the manual's Chinese for Chinese, English for the rest. */
+internal fun dtcZh(context: Context): Boolean = context.resources.configuration.locales[0].language == "zh"
 
 /** One short line for an attempt that ended without a result; null when there is nothing to say. */
 internal fun dtcErrorText(error: DtcScanError?): Int? = when (error) {

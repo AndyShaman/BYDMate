@@ -2278,11 +2278,6 @@
     <string name="tech_dtc_full_ure">Блок силовой установки URE</string>
     <string name="tech_dtc_full_body">Кузовной блок 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Блок 0x%1$X</string>
-    <string name="tech_dtc_ftb_no_signal">Нет сообщения от другого блока</string>
-    <string name="tech_dtc_ftb_open">Обрыв цепи</string>
-    <string name="tech_dtc_ftb_ground">Замыкание на массу</string>
-    <string name="tech_dtc_ftb_plus">Замыкание на плюс</string>
-    <string name="tech_dtc_ftb_component">Неисправность компонента</string>
     <string name="tech_dtc_block_ure" translatable="false">URE</string>
     <plurals name="tech_dtc_answered">
         <item quantity="one">ответил %1$d блок из %2$d</item>
@@ -2301,6 +2296,19 @@
         <item quantity="few">%1$d блока не отдали список, их коды здесь не показаны</item>
         <item quantity="many">%1$d блоков не отдали список, их коды здесь не показаны</item>
         <item quantity="other">%1$d блока не отдали список, их коды здесь не показаны</item>
+    </plurals>
+    <string name="tech_dtc_key_hint">Машина не видела ключ: так бывает при удалённом запуске. Если код пропадает, когда ключ рядом, это не поломка.</string>
+    <string name="tech_dtc_similar_note">Описания по данным похожих моделей BYD.</string>
+    <string name="tech_dtc_src_exact">по мануалу BYD для этой модели</string>
+    <string name="tech_dtc_src_similar">по данным похожих моделей BYD</string>
+    <string name="tech_dtc_no_desc">Описания этого кода нет в базе</string>
+    <string name="tech_dtc_support_text">Приложения для диагностики обычно платные, а BYDMate бесплатный и некоммерческий. Поддержка помогает добавлять в него новые полезные функции.</string>
+    <string name="tech_dtc_support_button">Поддержать</string>
+    <plurals name="tech_dtc_codes">
+        <item quantity="one">%1$d код</item>
+        <item quantity="few">%1$d кода</item>
+        <item quantity="many">%1$d кодов</item>
+        <item quantity="other">%1$d кода</item>
     </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="one">Ещё %1$d код не поместился, все в окне «Диагностика»</item>

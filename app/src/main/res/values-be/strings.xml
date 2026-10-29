@@ -2263,11 +2263,6 @@
     <string name="tech_dtc_full_ure">Блок сілавой устаноўкі URE</string>
     <string name="tech_dtc_full_body">Кузаўны блок 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Блок 0x%1$X</string>
-    <string name="tech_dtc_ftb_no_signal">Няма паведамлення ад іншага блока</string>
-    <string name="tech_dtc_ftb_open">Абрыў ланцуга</string>
-    <string name="tech_dtc_ftb_ground">Замыканне на масу</string>
-    <string name="tech_dtc_ftb_plus">Замыканне на плюс</string>
-    <string name="tech_dtc_ftb_component">Няспраўнасць кампанента</string>
     <plurals name="tech_dtc_answered">
         <item quantity="one">адказаў %1$d блок з %2$d</item>
         <item quantity="few">адказалі %1$d блокі з %2$d</item>
@@ -2285,6 +2280,19 @@
         <item quantity="few">%1$d блокі не аддалі спіс, іх коды тут не паказаны</item>
         <item quantity="many">%1$d блокаў не аддалі спіс, іх коды тут не паказаны</item>
         <item quantity="other">%1$d блока не аддалі спіс, іх коды тут не паказаны</item>
+    </plurals>
+    <string name="tech_dtc_key_hint">Машына не бачыла ключ: так бывае пры аддаленым запуску. Калі код знікае, калі ключ побач, гэта не паломка.</string>
+    <string name="tech_dtc_similar_note">Апісанні па даных падобных мадэляў BYD.</string>
+    <string name="tech_dtc_src_exact">па мануале BYD для гэтай мадэлі</string>
+    <string name="tech_dtc_src_similar">па даных падобных мадэляў BYD</string>
+    <string name="tech_dtc_no_desc">Апісання гэтага кода няма ў базе</string>
+    <string name="tech_dtc_support_text">Праграмы для дыягностыкі звычайна платныя, а BYDMate бясплатны і некамерцыйны. Падтрымка дапамагае дадаваць у яго новыя карысныя функцыі.</string>
+    <string name="tech_dtc_support_button">Падтрымаць</string>
+    <plurals name="tech_dtc_codes">
+        <item quantity="one">%1$d код</item>
+        <item quantity="few">%1$d коды</item>
+        <item quantity="many">%1$d кодаў</item>
+        <item quantity="other">%1$d кода</item>
     </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="one">Яшчэ %1$d код не змясціўся, усе ў акне «Дыягностыка»</item>

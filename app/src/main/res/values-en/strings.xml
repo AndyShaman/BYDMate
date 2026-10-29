@@ -2111,11 +2111,6 @@
     <string name="tech_dtc_full_ure">Powertrain unit URE</string>
     <string name="tech_dtc_full_body">Body module 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Module 0x%1$X</string>
-    <string name="tech_dtc_ftb_no_signal">No message from another module</string>
-    <string name="tech_dtc_ftb_open">Open circuit</string>
-    <string name="tech_dtc_ftb_ground">Short to ground</string>
-    <string name="tech_dtc_ftb_plus">Short to battery plus</string>
-    <string name="tech_dtc_ftb_component">Component fault</string>
     <plurals name="tech_dtc_answered">
         <item quantity="one">%1$d of %2$d modules answered</item>
         <item quantity="other">%1$d of %2$d modules answered</item>
@@ -2127,6 +2122,17 @@
     <plurals name="tech_dtc_unread_partial">
         <item quantity="one">%1$d module did not send its list, its codes are not shown here</item>
         <item quantity="other">%1$d modules did not send their lists, their codes are not shown here</item>
+    </plurals>
+    <string name="tech_dtc_key_hint">The car did not see the key: this happens after a remote start. If the code goes away when the key is near, nothing is broken.</string>
+    <string name="tech_dtc_similar_note">Descriptions from similar BYD models.</string>
+    <string name="tech_dtc_src_exact">from the BYD manual for this model</string>
+    <string name="tech_dtc_src_similar">from similar BYD models</string>
+    <string name="tech_dtc_no_desc">No description of this code in the database</string>
+    <string name="tech_dtc_support_text">Diagnostic apps are usually paid, while BYDMate is free and non-commercial. Support helps add new useful features to it.</string>
+    <string name="tech_dtc_support_button">Support</string>
+    <plurals name="tech_dtc_codes">
+        <item quantity="one">%1$d code</item>
+        <item quantity="other">%1$d codes</item>
     </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="one">%1$d more code did not fit, all of them are in the “Diagnostics” window</item>

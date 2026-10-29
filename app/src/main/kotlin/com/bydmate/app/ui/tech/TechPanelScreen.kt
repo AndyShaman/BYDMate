@@ -73,6 +73,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
+import com.bydmate.app.data.dtc.DtcKind
 import com.bydmate.app.data.dtc.DtcScanPhase
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
@@ -710,8 +711,9 @@ private fun DiagnosticsCard(
 }
 
 /**
- * «Ошибки в блоках» of the last manual scan: up to three codes, the rest in the dialog. The scan
- * runs only on a tap, only on P; a failed attempt keeps the last good scan and adds one line.
+ * «Ошибки в блоках» of the last manual scan: one line per block (address, short name, its first
+ * two codes), up to three blocks, the rest in the dialog. The scan runs only on a tap, only on P;
+ * a failed attempt keeps the last good scan and adds one line.
  */
 @Composable
 private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit, onOpen: () -> Unit) {
@@ -739,27 +741,36 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onOpen).padding(vertical = 2.dp),
         ) {
             if (summary.found.isEmpty()) DtcNote(dtcNoRowsText(context, summary))
-            summary.found.take(DTC_CARD_ROWS).forEach { found ->
+            val blocks = summary.found.groupBy { it.addr }.values.toList()
+            blocks.take(DTC_CARD_BLOCKS).forEach { codes ->
+                val now = codes.any { it.row.kind == DtcKind.NOW }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     Text(
-                        found.row.code,
-                        color = TextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        "0x%X".format(codes.first().addr),
+                        color = TextMuted,
+                        fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                     )
                     Text(
-                        dtcBlockShort(context, found.block),
+                        dtcBlockShort(context, codes.first().block),
                         color = TextSecondary,
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                     )
-                    Text(stringResource(dtcKindText(found.row.kind)), color = dtcKindColor(found.row.kind), fontSize = 11.sp)
+                    Text(
+                        codes.take(DTC_CARD_CODES).joinToString(", ") { it.row.code } +
+                            if (codes.size > DTC_CARD_CODES) " +${codes.size - DTC_CARD_CODES}" else "",
+                        color = if (now) SocYellow else TextMuted,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                    )
                 }
             }
-            val more = summary.found.size - DTC_CARD_ROWS
+            val more = blocks.size - DTC_CARD_BLOCKS
             if (more > 0) {
                 Text(stringResource(R.string.tech_dtc_more, more), color = TextMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
             }
@@ -794,8 +805,9 @@ private fun DtcNote(text: String) {
     Text(text, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
 }
 
-/** Codes the card lists before «+N ещё». */
-private const val DTC_CARD_ROWS = 3
+/** Blocks the card lists before «+N ещё», and codes per block before «+N». */
+private const val DTC_CARD_BLOCKS = 3
+private const val DTC_CARD_CODES = 2
 
 /** How the disabled scan button fades, as in the approved mock. */
 internal const val DISABLED_ALPHA = 0.45f

@@ -2263,11 +2263,6 @@
     <string name="tech_dtc_full_ure">Moduł układu napędowego URE</string>
     <string name="tech_dtc_full_body">Moduł nadwozia 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Moduł 0x%1$X</string>
-    <string name="tech_dtc_ftb_no_signal">Brak komunikatu z innego modułu</string>
-    <string name="tech_dtc_ftb_open">Przerwa w obwodzie</string>
-    <string name="tech_dtc_ftb_ground">Zwarcie do masy</string>
-    <string name="tech_dtc_ftb_plus">Zwarcie do plusa</string>
-    <string name="tech_dtc_ftb_component">Usterka podzespołu</string>
     <plurals name="tech_dtc_answered">
         <item quantity="one">odpowiedział %1$d moduł z %2$d</item>
         <item quantity="few">odpowiedziały %1$d moduły z %2$d</item>
@@ -2285,6 +2280,19 @@
         <item quantity="few">%1$d moduły nie przesłały listy, ich kody nie są tu pokazane</item>
         <item quantity="many">%1$d modułów nie przesłało listy, ich kody nie są tu pokazane</item>
         <item quantity="other">%1$d modułu nie przesłało listy, ich kody nie są tu pokazane</item>
+    </plurals>
+    <string name="tech_dtc_key_hint">Samochód nie widział kluczyka: tak bywa po zdalnym uruchomieniu. Jeśli kod znika, gdy kluczyk jest obok, to nie usterka.</string>
+    <string name="tech_dtc_similar_note">Opisy według danych podobnych modeli BYD.</string>
+    <string name="tech_dtc_src_exact">według instrukcji BYD dla tego modelu</string>
+    <string name="tech_dtc_src_similar">według danych podobnych modeli BYD</string>
+    <string name="tech_dtc_no_desc">Brak opisu tego kodu w bazie</string>
+    <string name="tech_dtc_support_text">Aplikacje diagnostyczne są zwykle płatne, a BYDMate jest darmowy i niekomercyjny. Wsparcie pomaga dodawać do niego nowe przydatne funkcje.</string>
+    <string name="tech_dtc_support_button">Wesprzyj</string>
+    <plurals name="tech_dtc_codes">
+        <item quantity="one">%1$d kod</item>
+        <item quantity="few">%1$d kody</item>
+        <item quantity="many">%1$d kodów</item>
+        <item quantity="other">%1$d kodu</item>
     </plurals>
     <plurals name="tech_dtc_more_codes">
         <item quantity="one">Jeszcze %1$d kod się nie zmieścił, wszystkie w oknie „Diagnostyka”</item>
