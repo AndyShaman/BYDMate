@@ -6,6 +6,7 @@ import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.nativestack.FidAddress
 import com.bydmate.app.data.nativestack.FidAddresses
+import com.bydmate.app.data.nativestack.FidCatalog
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.ParsReader
@@ -30,7 +31,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class VehicleApiImpl @Inject constructor(
+@Suppress("LargeClass") // every car read and write behind VehicleApi, one verification channel each
+class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies + test seams
     private val parsReader: ParsReader,
     private val autoservice: AutoserviceClient,
     private val helper: HelperClient,
@@ -40,6 +42,8 @@ class VehicleApiImpl @Inject constructor(
     private val windowStore: WindowChannelStore,
     // Null in unit tests (no SharedPreferences); production gets the singleton from AppModule.
     private val seatJournal: SeatCommandJournal? = null,
+    // This car's fid catalog for the rear seat heat gate (#327); none in unit tests = no rear heat.
+    private val rearCatalog: () -> FidCatalog? = { null },
 ) : VehicleApi {
 
     private val seatChannel = AdaptiveSeatChannel(
@@ -59,6 +63,12 @@ class VehicleApiImpl @Inject constructor(
     private val hudSwitchChannel = HudSwitchChannel(
         SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
         HudReader { fid -> helper.read(WriteAllowlist.HUD_DEV, fid)?.toInt() },
+    )
+
+    private val rearSeatHeatChannel = RearSeatHeatChannel(
+        SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
+        RearSeatReader { fid -> helper.read(RearSeatHeat.READ_DEV, fid)?.toInt() },
+        rearCatalog,
     )
 
     private val batteryPreheatChannel = BatteryPreheatChannel(
@@ -119,7 +129,12 @@ class VehicleApiImpl @Inject constructor(
 
     // ─── Writes ────────────────────────────────────────────────────────────────
 
+    @Suppress("CyclomaticComplexMethod") // one early route per command family
     override suspend fun dispatch(commandString: String): Result<Unit> {
+        // Rear seat heat (#327): write + readback as one unit, like the seat sequence below.
+        CommandTranslator.resolveRearSeatHeat(commandString)?.let { cmd ->
+            return withContext(NonCancellable) { rearSeatHeat(cmd) }
+        }
         CommandTranslator.resolveSeat(commandString)?.let { seat ->
             // Seat writes are switch then level (two binder transacts). Wrap in NonCancellable
             // so a hard stop between the two writes never leaves the seat half-commanded
@@ -428,6 +443,33 @@ class VehicleApiImpl @Inject constructor(
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
         }
     }
+
+    /**
+     * Rear seat heat through its channel (#327), as the Result dispatch returns. Like the HUD
+     * verdict row: dev = 1001 when the set was written (0 = nothing written), readback = the
+     * last state read, error = "verdict=<label>" (also on success).
+     */
+    private suspend fun rearSeatHeat(cmd: RearSeatCommand): Result<Unit> {
+        val action = RearSeatHeat.actionName(cmd.seat)
+        val outcome = rearSeatHeatChannel.actuate(cmd.seat, cmd.level)
+        val entry = allowlist.find(action)
+        logWrite(
+            action, if (outcome.written) entry?.dev ?: -1 else 0, entry?.writeFid ?: -1, RearSeatHeat.writeValue(cmd.level),
+            outcome.state, outcome.result == RearSeatHeatChannel.Result.OK, "verdict=${outcome.verdict}", validated = false,
+        )
+        return when (outcome.result) {
+            RearSeatHeatChannel.Result.OK -> Result.success(Unit)
+            RearSeatHeatChannel.Result.NOT_EQUIPPED -> Result.failure(VehicleWriteError.NotEquipped(action))
+            RearSeatHeatChannel.Result.NO_EFFECT -> Result.failure(VehicleWriteError.Unsupported(action))
+            RearSeatHeatChannel.Result.UNREACHABLE ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
+            RearSeatHeatChannel.Result.UNCONFIRMED ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+        }
+    }
+
+    override suspend fun rearSeatHeatSides(): Set<RearSeat> =
+        RearSeat.entries.filter { rearSeatHeatChannel.equipped(it) }.toSet()
 
     /**
      * Drive mode through its verification channel, as the Result dispatch returns. Like the

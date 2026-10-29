@@ -26,7 +26,7 @@ data class SteeringKeyOwners(
  */
 fun steeringKeyOwner(keyCode: Int, o: SteeringKeyOwners): SteeringKeyOwner? = when {
     o.voiceEnabled && (keyCode == o.voiceKey || keyCode in o.voiceCompanions) -> SteeringKeyOwner.VOICE
-    o.knobEnabled && keyCode == VOLUME_KNOB_PRESS_KEYCODE -> SteeringKeyOwner.KNOB
+    o.knobEnabled && keyCode in VOLUME_KNOB_PRESS_KEYCODES -> SteeringKeyOwner.KNOB
     o.projectionEnabled && keyCode == o.projectionKey -> SteeringKeyOwner.PROJECTION
     o.splitEnabled && o.splitKey > 0 && (keyCode == o.splitKey || keyCode in o.splitCompanions) ->
         SteeringKeyOwner.SPLIT
@@ -39,7 +39,7 @@ fun steeringKeyOwner(keyCode: Int, o: SteeringKeyOwners): SteeringKeyOwner? = wh
  */
 fun splitKeyChooserOwner(keyCode: Int, o: SteeringKeyOwners): SteeringKeyOwner? = when {
     keyCode == o.voiceKey || keyCode in o.voiceCompanions -> SteeringKeyOwner.VOICE
-    keyCode == VOLUME_KNOB_PRESS_KEYCODE -> SteeringKeyOwner.KNOB
+    keyCode in VOLUME_KNOB_PRESS_KEYCODES -> SteeringKeyOwner.KNOB
     keyCode == o.projectionKey -> SteeringKeyOwner.PROJECTION
     else -> null
 }

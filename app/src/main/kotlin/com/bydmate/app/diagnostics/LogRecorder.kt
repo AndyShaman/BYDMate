@@ -463,9 +463,13 @@ class LogRecorder internal constructor(
             // Blindspot wave: AVM camera probe. FidPush carries the daemon's push
             // subscription (register results, events) and the app's apply lines.
             "FidPush:*", "TechPanel:*", "CameraProbe:*", "BlindSpot:*", "CameraMonitor:*",
+            // «Диагностика»: reads of the stock car status provider and its key observers.
+            "CarStatus:*",
             // Diagnostic fid recorder (-test builds): summary only — the events go to its own
             // file in /sdcard/Download, not here.
             "FidRec:*",
+            // Manual fault-code scan: the daemon's requests, frames and outcomes (app and daemon share the tag).
+            "DtcScan:*",
             // Split-screen wave: session/watchdog decisions, pill+picker overlay, widget tap.
             "SplitSessionMgr:*", "SplitOverlayCtrl:*", "SplitPillView:*",
             "WidgetController:*",
@@ -519,7 +523,7 @@ class LogRecorder internal constructor(
             // rule confirm overlay, the autostart worker, the crash log and the listener grant.
             "NavA11yExtractor:*", "HudAmapBroadcaster:*", "HudAmapClusterLoop:*", "ClusterFrameUi7:*", "ClusterProbe:*",
             "Split37Engine:*", "NativeSplitLauncher:*", "HudTextSanitizer:*", "KnobPlayPause:*",
-            "SteeringHeatChannel:*", "HudSwitchChannel:*", "BatteryPreheatChannel:*", "NetworkAvailMon:*", "ConfirmOverlay:*", "ServiceStartWorker:*",
+            "SteeringHeatChannel:*", "HudSwitchChannel:*", "RearSeatHeatChannel:*", "BatteryPreheatChannel:*", "NetworkAvailMon:*", "ConfirmOverlay:*", "ServiceStartWorker:*",
             "CrashLog:*", "MediaSessionGrant:*",
             // Stock climate app seat writes (#327/#341): the BYD framework logs the seat and
             // value it sets, the car's confirmation and AC device events. AbsBYDAutoDevice stays

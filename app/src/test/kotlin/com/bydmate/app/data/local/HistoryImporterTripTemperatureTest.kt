@@ -59,7 +59,7 @@ class HistoryImporterTripTemperatureTest {
         coEvery { energyDataReader.readTripsSince(any()) } returns listOf(record)
         coEvery { settingsRepository.getBatteryCapacity() } returns 72.9
         coEvery { tripDao.getByBydId(record.id) } returns null
-        coEvery { tripDao.getByStartTsRange(any(), any()) } returns null
+        coEvery { tripDao.getSameTripByTime(any(), any()) } returns null
 
         val inserted = slot<TripEntity>()
         importer().syncFromEnergyData()

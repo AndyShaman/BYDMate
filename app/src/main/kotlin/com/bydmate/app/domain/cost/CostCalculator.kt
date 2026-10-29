@@ -8,6 +8,10 @@ import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_CHARGES
 import com.bydmate.app.data.repository.SettingsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToLong
@@ -48,6 +52,11 @@ class CostCalculator @Inject constructor(
     private val tripDao: TripDao,
     private val settingsRepository: SettingsRepository,
 ) {
+
+    private val _pricingVersion = MutableStateFlow(0L)
+
+    /** Bumped after every [recalculate], so a screen holding a rate knows to read it again. */
+    val pricingVersion: StateFlow<Long> = _pricingVersion.asStateFlow()
 
     /**
      * Current periods. A fresh install has none (the seeding migration only runs on an
@@ -105,6 +114,7 @@ class CostCalculator @Inject constructor(
 
         Log.i(TAG, "recalc from=$fromTs to=$toTs charges=${chargePass.charges} trips=$tripsUpdated " +
             "skippedManual=${chargePass.skippedManual}")
+        _pricingVersion.update { it + 1 }
         return chargePass.copy(trips = tripsUpdated)
     }
 
@@ -198,6 +208,17 @@ class CostCalculator @Inject constructor(
         val liters = trip.fuelLiters
         if (pricePerLiter == null || liters == null || liters <= 0.0) return null
         return (liters * pricePerLiter * 100.0).roundToLong() / 100.0
+    }
+
+    /**
+     * Price per kWh for a trip starting at [ts], by the same rule a saved trip is priced with:
+     * the dashboard counters and the Telegram report put it on the trip under way.
+     */
+    suspend fun tripRateAt(ts: Long): Double {
+        val period = schedule().periodAt(ts) ?: return settingsRepository.getHomeTariff()
+        TariffSchedule.fixedTripRate(period)?.let { return it }
+        val timeline = BatteryPriceTimeline(chargeDao.getCompletedForPricing(ts), settingsRepository.getBatteryCapacity())
+        return tripRate(period, ts, timeline)
     }
 
     /** Price per kWh for one trip under [period]; logs the `charges` rule decision. */

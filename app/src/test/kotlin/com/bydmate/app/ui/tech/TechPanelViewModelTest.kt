@@ -1,5 +1,12 @@
 package com.bydmate.app.ui.tech
 
+import com.bydmate.app.data.autoservice.Pm25
+import com.bydmate.app.data.autoservice.Pm25Reader
+import com.bydmate.app.data.carstatus.CarServiceStatus
+import com.bydmate.app.data.carstatus.CarStatusReader
+import com.bydmate.app.data.dtc.DtcScanPhase
+import com.bydmate.app.data.dtc.DtcScanRepository
+import com.bydmate.app.data.dtc.DtcScanState
 import com.bydmate.app.data.nativestack.HybridTechFixture
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
@@ -20,12 +27,18 @@ import androidx.lifecycle.ViewModelStore
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.coVerify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -50,12 +63,14 @@ class TechPanelViewModelTest {
         hintSeen = false
         hintFlagWrites = 0
         chargeLog.value = emptyList()
+        dtcScanState = MutableStateFlow(DtcScanState())
     }
 
     @After fun tearDown() {
         store.clear()
         connectedFlow().value = true
         liveDataFlow().value = null
+        runningFlow().value = false
         Dispatchers.resetMain()
     }
 
@@ -76,6 +91,23 @@ class TechPanelViewModelTest {
             .getDeclaredField("_lastData")
             .apply { isAccessible = true }
             .get(null) as MutableStateFlow<DiParsData?>
+    }
+
+    /** The scan repository the Diagnostics card reads; [dtcScanState] is the state it reports. */
+    private var dtcScanState = MutableStateFlow(DtcScanState())
+
+    private fun dtcRepo(): DtcScanRepository = mockk<DtcScanRepository>(relaxed = true).also {
+        every { it.state } returns dtcScanState
+        every { it.last } returns MutableStateFlow(null)
+    }
+
+    /** The service's own running flag, reached the same way as the transport flag. */
+    private fun runningFlow(): MutableStateFlow<Boolean> {
+        @Suppress("UNCHECKED_CAST")
+        return TrackingService::class.java
+            .getDeclaredField("_isRunning")
+            .apply { isAccessible = true }
+            .get(null) as MutableStateFlow<Boolean>
     }
 
     /** Scoped so [store] can clear it; a bare constructor call leaks its viewModelScope. */
@@ -102,12 +134,26 @@ class TechPanelViewModelTest {
         coEvery { r.setTechOrderHintSeen() } answers { hintFlagWrites++; hintSeen = true }
     }
 
+    /** The stock provider as the screen sees it: a snapshot, or null when the car has none. */
+    private fun carStatusReader(snapshot: CarServiceStatus?): CarStatusReader = mockk<CarStatusReader>().also {
+        coEvery { it.read() } returns snapshot
+        every { it.changes() } returns emptyFlow()
+    }
+
+    /** The on-demand PM2.5 read: [answer] is what every call returns (null = no sensor). */
+    private fun pm25Reader(answer: Pm25?): Pm25Reader = mockk<Pm25Reader>().also {
+        coEvery { it.read() } returns answer
+    }
+
+    @Suppress("LongParameterList") // test factory: every override is optional
     private fun buildViewModel(
         battery: BatteryState? = null,
         avg: AvgSoc = AvgSoc(null, null),
         lifetimeCharged: LifetimeChargingStats? = null,
         capacityKwh: Double = 72.9,
         kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
+        carStatus: CarServiceStatus? = null,
+        pm25: Pm25Reader = pm25Reader(null),
     ): TechPanelViewModel {
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } returns (
@@ -121,7 +167,7 @@ class TechPanelViewModelTest {
             )
         every { charges.getAllCharges() } returns chargeLog
         val settings = settings().also { coEvery { it.getBatteryCapacity() } returns capacityKwh }
-        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind)))
+        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind), carStatusReader(carStatus), dtcRepo(), pm25))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -282,7 +328,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor()))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null), dtcRepo(), pm25Reader(null)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
@@ -415,8 +461,8 @@ class TechPanelViewModelTest {
 
         assertEquals(
             listOf(
-                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
-                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+                TechCard.CAR_STATE, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.DIAGNOSTICS,
             ),
             vm.uiState.value.cardOrder,
         )
@@ -433,8 +479,8 @@ class TechPanelViewModelTest {
 
         assertEquals(
             listOf(
-                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
-                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+                TechCard.CAR_STATE, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.DIAGNOSTICS,
             ),
             vm.uiState.value.cardOrder,
         )
@@ -445,16 +491,16 @@ class TechPanelViewModelTest {
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        vm.moveCard(TechCard.TYRES, TechCard.BATTERY_NOW)
+        vm.moveCard(TechCard.CAR_STATE, TechCard.BATTERY_NOW)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(TechCard.TYRES, vm.uiState.value.cardOrder.first())
-        assertEquals("tyres,battery_now,limits,history,motors,climate", savedOrder)
+        assertEquals(TechCard.CAR_STATE, vm.uiState.value.cardOrder.first())
+        assertEquals("climate,battery_now,limits,history,motors,diagnostics", savedOrder)
         assertTrue(hintSeen)
         assertFalse(vm.uiState.value.showOrderHint)
 
         // The flag is already set: a second drag must not write it again.
-        vm.moveCard(TechCard.CLIMATE, TechCard.TYRES)
+        vm.moveCard(TechCard.DIAGNOSTICS, TechCard.CAR_STATE)
         testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(1, hintFlagWrites)
     }
@@ -464,8 +510,8 @@ class TechPanelViewModelTest {
     fun `only the cards with data are laid out`() {
         val state = TechPanelUiState(
             cardOrder = listOf(
-                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
-                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+                TechCard.CAR_STATE, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.DIAGNOSTICS,
             ),
             motorRpmFront = 1200,
             soc = 43,
@@ -481,9 +527,9 @@ class TechPanelViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(TechCard.FUEL, vm.uiState.value.cardOrder.last())
-        vm.moveCard(TechCard.FUEL, TechCard.TYRES)
+        vm.moveCard(TechCard.FUEL, TechCard.CAR_STATE)
         testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals("fuel,tyres,motors,battery_now,limits,history,climate", savedOrder)
+        assertEquals("fuel,climate,motors,battery_now,limits,history,diagnostics", savedOrder)
     }
 
     /** DM-i (#184): the fuel card needs a confirmed hybrid; an EV never lays it out. */
@@ -547,5 +593,211 @@ class TechPanelViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(15 * dayMs, vm.uiState.value.lastFullChargeTs)
+    }
+
+    // --- «Состояние машины» and «Диагностика» ------------------------------------
+
+    private val noData get() = diParsData()
+
+    private suspend fun TestScope.openWith(data: DiParsData?, carStatus: CarServiceStatus? = null): TechPanelUiState {
+        liveDataFlow().value = data
+        val vm = buildViewModel(carStatus = carStatus)
+        testDispatcher.scheduler.advanceUntilIdle()
+        return vm.uiState.value
+    }
+
+    @Test
+    fun `car-state card shows from tyres alone`() = runTest {
+        val state = openWith(noData.copy(tirePressFL = 245))
+        assertTrue(state.isVisible(TechCard.CAR_STATE))
+    }
+
+    @Test
+    fun `car-state card shows from climate alone`() = runTest {
+        val state = openWith(noData.copy(insideTemp = 22))
+        assertTrue(state.isVisible(TechCard.CAR_STATE))
+    }
+
+    @Test
+    fun `car-state card shows from pm25 alone`() = runTest {
+        liveDataFlow().value = noData
+        val vm = buildViewModel(pm25 = pm25Reader(Pm25(8, null, 1, null)))
+        backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        val state = vm.uiState.value
+        assertEquals(8, state.pm25InShown)
+        assertTrue(state.isVisible(TechCard.CAR_STATE))
+    }
+
+    @Test
+    fun `no sensor - the reader is asked once and never again while the screen stays open`() = runTest {
+        val reader = pm25Reader(null)
+        val vm = buildViewModel(pm25 = reader)
+        backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(5 * 60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 1) { reader.read() }
+        assertNull(vm.uiState.value.pm25InShown)
+        assertNull(vm.uiState.value.pm25OutShown)
+    }
+
+    @Test
+    fun `sensor present - shown at once and refreshed once a minute`() = runTest {
+        val reader = pm25Reader(Pm25(8, null, 2, null))
+        val vm = buildViewModel(pm25 = reader)
+        backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(8, vm.uiState.value.pm25InShown)
+        coVerify(exactly = 1) { reader.read() }
+        testDispatcher.scheduler.advanceTimeBy(60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 2) { reader.read() }
+        testDispatcher.scheduler.advanceTimeBy(60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 3) { reader.read() }
+    }
+
+    @Test
+    fun `a failed read after a sensor was seen clears the values and polling goes on`() = runTest {
+        val reader = mockk<Pm25Reader>()
+        coEvery { reader.read() } returnsMany listOf(Pm25(8, null, 2, null), null)
+        val vm = buildViewModel(pm25 = reader)
+        backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(8, vm.uiState.value.pm25InShown)
+        testDispatcher.scheduler.advanceTimeBy(60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 2) { reader.read() }
+        assertNull(vm.uiState.value.pm25InShown)
+        testDispatcher.scheduler.advanceTimeBy(60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 3) { reader.read() }
+    }
+
+    @Test
+    fun `back on the screen, a failed first read clears a sensor seen before and polling goes on`() = runTest {
+        val reader = mockk<Pm25Reader>()
+        coEvery { reader.read() } returnsMany listOf(Pm25(8, null, 2, null), null, Pm25(9, null, 2, null))
+        val vm = buildViewModel(pm25 = reader)
+        val first = backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(8, vm.uiState.value.pm25InShown)
+        first.cancel()
+
+        backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        assertNull(vm.uiState.value.pm25InShown)
+        testDispatcher.scheduler.advanceTimeBy(60_000L)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(9, vm.uiState.value.pm25InShown)
+    }
+
+    @Test
+    fun `nothing reads pm25 until the screen is shown, and leaving it stops the refresh`() = runTest {
+        val reader = pm25Reader(Pm25(8, null, 2, null))
+        val vm = buildViewModel(pm25 = reader)
+        coVerify(exactly = 0) { reader.read() }
+        val shown = backgroundScope.launch { vm.pollPm25() }
+        testDispatcher.scheduler.advanceTimeBy(1)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 1) { reader.read() }
+        shown.cancel()
+        testDispatcher.scheduler.advanceTimeBy(5 * 60_000L)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 1) { reader.read() }
+    }
+
+    @Test
+    fun `pm25 value is shown only with a valid level`() {
+        val state = TechPanelUiState(pm25In = 8, pm25LevelIn = 1, pm25Out = 0, pm25LevelOut = 0)
+        assertEquals(8, state.pm25InShown)
+        assertNull(state.pm25OutShown)
+        assertNull(TechPanelUiState(pm25In = 8).pm25InShown)
+        assertEquals(40, TechPanelUiState(pm25Out = 40, pm25LevelOut = 6).pm25OutShown)
+    }
+
+    @Test
+    fun `pm25 with level zero hides the row`() {
+        assertNull(TechPanelUiState(pm25In = 0, pm25LevelIn = 0).pm25InShown)
+        assertNull(TechPanelUiState(pm25In = 12, pm25LevelIn = 0).pm25InShown)
+    }
+
+    @Test
+    fun `diagnostics card shows with provider rows and zero warnings`() = runTest {
+        val state = openWith(null, CarServiceStatus(faults = 0, daysLeft = null, kmLeft = null))
+        assertEquals(0, state.faultCount)
+        assertTrue(state.isVisible(TechCard.DIAGNOSTICS))
+    }
+
+    @Test
+    fun `diagnostics card carries the service countdown`() = runTest {
+        val state = openWith(null, CarServiceStatus(faults = 2, daysLeft = 278, kmLeft = 27609))
+        assertEquals(2, state.faultCount)
+        assertEquals(278, state.serviceDaysLeft)
+        assertEquals(27609, state.serviceKmLeft)
+    }
+
+    @Test
+    fun `diagnostics card is hidden when the provider is absent`() = runTest {
+        val state = openWith(null, null)
+        assertNull(state.faultCount)
+        assertFalse(state.isVisible(TechCard.DIAGNOSTICS))
+    }
+
+    @Test
+    fun `the service row needs at least one half`() {
+        assertFalse(TechPanelUiState(serviceDaysLeft = null, serviceKmLeft = null).hasServiceRow)
+        assertTrue(TechPanelUiState(serviceDaysLeft = 90).hasServiceRow)
+        assertTrue(TechPanelUiState(serviceKmLeft = 3500).hasServiceRow)
+    }
+
+    // --- «Сканировать» button ---------------------------------------------------------
+
+    private suspend fun TestScope.openScan(gear: Int?, running: Boolean = true): TechPanelUiState {
+        runningFlow().value = running
+        return openWith(noData.copy(gear = gear))
+    }
+
+    @Test
+    fun `the scan button is enabled in P on a running service`() = runTest {
+        val state = openScan(gear = 1)
+        assertTrue(state.canScan)
+        assertEquals(DtcScanLabel.SCAN, state.scanLabel)
+    }
+
+    @Test
+    fun `the scan button is disabled outside P with the park caption`() = runTest {
+        for (gear in intArrayOf(2, 3, 4)) {
+            val state = openScan(gear = gear)
+            assertFalse("gear $gear", state.canScan)
+            assertEquals("gear $gear", DtcScanLabel.ONLY_PARK, state.scanLabel)
+        }
+    }
+
+    @Test
+    fun `the scan button is disabled when the gear is unknown`() = runTest {
+        val state = openScan(gear = null)
+        assertFalse(state.canScan)
+        assertEquals(DtcScanLabel.ONLY_PARK, state.scanLabel)
+    }
+
+    @Test
+    fun `the scan button is disabled when the service is not running`() = runTest {
+        val state = openScan(gear = 1, running = false)
+        assertFalse(state.canScan)
+        assertEquals(DtcScanLabel.ONLY_PARK, state.scanLabel)
+    }
+
+    @Test
+    fun `while scanning the button is disabled and says so`() = runTest {
+        dtcScanState.value = DtcScanState(phase = DtcScanPhase.SCANNING, done = 4, total = 18)
+        val state = openScan(gear = 1)
+        assertFalse(state.canScan)
+        assertEquals(DtcScanLabel.SCANNING, state.scanLabel)
     }
 }

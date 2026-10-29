@@ -141,6 +141,21 @@ class SteeringWheelKeyDecisionTest {
         assertEquals(353, VOLUME_KNOB_PRESS_KEYCODE)
     }
 
+    // #326 / #367: on DiLink 3/4 (Han 2022, Seal 2022) the knob press arrives as 293, not 353.
+    @Test fun `DiLink 4 knob press 293 sends play pause and is consumed`() {
+        assertEquals(KnobDecision.CONSUME_AND_PLAY_PAUSE, knobDecision(293, isDown = true, enabled = true))
+        assertEquals(KnobDecision.CONSUME, knobDecision(293, isDown = false, enabled = true))
+    }
+
+    @Test fun `DiLink 4 knob press 293 passes through while the feature is off`() {
+        assertEquals(KnobDecision.PASS_THROUGH, knobDecision(293, isDown = true, enabled = false))
+    }
+
+    @Test fun `knob rotation codes 291 and 292 stay with the car`() {
+        assertEquals(KnobDecision.PASS_THROUGH, knobDecision(291, isDown = true, enabled = true))
+        assertEquals(KnobDecision.PASS_THROUGH, knobDecision(292, isDown = true, enabled = true))
+    }
+
     @Test fun `assigned key down fires the bound rules`() {
         assertEquals(
             SteeringKeyDecision.FIRE,

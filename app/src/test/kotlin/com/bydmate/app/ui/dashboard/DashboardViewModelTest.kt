@@ -107,7 +107,7 @@ class DashboardViewModelTest {
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getPeriodSummary(from: Long, to: Long): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
-        override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
+        override suspend fun getSameTripByTime(startTs: Long, windowMs: Long): TripEntity? = null
         override suspend fun getAllSnapshot(): List<TripEntity> = emptyList()
         override suspend fun unlinkBydId(id: Long, bydId: Long): Int = 0
         override suspend fun getWithEnergyInRange(from: Long, to: Long): List<com.bydmate.app.data.local.entity.TripEntity> = emptyList()
@@ -277,6 +277,7 @@ class DashboardViewModelTest {
         settingsRepositoryOverride: SettingsRepository? = null,
         tripDaoOverride: TripDao? = null,
         vehicleKind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
+        costCalculatorOverride: com.bydmate.app.domain.cost.CostCalculator? = null,
     ): DashboardViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
@@ -311,6 +312,8 @@ class DashboardViewModelTest {
             tariffPeriodDao = mockk<com.bydmate.app.data.local.dao.TariffPeriodDao> {
                 io.mockk.coEvery { getAllAsc() } returns tariffPeriods
             },
+            costCalculator = costCalculatorOverride
+                ?: mockk(relaxed = true) { every { pricingVersion } returns MutableStateFlow(0L) },
         )
     }
 
@@ -652,6 +655,103 @@ class DashboardViewModelTest {
         assertTrue(vm.uiState.value.trip1!!.resetTs > 1L)
         // TRIP 2 untouched.
         assertEquals(40.0, vm.uiState.value.trip2!!.km, 0.001)
+    }
+
+    private fun trackingFlow(name: String): MutableStateFlow<Any?> {
+        @Suppress("UNCHECKED_CAST")
+        return com.bydmate.app.service.TrackingService::class.java
+            .getDeclaredField(name)
+            .apply { isAccessible = true }
+            .get(null) as MutableStateFlow<Any?>
+    }
+
+    private val zeroStats = TripCounterStats(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L)
+
+    @Test
+    fun `the live trip rate follows the session start, re-read when a new session begins`() = runTest {
+        val session = trackingFlow("_sessionStartedAt")
+        val kwh = trackingFlow("_tripKwhConsumed")
+        val km = trackingFlow("_tripDistanceKm")
+        val calc = mockk<com.bydmate.app.domain.cost.CostCalculator> {
+            coEvery { tripRateAt(any()) } returns 0.9
+            coEvery { tripRateAt(1000L) } returns 0.5
+            coEvery { tripRateAt(5000L) } returns 0.7
+            every { pricingVersion } returns MutableStateFlow(0L)
+        }
+        try {
+            session.value = 1000L
+            kwh.value = 10.0
+            km.value = 50.0
+            val vm = buildViewModel(
+                fakeAutoservice = FakeAutoservice(null, available = false),
+                tripDaoOverride = StubTripDaoWithCounterStats(zeroStats),
+                costCalculatorOverride = calc,
+            )
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(5.0, vm.uiState.value.trip1!!.cost, 1e-9)
+
+            session.value = 5000L
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            coVerify { calc.tripRateAt(5000L) }
+            assertEquals(7.0, vm.uiState.value.trip1!!.cost, 1e-9)
+        } finally {
+            session.value = null
+            kwh.value = null
+            km.value = null
+        }
+    }
+
+    @Test
+    fun `the live trip rate is re-read when a re-pricing finishes mid-session`() = runTest {
+        val session = trackingFlow("_sessionStartedAt")
+        val kwh = trackingFlow("_tripKwhConsumed")
+        val km = trackingFlow("_tripDistanceKm")
+        val version = MutableStateFlow(0L)
+        var rate = 1.0
+        val calc = mockk<com.bydmate.app.domain.cost.CostCalculator> {
+            coEvery { tripRateAt(any()) } returns 0.9
+            coEvery { tripRateAt(1000L) } answers { rate }
+            every { pricingVersion } returns version
+        }
+        try {
+            session.value = 1000L
+            kwh.value = 10.0
+            km.value = 50.0
+            val vm = buildViewModel(
+                fakeAutoservice = FakeAutoservice(null, available = false),
+                tripDaoOverride = StubTripDaoWithCounterStats(zeroStats),
+                costCalculatorOverride = calc,
+            )
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(10.0, vm.uiState.value.trip1!!.cost, 1e-9)
+
+            rate = 2.0
+            version.value = 1L
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(20.0, vm.uiState.value.trip1!!.cost, 1e-9)
+        } finally {
+            session.value = null
+            kwh.value = null
+            km.value = null
+        }
+    }
+
+    @Test
+    fun `with no session the live trip rate is the one at now`() = runTest {
+        val calc = mockk<com.bydmate.app.domain.cost.CostCalculator> {
+            coEvery { tripRateAt(any()) } returns 0.9
+            every { pricingVersion } returns MutableStateFlow(0L)
+        }
+        val before = System.currentTimeMillis()
+        buildViewModel(
+            fakeAutoservice = FakeAutoservice(null, available = false),
+            tripDaoOverride = StubTripDaoWithCounterStats(zeroStats),
+            costCalculatorOverride = calc,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify { calc.tripRateAt(match { it >= before }) }
     }
 
     @Test

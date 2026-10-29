@@ -65,6 +65,9 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import com.bydmate.app.data.vehicle.RearSeat
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -380,7 +383,7 @@ fun AutomationScreen(
     }
 
     // Editor dialog
-    if (state.showEditor) {
+    if (state.showEditor) CompositionLocalProvider(LocalRearSeats provides state.rearSeats) {
         EditorDialog(
             editing = state.editing,
             places = state.places,
@@ -2608,7 +2611,8 @@ private fun ParamActionControls(
 ) {
     val context = LocalContext.current
     val lc = context.appLocalizedContext()
-    val entries = remember(lc) { catalogEntries(lc) }
+    val rearSeats = LocalRearSeats.current
+    val entries = remember(lc, rearSeats) { catalogEntries(lc, rearSeats) }
     CatalogDropdown(
         selected = paramSelectedText(action, context),
         items = entries.map { it.label },
@@ -3089,6 +3093,9 @@ private class PickerTile(val label: String, val needsOverlay: Boolean = false, v
 
 private class PickerSection(val name: String, val tiles: List<PickerTile>)
 
+/** Rear seats whose heat this car reports (#327), for the editor's catalog; none outside the editor. */
+private val LocalRearSeats = compositionLocalOf { emptySet<RearSeat>() }
+
 /** The section the picker opened on last time: it opens there again. */
 private object ActionPickerMemory {
     var section = 0
@@ -3099,8 +3106,9 @@ private object ActionPickerMemory {
 private fun pickerSections(): List<PickerSection> {
     val context = LocalContext.current
     val lc = context.appLocalizedContext()
-    return remember(lc) {
-        val catalog = catalogSections(lc).map { (cat, entries) ->
+    val rearSeats = LocalRearSeats.current
+    return remember(lc, rearSeats) {
+        val catalog = catalogSections(lc, rearSeats).map { (cat, entries) ->
             PickerSection(lc.getString(cat), entries.map { entry -> PickerTile(entry.label) { entry.make(it) } })
         }
         catalog + listOf(

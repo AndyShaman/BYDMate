@@ -140,4 +140,13 @@ class RetroactiveRecalcTest {
         assertEquals(0.42, schedule.periods.first().homeRate, 1e-9)
         assertEquals(1, db.tariffPeriodDao().count())
     }
+
+    @Test fun a_finished_recalc_bumps_the_pricing_version() = runBlocking {
+        val before = calculator.pricingVersion.value
+        insertCharge(sep5, kwh = 10.0, cost = 1.0)
+        calculator.recalculate(sep1, Long.MAX_VALUE)
+        val after = calculator.pricingVersion.value
+        assertEquals(true, after > before)
+        assertEquals(1.0, costOf(db.chargeDao().getInRangeAsc(sep1, Long.MAX_VALUE).first().id), 1e-9)
+    }
 }

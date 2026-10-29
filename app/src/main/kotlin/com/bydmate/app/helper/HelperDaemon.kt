@@ -7,6 +7,8 @@ import com.bydmate.app.helper.push.FID_PUSH_DEVICE_CLASSES
 import com.bydmate.app.helper.push.FidPushRegistry
 import com.bydmate.app.helper.push.FidRecorder
 import com.bydmate.app.helper.push.deviceInstance
+import com.bydmate.app.helper.dtc.DtcDaemon
+import com.bydmate.app.helper.dtc.writeDtcScanStatus
 import com.bydmate.app.helper.offreport.OffReport
 import com.bydmate.app.helper.offreport.readOffReportArm
 import com.bydmate.app.helper.offreport.writeOffReportStatus
@@ -942,6 +944,9 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_HUD_NAVI_STATUS,
                 HelperBinderProtocol.TX_HUD_SDK,
                 HelperBinderProtocol.TX_WRITE_BUFFER -> handleHudTransact(code, data, reply, svc, autoIface)
+
+                HelperBinderProtocol.TX_DTC_SCAN_START,
+                HelperBinderProtocol.TX_DTC_SCAN_STATUS -> handleDtcScanTransact(code, data, reply, svc, autoIface)
 
                 else -> super.onTransact(code, data, reply, flags)
             }
@@ -2925,6 +2930,33 @@ private fun handleOffReportTransact(code: Int, data: Parcel, reply: Parcel?): Bo
     }.onFailure { e ->
         // The class name only: a message could carry what the request held.
         android.util.Log.w("OffReport", "offreport: tx=$code failed: ${e.javaClass.simpleName}")
+        reply?.setDataSize(0)
+        reply?.writeInt(-1)
+    }
+    return true
+}
+
+/**
+ * The manual fault-code scan verbs. START only hands the job to its own thread and answers; the
+ * gear is read live (getInt, tx 5) at the address the app resolved, before every request. A
+ * failure here costs this call only.
+ */
+private fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc: IBinder, autoIface: String): Boolean {
+    runCatching {
+        if (code == HelperBinderProtocol.TX_DTC_SCAN_START) {
+            val gearDev = data.readInt()
+            val gearFid = data.readInt()
+            val status = DtcDaemon.scanner.start {
+                autoserviceTransact(svc, autoIface, 5, gearDev, gearFid, 0, writeValue = false)
+                    .takeIf { (status, _) -> status == 0 }?.second
+            }
+            android.util.Log.i("DtcScan", "start request gear=$gearDev/$gearFid reply=$status")
+            reply?.writeInt(status)
+        } else {
+            reply?.let { writeDtcScanStatus(it, DtcDaemon.scanner.status()) }
+        }
+    }.onFailure { e ->
+        android.util.Log.w("DtcScan", "tx=$code failed: ${e.javaClass.simpleName}")
         reply?.setDataSize(0)
         reply?.writeInt(-1)
     }

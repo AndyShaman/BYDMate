@@ -68,7 +68,9 @@ object NavA11yExtractor {
         // on screen, the read is the same as before it.
         NavGuidanceParser.parse(raw)?.let {
             noteLayout(secondLayout = false)
-            return ReadResult.Guidance(it)
+            // #325: Navigator 24.x shows the maneuver node without a description; looked up only then.
+            val undescribed = raw.maneuverDesc == null && hasNode(root, "$pkg:id/$MANEUVER_ID")
+            return ReadResult.Guidance(if (undescribed) it.copy(maneuverUndescribed = true) else it)
         }
         // exitNumber is the balloon's: dropped, or a stale one turns the turn into a roundabout exit.
         val parsed = NavGuidanceParser.parse(raw.copy(
@@ -232,6 +234,9 @@ object NavA11yExtractor {
 
     private fun descOf(root: AccessibilityNodeInfo, viewId: String): String? =
         readNodes(root, viewId) { it.contentDescription?.toString() }
+
+    /** At least one node carries [viewId]; the nodes are recycled. */
+    private fun hasNode(root: AccessibilityNodeInfo, viewId: String): Boolean = readNodes(root, viewId) { "found" } != null
 
     private fun descOrTextOf(root: AccessibilityNodeInfo, viewId: String): String? =
         readNodes(root, viewId) { it.contentDescription?.toString() ?: it.text?.toString() }

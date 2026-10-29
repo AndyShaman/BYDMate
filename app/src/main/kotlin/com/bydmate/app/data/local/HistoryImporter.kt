@@ -253,10 +253,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             }
 
             // Check duplicate by time overlap (catches v1.x live trips without byd_id)
-            val existingByTime = tripDao.getByStartTsRange(
-                startTsMs - DEDUP_WINDOW_MS,
-                startTsMs + DEDUP_WINDOW_MS
-            )
+            val existingByTime = tripDao.getSameTripByTime(startTsMs, DEDUP_WINDOW_MS)
             if (existingByTime != null) {
                 // Update existing trip with byd_id so future syncs skip it instantly.
                 // The copy keeps its odometer: the km changes, the readings do not.

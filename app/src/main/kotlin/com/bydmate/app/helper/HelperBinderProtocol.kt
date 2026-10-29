@@ -558,6 +558,34 @@ object HelperBinderProtocol {
      */
     val TX_SET_AUTO_VOICE: Int = IBinder.FIRST_CALL_TRANSACTION + 60  // 61
 
+    /**
+     * Manual ECU fault-code scan, start: the daemon runs the whole job on its own thread so the
+     * shared client mutex is held for milliseconds only. No address or payload bytes come from
+     * the app, only where to read the gear fid.
+     *
+     * The daemon holds the 18 addresses (DtcWire.ADDRESSES) and builds only `19 01 FF`,
+     * `19 02 0D`/`19 02 09` (by the block's availability mask, `19 02 FF` once after a negative
+     * answer) and `22 F1 94`. Before every request: the 90 s budget, `sys.diagmgrsrv.task_bk`
+     * at its idle value and the gear read live (getInt) == P; a 2 s passive listen comes first.
+     *
+     * Request: [int gearDev, int gearFid]
+     * Reply:   [int status: 0 = started, 1 = busy (poll it), -1 = refused]
+     * An old daemon without this handler makes transact return false → the client returns -2.
+     */
+    val TX_DTC_SCAN_START: Int = IBinder.FIRST_CALL_TRANSACTION + 61  // 62
+
+    /**
+     * Fault-code scan, status (see [TX_DTC_SCAN_START]).
+     *
+     * Reply: [int state, int done, int total, String reason, int count,
+     *         count × (int addr, String outcome, byte[] countUds, byte[] listUds, byte[] idUds)]
+     * state: DtcWire.STATE_* (0 idle, 1 running, 2 done, 3 unavailable, 4 aborted); a failed
+     * call answers a lone -1. A uds array is null when that request was not sent or not answered,
+     * `7F sid nrc` for a negative answer, the raw frame for outcome multiframe.
+     * An old daemon without this handler makes transact return false → the client returns null.
+     */
+    val TX_DTC_SCAN_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 62  // 63
+
     /** TX_SET_AUTO_VOICE outcomes: called; no such method on this firmware; the audio service or
      *  the call threw. */
     const val AUTO_VOICE_APPLIED = 0

@@ -6,6 +6,7 @@ import com.bydmate.app.data.push.PushStateTrace
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.data.vehicle.RearSeatHeat
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -106,6 +107,27 @@ class FidCatalogManagerTest {
 
         val catalog = fromFile.catalog!!
         PushStateTrace.ADAS_STATES.forEach { assertEquals(it.symbol, it.fid, catalog.fidOf(it.symbol)) }
+    }
+
+    /** The rear seat heat gate (#327) reads its six symbols by name, so a catalog read back from the cache must still carry them. */
+    @Test fun `the cached catalog keeps the rear seat heat symbols`() = runTest {
+        val rear = """
+            Setting.SET_HAS_REAR_LEFT_SEAT_HEATING=-933232629
+            Setting.SET_HAS_REAR_RIGHT_SEAT_HEATING=-933232621
+            Setting.SET_REAR_LEFT_SEAT_HEATING_STATE=1214251019
+            Setting.SET_REAR_RIGHT_SEAT_HEATING_STATE=1214251027
+            Setting.SET_REAR_LEFT_SEAT_HEATING_STATE_SET=1125122091
+            Setting.SET_REAR_RIGHT_SEAT_HEATING_STATE_SET=1125122099
+        """.trimIndent()
+        manager(FakeHelper(listOf(DumpFidsResult.Success("$dump\n$rear")))).ensureResolved()
+
+        val fromFile = manager(FakeHelper(listOf(DumpFidsResult.BinderAbsent)))
+        fromFile.ensureResolved()
+
+        val catalog = fromFile.catalog!!
+        assertEquals(6, RearSeatHeat.SYMBOLS.size)
+        RearSeatHeat.SYMBOLS.forEach { assertTrue(it, catalog.fidOf(it) != null) }
+        assertEquals(1125122091, catalog.fidOf("Setting.SET_REAR_LEFT_SEAT_HEATING_STATE_SET"))
     }
 
     /**

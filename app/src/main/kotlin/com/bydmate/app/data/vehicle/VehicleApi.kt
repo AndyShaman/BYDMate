@@ -50,4 +50,7 @@ interface VehicleApi {
     suspend fun writeUnlockDoors(): Result<Unit>
     suspend fun writeSunroof(mode: SunroofMode): Result<Unit>
     suspend fun writeSunshade(open: Boolean): Result<Unit>
+
+    /** Rear seats whose heat this car has (#327). */
+    suspend fun rearSeatHeatSides(): Set<RearSeat> = emptySet()
 }

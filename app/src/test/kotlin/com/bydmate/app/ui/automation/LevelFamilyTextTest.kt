@@ -2,11 +2,14 @@ package com.bydmate.app.ui.automation
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.R
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.vehicle.RearSeat
 import com.bydmate.app.util.appLocalizedContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -67,8 +70,8 @@ class LevelFamilyTextTest {
     // A row's dropdown and the picker come from one builder: each family once, in its category.
     @Test fun `every family is offered once in the dropdown and once in the picker`() {
         val lc = lc("ru")
-        val entries = catalogEntries(lc)
-        val sections = catalogSections(lc)
+        val entries = catalogEntries(lc, RearSeat.entries.toSet())
+        val sections = catalogSections(lc, RearSeat.entries.toSet())
         for (f in LevelFamily.entries) {
             val tile = lc.getString(f.tileRes)
             assertEquals("dropdown $f", 1, entries.count { it.label == tile })
@@ -108,5 +111,27 @@ class LevelFamilyTextTest {
             "Команда автомобилю: Температура: 22 °C (设置温度22)",
             RuleImportSummary.action(old, ctx),
         )
+    }
+
+    // --- Rear seat heat (#327) ---
+
+    private fun rearFamily(name: String): LevelFamily? = LevelFamily.entries.firstOrNull { it.name == name }
+
+    @Test fun `rear seat heat tiles read as the mock, ru`() {
+        val lc = lc("ru")
+        assertEquals("Подогрев заднего левого сиденья выкл, 1–2", rearFamily("SEAT_HEAT_REAR_LEFT")?.let { lc.getString(it.tileRes) })
+        assertEquals("Подогрев заднего правого сиденья выкл, 1–2", rearFamily("SEAT_HEAT_REAR_RIGHT")?.let { lc.getString(it.tileRes) })
+    }
+
+    @Test fun `rear tiles are hidden by default and shown only for the sides the car has`() {
+        val lc = lc("ru")
+        val left = "Подогрев заднего левого сиденья выкл, 1–2"
+        val right = "Подогрев заднего правого сиденья выкл, 1–2"
+        assertTrue(catalogEntries(lc).none { it.label == left || it.label == right })
+        val one = catalogEntries(lc, setOf(RearSeat.LEFT))
+        assertEquals(1, one.count { it.label == left })
+        assertEquals(0, one.count { it.label == right })
+        assertEquals(R.string.auto_cat_seats, one.single { it.label == left }.categoryRes)
+        assertEquals(1, catalogSections(lc, setOf(RearSeat.LEFT)).sumOf { (_, tiles) -> tiles.count { it.label == left } })
     }
 }

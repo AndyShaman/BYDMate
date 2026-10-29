@@ -590,6 +590,37 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideDtcScanRepository(
+        @ApplicationContext context: Context,
+        helper: com.bydmate.app.data.vehicle.HelperClient,
+        settings: SettingsRepository,
+        sink: com.bydmate.app.data.backup.TelegramBackupSink,
+        vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor,
+    ): com.bydmate.app.data.dtc.DtcScanRepository = com.bydmate.app.data.dtc.DtcScanRepository(
+        helper = helper,
+        prefs = context.getSharedPreferences(com.bydmate.app.data.dtc.DtcScanRepository.PREFS_NAME, Context.MODE_PRIVATE),
+        settings = settings,
+        sink = sink,
+        scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+        liveSample = { com.bydmate.app.service.TrackingService.lastSample },
+        serviceRunning = { com.bydmate.app.service.TrackingService.isRunning.value },
+        elapsedNow = { android.os.SystemClock.elapsedRealtime() },
+        wallNow = { System.currentTimeMillis() },
+        describer = com.bydmate.app.data.dtc.DtcDescriber(
+            open = { name -> context.assets.open("dtc/$name").reader(Charsets.UTF_8) },
+            autoType = { com.bydmate.app.data.dtc.CarAutoType.read(helper) },
+            energy = {
+                when (vehicleKindMonitor.kind.value) {
+                    com.bydmate.app.data.nativestack.VehicleKind.EV -> com.bydmate.app.data.dtc.DtcEnergy.EV
+                    com.bydmate.app.data.nativestack.VehicleKind.HYBRID -> com.bydmate.app.data.dtc.DtcEnergy.DM
+                    com.bydmate.app.data.nativestack.VehicleKind.UNKNOWN -> com.bydmate.app.data.dtc.DtcEnergy.UNKNOWN
+                }
+            },
+        ),
+    )
+
+    @Provides
+    @Singleton
     fun provideWriteAllowlist(@ApplicationContext context: Context): com.bydmate.app.data.vehicle.WriteAllowlist =
         com.bydmate.app.data.vehicle.WriteAllowlist.loadProduction {
             context.assets.open("competitor-actions.json").bufferedReader().use { it.readText() }
@@ -621,6 +652,7 @@ object AppModule {
 
     @Provides
     @Singleton
+    @Suppress("LongParameterList") // Hilt-injected dependencies
     fun provideVehicleApi(
         parsReader: com.bydmate.app.data.nativestack.ParsReader,
         autoservice: com.bydmate.app.data.autoservice.AutoserviceClient,
@@ -630,10 +662,11 @@ object AppModule {
         seatChannelStore: com.bydmate.app.data.vehicle.SeatChannelStore,
         windowChannelStore: com.bydmate.app.data.vehicle.WindowChannelStore,
         seatCommandJournal: com.bydmate.app.data.vehicle.SeatCommandJournal,
+        fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     ): com.bydmate.app.data.vehicle.VehicleApi =
         com.bydmate.app.data.vehicle.VehicleApiImpl(
             parsReader, autoservice, helper, allowlist, writeLogDao, seatChannelStore, windowChannelStore,
-            seatCommandJournal,
+            seatCommandJournal, rearCatalog = { fidCatalogManager.catalog },
         )
 
     @Provides

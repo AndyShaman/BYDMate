@@ -32,6 +32,7 @@ import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.CommandTranslator
 import com.bydmate.app.data.vehicle.DriveMode
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.data.vehicle.RearSeatHeat
 import com.bydmate.app.data.vehicle.ScreenBacklightReply
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.vehicle.VehicleWriteError
@@ -399,6 +400,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             err is VehicleWriteError && DriveMode.ofAction(err.action) != null -> driveModeFailureReason(err, strings)
             err is VehicleWriteError && err.action.startsWith("battery_preheat_") -> batteryPreheatFailureReason(err, strings)
             err is VehicleWriteError.NotEquipped && err.action.startsWith("hud_") -> strings.get(R.string.hud_not_equipped)
+            err is VehicleWriteError.NotEquipped && err.action in RearSeatHeat.ACTIONS ->
+                strings.get(R.string.rear_seat_heat_not_equipped)
             err is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
             err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
                 stuckWindowsReason(err.stuckPanes, strings)

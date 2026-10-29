@@ -1974,6 +1974,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 )
             }
 
+            // «Состояние машины» / «Диагностика»: the stock car status provider as read right now
+            // (raw keys and what the card makes of them). PM2.5 is read by the Tech screen only
+            // and logs its own `pm25 read:` lines under TechPanel.
+            appendLine("--- car status ---")
+            try {
+                appendLine(com.bydmate.app.data.carstatus.CarStatusReader(appContext).dumpLine())
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
             // ICE-side addresses nothing in the app reads yet (#184). A DM-i owner sends this
             // dump with the engine running and the raw words say which of them are live there.
             appendLine("--- hybrid probe ---")
@@ -1985,6 +1993,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             try {
                 appendLine(vehicleKindMonitor.dumpLine())
             } catch (e: Exception) { appendLine("vehicle_kind: error ${e.message}") }
+            try {
+                appendLine(com.bydmate.app.data.dtc.CarAutoType.dumpLine(helperClient))
+            } catch (e: Exception) { appendLine("car_autotype: error ${e.message}") }
 
             appendLine(automationEngine.serviceStartDumpLine())
             // Automation rules (#177): issue reports about a rule that "does nothing"
@@ -2502,6 +2513,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             appendLine("--- steering heat ---")
             SteeringHeatDiagnostics.format(helperDiag.steeringHeat).forEach { appendLine(it) }
 
+            // Rear seat heat (#327): the gate the editor's tiles follow, read only.
+            appendLine("--- rear seat heat ---")
+            try {
+                val catalog = fidCatalogManager.catalog
+                val items = RearSeatHeatDiagnostics.batchItems(RearSeatHeatDiagnostics.addresses(catalog))
+                val readings = if (items.isEmpty()) emptyList() else helperClient.readBatch(items)
+                RearSeatHeatDiagnostics.format(catalog, readings).forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
             appendLine("--- fid resolve ---")
             try {
                 com.bydmate.app.data.nativestack.FidResolveDiagnostics.format(
@@ -2556,6 +2576,16 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     !recorder.running && recorder.devices.isEmpty() -> appendLine("not running")
                     else -> fidRecorderStatusLines(recorder).forEach { appendLine(it) }
                 }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
+            // The last manual block-fault scan, raw per address, and the daemon's scan state. Never scans.
+            appendLine("--- dtc scan ---")
+            try {
+                val prefs = appContext.getSharedPreferences(
+                    com.bydmate.app.data.dtc.DtcScanRepository.PREFS_NAME, Context.MODE_PRIVATE,
+                )
+                com.bydmate.app.data.dtc.DtcScanRepository.dumpLines(prefs, helperClient.dtcScanStatus())
+                    .forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             appendLine("--- last crash ---")

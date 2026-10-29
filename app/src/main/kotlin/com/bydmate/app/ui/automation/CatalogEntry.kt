@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.annotation.StringRes
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.vehicle.RearSeat
 import com.bydmate.app.util.appLocalizedContext
 
 /** One entry of the car's action catalog, as a row's dropdown and the picker offer it. */
@@ -20,25 +21,26 @@ internal val CATALOG_SECTIONS = listOf(
  * [ACTION_COMMANDS] in its order with one entry per [LevelFamily] in its category: before the
  * family's [LevelFamily.pickerBefore] entry, or after the category's last entry when it has none.
  * The editor's dropdown and the picker both build from this, so they cannot drift apart.
+ * A rear seat family is offered only for the [rearSeats] this car reports (#327).
  */
-internal fun catalogEntries(lc: Context): List<CatalogEntry> {
+internal fun catalogEntries(lc: Context, rearSeats: Set<RearSeat> = emptySet()): List<CatalogEntry> {
     val lastOfCategory = ACTION_COMMANDS.indices.associateBy { ACTION_COMMANDS[it].categoryRes }
     return ACTION_COMMANDS.flatMapIndexed { i, option ->
         val cat = option.categoryRes
-        levelEntries(cat, option.toggleTarget ?: option.command, lc) +
+        levelEntries(cat, option.toggleTarget ?: option.command, lc, rearSeats) +
             CatalogEntry(option.localizedName(lc), cat) { actionDefFor(option, it) } +
-            if (lastOfCategory[cat] == i) levelEntries(cat, null, lc) else emptyList()
+            if (lastOfCategory[cat] == i) levelEntries(cat, null, lc, rearSeats) else emptyList()
     }
 }
 
 /** [catalogEntries] grouped by [CATALOG_SECTIONS], empty sections left out. */
-internal fun catalogSections(lc: Context): List<Pair<Int, List<CatalogEntry>>> {
-    val entries = catalogEntries(lc)
+internal fun catalogSections(lc: Context, rearSeats: Set<RearSeat> = emptySet()): List<Pair<Int, List<CatalogEntry>>> {
+    val entries = catalogEntries(lc, rearSeats)
     return CATALOG_SECTIONS.map { cat -> cat to entries.filter { it.categoryRes == cat } }.filter { it.second.isNotEmpty() }
 }
 
-private fun levelEntries(cat: Int, before: String?, lc: Context): List<CatalogEntry> =
-    LevelFamily.entries.filter { it.categoryRes == cat && it.pickerBefore == before }
+private fun levelEntries(cat: Int, before: String?, lc: Context, rearSeats: Set<RearSeat>): List<CatalogEntry> =
+    LevelFamily.entries.filter { it.categoryRes == cat && it.pickerBefore == before && (it.rearSeat == null || it.rearSeat in rearSeats) }
         .map { family -> CatalogEntry(lc.getString(family.tileRes), cat) { family.newAction(it) } }
 
 /** What a param row's dropdown shows: the catalog name, a level command's name in the editor language, else the saved name. */

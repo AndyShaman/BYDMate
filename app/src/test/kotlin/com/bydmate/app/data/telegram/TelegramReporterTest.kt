@@ -24,6 +24,7 @@ import com.bydmate.app.helper.offreport.OffReportOutcome
 import com.bydmate.app.helper.offreport.OffReportState
 import com.bydmate.app.helper.offreport.OffReportStatus
 import com.bydmate.app.util.AppStrings
+import com.bydmate.app.domain.cost.CostCalculator
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -70,6 +71,8 @@ class TelegramReporterTest {
     private lateinit var reporter: TelegramReporter
     private val helper = mockk<HelperClient>()
     private val offState = PowerOffArmState(helper)
+    private val tripRate = 0.27
+    private val costCalculator = mockk<CostCalculator> { coEvery { tripRateAt(any()) } returns tripRate }
     private var now = 1_759_000_000_000L
     private val sent = mutableListOf<String>()
 
@@ -79,7 +82,7 @@ class TelegramReporterTest {
         LocalePreferences(ctx).setLanguage("ru")
         settings = SettingsRepository(dao, LocalePreferences(ctx))
         coEvery { helper.offReportStatus(any()) } returns null
-        reporter = TelegramReporter(ctx, sink, settings, mockk(relaxed = true), TripCounterResets(settings), AppStrings(ctx), offState)
+        reporter = TelegramReporter(ctx, sink, settings, mockk(relaxed = true), TripCounterResets(settings), AppStrings(ctx), offState, costCalculator)
         reporter.inputs = { ReportInputs(diParsData(soc = 64), 312.0, null, null, null, null) }
         reporter.clock = { now }
         reporter.language = { "ru" }
@@ -380,12 +383,12 @@ class TelegramReporterTest {
         every { tripDao.observeCounterStats(anchor1.resetTs, Long.MAX_VALUE) } returns flowOf(stats1)
         every { tripDao.observeCounterStats(0L, Long.MAX_VALUE) } returns flowOf(stats2)
         // A fresh holder, as in a process the dashboard never opened: the anchors come from the settings.
-        val live = TelegramReporter(ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState)
+        val live = TelegramReporter(ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, costCalculator)
         live.clock = { now }
 
         val inputs = live.inputs()
 
-        val tariff = settings.getTripCostTariff()
+        val tariff = tripRate
         assertEquals(TripCounterMath.compute(stats1, anchor1, null, null, null, false, now, tariff), inputs.trip1)
         assertEquals(anchor1.resetTs, inputs.trip1?.resetTs)
         assertEquals(0L, inputs.trip2?.resetTs)
@@ -414,7 +417,7 @@ class TelegramReporterTest {
         ))
         every { tripDao.getByDateRange(0L, now) } returns flowOf(listOf(TripEntity(startTs = 1L, distanceKm = 12.0)))
         val live = TelegramReporter(
-            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, monitor(VehicleKind.HYBRID),
+            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, costCalculator, monitor(VehicleKind.HYBRID),
         )
         live.clock = { now }
 
@@ -440,7 +443,7 @@ class TelegramReporterTest {
         every { tripDao.getByDateRange(any(), any()) } answers { flowOf(trips) }
         var clock = now
         val live = TelegramReporter(
-            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, monitor(VehicleKind.HYBRID),
+            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, costCalculator, monitor(VehicleKind.HYBRID),
         )
         live.clock = { clock }
 
@@ -458,7 +461,7 @@ class TelegramReporterTest {
         every { tripDao.getRecent(any()) } returns flowOf(emptyList())
         every { tripDao.observeCounterStats(any(), any()) } returns flowOf(emptyStats)
         val live = TelegramReporter(
-            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, monitor(VehicleKind.EV),
+            ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, costCalculator, monitor(VehicleKind.EV),
         )
         live.clock = { now }
 
@@ -473,13 +476,55 @@ class TelegramReporterTest {
         val tripDao = mockk<TripDao>()
         every { tripDao.getRecent(any()) } returns flowOf(emptyList())
         every { tripDao.observeCounterStats(any(), any()) } returns flowOf(emptyStats)
-        val live = TelegramReporter(ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState)
+        val live = TelegramReporter(ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, costCalculator)
         live.clock = { now }
 
         val inputs = live.inputs()
 
-        assertEquals(settings.getTripCostTariff(), inputs.tripTariff!!, 1e-9)
+        assertEquals(tripRate, inputs.tripTariff!!, 1e-9)
         assertEquals(settings.getCurrencySymbol(), inputs.currencySymbol)
+    }
+
+    private fun sessionFlow(name: String): MutableStateFlow<Any?> {
+        @Suppress("UNCHECKED_CAST")
+        return com.bydmate.app.service.TrackingService::class.java
+            .getDeclaredField(name)
+            .apply { isAccessible = true }
+            .get(null) as MutableStateFlow<Any?>
+    }
+
+    @Test fun `a trip under way is priced at its session start, with no session at the clock`() = runBlocking {
+        val sessionStart = now - 3_600_000L
+        val calc = mockk<CostCalculator> {
+            coEvery { tripRateAt(any()) } returns 0.9
+            coEvery { tripRateAt(sessionStart) } returns 0.5
+            coEvery { tripRateAt(now) } returns 0.8
+        }
+        val tripDao = mockk<TripDao>()
+        every { tripDao.getRecent(any()) } returns flowOf(emptyList())
+        every { tripDao.observeCounterStats(any(), any()) } returns flowOf(emptyStats)
+        val live = TelegramReporter(ctx, sink, settings, tripDao, TripCounterResets(settings), AppStrings(ctx), offState, calc)
+        live.clock = { now }
+        val session = sessionFlow("_sessionStartedAt")
+        val km = sessionFlow("_tripDistanceKm")
+        val kwh = sessionFlow("_tripKwhConsumed")
+        try {
+            session.value = sessionStart
+            km.value = 12.0
+            kwh.value = 2.0
+
+            assertEquals(0.5, live.inputs().tripTariff!!, 1e-9)
+
+            session.value = null
+            km.value = null
+            kwh.value = null
+
+            assertEquals(0.8, live.inputs().tripTariff!!, 1e-9)
+        } finally {
+            session.value = null
+            km.value = null
+            kwh.value = null
+        }
     }
 
     @Test fun `the power-off report with a time field carries the placeholder`() = runBlocking {

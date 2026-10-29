@@ -14,6 +14,8 @@ import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.helper.dtc.DtcScanStatus
+import com.bydmate.app.helper.dtc.readDtcScanStatus
 import com.bydmate.app.helper.offreport.OffReportStatus
 import com.bydmate.app.helper.offreport.readOffReportStatus
 import com.bydmate.app.helper.offreport.writeOffReportArm
@@ -419,6 +421,13 @@ interface HelperClient {
      *  the transaction. */
     suspend fun setAutoVoiceActive(active: Boolean): AutoVoiceReply?
 
+    /** Starts the daemon's manual fault-code scan (TX_DTC_SCAN_START): 0 started, 1 busy, -1 refused,
+     *  -2 daemon too old to know the code; null when the daemon is unreachable. */
+    suspend fun dtcScanStart(gearDev: Int, gearFid: Int): Int? = null
+
+    /** State and raw answers of the fault-code scan (TX_DTC_SCAN_STATUS); null when unreachable. */
+    suspend fun dtcScanStatus(): DtcScanStatus? = null
+
     /**
      * Direct freeform launch: find-or-launch [packageName], switch its task to freeform,
      * move it to [displayId] with the given window bounds and focus it. UNAVAILABLE = the
@@ -675,6 +684,7 @@ interface HelperClient {
 }
 
 @Singleton
+@Suppress("LargeClass") // every app call into the shell-uid daemon, one transaction each
 open class HelperClientImpl @Inject constructor() : HelperClient {
     private val mutex = Mutex()
     @Volatile private var cached: IBinder? = null
@@ -1301,6 +1311,24 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             readRecStatus(reply)
         }
 
+    // transactParsed's path, plus the notHandled answer: a daemon spawned by an older APK does
+    // not know the code (transact returns false) and the caller tells that apart from unreachable.
+    override suspend fun dtcScanStart(gearDev: Int, gearFid: Int): Int? =
+        withContext(Dispatchers.IO) {
+            withTimeoutOrNull(REQ_TIMEOUT_MS) {
+                onBeforeLock?.invoke()
+                mutex.withLock {
+                    transactBodyUnlocked(
+                        HelperBinderProtocol.TX_DTC_SCAN_START, { it.writeInt(gearDev); it.writeInt(gearFid) },
+                        notHandled = DTC_SCAN_NOT_HANDLED,
+                    ) { if (it.dataAvail() < 4) null else it.readInt() }
+                }
+            }
+        }
+
+    override suspend fun dtcScanStatus(): DtcScanStatus? =
+        transactParsed(HelperBinderProtocol.TX_DTC_SCAN_STATUS, { }, parse = ::readDtcScanStatus)
+
     override suspend fun offReportArm(id: String, token: String, chatId: Long, text: String, lateMark: String): Boolean =
         transactParsed(
             HelperBinderProtocol.TX_OFFREPORT_ARM,
@@ -1510,6 +1538,8 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
         private const val TAG = "HelperClient"
         private const val REQ_TIMEOUT_MS = 2000L
+        /** dtcScanStart's answer from a daemon that does not know TX_DTC_SCAN_START. */
+        private const val DTC_SCAN_NOT_HANDLED = -2
         /** Budget for a [writeStatus] beforeSend guard (e.g. DriveModeChannel's terrain speed
          *  re-check): well under REQ_TIMEOUT_MS so a slow guard cannot hold the transport mutex
          *  for the whole shared write budget, or make a caller behind it wait the full 2 s just

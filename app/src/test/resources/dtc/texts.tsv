@@ -1,0 +1,13 @@
+t1	与SEC丢失CAN通信	Lost CAN communication with SEC
+t2	与副仪表板左氛围灯前灯头失去通讯	Lost communication with the front lamp head of the left ambient light of the center console
+t3	与底盘网Left_BCM通讯丢失	Lost communication with chassis network Left_BCM
+t4	与空调通讯故障	Communication fault with air conditioning
+t5	（针对DST配置打开时）DST报文丢失	(When DST configuration is on) DST message lost
+t6	制动踏板传感器故障甲	Brake pedal sensor fault
+t7	制动踏板传感器故障乙	  brake PEDAL sensor fault 
+t8	轮速传感器故障	Wheel speed sensor fault
+t9	泵电机故障	Pump motor fault
+t10	电池故障（DM）	Battery fault DM manual
+t11	电池故障（EV）	Battery fault EV manual
+t12	左车身故障	Left body fault
+t13	电池通讯故障	Battery communication fault

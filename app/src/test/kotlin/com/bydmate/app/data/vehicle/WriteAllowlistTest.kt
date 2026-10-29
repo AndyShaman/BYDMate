@@ -631,4 +631,26 @@ class WriteAllowlistTest {
             assertNotNull("$name missing from production", al.find(name))
         }
     }
+
+    // ── Rear seat heat (#327): dev=1001 candidates, no dev=1023 write ─────────
+    @Test fun `rear seat heat entries are unvalidated dev 1001 candidates`() {
+        val allowlist = WriteAllowlist.loadProduction { "{}" }
+        for ((name, fid) in listOf("rear_left_seat_heat" to 1125122091, "rear_right_seat_heat" to 1125122099)) {
+            val e = allowlist.find(name)
+            assertNotNull(name, e)
+            assertEquals(name, 1001, e!!.dev)
+            assertEquals(name, fid, e.writeFid)
+            assertEquals(name, 1, e.valueMin)
+            assertEquals(name, 3, e.valueMax)
+            assertEquals(name, "seats", e.category)
+            assertFalse(name, e.validated)
+        }
+    }
+
+    @Test fun `nothing writes the rear seat fids on dev 1023`() {
+        val allowlist = WriteAllowlist.loadProduction { "{}" }
+        val fids = setOf(1125122091, 1125122099, 1214251019, 1214251027)
+        assertTrue(allowlist.allEntries().none { it.dev == 1023 && it.writeFid in fids })
+        assertTrue(WriteAllowlist.isBanned(1023, 1125122091))
+    }
 }

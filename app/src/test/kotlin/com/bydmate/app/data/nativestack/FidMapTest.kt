@@ -243,4 +243,10 @@ class FidMapTest {
             FidMap.all.filter { it.catalogScale != null }.map { it.field },
         )
     }
+
+    // PM2.5 is read on demand by Pm25Reader, never through the global poll.
+    @Test fun `no pm25 entry in FidMap and the batch is as before`() {
+        assertTrue(FidMap.entries.none { it.field.startsWith("pm25") })
+        assertEquals(94, FidMap.entries.size)
+    }
 }

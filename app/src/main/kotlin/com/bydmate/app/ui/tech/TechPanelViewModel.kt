@@ -3,6 +3,17 @@ package com.bydmate.app.ui.tech
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.autoservice.Pm25Reader
+import com.bydmate.app.data.carstatus.CarStatusReader
+import com.bydmate.app.data.dtc.DtcDescription
+import com.bydmate.app.data.dtc.DtcFound
+import com.bydmate.app.data.dtc.DtcLabels
+import com.bydmate.app.data.dtc.DtcParser
+import com.bydmate.app.data.dtc.DtcScanPhase
+import com.bydmate.app.data.dtc.DtcScanRepository
+import com.bydmate.app.data.dtc.DtcScanState
+import com.bydmate.app.data.dtc.DtcScanSummary
+import com.bydmate.app.data.dtc.DtcSendResult
 import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.ChargeRepository
@@ -12,15 +23,20 @@ import com.bydmate.app.domain.battery.BatteryCalibration
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** Caption of the «Сканировать» button. */
+enum class DtcScanLabel { SCAN, SCANNING, ONLY_PARK }
 
 /**
  * Live state of the «Техника» screen. Everything vehicle-side rides the poller that already
@@ -101,7 +117,53 @@ data class TechPanelUiState(
     val mileageHevKm: Int? = null,
     val mileageEvKm: Int? = null,
     val fuelTotalL: Double? = null,
+    // Состояние машины: PM2.5 (value, then the sensor's own 0..6 level)
+    val pm25In: Int? = null,
+    val pm25Out: Int? = null,
+    val pm25LevelIn: Int? = null,
+    val pm25LevelOut: Int? = null,
+    // Диагностика: stock car status provider
+    val faultCount: Int? = null,
+    val serviceDaysLeft: Int? = null,
+    val serviceKmLeft: Int? = null,
+    // Диагностика: manual block-fault scan
+    val gear: Int? = null,
+    val serviceRunning: Boolean = false,
+    val dtcScan: DtcScanState = DtcScanState(),
+    /** The last finished scan, parsed; null before the first one. */
+    val dtcSummary: DtcScanSummary? = null,
+    /** When [dtcSummary] was taken, epoch ms. */
+    val dtcCheckedAt: Long? = null,
+    /** Descriptions of [dtcSummary]'s codes that have one, by model + block + code. */
+    val dtcDescriptions: Map<DtcFound, DtcDescription> = emptyMap(),
+    val dtcDialogOpen: Boolean = false,
+    /** «Отправить в Telegram» shows only with a bot bound; read when the dialog opens. */
+    val dtcTelegramReady: Boolean = false,
+    val dtcSending: Boolean = false,
+    /** Result of the last send from the open dialog, null until one is made. */
+    val dtcSendResult: DtcSendResult? = null,
 ) {
+    /** The scan button is enabled on a running service in P and while no scan runs. */
+    val canScan: Boolean
+        get() = gear == GEAR_PARK && serviceRunning && dtcScan.phase != DtcScanPhase.SCANNING
+
+    val scanLabel: DtcScanLabel
+        get() = when {
+            dtcScan.phase == DtcScanPhase.SCANNING -> DtcScanLabel.SCANNING
+            canScan -> DtcScanLabel.SCAN
+            else -> DtcScanLabel.ONLY_PARK
+        }
+
+    /** PM2.5 value to draw: only with a valid level 1..6, null otherwise. */
+    val pm25InShown: Int?
+        get() = pm25In?.takeIf { pm25LevelIn in PM25_LEVELS }
+    val pm25OutShown: Int?
+        get() = pm25Out?.takeIf { pm25LevelOut in PM25_LEVELS }
+
+    /** True when the «До ТО» row has at least one half to show. */
+    val hasServiceRow: Boolean
+        get() = serviceDaysLeft != null || serviceKmLeft != null
+
     val isHybrid: Boolean
         get() = vehicleKind == VehicleKind.HYBRID
 
@@ -132,7 +194,7 @@ data class TechPanelUiState(
             motorCurrentFront, motorCurrentRear, engineRpm,
         )
     val showClimate: Boolean
-        get() = anyOf(compressorW, acStatus, insideTemp, exteriorTemp)
+        get() = anyOf(compressorW, acStatus, insideTemp, exteriorTemp, pm25InShown, pm25OutShown)
     val showFuel: Boolean
         get() = isHybrid && anyOf(
             fuelPercent, fuelRangeKm, evRangeKm, engineRpm, mileageHevKm, mileageEvKm, fuelTotalL,
@@ -142,6 +204,9 @@ data class TechPanelUiState(
             tirePressFL, tirePressFR, tirePressRL, tirePressRR,
             tyreTempFL, tyreTempFR, tyreTempRL, tyreTempRR,
         )
+    /** Provider rows, or a car that reports its gear (the scan needs it), or a saved scan. */
+    val showDiagnostics: Boolean
+        get() = faultCount != null || hasServiceRow || gear != null || dtcSummary != null
     val showHistory: Boolean
         get() = anyOf(
             lifetimeKm, lifetimeKwh, avgSocSinceCharge, avgSocAllTime,
@@ -160,16 +225,22 @@ data class TechPanelUiState(
         TechCard.LIMITS -> showLimitsAndCells
         TechCard.HISTORY -> showHistory
         TechCard.MOTORS -> showMotors
-        TechCard.CLIMATE -> showClimate
-        TechCard.TYRES -> showTyres
+        TechCard.CAR_STATE -> showClimate || showTyres
         TechCard.FUEL -> showFuel
+        TechCard.DIAGNOSTICS -> showDiagnostics
     }
 
     val hasAnyCard: Boolean
         get() = showBatteryNow || showLimitsAndCells || showMotors ||
-            showClimate || showTyres || showHistory || showFuel
+            showClimate || showTyres || showHistory || showFuel || showDiagnostics
 
     private fun anyOf(vararg values: Any?): Boolean = values.any { it != null }
+
+    private companion object {
+        /** The sensor's own grades; 0 is its "invalid", so a car without the sensor shows nothing. */
+        val PM25_LEVELS = 1..6
+        const val GEAR_PARK = 1
+    }
 }
 
 /**
@@ -188,12 +259,16 @@ internal fun remainKwhForDisplay(remainKwh: Double?, soc: Int?): Double? =
     remainKwh?.takeUnless { it <= 0.0 && soc != null && soc > 0 }
 
 @HiltViewModel
+@Suppress("LongParameterList", "TooManyFunctions") // Hilt constructor; one loader per card
 class TechPanelViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
     private val avgSocProvider: AvgSocProvider,
     private val settingsRepository: SettingsRepository,
     private val chargeRepository: ChargeRepository,
     private val vehicleKindMonitor: VehicleKindMonitor,
+    private val carStatusReader: CarStatusReader,
+    private val dtcScanRepository: DtcScanRepository,
+    private val pm25Reader: Pm25Reader,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TechPanelUiState())
@@ -206,10 +281,33 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch { loadCardOrder() }
         viewModelScope.launch { loadFullCycles() }
         observeCalibrationMarks()
+        observeCarStatus()
+        observeDtcScan()
         viewModelScope.launch {
             vehicleKindMonitor.kind.collect { kind ->
                 _uiState.update { it.copy(vehicleKind = kind, cardOrder = TechCardOrder.forKind(it.cardOrder, kind)) }
             }
+        }
+    }
+
+    @Volatile private var pm25Seen = false
+
+    /**
+     * PM2.5 only while the screen is on display, never in the global poll: the screen runs this
+     * from a LaunchedEffect, so leaving the tab cancels it (the view model itself outlives the
+     * tab). A car without the sensor gets one read and no more; with it, once a minute, and a
+     * failed read after that clears the values but keeps polling, also when the screen comes
+     * back (the sensor is remembered for the view model's life).
+     */
+    suspend fun pollPm25() {
+        while (true) {
+            val pm = runCatching { pm25Reader.read() }.getOrNull()
+            if (pm == null && !pm25Seen) return
+            pm25Seen = true
+            _uiState.update {
+                it.copy(pm25In = pm?.inside, pm25Out = pm?.outside, pm25LevelIn = pm?.levelIn, pm25LevelOut = pm?.levelOut)
+            }
+            delay(PM25_REFRESH_MS)
         }
     }
 
@@ -296,6 +394,7 @@ class TechPanelViewModel @Inject constructor(
                             mileageHevKm = data?.mileageHevKm,
                             mileageEvKm = data?.mileageEvKm,
                             fuelTotalL = data?.fuelTotalL,
+                            gear = data?.gear,
                         )
                     }
                 }
@@ -353,6 +452,95 @@ class TechPanelViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Warnings and the service countdown off the stock car status provider: one read on open,
+     * then a re-read per change of a watched key. A car without the provider gets no observer.
+     */
+    private fun observeCarStatus() {
+        suspend fun apply(): Boolean {
+            val status = runCatching { carStatusReader.read() }.getOrNull()
+            _uiState.update {
+                it.copy(faultCount = status?.faults, serviceDaysLeft = status?.daysLeft, serviceKmLeft = status?.kmLeft)
+            }
+            return status != null
+        }
+        viewModelScope.launch {
+            if (!apply()) return@launch
+            carStatusReader.changes().collect { apply() }
+        }
+        logCarStateChanges()
+    }
+
+    /**
+     * One line per change of what the car-state rows show. PM2.5 enters by level and visibility
+     * only: the raw value moves every tick on a car with the sensor, and is in the dump anyway.
+     */
+    private fun logCarStateChanges() {
+        viewModelScope.launch {
+            _uiState
+                .map { s ->
+                    listOf(
+                        s.faultCount, s.serviceDaysLeft, s.serviceKmLeft,
+                        s.pm25LevelIn, s.pm25LevelOut, s.pm25InShown != null, s.pm25OutShown != null,
+                    ) to s
+                }
+                .distinctUntilChanged { a, b -> a.first == b.first }
+                .collect { (_, s) ->
+                    Log.i(
+                        TAG,
+                        "carState: faults=${s.faultCount} days=${s.serviceDaysLeft} km=${s.serviceKmLeft} " +
+                            "pm25=${s.pm25In}/${s.pm25Out} lvl ${s.pm25LevelIn}/${s.pm25LevelOut}",
+                    )
+                }
+        }
+    }
+
+    /** The scan's own state, the last finished scan and whether the service runs (the button needs it). */
+    private fun observeDtcScan() {
+        viewModelScope.launch {
+            dtcScanRepository.state.collect { scan -> _uiState.update { it.copy(dtcScan = scan) } }
+        }
+        viewModelScope.launch {
+            dtcScanRepository.last.collect { last ->
+                val summary = last?.let { DtcParser.summarize(it.results) }
+                _uiState.update { it.copy(dtcSummary = summary, dtcCheckedAt = last?.at, dtcDescriptions = emptyMap()) }
+                if (summary == null) return@collect
+                // The tables load once, off the main thread; the codes show without text until then.
+                val descriptions = runCatching { dtcScanRepository.describe(summary) }.getOrDefault(emptyMap())
+                _uiState.update { if (it.dtcSummary === summary) it.copy(dtcDescriptions = descriptions) else it }
+            }
+        }
+        viewModelScope.launch {
+            TrackingService.isRunning.collect { running -> _uiState.update { it.copy(serviceRunning = running) } }
+        }
+    }
+
+    /** A tap on «Сканировать» or «Сканировать снова»; the repository re-checks P and ignores a second tap. */
+    fun scanDtc() = dtcScanRepository.start()
+
+    /** Opens the saved scan; never starts a new one. */
+    fun openDtcDialog() {
+        _uiState.update { it.copy(dtcDialogOpen = true, dtcSendResult = null) }
+        viewModelScope.launch {
+            val ready = runCatching { settingsRepository.getTgBackupConfig().configured }.getOrDefault(false)
+            _uiState.update { it.copy(dtcTelegramReady = ready) }
+        }
+    }
+
+    fun closeDtcDialog() {
+        _uiState.update { it.copy(dtcDialogOpen = false) }
+    }
+
+    /** One send per tap, nothing queued; a tap while one is on its way does nothing. */
+    fun sendDtc(labels: DtcLabels) {
+        if (_uiState.value.dtcSending) return
+        _uiState.update { it.copy(dtcSending = true, dtcSendResult = null) }
+        viewModelScope.launch {
+            val result = dtcScanRepository.sendLastScan(labels)
+            _uiState.update { it.copy(dtcSending = false, dtcSendResult = result) }
+        }
+    }
+
     private suspend fun loadAvgSoc() {
         val avg = runCatching { avgSocProvider.compute() }.getOrNull() ?: return
         _uiState.update {
@@ -361,6 +549,7 @@ class TechPanelViewModel @Inject constructor(
     }
 
     private companion object {
+        const val PM25_REFRESH_MS = 60_000L
         const val TAG = "TechPanel"
     }
 }

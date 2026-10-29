@@ -36,6 +36,10 @@ class SteeringKeyOwnerTest {
         assertEquals(SteeringKeyOwner.KNOB, steeringKeyOwner(VOLUME_KNOB_PRESS_KEYCODE, none.copy(knobEnabled = true)))
         assertNull(steeringKeyOwner(VOLUME_KNOB_PRESS_KEYCODE, none))
     }
+    @Test fun `knob owns the DiLink 4 knob press 293 only while on`() {
+        assertEquals(SteeringKeyOwner.KNOB, steeringKeyOwner(293, none.copy(knobEnabled = true)))
+        assertNull(steeringKeyOwner(293, none))
+    }
     @Test fun `split owns its key only while the feature is on`() {
         assertEquals(SteeringKeyOwner.SPLIT, steeringKeyOwner(383, none.copy(splitEnabled = true, splitKey = 383)))
         assertNull(steeringKeyOwner(383, none.copy(splitEnabled = false, splitKey = 383)))

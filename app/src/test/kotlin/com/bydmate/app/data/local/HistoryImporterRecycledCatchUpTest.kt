@@ -79,10 +79,12 @@ class HistoryImporterRecycledCatchUpTest {
         coEvery { tripDao.getAllSnapshot() } answers { trips.toList() }
         coEvery { tripDao.getLiveTrips() } answers { trips.filter { it.bydId == null } }
         coEvery { tripDao.getByBydId(any()) } answers { trips.firstOrNull { it.bydId == firstArg<Long>() } }
-        coEvery { tripDao.getByStartTsRange(any(), any()) } answers {
-            val lo = firstArg<Long>()
-            val hi = secondArg<Long>()
-            trips.firstOrNull { it.startTs in lo..hi }
+        // Mirrors the SQL of TripDao.getSameTripByTime
+        coEvery { tripDao.getSameTripByTime(any(), any()) } answers {
+            val start = firstArg<Long>()
+            val window = secondArg<Long>()
+            trips.filter { it.startTs in (start - window)..(start + window) && (it.bydId == null || it.startTs == start) }
+                .minByOrNull { kotlin.math.abs(it.startTs - start) }
         }
         coEvery { tripDao.unlinkBydId(any(), any()) } answers {
             val id = firstArg<Long>()

@@ -372,6 +372,7 @@ class HudController @Inject constructor(
             // Navigator posts no hint notifications while it is on screen: the card follows the
             // window read then (#325). A tree read only, no helper calls.
             NavA11yFeed.enabled = true
+            NavGuidanceHub.setGatewaylessClusterPath(true)
             NavGuidanceHub.hudWay = NavGuidanceHub.WAY_AMAP_CLUSTER
             setStatus(Status.CLUSTER_ONLY)
             Log.i(TAG, "SOME/IP gateway absent; hints go to the cluster card via the Amap adapter")
@@ -474,6 +475,7 @@ class HudController @Inject constructor(
             bridge = null
             amapCluster?.stop()
             amapCluster = null
+            NavGuidanceHub.setGatewaylessClusterPath(false)
             NavGuidanceHub.hudWay = 0
             setStatus(Status.OFF)
             // NavGuidanceHub is intentionally NOT reset: the voice agent keeps using it.

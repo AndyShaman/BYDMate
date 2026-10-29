@@ -279,7 +279,7 @@
     <string name="settings_voice_disable_native_label">Отключить штатный голосовой помощник</string>
     <string name="settings_voice_disable_native_description">Скрывает встроенный голосовой ассистент BYD, чтобы он не перебивал. Вместе с ним пропадает и приложение Shortcuts (быстрые команды), это его часть. Обратимо: выключите тумблер и перезагрузите мультимедиа, оба вернутся. Перед удалением BYDMate выключите этот тумблер, иначе штатный помощник останется отключённым.</string>
     <string name="settings_voice_disable_native_confirm_title">Отключить штатный помощник?</string>
-    <string name="settings_voice_disable_native_confirm_body">Штатный помощник BYD будет отключён в системе машины. Перед удалением BYDMate выключите этот тумблер, иначе штатный помощник останется отключённым. Если приложение уже удалено: установите BYDMate снова, выключите тумблер и перезагрузите мультимедиа.</string>
+    <string name="settings_voice_disable_native_confirm_body">Штатный помощник BYD будет отключён в системе машины. Вместе с ним пропадёт приложение Shortcuts (быстрые команды). Перед удалением BYDMate выключите этот тумблер, иначе штатный помощник останется отключённым. Если приложение уже удалено: установите BYDMate снова, выключите тумблер и перезагрузите мультимедиа.</string>
     <string name="settings_voice_disable_native_confirm_button">Отключить</string>
     <string name="settings_voice_native_assistant_reboot_note">Изменение вступит в силу после перезагрузки головного устройства.</string>
     <string name="settings_widget_opacity_label">Прозрачность</string>
@@ -1247,6 +1247,7 @@
     <string name="auto_act_hud_on">HUD: включить</string>
     <string name="auto_act_hud_off">HUD: выключить</string>
     <string name="hud_not_equipped">На этой машине нет HUD</string>
+    <string name="rear_seat_heat_not_equipped">На этой машине нет подогрева задних сидений</string>
     <string name="auto_act_battery_preheat_on">Подогрев батареи: включить</string>
     <string name="auto_act_battery_preheat_off">Подогрев батареи: выключить</string>
     <string name="battery_preheat_not_equipped">На этой машине нет подогрева батареи</string>
@@ -1286,6 +1287,8 @@
     <string name="auto_level_seat_heat_passenger">Подогрев сиденья пассажира</string>
     <string name="auto_level_seat_vent_driver">Вентиляция сиденья водителя</string>
     <string name="auto_level_seat_vent_passenger">Вентиляция сиденья пассажира</string>
+    <string name="auto_level_seat_heat_rear_left">Подогрев заднего левого сиденья</string>
+    <string name="auto_level_seat_heat_rear_right">Подогрев заднего правого сиденья</string>
     <string name="auto_level_window_driver">Окно водителя</string>
     <string name="auto_level_window_passenger">Окно пассажира</string>
     <string name="auto_level_window_rear_left">Заднее левое окно</string>
@@ -1298,6 +1301,8 @@
     <string name="auto_level_tile_seat_heat_passenger">Подогрев сиденья пассажира выкл, 1–5</string>
     <string name="auto_level_tile_seat_vent_driver">Вентиляция сиденья водителя выкл, 1–5</string>
     <string name="auto_level_tile_seat_vent_passenger">Вентиляция сиденья пассажира выкл, 1–5</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Подогрев заднего левого сиденья выкл, 1–2</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Подогрев заднего правого сиденья выкл, 1–2</string>
     <string name="auto_level_tile_window_driver">Окно водителя: положение 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Окно пассажира: положение 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Заднее левое окно: положение 0–100 %</string>
@@ -1748,7 +1753,6 @@
     <string name="tech_card_limits">Лимиты BMS</string>
     <string name="tech_card_cells">Ячейки</string>
     <string name="tech_card_motors">Моторы и инверторы</string>
-    <string name="tech_card_climate">Климат</string>
     <string name="tech_card_tyres">Шины · давление / температура</string>
     <string name="tech_card_history">Батарея · история</string>
     <string name="tech_label_remain_kwh">Остаток</string>
@@ -2213,4 +2217,104 @@
     <string name="tech_card_fuel">Топливо</string>
     <string name="settings_fuel_price_label">Цена литра</string>
     <string name="settings_fuel_price_hint">за литр, на поездки с этой даты</string>
+    <string name="tech_card_car_state">Состояние машины</string>
+    <string name="tech_card_diagnostics">Диагностика</string>
+    <string name="tech_dtc_scan">Сканировать</string>
+    <string name="tech_hint_diagnostics">Предупреждения приборки: то, что машина сама показывает на приборке. Строки «До ТО» нет, если напоминание о ТО в машине выключено. Включить: настройки машины → Vehicle → Maintenance → Maintenance Interval или Maintenance Mileage.</string>
+    <string name="tech_label_dash_warnings">Предупреждения приборки</string>
+    <string name="tech_value_none">нет</string>
+    <string name="tech_label_service">До ТО</string>
+    <string name="tech_value_service_days">%1$d дн</string>
+    <string name="tech_value_service_km">%1$d км</string>
+    <string name="tech_label_pm25_in">PM2.5 салон</string>
+    <string name="tech_label_pm25_out">PM2.5 улица</string>
+    <string name="tech_section_dtc">Ошибки в блоках</string>
+    <string name="tech_dtc_never">Ещё не сканировали</string>
+    <string name="tech_dtc_only_on_p">Сканировать можно только на P</string>
+    <string name="tech_dtc_scanning">Сканируем…</string>
+    <string name="tech_dtc_progress">Опрашиваем блоки: %1$d из %2$d…</string>
+    <string name="tech_dtc_none_found">Ошибок в блоках не найдено</string>
+    <string name="tech_dtc_unavailable">Недоступно на этой машине</string>
+    <string name="tech_dtc_failed">Не удалось проверить. Попробуйте ещё раз</string>
+    <string name="tech_dtc_more">+%1$d ещё · все в окне</string>
+    <string name="tech_dtc_today">сегодня %1$s</string>
+    <string name="tech_dtc_checked_card">проверено %1$s</string>
+    <string name="tech_dtc_checked_dialog">Проверено %1$s · %2$s</string>
+    <string name="tech_dtc_kind_now">сейчас</string>
+    <string name="tech_dtc_kind_old">старая</string>
+    <string name="tech_dtc_kind_pending">ожидающая</string>
+    <string name="tech_dtc_dialog_title">Диагностика · ошибки в блоках</string>
+    <string name="tech_dtc_now_header">Есть сейчас</string>
+    <string name="tech_dtc_now_sub">на момент проверки</string>
+    <string name="tech_dtc_old_header">Старые</string>
+    <string name="tech_dtc_old_sub">были раньше, блок их запомнил</string>
+    <string name="tech_dtc_note">Сканирование ничего не меняет в машине. Покажите коды сервису.</string>
+    <string name="tech_dtc_rescan">Сканировать снова</string>
+    <string name="tech_dtc_send_tg">Отправить в Telegram</string>
+    <string name="tech_dtc_tg_sending">Отправляем…</string>
+    <string name="tech_dtc_tg_sent">Отправлено в Telegram</string>
+    <string name="tech_dtc_tg_failed">Не удалось отправить: %1$s</string>
+    <string name="tech_dtc_tg_no_bot">Бот Telegram не подключён</string>
+    <string name="tech_dtc_tg_title">BYDMate · ошибки в блоках</string>
+    <string name="tech_dtc_tg_now">Есть сейчас:</string>
+    <string name="tech_dtc_tg_old">Старые:</string>
+    <string name="tech_dtc_tg_checked">Проверено %1$s, %2$s</string>
+    <string name="tech_dtc_block_adas">ассистенты (ADAS)</string>
+    <string name="tech_dtc_block_brakes">тормоза IPB</string>
+    <string name="tech_dtc_block_steering">руль (EPS)</string>
+    <string name="tech_dtc_block_airbag">подушки</string>
+    <string name="tech_dtc_block_radar">передний радар</string>
+    <string name="tech_dtc_block_bms">батарея (BMS)</string>
+    <string name="tech_dtc_block_charger">зарядное (OBC)</string>
+    <string name="tech_dtc_block_body">кузовной блок 0x%1$X</string>
+    <string name="tech_dtc_block_unknown">блок 0x%1$X</string>
+    <string name="tech_dtc_full_adas">Контроллер ассистентов водителя (ADAS)</string>
+    <string name="tech_dtc_full_brakes">Тормоза IPB (Bosch)</string>
+    <string name="tech_dtc_full_steering">Электроусилитель руля (EPS)</string>
+    <string name="tech_dtc_full_airbag">Подушки безопасности</string>
+    <string name="tech_dtc_full_radar">Передний радар</string>
+    <string name="tech_dtc_full_bms">Блок управления батареей (BMS)</string>
+    <string name="tech_dtc_full_charger">Бортовое зарядное и DC-DC</string>
+    <string name="tech_dtc_full_ure">Блок силовой установки URE</string>
+    <string name="tech_dtc_full_body">Кузовной блок 0x%1$X</string>
+    <string name="tech_dtc_full_unknown">Блок 0x%1$X</string>
+    <string name="tech_dtc_block_ure" translatable="false">URE</string>
+    <plurals name="tech_dtc_answered">
+        <item quantity="one">ответил %1$d блок из %2$d</item>
+        <item quantity="few">ответили %1$d блока из %2$d</item>
+        <item quantity="many">ответили %1$d блоков из %2$d</item>
+        <item quantity="other">ответили %1$d блока из %2$d</item>
+    </plurals>
+    <plurals name="tech_dtc_unread">
+        <item quantity="one">Коды %1$d блока прочитать не удалось</item>
+        <item quantity="few">Коды %1$d блоков прочитать не удалось</item>
+        <item quantity="many">Коды %1$d блоков прочитать не удалось</item>
+        <item quantity="other">Коды %1$d блока прочитать не удалось</item>
+    </plurals>
+    <plurals name="tech_dtc_unread_partial">
+        <item quantity="one">%1$d блок не отдал список, его коды здесь не показаны</item>
+        <item quantity="few">%1$d блока не отдали список, их коды здесь не показаны</item>
+        <item quantity="many">%1$d блоков не отдали список, их коды здесь не показаны</item>
+        <item quantity="other">%1$d блока не отдали список, их коды здесь не показаны</item>
+    </plurals>
+    <string name="tech_dtc_key_hint">Машина не видела ключ: так бывает при удалённом запуске. Если код пропадает, когда ключ рядом, это не поломка.</string>
+    <string name="tech_dtc_similar_note">Описания по данным похожих моделей BYD.</string>
+    <string name="tech_dtc_src_exact">по мануалу BYD для этой модели</string>
+    <string name="tech_dtc_src_similar">по данным похожих моделей BYD</string>
+    <string name="tech_dtc_no_desc">Описания этого кода нет в базе</string>
+    <string name="tech_dtc_support_text">Приложения для диагностики обычно платные, а BYDMate бесплатный и некоммерческий. Поддержка помогает добавлять в него новые полезные функции.</string>
+    <string name="tech_dtc_support_button">Поддержать</string>
+    <plurals name="tech_dtc_codes">
+        <item quantity="one">%1$d код</item>
+        <item quantity="few">%1$d кода</item>
+        <item quantity="many">%1$d кодов</item>
+        <item quantity="other">%1$d кода</item>
+    </plurals>
+    <plurals name="tech_dtc_more_codes">
+        <item quantity="one">Ещё %1$d код не поместился, все в окне «Диагностика»</item>
+        <item quantity="few">Ещё %1$d кода не поместились, все в окне «Диагностика»</item>
+        <item quantity="many">Ещё %1$d кодов не поместились, все в окне «Диагностика»</item>
+        <item quantity="other">Ещё %1$d кода не поместились, все в окне «Диагностика»</item>
+    </plurals>
+    <string name="tech_value_pm25" translatable="false">%1$d µg/m³</string>
 </resources>

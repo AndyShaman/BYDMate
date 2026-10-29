@@ -110,6 +110,29 @@ object NavGuidanceHub {
     /** [hudWay] label of the gateway-less path (#301, Amap adapter to the cluster card); not a way from settings. */
     const val WAY_AMAP_CLUSTER = 10
 
+    /** Whether the gateway-less cluster path (#301) runs: only there a fresh a11y read lets a
+     *  notification's arrow in (#325). */
+    private var gatewaylessClusterPath = false
+    /** The latest a11y read found the maneuver node without a description (#325, Navigator 24.x). */
+    private var lastA11yUndescribed = false
+    /** Both of the above: a fresh a11y read takes a notification's arrow; logged on change only. */
+    private var notifManeuverLane = false
+
+    @Synchronized
+    fun setGatewaylessClusterPath(active: Boolean) {
+        gatewaylessClusterPath = active
+        noteNotifManeuverLane()
+    }
+
+    /** One log line per switch of [notifManeuverLane], never per read. */
+    private fun noteNotifManeuverLane() {
+        val on = gatewaylessClusterPath && lastA11yUndescribed
+        if (on == notifManeuverLane) return
+        notifManeuverLane = on
+        Log.i(TAG, "notification arrow lane ${if (on) "on" else "off"} (#325): " +
+            "gatewayless=$gatewaylessClusterPath a11y_undescribed=$lastA11yUndescribed")
+    }
+
     /** Trace id of the last guidance-off line: the cause a disarm that follows it links to. */
     @Volatile var lastOffTraceId: Long = 0L
         private set
@@ -197,7 +220,11 @@ object NavGuidanceHub {
             speedLimitMs = if (data.speedLimit > 0) nowMs else prev.speedLimitMs,
             lastUpdateMs = nowMs,
         )
-        if (source == Source.A11Y) lastA11yMs = nowMs
+        if (source == Source.A11Y) {
+            lastA11yMs = nowMs
+            lastA11yUndescribed = data.maneuverUndescribed
+            noteNotifManeuverLane()
+        }
     }
 
     /**
@@ -205,6 +232,8 @@ object NavGuidanceHub {
      * A11Y_PRIORITY_MS the guidance fields are ignored (a11y wins the field race),
      * but side effects ALWAYS apply: active=true, lastUpdateMs, camera merge. Camera two-stage rule mirrors the donor listener:
      * alert replaces; empty alert clears distance/icon; non-empty keeps prev gaps.
+     * #325: on the gateway-less path, while the fresh a11y read shows the maneuver node without a
+     * description, the notification's arrow alone is taken; the a11y fields stay.
      */
     @Synchronized
     fun updateFromNotification(rich: RichUpdate, nowMs: Long = System.currentTimeMillis()) {
@@ -229,28 +258,20 @@ object NavGuidanceHub {
         }
         lastNotifMs = nowMs
         val a11yFresh = lastA11yMs != 0L && nowMs - lastA11yMs <= A11Y_PRIORITY_MS
-        if (a11yFresh) {
-            stats.notifIgnored++
-        } else {
-            stats.notifRich++
-            countRead(prev, rich.maneuverGaode, rich.distanceMeters)
+        val arrowOnly = a11yFresh && notifManeuverLane && rich.maneuverGaode > 0
+        when {
+            arrowOnly -> {
+                stats.notifMan++
+                countRead(prev, rich.maneuverGaode, 0)
+            }
+            a11yFresh -> stats.notifIgnored++
+            else -> {
+                stats.notifRich++
+                countRead(prev, rich.maneuverGaode, rich.distanceMeters)
+            }
         }
-        maneuverExpiryArmed = a11yFresh || rich.maneuverGaode <= 0
-        val held = if (a11yFresh) prev else dropOnDistanceJump(
-            dropOnStreetChange(prev, rich.maneuverGaode, rich.road, Source.NOTIFICATION),
-            rich.maneuverGaode, rich.distanceMeters, Source.NOTIFICATION, nowMs,
-        )
-        val base = if (a11yFresh) prev else held.copy(
-            maneuverGaode = if (rich.maneuverGaode > 0) rich.maneuverGaode else held.maneuverGaode,
-            maneuverGaodeMs = if (rich.maneuverGaode > 0) nowMs else held.maneuverGaodeMs,
-            maneuverSource = if (rich.maneuverGaode > 0) Source.NOTIFICATION.label() else held.maneuverSource,
-            maneuverRaw = if (rich.maneuverGaode > 0) rich.maneuverRaw else held.maneuverRaw,
-            distanceMeters = if (rich.distanceMeters > 0) rich.distanceMeters else held.distanceMeters,
-            road = rich.road.ifEmpty { held.road },
-            etaSeconds = if (rich.etaSeconds > 0) rich.etaSeconds else held.etaSeconds,
-            totalDistMeters = if (rich.totalDistMeters > 0) rich.totalDistMeters else held.totalDistMeters,
-            maneuverPng = rich.maneuverPng ?: held.maneuverPng,
-        )
+        maneuverExpiryArmed = !arrowOnly && (a11yFresh || rich.maneuverGaode <= 0)
+        val base = guidanceFields(prev, rich, a11yFresh, arrowOnly, nowMs)
         current = base.copy(
             active = true,
             lastUpdateMs = nowMs,
@@ -266,6 +287,39 @@ object NavGuidanceHub {
                 else -> rich.cameraIconPng ?: prev.cameraIconPng
             },
         )
+    }
+
+    /** The guidance fields a notification leaves: a fresh a11y read keeps its own, save the arrow
+     *  of [arrowOnly] (#325); otherwise the notification merges field-wise after the drops. */
+    private fun guidanceFields(
+        prev: Snapshot, rich: RichUpdate, a11yFresh: Boolean, arrowOnly: Boolean, nowMs: Long,
+    ): Snapshot {
+        val held = if (a11yFresh) prev else dropOnDistanceJump(
+            dropOnStreetChange(prev, rich.maneuverGaode, rich.road, Source.NOTIFICATION),
+            rich.maneuverGaode, rich.distanceMeters, Source.NOTIFICATION, nowMs,
+        )
+        return when {
+            // No drop on this lane: the a11y reads own the distance and drop or expire the arrow.
+            arrowOnly -> prev.copy(
+                maneuverGaode = rich.maneuverGaode,
+                maneuverGaodeMs = nowMs,
+                maneuverSource = Source.NOTIFICATION.label(),
+                maneuverRaw = rich.maneuverRaw,
+                maneuverPng = rich.maneuverPng ?: prev.maneuverPng,
+            )
+            a11yFresh -> prev
+            else -> held.copy(
+                maneuverGaode = if (rich.maneuverGaode > 0) rich.maneuverGaode else held.maneuverGaode,
+                maneuverGaodeMs = if (rich.maneuverGaode > 0) nowMs else held.maneuverGaodeMs,
+                maneuverSource = if (rich.maneuverGaode > 0) Source.NOTIFICATION.label() else held.maneuverSource,
+                maneuverRaw = if (rich.maneuverGaode > 0) rich.maneuverRaw else held.maneuverRaw,
+                distanceMeters = if (rich.distanceMeters > 0) rich.distanceMeters else held.distanceMeters,
+                road = rich.road.ifEmpty { held.road },
+                etaSeconds = if (rich.etaSeconds > 0) rich.etaSeconds else held.etaSeconds,
+                totalDistMeters = if (rich.totalDistMeters > 0) rich.totalDistMeters else held.totalDistMeters,
+                maneuverPng = rich.maneuverPng ?: held.maneuverPng,
+            )
+        }
     }
 
     /** #294: a held maneuver belongs to the next street it was read with. A read that names
@@ -423,6 +477,9 @@ object NavGuidanceHub {
         nextStreet = ""
         distanceSource = null
         maneuverExpiryArmed = false
+        gatewaylessClusterPath = false
+        lastA11yUndescribed = false
+        notifManeuverLane = false
         stats.reset(0L)
     }
 

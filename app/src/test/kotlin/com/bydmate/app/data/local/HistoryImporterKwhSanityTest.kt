@@ -171,7 +171,7 @@ class HistoryImporterKwhSanityTest {
         coEvery { energyDataReader.readTripsSince(any()) } returns listOf(zeroKm)
         coEvery { settingsRepository.getBatteryCapacity() } returns 60.0
         coEvery { tripDao.getByBydId(91L) } returns null
-        coEvery { tripDao.getByStartTsRange(any(), any()) } returns null
+        coEvery { tripDao.getSameTripByTime(any(), any()) } returns null
 
         val drain = slot<IdleDrainEntity>()
         val inserted = slot<TripEntity>()
@@ -197,7 +197,7 @@ class HistoryImporterKwhSanityTest {
         coEvery { energyDataReader.readTripsSince(any()) } returns listOf(zeroKm)
         coEvery { settingsRepository.getBatteryCapacity() } returns 60.0
         coEvery { tripDao.getByBydId(92L) } returns null
-        coEvery { tripDao.getByStartTsRange(any(), any()) } returns null
+        coEvery { tripDao.getSameTripByTime(any(), any()) } returns null
 
         val drain = slot<IdleDrainEntity>()
         val result = importer().syncFromEnergyData()

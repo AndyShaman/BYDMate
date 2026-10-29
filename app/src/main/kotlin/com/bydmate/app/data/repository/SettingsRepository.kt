@@ -267,15 +267,6 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun getCurrencySymbol(): String = getCurrency().symbol
 
-    suspend fun getTripCostTariff(): Double {
-        val raw = getString(KEY_TRIP_COST_TARIFF, "home")
-        return when (raw) {
-            "home" -> getHomeTariff()
-            "dc" -> getDcTariff()
-            else -> raw.parseNumericSetting() ?: getHomeTariff()
-        }
-    }
-
     suspend fun getTripCostTariffKey(): String =
         getString(KEY_TRIP_COST_TARIFF, "home")
 
