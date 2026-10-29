@@ -46,9 +46,9 @@ class DtcDescriptionsTest {
         assertNull(d.lookup(260, DtcEnergy.EV, null, "U116687"))
     }
 
-    @Test fun `unknown class gets no description even when the manual has one text for the code`() {
-        // U171187 is only in URE of 61337: an unnamed block is not known to be the URE
-        assertNull(d.lookup(260, DtcEnergy.EV, null, "U171187"))
+    @Test fun `unknown class with one text for the code is exact`() {
+        val r = d.lookup(260, DtcEnergy.EV, null, "U171187")!!
+        assertEquals(DtcDescLevel.EXACT, r.level)
     }
 
     @Test fun `a code in no manual has no description`() {
