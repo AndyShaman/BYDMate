@@ -230,7 +230,7 @@ class DtcScanRepositoryTest {
         val result = r.sendLastScan(DtcFixtures.labels)
         assertEquals(DtcSendResult(DtcSendOutcome.SENT), result)
         coVerify(exactly = 1) {
-            sink.sendMessage("tok", 5L, match { it.contains("D16687") && it.contains("Есть сейчас:") }, null, any())
+            sink.sendMessage("tok", 5L, match { it.contains("U1166-87") && it.contains("Есть сейчас:") }, null, any())
         }
     }
 

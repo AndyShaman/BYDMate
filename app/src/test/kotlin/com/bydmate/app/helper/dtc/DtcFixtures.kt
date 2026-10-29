@@ -74,6 +74,8 @@ object DtcFixtures {
         override val pendingMark = "ожидающая"
         override val noErrors = "Ошибок в блоках не найдено"
         override val footer = "Сканирование ничего не меняет в машине. Покажите коды сервису."
+        override val keyHint = "Машина не видела ключ: так бывает при удалённом запуске."
+        override val similarNote = "Описания по данным похожих моделей BYD."
         override fun unread(count: Int) = "Коды $count блока прочитать не удалось"
         override fun moreCodes(count: Int) = "и ещё $count"
         override fun blockName(name: DtcBlockName) = when (name.block) {

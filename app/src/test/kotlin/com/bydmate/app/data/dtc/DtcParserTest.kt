@@ -34,10 +34,15 @@ class DtcParserTest {
         assertNull(DtcParser.parseCount(hex("5901")))
     }
 
-    @Test fun `the 0x712 list is one raw-hex now row and the tail is not parsed`() {
+    @Test fun `the 0x712 list is one now row and the tail is not parsed`() {
         val l = list("list-712.txt", 0x712)
         assertEquals(1, l.records)
-        assertEquals(listOf(DtcRow("D16687", 0x09, DtcKind.NOW, 0x87)), l.rows)
+        assertEquals(listOf(DtcRow("U1166-87", 0x09, DtcKind.NOW, 0x87)), l.rows)
+    }
+
+    @Test fun `Andy's 0x712 answer in format 01 reads as the manual code U1166-87`() {
+        assertEquals(1, count(0x712)!!.format)
+        assertEquals(listOf("U1166-87"), codes(list("list-712.txt", 0x712)))
     }
 
     @Test fun `the 0x782 list keeps one visible record out of thirty-six`() {
@@ -80,8 +85,10 @@ class DtcParserTest {
         assertEquals("U0164-87", DtcParser.codeText(hex("C16487"), 0))
         assertEquals("P0562-FC", DtcParser.codeText(hex("0562FC"), 0))
         assertEquals("U1166-87", DtcParser.codeText(hex("D16687"), 0))
-        assertEquals("D16687", DtcParser.codeText(hex("D16687"), 1))
-        assertEquals("D16687", DtcParser.codeText(hex("D16687"), null))
+        assertEquals("U1166-87", DtcParser.codeText(hex("D16687"), 1))
+        assertEquals("U1166-87", DtcParser.codeText(hex("D16687"), null))
+        assertEquals("D166", DtcParser.codeText(hex("D166"), 1))
+        assertEquals("D1668701", DtcParser.codeText(hex("D1668701"), 0))
     }
 
     @Test fun `a partial record is ignored and a negative list has no rows`() {
