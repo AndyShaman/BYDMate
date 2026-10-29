@@ -175,11 +175,11 @@ class DtcScannerTest {
         assertEquals(listOf("1901FF"), w.device.requests(0x726))
     }
 
-    @Test fun `a visible row asks for the identity after the list, mask 09 when no pending bit`() {
+    @Test fun `a visible row asks for the identity and the name after the list, mask 09 when no pending bit`() {
         val w = world()
         w.run()
         // count-712 availability is 0x09: no 0x04 bit, so the block filters with 0x09
-        assertEquals(listOf("1901FF", "190209", "22F194"), w.device.requests(0x712))
+        assertEquals(listOf("1901FF", "190209", "22F194", "22F197"), w.device.requests(0x712))
     }
 
     @Test fun `availability with the pending bit asks for mask 0D`() {
@@ -189,14 +189,14 @@ class DtcScannerTest {
             } else recorded(p)
         }
         w.run()
-        assertEquals(listOf("1901FF", "19020D", "22F194"), w.device.requests(0x712))
+        assertEquals(listOf("1901FF", "19020D", "22F194", "22F197"), w.device.requests(0x712))
     }
 
     @Test fun `the fixture availability with the pending bit picks mask 0D on 0x782`() {
         val w = world()
         w.run()
         // count-782 availability is 0xFF
-        assertEquals(listOf("1901FF", "19020D", "22F194"), w.device.requests(0x782))
+        assertEquals(listOf("1901FF", "19020D", "22F194", "22F197"), w.device.requests(0x782))
     }
 
     @Test fun `a masked list answered with a negative code is retried once with FF`() {
@@ -206,7 +206,7 @@ class DtcScannerTest {
             } else recorded(p)
         }
         val s = w.run()
-        assertEquals(listOf("1901FF", "190209", "1902FF", "22F194"), w.device.requests(0x712))
+        assertEquals(listOf("1901FF", "190209", "1902FF", "22F194", "22F197"), w.device.requests(0x712))
         assertEquals(DtcWire.OUTCOME_OK, s.of(0x712).outcome)
         assertNotNull(s.of(0x712).listUds)
     }
@@ -221,10 +221,10 @@ class DtcScannerTest {
         assertEquals(DtcWire.STATE_DONE, s.state)
     }
 
-    @Test fun `only the five fixed request shapes are ever sent`() {
+    @Test fun `only the six fixed request shapes are ever sent`() {
         val w = world()
         w.run()
-        val allowed = setOf("1901FF", "19020D", "190209", "1902FF", "22F194")
+        val allowed = setOf("1901FF", "19020D", "190209", "1902FF", "22F194", "22F197")
         for (p in w.device.sent) {
             assertEquals(7, p.size)
             assertTrue(DtcFixtures.hex(p), DtcFixtures.hex(p.copyOfRange(4, 7)) in allowed)
