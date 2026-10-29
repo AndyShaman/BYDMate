@@ -47,8 +47,6 @@ object DtcParser {
     private const val PENDING = 0x04
     private const val CONFIRMED = 0x08
 
-    /** DTC format byte of ISO 15031-6 (the letter form). */
-    private const val FORMAT_ISO15031 = 0
     private val LETTERS = charArrayOf('P', 'C', 'B', 'U')
 
     private val FAULTS = mapOf(
@@ -95,10 +93,14 @@ object DtcParser {
         else -> null
     }
 
-    /** `U0164-87` for format 00, raw hex `D16687` for format 01, unknown or null. */
+    /**
+     * The SAE letter form `U1166-87` for every 3-byte code, whatever the [format] byte (00, 01 or
+     * unknown): the BYD manuals write the ISO 14229-1 bytes `D1 66 87` as U1166-87 too. Raw hex
+     * only for a code that is not 3 bytes; the daemon log keeps the raw bytes.
+     */
+    @Suppress("UNUSED_PARAMETER", "UnusedParameter") // the format byte no longer changes the text
     fun codeText(code: ByteArray, format: Int?): String {
-        val hex = code.joinToString("") { "%02X".format(it) }
-        if (format != FORMAT_ISO15031 || code.size != CODE_BYTES) return hex
+        if (code.size != CODE_BYTES) return code.joinToString("") { "%02X".format(it) }
         val b0 = u(code, 0)
         return "${LETTERS[b0 shr 6]}${(b0 shr 4) and 0x3}${"%X".format(b0 and 0xF)}${"%02X".format(u(code, 1))}" +
             "-${"%02X".format(u(code, 2))}"
