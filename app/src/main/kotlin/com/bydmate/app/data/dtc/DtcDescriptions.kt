@@ -77,8 +77,8 @@ object DtcTablesLoader {
 
 /**
  * Description of a found code by (car model + block class + code). EXACT: the first manual of
- * the model (after the energy filter) that has the code; with a known class only its rows, with
- * an unknown class all of them; one distinct text or nothing. SIMILAR: a known class only, all
+ * the model (after the energy filter) that has the code in this block class (any block when the
+ * class is unknown); one distinct text or nothing. SIMILAR: a known class only, all
  * manuals, every English text the same. Never picks one of two differing texts.
  */
 class DtcDescriptions(private val tables: DtcTables) {
@@ -91,11 +91,9 @@ class DtcDescriptions(private val tables: DtcTables) {
 
     private fun exact(autoType: Int?, energy: DtcEnergy, blockClass: String?, rows: List<DtcTableRow>): DtcDescription? {
         val manuals = autoType?.let { tables.manualsByModel[it] } ?: return null
-        val manual = manuals.filter { fits(it, energy) }.firstOrNull { m -> rows.any { it.manual == m } } ?: return null
-        val texts = rows
-            .filter { it.manual == manual && (blockClass == null || it.blockClass == blockClass) }
-            .map { it.text }
-            .distinct()
+        val inBlock = rows.filter { blockClass == null || it.blockClass == blockClass }
+        val manual = manuals.filter { fits(it, energy) }.firstOrNull { m -> inBlock.any { it.manual == m } } ?: return null
+        val texts = inBlock.filter { it.manual == manual }.map { it.text }.distinct()
         val text = texts.singleOrNull() ?: return null
         return DtcDescription(text.en.trim(), text.zh.trim(), DtcDescLevel.EXACT, manual)
     }

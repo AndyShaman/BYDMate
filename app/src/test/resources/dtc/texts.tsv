@@ -9,3 +9,5 @@ t8	轮速传感器故障	Wheel speed sensor fault
 t9	泵电机故障	Pump motor fault
 t10	电池故障（DM）	Battery fault DM manual
 t11	电池故障（EV）	Battery fault EV manual
+t12	左车身故障	Left body fault
+t13	电池通讯故障	Battery communication fault

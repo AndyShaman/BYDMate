@@ -34,6 +34,14 @@ class DtcDescriptionsTest {
         assertEquals("（针对DST配置打开时）DST报文丢失", d.lookup(260, DtcEnergy.EV, "STEERING", "U111387")!!.zh)
     }
 
+    @Test fun `the exact text comes from the model's manual that has the code in this block`() {
+        // 90002 is preferred but has U400187 only in another block; 90001 has it in BMS
+        val r = d.lookup(999, DtcEnergy.UNKNOWN, "BMS", "U400187")!!
+        assertEquals(DtcDescLevel.EXACT, r.level)
+        assertEquals("90001", r.manual)
+        assertEquals("Battery communication fault", r.en)
+    }
+
     @Test fun `unknown class with two texts for the code is not picked`() {
         assertNull(d.lookup(260, DtcEnergy.EV, null, "U116687"))
     }
