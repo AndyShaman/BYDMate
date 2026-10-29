@@ -595,6 +595,7 @@ object AppModule {
         helper: com.bydmate.app.data.vehicle.HelperClient,
         settings: SettingsRepository,
         sink: com.bydmate.app.data.backup.TelegramBackupSink,
+        vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor,
     ): com.bydmate.app.data.dtc.DtcScanRepository = com.bydmate.app.data.dtc.DtcScanRepository(
         helper = helper,
         prefs = context.getSharedPreferences(com.bydmate.app.data.dtc.DtcScanRepository.PREFS_NAME, Context.MODE_PRIVATE),
@@ -605,6 +606,17 @@ object AppModule {
         serviceRunning = { com.bydmate.app.service.TrackingService.isRunning.value },
         elapsedNow = { android.os.SystemClock.elapsedRealtime() },
         wallNow = { System.currentTimeMillis() },
+        describer = com.bydmate.app.data.dtc.DtcDescriber(
+            open = { name -> context.assets.open("dtc/$name").reader(Charsets.UTF_8) },
+            autoType = { com.bydmate.app.data.dtc.CarAutoType.read(helper) },
+            energy = {
+                when (vehicleKindMonitor.kind.value) {
+                    com.bydmate.app.data.nativestack.VehicleKind.EV -> com.bydmate.app.data.dtc.DtcEnergy.EV
+                    com.bydmate.app.data.nativestack.VehicleKind.HYBRID -> com.bydmate.app.data.dtc.DtcEnergy.DM
+                    com.bydmate.app.data.nativestack.VehicleKind.UNKNOWN -> com.bydmate.app.data.dtc.DtcEnergy.UNKNOWN
+                }
+            },
+        ),
     )
 
     @Provides

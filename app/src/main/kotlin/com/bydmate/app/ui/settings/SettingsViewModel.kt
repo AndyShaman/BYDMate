@@ -1993,6 +1993,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             try {
                 appendLine(vehicleKindMonitor.dumpLine())
             } catch (e: Exception) { appendLine("vehicle_kind: error ${e.message}") }
+            try {
+                appendLine(com.bydmate.app.data.dtc.CarAutoType.dumpLine(helperClient))
+            } catch (e: Exception) { appendLine("car_autotype: error ${e.message}") }
 
             appendLine(automationEngine.serviceStartDumpLine())
             // Automation rules (#177): issue reports about a rule that "does nothing"

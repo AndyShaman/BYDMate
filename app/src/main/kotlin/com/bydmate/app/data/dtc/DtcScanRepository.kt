@@ -49,7 +49,7 @@ data class DtcSendResult(val outcome: DtcSendOutcome, val error: TelegramError? 
 /**
  * Owner of the manual scan at app scope. One attempt per tap, no automatic start or send.
  * Seams ([liveSample], [serviceRunning], [elapsedNow], [wallNow], [gearAddress]) let tests
- * run it without the service.
+ * run it without the service; without a [describer] the codes go out without descriptions.
  */
 @Suppress("LongParameterList") // seams for tests
 class DtcScanRepository(
@@ -63,6 +63,7 @@ class DtcScanRepository(
     private val elapsedNow: () -> Long,
     private val wallNow: () -> Long,
     private val gearAddress: () -> FidAddress = { FidAddresses.of("gear") },
+    private val describer: DtcDescriber? = null,
 ) {
     private val _state = MutableStateFlow(DtcScanState())
     val state: StateFlow<DtcScanState> = _state
@@ -91,6 +92,7 @@ class DtcScanRepository(
     }
 
     private suspend fun run() {
+        Log.i(TAG, "scan autotype=${CarAutoType.read(helper) ?: "?"}")
         val address = gearAddress()
         val reply = runCatching { helper.dtcScanStart(address.device, address.fid) }.getOrNull()
         Log.i(TAG, "start reply=${replyName(reply)}")
@@ -160,7 +162,9 @@ class DtcScanRepository(
             Log.i(TAG, "telegram skipped no_scan")
             return DtcSendResult(DtcSendOutcome.FAILED)
         }
-        val text = DtcTelegramText.build(DtcParser.summarize(scan.results), formatShort(scan.at), labels)
+        val summary = DtcParser.summarize(scan.results)
+        val descriptions = describe(summary)
+        val text = DtcTelegramText.build(summary, formatShort(scan.at), labels, { descriptions[it] }, labels.zh)
         return sink.sendMessage(config.token, chatId, text, null, false).fold(
             onSuccess = {
                 Log.i(TAG, "telegram rc=ok len=${text.length}")
@@ -173,6 +177,10 @@ class DtcScanRepository(
             },
         )
     }
+
+    /** Descriptions of the found codes by model + block + code; empty without a [describer]. */
+    suspend fun describe(summary: DtcScanSummary): Map<DtcFound, DtcDescription> =
+        describer?.describe(summary.found).orEmpty()
 
     private fun load(): DtcSavedScan? {
         val json = prefs.getString(KEY_LAST, null) ?: return null

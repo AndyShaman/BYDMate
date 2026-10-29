@@ -856,6 +856,8 @@ class TrackingService : Service(), LocationListener {
         serviceScope.launch { logTelegramSender.run() }
         // Car type (EV / DM-i hybrid): cache first, then a read round; the poll tick continues it.
         serviceScope.launch { vehicleKindMonitor.onServiceStart(System.currentTimeMillis()) }
+        // Car model code (AutoType): read once per process, logged for the DTC descriptions.
+        serviceScope.launch { com.bydmate.app.data.dtc.CarAutoType.read(helperClient) }
         startPolling()
         startCameraMonitor()
         // Pushed fid values are laid into the live snapshot as they arrive; the poll above is
