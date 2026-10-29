@@ -73,12 +73,16 @@ object DtcWire {
     const val SUB_COUNT = 0x01
     const val SUB_LIST = 0x02
     const val DID_IDENTITY = 0xF194
+    /** The block's own system name, ASCII (L3: "URE", "IPB", "SEC30-P50"); logged only. */
+    const val DID_NAME = 0xF197
 
     /** List masks: pending|confirmed|failed, confirmed|failed, everything (the validated fallback). */
     val LIST_MASKS: IntArray = intArrayOf(0x0D, 0x09, 0xFF)
 
     /** `0A rid(2) len frames idx result`, then the UDS bytes. */
     private const val HEADER = 7
+    /** `62` plus the 16-bit DID echo ahead of the data of a DID answer. */
+    private const val DID_HEAD = 3
     private const val FRAME_PREFIX = 0x0A
     private const val REQUEST_LEN = 0x03
     private const val REPLY_ID_OFFSET = 8
@@ -99,6 +103,10 @@ object DtcWire {
     /** `22 F1 94`: the block's identity. */
     fun identityRequest(addr: Int): ByteArray =
         request(addr, SERVICE_READ_DID, DID_IDENTITY shr 8, DID_IDENTITY and 0xFF)
+
+    /** `22 F1 97`: the block's own name. */
+    fun nameRequest(addr: Int): ByteArray =
+        request(addr, SERVICE_READ_DID, DID_NAME shr 8, DID_NAME and 0xFF)
 
     private fun request(addr: Int, service: Int, b1: Int, b2: Int): ByteArray {
         require(addr in ADDRESSES) { "address not in read whitelist" }
@@ -126,6 +134,14 @@ object DtcWire {
         }
         if (echoes(uds, service + POSITIVE_OFFSET, service, sub)) return DtcMatch.Answer(uds)
         return DtcMatch.NotMine
+    }
+
+    /** The F197 log text: `f197=URE` for a `62 F1 97` answer (ASCII, trimmed), `nrc=0x31`, or `none`. */
+    fun nameText(m: DtcMatch?): String = when (m) {
+        is DtcMatch.Answer -> "f197=" + String(m.uds, DID_HEAD, m.uds.size - DID_HEAD, Charsets.US_ASCII)
+            .trim { it.isWhitespace() || it == '\u0000' }
+        is DtcMatch.Nrc -> "nrc=0x${"%02X".format(m.code)}"
+        else -> "none"
     }
 
     /** `rid` of a frame of at least the header's size. */

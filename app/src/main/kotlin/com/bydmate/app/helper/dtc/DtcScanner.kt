@@ -160,7 +160,7 @@ class DtcScanner(
     /**
      * `19 01 FF` first; a positive count asks for the list with the block's own mask (0x0D when it
      * supports the pending bit, else 0x09) and, on a negative answer, once more with FF; a list with
-     * a row the app would show asks for the identity.
+     * a row the app would show asks for the identity and the name.
      */
     private fun readAddress(run: Run, acc: Acc) {
         val addr = acc.addr
@@ -189,6 +189,10 @@ class DtcScanner(
         )
         // The identity only names the block: no answer leaves the address's outcome as it is.
         if (id is DtcMatch.Answer) acc.idUds = id.uds
+
+        // The block's own name, for the log only (other models): never changes the outcome.
+        val name = exchange(run, addr, DtcWire.nameRequest(addr), DtcWire.SERVICE_READ_DID, DtcWire.DID_NAME)
+        log("name addr=${hexAddr(addr)} ${DtcWire.nameText(name)}")
     }
 
     /**
