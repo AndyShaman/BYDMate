@@ -14,24 +14,38 @@ class DtcTelegramTextTest {
 
     private val preClear get() = DtcParser.summarize(DtcFixtures.preClearScan())
 
+    @Test fun `the checked line gives the answered count without a total`() {
+        val answered = preClear.answered
+        val t = text(preClear)
+        assertTrue(t.contains("ответили $answered блоков"))
+        assertFalse(t.contains(" из "))
+    }
+
+    @Test fun `the merged URE addresses show their codes once under one header`() {
+        val t = text(preClear)
+        val headers = t.lines().filter { it.contains("0x7E0") && it.contains("0x7E2") }
+        assertEquals(t, 1, headers.size)
+        assertEquals(1, t.lines().count { it == "  U0164-87" })
+    }
+
     @Test fun `the message lists the current code first and the old ones after`() {
         val lines = text(preClear).lines()
         assertEquals("BYDMate · ошибки в блоках", lines[0])
-        assertEquals("Проверено 28.10 16:34, ответили 14 блоков из 18", lines[1])
+        assertEquals("Проверено 28.10 16:34, ответили 14 блоков", lines[1])
         val now = lines.indexOf("Есть сейчас:")
         val old = lines.indexOf("Старые:")
         assertTrue(now in 1 until old)
         assertEquals("ассистенты (ADAS) (0x712)", lines[now + 1])
         assertEquals("  U1166-87", lines[now + 2])
-        // fourteen old codes, under their block headers, between the header and the closing line
+        // nine old codes (the duplicate URE list at 0x7E0/0x7E2 counted once), under their block headers, between the header and the closing line
         val footer = lines.indexOf(labels.footer)
         assertTrue(footer > old)
-        assertEquals(14, lines.subList(old + 1, footer).count { it.startsWith("  ") })
+        assertEquals(9, lines.subList(old + 1, footer).count { it.startsWith("  ") })
     }
 
     @Test fun `old rows carry the block name and the code`() {
         val lines = text(preClear).lines()
-        assertTrue(lines.contains("URE (0x7E0)"))
+        assertTrue(lines.contains("URE (0x7E0, 0x7E2)"))
         assertTrue(lines.contains("  U0164-87"))
         assertTrue(lines.contains("кузовной блок 0x747"))
         assertTrue(lines.contains("  B2249-13"))
@@ -67,7 +81,7 @@ class DtcTelegramTextTest {
         val t = text(empty)
         assertTrue(t.contains("Ошибок в блоках не найдено"))
         assertFalse(t.contains("Есть сейчас:") || t.contains("Старые:"))
-        assertTrue(t.contains("ответили 12 блоков из 18"))
+        assertTrue(t.contains("ответили 12 блоков"))
     }
 
     @Test fun `a scan whose only codes are unread is not reported as clean`() {

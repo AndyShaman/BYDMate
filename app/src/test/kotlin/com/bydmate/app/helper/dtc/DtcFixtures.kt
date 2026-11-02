@@ -67,8 +67,8 @@ object DtcFixtures {
     /** Plain Russian labels, as the app would resolve them. */
     val labels = object : DtcLabels {
         override val title = "BYDMate · ошибки в блоках"
-        override fun checked(at: String, answered: Int, total: Int) =
-            "Проверено $at, ответили $answered блоков из $total"
+        override fun checked(at: String, answered: Int) =
+            "Проверено $at, ответили $answered блоков"
         override val nowHeader = "Есть сейчас:"
         override val oldHeader = "Старые:"
         override val pendingMark = "ожидающая"

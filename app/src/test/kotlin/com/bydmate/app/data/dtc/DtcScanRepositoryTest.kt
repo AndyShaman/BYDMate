@@ -11,6 +11,7 @@ import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.helper.dtc.DtcEraseResult
 import com.bydmate.app.helper.dtc.DtcFixtures
 import com.bydmate.app.helper.dtc.DtcScanStatus
 import com.bydmate.app.helper.dtc.DtcWire
@@ -25,11 +26,14 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 
 /**
  * The repository must run its work on the scope it is given (no Dispatchers.IO switch), so the
@@ -252,5 +256,75 @@ class DtcScanRepositoryTest {
         coVerify(exactly = 1) { sink.sendMessage(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { settings.getTgReportOutbox() }
         coVerify(exactly = 0) { settings.setTgReportOutbox(any()) }
+    }
+
+    @Test fun `a guard_absent reason is its own error, other unavailable reasons are not`() = runTest {
+        val r = repo(this)
+        statuses.addLast(ended(DtcWire.STATE_UNAVAILABLE, "guard_absent"))
+        r.start()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(DtcScanError.NO_DIAG_SERVICE, r.state.value.error)
+
+        statuses.addLast(ended(DtcWire.STATE_UNAVAILABLE, "no_frames"))
+        r.start()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(DtcScanError.UNAVAILABLE, r.state.value.error)
+    }
+
+    @Test fun `erase with a scan older than ten minutes does not call the daemon`() = runTest {
+        val r = repo(this)
+        finishScan(r)
+        wall += 11 * 60_000L
+        r.startErase(intArrayOf(0x7E0, 0x7E2))
+        runCurrent()
+        coVerify(exactly = 0) { helper.dtcEraseStart(any(), any(), any(), any(), any()) }
+        assertEquals(DtcScanError.ERASE_NEEDS_SCAN, r.erase.value?.error)
+    }
+
+    @Test fun `erase logs the visible codes first, then starts the daemon with the requested blocks`() = runTest {
+        ShadowLog.clear()
+        var beforeAtCall = -1
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } answers {
+            beforeAtCall = ShadowLog.getLogs().count { it.msg.startsWith("dtc erase before") }
+            0
+        }
+        val r = repo(this)
+        finishScan(r)
+        val requested = intArrayOf(0x7E0, 0x7E2)
+        r.startErase(requested)
+        runCurrent()
+        assertEquals(1, beforeAtCall)
+        val blocks = ShadowLog.getLogs().filter { it.msg.startsWith("dtc erase before") }
+        assertEquals(1, blocks.size)
+        for (f in DtcParser.summarize(DtcFixtures.preClearScan()).found) {
+            assertTrue(f.row.code, blocks.single().msg.contains(f.row.code))
+        }
+        assertTrue(blocks.single().msg.contains("U1166-87"))
+        coVerify(exactly = 1) {
+            helper.dtcEraseStart(any(), any(), any(), any(), match { it.contentEquals(requested) })
+        }
+    }
+
+    @Test fun `the status of an erase run is never saved as the scan`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        val r = repo(this)
+        finishScan(r)
+        val saved = r.last.value!!
+        val savedJson = prefs.getString("last", null)
+        wall += 60_000
+        val eraseResults = listOf(DtcEraseResult(0x7E0, DtcWire.CONFIRM_CONFIRMED, null, "", null))
+        statuses.addLast(
+            DtcScanStatus(
+                DtcWire.STATE_DONE, 1, 1, "", DtcFixtures.preClearScan().take(2), eraseResults, DtcWire.MODE_ERASE,
+            ),
+        )
+        r.startErase(intArrayOf(0x7E0, 0x7E2))
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertSame(saved, r.last.value)
+        assertEquals(savedJson, prefs.getString("last", null))
+        assertEquals(1, r.erase.value?.results?.size)
     }
 }
