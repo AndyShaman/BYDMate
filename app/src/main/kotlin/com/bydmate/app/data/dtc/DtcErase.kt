@@ -59,11 +59,16 @@ fun dtcEraseVerdict(r: DtcEraseResult): DtcEraseVerdict {
 /** `59 02`: a positive list answer, the only one an empty re-read may be trusted from. */
 private const val POSITIVE_LIST_HEAD = 0x59
 
-/** The visible rows of the re-read; null when it was not made or no positive list came back. */
+/**
+ * The visible rows of the re-read; null when it was not made or no positive answer came back.
+ * A positive count of 0 is an empty re-read: the daemon asks no list then.
+ */
 fun rereadRows(r: DtcEraseResult): List<DtcRow>? {
     val reread = r.reread ?: return null
-    val list = reread.listUds ?: return null
-    if (reread.outcome != DtcWire.OUTCOME_OK || list.size < 2) return null
+    if (reread.outcome != DtcWire.OUTCOME_OK) return null
+    val count = reread.countUds?.let { DtcParser.parseCount(it) }
+    val list = reread.listUds ?: return if (count?.count == 0) emptyList() else null
+    if (list.size < 2) return null
     if (list[0].toInt() and 0xFF != POSITIVE_LIST_HEAD || list[1].toInt() != DtcWire.SUB_LIST) return null
-    return DtcParser.parseList(list, reread.countUds?.let { DtcParser.parseCount(it) }?.format).rows
+    return DtcParser.parseList(list, count?.format).rows
 }

@@ -2289,7 +2289,7 @@
     <string name="tech_dtc_note_erase">Сканирование ничего не меняет в машине, стирание очищает только память ошибок в блоках.</string>
     <string name="tech_dtc_only_on_p_erase">Сканировать и стирать можно только на P</string>
     <string name="tech_dtc_erase_title_all">Стереть ошибки во всех блоках?</string>
-    <string name="tech_dtc_erase_title_block">Стереть ошибки блока %1$s?</string>
+    <string name="tech_dtc_erase_title_block">Стереть ошибки: %1$s?</string>
     <string name="tech_dtc_erase_text_all">Блоки забудут старые ошибки. Ошибка, которая есть сейчас, вернётся сразу, если её причина не ушла. Если собираетесь в сервис, сначала отправьте коды в Telegram или сфотографируйте экран.</string>
     <string name="tech_dtc_erase_text_block">Блок стирает свои коды только все вместе. Ошибка, которая есть сейчас, вернётся сразу, если её причина не ушла. Если собираетесь в сервис, сначала отправьте коды в Telegram или сфотографируйте экран.</string>
     <string name="tech_dtc_erase_warning">Функция экспериментальная. Стирая ошибки, вы действуете на свой риск: всю ответственность за последствия вы берёте на себя.</string>

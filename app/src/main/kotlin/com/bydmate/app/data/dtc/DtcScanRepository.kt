@@ -262,9 +262,10 @@ class DtcScanRepository(
         Log.i(TAG, "erase start reply=${replyName(reply)} gear=${gear.device}/${gear.fid} speed=${speed.device}/${speed.fid}")
         when (reply) {
             START_OK -> pollErase()
-            // Nothing was sent: busy = a scan or an erase holds the daemon, -1 = it refused the list.
-            null -> endErase(DtcScanError.DAEMON_UNREACHABLE)
+            // No reply: the daemon may have started the clears after the call timed out.
+            null -> endErase(DtcScanError.STATUS_LOST, mayHaveErased = true)
             START_OUTDATED -> endErase(DtcScanError.DAEMON_OUTDATED)
+            // Nothing was sent: busy = a scan or an erase holds the daemon, -1 = it refused the list.
             else -> endErase(DtcScanError.ABORTED)
         }
     }

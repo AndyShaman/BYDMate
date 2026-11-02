@@ -2,6 +2,7 @@ package com.bydmate.app.ui.tech
 
 import androidx.compose.ui.graphics.Color
 import com.bydmate.app.R
+import com.bydmate.app.data.dtc.DtcEraseState
 import com.bydmate.app.data.dtc.DtcEraseVerdict
 import com.bydmate.app.data.dtc.DtcScanError
 import com.bydmate.app.ui.theme.SocYellow
@@ -49,6 +50,18 @@ internal fun dtcEraseStopText(reason: String): Int = when (reason.substringBefor
     "budget" -> R.string.tech_dtc_stop_budget
     else -> R.string.tech_dtc_stop_other
 }
+
+/** The stop reason's key (`not_park`, `foreign`…) of an erase the daemon stopped; null after a normal end. */
+internal fun dtcEraseStopReasonKey(erase: DtcEraseState): String? =
+    if (erase.error != null) null else erase.reason.substringBefore(' ').ifEmpty { null }
+
+/** The block in the confirmation title, with its addresses unless the block text already holds them. */
+internal fun dtcEraseTitleName(blockText: String, addrs: List<Int>): String =
+    if (addrs.all { blockText.contains("0x%X".format(it), ignoreCase = true) }) {
+        blockText
+    } else {
+        "$blockText (${addrsText(addrs)})"
+    }
 
 /** «16:34», the time of the erase on the card. */
 internal fun dtcTime(at: Long): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(at))

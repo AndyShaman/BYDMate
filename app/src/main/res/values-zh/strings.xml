@@ -2235,7 +2235,7 @@
     <string name="tech_dtc_note_erase">扫描不会改变车辆的任何设置，清除只会清空各模块的故障记忆。</string>
     <string name="tech_dtc_only_on_p_erase">仅在 P 挡可扫描和清除</string>
     <string name="tech_dtc_erase_title_all">清除所有模块的故障码？</string>
-    <string name="tech_dtc_erase_title_block">清除 %1$s 的故障码？</string>
+    <string name="tech_dtc_erase_title_block">清除故障码：%1$s？</string>
     <string name="tech_dtc_erase_text_all">各模块将忘记旧故障。当前存在的故障如果原因未消除，会立即重新出现。如果要去维修站，请先把故障码发送到 Telegram 或拍下屏幕。</string>
     <string name="tech_dtc_erase_text_block">模块只能一次清除全部故障码。当前存在的故障如果原因未消除，会立即重新出现。如果要去维修站，请先把故障码发送到 Telegram 或拍下屏幕。</string>
     <string name="tech_dtc_erase_warning">实验性功能。清除故障码的风险由您自行承担：一切后果由您负责。</string>

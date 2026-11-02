@@ -2117,7 +2117,7 @@
     <string name="tech_dtc_note_erase">A análise não altera nada no carro, apagar limpa apenas a memória de falhas dos módulos.</string>
     <string name="tech_dtc_only_on_p_erase">Análise e apagamento só em P</string>
     <string name="tech_dtc_erase_title_all">Apagar as falhas de todos os módulos?</string>
-    <string name="tech_dtc_erase_title_block">Apagar as falhas de %1$s?</string>
+    <string name="tech_dtc_erase_title_block">Apagar falhas: %1$s?</string>
     <string name="tech_dtc_erase_text_all">Os módulos vão esquecer as falhas antigas. Uma falha presente agora volta logo, se a causa continuar. Se vai à oficina, envie primeiro os códigos para o Telegram ou fotografe a tela.</string>
     <string name="tech_dtc_erase_text_block">Um módulo apaga os seus códigos só todos juntos. Uma falha presente agora volta logo, se a causa continuar. Se vai à oficina, envie primeiro os códigos para o Telegram ou fotografe a tela.</string>
     <string name="tech_dtc_erase_warning">Função experimental. Ao apagar falhas, age por sua conta e risco: assume toda a responsabilidade pelas consequências.</string>

@@ -23,7 +23,6 @@ import com.bydmate.app.R
 import com.bydmate.app.data.dtc.DtcBlock
 import com.bydmate.app.data.dtc.DtcBlockName
 import com.bydmate.app.data.dtc.DtcEraseState
-import com.bydmate.app.data.dtc.DtcEraseVerdict
 import com.bydmate.app.data.dtc.dtcEraseVerdict
 import com.bydmate.app.ui.components.AppAlertDialog
 import com.bydmate.app.ui.theme.AccentGreen
@@ -75,7 +74,7 @@ internal fun EraseConfirm(target: EraseTarget, enabled: Boolean, onConfirm: () -
                     EraseTarget.All -> stringResource(R.string.tech_dtc_erase_title_all)
                     is EraseTarget.Block -> stringResource(
                         R.string.tech_dtc_erase_title_block,
-                        "${dtcBlockFull(context, target.name)} (${addrsText(target.addrs)})",
+                        dtcEraseTitleName(dtcBlockFull(context, target.name), target.addrs),
                     )
                 },
                 color = TextPrimary,
@@ -122,7 +121,7 @@ internal fun EraseConfirm(target: EraseTarget, enabled: Boolean, onConfirm: () -
 }
 
 /**
- * The last erase: the stop reason when some blocks were not reached, then one line per block
+ * The last erase: the stop reason when the daemon stopped it, then one line per block
  * (address, short name, verdict), or one line when the erase did not run.
  */
 @Composable
@@ -131,9 +130,7 @@ internal fun EraseResults(erase: DtcEraseState, names: Map<Int, DtcBlockName>) {
     dtcEraseErrorText(erase.error)?.let { NoneText(it) }
     if (erase.results.isEmpty()) return
     val verdicts = erase.results.map { it to dtcEraseVerdict(it) }
-    if (verdicts.any { it.second == DtcEraseVerdict.NOT_RUN } && erase.error == null) {
-        NoneText(dtcEraseStopText(erase.reason))
-    }
+    dtcEraseStopReasonKey(erase)?.let { NoneText(dtcEraseStopText(it)) }
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
         verdicts.forEach { (r, verdict) ->
             Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {

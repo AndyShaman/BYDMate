@@ -2273,10 +2273,10 @@
     <string name="tech_dtc_note_erase">Сканаванне нічога не мяняе ў машыне, сціранне ачышчае толькі памяць памылак у блоках.</string>
     <string name="tech_dtc_only_on_p_erase">Сканаваць і сціраць можна толькі на P</string>
     <string name="tech_dtc_erase_title_all">Сцерці памылкі ва ўсіх блоках?</string>
-    <string name="tech_dtc_erase_title_block">Сцерці памылкі блока %1$s?</string>
+    <string name="tech_dtc_erase_title_block">Сцерці памылкі: %1$s?</string>
     <string name="tech_dtc_erase_text_all">Блокі забудуць старыя памылкі. Памылка, якая ёсць зараз, вернецца адразу, калі яе прычына не сышла. Калі збіраецеся ў сэрвіс, спачатку адпраўце коды ў Telegram або сфатаграфуйце экран.</string>
     <string name="tech_dtc_erase_text_block">Блок сцірае свае коды толькі ўсе разам. Памылка, якая ёсць зараз, вернецца адразу, калі яе прычына не сышла. Калі збіраецеся ў сэрвіс, спачатку адпраўце коды ў Telegram або сфатаграфуйце экран.</string>
-    <string name="tech_dtc_erase_warning">Функцыя эксперыментальная. Сціраючы памылкі, вы дзейнічаеце на свой рызыка: усю адказнасць за наступствы вы бераце на сябе.</string>
+    <string name="tech_dtc_erase_warning">Функцыя эксперыментальная. Сціраючы памылкі, вы дзейнічаеце на сваю рызыку: усю адказнасць за наступствы вы бераце на сябе.</string>
     <string name="tech_dtc_erase_confirm">Сцерці</string>
     <string name="tech_dtc_erasing">Сціраем: %1$d з %2$d…</string>
     <string name="tech_dtc_erased_at">Коды сціраліся ў %1$s, націсніце «Сканаваць», каб убачыць, што засталося</string>

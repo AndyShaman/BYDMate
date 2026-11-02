@@ -23,7 +23,7 @@ class TimezoneLock(
     private val write: (String) -> Boolean,
     private val store: TimezoneLockStore,
 ) {
-    /** Writes 0 and keeps the value it replaced; true only when the read-back shows 0. */
+    /** Writes 0 and keeps the value it replaced; true only when the read-back shows 0, else puts it back. */
     fun enable(): Boolean {
         // A repeated enable must not take our own 0 for the user's value.
         val current = read()
@@ -35,6 +35,10 @@ class TimezoneLock(
         if (ok) {
             store.previous = previous
             store.enabled = true
+        } else if (written && !store.enabled) {
+            // The 0 may have landed while the switch stays off: put back what was there.
+            val restored = write(current ?: ANDROID_DEFAULT)
+            Log.w(TAG, "enable: read-back not 0, restored ${current ?: ANDROID_DEFAULT} ok=$restored")
         }
         return ok
     }

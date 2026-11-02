@@ -2273,7 +2273,7 @@
     <string name="tech_dtc_note_erase">Skanowanie niczego w aucie nie zmienia, czyszczenie usuwa tylko pamięć błędów w modułach.</string>
     <string name="tech_dtc_only_on_p_erase">Skanowanie i czyszczenie tylko na P</string>
     <string name="tech_dtc_erase_title_all">Wyczyścić błędy we wszystkich modułach?</string>
-    <string name="tech_dtc_erase_title_block">Wyczyścić błędy modułu %1$s?</string>
+    <string name="tech_dtc_erase_title_block">Wyczyścić błędy: %1$s?</string>
     <string name="tech_dtc_erase_text_all">Moduły zapomną stare błędy. Błąd obecny teraz wróci od razu, jeśli jego przyczyna nie zniknęła. Jeśli jedziesz do serwisu, najpierw wyślij kody do Telegrama albo zrób zdjęcie ekranu.</string>
     <string name="tech_dtc_erase_text_block">Moduł czyści swoje kody tylko wszystkie razem. Błąd obecny teraz wróci od razu, jeśli jego przyczyna nie zniknęła. Jeśli jedziesz do serwisu, najpierw wyślij kody do Telegrama albo zrób zdjęcie ekranu.</string>
     <string name="tech_dtc_erase_warning">Funkcja eksperymentalna. Czyszcząc błędy, działasz na własne ryzyko: całą odpowiedzialność za skutki bierzesz na siebie.</string>

@@ -2121,7 +2121,7 @@
     <string name="tech_dtc_note_erase">Scanning changes nothing in the car, erasing clears only the fault memory of the modules.</string>
     <string name="tech_dtc_only_on_p_erase">Scanning and erasing only in P</string>
     <string name="tech_dtc_erase_title_all">Erase the faults in all modules?</string>
-    <string name="tech_dtc_erase_title_block">Erase the faults of %1$s?</string>
+    <string name="tech_dtc_erase_title_block">Erase faults: %1$s?</string>
     <string name="tech_dtc_erase_text_all">The modules will forget their old faults. A fault present now comes back at once if its cause is still there. If you are going to a service centre, send the codes to Telegram or take a photo of the screen first.</string>
     <string name="tech_dtc_erase_text_block">A module erases its codes only all together. A fault present now comes back at once if its cause is still there. If you are going to a service centre, send the codes to Telegram or take a photo of the screen first.</string>
     <string name="tech_dtc_erase_warning">Experimental feature. By erasing faults you act at your own risk: you take full responsibility for the consequences.</string>
