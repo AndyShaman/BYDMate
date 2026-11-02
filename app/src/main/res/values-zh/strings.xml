@@ -813,6 +813,9 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">方向盘音量旋钮</string>
     <string name="settings_knob_play_pause_desc">按下旋钮暂停和继续播放，而不是切换音源。固件更新后按下变为切换音源时需要开启。</string>
+    <string name="settings_timezone_lock_title">不通过网络更改时区</string>
+    <string name="settings_timezone_lock_desc">适用于边境附近、时区会自动重置为北京时间的车辆。请先在车机设置中选择正确的时区，然后再开启。</string>
+    <string name="settings_timezone_lock_failed">失败：请重启 ADB 助手后重试</string>
     <string name="settings_cluster_music_card_title">仪表显示曲目</string>
     <string name="settings_cluster_music_card_desc">为原厂固件不支持的播放器在仪表盘音乐卡片上显示歌名与歌手：Yandex 导航（Alice）、Yandex 音乐、Spotify、网络电台等。原厂播放器和蓝牙由固件自行填写。</string>
 

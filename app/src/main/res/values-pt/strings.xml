@@ -79,6 +79,9 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Botão giratório de volume no volante</string>
     <string name="settings_knob_play_pause_desc">Pressionar pausa e retoma a reprodução em vez de trocar a fonte de áudio. Necessário após a atualização de firmware em que o toque passou a mudar a fonte.</string>
+    <string name="settings_timezone_lock_title">Não mudar o fuso horário pela rede</string>
+    <string name="settings_timezone_lock_desc">Para carros perto da fronteira, onde o fuso horário volta sozinho para o de Pequim. Primeiro escolha o fuso certo nas configurações do carro, depois ative.</string>
+    <string name="settings_timezone_lock_failed">Falhou: reinicie o auxiliar ADB e tente de novo</string>
     <string name="settings_cluster_music_card_title">Faixa no painel</string>
     <string name="settings_cluster_music_card_desc">Mostra o título e o artista no cartão de música do painel de instrumentos para os reprodutores que o firmware de fábrica ignora: Yandex Navigator (Alice), Yandex Music, Spotify, rádio pela internet e outros. Para os próprios reprodutores e o Bluetooth, o firmware preenche-o sozinho.</string>
 

@@ -458,6 +458,8 @@ class LogRecorder internal constructor(
             "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*",
             // Amap-channel wave: notification lane + parser tags.
             "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*",
+            // Listener rebind (#325) and the time zone lock (#379).
+            "NotifListenerRebind:*", "TimezoneLock:*",
             // Cluster music card: what the bridge decided and wrote.
             "ClusterMusicBridge:*",
             // Blindspot wave: AVM camera probe. FidPush carries the daemon's push

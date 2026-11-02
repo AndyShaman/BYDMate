@@ -174,6 +174,8 @@ class TrackingService : Service(), LocationListener {
     // estimate() runs on every ~3s poll tick.
     private var lastLoggedRangeKm: Int? = null
     @Volatile private var lastGuidanceGrantRearmTs: Long = 0L
+    // One listener rebind (#325) at a time: the guidance check may come while the startup one runs.
+    private val notifRebindRunning = java.util.concurrent.atomic.AtomicBoolean(false)
     // Live charging-end detector. We track gun-connect state across polls and
     // fire runCatchUp on the connected→disconnected edge. The gun signal is
     // sourced from autoservice (system SDK) — DiPlus' chargeGunState is
@@ -326,6 +328,11 @@ class TrackingService : Service(), LocationListener {
         // self-heal run per 10 min at most, so a permanently-failing grant can't
         // hammer the daemon for a whole trip.
         private const val GUIDANCE_GRANT_REARM_MS = 600_000L
+        // After a listener rebind (#325): when to look whether the framework bound it.
+        private const val NOTIF_REBIND_RECHECK_MS = 5_000L
+
+        /** Per process, not per service instance: MAX_ATTEMPTS counts this process's rebinds (#325). */
+        @Volatile private var notifListenerRebinder: com.bydmate.app.media.NotificationListenerRebinder? = null
         // Resuming a log recording interrupted by ignition-off: a couple of retries
         // cover the storage mount lagging the service start, then we stop trying.
         private const val LOG_RESUME_ATTEMPTS = 3
@@ -712,6 +719,12 @@ class TrackingService : Service(), LocationListener {
             try {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
+                // Time zone lock (#379): re-assert auto_time_zone=0 if the user turned it on.
+                if (ok) {
+                    runCatching {
+                        com.bydmate.app.data.settings.TimezoneLock.create(this@TrackingService, helperClient).onServiceStart()
+                    }.onFailure { Log.w(TAG, "TimezoneLock: service start failed: ${it.message}") }
+                }
                 // First start after a backup restore: re-grant the overlay through the daemon
                 // that is now up, report the rest to the dialog in MainActivity.
                 serviceScope.launch {
@@ -868,6 +881,12 @@ class TrackingService : Service(), LocationListener {
         blindSpotController.start(serviceScope)
         // Cluster music card: mirrors Yandex music the stock controller leaves blank.
         clusterMusicBridge.start(serviceScope) { reason -> notificationListenerGrant.ensure(reason) }
+        // #325: an approved listener the framework never bound after a car start. Healthy starts
+        // bind within ~10 s, so this one check does nothing on them.
+        serviceScope.launch {
+            delay(com.bydmate.app.media.NotificationListenerHealth.GRACE_MS)
+            checkNotificationListenerBinding("startup")
+        }
         instance = this
         _isRunning.value = true
         adbVerdictMonitor.onServiceStarted()
@@ -1190,11 +1209,65 @@ class TrackingService : Service(), LocationListener {
         // Without the gateway (#301) a11y stays off, so the hub needs the listener to activate at all.
         if (!com.bydmate.app.navdata.NavGuidanceHub.snapshot(now).active &&
             hudController.status.value != com.bydmate.app.hud.HudController.Status.CLUSTER_ONLY) return
+        checkNotificationListenerBinding("guidance-active")
         if (now - lastGuidanceGrantRearmTs < GUIDANCE_GRANT_REARM_MS) return
         if (runCatching { notificationListenerGranted() }.getOrDefault(false)) return
         lastGuidanceGrantRearmTs = now
         serviceScope.launch { notificationListenerGrant.ensure("guidance-active") }
     }
+
+    /**
+     * #325: approved but never bound by the framework → disallow/allow through the daemon, at most
+     * NotificationListenerRebinder.MAX_ATTEMPTS per process. A missing approval stays on the grant
+     * path above; a connected listener is never touched.
+     */
+    private fun checkNotificationListenerBinding(reason: String) {
+        val approved = runCatching { notificationListenerGranted() }.getOrDefault(false)
+        val connected = com.bydmate.app.media.MediaSessionListenerService.isConnected
+        val ageMs = android.os.SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime()
+        val needs = com.bydmate.app.media.NotificationListenerHealth.needsRebind(approved, connected, ageMs)
+        val attempts = notifListenerRebinder?.attempts ?: 0
+        val exhausted = attempts >= com.bydmate.app.media.NotificationListenerRebinder.MAX_ATTEMPTS
+        // The guidance check runs every minute while driving: only a startup or a rebind decision is logged.
+        if (reason == "startup" || (needs && !exhausted)) {
+            Log.i(TAG, "notif-listener check reason=$reason approved=$approved connected=$connected " +
+                "age=${ageMs / 1000}s attempts=$attempts rebind=${needs && !exhausted}")
+        }
+        if (!needs || exhausted) return
+        if (!notifRebindRunning.compareAndSet(false, true)) return
+        serviceScope.launch {
+            try {
+                val rebinder = notificationListenerRebinder()
+                val ok = rebinder.rebind(reason)
+                Trace.event(TraceArea.HUD, "notif-listener rebind", "reason" to reason, "ok" to ok,
+                    "attempt" to rebinder.attempts)
+                delay(NOTIF_REBIND_RECHECK_MS)
+                val after = com.bydmate.app.media.MediaSessionListenerService.isConnected
+                Log.i(TAG, "notif-listener after-rebind reason=$reason ok=$ok connected=$after")
+                Trace.event(TraceArea.HUD, "notif-listener after-rebind", "connected" to after)
+            } finally {
+                notifRebindRunning.set(false)
+            }
+        }
+    }
+
+    private fun notificationListenerRebinder(): com.bydmate.app.media.NotificationListenerRebinder =
+        synchronized(TrackingService) {
+            notifListenerRebinder ?: com.bydmate.app.media.NotificationListenerRebinder(
+                disallow = {
+                    kotlinx.coroutines.runBlocking {
+                        helperBootstrap.ensureRunning() && helperClient.disallowNotificationListener()
+                    }
+                },
+                allow = {
+                    kotlinx.coroutines.runBlocking {
+                        com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
+                    }
+                },
+                sleep = { Thread.sleep(it) },
+                hooks = listOf(clusterMusicBridge),
+            ).also { notifListenerRebinder = it }
+        }
 
     /**
      * Отправка живой телеметрии с адаптивной частотой (см.

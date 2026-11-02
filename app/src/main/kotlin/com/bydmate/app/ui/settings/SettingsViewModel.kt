@@ -322,6 +322,10 @@ data class SettingsUiState(
     }
     /** The saved log can go to the user's own bot: a finished recording, none running, a bot bound (#324). */
     val canSendLogToTelegram: Boolean get() = lastLogPath != null && !isRecordingLogs && tgBackupBinding != null
+    /** No bot bound: the saved log goes through the system share sheet instead (#380). */
+    val canShareLog: Boolean get() = lastLogPath != null && !isRecordingLogs &&
+        com.bydmate.app.diagnostics.logSendRoute(botConfigured = tgBackupBinding != null) ==
+        com.bydmate.app.diagnostics.LogSendRoute.SHARE_SHEET
 }
 
 @HiltViewModel
@@ -394,6 +398,17 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     fun recheckAdb() = adbVerdictMonitor.recheck("settings")
 
     fun enableAdbRestore() = adbVerdictMonitor.enableRestoreAndRecheck()
+
+    fun isTimezoneLockOn(): Boolean = com.bydmate.app.data.settings.TimezoneLockPrefs(appContext).enabled
+
+    /** Time zone lock (#379) switched in Settings; true when the helper confirmed the write. */
+    suspend fun setTimezoneLock(on: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val helperUp = helperBootstrap.ensureRunning()
+        Log.i(TAG, "timezone lock: switch on=$on helper=$helperUp")
+        if (!helperUp) return@withContext false
+        val lock = com.bydmate.app.data.settings.TimezoneLock.create(appContext, helperClient)
+        if (on) lock.enable() else lock.disable()
+    }
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
     val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
@@ -2166,6 +2181,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(appContext)
                         .contains(appContext.packageName)
                 }")
+                // Approved is not bound (#325): the framework may never connect an approved listener.
+                appendLine("notif_listener_connected=${com.bydmate.app.media.MediaSessionListenerService.isConnected}")
                 // Self-heal runs for every daemon-backed grant: all-false reasserts point at the
                 // daemon path, true reasserts with granted=false at the system reverting us.
                 val healHistory = com.bydmate.app.service.GrantSelfHeal.history()
@@ -2681,6 +2698,26 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             logTelegramSender.results.collect { status ->
                 _uiState.update { if (it.isRecordingLogs) it else it.copy(logSaveStatus = status) }
             }
+        }
+    }
+
+    /** The saved-log button: the bound bot (#324), or the system share sheet without one (#380). */
+    fun sendLog() {
+        val route = com.bydmate.app.diagnostics.logSendRoute(botConfigured = _uiState.value.tgBackupBinding != null)
+        Log.i(TAG, "log send: route=$route")
+        when (route) {
+            com.bydmate.app.diagnostics.LogSendRoute.TELEGRAM -> sendLogToTelegram()
+            com.bydmate.app.diagnostics.LogSendRoute.SHARE_SHEET -> shareLog()
+        }
+    }
+
+    private fun shareLog() {
+        val path = _uiState.value.lastLogPath ?: return
+        try {
+            shareFile(File(path), "text/plain")
+        } catch (e: Exception) {
+            Log.w(TAG, "log share failed: ${e.javaClass.simpleName}")
+            _uiState.update { it.copy(logSaveStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?")) }
         }
     }
 

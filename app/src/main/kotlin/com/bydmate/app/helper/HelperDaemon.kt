@@ -570,6 +570,16 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_DISALLOW_NOTIFICATION_LISTENER -> runCatching {
+                    // Our own listener only: the component is the protocol constant, nothing from
+                    // the caller. Revokes the approval so the following allow makes NMS bind anew.
+                    val result = shExec("cmd notification disallow_listener \"\$1\"",
+                        HelperBinderProtocol.NOTIFICATION_LISTENER_COMPONENT)
+                    android.util.Log.i("bydmate_helper", "TX_DISALLOW_NOTIFICATION_LISTENER code=${result.code}")
+                    reply?.writeInt(if (result.code == 0) 0 else -1)
+                    true
+                }.getOrElse { reply?.writeInt(-1); true }
+
                 HelperBinderProtocol.TX_SET_APP_HIDDEN -> runCatching {
                     val pkg = data.readString() ?: ""
                     val hidden = data.readInt()    // 1 = disable, 0 = enable
@@ -2502,16 +2512,17 @@ private fun setHotspot(ctx: Context, enable: Boolean): Boolean {
 }
 
 /**
- * Settings.Global whitelist for TX_PUT_GLOBAL_SETTING: the sentry-mode master switch and the
- * freeform windowing flag (direct cluster projection; the framework reads it once at boot).
+ * Settings.Global whitelist for TX_PUT_GLOBAL_SETTING: the sentry-mode master switch, the
+ * freeform windowing flag (direct cluster projection; the framework reads it once at boot) and
+ * the automatic time zone switch (the user's time zone lock, #379: 0 = network zone ignored).
  * Values are bounded to 0/1. Anything else is rejected before any shell command runs.
  */
 internal fun globalSettingAllowed(key: String, value: Int): Boolean =
-    key in setOf("sentrymode_enabled_switch", "enable_freeform_support") && value in 0..1
+    key in setOf("sentrymode_enabled_switch", "enable_freeform_support", "auto_time_zone") && value in 0..1
 
 /** Keys [HelperBinderProtocol.TX_GET_GLOBAL_SETTING] may read back: the write whitelist's keys. */
 internal fun globalSettingReadable(key: String): Boolean =
-    key in setOf("sentrymode_enabled_switch", "enable_freeform_support")
+    key in setOf("sentrymode_enabled_switch", "enable_freeform_support", "auto_time_zone")
 
 /** How long the read below waits for `settings get global` before it gives up on it. */
 internal const val GLOBAL_SETTING_READ_TIMEOUT_MS = 2000L

@@ -41,6 +41,7 @@ import android.os.IBinder
  *   TX_SET_APP_HIDDEN : writeString(packageName), writeInt(hidden: 1=disable 0=enable)
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
  *   TX_ENABLE_NOTIFICATION_LISTENER : (no args)           -> reply: writeInt(status), writeInt(0)  // status 0 = our listener stub enabled
+ *   TX_DISALLOW_NOTIFICATION_LISTENER : (no args)         -> reply: writeInt(status)  // status 0 = our listener stub disallowed (#325 rebind)
  *   TX_SET_CLUSTER_MODE: [int on(0|1)] -> [int status]; status 0 = ok.
  *   TX_GET_TASK_STATE : writeString(packageName)
  *       -> reply: writeInt(status), then on status 0:
@@ -602,6 +603,17 @@ object HelperBinderProtocol {
      * An old daemon without this handler makes transact return false → the client returns -2.
      */
     val TX_DTC_ERASE_START: Int = IBinder.FIRST_CALL_TRANSACTION + 63  // 64
+
+    /**
+     * First half of the notification-listener rebind (#325): `cmd notification disallow_listener`
+     * for [NOTIFICATION_LISTENER_COMPONENT] only, the component is fixed daemon-side and no
+     * argument is read. The app gives it back with [TX_ENABLE_NOTIFICATION_LISTENER] 200 ms later.
+     *
+     * Request: (no args) -> Reply: [int status (0 = disallowed, -1 = failed)]
+     * An old daemon without this handler makes transact return false → the client returns false
+     * and the rebind stops there, nothing revoked.
+     */
+    val TX_DISALLOW_NOTIFICATION_LISTENER: Int = IBinder.FIRST_CALL_TRANSACTION + 64  // 65
 
     /** TX_SET_AUTO_VOICE outcomes: called; no such method on this firmware; the audio service or
      *  the call threw. */

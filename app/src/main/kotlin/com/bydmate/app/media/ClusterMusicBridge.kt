@@ -34,6 +34,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Non-UI7 polls register the sessions listener while none is held. */
+fun shouldAddSessionsListener(ui7: Boolean, listenerRegistered: Boolean): Boolean = !ui7 && !listenerRegistered
+
 /**
  * Mirrors the track of any player the stock controller leaves out (Yandex Navigator's Alice music,
  * Yandex Music, Spotify, internet radio...) onto the instrument cluster's music card, which it
@@ -70,7 +73,7 @@ class ClusterMusicBridge @Inject constructor(
     @ApplicationContext private val context: Context,
     private val helper: HelperClient,
     private val catalogManager: FidCatalogManager,
-) {
+) : RebindHook {
     private val prefs = context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
     private val ui7 = Split37Engine.isPlatformizedFirmware()
     private val sync = ClusterMusicSync(object : ClusterMusicSync.Port {
@@ -96,6 +99,8 @@ class ClusterMusicBridge @Inject constructor(
     @Volatile private var sessionsListener: MediaSessionManager.OnActiveSessionsChangedListener? = null
     /** The pending rewrite; a newer sessions change replaces it, so a burst gives one rewrite. */
     @Volatile private var pendingReassert: Job? = null
+    /** A listener rebind (#325) is in progress: no poll registers until it is over. */
+    @Volatile private var rebinding = false
     @Volatile private var ensureAccess: (suspend (String) -> Unit)? = null
     private val access = ClusterMusicAccess(ACCESS_RETRY_MS)
     private var wasEnabled = false
@@ -179,7 +184,7 @@ class ClusterMusicBridge @Inject constructor(
             return
         }
         val sessions = readSessions() ?: return
-        if (!ui7 && sessionsListener == null) addSessionsListener()
+        if (!rebinding && shouldAddSessionsListener(ui7, listenerRegistered = sessionsListener != null)) addSessionsListener()
         val target = observe(sessions, via = "poll")
         val outcome = sync.step(true, fids, target, SystemClock.elapsedRealtime()) { enabled() && job?.isActive == true }
         report(outcome, target)
@@ -241,6 +246,27 @@ class ClusterMusicBridge @Inject constructor(
             return
         }
         Log.i(TAG, "sessions listener on: rewrite $SESSIONS_REASSERT_DELAY_MS ms after an active-sessions change")
+    }
+
+    /**
+     * The rebind (#325) revokes the listener, which drops this registration without telling us, and
+     * the 200 ms gap usually falls between two polls that would notice. Let go of it first; the
+     * first poll after the rebind registers a new one.
+     */
+    override fun beforeRebind() {
+        rebinding = true
+        val held = sessionsListener != null
+        removeSessionsListener()
+        Log.i(TAG, "listener rebind: sessions listener released held=$held")
+    }
+
+    override fun afterRebind() {
+        // A poll that passed its check just before beforeRebind may have registered one the
+        // disallow then dropped: forget that too.
+        val raced = sessionsListener != null
+        removeSessionsListener()
+        rebinding = false
+        Log.i(TAG, "listener rebind over: next poll registers the sessions listener raced=$raced ui7=$ui7")
     }
 
     private fun removeSessionsListener() {

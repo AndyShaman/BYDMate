@@ -24,6 +24,12 @@ class MediaSessionListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "MediaSessionListener"
 
+        /** Bound and connected right now, process-wide (#325): approval alone does not mean the
+         *  framework bound us. Same signal as SteeringWheelKeyService.isConnected. */
+        @Volatile
+        var isConnected: Boolean = false
+            private set
+
         /** Donor media filter: session token, transport category, or MediaStyle
          *  template. Alice music playing inside Navigator posts these - guidance
          *  parsing must not touch them (spec MEDIA outcome: full stop). */
@@ -55,17 +61,20 @@ class MediaSessionListenerService : NotificationListenerService() {
     // guidance (#199) cannot tell a disconnected listener from a quiet navigator.
     override fun onListenerConnected() {
         super.onListenerConnected()
+        isConnected = true
         Log.i(TAG, "listener connected")
         Trace.event(TraceArea.HUD, "notif-listener", "state" to "connected")
     }
 
     override fun onListenerDisconnected() {
+        isConnected = false
         Log.i(TAG, "listener disconnected")
         Trace.event(TraceArea.HUD, "notif-listener", "state" to "disconnected")
         super.onListenerDisconnected()
     }
 
     override fun onDestroy() {
+        isConnected = false
         lane?.shutdown()
         lane = null
         super.onDestroy()

@@ -404,6 +404,10 @@ interface HelperClient {
      */
     suspend fun enableNotificationListenerAccess(): Boolean
 
+    /** First half of the listener rebind (#325): disallows our own listener through the daemon;
+     *  [enableNotificationListenerAccess] gives it back. False on an old daemon without the op. */
+    suspend fun disallowNotificationListener(): Boolean = false
+
     /** Powers the cluster compositor on/off via auto_container (Wave P). True on daemon status 0. */
     suspend fun setClusterContainerMode(on: Boolean): Boolean
 
@@ -1270,6 +1274,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         transactParsed(HelperBinderProtocol.TX_ENABLE_NOTIFICATION_LISTENER, { }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             status == 0
+        } ?: false
+
+    // FORCE_TIMEOUT_MS like the allow above: one `cmd` process spawn, slow on a cold head unit.
+    override suspend fun disallowNotificationListener(): Boolean =
+        transactParsed(HelperBinderProtocol.TX_DISALLOW_NOTIFICATION_LISTENER, { }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
+            if (reply.dataAvail() >= 4) reply.readInt() == 0 else false
         } ?: false
 
     override suspend fun pushSubscribe(callback: IBinder, subs: List<FidPushSub>): List<FidPushResult>? =
