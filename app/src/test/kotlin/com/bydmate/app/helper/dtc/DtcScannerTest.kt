@@ -50,9 +50,12 @@ class DtcScannerTest {
 
         fun addr(i: Int) = ((sent[i][1].toInt() and 0xFF) shl 8) or (sent[i][2].toInt() and 0xFF)
 
-        /** The request bytes after the `0A hi lo 03` header, per address, in send order. */
-        fun requests(addr: Int): List<String> =
+        /** Every request's bytes after the `0A hi lo len` header, per address, in send order. */
+        fun allRequests(addr: Int): List<String> =
             sent.indices.filter { addr(it) == addr }.map { DtcFixtures.hex(sent[it].copyOfRange(4, sent[it].size)) }
+
+        /** As [allRequests] without the log-only snapshot requests (`19 04`), which never change a result. */
+        fun requests(addr: Int): List<String> = allRequests(addr).filterNot { it.startsWith("1904") }
     }
 
     private class World {
@@ -699,10 +702,10 @@ class DtcScannerTest {
         val results = answers.map { answer ->
             val w = codesWorld(codes, answer)
             val s = w.run()
-            val snaps = w.device.requests(0x712).filter { it.startsWith("1904") }
+            val snaps = w.device.allRequests(0x712).filter { it.startsWith("1904") }
             assertEquals(listOf("1904D16687FF", "1904D16688FF"), snaps)
             assertEquals(2, w.device.sent.count { isSnapshot(it) && addrOf(it) == 0x712 })
-            assertTrue(w.device.requests(0x712).indexOf("190209") < w.device.requests(0x712).indexOf(snaps[0]))
+            assertTrue(w.device.allRequests(0x712).indexOf("190209") < w.device.allRequests(0x712).indexOf(snaps[0]))
             assertEquals(DtcWire.STATE_DONE, s.state)
             s.of(0x712)
         }
@@ -722,7 +725,8 @@ class DtcScannerTest {
                 (a == 0x712 || a == 0x720) && isCount(p) -> listOf(DtcFixtures.frame(a, count))
                 (a == 0x712 || a == 0x720) && isList(p) ->
                     listOf(DtcFixtures.frame(a, hex("590209" + codes.joinToString("") { "%06X09".format(it) })))
-                isSnapshot(p) -> emptyList()
+                // Answered (negative), so the test measures the cap, not the scan budget.
+                isSnapshot(p) -> listOf(DtcFixtures.frame(a, hex("7F1931"), result = 2))
                 else -> recorded(p)
             }
         }
