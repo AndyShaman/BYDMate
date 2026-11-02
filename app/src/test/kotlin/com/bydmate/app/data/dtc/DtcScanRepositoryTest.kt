@@ -414,4 +414,94 @@ class DtcScanRepositoryTest {
             assertNull(r.erasedAt.value)
         }
     }
+
+    // Blocks with distinct codes so no two merge into one group.
+    private fun rowsOn(addr: Int, list: String) =
+        DtcAddressResult(addr, DtcWire.OUTCOME_OK, DtcFixtures.hex("5901FF010001"), DtcFixtures.hex(list), null)
+
+    private val lockScan = listOf(
+        rowsOn(0x712, "5902FF D16687 08"),
+        rowsOn(0x720, "5902FF D16787 08"),
+        rowsOn(0x726, "5902FF D16887 08"),
+        rowsOn(0x782, "5902FF D16987 08"),
+    )
+
+    private fun lockScanDone() = DtcScanStatus(DtcWire.STATE_DONE, 4, 4, "", lockScan)
+
+    private fun unconfirmed(addr: Int) = DtcEraseResult(addr, DtcWire.CONFIRM_UNCONFIRMED, null, "", null)
+
+    private fun notRun(addr: Int) = DtcEraseResult(addr, DtcWire.CONFIRM_NOT_RUN, null, "", null)
+
+    private fun lockEraseDone(vararg erase: DtcEraseResult) =
+        DtcScanStatus(DtcWire.STATE_DONE, erase.size, erase.size, "", lockScan, erase.toList(), DtcWire.MODE_ERASE)
+
+    /** Scan, then erase all four: 0x712 confirmed without re-read, 0x726 unconfirmed, 0x720 and 0x782 not run. */
+    private suspend fun TestScope.eraseWithUnknowns(r: DtcScanRepository) {
+        statuses.addLast(lockScanDone())
+        r.start()
+        advanceTimeBy(5_000)
+        runCurrent()
+        wall += 60_000
+        statuses.addLast(
+            lockEraseDone(confirmed(0x712, null), notRun(0x720), unconfirmed(0x726), notRun(0x782)),
+        )
+        r.startErase(intArrayOf(0x712, 0x720, 0x726, 0x782))
+        advanceTimeBy(5_000)
+        runCurrent()
+    }
+
+    @Test fun `E5 a block of unknown result is locked and refused, an unlocked one still goes`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        val r = repo(this)
+        eraseWithUnknowns(r)
+        assertEquals(setOf(0x712, 0x726), r.last.value!!.eraseLocked)
+        wall += 60_000
+        r.startErase(intArrayOf(0x726))
+        runCurrent()
+        coVerify(exactly = 1) { helper.dtcEraseStart(any(), any(), any(), any(), any()) }
+        assertEquals(DtcScanError.ERASE_NEEDS_SCAN, r.erase.value?.error)
+        r.startErase(intArrayOf(0x782))
+        runCurrent()
+        coVerify(exactly = 1) {
+            helper.dtcEraseStart(any(), any(), any(), any(), match { it.contentEquals(intArrayOf(0x782)) })
+        }
+    }
+
+    @Test fun `E6 the locks survive a new repository on the same prefs`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        eraseWithUnknowns(repo(this))
+        assertEquals(setOf(0x712, 0x726), repo(this).last.value!!.eraseLocked)
+    }
+
+    @Test fun `E7 a new scan clears the locks and the block can be erased again`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        val r = repo(this)
+        eraseWithUnknowns(r)
+        wall += 60_000
+        statuses.addLast(lockScanDone())
+        r.start()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertTrue(r.last.value!!.eraseLocked.isEmpty())
+        r.startErase(intArrayOf(0x726))
+        runCurrent()
+        coVerify(exactly = 1) {
+            helper.dtcEraseStart(any(), any(), any(), any(), match { it.contentEquals(intArrayOf(0x726)) })
+        }
+    }
+
+    @Test fun `E8 an erase where every block is erased leaves no lock`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        val r = repo(this)
+        statuses.addLast(lockScanDone())
+        r.start()
+        advanceTimeBy(5_000)
+        runCurrent()
+        wall += 60_000
+        statuses.addLast(lockEraseDone(*lockScan.map { confirmed(it.addr, zeroReread(it.addr)) }.toTypedArray()))
+        r.startErase(intArrayOf(0x712, 0x720, 0x726, 0x782))
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertTrue(r.last.value!!.eraseLocked.isEmpty())
+    }
 }

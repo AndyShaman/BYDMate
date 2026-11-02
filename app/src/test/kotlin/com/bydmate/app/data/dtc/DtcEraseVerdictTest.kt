@@ -56,4 +56,33 @@ class DtcEraseVerdictTest {
     @Test fun `a zero-count block in a scan still means no codes`() {
         assertTrue(DtcParser.summarize(listOf(zeroCount)).found.isEmpty())
     }
+
+    private fun eraseResult(addr: Int, confirm: String, reread: DtcAddressResult? = null) =
+        DtcEraseResult(addr, confirm, null, "", reread)
+
+    @Test fun `E1 the locks of the eight results in the Song Plus log are the three unverified blocks`() {
+        val results = listOf(
+            eraseResult(0x712, DtcWire.CONFIRM_CONFIRMED),
+            eraseResult(0x720, DtcWire.CONFIRM_CONFIRMED),
+            eraseResult(0x726, DtcWire.CONFIRM_UNCONFIRMED),
+            eraseResult(0x782, DtcWire.CONFIRM_NOT_RUN),
+            eraseResult(0x783, DtcWire.CONFIRM_NOT_RUN),
+            eraseResult(0x7E0, DtcWire.CONFIRM_NOT_RUN),
+            eraseResult(0x7E2, DtcWire.CONFIRM_NOT_RUN),
+            eraseResult(0x7F2, DtcWire.CONFIRM_NOT_RUN),
+        )
+        assertEquals(setOf(0x712, 0x720, 0x726), dtcEraseLocks(results))
+    }
+
+    @Test fun `E2 every other verdict leaves no lock`() {
+        val results = listOf(
+            eraseResult(0x712, DtcWire.CONFIRM_CONFIRMED, empty),
+            eraseResult(0x720, DtcWire.CONFIRM_CONFIRMED, nowRow),
+            eraseResult(0x726, DtcWire.CONFIRM_UNCONFIRMED, empty),
+            eraseResult(0x782, DtcWire.CONFIRM_UNCONFIRMED, oldRow),
+            eraseResult(0x783, DtcWire.CONFIRM_REFUSED),
+            eraseResult(0x7E0, DtcWire.CONFIRM_NOT_RUN),
+        )
+        assertTrue(dtcEraseLocks(results).isEmpty())
+    }
 }

@@ -1,6 +1,9 @@
 package com.bydmate.app.data.dtc
 
+import com.bydmate.app.helper.dtc.DtcAddressResult
 import com.bydmate.app.helper.dtc.DtcFixtures
+import com.bydmate.app.helper.dtc.DtcFixtures.hex
+import com.bydmate.app.helper.dtc.DtcWire
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -33,5 +36,36 @@ class DtcErasePlanTest {
     @Test fun `a block of a merged group returns all its addresses, a block without rows none`() {
         assertArrayEquals(intArrayOf(0x7E0, 0x7E2), DtcErasePlan.eligibleBlock(scan(9 * 60_000L), 0x7E2, now))
         assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(scan(9 * 60_000L), 0x720, now))
+    }
+
+    private fun rows(addr: Int, list: String) =
+        DtcAddressResult(addr, DtcWire.OUTCOME_OK, hex("5901FF010001"), hex(list), null)
+
+    private fun lockedScan(locked: Set<Int>) = DtcSavedScan(
+        now - 60_000L, 3,
+        listOf(
+            rows(0x712, "5902FF D16687 08"),
+            rows(0x726, "5902FF D16787 08"),
+            rows(0x782, "5902FF D16887 08"),
+        ),
+        locked,
+    )
+
+    @Test fun `E3 a locked block is left out of the plan and of its own block plan`() {
+        val saved = lockedScan(setOf(0x726))
+        assertArrayEquals(intArrayOf(0x712, 0x782), DtcErasePlan.eligible(saved, now))
+        assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(saved, 0x726, now))
+        assertArrayEquals(intArrayOf(0x782), DtcErasePlan.eligibleBlock(saved, 0x782, now))
+    }
+
+    @Test fun `E4 a merged group is locked when one of its addresses is locked`() {
+        val ure = "5902FF D71187 08 D0FFCE 08"
+        val saved = DtcSavedScan(
+            now - 60_000L, 2,
+            listOf(rows(0x7E0, ure), rows(0x7E2, ure)),
+            setOf(0x7E2),
+        )
+        assertArrayEquals(intArrayOf(), DtcErasePlan.eligible(saved, now))
+        assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(saved, 0x7E0, now))
     }
 }
