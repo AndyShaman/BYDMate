@@ -156,7 +156,7 @@ class DtcScanRepositoryTest {
         assertEquals(14, s.answered)
         assertEquals(18, s.total)
         assertEquals(1, s.now)
-        assertEquals(14, s.old)
+        assertEquals(9, s.old)
         assertNotNull(prefs.getString("last", null))
     }
 

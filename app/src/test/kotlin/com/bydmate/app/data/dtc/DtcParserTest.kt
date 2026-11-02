@@ -110,12 +110,12 @@ class DtcParserTest {
         for (ftb in intArrayOf(0x00, 0xCE, 0x28, 0xFF)) assertNull("0x%02X".format(ftb), DtcParser.faultType(ftb))
     }
 
-    @Test fun `the whole pre-clear scan reads as 14 of 18, one now and fourteen old`() {
+    @Test fun `the whole pre-clear scan reads as 14 answered, one now and nine old (duplicate URE list counted once)`() {
         val s = DtcParser.summarize(DtcFixtures.preClearScan())
         assertEquals(14, s.answered)
         assertEquals(18, s.total)
         assertEquals(1, s.now)
-        assertEquals(14, s.old)
+        assertEquals(9, s.old)
         assertEquals(0, s.pending)
         // the card shows three rows and «+12 ещё»
         assertEquals(15, s.found.size)
