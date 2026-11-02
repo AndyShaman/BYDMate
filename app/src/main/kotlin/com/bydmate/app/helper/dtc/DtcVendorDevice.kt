@@ -12,14 +12,20 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
 /**
- * The daemon's [DtcScanner], built on first use: the vendor 1033 device, the monotonic clock and
- * the diagnostic manager's guard property.
+ * The daemon's [DtcScanner], built on first use: the vendor 1033 device, the monotonic clock,
+ * the diagnostic manager's guard property and the live speed for the erase gates.
  */
 internal object DtcDaemon {
     private const val GUARD_PROPERTY = "sys.diagmgrsrv.task_bk"
 
+    /** Reads the speed (km/h, null = unknown) at the address the app resolved; set by the erase verb. */
+    @Volatile var speed: (() -> Int?)? = null
+
     val scanner: DtcScanner by lazy {
-        DtcScanner(DtcVendorDevice(), SystemDtcClock, { readSystemProperty(GUARD_PROPERTY) })
+        DtcScanner(
+            DtcVendorDevice(), SystemDtcClock, { readSystemProperty(GUARD_PROPERTY) },
+            readSpeed = { speed?.invoke() },
+        )
     }
 }
 

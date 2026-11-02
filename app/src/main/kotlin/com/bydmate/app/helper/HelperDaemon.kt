@@ -2,6 +2,7 @@
 package com.bydmate.app.helper
 
 import com.bydmate.app.BuildConfig
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.vehicle.NativeAssistant
 import com.bydmate.app.helper.push.FID_PUSH_DEVICE_CLASSES
 import com.bydmate.app.helper.push.FidPushRegistry
@@ -946,7 +947,8 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_WRITE_BUFFER -> handleHudTransact(code, data, reply, svc, autoIface)
 
                 HelperBinderProtocol.TX_DTC_SCAN_START,
-                HelperBinderProtocol.TX_DTC_SCAN_STATUS -> handleDtcScanTransact(code, data, reply, svc, autoIface)
+                HelperBinderProtocol.TX_DTC_SCAN_STATUS,
+                HelperBinderProtocol.TX_DTC_ERASE_START -> handleDtcScanTransact(code, data, reply, svc, autoIface)
 
                 else -> super.onTransact(code, data, reply, flags)
             }
@@ -2937,23 +2939,36 @@ private fun handleOffReportTransact(code: Int, data: Parcel, reply: Parcel?): Bo
 }
 
 /**
- * The manual fault-code scan verbs. START only hands the job to its own thread and answers; the
- * gear is read live (getInt, tx 5) at the address the app resolved, before every request. A
- * failure here costs this call only.
+ * The manual fault-code scan and erase verbs. START only hands the job to its own thread and
+ * answers; the gear (getInt, tx 5) and, for the erase, the speed (getFloat, tx 7) are read live at
+ * the addresses the app resolved, before every request. A failure here costs this call only.
  */
 private fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc: IBinder, autoIface: String): Boolean {
     runCatching {
-        if (code == HelperBinderProtocol.TX_DTC_SCAN_START) {
-            val gearDev = data.readInt()
-            val gearFid = data.readInt()
-            val status = DtcDaemon.scanner.start {
-                autoserviceTransact(svc, autoIface, 5, gearDev, gearFid, 0, writeValue = false)
-                    .takeIf { (status, _) -> status == 0 }?.second
+        when (code) {
+            HelperBinderProtocol.TX_DTC_SCAN_START -> {
+                val gearDev = data.readInt()
+                val gearFid = data.readInt()
+                val status = DtcDaemon.scanner.start { readDtcGear(svc, autoIface, gearDev, gearFid) }
+                android.util.Log.i("DtcScan", "start request gear=$gearDev/$gearFid reply=$status")
+                reply?.writeInt(status)
             }
-            android.util.Log.i("DtcScan", "start request gear=$gearDev/$gearFid reply=$status")
-            reply?.writeInt(status)
-        } else {
-            reply?.let { writeDtcScanStatus(it, DtcDaemon.scanner.status()) }
+            HelperBinderProtocol.TX_DTC_ERASE_START -> {
+                val gearDev = data.readInt()
+                val gearFid = data.readInt()
+                val speedDev = data.readInt()
+                val speedFid = data.readInt()
+                val addrs = data.createIntArray() ?: IntArray(0)
+                DtcDaemon.speed = { readDtcSpeed(svc, autoIface, speedDev, speedFid) }
+                val status = DtcDaemon.scanner.startErase(addrs) { readDtcGear(svc, autoIface, gearDev, gearFid) }
+                android.util.Log.i(
+                    "DtcScan",
+                    "erase request gear=$gearDev/$gearFid speed=$speedDev/$speedFid " +
+                        "addrs=${addrs.joinToString(",") { "0x%X".format(it) }} reply=$status",
+                )
+                reply?.writeInt(status)
+            }
+            else -> reply?.let { writeDtcScanStatus(it, DtcDaemon.scanner.status()) }
         }
     }.onFailure { e ->
         android.util.Log.w("DtcScan", "tx=$code failed: ${e.javaClass.simpleName}")
@@ -2962,6 +2977,17 @@ private fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc: 
     }
     return true
 }
+
+private fun readDtcGear(svc: IBinder, autoIface: String, dev: Int, fid: Int): Int? =
+    autoserviceTransact(svc, autoIface, 5, dev, fid, 0, writeValue = false)
+        .takeIf { (status, _) -> status == 0 }?.second
+
+/** Speed in whole km/h rounded away from 0 (any movement reads >= 1); null when unreadable or a sentinel. */
+private fun readDtcSpeed(svc: IBinder, autoIface: String, dev: Int, fid: Int): Int? =
+    autoserviceTransact(svc, autoIface, 7, dev, fid, 0, writeValue = false)
+        .takeIf { (status, _) -> status == 0 }
+        ?.let { (_, bits) -> SentinelDecoder.parseFloatFromShellInt(bits) }
+        ?.let { kotlin.math.ceil(kotlin.math.abs(it)).toInt() }
 
 /**
  * Finds [packageName]'s task id, launching the app and polling (16 x 500ms + settle pause)

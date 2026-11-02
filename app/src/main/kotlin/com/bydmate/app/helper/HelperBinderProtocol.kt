@@ -578,13 +578,30 @@ object HelperBinderProtocol {
      * Fault-code scan, status (see [TX_DTC_SCAN_START]).
      *
      * Reply: [int state, int done, int total, String reason, int count,
-     *         count × (int addr, String outcome, byte[] countUds, byte[] listUds, byte[] idUds)]
+     *         count × (int addr, String outcome, byte[] countUds, byte[] listUds, byte[] idUds),
+     *         int mode (0 scan, 1 erase), int eraseCount, eraseCount × (int addr, String confirm,
+     *         int nrc (-1 none), String reason, int hasReread, [the five reread fields above])]
+     * A daemon from before the erase ends after the results; the client reads that as a scan.
      * state: DtcWire.STATE_* (0 idle, 1 running, 2 done, 3 unavailable, 4 aborted); a failed
      * call answers a lone -1. A uds array is null when that request was not sent or not answered,
      * `7F sid nrc` for a negative answer, the raw frame for outcome multiframe.
      * An old daemon without this handler makes transact return false → the client returns null.
      */
     val TX_DTC_SCAN_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 62  // 63
+
+    /**
+     * Erase of stored fault codes, start: `14 FF FF FF` to each of the given blocks in order, then
+     * the codes of those blocks read again; runs on the scan's thread and state, so a scan and an
+     * erase never overlap. The addresses must all be in DtcWire.ADDRESSES (else refused, nothing
+     * sent). Before every request: the 120 s budget, the guard property at its idle value, the
+     * gear == P and the speed (getFloat) exactly 0, unknown = refuse; any foreign frame stops it.
+     * Progress and the per-block result come through [TX_DTC_SCAN_STATUS] (mode 1).
+     *
+     * Request: [int gearDev, int gearFid, int speedDev, int speedFid, int[] addrs]
+     * Reply:   [int status: 0 = started, 1 = busy, -1 = refused]
+     * An old daemon without this handler makes transact return false → the client returns -2.
+     */
+    val TX_DTC_ERASE_START: Int = IBinder.FIRST_CALL_TRANSACTION + 63  // 64
 
     /** TX_SET_AUTO_VOICE outcomes: called; no such method on this firmware; the audio service or
      *  the call threw. */
