@@ -835,7 +835,7 @@ The screenshots show the app in Russian; in English the labels are the ones quot
 
 ### Where to find it
 
-Home → tap the battery card → the **"Tech"** screen → the **"Diagnostics"** card. The card has three parts:
+Dashboard → tap the battery card → the **"Tech"** screen → the **"Diagnostics"** card. The card has three parts:
 
 - **Cluster warnings**: what the car itself shows on the instrument cluster. "none" means the cluster shows nothing right now.
 - **Next service**: days and km left until the scheduled service. The row shows only if the service reminder is on in the car. On Leopard 3 it is turned on in the car settings: Vehicle → Maintenance → Maintenance Interval or Maintenance Mileage.
