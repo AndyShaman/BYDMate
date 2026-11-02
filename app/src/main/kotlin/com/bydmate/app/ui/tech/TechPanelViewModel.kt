@@ -6,10 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.autoservice.Pm25Reader
 import com.bydmate.app.data.carstatus.CarStatusReader
 import com.bydmate.app.data.dtc.DtcDescription
+import com.bydmate.app.data.dtc.DtcErasePhase
+import com.bydmate.app.data.dtc.DtcErasePlan
+import com.bydmate.app.data.dtc.DtcEraseState
 import com.bydmate.app.data.dtc.DtcFound
 import com.bydmate.app.data.dtc.DtcLabels
 import com.bydmate.app.data.dtc.DtcParser
 import com.bydmate.app.data.dtc.DtcScanPhase
+import com.bydmate.app.data.dtc.DtcSavedScan
 import com.bydmate.app.data.dtc.DtcScanRepository
 import com.bydmate.app.data.dtc.DtcScanState
 import com.bydmate.app.data.dtc.DtcScanSummary
@@ -142,10 +146,25 @@ data class TechPanelUiState(
     val dtcSending: Boolean = false,
     /** Result of the last send from the open dialog, null until one is made. */
     val dtcSendResult: DtcSendResult? = null,
+    /** The last erase of this process: progress, then a result per block. */
+    val dtcErase: DtcEraseState? = null,
+    /** When the last erase that may have changed a block ended, epoch ms. */
+    val dtcErasedAt: Long? = null,
 ) {
-    /** The scan button is enabled on a running service in P and while no scan runs. */
+    val dtcErasing: Boolean
+        get() = dtcErase?.phase == DtcErasePhase.ERASING
+
+    /** The scan button is enabled on a running service in P and while no scan or erase runs. */
     val canScan: Boolean
-        get() = gear == GEAR_PARK && serviceRunning && dtcScan.phase != DtcScanPhase.SCANNING
+        get() = gear == GEAR_PARK && serviceRunning && dtcScan.phase != DtcScanPhase.SCANNING && !dtcErasing
+
+    /** Codes were erased after the saved scan: its list may be out of date until a new scan. */
+    val dtcErasedSinceScan: Boolean
+        get() = dtcErasedAt != null && dtcCheckedAt != null && dtcErasedAt >= dtcCheckedAt
+
+    /** The erase buttons show with codes on display that no erase has touched since the scan. */
+    val showErase: Boolean
+        get() = dtcSummary?.found?.isNotEmpty() == true && !dtcErasedSinceScan
 
     val scanLabel: DtcScanLabel
         get() = when {
@@ -501,7 +520,13 @@ class TechPanelViewModel @Inject constructor(
             dtcScanRepository.state.collect { scan -> _uiState.update { it.copy(dtcScan = scan) } }
         }
         viewModelScope.launch {
+            dtcScanRepository.eraseUpdates().collect { (erase, at) ->
+                _uiState.update { it.copy(dtcErase = erase, dtcErasedAt = at) }
+            }
+        }
+        viewModelScope.launch {
             dtcScanRepository.last.collect { last ->
+                dtcSaved = last
                 val summary = last?.let { DtcParser.summarize(it.results) }
                 _uiState.update { it.copy(dtcSummary = summary, dtcCheckedAt = last?.at, dtcDescriptions = emptyMap()) }
                 if (summary == null) return@collect
@@ -517,6 +542,24 @@ class TechPanelViewModel @Inject constructor(
 
     /** A tap on «Сканировать» or «Сканировать снова»; the repository re-checks P and ignores a second tap. */
     fun scanDtc() = dtcScanRepository.start()
+
+    /** The saved scan the erase targets come from. */
+    @Volatile private var dtcSaved: DtcSavedScan? = null
+
+    /**
+     * A confirmed «Стереть все» ([addr] null) or «стереть ›» on a block (all addresses of its
+     * group). A missing or stale scan sends an empty list, which the repository refuses with
+     * «нажмите Сканировать».
+     */
+    fun eraseDtc(addr: Int?) {
+        val now = System.currentTimeMillis()
+        val addrs = if (addr == null) {
+            DtcErasePlan.eligible(dtcSaved, now)
+        } else {
+            DtcErasePlan.eligibleBlock(dtcSaved, addr, now)
+        }
+        dtcScanRepository.startErase(addrs ?: IntArray(0))
+    }
 
     /** Opens the saved scan; never starts a new one. */
     fun openDtcDialog() {

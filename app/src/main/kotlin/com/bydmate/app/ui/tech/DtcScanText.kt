@@ -63,14 +63,15 @@ internal fun dtcWhen(context: Context, at: Long): String =
         SimpleDateFormat("dd.MM HH:mm", Locale.getDefault()).format(Date(at))
     }
 
-internal fun answeredText(context: Context, answered: Int, total: Int): String =
-    context.resources.getQuantityString(R.plurals.tech_dtc_answered, answered, answered, total)
+/** «ответили 14 блоков»: the addresses that never answer on a model are not counted, so no total. */
+internal fun answeredText(context: Context, answered: Int): String =
+    context.resources.getQuantityString(R.plurals.tech_dtc_answered, answered, answered)
 
 /** The texts of the manual Telegram send, in the app language. */
 internal fun dtcLabels(context: Context): DtcLabels = object : DtcLabels {
     override val title = context.getString(R.string.tech_dtc_tg_title)
-    override fun checked(at: String, answered: Int, total: Int) =
-        context.getString(R.string.tech_dtc_tg_checked, at, answeredText(context, answered, total))
+    override fun checked(at: String, answered: Int) =
+        context.getString(R.string.tech_dtc_tg_checked, at, answeredText(context, answered))
     override val nowHeader = context.getString(R.string.tech_dtc_tg_now)
     override val oldHeader = context.getString(R.string.tech_dtc_tg_old)
     override val pendingMark = context.getString(R.string.tech_dtc_kind_pending)
@@ -92,6 +93,7 @@ internal fun dtcErrorText(error: DtcScanError?): Int? = when (error) {
     null -> null
     DtcScanError.NOT_PARK -> R.string.tech_dtc_only_on_p
     DtcScanError.UNAVAILABLE -> R.string.tech_dtc_unavailable
+    DtcScanError.NO_DIAG_SERVICE -> R.string.tech_dtc_no_diag_service
     else -> R.string.tech_dtc_failed
 }
 

@@ -11,12 +11,15 @@ import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.helper.dtc.DtcAddressResult
+import com.bydmate.app.helper.dtc.DtcEraseResult
 import com.bydmate.app.helper.dtc.DtcScanStatus
 import com.bydmate.app.helper.dtc.DtcWire
 import com.bydmate.app.ui.automation.isSampleFresh
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -27,15 +30,39 @@ import java.util.Locale
 
 enum class DtcScanPhase { IDLE, SCANNING }
 
+/**
+ * [NO_DIAG_SERVICE]: the firmware has no diagnostic manager (daemon reason `guard_absent`);
+ * [ERASE_NEEDS_SCAN]: an erase was asked without a scan of the last ten minutes.
+ */
 enum class DtcScanError {
-    NOT_PARK, UNAVAILABLE, ABORTED, DAEMON_UNREACHABLE, DAEMON_OUTDATED, STATUS_LOST,
+    NOT_PARK, UNAVAILABLE, NO_DIAG_SERVICE, ABORTED, DAEMON_UNREACHABLE, DAEMON_OUTDATED, STATUS_LOST,
+    ERASE_NEEDS_SCAN,
 }
 
-/** [error] is the reason the last attempt ended without a result; the saved scan is untouched. */
+/**
+ * [error] is the reason the last attempt ended without a result; the saved scan is untouched.
+ * [firmwareHint]: with [DtcScanError.NO_DIAG_SERVICE] on a model whose newer firmware has the service.
+ */
 data class DtcScanState(
     val phase: DtcScanPhase = DtcScanPhase.IDLE,
     val done: Int = 0,
     val total: Int = 18,
+    val error: DtcScanError? = null,
+    val firmwareHint: Boolean = false,
+)
+
+enum class DtcErasePhase { ERASING, ENDED }
+
+/**
+ * The last erase of this process: progress while [phase] is ERASING, then one [results] entry per
+ * requested block and the daemon's stop [reason]. [error]: the erase did not run, or its end is unknown.
+ */
+data class DtcEraseState(
+    val phase: DtcErasePhase,
+    val done: Int = 0,
+    val total: Int = 0,
+    val results: List<DtcEraseResult> = emptyList(),
+    val reason: String = "",
     val error: DtcScanError? = null,
 )
 
@@ -51,7 +78,7 @@ data class DtcSendResult(val outcome: DtcSendOutcome, val error: TelegramError? 
  * Seams ([liveSample], [serviceRunning], [elapsedNow], [wallNow], [gearAddress]) let tests
  * run it without the service; without a [describer] the codes go out without descriptions.
  */
-@Suppress("LongParameterList") // seams for tests
+@Suppress("LongParameterList", "TooManyFunctions") // seams for tests; scan and erase share the daemon and the saved scan
 class DtcScanRepository(
     private val helper: HelperClient,
     private val prefs: SharedPreferences,
@@ -64,6 +91,7 @@ class DtcScanRepository(
     private val wallNow: () -> Long,
     private val gearAddress: () -> FidAddress = { FidAddresses.of("gear") },
     private val describer: DtcDescriber? = null,
+    private val speedAddress: () -> FidAddress = { FidAddresses.of("speed") },
 ) {
     private val _state = MutableStateFlow(DtcScanState())
     val state: StateFlow<DtcScanState> = _state
@@ -71,28 +99,55 @@ class DtcScanRepository(
     private val _last = MutableStateFlow(load())
     val last: StateFlow<DtcSavedScan?> = _last
 
-    /** A tap on «Сканировать»; ignored while a scan runs. */
+    private val _erase = MutableStateFlow<DtcEraseState?>(null)
+    val erase: StateFlow<DtcEraseState?> = _erase
+
+    /**
+     * When the last erase that may have changed a block ended (epoch ms), kept across restarts.
+     * While it is newer than [last], the saved codes may be gone and only a new scan tells.
+     */
+    private val _erasedAt = MutableStateFlow(prefs.getLong(KEY_ERASED_AT, 0L).takeIf { it > 0L })
+    val erasedAt: StateFlow<Long?> = _erasedAt
+
+    /** [erase] and [erasedAt] together, for the screen. */
+    fun eraseUpdates(): Flow<Pair<DtcEraseState?, Long?>> = combine(_erase, _erasedAt) { e, at -> e to at }
+
+    private var autotype: Int? = null
+
+    private val erasing: Boolean get() = _erase.value?.phase == DtcErasePhase.ERASING
+
+    /** A tap on «Сканировать»; ignored while a scan or an erase runs. */
     fun start() {
         val current = _state.value
-        if (current.phase == DtcScanPhase.SCANNING) {
-            Log.i(TAG, "tap ignored scanning")
+        if (current.phase == DtcScanPhase.SCANNING || erasing) {
+            Log.i(TAG, "tap ignored scanning=${current.phase == DtcScanPhase.SCANNING} erasing=$erasing")
             return
         }
+        val gear = parkGear()
+        if (gear != GEAR_PARK) {
+            _state.value = current.copy(error = DtcScanError.NOT_PARK)
+            return
+        }
+        Log.i(TAG, "tap gear=$gear state=${current.phase}")
+        _state.value = DtcScanState(phase = DtcScanPhase.SCANNING, total = DtcWire.ADDRESSES.size)
+        scope.launch { run() }
+    }
+
+    /** The live gear when the sample is fresh, null otherwise; a refusal is logged. */
+    private fun parkGear(): Int? {
         val sample = liveSample()
         val fresh = sample != null && isSampleFresh(sample, serviceRunning(), elapsedNow())
         val gear = sample?.data?.gear
         if (!fresh || gear != GEAR_PARK) {
             Log.i(TAG, "tap refused not_park gear=$gear fresh=$fresh")
-            _state.value = current.copy(error = DtcScanError.NOT_PARK)
-            return
+            return null
         }
-        Log.i(TAG, "tap gear=$gear fresh=$fresh state=${current.phase}")
-        _state.value = DtcScanState(phase = DtcScanPhase.SCANNING, total = DtcWire.ADDRESSES.size)
-        scope.launch { run() }
+        return gear
     }
 
     private suspend fun run() {
-        Log.i(TAG, "scan autotype=${CarAutoType.read(helper) ?: "?"}")
+        autotype = CarAutoType.read(helper)
+        Log.i(TAG, "scan autotype=${autotype ?: "?"}")
         val address = gearAddress()
         val reply = runCatching { helper.dtcScanStart(address.device, address.fid) }.getOrNull()
         Log.i(TAG, "start reply=${replyName(reply)}")
@@ -118,6 +173,11 @@ class DtcScanRepository(
                 continue
             }
             lost = 0
+            if (status.mode == DtcWire.MODE_ERASE) {
+                // An erase holds the daemon (e.g. started before the app was restarted): never a scan.
+                Log.w(TAG, "scan poll saw an erase state=${STATE_NAMES[status.state] ?: "IDLE"}, scan ended")
+                return fail(DtcScanError.ABORTED)
+            }
             when (status.state) {
                 DtcWire.STATE_RUNNING ->
                     _state.value = _state.value.copy(done = status.done, total = status.total)
@@ -143,11 +203,132 @@ class DtcScanRepository(
         prefs.edit().putString(KEY_LAST, json).apply()
         Log.i(TAG, "saved at=${scan.at} json_len=${json.length}")
         _last.value = scan
+        _erase.value = null
         _state.value = DtcScanState(total = status.total)
     }
 
     private fun fail(error: DtcScanError) {
-        _state.value = _state.value.copy(phase = DtcScanPhase.IDLE, error = error)
+        val hint = error == DtcScanError.NO_DIAG_SERVICE && dtcFirmwareHint(autotype)
+        _state.value = _state.value.copy(phase = DtcScanPhase.IDLE, error = error, firmwareHint = hint)
+    }
+
+    /**
+     * A confirmed tap on «Стереть все» or «стереть ›»: [addrs] must all have a shown code in the
+     * saved scan, which must be at most ten minutes old and taken after the last erase; on P only.
+     * The saved codes go to the log first; ignored while a scan or an erase runs.
+     */
+    fun startErase(addrs: IntArray) {
+        val list = addrs.joinToString(",") { "0x%X".format(it) }
+        if (_state.value.phase == DtcScanPhase.SCANNING || erasing) {
+            Log.i(TAG, "erase tap ignored addrs=$list")
+            return
+        }
+        val saved = _last.value
+        val eligible = DtcErasePlan.eligible(saved, wallNow())
+        if (saved == null || !eraseAllowed(saved, eligible, addrs)) {
+            Log.i(
+                TAG,
+                "erase refused needs_scan addrs=$list eligible=${eligible?.joinToString(",") { "0x%X".format(it) } ?: "-"} " +
+                    "scan_at=${saved?.at ?: "-"} erased_at=${_erasedAt.value ?: "-"}",
+            )
+            _erase.value = DtcEraseState(DtcErasePhase.ENDED, error = DtcScanError.ERASE_NEEDS_SCAN)
+            return
+        }
+        if (parkGear() != GEAR_PARK) {
+            _erase.value = DtcEraseState(DtcErasePhase.ENDED, error = DtcScanError.NOT_PARK)
+            return
+        }
+        _erase.value = DtcEraseState(DtcErasePhase.ERASING, total = addrs.size)
+        scope.launch { runErase(addrs.copyOf(), saved) }
+    }
+
+    /** Every one of [addrs] has a shown code in [saved], fresh and taken after the last erase. */
+    private fun eraseAllowed(saved: DtcSavedScan, eligible: IntArray?, addrs: IntArray): Boolean {
+        val erasedSince = (_erasedAt.value ?: 0L) >= saved.at
+        return eligible != null && !erasedSince && addrs.isNotEmpty() && addrs.all { it in eligible }
+    }
+
+    private suspend fun runErase(addrs: IntArray, saved: DtcSavedScan) {
+        val s = DtcParser.summarize(saved.results)
+        Log.i(
+            TAG,
+            "dtc erase before scan_at=${formatShort(saved.at)} addrs=${addrs.joinToString(",") { "0x%X".format(it) }} " +
+                "now=${s.now} old=${s.old} pending=${s.pending} rows=[" +
+                s.found.joinToString(",") { "0x%X:%s/%02X".format(it.addr, it.row.code, it.row.status) } + "]",
+        )
+        val gear = gearAddress()
+        val speed = speedAddress()
+        val reply = runCatching { helper.dtcEraseStart(gear.device, gear.fid, speed.device, speed.fid, addrs) }.getOrNull()
+        Log.i(TAG, "erase start reply=${replyName(reply)} gear=${gear.device}/${gear.fid} speed=${speed.device}/${speed.fid}")
+        when (reply) {
+            START_OK -> pollErase()
+            // Nothing was sent: busy = a scan or an erase holds the daemon, -1 = it refused the list.
+            null -> endErase(DtcScanError.DAEMON_UNREACHABLE)
+            START_OUTDATED -> endErase(DtcScanError.DAEMON_OUTDATED)
+            else -> endErase(DtcScanError.ABORTED)
+        }
+    }
+
+    /** As the scan's poll; any state other than this erase's own ends it as lost. */
+    private suspend fun pollErase() {
+        var lost = 0
+        while (true) {
+            delay(POLL_MS)
+            val status = runCatching { helper.dtcScanStatus() }.getOrNull()
+            if (status == null) {
+                if (++lost >= MAX_LOST_POLLS) {
+                    Log.w(TAG, "erase status lost polls=$lost")
+                    return endErase(DtcScanError.STATUS_LOST, mayHaveErased = true)
+                }
+                continue
+            }
+            lost = 0
+            when {
+                status.mode != DtcWire.MODE_ERASE || status.state == DtcWire.STATE_IDLE -> {
+                    Log.w(TAG, "erase poll saw mode=${status.mode} state=${STATE_NAMES[status.state] ?: "IDLE"}, erase lost")
+                    return endErase(DtcScanError.STATUS_LOST, mayHaveErased = true)
+                }
+                status.state == DtcWire.STATE_RUNNING ->
+                    _erase.value = _erase.value?.copy(done = status.done, total = status.total)
+                else -> return finishErase(status)
+            }
+        }
+    }
+
+    private fun finishErase(status: DtcScanStatus) {
+        status.erase.forEach { r ->
+            Log.i(
+                TAG,
+                "erase result addr=0x%X verdict=%s confirm=%s nrc=%s reason=%s reread=%s".format(
+                    r.addr, dtcEraseVerdict(r), r.confirm, r.nrc?.let { "%02X".format(it) } ?: "-",
+                    r.reason.ifEmpty { "-" },
+                    rereadRows(r)?.joinToString(",", "[", "]") { "${it.code}/%02X".format(it.status) } ?: "-",
+                ),
+            )
+        }
+        val error = if (status.state == DtcWire.STATE_UNAVAILABLE) errorOf(status) else null
+        Log.i(
+            TAG,
+            "erase end state=${STATE_NAMES[status.state] ?: "IDLE"} reason=${status.reason.ifEmpty { "-" }} " +
+                "blocks=${status.erase.size} error=${error ?: "-"}",
+        )
+        if (status.erase.any { it.confirm != DtcWire.CONFIRM_NOT_RUN }) markErased()
+        _erase.value = DtcEraseState(
+            DtcErasePhase.ENDED, status.done, status.total, status.erase, status.reason, error,
+        )
+    }
+
+    /** The erase ended without results; [mayHaveErased] when a clear may have gone out. */
+    private fun endErase(error: DtcScanError, mayHaveErased: Boolean = false) {
+        Log.i(TAG, "erase end error=$error may_have_erased=$mayHaveErased")
+        if (mayHaveErased) markErased()
+        _erase.value = (_erase.value ?: DtcEraseState(DtcErasePhase.ENDED)).copy(phase = DtcErasePhase.ENDED, error = error)
+    }
+
+    private fun markErased() {
+        val at = wallNow()
+        prefs.edit().putLong(KEY_ERASED_AT, at).apply()
+        _erasedAt.value = at
     }
 
     /** One plain-text attempt, never queued. */
@@ -192,6 +373,7 @@ class DtcScanRepository(
     companion object {
         const val PREFS_NAME = "dtc_scan"
         private const val KEY_LAST = "last"
+        private const val KEY_ERASED_AT = "erased_at"
         private const val TAG = "DtcScan"
         private const val GEAR_PARK = 1
         private const val POLL_MS = 1_000L
@@ -239,6 +421,7 @@ class DtcScanRepository(
         }
 
         private fun errorOf(status: DtcScanStatus): DtcScanError = when {
+            status.state == DtcWire.STATE_UNAVAILABLE && status.reason == "guard_absent" -> DtcScanError.NO_DIAG_SERVICE
             status.state == DtcWire.STATE_UNAVAILABLE -> DtcScanError.UNAVAILABLE
             status.state == DtcWire.STATE_ABORTED && status.reason.startsWith("not_park") -> DtcScanError.NOT_PARK
             status.state == DtcWire.STATE_ABORTED -> DtcScanError.ABORTED

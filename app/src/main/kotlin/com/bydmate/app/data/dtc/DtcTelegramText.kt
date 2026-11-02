@@ -3,7 +3,7 @@ package com.bydmate.app.data.dtc
 /** The texts of the scan message and card, in the app language; a plain implementation in tests. */
 interface DtcLabels {
     val title: String
-    fun checked(at: String, answered: Int, total: Int): String
+    fun checked(at: String, answered: Int): String
     val nowHeader: String
     val oldHeader: String
     val pendingMark: String
@@ -43,13 +43,16 @@ object DtcTelegramText {
         describe: (DtcFound) -> DtcDescription? = { null },
         zh: Boolean = false,
     ): String {
-        val all = summary.found.filter { it.row.kind == DtcKind.NOW } + summary.found.filter { it.row.kind != DtcKind.NOW }
+        // A merged group shows the rows of its first address once, under all its addresses.
+        val addrs = DtcParser.groups(summary.found).associate { it.addrs.first() to it.addrs }
+        val found = summary.found.filter { it.addr in addrs }
+        val all = found.filter { it.row.kind == DtcKind.NOW } + found.filter { it.row.kind != DtcKind.NOW }
         val descriptions = all.associateWith(describe)
         var shown = all.size
-        var text = render(summary, all, shown, checkedAt, labels, descriptions, zh)
+        var text = render(summary, Shown(all, shown, addrs), checkedAt, labels, descriptions, zh)
         while (text.length > MAX_CHARS && shown > 0) {
             shown--
-            text = render(summary, all, shown, checkedAt, labels, descriptions, zh)
+            text = render(summary, Shown(all, shown, addrs), checkedAt, labels, descriptions, zh)
         }
         return text
     }
@@ -57,19 +60,23 @@ object DtcTelegramText {
     /** True for U1166-87 of the ADAS block, whatever its description. */
     fun isKeyCode(f: DtcFound): Boolean = f.row.code == KEY_CODE && DtcBlockClass.of(f.block) == KEY_CLASS
 
+    /** The rows to list, how many of them fit, and the addresses of each group by its first one. */
+    private class Shown(val all: List<DtcFound>, val count: Int, val addrs: Map<Int, List<Int>>)
+
     @Suppress("LongParameterList") // one render pass of build()
     private fun render(
         summary: DtcScanSummary,
-        all: List<DtcFound>,
-        shown: Int,
+        rows: Shown,
         checkedAt: String,
         labels: DtcLabels,
         descriptions: Map<DtcFound, DtcDescription?>,
         zh: Boolean,
     ): String = buildString {
         appendLine(labels.title)
-        appendLine(labels.checked(checkedAt, summary.answered, summary.total))
+        appendLine(labels.checked(checkedAt, summary.answered))
         appendLine()
+        val all = rows.all
+        val shown = rows.count
         val kept = all.take(shown)
         val now = kept.filter { it.row.kind == DtcKind.NOW }
         val old = kept.filter { it.row.kind != DtcKind.NOW }
@@ -80,13 +87,13 @@ object DtcTelegramText {
         }
         if (now.isNotEmpty()) {
             appendLine(labels.nowHeader)
-            blocks(now, labels, descriptions, zh)
+            blocks(now, rows.addrs, labels, descriptions, zh)
             if (old.isEmpty()) more?.let { appendLine(it) }
             appendLine()
         }
         if (old.isNotEmpty()) {
             appendLine(labels.oldHeader)
-            blocks(old, labels, descriptions, zh)
+            blocks(old, rows.addrs, labels, descriptions, zh)
             more?.let { appendLine(it) }
             appendLine()
         }
@@ -98,9 +105,13 @@ object DtcTelegramText {
         append(labels.footer)
     }
 
-    /** One header per block (`name (0x712)`, the address only when the name lacks it), then its codes. */
+    /**
+     * One header per block (`name (0x712)`, the address only when the name lacks it; a merged
+     * group `name (0x7E0, 0x7E2)`), then its codes.
+     */
     private fun StringBuilder.blocks(
         rows: List<DtcFound>,
+        addrs: Map<Int, List<Int>>,
         labels: DtcLabels,
         descriptions: Map<DtcFound, DtcDescription?>,
         zh: Boolean,
@@ -108,8 +119,15 @@ object DtcTelegramText {
         rows.groupBy { it.addr }.values.forEach { group ->
             val block = group.first().block
             val name = labels.blockName(block)
+            val merged = addrs[block.addr].orEmpty()
             val addr = "0x%X".format(block.addr)
-            appendLine(if (name.contains(addr, ignoreCase = true)) name else "$name ($addr)")
+            appendLine(
+                when {
+                    merged.size > 1 -> "$name (${merged.joinToString(", ") { "0x%X".format(it) }})"
+                    name.contains(addr, ignoreCase = true) -> name
+                    else -> "$name ($addr)"
+                },
+            )
             group.forEach { f ->
                 appendLine("  " + codeLine(f, labels, descriptions[f], zh))
                 if (isKeyCode(f)) appendLine("  ${labels.keyHint}")

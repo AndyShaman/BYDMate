@@ -3,6 +3,7 @@ package com.bydmate.app.ui.tech
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -53,6 +55,7 @@ import com.bydmate.app.data.dtc.DtcDescLevel
 import com.bydmate.app.data.dtc.DtcDescription
 import com.bydmate.app.data.dtc.DtcFound
 import com.bydmate.app.data.dtc.DtcKind
+import com.bydmate.app.data.dtc.DtcParser
 import com.bydmate.app.data.dtc.DtcScanPhase
 import com.bydmate.app.data.dtc.DtcScanState
 import com.bydmate.app.data.dtc.DtcTelegramText
@@ -92,19 +95,24 @@ internal fun DtcProgress(scan: DtcScanState) {
 /**
  * «Диагностика · ошибки в блоках»: the saved scan in full. Opening it never scans; «Сканировать
  * снова» has the card button's gates, «Отправить в Telegram» is one plain attempt and shows only
- * with a bot bound. No red, no clear button.
+ * with a bot bound. «Стереть все» and «стереть ›» on a block have the scan's gate and always ask
+ * first. No red.
  */
 @Composable
 internal fun DtcScanDialog(
     state: TechPanelUiState,
     onScan: () -> Unit,
     onSend: () -> Unit,
+    onErase: (Int?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     val summary = state.dtcSummary
     val scanning = state.dtcScan.phase == DtcScanPhase.SCANNING
     var showDonate by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf<EraseTarget?>(null) }
+    val onEraseBlock: ((EraseTarget.Block) -> Unit)? =
+        if (state.showErase) ({ confirm = it }) else null
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         ScaledDialogContent {
             Card(
@@ -127,7 +135,7 @@ internal fun DtcScanDialog(
                                     stringResource(
                                         R.string.tech_dtc_checked_dialog,
                                         dtcWhen(context, state.dtcCheckedAt),
-                                        answeredText(context, summary.answered, summary.total),
+                                        answeredText(context, summary.answered),
                                     ),
                                     color = TextMuted,
                                     fontSize = 11.sp,
@@ -148,52 +156,81 @@ internal fun DtcScanDialog(
                             .verticalScroll(rememberScrollState())
                             .padding(vertical = 6.dp),
                     ) {
+                        val erase = state.dtcErase
                         when {
                             scanning -> DtcProgress(state.dtcScan)
+                            erase != null && state.dtcErasing -> DtcEraseProgress(erase)
+                            erase != null -> EraseResults(erase, summary?.found.orEmpty().associate { it.addr to it.block })
+                        }
+                        when {
+                            scanning -> Unit
                             summary == null -> Unit
                             summary.found.isEmpty() -> NoneText(dtcNoRowsText(context, summary))
                             else -> {
-                                val now = summary.found.filter { it.row.kind == DtcKind.NOW }
-                                val old = summary.found.filter { it.row.kind != DtcKind.NOW }
+                                // A merged group lists the rows of its first address once, under all its addresses.
+                                val groups = DtcParser.groups(summary.found).associate { it.addrs.first() to it.addrs }
+                                val found = summary.found.filter { it.addr in groups }
+                                val now = found.filter { it.row.kind == DtcKind.NOW }
+                                val old = found.filter { it.row.kind != DtcKind.NOW }
                                 val zh = dtcZh(context)
-                                DialogSection(R.string.tech_dtc_now_header, R.string.tech_dtc_now_sub, now, state.dtcDescriptions, zh)
-                                DialogSection(R.string.tech_dtc_old_header, R.string.tech_dtc_old_sub, old, state.dtcDescriptions, zh)
+                                val section = SectionData(groups, state.dtcDescriptions, zh, state.canScan, onEraseBlock)
+                                DialogSection(R.string.tech_dtc_now_header, R.string.tech_dtc_now_sub, now, section)
+                                DialogSection(R.string.tech_dtc_old_header, R.string.tech_dtc_old_sub, old, section)
                                 dtcUnreadPartialText(context, summary)?.let { NoneText(it) }
                             }
                         }
                         if (!scanning) dtcErrorText(state.dtcScan.error)?.let { NoneText(it) }
+                        if (!scanning && state.dtcScan.firmwareHint) NoneText(R.string.tech_dtc_firmware_hint)
                         DtcSupportLine(onSupport = { showDonate = true })
                     }
-                    DialogFooter(state, onScan, onSend)
+                    DialogFooter(state, onScan, onSend, onEraseAll = { confirm = EraseTarget.All })
                 }
             }
         }
     }
     // Over the DTC dialog; the deliberate entry never touches the app-wide opt-out flag.
     if (showDonate) DonateDialog(entry = DonateEntry.SETTINGS, onDismiss = { showDonate = false })
+    confirm?.let { target ->
+        EraseConfirm(
+            target = target,
+            enabled = state.canScan,
+            onConfirm = {
+                confirm = null
+                onErase((target as? EraseTarget.Block)?.addrs?.first())
+            },
+            onDismiss = { confirm = null },
+        )
+    }
 }
 
+/** What every block box of the dialog shares. */
+private class SectionData(
+    val groups: Map<Int, List<Int>>,
+    val descriptions: Map<DtcFound, DtcDescription>,
+    val zh: Boolean,
+    val canErase: Boolean,
+    val onErase: ((EraseTarget.Block) -> Unit)?,
+)
+
 @Composable
-private fun DialogSection(
-    header: Int,
-    sub: Int,
-    rows: List<DtcFound>,
-    descriptions: Map<DtcFound, DtcDescription>,
-    zh: Boolean,
-) {
+private fun DialogSection(header: Int, sub: Int, rows: List<DtcFound>, section: SectionData) {
     Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp)) {
         Text(stringResource(header), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Text(stringResource(sub), color = TextMuted, fontSize = 11.sp, modifier = Modifier.padding(start = 10.dp))
     }
     if (rows.isEmpty()) NoneText(R.string.tech_value_none)
-    rows.groupBy { it.addr }.values.forEach { BlockBox(it, descriptions, zh) }
+    rows.groupBy { it.addr }.values.forEach { BlockBox(it, section) }
 }
 
-/** One block: `address  full name  …  N кодов`, yellow border when it holds a code present now. */
+/**
+ * One block: `address  full name  …  N кодов  стереть ›`, yellow border when it holds a code
+ * present now; a merged group names all its addresses.
+ */
 @Composable
-private fun BlockBox(codes: List<DtcFound>, descriptions: Map<DtcFound, DtcDescription>, zh: Boolean) {
+private fun BlockBox(codes: List<DtcFound>, section: SectionData) {
     val context = LocalContext.current
     val block = codes.first().block
+    val addrs = section.groups[block.addr] ?: listOf(block.addr)
     val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = Modifier
@@ -204,7 +241,7 @@ private fun BlockBox(codes: List<DtcFound>, descriptions: Map<DtcFound, DtcDescr
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
-            Text("0x%X".format(block.addr), color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            Text(addrsText(addrs), color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
             Text(
                 dtcBlockFull(context, block),
                 color = TextPrimary,
@@ -217,8 +254,26 @@ private fun BlockBox(codes: List<DtcFound>, descriptions: Map<DtcFound, DtcDescr
                 color = TextMuted,
                 fontSize = 11.sp,
             )
+            section.onErase?.let { onErase ->
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = section.canErase) { onErase(EraseTarget.Block(addrs, block)) }
+                        .padding(horizontal = 12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.tech_dtc_erase_block),
+                        color = TextSecondary.copy(alpha = if (section.canErase) 1f else DISABLED_ALPHA),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
         }
-        codes.forEach { CodeRow(it, descriptions[it], zh) }
+        codes.forEach { CodeRow(it, section.descriptions[it], section.zh) }
     }
 }
 
@@ -280,15 +335,15 @@ private fun KeyHint() {
 }
 
 @Composable
-private fun NoneText(res: Int) = NoneText(stringResource(res))
+internal fun NoneText(res: Int) = NoneText(stringResource(res))
 
 @Composable
-private fun NoneText(text: String) {
+internal fun NoneText(text: String) {
     Text(text, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp))
 }
 
 @Composable
-private fun DialogFooter(state: TechPanelUiState, onScan: () -> Unit, onSend: () -> Unit) {
+private fun DialogFooter(state: TechPanelUiState, onScan: () -> Unit, onSend: () -> Unit, onEraseAll: () -> Unit) {
     val context = LocalContext.current
     val scanning = state.dtcScan.phase == DtcScanPhase.SCANNING
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -308,12 +363,29 @@ private fun DialogFooter(state: TechPanelUiState, onScan: () -> Unit, onSend: ()
                 onClick = onSend,
             )
         }
+        if (state.showErase) {
+            DialogButton(
+                text = stringResource(R.string.tech_dtc_erase_all),
+                icon = { Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                enabled = state.canScan,
+                accent = false,
+                onClick = onEraseAll,
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             if (!scanning && state.scanLabel == DtcScanLabel.ONLY_PARK) {
-                Text(stringResource(R.string.tech_dtc_only_on_p), color = TextMuted, fontSize = 11.sp)
+                Text(
+                    stringResource(if (state.showErase) R.string.tech_dtc_only_on_p_erase else R.string.tech_dtc_only_on_p),
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                )
             }
             sendResultText(context, state.dtcSendResult)?.let { Text(it, color = TextSecondary, fontSize = 11.sp) }
-            Text(stringResource(R.string.tech_dtc_note), color = TextMuted, fontSize = 11.sp)
+            Text(
+                stringResource(if (state.showErase) R.string.tech_dtc_note_erase else R.string.tech_dtc_note),
+                color = TextMuted,
+                fontSize = 11.sp,
+            )
         }
     }
 }

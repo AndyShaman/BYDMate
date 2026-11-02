@@ -77,6 +77,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
 import com.bydmate.app.data.dtc.DtcKind
+import com.bydmate.app.data.dtc.DtcParser
 import com.bydmate.app.data.dtc.DtcScanPhase
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
@@ -162,6 +163,7 @@ fun TechPanelScreen(
             state = state,
             onScan = viewModel::scanDtc,
             onSend = { viewModel.sendDtc(dtcLabels(context)) },
+            onErase = viewModel::eraseDtc,
             onDismiss = viewModel::closeDtcDialog,
         )
     }
@@ -735,20 +737,29 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
         // The caption over the disabled button already says it.
         ?.takeUnless { it == R.string.tech_dtc_only_on_p && state.scanLabel == DtcScanLabel.ONLY_PARK }
     // Before any good scan, «Недоступно» replaces «Ещё не сканировали» instead of adding to it.
-    val unavailableOnly = summary == null && error == R.string.tech_dtc_unavailable
+    val unavailableOnly = summary == null && dtcUnavailableText(error)
+    val erasedAt = state.dtcErasedAt
     when {
         scanning -> DtcProgress(state.dtcScan)
-        unavailableOnly -> DtcNote(R.string.tech_dtc_unavailable)
+        unavailableOnly -> error?.let { DtcNote(it) }
         summary == null -> DtcNote(R.string.tech_dtc_never)
+        // The saved codes may be gone: one line instead of them, until a new scan.
+        state.dtcErasedSinceScan && erasedAt != null -> Column(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onOpen).padding(vertical = 2.dp),
+        ) {
+            DtcNote(stringResource(R.string.tech_dtc_erased_at, dtcTime(erasedAt)))
+        }
         else -> Column(
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onOpen).padding(vertical = 2.dp),
         ) {
             if (summary.found.isEmpty()) DtcNote(dtcNoRowsText(context, summary))
-            val blocks = summary.found.groupBy { it.addr }.values.toList()
+            // A merged group shows once, with all its addresses.
+            val groups = DtcParser.groups(summary.found).associate { it.addrs.first() to it.addrs }
+            val blocks = summary.found.filter { it.addr in groups }.groupBy { it.addr }.values.toList()
             blocks.take(DTC_CARD_BLOCKS).forEach { codes ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     Text(
-                        "0x%X".format(codes.first().addr),
+                        groups[codes.first().addr].orEmpty().joinToString(", ") { "0x%X".format(it) },
                         color = TextMuted,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
@@ -787,6 +798,7 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
         }
     }
     if (!scanning && error != null && !unavailableOnly) DtcNote(error)
+    if (!scanning && state.dtcScan.firmwareHint) DtcNote(R.string.tech_dtc_firmware_hint)
     Box(modifier = Modifier.weight(1f))
     if (state.scanLabel == DtcScanLabel.ONLY_PARK) {
         Text(
