@@ -115,6 +115,7 @@ object DtcWire {
 
     /** `0A rid(2) len frames idx result`, then the UDS bytes. */
     private const val HEADER = 7
+    private const val CLEAR_ECHO_BYTES = 4
     /** `62` plus the 16-bit DID echo ahead of the data of a DID answer. */
     private const val DID_HEAD = 3
     private const val FRAME_PREFIX = 0x0A
@@ -196,10 +197,16 @@ object DtcWire {
         if (uds.size >= 3 && u(uds, 0) == NEGATIVE && u(uds, 1) == service) {
             return if (u(uds, 2) == NRC_PENDING) DtcMatch.Pending else DtcMatch.Nrc(u(uds, 2))
         }
-        // Without a sub-function echo the positive answer is the one service byte (`54`).
-        val positive = echoes(uds, service + POSITIVE_OFFSET, service, sub) && (sub >= 0 || uds.size == 1)
+        // Without a sub-function echo the positive answer is the one service byte (`54`); some blocks
+        // (Song Plus EV 0x726) echo the cleared group after it: `54 FF FF FF`.
+        val positive = echoes(uds, service + POSITIVE_OFFSET, service, sub) &&
+            (sub >= 0 || uds.size == 1 || isClearEcho(uds, service))
         return if (positive) DtcMatch.Answer(uds) else DtcMatch.NotMine
     }
+
+    /** `54 FF FF FF`: the clear's positive answer with the group `FF FF FF` it was sent for echoed back. */
+    private fun isClearEcho(uds: ByteArray, service: Int): Boolean =
+        service == SERVICE_CLEAR && uds.size == CLEAR_ECHO_BYTES && (1 until CLEAR_ECHO_BYTES).all { u(uds, it) == 0xFF }
 
     /** Null when [result] is not a gateway result; else its kind, or NotMine when [uds] echoes another request. */
     private fun gatewayMatch(result: Int, uds: ByteArray, service: Int, sub: Int): DtcMatch? {
