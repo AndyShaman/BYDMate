@@ -97,4 +97,69 @@ class DtcWireTest {
             assertThrows(IllegalArgumentException::class.java) { DtcWire.listRequest(0x712, mask) }
         }
     }
+
+    // --- erase request, snapshot request, busy / manager-timeout results ---
+
+    @Test fun `W1 clearRequest builds the fixed clear-all frame`() {
+        assertArrayEquals(hex("0A 07 12 04 14 FF FF FF"), DtcWire.clearRequest(0x712))
+    }
+
+    @Test fun `W2 clearRequest refuses an address outside the whitelist`() {
+        assertThrows(IllegalArgumentException::class.java) { DtcWire.clearRequest(0x700) }
+    }
+
+    @Test fun `W3 snapshotRequest builds the fixed snapshot frame`() {
+        assertArrayEquals(hex("0A 07 12 05 19 04 D1 66 87 FF"), DtcWire.snapshotRequest(0x712, 0xD16687))
+    }
+
+    @Test fun `W4 a one-byte 54 answer matches the clear request`() {
+        val m = DtcWire.match(DtcFixtures.frame(0x712, hex("54"), result = 1), 0x712, DtcWire.SERVICE_CLEAR, -1)
+        assertTrue(m is DtcMatch.Answer)
+        assertArrayEquals(hex("54"), (m as DtcMatch.Answer).uds)
+    }
+
+    @Test fun `W5 a negative answer to the clear request carries its code`() {
+        val m = DtcWire.match(DtcFixtures.frame(0x712, hex("7F 14 22"), result = 2), 0x712, DtcWire.SERVICE_CLEAR, -1)
+        assertEquals(0x22, (m as DtcMatch.Nrc).code)
+    }
+
+    @Test fun `W6 nrc 78 on the clear request means keep waiting`() {
+        val m = DtcWire.match(DtcFixtures.frame(0x712, hex("7F 14 78")), 0x712, DtcWire.SERVICE_CLEAR, -1)
+        assertTrue(m is DtcMatch.Pending)
+    }
+
+    @Test fun `W7 result 5 is busy, 4 is manager timeout, 3 is gateway timeout for every service`() {
+        val cases = listOf(
+            Triple(DtcWire.SERVICE_CLEAR, -1, "clear"),
+            Triple(DtcWire.SERVICE_READ_DTC, DtcWire.SUB_COUNT, "count"),
+        )
+        for ((service, sub, name) in cases) {
+            val busy = DtcWire.match(DtcFixtures.frame(0x712, ByteArray(0), result = 5), 0x712, service, sub)
+            val mgr = DtcWire.match(DtcFixtures.frame(0x712, ByteArray(0), result = 4), 0x712, service, sub)
+            val gw = DtcWire.match(DtcFixtures.frame(0x712, ByteArray(0), result = 3), 0x712, service, sub)
+            assertTrue(name, busy is DtcMatch.Busy)
+            assertTrue(name, mgr is DtcMatch.ManagerTimeout)
+            assertTrue(name, gw is DtcMatch.GatewayTimeout)
+        }
+        assertEquals("busy", DtcWire.OUTCOME_BUSY)
+        assertEquals("manager_timeout", DtcWire.OUTCOME_MANAGER_TIMEOUT)
+    }
+
+    @Test fun `W8 a busy frame of another block is not mine`() {
+        val foreign = DtcFixtures.frame(0x720, ByteArray(0), result = 5)
+        assertTrue(DtcWire.match(foreign, 0x712, DtcWire.SERVICE_CLEAR, -1) is DtcMatch.NotMine)
+    }
+
+    @Test fun `W9 a one-byte 54 answer does not match a read request`() {
+        val m = DtcWire.match(DtcFixtures.frame(0x712, hex("54")), 0x712, DtcWire.SERVICE_READ_DTC, DtcWire.SUB_COUNT)
+        assertTrue(m !is DtcMatch.Answer)
+    }
+
+    @Test fun `W10 the recorded erase answers match as confirmed`() {
+        for ((file, addr) in listOf("clear-712.txt" to 0x712, "clear-7E7.txt" to 0x7E7)) {
+            val m = DtcWire.match(DtcFixtures.raw(file), addr, DtcWire.SERVICE_CLEAR, -1)
+            assertTrue(file, m is DtcMatch.Answer)
+            assertArrayEquals(file, hex("54"), (m as DtcMatch.Answer).uds)
+        }
+    }
 }
