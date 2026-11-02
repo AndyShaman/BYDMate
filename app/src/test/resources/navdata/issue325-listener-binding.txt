@@ -1,0 +1,24 @@
+# #325 Han 2022 (DiLink 4.0, Android 10, fw 20250618), BYDMate 4.1.0, Navigator 24.3.1, no SOME/IP gateway.
+# Verbatim trace lines from bydmate_logs_20261101_174620 (ids and counters only). A process starts at each "start version".
+# Block A, 2026-11-01: car start; daemon down in the first process, a11y bound by itself in the second (no force-stop):
+# listener access approved, the listener never connects, a11y reads the route with an undescribed maneuver.
+17:43:58.462 app    start version=512 name=4.1.0 #4099
+17:43:58.497 app    boot-receiver action=BOOT_COMPLETED service_running=false #4100
+17:44:08.837 app    a11y-grant reason=startup granted=false tries=2 reasserts=00 #4110
+17:45:07.206 app    start version=512 name=4.1.0 #4125
+17:45:07.267 app    boot-receiver action=BOOT_COMPLETED service_running=false #4126
+17:45:08.249 app    a11y-connected streak=0 service_running=true #4136
+17:45:13.366 app    a11y-grant reason=startup granted=true tries=2 reasserts=1 #4141
+17:46:27.706 hud    guidance-on src=a11y #4160
+grant_heal: 2026-11-01 17:45:07 notification listener reason=startup tries=1 reasserts=[] granted=true
+route_summary: way=10 dur_s=64 a11y_guid=14 a11y_noguid=0 kept=0 blind_ms=0 notif_rich=0 notif_ignored=0 notif_empty=0 maneuvers=0 unknown=14 expiries=0 drops=0 frames=0 rc={} max_gap_s=2
+# Block B, 2026-10-30: car start, a11y lost its bind race, the a11y force-stop restarted us, the listener connected 42 ms later.
+18:44:19.110 app    start version=512 name=4.1.0 #3854
+18:44:19.152 app    boot-receiver action=BOOT_COMPLETED service_running=false #3855
+18:44:30.877 app    a11y-grant reason=startup granted=false tries=2 reasserts=11 #3871
+18:44:30.890 app    a11y-recovery-force-stop reason=startup streak=1 #3872
+18:44:31.076 app    start version=512 name=4.1.0 #3873
+18:44:31.118 hud    notif-listener state=connected #3874
+# Block C, 2026-10-30: restart inside a trip (the binding survived), connected 3.0 s after the start, before any force-stop.
+12:25:10.564 app    start version=512 name=4.1.0 #3657
+12:25:13.575 hud    notif-listener state=connected #3671
