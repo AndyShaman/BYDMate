@@ -431,6 +431,16 @@ class DtcScannerTest {
         }
     }
 
+    /** Song Plus EV, 2026-11-02: 0x726 answered `54 FF FF FF`; the run stopped there and left 5 blocks unerased. */
+    @Test fun `E1b a clear answered with the echoed group is confirmed and the run goes on`() {
+        val echo = DtcFixtures.frame(0x726, DtcFixtures.hex("54 FF FF FF"))
+        val w = eraseWorld(onClear = { _, p -> if (addrOf(p) == 0x726) listOf(echo, echo) else listOf(ack(addrOf(p))) })
+        val s = w.erase(0x712, 0x720, 0x726, 0x782)
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertTrue(s.erase.all { it.confirm == DtcWire.CONFIRM_CONFIRMED })
+        assertEquals(4, w.device.sent.count { isClear(it) })
+    }
+
     @Test fun `E2 a gear other than P stops the erase before any send`() {
         val w = eraseWorld()
         w.gear = { 4 }

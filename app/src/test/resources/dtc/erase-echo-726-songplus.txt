@@ -1,0 +1,21 @@
+# Song Plus EV (car_autotype=330), BYDMate 4.1.0-test 514, tester log 2026-11-02. Block 0x726 answered the clear
+# with 54 + the echoed group FFFFFF; the daemon took it for foreign traffic and aborted the run. Verbatim lines:
+11-02 17:08:52.080 I/DtcScan ( 3183): tx addr=0x712 req=14FFFFFF gear=1 speed=0 guard=r@-1_0&w@-1_0 rc=0
+11-02 17:08:52.118 I/DtcScan ( 3183): rx addr=0x712 req=14FFFFFF rid=0x71A len=1 fr=1/1 res=1 kind=answer uds=54 ms=38
+11-02 17:08:52.519 I/DtcScan ( 3183): erase addr=0x712 confirm=confirmed nrc=- reason=- sends=1 ms=440
+11-02 17:08:53.522 I/DtcScan ( 3183): tx addr=0x720 req=14FFFFFF gear=1 speed=0 guard=r@-1_0&w@-1_0 rc=0
+11-02 17:08:53.569 I/DtcScan ( 3183): rx addr=0x720 req=14FFFFFF rid=0x728 len=1 fr=1/1 res=1 kind=answer uds=54 ms=47
+11-02 17:08:53.970 I/DtcScan ( 3183): erase addr=0x720 confirm=confirmed nrc=- reason=- sends=1 ms=450
+11-02 17:08:54.972 I/DtcScan ( 3183): tx addr=0x726 req=14FFFFFF gear=1 speed=0 guard=r@-1_0&w@-1_0 rc=0
+11-02 17:08:54.990 I/DtcScan ( 3183): foreign rid=0x72E len=4 fr=1/1 res=1 uds=54FFFFFF
+11-02 17:08:54.990 I/DtcScan ( 3183): abort foreign rid=0x72E at=0x726 req=14FFFFFF
+11-02 17:08:54.991 I/DtcScan ( 3183): unregistered
+11-02 17:08:54.992 I/DtcScan ( 3183): erase result addr=0x712 confirm=confirmed reason=-
+11-02 17:08:54.992 I/DtcScan ( 3183): erase result addr=0x720 confirm=confirmed reason=-
+11-02 17:08:54.992 I/DtcScan ( 3183): erase result addr=0x726 confirm=unconfirmed reason=foreign rid=0x72E
+11-02 17:08:54.992 I/DtcScan ( 3183): erase result addr=0x782 confirm=not_run reason=foreign rid=0x72E
+11-02 17:08:54.992 I/DtcScan ( 3183): erase result addr=0x783 confirm=not_run reason=foreign rid=0x72E
+11-02 17:08:54.992 I/DtcScan ( 3183): erase result addr=0x7E0 confirm=not_run reason=foreign rid=0x72E
+11-02 17:08:54.992 I/DtcScan ( 3183): erase result addr=0x7E2 confirm=not_run reason=foreign rid=0x72E
+11-02 17:08:54.992 I/DtcScan ( 3183): erase result addr=0x7F2 confirm=not_run reason=foreign rid=0x72E
+11-02 17:08:54.993 I/DtcScan ( 3183): erase end state=ABORTED reason=foreign rid=0x72E done=2/8 confirmed=2 refused=0 unconfirmed=1 not_run=5 sent=3 frames=3 ms=4929

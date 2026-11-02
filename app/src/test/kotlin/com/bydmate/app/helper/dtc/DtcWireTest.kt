@@ -162,4 +162,21 @@ class DtcWireTest {
             assertArrayEquals(file, hex("54"), (m as DtcMatch.Answer).uds)
         }
     }
+
+    /** Song Plus EV, tester log 2026-11-02 (resources `dtc/erase-echo-726-songplus.txt`): `54 FF FF FF`. */
+    @Test fun `W11 a 54 answer that echoes the cleared group FFFFFF matches the clear request`() {
+        val line = javaClass.getResourceAsStream("/dtc/erase-echo-726-songplus.txt")!!.bufferedReader()
+            .readLines().first { "foreign rid=0x72E" in it }
+        val uds = hex(line.substringAfter("uds=").trim())
+        assertArrayEquals(hex("54 FF FF FF"), uds)
+        val m = DtcWire.match(DtcFixtures.frame(0x726, uds, result = 1), 0x726, DtcWire.SERVICE_CLEAR, -1)
+        assertTrue(m is DtcMatch.Answer)
+    }
+
+    @Test fun `W12 a 54 answer with any other tail is not taken for the clear answer`() {
+        for (tail in listOf("54 FF", "54 FF FF", "54 FF FF 00", "54 00 00 00", "54 FF FF FF FF")) {
+            val m = DtcWire.match(DtcFixtures.frame(0x726, hex(tail), result = 1), 0x726, DtcWire.SERVICE_CLEAR, -1)
+            assertTrue(tail, m is DtcMatch.NotMine)
+        }
+    }
 }
