@@ -154,6 +154,8 @@ data class TechPanelUiState(
     val dtcErasedAt: Long? = null,
     /** Block name per address of the saved scan, rows or not (erase result lines need them). */
     val dtcBlocks: Map<Int, DtcBlockName> = emptyMap(),
+    /** Blocks of unknown erase result since the saved scan: no erase of them until a new scan. */
+    val dtcEraseLocked: Set<Int> = emptySet(),
 ) {
     val dtcErasing: Boolean
         get() = dtcErase?.phase == DtcErasePhase.ERASING
@@ -166,9 +168,15 @@ data class TechPanelUiState(
     val dtcErasedSinceScan: Boolean
         get() = dtcErasedAt != null && dtcCheckedAt != null && dtcErasedAt >= dtcCheckedAt
 
-    /** The erase buttons show with codes on display and no erase of unknown outcome since the scan. */
+    /** The erase buttons show with an erasable block on display and no erase of unknown outcome since the scan. */
     val showErase: Boolean
-        get() = dtcSummary?.found?.isNotEmpty() == true && !dtcErasedSinceScan
+        get() = dtcSummary?.found.orEmpty().any { canEraseBlock(it.addr) } && !dtcErasedSinceScan
+
+    /** False when the group of [addr] (a merged one included) holds a block of [dtcEraseLocked]. */
+    fun canEraseBlock(addr: Int): Boolean {
+        val group = DtcParser.groups(dtcSummary?.found.orEmpty()).firstOrNull { addr in it.addrs }?.addrs ?: listOf(addr)
+        return group.none { it in dtcEraseLocked }
+    }
 
     val scanLabel: DtcScanLabel
         get() = when {
@@ -534,7 +542,10 @@ class TechPanelViewModel @Inject constructor(
                 val summary = last?.let { DtcParser.summarize(it.results) }
                 val blocks = last?.results.orEmpty().associate { it.addr to DtcBlockNames.identify(it.addr, it.idUds) }
                 _uiState.update {
-                    it.copy(dtcSummary = summary, dtcCheckedAt = last?.at, dtcDescriptions = emptyMap(), dtcBlocks = blocks)
+                    it.copy(
+                        dtcSummary = summary, dtcCheckedAt = last?.at, dtcDescriptions = emptyMap(), dtcBlocks = blocks,
+                        dtcEraseLocked = last?.eraseLocked.orEmpty(),
+                    )
                 }
                 if (summary == null) return@collect
                 // The tables load once, off the main thread; the codes show without text until then.

@@ -173,7 +173,7 @@ internal fun DtcScanDialog(
                                 val now = found.filter { it.row.kind == DtcKind.NOW }
                                 val old = found.filter { it.row.kind != DtcKind.NOW }
                                 val zh = dtcZh(context)
-                                val section = SectionData(groups, state.dtcDescriptions, zh, state.canScan, onEraseBlock)
+                                val section = SectionData(groups, state.dtcDescriptions, zh, state.canScan, onEraseBlock, state::canEraseBlock)
                                 DialogSection(R.string.tech_dtc_now_header, R.string.tech_dtc_now_sub, now, section)
                                 DialogSection(R.string.tech_dtc_old_header, R.string.tech_dtc_old_sub, old, section)
                                 dtcUnreadPartialText(context, summary)?.let { NoneText(it) }
@@ -210,6 +210,8 @@ private class SectionData(
     val zh: Boolean,
     val canErase: Boolean,
     val onErase: ((EraseTarget.Block) -> Unit)?,
+    /** False for a block of unknown erase result: it shows no «стереть ›» until a new scan. */
+    val erasable: (Int) -> Boolean,
 )
 
 @Composable
@@ -254,7 +256,7 @@ private fun BlockBox(codes: List<DtcFound>, section: SectionData) {
                 color = TextMuted,
                 fontSize = 11.sp,
             )
-            section.onErase?.let { onErase ->
+            section.onErase?.takeIf { section.erasable(block.addr) }?.let { onErase ->
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier

@@ -12,7 +12,8 @@ fun dtcFirmwareHint(autotype: Int?): Boolean = autotype in LEOPARD3_AUTOTYPES
 
 /**
  * Which blocks an erase may ask for: only those with a shown code in the scan the user looks at,
- * and only while that scan is at most [MAX_SCAN_AGE_MS] old.
+ * and only while that scan is at most [MAX_SCAN_AGE_MS] old. A group holding an address of
+ * [DtcSavedScan.eraseLocked] is left out.
  */
 object DtcErasePlan {
     const val MAX_SCAN_AGE_MS = 600_000L
@@ -28,6 +29,7 @@ object DtcErasePlan {
     private fun groups(saved: DtcSavedScan?, nowMs: Long): List<DtcBlockGroup>? {
         if (saved == null || nowMs - saved.at > MAX_SCAN_AGE_MS) return null
         return DtcParser.groups(DtcParser.summarize(saved.results).found)
+            .filter { g -> g.addrs.none { it in saved.eraseLocked } }
     }
 }
 
@@ -56,6 +58,11 @@ fun dtcEraseVerdict(r: DtcEraseResult): DtcEraseVerdict {
         else -> DtcEraseVerdict.UNKNOWN_CODES_PRESENT
     }
 }
+
+/** The blocks whose erase result is unknown: no erase of them until a new scan. */
+fun dtcEraseLocks(erase: List<DtcEraseResult>): Set<Int> = erase.filter {
+    dtcEraseVerdict(it).let { v -> v == DtcEraseVerdict.CONFIRMED_UNVERIFIED || v == DtcEraseVerdict.UNCONFIRMED_UNVERIFIED }
+}.map { it.addr }.toSet()
 
 /** `59 02`: a positive list answer, the only one an empty re-read may be trusted from. */
 private const val POSITIVE_LIST_HEAD = 0x59

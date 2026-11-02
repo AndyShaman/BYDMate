@@ -2288,8 +2288,8 @@
     <string name="tech_dtc_v_back">Wyczyszczono, ale kod od razu wrócił: usterka jest teraz</string>
     <string name="tech_dtc_v_likely">Moduł nie potwierdził, ale kodów już nie ma</string>
     <string name="tech_dtc_v_unknown_codes">Moduł nie potwierdził czyszczenia, kody zostały</string>
-    <string name="tech_dtc_v_confirmed_unverified">Moduł potwierdził czyszczenie, nie udało się odczytać ponownie</string>
-    <string name="tech_dtc_v_unconfirmed_unverified">Moduł nie odpowiedział, wynik nieznany</string>
+    <string name="tech_dtc_v_confirmed_unverified">Moduł potwierdził czyszczenie, nie udało się odczytać ponownie. Aby wyczyścić jeszcze raz, naciśnij «Skanuj»</string>
+    <string name="tech_dtc_v_unconfirmed_unverified">Moduł nie odpowiedział, wynik nieznany. Aby wyczyścić jeszcze raz, naciśnij «Skanuj»</string>
     <string name="tech_dtc_v_refused">Moduł odmówił czyszczenia</string>
     <string name="tech_dtc_v_not_run">Nie czyszczono: czyszczenie zatrzymane</string>
     <string name="tech_dtc_stop_not_park">Czyszczenie zatrzymane: auto nie jest na P</string>

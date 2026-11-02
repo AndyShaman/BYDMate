@@ -2132,8 +2132,8 @@
     <string name="tech_dtc_v_back">Apagado, mas o código voltou logo: a falha está presente agora</string>
     <string name="tech_dtc_v_likely">O módulo não confirmou, mas os códigos já não existem</string>
     <string name="tech_dtc_v_unknown_codes">O módulo não confirmou o apagamento, os códigos ficaram</string>
-    <string name="tech_dtc_v_confirmed_unverified">O módulo confirmou o apagamento, não foi possível ler de novo</string>
-    <string name="tech_dtc_v_unconfirmed_unverified">O módulo não respondeu, resultado desconhecido</string>
+    <string name="tech_dtc_v_confirmed_unverified">O módulo confirmou o apagamento, não foi possível ler de novo. Para apagar de novo, toque em «Analisar»</string>
+    <string name="tech_dtc_v_unconfirmed_unverified">O módulo não respondeu, resultado desconhecido. Para apagar de novo, toque em «Analisar»</string>
     <string name="tech_dtc_v_refused">O módulo recusou apagar</string>
     <string name="tech_dtc_v_not_run">Não apagado: apagamento interrompido</string>
     <string name="tech_dtc_stop_not_park">Apagamento interrompido: o carro não está em P</string>

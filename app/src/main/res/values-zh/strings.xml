@@ -2250,8 +2250,8 @@
     <string name="tech_dtc_v_back">已清除，但故障码立即重现：故障当前存在</string>
     <string name="tech_dtc_v_likely">模块未确认，但故障码已消失</string>
     <string name="tech_dtc_v_unknown_codes">模块未确认清除，故障码仍在</string>
-    <string name="tech_dtc_v_confirmed_unverified">模块已确认清除，未能重新读取</string>
-    <string name="tech_dtc_v_unconfirmed_unverified">模块未响应，结果未知</string>
+    <string name="tech_dtc_v_confirmed_unverified">模块已确认清除，未能重新读取。如需再次清除，请点击“扫描”</string>
+    <string name="tech_dtc_v_unconfirmed_unverified">模块未响应，结果未知。如需再次清除，请点击“扫描”</string>
     <string name="tech_dtc_v_refused">模块拒绝清除</string>
     <string name="tech_dtc_v_not_run">未清除：清除已停止</string>
     <string name="tech_dtc_stop_not_park">清除已停止：车辆不在 P 挡</string>

@@ -2288,8 +2288,8 @@
     <string name="tech_dtc_v_back">Сцёрта, але код адразу вярнуўся: няспраўнасць ёсць зараз</string>
     <string name="tech_dtc_v_likely">Блок не пацвердзіў, але кодаў больш няма</string>
     <string name="tech_dtc_v_unknown_codes">Блок не пацвердзіў сціранне, коды засталіся</string>
-    <string name="tech_dtc_v_confirmed_unverified">Блок пацвердзіў сціранне, перачытаць не ўдалося</string>
-    <string name="tech_dtc_v_unconfirmed_unverified">Блок не адказаў, вынік невядомы</string>
+    <string name="tech_dtc_v_confirmed_unverified">Блок пацвердзіў сціранне, перачытаць не ўдалося. Каб сцерці зноў, націсніце «Сканаваць»</string>
+    <string name="tech_dtc_v_unconfirmed_unverified">Блок не адказаў, вынік невядомы. Каб сцерці зноў, націсніце «Сканаваць»</string>
     <string name="tech_dtc_v_refused">Блок адмовіў у сціранні</string>
     <string name="tech_dtc_v_not_run">Не сціралі: сціранне спынена</string>
     <string name="tech_dtc_stop_not_park">Сціранне спынена: машына не на P</string>

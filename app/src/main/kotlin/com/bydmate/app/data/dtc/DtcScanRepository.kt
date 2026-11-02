@@ -66,8 +66,16 @@ data class DtcEraseState(
     val error: DtcScanError? = null,
 )
 
-/** The raw answers of the last finished scan and when DONE was seen (epoch ms). */
-class DtcSavedScan(val at: Long, val total: Int, val results: List<DtcAddressResult>)
+/**
+ * The raw answers of the last finished scan and when DONE was seen (epoch ms).
+ * [eraseLocked]: blocks of unknown erase result since this scan, not erased again until a new one.
+ */
+class DtcSavedScan(
+    val at: Long,
+    val total: Int,
+    val results: List<DtcAddressResult>,
+    val eraseLocked: Set<Int> = emptySet(),
+)
 
 enum class DtcSendOutcome { SENT, NO_BOT, FAILED }
 
@@ -230,7 +238,8 @@ class DtcScanRepository(
             Log.i(
                 TAG,
                 "erase refused needs_scan addrs=$list eligible=${eligible?.joinToString(",") { "0x%X".format(it) } ?: "-"} " +
-                    "scan_at=${saved?.at ?: "-"} erased_at=${_erasedAt.value ?: "-"}",
+                    "scan_at=${saved?.at ?: "-"} erased_at=${_erasedAt.value ?: "-"} " +
+                    "locked=${saved?.eraseLocked?.sorted()?.joinToString(",") { "0x%X".format(it) }?.ifEmpty { null } ?: "-"}",
             )
             _erase.value = DtcEraseState(DtcErasePhase.ENDED, error = DtcScanError.ERASE_NEEDS_SCAN)
             return
@@ -327,15 +336,21 @@ class DtcScanRepository(
         _erase.value = (_erase.value ?: DtcEraseState(DtcErasePhase.ENDED)).copy(phase = DtcErasePhase.ENDED, error = error)
     }
 
-    /** Each re-read block replaces its entry in the saved scan, which keeps its time. */
+    /**
+     * Each re-read block replaces its entry in the saved scan, which keeps its time;
+     * blocks of unknown result join its erase locks.
+     */
     private fun applyErase(erase: List<DtcEraseResult>) {
         val saved = _last.value ?: return
-        val scan = DtcSavedScan(saved.at, saved.total, dtcScanAfterErase(saved.results, erase))
+        val scan = DtcSavedScan(
+            saved.at, saved.total, dtcScanAfterErase(saved.results, erase), saved.eraseLocked + dtcEraseLocks(erase),
+        )
         Log.i(
             TAG,
             "erase applied addrs=${erase.joinToString(",") { "0x%X".format(it.addr) }} " +
                 "rows_before=${DtcParser.summarize(saved.results).found.size} " +
-                "rows_after=${DtcParser.summarize(scan.results).found.size}",
+                "rows_after=${DtcParser.summarize(scan.results).found.size} " +
+                "locked=${scan.eraseLocked.sorted().joinToString(",") { "0x%X".format(it) }.ifEmpty { "-" }}",
         )
         prefs.edit().putString(KEY_LAST, toJson(scan)).apply()
         _last.value = scan
@@ -478,7 +493,8 @@ class DtcScanRepository(
                         .putOpt("i", hex(r.idUds)),
                 )
             }
-            return JSONObject().put("v", 1).put("at", scan.at).put("total", scan.total).put("answers", answers).toString()
+            return JSONObject().put("v", 1).put("at", scan.at).put("total", scan.total).put("answers", answers)
+                .put("locked", JSONArray(scan.eraseLocked.sorted())).toString()
         }
 
         private fun fromJson(text: String): DtcSavedScan {
@@ -491,7 +507,9 @@ class DtcScanRepository(
                     unhex(a.optString("c")), unhex(a.optString("l")), unhex(a.optString("i")),
                 )
             }
-            return DtcSavedScan(o.getLong("at"), o.getInt("total"), results)
+            // A scan saved before the erase locks has no "locked".
+            val eraseLocked = o.optJSONArray("locked")?.let { l -> (0 until l.length()).map { l.getInt(it) }.toSet() }.orEmpty()
+            return DtcSavedScan(o.getLong("at"), o.getInt("total"), results, eraseLocked)
         }
 
         private fun hex(b: ByteArray?): String? = b?.joinToString("") { "%02X".format(it) }

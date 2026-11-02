@@ -2136,8 +2136,8 @@
     <string name="tech_dtc_v_back">Erased, but the code came back at once: the fault is present now</string>
     <string name="tech_dtc_v_likely">The module did not confirm, but the codes are gone</string>
     <string name="tech_dtc_v_unknown_codes">The module did not confirm the erase, the codes are still there</string>
-    <string name="tech_dtc_v_confirmed_unverified">The module confirmed the erase, could not read it again</string>
-    <string name="tech_dtc_v_unconfirmed_unverified">The module did not answer, result unknown</string>
+    <string name="tech_dtc_v_confirmed_unverified">The module confirmed the erase, could not read it again. To erase again, tap «Scan»</string>
+    <string name="tech_dtc_v_unconfirmed_unverified">The module did not answer, result unknown. To erase again, tap «Scan»</string>
     <string name="tech_dtc_v_refused">The module refused to erase</string>
     <string name="tech_dtc_v_not_run">Not erased: erasing stopped</string>
     <string name="tech_dtc_stop_not_park">Erasing stopped: the car is not in P</string>

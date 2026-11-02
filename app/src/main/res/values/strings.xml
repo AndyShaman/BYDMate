@@ -2303,8 +2303,8 @@
     <string name="tech_dtc_v_back">Стёрто, но код сразу вернулся: неисправность есть сейчас</string>
     <string name="tech_dtc_v_likely">Блок не подтвердил, но кодов больше нет</string>
     <string name="tech_dtc_v_unknown_codes">Блок не подтвердил стирание, коды остались</string>
-    <string name="tech_dtc_v_confirmed_unverified">Блок подтвердил стирание, перечитать не удалось</string>
-    <string name="tech_dtc_v_unconfirmed_unverified">Блок не ответил, результат неизвестен</string>
+    <string name="tech_dtc_v_confirmed_unverified">Блок подтвердил стирание, перечитать не удалось. Чтобы стереть снова, нажмите «Сканировать»</string>
+    <string name="tech_dtc_v_unconfirmed_unverified">Блок не ответил, результат неизвестен. Чтобы стереть снова, нажмите «Сканировать»</string>
     <string name="tech_dtc_v_refused">Блок отказал в стирании</string>
     <string name="tech_dtc_v_not_run">Не стирали: стирание остановлено</string>
     <string name="tech_dtc_stop_not_park">Стирание остановлено: машина не на P</string>
