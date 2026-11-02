@@ -327,4 +327,28 @@ class DtcScanRepositoryTest {
         assertEquals(savedJson, prefs.getString("last", null))
         assertEquals(1, r.erase.value?.results?.size)
     }
+
+    @Test fun `an erase start that gets no reply is a result unknown and marks the scan erased`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns null
+        val r = repo(this)
+        finishScan(r)
+        r.startErase(intArrayOf(0x7E0, 0x7E2))
+        runCurrent()
+        assertEquals(DtcErasePhase.ENDED, r.erase.value?.phase)
+        // The code's «Результат стирания неизвестен» is STATUS_LOST, not a plain failure.
+        assertEquals(DtcScanError.STATUS_LOST, r.erase.value?.error)
+        assertNotNull(r.erasedAt.value)
+    }
+
+    @Test fun `a refused or busy erase start stays a plain failure and does not mark erased`() = runTest {
+        for (reply in listOf(-1, 1)) {
+            coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns reply
+            val r = repo(this)
+            finishScan(r)
+            r.startErase(intArrayOf(0x7E0, 0x7E2))
+            runCurrent()
+            assertEquals(DtcScanError.ABORTED, r.erase.value?.error)
+            assertNull(r.erasedAt.value)
+        }
+    }
 }

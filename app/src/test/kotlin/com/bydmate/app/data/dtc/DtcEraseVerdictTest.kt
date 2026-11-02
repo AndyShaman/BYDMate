@@ -5,6 +5,7 @@ import com.bydmate.app.helper.dtc.DtcEraseResult
 import com.bydmate.app.helper.dtc.DtcFixtures.hex
 import com.bydmate.app.helper.dtc.DtcWire
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DtcEraseVerdictTest {
@@ -42,5 +43,17 @@ class DtcEraseVerdictTest {
     @Test fun `refused and not run map to their own verdicts`() {
         assertEquals(DtcEraseVerdict.REFUSED, verdict(DtcWire.CONFIRM_REFUSED, null))
         assertEquals(DtcEraseVerdict.NOT_RUN, verdict(DtcWire.CONFIRM_NOT_RUN, null))
+    }
+
+    /** The daemon asks no list when the re-read count answers a positive 0. */
+    private val zeroCount = DtcAddressResult(0x712, DtcWire.OUTCOME_OK, count, null, null)
+
+    @Test fun `a zero-count re-read without a list is an empty re-read`() {
+        assertEquals(DtcEraseVerdict.ERASED, verdict(DtcWire.CONFIRM_CONFIRMED, zeroCount))
+        assertEquals(DtcEraseVerdict.LIKELY_ERASED, verdict(DtcWire.CONFIRM_UNCONFIRMED, zeroCount))
+    }
+
+    @Test fun `a zero-count block in a scan still means no codes`() {
+        assertTrue(DtcParser.summarize(listOf(zeroCount)).found.isEmpty())
     }
 }

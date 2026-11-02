@@ -86,4 +86,28 @@ class TimezoneLockTest {
         assertEquals(listOf("1"), env.writes)
         assertFalse(store.enabled)
     }
+
+    @Test fun `enable restores the previous value when the read-back is null`() {
+        val env = Env("1")
+        var firstRead = true
+        val store = FakeStore()
+        val ok = TimezoneLock(
+            read = { if (firstRead) { firstRead = false; env.value } else null },
+            write = env.write,
+            store = store,
+        ).enable()
+        assertFalse(ok)
+        assertFalse(store.enabled)
+        assertEquals(listOf("0", "1"), env.writes)
+        assertEquals("1", env.value)
+    }
+
+    @Test fun `enable restores 1 when nothing was readable before and the read-back is not 0`() {
+        val env = Env(null)
+        val store = FakeStore()
+        val ok = TimezoneLock({ null }, env.write, store).enable()
+        assertFalse(ok)
+        assertFalse(store.enabled)
+        assertEquals(listOf("0", "1"), env.writes)
+    }
 }
