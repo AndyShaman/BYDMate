@@ -577,8 +577,8 @@
     <string name="automation_action_hotspot">Hotspot Wi-Fi</string>
     <string name="automation_action_hotspot_on">Włącz</string>
     <string name="automation_action_hotspot_off">Wyłącz</string>
-    <string name="automation_action_screen_off">Ekran: wyłącz</string>
-    <string name="automation_action_screen_on">Ekran: włącz</string>
+    <string name="automation_action_screen_off">Ekran centralny: wyłącz</string>
+    <string name="automation_action_screen_on">Ekran centralny: włącz</string>
     <string name="automation_action_speak">Odczytaj tekst</string>
     <string name="automation_action_agent_query">Zapytanie do agenta</string>
     <string name="auto_act_speak">Odczytaj tekst</string>

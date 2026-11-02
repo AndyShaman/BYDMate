@@ -520,8 +520,8 @@
     <string name="automation_action_hotspot">Wi-Fi hotspot</string>
     <string name="automation_action_hotspot_on">Enable</string>
     <string name="automation_action_hotspot_off">Disable</string>
-    <string name="automation_action_screen_off">Screen: off</string>
-    <string name="automation_action_screen_on">Screen: on</string>
+    <string name="automation_action_screen_off">Center screen: off</string>
+    <string name="automation_action_screen_on">Center screen: on</string>
     <string name="automation_action_speak">Speak text</string>
     <string name="automation_action_agent_query">Ask the agent</string>
     <string name="auto_act_speak">Speak text</string>

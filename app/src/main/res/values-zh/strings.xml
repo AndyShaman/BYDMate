@@ -1289,8 +1289,8 @@
     <string name="automation_action_hotspot">Wi-Fi热点</string>
     <string name="automation_action_hotspot_on">开启</string>
     <string name="automation_action_hotspot_off">关闭</string>
-    <string name="automation_action_screen_off">关闭屏幕</string>
-    <string name="automation_action_screen_on">打开屏幕</string>
+    <string name="automation_action_screen_off">关闭中控屏</string>
+    <string name="automation_action_screen_on">打开中控屏</string>
     <string name="automation_action_speak">朗读文字</string>
     <string name="automation_action_agent_query">询问语音助手</string>
     <string name="auto_act_speak">朗读文字</string>

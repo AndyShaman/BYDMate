@@ -80,7 +80,7 @@ class RuleImportSummaryTest {
             ActionDef("screen", "x", "screen", "1"),
         )
         val preview = RuleImportSummary.preview(rule, ctx, realDispatcher()::autoGoWillRun)
-        assertEquals(listOf("Экран: выключить", "Экран: включить"), preview.actions)
+        assertEquals(listOf("Центральный экран: выключить", "Центральный экран: включить"), preview.actions)
     }
 
     @Test fun `import preview promises «Поехали» only where the dispatcher presses it`() {

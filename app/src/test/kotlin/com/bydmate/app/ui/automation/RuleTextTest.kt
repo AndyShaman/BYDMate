@@ -269,19 +269,19 @@ class RuleTextTest {
         val off = ActionDef("screen", "x", "screen", "0")
         val on = ActionDef("screen", "x", "screen", "1")
         val labels = mapOf(
-            "en" to ("Screen: off" to "Screen: on"),
-            "be" to ("Экран: выключыць" to "Экран: уключыць"),
-            "pl" to ("Ekran: wyłącz" to "Ekran: włącz"),
-            "pt" to ("Tela: desligar" to "Tela: ligar"),
-            "zh" to ("关闭屏幕" to "打开屏幕"),
-            "ru" to ("Экран: выключить" to "Экран: включить"),
+            "en" to ("Center screen: off" to "Center screen: on"),
+            "be" to ("Цэнтральны экран: выключыць" to "Цэнтральны экран: уключыць"),
+            "pl" to ("Ekran centralny: wyłącz" to "Ekran centralny: włącz"),
+            "pt" to ("Tela central: desligar" to "Tela central: ligar"),
+            "zh" to ("关闭中控屏" to "打开中控屏"),
+            "ru" to ("Центральный экран: выключить" to "Центральный экран: включить"),
         )
         for ((tag, expected) in labels) {
             LocalePreferences(ctx).setLanguage(tag)
             val lc = ctx.appLocalizedContext()
             assertEquals(tag, expected, actionText(off, lc) to actionText(on, lc))
         }
-        assertEquals("Экран: выключить не выполнено", journalLine(run(recorded(off, success = false), success = false), ctx, now, zone).what)
+        assertEquals("Центральный экран: выключить не выполнено", journalLine(run(recorded(off, success = false), success = false), ctx, now, zone).what)
     }
 
     @Test fun `a run shows the parameters it recorded`() {

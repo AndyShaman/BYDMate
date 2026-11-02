@@ -513,8 +513,8 @@
     <string name="automation_action_hotspot">Ponto de acesso Wi-Fi</string>
     <string name="automation_action_hotspot_on">Ativar</string>
     <string name="automation_action_hotspot_off">Desativar</string>
-    <string name="automation_action_screen_off">Tela: desligar</string>
-    <string name="automation_action_screen_on">Tela: ligar</string>
+    <string name="automation_action_screen_off">Tela central: desligar</string>
+    <string name="automation_action_screen_on">Tela central: ligar</string>
     <string name="automation_action_speak">Falar texto</string>
     <string name="automation_action_agent_query">Perguntar ao agente</string>
     <string name="auto_act_speak">Falar texto</string>

@@ -577,8 +577,8 @@
     <string name="automation_action_hotspot">Точка доступа Wi-Fi</string>
     <string name="automation_action_hotspot_on">Включить</string>
     <string name="automation_action_hotspot_off">Отключить</string>
-    <string name="automation_action_screen_off">Экран: выключить</string>
-    <string name="automation_action_screen_on">Экран: включить</string>
+    <string name="automation_action_screen_off">Центральный экран: выключить</string>
+    <string name="automation_action_screen_on">Центральный экран: включить</string>
     <string name="automation_action_speak">Озвучить текст</string>
     <string name="automation_action_agent_query">Запрос агенту</string>
     <string name="auto_act_speak">Озвучить текст</string>
