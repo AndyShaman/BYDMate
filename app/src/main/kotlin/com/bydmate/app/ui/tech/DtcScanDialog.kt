@@ -160,7 +160,7 @@ internal fun DtcScanDialog(
                         when {
                             scanning -> DtcProgress(state.dtcScan)
                             erase != null && state.dtcErasing -> DtcEraseProgress(erase)
-                            erase != null -> EraseResults(erase, summary?.found.orEmpty().associate { it.addr to it.block })
+                            erase != null -> EraseResults(erase, state.dtcBlocks)
                         }
                         when {
                             scanning -> Unit

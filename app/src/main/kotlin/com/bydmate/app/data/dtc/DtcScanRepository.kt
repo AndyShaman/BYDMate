@@ -103,7 +103,7 @@ class DtcScanRepository(
     val erase: StateFlow<DtcEraseState?> = _erase
 
     /**
-     * When the last erase that may have changed a block ended (epoch ms), kept across restarts.
+     * When the last erase whose outcome is unknown ended (epoch ms), kept across restarts.
      * While it is newer than [last], the saved codes may be gone and only a new scan tells.
      */
     private val _erasedAt = MutableStateFlow(prefs.getLong(KEY_ERASED_AT, 0L).takeIf { it > 0L })
@@ -214,7 +214,8 @@ class DtcScanRepository(
 
     /**
      * A confirmed tap on «Стереть все» or «стереть ›»: [addrs] must all have a shown code in the
-     * saved scan, which must be at most ten minutes old and taken after the last erase; on P only.
+     * saved scan, which must be at most ten minutes old and taken after the last erase of unknown
+     * outcome; on P only.
      * The saved codes go to the log first; ignored while a scan or an erase runs.
      */
     fun startErase(addrs: IntArray) {
@@ -242,7 +243,7 @@ class DtcScanRepository(
         scope.launch { runErase(addrs.copyOf(), saved) }
     }
 
-    /** Every one of [addrs] has a shown code in [saved], fresh and taken after the last erase. */
+    /** Every one of [addrs] has a shown code in [saved], fresh and taken after the last erase of unknown outcome. */
     private fun eraseAllowed(saved: DtcSavedScan, eligible: IntArray?, addrs: IntArray): Boolean {
         val erasedSince = (_erasedAt.value ?: 0L) >= saved.at
         return eligible != null && !erasedSince && addrs.isNotEmpty() && addrs.all { it in eligible }
@@ -313,7 +314,7 @@ class DtcScanRepository(
             "erase end state=${STATE_NAMES[status.state] ?: "IDLE"} reason=${status.reason.ifEmpty { "-" }} " +
                 "blocks=${status.erase.size} error=${error ?: "-"}",
         )
-        if (status.erase.any { it.confirm != DtcWire.CONFIRM_NOT_RUN }) markErased()
+        if (status.erase.isNotEmpty()) applyErase(status.erase)
         _erase.value = DtcEraseState(
             DtcErasePhase.ENDED, status.done, status.total, status.erase, status.reason, error,
         )
@@ -324,6 +325,20 @@ class DtcScanRepository(
         Log.i(TAG, "erase end error=$error may_have_erased=$mayHaveErased")
         if (mayHaveErased) markErased()
         _erase.value = (_erase.value ?: DtcEraseState(DtcErasePhase.ENDED)).copy(phase = DtcErasePhase.ENDED, error = error)
+    }
+
+    /** Each re-read block replaces its entry in the saved scan, which keeps its time. */
+    private fun applyErase(erase: List<DtcEraseResult>) {
+        val saved = _last.value ?: return
+        val scan = DtcSavedScan(saved.at, saved.total, dtcScanAfterErase(saved.results, erase))
+        Log.i(
+            TAG,
+            "erase applied addrs=${erase.joinToString(",") { "0x%X".format(it.addr) }} " +
+                "rows_before=${DtcParser.summarize(saved.results).found.size} " +
+                "rows_after=${DtcParser.summarize(scan.results).found.size}",
+        )
+        prefs.edit().putString(KEY_LAST, toJson(scan)).apply()
+        _last.value = scan
     }
 
     private fun markErased() {

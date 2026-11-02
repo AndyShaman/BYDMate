@@ -1,5 +1,6 @@
 package com.bydmate.app.data.dtc
 
+import com.bydmate.app.helper.dtc.DtcAddressResult
 import com.bydmate.app.helper.dtc.DtcEraseResult
 import com.bydmate.app.helper.dtc.DtcWire
 
@@ -71,4 +72,16 @@ fun rereadRows(r: DtcEraseResult): List<DtcRow>? {
     if (list.size < 2) return null
     if (list[0].toInt() and 0xFF != POSITIVE_LIST_HEAD || list[1].toInt() != DtcWire.SUB_LIST) return null
     return DtcParser.parseList(list, count?.format).rows
+}
+
+/**
+ * The saved scan after an erase: each block whose re-read was read ([rereadRows] not null) holds
+ * that re-read, under the scan's block id; every other entry stays as scanned.
+ */
+fun dtcScanAfterErase(results: List<DtcAddressResult>, erase: List<DtcEraseResult>): List<DtcAddressResult> {
+    val reread = erase.mapNotNull { e -> e.reread?.takeIf { rereadRows(e) != null }?.let { e.addr to it } }.toMap()
+    return results.map { r ->
+        val after = reread[r.addr] ?: return@map r
+        DtcAddressResult(r.addr, after.outcome, after.countUds, after.listUds, r.idUds)
+    }
 }

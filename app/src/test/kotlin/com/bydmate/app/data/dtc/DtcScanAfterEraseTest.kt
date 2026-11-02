@@ -33,9 +33,6 @@ class DtcScanAfterEraseTest {
     private fun erased(addr: Int, reread: DtcAddressResult?) =
         DtcEraseResult(addr, DtcWire.CONFIRM_CONFIRMED, null, "", reread)
 
-    private fun codes(results: List<DtcAddressResult>) =
-        DtcParser.summarize(results).found.map { it.addr to it.row.code }
-
     @Test fun `blocks re-read empty after the erase lose their rows and keep their name`() {
         val after = dtcScanAfterErase(scan, listOf(erased(0x7E0, zeroCount(0x7E0)), erased(0x7E2, zeroCount(0x7E2))))
         val summary = DtcParser.summarize(after)

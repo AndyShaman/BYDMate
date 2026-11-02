@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.autoservice.Pm25Reader
 import com.bydmate.app.data.carstatus.CarStatusReader
+import com.bydmate.app.data.dtc.DtcBlockName
+import com.bydmate.app.data.dtc.DtcBlockNames
 import com.bydmate.app.data.dtc.DtcDescription
 import com.bydmate.app.data.dtc.DtcErasePhase
 import com.bydmate.app.data.dtc.DtcErasePlan
@@ -148,8 +150,10 @@ data class TechPanelUiState(
     val dtcSendResult: DtcSendResult? = null,
     /** The last erase of this process: progress, then a result per block. */
     val dtcErase: DtcEraseState? = null,
-    /** When the last erase that may have changed a block ended, epoch ms. */
+    /** When the last erase whose outcome is unknown ended, epoch ms. */
     val dtcErasedAt: Long? = null,
+    /** Block name per address of the saved scan, rows or not (erase result lines need them). */
+    val dtcBlocks: Map<Int, DtcBlockName> = emptyMap(),
 ) {
     val dtcErasing: Boolean
         get() = dtcErase?.phase == DtcErasePhase.ERASING
@@ -158,11 +162,11 @@ data class TechPanelUiState(
     val canScan: Boolean
         get() = gear == GEAR_PARK && serviceRunning && dtcScan.phase != DtcScanPhase.SCANNING && !dtcErasing
 
-    /** Codes were erased after the saved scan: its list may be out of date until a new scan. */
+    /** An erase of unknown outcome ran after the saved scan: its list may be out of date until a new scan. */
     val dtcErasedSinceScan: Boolean
         get() = dtcErasedAt != null && dtcCheckedAt != null && dtcErasedAt >= dtcCheckedAt
 
-    /** The erase buttons show with codes on display that no erase has touched since the scan. */
+    /** The erase buttons show with codes on display and no erase of unknown outcome since the scan. */
     val showErase: Boolean
         get() = dtcSummary?.found?.isNotEmpty() == true && !dtcErasedSinceScan
 
@@ -528,7 +532,10 @@ class TechPanelViewModel @Inject constructor(
             dtcScanRepository.last.collect { last ->
                 dtcSaved = last
                 val summary = last?.let { DtcParser.summarize(it.results) }
-                _uiState.update { it.copy(dtcSummary = summary, dtcCheckedAt = last?.at, dtcDescriptions = emptyMap()) }
+                val blocks = last?.results.orEmpty().associate { it.addr to DtcBlockNames.identify(it.addr, it.idUds) }
+                _uiState.update {
+                    it.copy(dtcSummary = summary, dtcCheckedAt = last?.at, dtcDescriptions = emptyMap(), dtcBlocks = blocks)
+                }
                 if (summary == null) return@collect
                 // The tables load once, off the main thread; the codes show without text until then.
                 val descriptions = runCatching { dtcScanRepository.describe(summary) }.getOrDefault(emptyMap())
