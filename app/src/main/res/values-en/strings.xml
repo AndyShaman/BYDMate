@@ -1144,12 +1144,12 @@
     <string name="auto_level_fridge_heat">Fridge heating</string>
     <string name="auto_level_tile_temp">Temperature 16–33 °C</string>
     <string name="auto_level_tile_fan">Fan 1–7</string>
-    <string name="auto_level_tile_seat_heat_driver">Driver seat heating off, 1–5</string>
-    <string name="auto_level_tile_seat_heat_passenger">Passenger seat heating off, 1–5</string>
-    <string name="auto_level_tile_seat_vent_driver">Driver seat ventilation off, 1–5</string>
-    <string name="auto_level_tile_seat_vent_passenger">Passenger seat ventilation off, 1–5</string>
-    <string name="auto_level_tile_seat_heat_rear_left">Rear left seat heating off, 1–2</string>
-    <string name="auto_level_tile_seat_heat_rear_right">Rear right seat heating off, 1–2</string>
+    <string name="auto_level_tile_seat_heat_driver">Driver seat heating: level 1–5 or off</string>
+    <string name="auto_level_tile_seat_heat_passenger">Passenger seat heating: level 1–5 or off</string>
+    <string name="auto_level_tile_seat_vent_driver">Driver seat ventilation: level 1–5 or off</string>
+    <string name="auto_level_tile_seat_vent_passenger">Passenger seat ventilation: level 1–5 or off</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Rear left seat heating: level 1–2 or off</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Rear right seat heating: level 1–2 or off</string>
     <string name="auto_level_tile_window_driver">Driver window: position 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Passenger window: position 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Rear left window: position 0–100 %</string>
@@ -2102,6 +2102,7 @@
     <string name="tech_dtc_block_radar">front radar</string>
     <string name="tech_dtc_block_bms">battery (BMS)</string>
     <string name="tech_dtc_block_charger">charger (OBC)</string>
+    <string name="tech_dtc_block_ure">powertrain</string>
     <string name="tech_dtc_block_body">body module 0x%1$X</string>
     <string name="tech_dtc_block_unknown">module 0x%1$X</string>
     <string name="tech_dtc_full_adas">Driver assistance controller (ADAS)</string>
@@ -2111,7 +2112,7 @@
     <string name="tech_dtc_full_radar">Front radar</string>
     <string name="tech_dtc_full_bms">Battery management (BMS)</string>
     <string name="tech_dtc_full_charger">On-board charger and DC-DC</string>
-    <string name="tech_dtc_full_ure">Powertrain unit URE</string>
+    <string name="tech_dtc_full_ure">Powertrain controller</string>
     <string name="tech_dtc_full_body">Body module 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Module 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">Not available: this car\'s firmware has no diagnostic service</string>

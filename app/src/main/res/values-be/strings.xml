@@ -1296,12 +1296,12 @@
     <string name="auto_level_fridge_heat">Абагрэў халадзільніка</string>
     <string name="auto_level_tile_temp">Тэмпература 16–33 °C</string>
     <string name="auto_level_tile_fan">Вентылятар 1–7</string>
-    <string name="auto_level_tile_seat_heat_driver">Падагрэў сядзення кіроўцы выкл, 1–5</string>
-    <string name="auto_level_tile_seat_heat_passenger">Падагрэў сядзення пасажыра выкл, 1–5</string>
-    <string name="auto_level_tile_seat_vent_driver">Вентыляцыя сядзення кіроўцы выкл, 1–5</string>
-    <string name="auto_level_tile_seat_vent_passenger">Вентыляцыя сядзення пасажыра выкл, 1–5</string>
-    <string name="auto_level_tile_seat_heat_rear_left">Падагрэў задняга левага сядзення выкл, 1–2</string>
-    <string name="auto_level_tile_seat_heat_rear_right">Падагрэў задняга правага сядзення выкл, 1–2</string>
+    <string name="auto_level_tile_seat_heat_driver">Падагрэў сядзення кіроўцы: узровень 1–5 або выкл</string>
+    <string name="auto_level_tile_seat_heat_passenger">Падагрэў сядзення пасажыра: узровень 1–5 або выкл</string>
+    <string name="auto_level_tile_seat_vent_driver">Вентыляцыя сядзення кіроўцы: узровень 1–5 або выкл</string>
+    <string name="auto_level_tile_seat_vent_passenger">Вентыляцыя сядзення пасажыра: узровень 1–5 або выкл</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Падагрэў задняга левага сядзення: узровень 1–2 або выкл</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Падагрэў задняга правага сядзення: узровень 1–2 або выкл</string>
     <string name="auto_level_tile_window_driver">Акно кіроўцы: становішча 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Акно пасажыра: становішча 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Задняе левае акно: становішча 0–100 %</string>
@@ -2254,6 +2254,7 @@
     <string name="tech_dtc_block_radar">пярэдні радар</string>
     <string name="tech_dtc_block_bms">батарэя (BMS)</string>
     <string name="tech_dtc_block_charger">зараднае (OBC)</string>
+    <string name="tech_dtc_block_ure">сілавая ўстаноўка</string>
     <string name="tech_dtc_block_body">кузаўны блок 0x%1$X</string>
     <string name="tech_dtc_block_unknown">блок 0x%1$X</string>
     <string name="tech_dtc_full_adas">Кантролер асістэнтаў кіроўцы (ADAS)</string>
@@ -2263,7 +2264,7 @@
     <string name="tech_dtc_full_radar">Пярэдні радар</string>
     <string name="tech_dtc_full_bms">Блок кіравання батарэяй (BMS)</string>
     <string name="tech_dtc_full_charger">Бартавое зараднае і DC-DC</string>
-    <string name="tech_dtc_full_ure">Блок сілавой устаноўкі URE</string>
+    <string name="tech_dtc_full_ure">Кантролер сілавой устаноўкі</string>
     <string name="tech_dtc_full_body">Кузаўны блок 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Блок 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">Недаступна: у прашыўцы гэтай машыны няма дыягнастычнага сэрвісу</string>

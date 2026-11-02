@@ -1137,12 +1137,12 @@
     <string name="auto_level_fridge_heat">Aquecimento da geladeira</string>
     <string name="auto_level_tile_temp">Temperatura 16–33 °C</string>
     <string name="auto_level_tile_fan">Ventilação 1–7</string>
-    <string name="auto_level_tile_seat_heat_driver">Aquecimento do banco do motorista desl., 1–5</string>
-    <string name="auto_level_tile_seat_heat_passenger">Aquecimento do banco do passageiro desl., 1–5</string>
-    <string name="auto_level_tile_seat_vent_driver">Ventilação do banco do motorista desl., 1–5</string>
-    <string name="auto_level_tile_seat_vent_passenger">Ventilação do banco do passageiro desl., 1–5</string>
-    <string name="auto_level_tile_seat_heat_rear_left">Aquecimento do banco traseiro esquerdo desl., 1–2</string>
-    <string name="auto_level_tile_seat_heat_rear_right">Aquecimento do banco traseiro direito desl., 1–2</string>
+    <string name="auto_level_tile_seat_heat_driver">Aquecimento do banco do motorista: nível 1–5 ou desl.</string>
+    <string name="auto_level_tile_seat_heat_passenger">Aquecimento do banco do passageiro: nível 1–5 ou desl.</string>
+    <string name="auto_level_tile_seat_vent_driver">Ventilação do banco do motorista: nível 1–5 ou desl.</string>
+    <string name="auto_level_tile_seat_vent_passenger">Ventilação do banco do passageiro: nível 1–5 ou desl.</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Aquecimento do banco traseiro esquerdo: nível 1–2 ou desl.</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Aquecimento do banco traseiro direito: nível 1–2 ou desl.</string>
     <string name="auto_level_tile_window_driver">Vidro do motorista: posição 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Vidro do passageiro: posição 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Vidro traseiro esquerdo: posição 0–100 %</string>
@@ -2098,6 +2098,7 @@
     <string name="tech_dtc_block_radar">radar dianteiro</string>
     <string name="tech_dtc_block_bms">bateria (BMS)</string>
     <string name="tech_dtc_block_charger">carregador (OBC)</string>
+    <string name="tech_dtc_block_ure">propulsão</string>
     <string name="tech_dtc_block_body">módulo da carroçaria 0x%1$X</string>
     <string name="tech_dtc_block_unknown">módulo 0x%1$X</string>
     <string name="tech_dtc_full_adas">Controlador de assistência ao condutor (ADAS)</string>
@@ -2107,7 +2108,7 @@
     <string name="tech_dtc_full_radar">Radar dianteiro</string>
     <string name="tech_dtc_full_bms">Gestão da bateria (BMS)</string>
     <string name="tech_dtc_full_charger">Carregador de bordo e DC-DC</string>
-    <string name="tech_dtc_full_ure">Unidade de propulsão URE</string>
+    <string name="tech_dtc_full_ure">Controlador de propulsão</string>
     <string name="tech_dtc_full_body">Módulo da carroçaria 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Módulo 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">Indisponível: o firmware deste carro não tem serviço de diagnóstico</string>

@@ -30,10 +30,10 @@ class LevelFamilyTextTest {
         val expected = mapOf(
             LevelFamily.TEMPERATURE to "Температура 16–33 °C",
             LevelFamily.FAN to "Вентилятор 1–7",
-            LevelFamily.SEAT_HEAT_DRIVER to "Подогрев сиденья водителя выкл, 1–5",
-            LevelFamily.SEAT_HEAT_PASSENGER to "Подогрев сиденья пассажира выкл, 1–5",
-            LevelFamily.SEAT_VENT_DRIVER to "Вентиляция сиденья водителя выкл, 1–5",
-            LevelFamily.SEAT_VENT_PASSENGER to "Вентиляция сиденья пассажира выкл, 1–5",
+            LevelFamily.SEAT_HEAT_DRIVER to "Подогрев сиденья водителя: уровень 1–5 или выкл",
+            LevelFamily.SEAT_HEAT_PASSENGER to "Подогрев сиденья пассажира: уровень 1–5 или выкл",
+            LevelFamily.SEAT_VENT_DRIVER to "Вентиляция сиденья водителя: уровень 1–5 или выкл",
+            LevelFamily.SEAT_VENT_PASSENGER to "Вентиляция сиденья пассажира: уровень 1–5 или выкл",
             LevelFamily.WINDOW_DRIVER to "Окно водителя: положение 0–100 %",
             LevelFamily.WINDOW_PASSENGER to "Окно пассажира: положение 0–100 %",
             LevelFamily.WINDOW_REAR_LEFT to "Заднее левое окно: положение 0–100 %",
@@ -119,14 +119,14 @@ class LevelFamilyTextTest {
 
     @Test fun `rear seat heat tiles read as the mock, ru`() {
         val lc = lc("ru")
-        assertEquals("Подогрев заднего левого сиденья выкл, 1–2", rearFamily("SEAT_HEAT_REAR_LEFT")?.let { lc.getString(it.tileRes) })
-        assertEquals("Подогрев заднего правого сиденья выкл, 1–2", rearFamily("SEAT_HEAT_REAR_RIGHT")?.let { lc.getString(it.tileRes) })
+        assertEquals("Подогрев заднего левого сиденья: уровень 1–2 или выкл", rearFamily("SEAT_HEAT_REAR_LEFT")?.let { lc.getString(it.tileRes) })
+        assertEquals("Подогрев заднего правого сиденья: уровень 1–2 или выкл", rearFamily("SEAT_HEAT_REAR_RIGHT")?.let { lc.getString(it.tileRes) })
     }
 
     @Test fun `rear tiles are hidden by default and shown only for the sides the car has`() {
         val lc = lc("ru")
-        val left = "Подогрев заднего левого сиденья выкл, 1–2"
-        val right = "Подогрев заднего правого сиденья выкл, 1–2"
+        val left = "Подогрев заднего левого сиденья: уровень 1–2 или выкл"
+        val right = "Подогрев заднего правого сиденья: уровень 1–2 или выкл"
         assertTrue(catalogEntries(lc).none { it.label == left || it.label == right })
         val one = catalogEntries(lc, setOf(RearSeat.LEFT))
         assertEquals(1, one.count { it.label == left })

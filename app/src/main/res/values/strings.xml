@@ -1300,12 +1300,12 @@
     <string name="auto_level_fridge_heat">Обогрев холодильника</string>
     <string name="auto_level_tile_temp">Температура 16–33 °C</string>
     <string name="auto_level_tile_fan">Вентилятор 1–7</string>
-    <string name="auto_level_tile_seat_heat_driver">Подогрев сиденья водителя выкл, 1–5</string>
-    <string name="auto_level_tile_seat_heat_passenger">Подогрев сиденья пассажира выкл, 1–5</string>
-    <string name="auto_level_tile_seat_vent_driver">Вентиляция сиденья водителя выкл, 1–5</string>
-    <string name="auto_level_tile_seat_vent_passenger">Вентиляция сиденья пассажира выкл, 1–5</string>
-    <string name="auto_level_tile_seat_heat_rear_left">Подогрев заднего левого сиденья выкл, 1–2</string>
-    <string name="auto_level_tile_seat_heat_rear_right">Подогрев заднего правого сиденья выкл, 1–2</string>
+    <string name="auto_level_tile_seat_heat_driver">Подогрев сиденья водителя: уровень 1–5 или выкл</string>
+    <string name="auto_level_tile_seat_heat_passenger">Подогрев сиденья пассажира: уровень 1–5 или выкл</string>
+    <string name="auto_level_tile_seat_vent_driver">Вентиляция сиденья водителя: уровень 1–5 или выкл</string>
+    <string name="auto_level_tile_seat_vent_passenger">Вентиляция сиденья пассажира: уровень 1–5 или выкл</string>
+    <string name="auto_level_tile_seat_heat_rear_left">Подогрев заднего левого сиденья: уровень 1–2 или выкл</string>
+    <string name="auto_level_tile_seat_heat_rear_right">Подогрев заднего правого сиденья: уровень 1–2 или выкл</string>
     <string name="auto_level_tile_window_driver">Окно водителя: положение 0–100 %</string>
     <string name="auto_level_tile_window_passenger">Окно пассажира: положение 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">Заднее левое окно: положение 0–100 %</string>
@@ -2269,6 +2269,7 @@
     <string name="tech_dtc_block_radar">передний радар</string>
     <string name="tech_dtc_block_bms">батарея (BMS)</string>
     <string name="tech_dtc_block_charger">зарядное (OBC)</string>
+    <string name="tech_dtc_block_ure">силовая установка</string>
     <string name="tech_dtc_block_body">кузовной блок 0x%1$X</string>
     <string name="tech_dtc_block_unknown">блок 0x%1$X</string>
     <string name="tech_dtc_full_adas">Контроллер ассистентов водителя (ADAS)</string>
@@ -2278,10 +2279,9 @@
     <string name="tech_dtc_full_radar">Передний радар</string>
     <string name="tech_dtc_full_bms">Блок управления батареей (BMS)</string>
     <string name="tech_dtc_full_charger">Бортовое зарядное и DC-DC</string>
-    <string name="tech_dtc_full_ure">Блок силовой установки URE</string>
+    <string name="tech_dtc_full_ure">Контроллер силовой установки</string>
     <string name="tech_dtc_full_body">Кузовной блок 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Блок 0x%1$X</string>
-    <string name="tech_dtc_block_ure" translatable="false">URE</string>
     <string name="tech_dtc_no_diag_service">Недоступно: в прошивке этой машины нет диагностического сервиса</string>
     <string name="tech_dtc_firmware_hint">Обновите магнитолу до прошивки 1.6.0 или новее</string>
     <string name="tech_dtc_erase_all">Стереть все</string>

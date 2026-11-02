@@ -1221,12 +1221,12 @@
     <string name="auto_level_fridge_heat">冰箱制热</string>
     <string name="auto_level_tile_temp">温度 16–33 °C</string>
     <string name="auto_level_tile_fan">风量 1–7</string>
-    <string name="auto_level_tile_seat_heat_driver">主驾座椅加热 关、1–5</string>
-    <string name="auto_level_tile_seat_heat_passenger">副驾座椅加热 关、1–5</string>
-    <string name="auto_level_tile_seat_vent_driver">主驾座椅通风 关、1–5</string>
-    <string name="auto_level_tile_seat_vent_passenger">副驾座椅通风 关、1–5</string>
-    <string name="auto_level_tile_seat_heat_rear_left">后左座椅加热 关、1–2</string>
-    <string name="auto_level_tile_seat_heat_rear_right">后右座椅加热 关、1–2</string>
+    <string name="auto_level_tile_seat_heat_driver">主驾座椅加热：1–5 档或关</string>
+    <string name="auto_level_tile_seat_heat_passenger">副驾座椅加热：1–5 档或关</string>
+    <string name="auto_level_tile_seat_vent_driver">主驾座椅通风：1–5 档或关</string>
+    <string name="auto_level_tile_seat_vent_passenger">副驾座椅通风：1–5 档或关</string>
+    <string name="auto_level_tile_seat_heat_rear_left">后左座椅加热：1–2 档或关</string>
+    <string name="auto_level_tile_seat_heat_rear_right">后右座椅加热：1–2 档或关</string>
     <string name="auto_level_tile_window_driver">主驾车窗：开度 0–100 %</string>
     <string name="auto_level_tile_window_passenger">副驾车窗：开度 0–100 %</string>
     <string name="auto_level_tile_window_rear_left">后左车窗：开度 0–100 %</string>
@@ -2216,6 +2216,7 @@
     <string name="tech_dtc_block_radar">前雷达</string>
     <string name="tech_dtc_block_bms">电池 (BMS)</string>
     <string name="tech_dtc_block_charger">车载充电机 (OBC)</string>
+    <string name="tech_dtc_block_ure">动力总成</string>
     <string name="tech_dtc_block_body">车身模块 0x%1$X</string>
     <string name="tech_dtc_block_unknown">模块 0x%1$X</string>
     <string name="tech_dtc_full_adas">驾驶辅助控制器 (ADAS)</string>
@@ -2225,7 +2226,7 @@
     <string name="tech_dtc_full_radar">前雷达</string>
     <string name="tech_dtc_full_bms">电池管理 (BMS)</string>
     <string name="tech_dtc_full_charger">车载充电机和 DC-DC</string>
-    <string name="tech_dtc_full_ure">动力总成单元 URE</string>
+    <string name="tech_dtc_full_ure">动力总成控制器</string>
     <string name="tech_dtc_full_body">车身模块 0x%1$X</string>
     <string name="tech_dtc_full_unknown">模块 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">不可用：此车固件没有诊断服务</string>
