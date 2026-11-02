@@ -11,6 +11,7 @@ import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.helper.dtc.DtcAddressResult
 import com.bydmate.app.helper.dtc.DtcEraseResult
 import com.bydmate.app.helper.dtc.DtcFixtures
 import com.bydmate.app.helper.dtc.DtcScanStatus
@@ -24,6 +25,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -307,25 +309,86 @@ class DtcScanRepositoryTest {
         }
     }
 
-    @Test fun `the status of an erase run is never saved as the scan`() = runTest {
+    private fun zeroReread(addr: Int) =
+        DtcAddressResult(addr, DtcWire.OUTCOME_OK, byteArrayOf(0x59, 0x01, 0xFF.toByte(), 0, 0, 0), null, null)
+
+    private fun eraseDone(vararg erase: DtcEraseResult) = DtcScanStatus(
+        DtcWire.STATE_DONE, erase.size, erase.size, "", DtcFixtures.preClearScan().take(2), erase.toList(), DtcWire.MODE_ERASE,
+    )
+
+    private fun confirmed(addr: Int, reread: DtcAddressResult?) =
+        DtcEraseResult(addr, DtcWire.CONFIRM_CONFIRMED, null, "", reread)
+
+    private fun rowAddrs(scan: DtcSavedScan) = DtcParser.summarize(scan.results).found.map { it.addr }
+
+    @Test fun `an erase run never replaces the whole saved scan`() = runTest {
         coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
         val r = repo(this)
         finishScan(r)
         val saved = r.last.value!!
-        val savedJson = prefs.getString("last", null)
         wall += 60_000
-        val eraseResults = listOf(DtcEraseResult(0x7E0, DtcWire.CONFIRM_CONFIRMED, null, "", null))
-        statuses.addLast(
-            DtcScanStatus(
-                DtcWire.STATE_DONE, 1, 1, "", DtcFixtures.preClearScan().take(2), eraseResults, DtcWire.MODE_ERASE,
-            ),
-        )
+        statuses.addLast(eraseDone(confirmed(0x7E0, zeroReread(0x7E0))))
         r.startErase(intArrayOf(0x7E0, 0x7E2))
         advanceTimeBy(5_000)
         runCurrent()
-        assertSame(saved, r.last.value)
-        assertEquals(savedJson, prefs.getString("last", null))
+        val now = r.last.value!!
+        assertEquals(saved.at, now.at)
+        assertEquals(saved.results.size, now.results.size)
+        saved.results.zip(now.results).filter { it.first.addr != 0x7E0 }.forEach { (before, after) ->
+            assertSame(before, after)
+        }
+        assertEquals(rowAddrs(saved).filter { it != 0x7E0 }, rowAddrs(now))
         assertEquals(1, r.erase.value?.results?.size)
+    }
+
+    @Test fun `blocks erased and re-read empty disappear from the saved scan and from the prefs`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        val r = repo(this)
+        finishScan(r)
+        val saved = r.last.value!!
+        wall += 60_000
+        statuses.addLast(eraseDone(confirmed(0x7E0, zeroReread(0x7E0)), confirmed(0x7E2, zeroReread(0x7E2))))
+        r.startErase(intArrayOf(0x7E0, 0x7E2))
+        advanceTimeBy(5_000)
+        runCurrent()
+        val expected = rowAddrs(saved).filter { it != 0x7E0 && it != 0x7E2 }
+        assertTrue(rowAddrs(saved).size > expected.size)
+        assertEquals(expected, rowAddrs(r.last.value!!))
+        assertEquals(saved.at, r.last.value!!.at)
+        val reloaded = repo(this).last.value!!
+        assertEquals(expected, rowAddrs(reloaded))
+        assertEquals(saved.at, reloaded.at)
+    }
+
+    @Test fun `after an erase another block can be erased from the same scan`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        val r = repo(this)
+        finishScan(r)
+        wall += 60_000
+        statuses.addLast(eraseDone(confirmed(0x7E0, zeroReread(0x7E0)), confirmed(0x7E2, zeroReread(0x7E2))))
+        r.startErase(intArrayOf(0x7E0, 0x7E2))
+        advanceTimeBy(5_000)
+        runCurrent()
+        wall += 60_000
+        r.startErase(intArrayOf(0x712))
+        runCurrent()
+        coVerify(exactly = 1) {
+            helper.dtcEraseStart(any(), any(), any(), any(), match { it.contentEquals(intArrayOf(0x712)) })
+        }
+        assertNotEquals(DtcScanError.ERASE_NEEDS_SCAN, r.erase.value?.error)
+    }
+
+    @Test fun `a block without a re-read keeps its rows in the saved scan`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        val r = repo(this)
+        finishScan(r)
+        val saved = r.last.value!!
+        wall += 60_000
+        statuses.addLast(eraseDone(confirmed(0x7E0, null), confirmed(0x7E2, zeroReread(0x7E2))))
+        r.startErase(intArrayOf(0x7E0, 0x7E2))
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(rowAddrs(saved).filter { it != 0x7E2 }, rowAddrs(r.last.value!!))
     }
 
     @Test fun `an erase start that gets no reply is a result unknown and marks the scan erased`() = runTest {
