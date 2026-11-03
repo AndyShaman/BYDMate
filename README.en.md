@@ -874,7 +874,7 @@ The **"Send to Telegram"** button in the window sends the codes with their descr
 ### Good to know
 
 - **Scanning only reads.** It changes nothing in the car, does not erase faults and does not change module settings. The app sends the modules read requests only.
-- **The app cannot erase faults.** The codes stay in the modules; a service erases them with its own equipment.
+- **Faults can be erased, the feature is experimental.** "Erase all" in the window or "erase ›" next to one module, on P only and only after a fresh scan. After the erase the app re-reads the modules and shows the result for each. A fault that is present right now comes back at once while its cause remains. You erase at your own risk; if you are going to a service, send the codes to Telegram first.
 - **This is not a repair or a diagnosis.** A code says what a module noticed, not what broke or what to replace. The service decides: show them the codes.
 - **Tested only on Leopard 3** (Fangchengbao Tai 3). On other BYD models the scan may not work and show "Not available on this car", fewer modules may answer, and module names will show as addresses. If you have another model, tell us in an [Issue](https://github.com/AndyShaman/BYDMate/issues) what the scan showed and attach a log recording.
 - **Only in P and only on a press.** We chose not to query the car's modules while driving.
