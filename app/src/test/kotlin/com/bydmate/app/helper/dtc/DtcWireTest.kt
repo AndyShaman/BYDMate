@@ -108,8 +108,8 @@ class DtcWireTest {
         assertThrows(IllegalArgumentException::class.java) { DtcWire.clearRequest(0x700) }
     }
 
-    @Test fun `W3 snapshotRequest builds the fixed snapshot frame`() {
-        assertArrayEquals(hex("0A 07 12 05 19 04 D1 66 87 FF"), DtcWire.snapshotRequest(0x712, 0xD16687))
+    @Test fun `W3 snapshotRequest declares all six UDS bytes`() {
+        assertArrayEquals(hex("0A 07 12 06 19 04 D1 66 87 FF"), DtcWire.snapshotRequest(0x712, 0xD16687))
     }
 
     @Test fun `W4 a one-byte 54 answer matches the clear request`() {

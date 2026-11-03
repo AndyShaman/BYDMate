@@ -128,7 +128,7 @@ object DtcWire {
     private const val RESULT_MANAGER_TIMEOUT = 4
     private const val RESULT_BUSY = 5
     private const val CLEAR_LEN = 0x04
-    private const val SNAPSHOT_LEN = 0x05
+    private const val SNAPSHOT_LEN = 0x06
     private const val ALL_GROUPS = 0xFF
     private const val SNAPSHOT_ALL_RECORDS = 0xFF
 
