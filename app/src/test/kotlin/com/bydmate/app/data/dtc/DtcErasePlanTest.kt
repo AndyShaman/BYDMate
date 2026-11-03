@@ -38,8 +38,11 @@ class DtcErasePlanTest {
         assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(scan(9 * 60_000L), 0x720, now))
     }
 
-    private fun rows(addr: Int, list: String) =
-        DtcAddressResult(addr, DtcWire.OUTCOME_OK, hex("5901FF010001"), hex(list), null)
+    private fun rows(addr: Int, list: String, id: String? = null) =
+        DtcAddressResult(addr, DtcWire.OUTCOME_OK, hex("5901FF010001"), hex(list), id?.let { hex(it) })
+
+    /** The URE identity both 0x7E0 and 0x7E2 answer on the Leopard 3 (log of 2026-11-02). */
+    private val ureId = "62F1944B30001202FD000102"
 
     private fun lockedScan(locked: Set<Int>) = DtcSavedScan(
         now - 60_000L, 3,
@@ -62,7 +65,7 @@ class DtcErasePlanTest {
         val ure = "5902FF D71187 08 D0FFCE 08"
         val saved = DtcSavedScan(
             now - 60_000L, 2,
-            listOf(rows(0x7E0, ure), rows(0x7E2, ure)),
+            listOf(rows(0x7E0, ure, ureId), rows(0x7E2, ure, ureId)),
             setOf(0x7E2),
         )
         assertArrayEquals(intArrayOf(), DtcErasePlan.eligible(saved, now))

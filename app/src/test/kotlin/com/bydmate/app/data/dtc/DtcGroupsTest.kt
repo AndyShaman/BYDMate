@@ -42,6 +42,18 @@ class DtcGroupsTest {
         assertEquals(listOf(listOf(0x7E0), listOf(0x7E2)), groups.map { it.addrs })
     }
 
+    @Test fun `two body blocks with identical rows stay two groups`() {
+        val rows = arrayOf(row("U1166-87"))
+        val groups = DtcParser.groups(at(0x720, DtcBlock.BODY, *rows) + at(0x747, DtcBlock.BODY, *rows))
+        assertEquals(listOf(listOf(0x720), listOf(0x747)), groups.map { it.addrs })
+    }
+
+    @Test fun `two unknown blocks with identical rows stay two groups`() {
+        val rows = arrayOf(row("U1166-87"))
+        val groups = DtcParser.groups(at(0x712, DtcBlock.UNKNOWN, *rows) + at(0x7F2, DtcBlock.UNKNOWN, *rows))
+        assertEquals(listOf(listOf(0x712), listOf(0x7F2)), groups.map { it.addrs })
+    }
+
     @Test fun `the summary counts the codes of a merged group once`() {
         val results = DtcFixtures.preClearScan()
         val perAddress = results.sumOf { r ->

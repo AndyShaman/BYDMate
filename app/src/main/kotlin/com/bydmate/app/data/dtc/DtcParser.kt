@@ -57,6 +57,7 @@ object DtcParser {
     private const val CONFIRMED = 0x08
 
     private val LETTERS = charArrayOf('P', 'C', 'B', 'U')
+    private val UNMERGED = setOf(DtcBlock.BODY, DtcBlock.UNKNOWN)
 
     private val FAULTS = mapOf(
         0x87 to DtcFault.NO_SIGNAL,
@@ -143,12 +144,16 @@ object DtcParser {
     /**
      * One group per address with rows, addresses with identical rows and block merged (addrs
      * ascending); groups in the order their first address appears in [found], which for
-     * [summarize]'s list is the current code first, then address order.
+     * [summarize]'s list is the current code first, then address order. Only a named block merges:
+     * BODY and UNKNOWN name a family or nothing, so two of them are two control units.
      */
     fun groups(found: List<DtcFound>): List<DtcBlockGroup> = found
         .groupBy { it.addr }
         .map { (addr, list) -> DtcBlockGroup(listOf(addr), list.first().block, list.map { it.row }) }
-        .groupBy { it.block.block to it.rows }
+        .groupBy { g ->
+            val unit = if (g.block.block in UNMERGED) g.addrs.single() else null
+            Triple(g.block.block, g.rows, unit)
+        }
         .values
         .map { same ->
             val addrs = same.map { it.addrs.single() }.sorted()
