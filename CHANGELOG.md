@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-11-03
+
 ### Новое
 - «Техника», «Диагностика»: коды ошибок теперь можно стереть. «Стереть все» в окне ошибок или «стереть ›» у одного блока, только на P. После стирания приложение само перечитывает блоки и пишет результат у каждого; ошибка, которая есть сейчас, вернётся сразу, пока её причина не ушла. Функция экспериментальная, стираете на свой риск; если собираетесь в сервис, сначала отправьте коды в Telegram. Проверено на Leopard 3, Han L и Song Plus EV.
 - Настройка «Не менять часовой пояс по сети» для машин у границы, где часовой пояс сам сбрасывается на пекинский (#379).
@@ -1493,7 +1495,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/AndyShaman/BYDMate/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/AndyShaman/BYDMate/compare/v4.0.3...v4.1.0
 [4.0.3]: https://github.com/AndyShaman/BYDMate/compare/v4.0.2...v4.0.3
 [4.0.2]: https://github.com/AndyShaman/BYDMate/compare/v4.0.1...v4.0.2
