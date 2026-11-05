@@ -671,3 +671,12 @@ utterance	expected	category	danger
 включи проекцию	UNRECOGNIZED	hud	
 выключи проекцию на приборке	UNRECOGNIZED	hud	
 худ	UNRECOGNIZED	hud	
+включи обдув в лицо	吹面	climate	
+обдув на лицо	吹面	climate	
+сделай обдув в лицо и ноги	吹面吹脚	climate	
+включи обдув в лицо и в ноги	吹面吹脚	climate	
+включи обдув в ноги	吹脚	climate	
+обдув на ноги	吹脚	climate	
+включи обдув в ноги и на стекло	吹脚除霜	climate	
+включи обдув на стекло	除霜	climate	
+обдув на лобовое стекло	除霜	climate	

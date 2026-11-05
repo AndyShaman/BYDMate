@@ -77,6 +77,12 @@ object RouteNavigatorUris {
     }
 
     /**
+     * Waze's own saved Home or Work, route started (#334). [shortcut] is "home" or "work", the
+     * two favorites Waze's public deep-link docs name.
+     */
+    fun wazeFavorite(shortcut: String): String = "waze://?favorite=$shortcut&navigate=yes"
+
+    /**
      * Yandex Maps' own dialect (#200), reached either per command with `app="maps"` or, since
      * the setting grew a third value, when [MAPS] is the chosen navigator — Maps is a separate
      * app from the Navigator and speaks `yandexmaps://`. The route form leaves the start point

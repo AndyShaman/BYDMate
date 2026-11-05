@@ -236,6 +236,15 @@ solo климат (в автомате|на авто) => 自动空调 + 空调�
 rule windshield: лобового [стекла]|переднего стекла|стекла
 <on> обдув <windshield> => 吹前挡
 <off> обдув <windshield> => 关闭吹前挡
+# Blow direction (ac_wind_mode 1..5). "на стекло" is the direction; "обдув стекла"/"лобового"
+# above is the windshield defrost button, a different fid.
+list airflow: (в|на) лицо => 吹面 ;
+    (в|на) лицо и [(в|на)] ноги => 吹面吹脚 ;
+    (в|на) ноги => 吹脚 ;
+    (в|на) ноги и [на] стекло => 吹脚除霜 ;
+    на (стекло|лобовое [стекло]) => 除霜
+(<on>|<set>) обдув {airflow} => {airflow}
+solo обдув {airflow} => {airflow}
 
 range temp: 16..33
 rule deg: градус|градуса|градусов

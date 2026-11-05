@@ -6,7 +6,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
@@ -108,13 +106,12 @@ import kotlin.math.roundToInt
 private const val DASH = "—"
 
 /**
- * «Техника» — the full-screen live panel behind the battery card on the Dashboard.
+ * «Техника» — the bottom bar tab with the live panel; the Dashboard battery card switches to it too.
  * Replaces the old battery-health dialog: same numbers plus the technical readings the
  * autoservice batch now carries. Cards without a single live value are not drawn.
  */
 @Composable
 fun TechPanelScreen(
-    onBack: () -> Unit,
     viewModel: TechPanelViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,7 +127,7 @@ fun TechPanelScreen(
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        Header(online = state.autoserviceOnline, onBack = onBack)
+        Header(online = state.autoserviceOnline)
 
         if (!state.hasAnyCard) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -318,26 +315,16 @@ private fun TechCardContent(
 }
 
 @Composable
-private fun Header(online: Boolean?, onBack: () -> Unit) {
+private fun Header(online: Boolean?) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .border(1.5.dp, TextMuted, CircleShape)
-                .clickable { onBack() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text("‹", color = TextSecondary, fontSize = 16.sp)
-        }
         Text(
             stringResource(R.string.tech_title),
             color = AccentGreen,
             fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 14.dp)
+            fontWeight = FontWeight.Bold
         )
         Box(modifier = Modifier.weight(1f))
         Text(

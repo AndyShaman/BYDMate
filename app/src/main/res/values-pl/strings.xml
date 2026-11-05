@@ -388,6 +388,38 @@
     <string name="trip_detail_cost_per_100_label">Na 100 km</string>
     <string name="trip_detail_soc_label">Bateria</string>
     <string name="trip_detail_ext_temp_label">Na zewnątrz</string>
+    <string name="trip_scrub_time">Czas</string>
+    <string name="trip_scrub_from_start">Od startu</string>
+    <string name="trip_scrub_speed">Prędkość</string>
+    <string name="trip_scrub_power">Moc</string>
+    <string name="trip_scrub_consumption_here">Zużycie tutaj</string>
+    <string name="trip_scrub_consumption">Zużycie</string>
+    <string name="trip_scrub_altitude">Wysokość</string>
+    <string name="trip_scrub_slow">wolno</string>
+    <string name="trip_scrub_range_distance">Odcinek</string>
+    <string name="trip_scrub_range_avg">Średnia</string>
+    <string name="trip_scrub_range_energy">Energia</string>
+    <string name="trip_scrub_range_share">Udział w trasie</string>
+    <string name="trip_scrub_unit_km">km</string>
+    <string name="trip_scrub_unit_kmh">km/h</string>
+    <string name="trip_scrub_unit_kw">kW</string>
+    <string name="trip_scrub_unit_kwh">kWh</string>
+    <string name="trip_scrub_unit_per100">/100</string>
+    <string name="trip_scrub_unit_m">m</string>
+    <string name="trip_scrub_unit_min">min</string>
+    <string name="trip_scrub_unit_percent" formatted="false">%</string>
+    <string name="trip_scrub_play">Odtwórz</string>
+    <string name="trip_scrub_pause">Pauza</string>
+    <string name="trip_scrub_range_toggle">Odcinek</string>
+    <string name="trip_scrub_no_power_hint">Zużycie na trasie tylko dla nowych przejazdów</string>
+    <string name="trip_scrub_legend_speed_min">0</string>
+    <string name="trip_scrub_legend_speed_max">140+ km/h</string>
+    <string name="trip_scrub_legend_regen">rekup.</string>
+    <string name="trip_scrub_legend_consumption_max">60 kWh/100</string>
+    <string name="trip_scrub_chart_speed">Prędkość, km/h</string>
+    <string name="trip_scrub_chart_power">Moc, kW · poniżej zera rekuperacja</string>
+    <string name="trip_scrub_map_max_speed">%1$d km/h</string>
+    <string name="trip_scrub_map_max_regen">−%1$d kW</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">Wszystkie</string>

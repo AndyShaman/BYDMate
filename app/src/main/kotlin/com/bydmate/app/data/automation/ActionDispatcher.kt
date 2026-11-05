@@ -1312,7 +1312,12 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      */
     fun autoGoSupported(payload: JSONObject): Boolean =
         !payload.optBoolean("show", false) && payload.optString("query").isBlank() && !willOpenMaps(payload) &&
-            (payload.optString("shortcut").isNotBlank() || resolveNavigator().first == RouteNavigatorUris.YANDEX)
+            when (resolveNavigator().first) {
+                RouteNavigatorUris.YANDEX -> true
+                // Waze's favorite link starts the route itself; other apps' Home/Work go to the Navigator.
+                RouteNavigatorUris.WAZE -> false
+                else -> payload.optString("shortcut").isNotBlank()
+            }
 
     /** Whether [navigate] will press «Поехали» itself for [payload]: asked for, and possible here. */
     fun autoGoWillRun(payload: JSONObject): Boolean = autoGoRequested(payload) && autoGoSupported(payload)
@@ -1383,6 +1388,14 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
                 "work" -> "ru.yandex.yandexmaps.action.ROUTE_TO_WORK_SHORTCUT"
                 else -> return DispatchResult(false, appStrings.get(R.string.dispatch_shortcut_unknown, shortcut))
             }
+            // #334: Waze has its own saved Home/Work; resolveNavigator already fell back to
+            // Yandex when Waze is not installed.
+            if (navigator == RouteNavigatorUris.WAZE) {
+                return startNavigate(
+                    navigator, RouteNavigatorUris.MODE_ROUTE, RouteNavigatorUris.wazeFavorite(shortcut),
+                    "navigate_shortcut:$shortcut", fallbackReason,
+                )
+            }
             val intent = Intent(intentAction)
                 .setPackage(NAVI_PACKAGE)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1437,8 +1450,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      * action. Mirrors [sendNavigateIntent]'s routing exactly, like [willOpenMaps].
      */
     fun willOpenPinned(payload: JSONObject): String? {
-        if (isMapsRequest(payload) || payload.optString("shortcut").isNotBlank()) return null
+        if (isMapsRequest(payload)) return null
         val navigator = resolveNavigator().first
+        if (payload.optString("shortcut").isNotBlank() && navigator != RouteNavigatorUris.WAZE) return null
         return if (navigator == RouteNavigatorUris.DGIS || navigator == RouteNavigatorUris.WAZE) {
             RouteNavigatorUris.packageOf(navigator)
         } else null

@@ -413,6 +413,15 @@ object AppModule {
         }
     }
 
+    /** Battery power and the cumulative battery-energy counter on every trip point (trip window scrub). */
+    internal val MIGRATION_24_25 = object : Migration(24, 25) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE trip_points ADD COLUMN battery_power_w REAL")
+            db.execSQL("ALTER TABLE trip_points ADD COLUMN battery_energy_wh REAL")
+            db.execSQL("ALTER TABLE trip_points ADD COLUMN energy_run INTEGER")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -428,7 +437,7 @@ object AppModule {
 
     /** Every production migration: the app database and a restored archive of an older schema share them. */
     fun withMigrations(builder: RoomDatabase.Builder<AppDatabase>): RoomDatabase.Builder<AppDatabase> =
-        builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
+        builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25)
 
     @Provides fun provideTripDao(db: AppDatabase): TripDao = db.tripDao()
     @Provides fun provideTripPointDao(db: AppDatabase): TripPointDao = db.tripPointDao()
@@ -796,6 +805,8 @@ object AppModule {
         // Alternative to our freeform split for firmwares that gate the freeform flag (#139).
         // Only reached while the native-mode switch is on; off for the whole fleet by default.
         nativeLauncher = com.bydmate.app.split.NativeSplitLauncher(ctx, journal),
+        // #385: below Android 12 (DiLink 3/4) every start answers "unavailable on this firmware".
+        platformSdk = android.os.Build.VERSION.SDK_INT,
         // The firmware's own 3:7 split (OTA V1.6). isApplicable() is false on every other
         // firmware, so this is inert for the rest of the fleet.
         split37 = com.bydmate.app.split.Split37Engine(

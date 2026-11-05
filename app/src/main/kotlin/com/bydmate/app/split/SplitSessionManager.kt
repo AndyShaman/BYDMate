@@ -46,6 +46,9 @@ private const val WINDOWING_FULLSCREEN = 1
 // so seeing one means the user started the head unit's own split over our session (W6-F3).
 private const val WINDOWING_SPLIT_PRIMARY = 3
 private const val WINDOWING_SPLIT_SECONDARY = 4
+
+/** Android 12, DiLink 5.0: the oldest platform any split path has been seen working on (#385). */
+private const val MIN_SPLIT_SDK = 31
 private val NATIVE_SPLIT_MODES = setOf(WINDOWING_SPLIT_PRIMARY, WINDOWING_SPLIT_SECONDARY)
 private const val DISPLAY_SPLIT = 0
 
@@ -245,6 +248,7 @@ private suspend fun HelperClient.setTaskBounds(taskId: Int, b: SplitBounds) =
  *                         which no-ops unless direct projection is active on that display.
  *                         Null (default) is a no-op — keeps existing tests unchanged.
  */
+@Suppress("LongParameterList") // optional hooks with no-op defaults keep the tests unchanged
 class SplitSessionManager(
     private val helper: HelperClient,
     private val prefs: SplitPreferences,
@@ -306,6 +310,12 @@ class SplitSessionManager(
      * means no engine is wired — the whole fleet takes the freeform path.
      */
     private val split37: Split37Engine? = null,
+    /**
+     * Android API level of the head unit (#385). Below [MIN_SPLIT_SDK] (DiLink 3 and 4) no split
+     * path has ever worked, so [start] answers [SplitStartResult.FREEFORM_UNAVAILABLE] at once.
+     * The default keeps every start attempted, as in existing tests; production passes the real level.
+     */
+    private val platformSdk: Int = Int.MAX_VALUE,
 ) {
     /** activityType for PANES on this firmware — see [PaneTypePolicy]. */
     private val paneType: Int = paneTypePolicy.paneType
@@ -539,7 +549,7 @@ class SplitSessionManager(
      * True when this firmware is proven to ignore the freeform flag (#139) — callers use it to
      * pick the hint text, since telling the user to reboot the car is wrong on such a head unit.
      */
-    fun freeformUnsupported(): Boolean = verdict?.unsupported() == true
+    fun freeformUnsupported(): Boolean = platformSdk < MIN_SPLIT_SDK || verdict?.unsupported() == true
 
     /**
      * True on "platformized" firmware (OTA V1.6), where the panes belong to the vehicle and the
@@ -635,6 +645,12 @@ class SplitSessionManager(
         scope.async {
             mutex.withLock {
                 if (!prefs.isFeatureEnabled()) return@withLock SplitStartResult.DISABLED
+                // #385: DiLink 3/4 (Android 10) — neither our freeform panes nor the firmware toggle
+                // split the screen there, and the native path used to report success regardless.
+                if (platformSdk < MIN_SPLIT_SDK) {
+                    journal.append("start ${pair.label()} unavailable: android sdk=$platformSdk")
+                    return@withLock SplitStartResult.FREEFORM_UNAVAILABLE
+                }
                 // Platformized firmware (OTA V1.6) has a real 3:7 split of its own and refuses our
                 // freeform layout, so the engine owns the whole session there. A null answer means
                 // the engine could not enter (outdated daemon, no split surface) — the paths below
