@@ -34,14 +34,17 @@ data class ScheduleSpec(
             if (from == null || to == null) {
                 null
             } else {
+                // A day that is not a number 1..7 makes the whole spec invalid: dropping it
+                // would turn "days":[0] into "every day".
                 val days = mutableSetOf<Int>()
+                var badDay = false
                 obj.optJSONArray("days")?.let { arr ->
                     for (i in 0 until arr.length()) {
-                        val d = arr.optInt(i, -1)
-                        if (d in 1..7) days.add(d)
+                        val d = arr.opt(i) as? Int
+                        if (d != null && d in 1..7) days.add(d) else badDay = true
                     }
                 }
-                ScheduleSpec(from, to, days)
+                if (badDay) null else ScheduleSpec(from, to, days)
             }
         } catch (e: Exception) {
             null
@@ -49,10 +52,12 @@ data class ScheduleSpec(
     }
 }
 
-/** "HH:mm" → minutes since midnight (0..1439), or null if malformed/out of range. */
+/** "HH:mm" (or "H:mm") → minutes since midnight (0..1439), or null if malformed/out of range. */
 internal fun hhmmToMinute(s: String): Int? {
     val parts = s.split(":")
     if (parts.size != 2) return null
+    // Digits only: toIntOrNull alone would accept "+7:30" and "-0:30".
+    if (parts.any { p -> p.isEmpty() || !p.all { it in '0'..'9' } }) return null
     val h = parts[0].toIntOrNull() ?: return null
     val m = parts[1].toIntOrNull() ?: return null
     if (h !in 0..23 || m !in 0..59) return null

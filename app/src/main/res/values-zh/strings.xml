@@ -1871,6 +1871,9 @@
     <string name="automation_import_pick_title">Download 中的自动化文件</string>
     <string name="automation_import_pick_empty">Download 文件夹中没有 bydmate_rule_*.json 文件</string>
     <string name="automation_import_invalid">无法读取文件：这不是 BYDMate 自动化</string>
+    <string name="automation_import_bad_condition">文件中的条件 %1$d 写法有误，无法添加此自动化</string>
+    <string name="automation_import_bad_action">文件中的动作 %1$d 写法有误，无法添加此自动化</string>
+    <string name="automation_import_too_many_actions">文件中的动作超过 %1$d 个，无法添加此自动化</string>
     <string name="automation_import_newer_version">该自动化来自更新的版本，请更新应用</string>
     <string name="automation_import_power_off_only">该自动化只能在车辆熄火时触发，此条件已不再提供</string>
     <string name="automation_import_preview_title">检查自动化</string>

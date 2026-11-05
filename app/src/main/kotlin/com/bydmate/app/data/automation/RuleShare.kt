@@ -591,11 +591,17 @@ object RuleShareFiles {
         return out.toString(Charsets.UTF_8.name())
     }
 
-    /** Share files in [dir], newest first (same listing approach as the backup restore picker). */
-    fun listRuleFiles(dir: File): List<File> =
-        (dir.listFiles() ?: emptyArray())
+    /**
+     * Share files in [dir] and its direct subfolders (Download/Telegram and the like; hidden
+     * folders skipped, no deeper), newest first.
+     */
+    fun listRuleFiles(dir: File): List<File> {
+        val subdirs = (dir.listFiles() ?: emptyArray()).filter { it.isDirectory && !it.name.startsWith(".") }
+        return (listOf(dir) + subdirs)
+            .flatMap { (it.listFiles() ?: emptyArray()).asList() }
             .filter { it.isFile && it.name.startsWith(FILE_PREFIX) && it.name.endsWith(FILE_SUFFIX) }
             .sortedByDescending { it.lastModified() }
+    }
 }
 
 private fun payloadOf(payload: String?): JSONObject =

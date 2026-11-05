@@ -1753,6 +1753,9 @@
     <string name="automation_import_pick_title">Arquivos de automação em Download</string>
     <string name="automation_import_pick_empty">Nenhum arquivo bydmate_rule_*.json na pasta Download</string>
     <string name="automation_import_invalid">Não foi possível ler o arquivo: não é uma automação do BYDMate</string>
+    <string name="automation_import_bad_condition">A condição %1$d no arquivo está escrita incorretamente, esta automação não pode ser adicionada</string>
+    <string name="automation_import_bad_action">A ação %1$d no arquivo está escrita incorretamente, esta automação não pode ser adicionada</string>
+    <string name="automation_import_too_many_actions">O arquivo tem mais de %1$d ações, esta automação não pode ser adicionada</string>
     <string name="automation_import_newer_version">Automação de uma versão mais nova, atualize o app</string>
     <string name="automation_import_power_off_only">Esta automação só podia disparar com o carro desligado, e essa condição não existe mais</string>
     <string name="automation_import_preview_title">Confira a automação</string>
