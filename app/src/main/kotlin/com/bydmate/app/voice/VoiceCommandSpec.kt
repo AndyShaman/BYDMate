@@ -59,6 +59,12 @@ object VoiceCatalog {
         VoiceCommandSpec(ON, AC_RECIRC_OUTER) { "外循环" },
         VoiceCommandSpec(ON, DEFROST_FRONT) { "吹前挡" },
         VoiceCommandSpec(OFF, DEFROST_FRONT) { "关闭吹前挡" },
+        // Climate — blow direction (ac_wind_mode 1..5)
+        VoiceCommandSpec(SET, AC_WIND_FACE) { "吹面" },
+        VoiceCommandSpec(SET, AC_WIND_FACE_FEET) { "吹面吹脚" },
+        VoiceCommandSpec(SET, AC_WIND_FEET) { "吹脚" },
+        VoiceCommandSpec(SET, AC_WIND_FEET_WINDSHIELD) { "吹脚除霜" },
+        VoiceCommandSpec(SET, AC_WIND_WINDSHIELD) { "除霜" },
         // Seats — heat
         VoiceCommandSpec(HEAT_1, SEAT_DRIVER_HEAT) { "主驾座椅加热1档" },
         VoiceCommandSpec(HEAT_2, SEAT_DRIVER_HEAT) { "主驾座椅加热2档" },
