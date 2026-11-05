@@ -14,9 +14,9 @@ import dagger.assisted.AssistedInject
  * Daily worker that thins old data points to save disk space.
  *
  * Thinning tiers:
- * - < 7 days: full resolution (every 3 sec)
- * - 7-30 days: ~1 point per 15 sec
- * - > 30 days: ~1 point per 60 sec
+ * - trip points: full resolution for 30 days, then ~1 point per 5 sec (the trip window
+ *   cursor needs dense points; energy stays exact through the cumulative counter)
+ * - charge points: full resolution for 7 days, ~1 per 15 sec up to 30 days, then ~1 per 60 sec
  */
 @HiltWorker
 class DataThinningWorker @AssistedInject constructor(
@@ -33,6 +33,15 @@ class DataThinningWorker @AssistedInject constructor(
         private const val DAYS_30_MS = 30L * 24 * 60 * 60 * 1000
         private const val INTERVAL_15S = 15_000L
         private const val INTERVAL_60S = 60_000L
+        private const val INTERVAL_5S = 5_000L
+
+        internal suspend fun thin(tripPointDao: TripPointDao, chargePointDao: ChargePointDao, now: Long) {
+            val cutoff30 = now - DAYS_30_MS
+            val cutoff7 = now - DAYS_7_MS
+            tripPointDao.thinOldPoints(cutoff30, INTERVAL_5S)
+            chargePointDao.thinOldPoints(cutoff7, INTERVAL_15S)
+            chargePointDao.thinOldPoints(cutoff30, INTERVAL_60S)
+        }
     }
 
     override suspend fun doWork(): Result {
@@ -41,15 +50,7 @@ class DataThinningWorker @AssistedInject constructor(
             val tripsBefore = tripPointDao.getCount()
             val chargesBefore = chargePointDao.getCount()
 
-            // Tier 1: 7-30 days old → keep 1 per 15 sec
-            val cutoff30 = now - DAYS_30_MS
-            val cutoff7 = now - DAYS_7_MS
-            tripPointDao.thinOldPoints(cutoff7, INTERVAL_15S)
-            chargePointDao.thinOldPoints(cutoff7, INTERVAL_15S)
-
-            // Tier 2: > 30 days old → keep 1 per 60 sec
-            tripPointDao.thinOldPoints(cutoff30, INTERVAL_60S)
-            chargePointDao.thinOldPoints(cutoff30, INTERVAL_60S)
+            thin(tripPointDao, chargePointDao, now)
 
             val tripsAfter = tripPointDao.getCount()
             val chargesAfter = chargePointDao.getCount()
