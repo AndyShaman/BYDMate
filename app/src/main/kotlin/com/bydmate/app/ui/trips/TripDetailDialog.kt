@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -97,6 +98,7 @@ import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
+import kotlin.math.abs
 
 @Composable
 fun TripDetailDialog(
@@ -158,6 +160,9 @@ fun TripDetailDialog(
                                 if (points.size >= 2) {
                                     TripScrubPane(points = points, tileSource = tileSource)
                                 } else {
+                                    LaunchedEffect(points.size) {
+                                        Log.d(SCRUB_TAG, "open: points=${points.size} (no track)")
+                                    }
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -894,17 +899,30 @@ private fun ScrubChart(data: ScrubData, state: ScrubState, modifier: Modifier = 
                     val hi = maxOf(0.0, known.maxOrNull() ?: 0.0)
                     fun y(p: Double) = (top + (hi - p) / (hi - lo) * (h - top - bottom)).toFloat()
                     zeroY = y(0.0)
-                    area.moveTo(x(0), zeroY)
-                    area2.moveTo(x(0), zeroY)
-                    data.powerKw.forEachIndexed { i, p ->
-                        val kw = p ?: 0.0
+                    // Unknown power is a gap: each known stretch is its own shape down to zero.
+                    var last = -1
+                    fun closeStretch() {
+                        if (last < 0) return
+                        area.lineTo(x(last), zeroY)
+                        area.close()
+                        area2.lineTo(x(last), zeroY)
+                        area2.close()
+                        last = -1
+                    }
+                    data.powerKw.forEachIndexed { i, kw ->
+                        if (kw == null) {
+                            closeStretch()
+                            return@forEachIndexed
+                        }
+                        if (last < 0) {
+                            area.moveTo(x(i), zeroY)
+                            area2.moveTo(x(i), zeroY)
+                        }
                         area.lineTo(x(i), y(maxOf(0.0, kw)))
                         area2.lineTo(x(i), y(minOf(0.0, kw)))
+                        last = i
                     }
-                    area.lineTo(x(points.lastIndex), zeroY)
-                    area.close()
-                    area2.lineTo(x(points.lastIndex), zeroY)
-                    area2.close()
+                    closeStretch()
                     data.maxRegenIndex?.let { i -> data.powerKw[i]?.let { dot = Offset(x(i), y(it)) } }
                 }
                 val lineWidth = 2.5.dp.toPx()
@@ -1008,12 +1026,13 @@ private fun TripRouteMap(
             )
         }
     }
-    val overlay = remember(mapView) { TripRouteOverlay(context.resources.displayMetrics.density) }
+    val fontScale = LocalDensity.current.fontScale
+    val overlay = remember(mapView) { TripRouteOverlay(context.resources.displayMetrics.density, fontScale) }
     val speedLabel = data.maxSpeedIndex?.let {
         stringResource(R.string.trip_scrub_map_max_speed, Math.round(points[it].speedKmh ?: 0.0))
     }
     val regenLabel = data.maxRegenIndex?.takeIf { data.hasPower }?.let { i ->
-        data.powerKw[i]?.let { stringResource(R.string.trip_scrub_map_max_regen, Math.round(-it)) }
+        points[i].batteryPowerW?.let { stringResource(R.string.trip_scrub_map_max_regen, Math.round(abs(it) / 1000.0)) }
     }
 
     DisposableEffect(mapView) {
@@ -1073,7 +1092,7 @@ private fun TripRouteMap(
  * max speed / max regen markers and the cursor arrow. Much cheaper than two Polyline
  * overlays per segment; drags stay with the map (pan/zoom), only a tap is taken.
  */
-private class TripRouteOverlay(private val density: Float) : Overlay() {
+private class TripRouteOverlay(private val density: Float, fontScale: Float) : Overlay() {
     var geoPoints: List<GeoPoint> = emptyList()
     var colors: IntArray = IntArray(0)
     var cursor = 0
@@ -1104,13 +1123,13 @@ private class TripRouteOverlay(private val density: Float) : Overlay() {
     }
     private val pinTextPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         color = NavyDark.toArgb()
-        textSize = 12f * density
+        textSize = 12f * density * fontScale
         textAlign = android.graphics.Paint.Align.CENTER
         typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
     private val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         color = TextPrimary.toArgb()
-        textSize = 12f * density
+        textSize = 12f * density * fontScale
         textAlign = android.graphics.Paint.Align.CENTER
         typeface = android.graphics.Typeface.MONOSPACE
     }

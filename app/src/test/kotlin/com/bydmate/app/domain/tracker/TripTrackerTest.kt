@@ -13,6 +13,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -183,7 +185,7 @@ class TripTrackerTest {
     private suspend fun driveWithPower(
         tracker: TripTracker,
         pauseBeforeTick: Int? = null,
-        powerAt: (Int) -> Double = { 3_600.0 },
+        powerAt: (Int) -> Double? = { 3_600.0 },
     ): List<TripPointEntity> {
         val data = diParsData(speed = 20).copy(batteryPowerW = 3_600.0)
         nowMs = 1_000L
@@ -231,5 +233,23 @@ class TripTrackerTest {
         val points = driveWithPower(tracker()) { i -> if (i == 10) -7_200.0 else 3_600.0 }
         assertEquals(1.0, points[10].batteryEnergyWh!! - points[9].batteryEnergyWh!!, 1e-9)
         assertEquals(-2.0, points[11].batteryEnergyWh!! - points[10].batteryEnergyWh!!, 1e-9)
+    }
+
+    // A break in the integration must survive thinning: the points on both sides of it belong to
+    // different runs, so TripScrub.energyKwh across the break is unknown instead of too small.
+    @Test
+    fun `a pause over ten seconds starts a new energy run`() = runTest {
+        val points = driveWithPower(tracker(), pauseBeforeTick = 10)
+        assertNotEquals(points[9].energyRun, points[10].energyRun)
+        assertEquals(points[10].energyRun, points[11].energyRun)
+        assertEquals(points[0].energyRun, points[9].energyRun)
+    }
+
+    @Test
+    fun `a tick without battery power starts a new energy run`() = runTest {
+        val points = driveWithPower(tracker()) { i -> if (i == 10) null else 3_600.0 }
+        assertNull(points[10].energyRun)
+        assertNotEquals(points[9].energyRun, points[11].energyRun)
+        assertEquals(points[11].energyRun, points[12].energyRun)
     }
 }

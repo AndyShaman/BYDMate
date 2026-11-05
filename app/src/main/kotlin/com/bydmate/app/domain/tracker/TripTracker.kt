@@ -40,7 +40,10 @@ class TripTracker @Inject constructor(
 
     // Net battery energy of this run, Wh, integrated on every tick in any state so that the
     // difference of two stored points stays exact after old points are thinned out.
-    private val energyRun: Long = clock()
+    // A new run starts after every break in the integration, so a difference across a break
+    // (which thinning could otherwise hide) is never read as a complete energy.
+    private var energyRun: Long = clock()
+    private var energyChainBroken = false
     private var batteryEnergyWh = 0.0
     private var prevPowerW: Double? = null
     private var prevPowerTs = 0L
@@ -112,12 +115,23 @@ class TripTracker @Inject constructor(
         }
     }
 
-    /** Left rectangle with the previous tick's power; a tick without power breaks the chain. */
+    /**
+     * Left rectangle with the previous tick's power. A tick without power, or a gap over
+     * [MAX_ENERGY_STEP_MS], breaks the chain; the next powered tick opens a new [energyRun].
+     */
     private fun integrateEnergy(powerW: Double?, now: Long) {
         val prev = prevPowerW
-        if (powerW != null && prev != null) {
+        if (prev != null) {
             val dt = now - prevPowerTs
-            if (dt in 1..MAX_ENERGY_STEP_MS) batteryEnergyWh += prev * dt / 3_600_000.0
+            if (powerW != null && dt in 1..MAX_ENERGY_STEP_MS) {
+                batteryEnergyWh += prev * dt / 3_600_000.0
+            } else {
+                energyChainBroken = true
+            }
+        }
+        if (powerW != null && energyChainBroken) {
+            energyRun = now
+            energyChainBroken = false
         }
         prevPowerW = powerW
         prevPowerTs = now

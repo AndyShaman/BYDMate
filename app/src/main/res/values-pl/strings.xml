@@ -411,7 +411,7 @@
     <string name="trip_scrub_play">Odtwórz</string>
     <string name="trip_scrub_pause">Pauza</string>
     <string name="trip_scrub_range_toggle">Odcinek</string>
-    <string name="trip_scrub_no_power_hint">Zużycie na trasie — tylko dla nowych przejazdów</string>
+    <string name="trip_scrub_no_power_hint">Zużycie na trasie tylko dla nowych przejazdów</string>
     <string name="trip_scrub_legend_speed_min">0</string>
     <string name="trip_scrub_legend_speed_max">140+ km/h</string>
     <string name="trip_scrub_legend_regen">rekup.</string>

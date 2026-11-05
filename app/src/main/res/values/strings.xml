@@ -411,7 +411,7 @@
     <string name="trip_scrub_play">Проиграть</string>
     <string name="trip_scrub_pause">Пауза</string>
     <string name="trip_scrub_range_toggle">Участок</string>
-    <string name="trip_scrub_no_power_hint">Расход по треку — только для новых поездок</string>
+    <string name="trip_scrub_no_power_hint">Расход по треку есть только у новых поездок</string>
     <string name="trip_scrub_legend_speed_min">0</string>
     <string name="trip_scrub_legend_speed_max">140+ км/ч</string>
     <string name="trip_scrub_legend_regen">рекуп.</string>
