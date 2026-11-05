@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -87,6 +88,7 @@ private val NavBarItemChrome = 40.dp
 
 enum class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
     Dashboard("dashboard", R.string.nav_tab_dashboard, Icons.Outlined.Home),
+    Tech("tech_panel", R.string.tech_title, Icons.Outlined.Speed),
     Trips("trips", R.string.nav_tab_trips, Icons.Outlined.DirectionsCar),
     Charges("charges", R.string.nav_tab_charges, Icons.Outlined.BatteryChargingFull),
     Automation("automation", R.string.nav_tab_automation, Icons.Outlined.Bolt),
@@ -287,8 +289,18 @@ fun AppNavigation(
                         restoreState = true
                     }
                 }
+                // The battery card opens the Tech tab, the same switch as its bottom bar item.
+                val openTechTab = {
+                    navController.navigate(Screen.Tech.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
                 DashboardScreen(
-                    onOpenTechPanel = { navController.navigate("tech_panel") },
+                    onOpenTechPanel = openTechTab,
                     onOpenSettings = openSettingsTab,
                     // Settings first: the periods screen takes its view model from that entry,
                     // and Back lands on Settings.
@@ -317,8 +329,8 @@ fun AppNavigation(
             composable("trip_temperature") {
                 com.bydmate.app.ui.trips.TripTemperatureScreen(onBack = { navController.popBackStack() })
             }
-            composable("tech_panel") {
-                com.bydmate.app.ui.tech.TechPanelScreen(onBack = { navController.popBackStack() })
+            composable(Screen.Tech.route) {
+                com.bydmate.app.ui.tech.TechPanelScreen()
             }
             composable("tariff_periods") { entry ->
                 // The settings entry's own view model: the periods list, the recalc status and
