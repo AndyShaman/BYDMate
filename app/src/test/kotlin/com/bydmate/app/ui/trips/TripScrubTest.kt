@@ -12,6 +12,7 @@ import org.junit.Test
 class TripScrubTest {
 
     /** Point on a meridian: `metres` north of lat 53.0, so distance is easy to reason about. */
+    @Suppress("LongParameterList") // one optional field per point column the tests vary
     private fun pt(
         metres: Double = 0.0,
         ts: Long = 0L,

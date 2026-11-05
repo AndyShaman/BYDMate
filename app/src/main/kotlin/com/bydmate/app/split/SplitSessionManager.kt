@@ -248,6 +248,7 @@ private suspend fun HelperClient.setTaskBounds(taskId: Int, b: SplitBounds) =
  *                         which no-ops unless direct projection is active on that display.
  *                         Null (default) is a no-op — keeps existing tests unchanged.
  */
+@Suppress("LongParameterList") // optional hooks with no-op defaults keep the tests unchanged
 class SplitSessionManager(
     private val helper: HelperClient,
     private val prefs: SplitPreferences,

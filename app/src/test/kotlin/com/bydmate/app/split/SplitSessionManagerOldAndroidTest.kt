@@ -22,14 +22,14 @@ private class OldAndroidFakePreferences(private val native: Boolean) : SplitPref
     override fun saveLastPair(pair: SplitPair) { saved = pair }
     override fun clearLastPair() { saved = null }
     override fun isFeatureEnabled(): Boolean = true
-    override fun setFeatureEnabled(enabled: Boolean) {}
+    override fun setFeatureEnabled(enabled: Boolean) { /* not used by these tests */ }
     override fun isNativeModeEnabled(): Boolean = native
 }
 
 private class OldAndroidFakeBackdrop : SplitBackdrop {
     var showCalls = 0
     override suspend fun show(): Boolean { showCalls++; return true }
-    override fun hide() {}
+    override fun hide() { /* not used by these tests */ }
 }
 
 /**
