@@ -113,6 +113,17 @@ class ScheduleTriggerTest {
     }
 
     @Test
+    fun `days written as number strings still parse`() {
+        assertEquals(setOf(1, 2), ScheduleSpec.fromJson("""{"from":"08:00","to":"10:00","days":["1","2"]}""")?.days)
+    }
+
+    @Test
+    fun `days that are not an array make the spec invalid`() {
+        assertNull(ScheduleSpec.fromJson("""{"from":"08:00","to":"10:00","days":8}"""))
+        assertNull(ScheduleSpec.fromJson("""{"from":"08:00","to":"10:00","days":"[1,2,3,4,5]"}"""))
+    }
+
+    @Test
     fun `hhmm rejects a sign`() {
         assertNull(hhmmToMinute("+7:30"))
         assertNull(hhmmToMinute("-0:30"))

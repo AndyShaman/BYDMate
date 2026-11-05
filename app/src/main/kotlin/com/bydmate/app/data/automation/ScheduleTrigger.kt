@@ -38,10 +38,14 @@ data class ScheduleSpec(
                 // would turn "days":[0] into "every day".
                 val days = mutableSetOf<Int>()
                 var badDay = false
+                val raw = obj.opt("days")
+                // "days":8 or "days":"[1,2]" is no list of days, not "every day" either.
+                if (raw != null && raw != JSONObject.NULL && raw !is JSONArray) badDay = true
                 obj.optJSONArray("days")?.let { arr ->
                     for (i in 0 until arr.length()) {
-                        val d = arr.opt(i) as? Int
-                        if (d != null && d in 1..7) days.add(d) else badDay = true
+                        // optInt keeps reading "1" or 1.0 as Monday, as before.
+                        val d = arr.optInt(i, -1)
+                        if (d in 1..7) days.add(d) else badDay = true
                     }
                 }
                 if (badDay) null else ScheduleSpec(from, to, days)

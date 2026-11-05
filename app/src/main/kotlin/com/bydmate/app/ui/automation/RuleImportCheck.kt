@@ -19,8 +19,9 @@ internal sealed interface ImportProblem {
     data object TooManyActions : ImportProblem
 }
 
-// The widget offers buttons 1..4, the same range the editor's button picker shows.
-private val WIDGET_BUTTONS = 1..4
+// The widget offers buttons 1..4, the same range the editor's button picker shows. The engine
+// matches the pressed button by its text, so "01" or "+1" would never fire.
+private val WIDGET_BUTTONS = (1..4).map { it.toString() }
 
 /**
  * The editor's checks on a rule read from a share file: the action limit, then each condition,
@@ -52,15 +53,18 @@ private fun triggerOk(t: TriggerDef): Boolean = when (t.kind) {
     "time_range" -> ScheduleSpec.fromJson(t.value) != null
     // The engine compares the upper-cased value with the phase name.
     "time_of_day" -> TimeOfDay.entries.any { it.name == t.value.uppercase() }
-    "button_press" -> t.value.toIntOrNull() in WIDGET_BUTTONS
+    "button_press" -> t.value in WIDGET_BUTTONS
     else -> true
 }
 
 private fun actionOk(a: ActionDef): Boolean = when (a.kind) {
     // The write path's own test, not the menu list: a legacy command the car still accepts imports.
-    "param" -> CommandTranslator.resolveRearSeatHeat(a.command) != null ||
-        CommandTranslator.resolveSeat(a.command) != null ||
-        CommandTranslator.resolve(a.command).isNotEmpty()
+    // runCatching: a level number too big for an Int («设置温度2147483648») throws in the translator.
+    "param" -> runCatching {
+        CommandTranslator.resolveRearSeatHeat(a.command) != null ||
+            CommandTranslator.resolveSeat(a.command) != null ||
+            CommandTranslator.resolve(a.command).isNotEmpty()
+    }.getOrDefault(false)
     "delay" -> a.payload?.toLongOrNull()?.let { it in 0..ActionDispatcher.MAX_DELAY_MS } == true
     else -> true
 }

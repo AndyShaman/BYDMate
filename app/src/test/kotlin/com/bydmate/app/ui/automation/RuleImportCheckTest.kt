@@ -83,6 +83,18 @@ class RuleImportCheckTest {
         assertNull(importProblem(withTrigger(t("4"))))
     }
 
+    @Test fun `button press value must be written as the button number`() {
+        fun t(v: String) = TriggerDef("button", "", "==", v, "Кнопка", kind = "button_press")
+        assertEquals(ImportProblem.Condition(1), importProblem(withTrigger(t("01"))))
+        assertEquals(ImportProblem.Condition(1), importProblem(withTrigger(t("+1"))))
+    }
+
+    @Test fun `a level number too big for an Int is a bad action, not a crash`() {
+        listOf("设置温度2147483648", "风量2147483648").forEach {
+            assertEquals(it, ImportProblem.Action(1), importProblem(withAction(ActionDef(it, "x"))))
+        }
+    }
+
     @Test fun `unknown action command is a bad action`() {
         assertEquals(ImportProblem.Action(1), importProblem(withAction(ActionDef("不存在的命令", "x"))))
     }
