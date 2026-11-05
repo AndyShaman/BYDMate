@@ -24,7 +24,7 @@ class Migration24to25Test {
     )
 
     @Test
-    fun `24 to 25 keeps every trip point and adds an empty battery power`() {
+    fun `24 to 25 keeps every trip point and adds empty battery power columns`() {
         helper.createDatabase(dbName, 24).use { old ->
             old.execSQL(
                 "INSERT INTO trip_points (trip_id, timestamp, lat, lon, speed_kmh, altitude) " +
@@ -39,7 +39,7 @@ class Migration24to25Test {
         val migrated = helper.runMigrationsAndValidate(dbName, 25, true, AppModule.MIGRATION_24_25)
 
         migrated.query(
-            "SELECT trip_id, timestamp, lat, lon, speed_kmh, altitude, battery_power_w " +
+            "SELECT trip_id, timestamp, lat, lon, speed_kmh, altitude, battery_power_w, battery_energy_wh, energy_run " +
                 "FROM trip_points ORDER BY timestamp"
         ).use { c ->
             assertEquals(2, c.count)
@@ -47,12 +47,12 @@ class Migration24to25Test {
             assertEquals(1L, c.getLong(0)); assertEquals(1000L, c.getLong(1))
             assertEquals(53.5, c.getDouble(2), 1e-9); assertEquals(27.5, c.getDouble(3), 1e-9)
             assertEquals(42.0, c.getDouble(4), 1e-9); assertEquals(250.0, c.getDouble(5), 1e-9)
-            assertTrue(c.isNull(6))
+            assertTrue(c.isNull(6)); assertTrue(c.isNull(7)); assertTrue(c.isNull(8))
             c.moveToNext()
             assertEquals(1L, c.getLong(0)); assertEquals(2000L, c.getLong(1))
             assertEquals(53.6, c.getDouble(2), 1e-9); assertEquals(27.6, c.getDouble(3), 1e-9)
             assertEquals(55.0, c.getDouble(4), 1e-9); assertEquals(251.0, c.getDouble(5), 1e-9)
-            assertTrue(c.isNull(6))
+            assertTrue(c.isNull(6)); assertTrue(c.isNull(7)); assertTrue(c.isNull(8))
         }
         migrated.close()
     }

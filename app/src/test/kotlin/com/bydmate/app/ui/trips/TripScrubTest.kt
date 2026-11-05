@@ -17,6 +17,8 @@ class TripScrubTest {
         ts: Long = 0L,
         speed: Double? = null,
         power: Double? = null,
+        energy: Double? = null,
+        run: Long? = null,
     ) = TripPointEntity(
         tripId = 1,
         timestamp = ts,
@@ -24,16 +26,31 @@ class TripScrubTest {
         lon = 27.0,
         speedKmh = speed,
         batteryPowerW = power,
+        batteryEnergyWh = energy,
+        energyRun = run,
     )
 
-    /** Evenly spaced points: [stepM] metres and [stepMs] ms apart. */
+    /**
+     * Evenly spaced points: [stepM] metres and [stepMs] ms apart. With a [power] the points also
+     * carry the cumulative battery counter of a tracker run that drew [power] all along.
+     */
     private fun track(
         n: Int,
         stepM: Double = 100.0,
         stepMs: Long = 10_000L,
         speed: Double? = 36.0,
         power: Double? = 10_000.0,
-    ) = List(n) { pt(it * stepM, it * stepMs, speed, power) }
+    ) = List(n) {
+        pt(
+            it * stepM, it * stepMs, speed, power,
+            energy = power?.let { w -> it * w * stepMs / 3_600_000.0 },
+            run = if (power != null) 1L else null,
+        )
+    }
+
+    /** Points at the given timestamps carrying the given counter values (run 1). */
+    private fun counter(vararg tsWh: Pair<Long, Double?>) =
+        tsWh.map { (ts, wh) -> pt(ts = ts, energy = wh, run = if (wh != null) 1L else null) }
 
     private fun withPower(points: List<TripPointEntity>, powers: List<Double?>) =
         points.mapIndexed { i, p -> p.copy(batteryPowerW = powers[i]) }
@@ -64,11 +81,16 @@ class TripScrubTest {
 
     // 2
     @Test
-    fun `hasPower needs at least two points with power`() {
+    fun `hasPower counts the battery counter, not the instantaneous power`() {
         assertFalse(TripScrub.hasPower(emptyList()))
-        assertFalse(TripScrub.hasPower(listOf(pt(power = 1000.0))))
-        assertFalse(TripScrub.hasPower(listOf(pt(power = 1000.0), pt(ts = 1000L))))
-        assertTrue(TripScrub.hasPower(listOf(pt(power = 1000.0), pt(ts = 1000L, power = 2000.0))))
+        assertFalse(TripScrub.hasPower(listOf(pt(energy = 1.0, run = 1L))))
+        // power without a counter does not count
+        assertFalse(TripScrub.hasPower(listOf(pt(power = 1000.0), pt(ts = 1000L, power = 2000.0))))
+        assertTrue(
+            TripScrub.hasPower(
+                listOf(pt(energy = 0.0, run = 1L), pt(ts = 1000L, energy = 1.0, run = 1L))
+            )
+        )
     }
 
     // 3
@@ -100,53 +122,58 @@ class TripScrubTest {
 
     // 5
     @Test
-    fun `energyKwh integrates constant power`() {
-        val p = track(36, power = 10_000.0)
-            .mapIndexed { i, x -> x.copy(timestamp = i * 100_000L) }
+    fun `energyKwh reads constant power from the counter`() {
+        val p = track(36, stepMs = 100_000L, power = 10_000.0)
         assertEquals(9.7222222, TripScrub.energyKwh(p, 0, 35)!!, 1e-6)
     }
 
     // 6
     @Test
-    fun `energyKwh uses the trapezoid between points`() {
-        val p = listOf(pt(ts = 0, power = 0.0), pt(ts = 60_000, power = 20_000.0))
-        assertEquals(10.0 * 60.0 / 3600.0, TripScrub.energyKwh(p, 0, 1)!!, 1e-6)
+    fun `energyKwh is the difference of the counters`() {
+        val p = counter(0L to 0.0, 60_000L to 100.0, 120_000L to 250.0)
+        assertEquals(0.25, TripScrub.energyKwh(p, 0, 2)!!, 1e-9)
     }
 
     // 7
     @Test
     fun `energyKwh is negative for regen`() {
-        val p = listOf(pt(ts = 0, power = -30_000.0), pt(ts = 60_000, power = -30_000.0))
-        assertEquals(-0.5, TripScrub.energyKwh(p, 0, 1)!!, 1e-6)
+        val p = counter(0L to 500.0, 60_000L to 0.0)
+        assertEquals(-0.5, TripScrub.energyKwh(p, 0, 1)!!, 1e-9)
     }
 
     // 8
     @Test
-    fun `energyKwh skips an interval longer than MAX_GAP_MS`() {
-        val p = listOf(
-            pt(ts = 0, power = 10_000.0),
-            pt(ts = 60_000, power = 10_000.0),
-            pt(ts = 260_000, power = 10_000.0), // dt = 200 s, dropped
-            pt(ts = 320_000, power = 10_000.0),
+    fun `energyKwh is null when an interval is longer than MAX_GAP_MS`() {
+        val p = counter(
+            0L to 0.0,
+            60_000L to 100.0,
+            260_000L to 200.0, // dt = 200 s
+            320_000L to 300.0,
         )
-        assertEquals(10.0 * 120.0 / 3600.0, TripScrub.energyKwh(p, 0, 3)!!, 1e-6)
+        assertNull(TripScrub.energyKwh(p, 0, 3))
     }
 
     // 9
     @Test
-    fun `energyKwh is null when any point in the range has no power`() {
-        val p = listOf(
-            pt(ts = 0, power = 1000.0),
-            pt(ts = 10_000, power = null),
-            pt(ts = 20_000, power = 1000.0),
-        )
+    fun `energyKwh is null when any point in the range has no counter`() {
+        val p = counter(0L to 0.0, 10_000L to null, 20_000L to 5.0)
         assertNull(TripScrub.energyKwh(p, 0, 2))
     }
 
     @Test
     fun `energyKwh is zero for an empty range`() {
-        val p = listOf(pt(ts = 0, power = 1000.0), pt(ts = 10_000, power = 1000.0))
+        val p = counter(0L to 0.0, 10_000L to 5.0)
         assertEquals(0.0, TripScrub.energyKwh(p, 1, 1)!!, 0.0)
+    }
+
+    // 9b
+    @Test
+    fun `energyKwh is null across two different tracker runs`() {
+        val p = listOf(
+            pt(ts = 0, energy = 100.0, run = 1L),
+            pt(ts = 10_000, energy = 0.0, run = 2L),
+        )
+        assertNull(TripScrub.energyKwh(p, 0, 1))
     }
 
     // 10
@@ -155,6 +182,15 @@ class TripScrubTest {
         val p = track(40, stepM = 50.0, stepMs = 10_000L, speed = 18.0, power = 5_000.0)
         val d = TripScrub.cumulativeDistanceM(p)
         assertRel(27.78, TripScrub.localConsumption(p, d, 20, 400.0, 15.0))
+    }
+
+    // 10b
+    @Test
+    fun `localConsumption brackets the nearest points beyond the edges of a thinned track`() {
+        // 5 points 1 km / 60 s apart: window [1, 3] = 2 km, 2 x 250 Wh
+        val p = track(5, stepM = 1000.0, stepMs = 60_000L, speed = 60.0, power = 15_000.0)
+        val d = TripScrub.cumulativeDistanceM(p)
+        assertRel(25.0, TripScrub.localConsumption(p, d, 2, 400.0, 15.0))
     }
 
     // 11
@@ -176,9 +212,19 @@ class TripScrubTest {
 
     // 13
     @Test
-    fun `localConsumption is null when the window has a point without power`() {
+    fun `localConsumption is null when the window has a point without a counter`() {
         val p = track(40, stepM = 50.0, speed = 18.0, power = 5_000.0)
-            .mapIndexed { i, x -> if (i == 15) x.copy(batteryPowerW = null) else x }
+            .mapIndexed { i, x -> if (i == 15) x.copy(batteryEnergyWh = null, energyRun = null) else x }
+        val d = TripScrub.cumulativeDistanceM(p)
+        assertNull(TripScrub.localConsumption(p, d, 20, 400.0, 15.0))
+    }
+
+    // 13b
+    @Test
+    fun `localConsumption is null when the window has an interval over MAX_GAP_MS`() {
+        // from point 15 on, everything is 200 s later: the 14 -> 15 interval is 210 s
+        val p = track(40, stepM = 50.0, speed = 18.0, power = 5_000.0)
+            .mapIndexed { i, x -> if (i >= 15) x.copy(timestamp = x.timestamp + 200_000L) else x }
         val d = TripScrub.cumulativeDistanceM(p)
         assertNull(TripScrub.localConsumption(p, d, 20, 400.0, 15.0))
     }
@@ -215,8 +261,9 @@ class TripScrubTest {
     }
 
     @Test
-    fun `rangeStats has no energy when a point in range lacks power`() {
-        val p = track(21).mapIndexed { i, x -> if (i == 8) x.copy(batteryPowerW = null) else x }
+    fun `rangeStats has no energy when a point in range lacks a counter`() {
+        val p = track(21)
+            .mapIndexed { i, x -> if (i == 8) x.copy(batteryEnergyWh = null, energyRun = null) else x }
         val d = TripScrub.cumulativeDistanceM(p)
         val s = TripScrub.rangeStats(p, d, 5, 15)
         assertNull(s.energyKwh)
@@ -230,6 +277,20 @@ class TripScrubTest {
         val s = TripScrub.rangeStats(p, d, 5, 6) // 50 m
         assertNotNull(s.energyKwh)
         assertNull(s.kwhPer100Km)
+    }
+
+    // 16b
+    @Test
+    fun `rangeStats has no speed or energy when the range has a gap over MAX_GAP_MS`() {
+        // the 7 -> 8 interval is 300 s
+        val p = track(21)
+            .mapIndexed { i, x -> if (i >= 8) x.copy(timestamp = x.timestamp + 290_000L) else x }
+        val d = TripScrub.cumulativeDistanceM(p)
+        val s = TripScrub.rangeStats(p, d, 5, 15)
+        assertNull(s.avgSpeedKmh)
+        assertNull(s.energyKwh)
+        assertNull(s.kwhPer100Km)
+        assertTrue(s.distanceKm > 0.0)
     }
 
     // 17
