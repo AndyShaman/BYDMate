@@ -3,6 +3,7 @@ package com.bydmate.app.ui.trips
 import com.bydmate.app.data.local.entity.TripPointEntity
 
 /** Numbers of the trip window under the scrub cursor, kept pure for the unit tests. */
+@Suppress("TooManyFunctions") // one small pure function per number of the trip window
 internal object TripScrub {
 
     /** One speed scale for every trip: from this speed on the hottest color. */

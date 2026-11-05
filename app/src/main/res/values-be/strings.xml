@@ -388,6 +388,38 @@
     <string name="trip_detail_cost_per_100_label">На 100 км</string>
     <string name="trip_detail_soc_label">Зарад</string>
     <string name="trip_detail_ext_temp_label">За бортам</string>
+    <string name="trip_scrub_time">Час</string>
+    <string name="trip_scrub_from_start">Ад старту</string>
+    <string name="trip_scrub_speed">Хуткасць</string>
+    <string name="trip_scrub_power">Магутнасць</string>
+    <string name="trip_scrub_consumption_here">Расход тут</string>
+    <string name="trip_scrub_consumption">Расход</string>
+    <string name="trip_scrub_altitude">Вышыня</string>
+    <string name="trip_scrub_slow">павольна</string>
+    <string name="trip_scrub_range_distance">Адрэзак</string>
+    <string name="trip_scrub_range_avg">Сярэдняя</string>
+    <string name="trip_scrub_range_energy">Энергія</string>
+    <string name="trip_scrub_range_share">Доля паездкі</string>
+    <string name="trip_scrub_unit_km">км</string>
+    <string name="trip_scrub_unit_kmh">км/г</string>
+    <string name="trip_scrub_unit_kw">кВт</string>
+    <string name="trip_scrub_unit_kwh">кВт·г</string>
+    <string name="trip_scrub_unit_per100">/100</string>
+    <string name="trip_scrub_unit_m">м</string>
+    <string name="trip_scrub_unit_min">хв</string>
+    <string name="trip_scrub_unit_percent" formatted="false">%</string>
+    <string name="trip_scrub_play">Прайграць</string>
+    <string name="trip_scrub_pause">Паўза</string>
+    <string name="trip_scrub_range_toggle">Участак</string>
+    <string name="trip_scrub_no_power_hint">Расход па трэку — толькі для новых паездак</string>
+    <string name="trip_scrub_legend_speed_min">0</string>
+    <string name="trip_scrub_legend_speed_max">140+ км/г</string>
+    <string name="trip_scrub_legend_regen">рэкуп.</string>
+    <string name="trip_scrub_legend_consumption_max">60 кВт·г/100</string>
+    <string name="trip_scrub_chart_speed">Хуткасць, км/г</string>
+    <string name="trip_scrub_chart_power">Магутнасць, кВт · ніжэй за нуль рэкуперацыя</string>
+    <string name="trip_scrub_map_max_speed">%1$d км/г</string>
+    <string name="trip_scrub_map_max_regen">−%1$d кВт</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">Усе</string>

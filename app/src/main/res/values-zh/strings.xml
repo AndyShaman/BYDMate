@@ -287,6 +287,38 @@
     <string name="trip_detail_cost_per_100_label">每百公里</string>
     <string name="trip_detail_soc_label">电量</string>
     <string name="trip_detail_ext_temp_label">车外温度</string>
+    <string name="trip_scrub_time">时间</string>
+    <string name="trip_scrub_from_start">距起点</string>
+    <string name="trip_scrub_speed">速度</string>
+    <string name="trip_scrub_power">功率</string>
+    <string name="trip_scrub_consumption_here">此处能耗</string>
+    <string name="trip_scrub_consumption">能耗</string>
+    <string name="trip_scrub_altitude">海拔</string>
+    <string name="trip_scrub_slow">车速过低</string>
+    <string name="trip_scrub_range_distance">路段</string>
+    <string name="trip_scrub_range_avg">平均</string>
+    <string name="trip_scrub_range_energy">能量</string>
+    <string name="trip_scrub_range_share">占行程</string>
+    <string name="trip_scrub_unit_km">km</string>
+    <string name="trip_scrub_unit_kmh">km/h</string>
+    <string name="trip_scrub_unit_kw">kW</string>
+    <string name="trip_scrub_unit_kwh">kWh</string>
+    <string name="trip_scrub_unit_per100">/100</string>
+    <string name="trip_scrub_unit_m">m</string>
+    <string name="trip_scrub_unit_min">分钟</string>
+    <string name="trip_scrub_unit_percent" formatted="false">%</string>
+    <string name="trip_scrub_play">播放</string>
+    <string name="trip_scrub_pause">暂停</string>
+    <string name="trip_scrub_range_toggle">路段</string>
+    <string name="trip_scrub_no_power_hint">沿轨迹能耗仅适用于新行程</string>
+    <string name="trip_scrub_legend_speed_min">0</string>
+    <string name="trip_scrub_legend_speed_max">140+ km/h</string>
+    <string name="trip_scrub_legend_regen">回收</string>
+    <string name="trip_scrub_legend_consumption_max">60 kWh/100</string>
+    <string name="trip_scrub_chart_speed">速度, km/h</string>
+    <string name="trip_scrub_chart_power">功率, kW · 零以下为能量回收</string>
+    <string name="trip_scrub_map_max_speed">%1$d km/h</string>
+    <string name="trip_scrub_map_max_regen">−%1$d kW</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">全部</string>

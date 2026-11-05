@@ -115,9 +115,9 @@ class TripTracker @Inject constructor(
     /** Left rectangle with the previous tick's power; a tick without power breaks the chain. */
     private fun integrateEnergy(powerW: Double?, now: Long) {
         val prev = prevPowerW
-        val dt = now - prevPowerTs
-        if (powerW != null && prev != null && dt > 0 && dt <= MAX_ENERGY_STEP_MS) {
-            batteryEnergyWh += prev * dt / 3_600_000.0
+        if (powerW != null && prev != null) {
+            val dt = now - prevPowerTs
+            if (dt in 1..MAX_ENERGY_STEP_MS) batteryEnergyWh += prev * dt / 3_600_000.0
         }
         prevPowerW = powerW
         prevPowerTs = now
