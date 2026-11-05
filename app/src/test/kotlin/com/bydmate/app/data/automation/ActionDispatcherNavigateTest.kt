@@ -233,6 +233,42 @@ class ActionDispatcherNavigateTest {
         assertEquals("waze://?ll=55.75,37.62", shadowOf(app).nextStartedActivity.dataString)
     }
 
+    /** #334: Home/Work with Waze chosen goes to Waze's own saved favorites, not to Yandex. */
+    @Test fun waze_selected_home_shortcut_opens_waze_favorite() = runTest {
+        selectNavigator("waze")
+        installWaze()
+
+        val res = dispatcher.dispatch(actionDef("""{"shortcut":"home"}"""), null)
+        assertTrue(res.success)
+        val intent = shadowOf(app).nextStartedActivity
+        assertEquals("waze://?favorite=home&navigate=yes", intent.dataString)
+        assertEquals("com.waze", intent.`package`)
+    }
+
+    @Test fun waze_selected_work_shortcut_opens_waze_favorite() = runTest {
+        selectNavigator("waze")
+        installWaze()
+
+        dispatcher.dispatch(actionDef("""{"shortcut":"work"}"""), null)
+        assertEquals("waze://?favorite=work&navigate=yes", shadowOf(app).nextStartedActivity.dataString)
+    }
+
+    /** Waze chosen but absent: Home stays on the Navigator's own shortcut, as before. */
+    @Test fun waze_selected_but_missing_home_shortcut_stays_on_yandex() = runTest {
+        selectNavigator("waze")
+
+        dispatcher.dispatch(actionDef("""{"shortcut":"home"}"""), null)
+        assertEquals("ru.yandex.yandexmaps.action.ROUTE_TO_HOME_SHORTCUT",
+            shadowOf(app).nextStartedActivity.action)
+    }
+
+    /** The Waze favorite link starts the route itself; nothing waits for the Navigator's «Поехали». */
+    @Test fun waze_home_shortcut_has_no_auto_go() {
+        selectNavigator("waze")
+        installWaze()
+        assertFalse(dispatcher.autoGoSupported(org.json.JSONObject("""{"shortcut":"home"}""")))
+    }
+
     /** «Поехали» is pressed through the Yandex Navigator's a11y window; Waze has no such read. */
     @Test fun waze_route_has_no_auto_go() {
         selectNavigator("waze")
@@ -241,7 +277,7 @@ class ActionDispatcherNavigateTest {
     }
 
     /** #305: AgentTools waits for the package the intent was pinned to, so this must agree with
-     *  sendNavigateIntent: pinned only for an installed 2GIS/Waze and never for Maps or Home/Work. */
+     *  sendNavigateIntent: pinned only for an installed 2GIS/Waze (Waze Home/Work included, #334) and never for Maps. */
     @Test fun willOpenPinned_follows_the_routing() {
         selectNavigator("waze")
         assertEquals(null, dispatcher.willOpenPinned(org.json.JSONObject("""{"lat":57.0,"lon":36.0}""")))
@@ -249,7 +285,7 @@ class ActionDispatcherNavigateTest {
         installWaze()
         assertEquals("com.waze", dispatcher.willOpenPinned(org.json.JSONObject("""{"lat":57.0,"lon":36.0}""")))
         assertEquals(null, dispatcher.willOpenPinned(org.json.JSONObject("""{"app":"maps","lat":57.0,"lon":36.0}""")))
-        assertEquals(null, dispatcher.willOpenPinned(org.json.JSONObject("""{"shortcut":"home"}""")))
+        assertEquals("com.waze", dispatcher.willOpenPinned(org.json.JSONObject("""{"shortcut":"home"}""")))
     }
 
     // --- willOpenMaps: what AgentTools asks to pick the right foreground-verification app ---
