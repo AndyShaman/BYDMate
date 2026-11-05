@@ -130,4 +130,48 @@ class TripTrackerTest {
         assertEquals(30, saved.captured.size)
         assertTrue(saved.captured.all { it.timestamp > 7_000L })
     }
+
+    @Test
+    fun `a recorded point carries the battery power of its tick`() = runTest {
+        val tracker = tracker()
+        val data = diParsData(speed = 20)
+        nowMs = 1_000L
+        tracker.onData(data, null) // arm
+        nowMs = 7_000L
+        tracker.onData(data, null) // DRIVING
+
+        val fix = movingLocation(5f)
+        repeat(30) { i ->
+            nowMs += 1_000L
+            val w = if (i % 2 == 0) 12_500.0 else -8_000.0
+            tracker.onData(data.copy(batteryPowerW = w), fix)
+        }
+
+        val saved = slot<List<TripPointEntity>>()
+        coVerify(exactly = 1) { dao.insertAll(capture(saved)) }
+        assertEquals(30, saved.captured.size)
+        assertEquals(12_500.0, saved.captured[0].batteryPowerW!!, 0.0)
+        assertEquals(-8_000.0, saved.captured[1].batteryPowerW!!, 0.0)
+    }
+
+    @Test
+    fun `a recorded point has no battery power when the reading is unavailable`() = runTest {
+        val tracker = tracker()
+        val data = diParsData(speed = 20) // batteryPowerW stays null
+        nowMs = 1_000L
+        tracker.onData(data, null) // arm
+        nowMs = 7_000L
+        tracker.onData(data, null) // DRIVING
+
+        val fix = movingLocation(5f)
+        repeat(30) {
+            nowMs += 1_000L
+            tracker.onData(data, fix)
+        }
+
+        val saved = slot<List<TripPointEntity>>()
+        coVerify(exactly = 1) { dao.insertAll(capture(saved)) }
+        assertTrue(saved.captured.isNotEmpty())
+        assertTrue(saved.captured.all { it.batteryPowerW == null })
+    }
 }
