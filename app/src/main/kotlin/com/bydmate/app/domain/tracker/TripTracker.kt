@@ -38,12 +38,20 @@ class TripTracker @Inject constructor(
     private var speedZeroSince: Long? = null
     private val pendingPoints = Collections.synchronizedList(mutableListOf<TripPointEntity>())
 
+    // Net battery energy of this run, Wh, integrated on every tick in any state so that the
+    // difference of two stored points stays exact after old points are thinned out.
+    private val energyRun: Long = clock()
+    private var batteryEnergyWh = 0.0
+    private var prevPowerW: Double? = null
+    private var prevPowerTs = 0L
+
     companion object {
         private const val TAG = "TripTracker"
         private const val SPEED_THRESHOLD = 3    // km/h
         private const val START_DELAY_MS = 5_000L   // 5 seconds above threshold
         private const val STOP_DELAY_MS = 180_000L  // 3 minutes at zero
         private const val POINT_BATCH_SIZE = 30
+        private const val MAX_ENERGY_STEP_MS = 10_000L  // longer tick gaps are not integrated
     }
 
     suspend fun onData(data: DiParsData, location: Location?) {
@@ -56,6 +64,8 @@ class TripTracker @Inject constructor(
             ?: location?.takeIf { it.hasSpeed() }?.let { (it.speed * 3.6f).toInt() }
             ?: 0
         val now = clock()
+        val powerW = data.batteryPowerW
+        integrateEnergy(powerW, now)
 
         when (_state.value) {
             TripState.IDLE -> {
@@ -69,7 +79,7 @@ class TripTracker @Inject constructor(
                         speedAboveThresholdSince = null
                         Log.d(TAG, "Driving started (GPS collection)")
                         // Record first point
-                        recordPoint(location, speed, now)
+                        recordPoint(location, speed, now, powerW)
                     }
                 } else {
                     speedAboveThresholdSince = null
@@ -77,7 +87,7 @@ class TripTracker @Inject constructor(
             }
             TripState.DRIVING -> {
                 // Record GPS point
-                recordPoint(location, speed, now)
+                recordPoint(location, speed, now, powerW)
 
                 if (pendingPoints.size >= POINT_BATCH_SIZE) {
                     flushPoints()
@@ -102,7 +112,18 @@ class TripTracker @Inject constructor(
         }
     }
 
-    private fun recordPoint(location: Location?, speed: Int, now: Long) {
+    /** Left rectangle with the previous tick's power; a tick without power breaks the chain. */
+    private fun integrateEnergy(powerW: Double?, now: Long) {
+        val prev = prevPowerW
+        val dt = now - prevPowerTs
+        if (powerW != null && prev != null && dt > 0 && dt <= MAX_ENERGY_STEP_MS) {
+            batteryEnergyWh += prev * dt / 3_600_000.0
+        }
+        prevPowerW = powerW
+        prevPowerTs = now
+    }
+
+    private fun recordPoint(location: Location?, speed: Int, now: Long, powerW: Double?) {
         if (location != null) {
             pendingPoints.add(
                 TripPointEntity(
@@ -111,8 +132,11 @@ class TripTracker @Inject constructor(
                     lat = location.latitude,
                     lon = location.longitude,
                     speedKmh = speed.toDouble(),
-                    // Elevation is stored for a later climb correction; nothing reads it yet.
+                    // Elevation feeds the elevation shadow of the trip window chart.
                     altitude = if (location.hasAltitude()) location.altitude else null,
+                    batteryPowerW = powerW,
+                    batteryEnergyWh = if (powerW != null) batteryEnergyWh else null,
+                    energyRun = if (powerW != null) energyRun else null,
                 )
             )
             if (pendingPoints.size % 10 == 1) {
