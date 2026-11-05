@@ -102,4 +102,26 @@ class ScheduleTriggerTest {
         assertTrue(isWithinSchedule(spec, nowMinute = 11 * 60 + 34, nowDayOfWeek = 7))
         assertFalse(isWithinSchedule(spec, nowMinute = 11 * 60 + 34, nowDayOfWeek = 1))
     }
+
+    // --- strict import checks ---
+
+    @Test
+    fun `days outside 1 to 7 or not numbers make the spec invalid`() {
+        listOf("[0]", "[8]", "[\"x\"]", "[1,9]").forEach {
+            assertNull(it, ScheduleSpec.fromJson("""{"from":"08:00","to":"10:00","days":$it}"""))
+        }
+    }
+
+    @Test
+    fun `hhmm rejects a sign`() {
+        assertNull(hhmmToMinute("+7:30"))
+        assertNull(hhmmToMinute("-0:30"))
+        assertNull(ScheduleSpec.fromJson("""{"from":"+7:30","to":"10:00","days":[1]}"""))
+    }
+
+    @Test
+    fun `hhmm still accepts one and two digit hours`() {
+        assertEquals(450, hhmmToMinute("7:30"))
+        assertEquals(450, hhmmToMinute("07:30"))
+    }
 }
