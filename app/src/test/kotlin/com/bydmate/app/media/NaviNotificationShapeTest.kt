@@ -60,4 +60,32 @@ class NaviNotificationShapeTest {
         val line = NaviNotificationShape.line("empty", emptySet(), null, null, null, emptyMap())
         assertTrue(line, line.endsWith("views=none"))
     }
+
+    // RemoteViews actions are read by reflection; these fakes carry the same field names.
+    @Suppress("unused") private class FakeAction(val methodName: String, val viewId: Int, val value: Any?)
+    @Suppress("unused") private class NestedViewsAdd(val viewId: Int)
+
+    private val names: (Int) -> String? = { mapOf(5 to "titleView", 7 to "notification_right_sdl")[it] }
+
+    @Test fun shape_keeps_actions_the_guidance_parser_ignores_without_their_values() {
+        assertEquals(
+            RvAction("titleView", "setVisibility", ""),
+            NaviNotificationParser.shapeAction(FakeAction("setVisibility", 5, 8), names),
+        )
+        assertEquals(
+            RvAction("titleView", "NestedViewsAdd", ""),
+            NaviNotificationParser.shapeAction(NestedViewsAdd(5), names),
+        )
+    }
+
+    @Test fun shape_keeps_text_and_image_values_like_the_parser() {
+        assertEquals(
+            RvAction("titleView", "setText", "350 м"),
+            NaviNotificationParser.shapeAction(FakeAction("setText", 5, "350 м"), names),
+        )
+        assertEquals(
+            RvAction("titleView", "setImageResource", "notification_right_sdl"),
+            NaviNotificationParser.shapeAction(FakeAction("setImageResource", 5, 7), names),
+        )
+    }
 }
