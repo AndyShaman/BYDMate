@@ -103,6 +103,7 @@ class AutomationEngineRunningGateTest {
 
         gate.complete(Unit)
         coVerify(timeout = 3000, exactly = 1) { dispatcher.dispatch(stepB, any()) }
+        Thread.sleep(300)  // the last step is dispatched; let the run unwind past its journal write
 
         engine.coldFront()  // the run is over: fires again
         coVerify(timeout = 3000, exactly = 2) { dispatcher.dispatch(stepA, any()) }

@@ -2749,9 +2749,12 @@ private fun DelayActionControls(
     var text by remember { mutableStateOf(initial?.first.orEmpty()) }
     var unit by remember { mutableStateOf(initial?.second ?: DelayUnit.SECONDS) }
     LaunchedEffect(action.payload) {
-        // A payload set from outside (a preset tile, another rule) replaces the typed text.
-        if (payloadMs != null && payloadMs != parseDelayMs(text, unit)) {
-            numberText(payloadMs).let { (t, u) -> text = t; unit = u }
+        // A payload set from outside (a preset tile, another rule, a row moved into this unkeyed
+        // slot) replaces the typed text; an empty one clears a number that is not this action's.
+        when {
+            payloadMs != null && payloadMs != parseDelayMs(text, unit) ->
+                numberText(payloadMs).let { (t, u) -> text = t; unit = u }
+            payloadMs == null && parseDelayMs(text, unit) != null -> text = ""
         }
     }
     fun push(newText: String, newUnit: DelayUnit) {
