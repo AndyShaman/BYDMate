@@ -404,6 +404,17 @@ class TechPanelViewModelTest {
         assertNull(rpmForDisplay(null))
     }
 
+    /** #403: the car never reports the inverter below 30 (cold start at 4° outside, motors 8-11°,
+     *  inverters 30), so 30 means "30 or colder" and shows as a dash; 31+ is a real reading. */
+    @Test
+    fun `inverter temperature at the 30 degree floor shows as unknown`() {
+        assertNull(inverterTempForDisplay(30))
+        assertEquals(31, inverterTempForDisplay(31))
+        assertEquals(37, inverterTempForDisplay(37))
+        assertEquals(25, inverterTempForDisplay(25))
+        assertNull(inverterTempForDisplay(null))
+    }
+
     /** Measured on the car: the split follows the two motor currents on a shared bus. */
     @Test
     fun `motor split follows the current ratio`() {
