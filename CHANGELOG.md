@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [4.3.1] - 2026-11-06
+
 ### Новое
 - Автоматизация: действия «Подсветка заднего логотипа: вкл» и «выкл». Проверено на Leopard 3 (#383).
 
@@ -1517,7 +1519,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.3.0...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.3.1...HEAD
+[4.3.1]: https://github.com/AndyShaman/BYDMate/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/AndyShaman/BYDMate/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/AndyShaman/BYDMate/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/AndyShaman/BYDMate/compare/v4.0.3...v4.1.0
