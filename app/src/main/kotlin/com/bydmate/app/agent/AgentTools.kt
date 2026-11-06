@@ -862,7 +862,7 @@ class AgentTools @Inject constructor(
                                 .put("value", JSONObject().put("type", "integer")
                                     .put("description", "Только для kind=param: значение, если команда его требует"))
                                 .put("ms", JSONObject().put("type", "integer")
-                                    .put("description", "Только для kind=delay: пауза в мс, 0..60000"))
+                                    .put("description", "Только для kind=delay: пауза в мс, 0..86400000 (до 24 ч)"))
                                 .put("op", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=media_volume: число / \"+N\" / \"-N\" / mute / unmute"))
                                 .put("title", JSONObject().put("type", "string")
@@ -2798,9 +2798,9 @@ class AgentTools @Inject constructor(
             }
             "delay" -> {
                 val hasMs = a.has("ms") && !a.isNull("ms")
-                val ms = if (hasMs) a.optInt("ms", -1) else -1
-                if (!hasMs || ms !in 0..MAX_DELAY_MS) {
-                    return Built.Error("не указана длительность паузы (мс, 0..$MAX_DELAY_MS)")
+                val ms = if (hasMs) a.optLong("ms", -1) else -1
+                if (!hasMs || ms !in 0..ActionDispatcher.MAX_DELAY_MS) {
+                    return Built.Error("не указана длительность паузы (мс, 0..${ActionDispatcher.MAX_DELAY_MS})")
                 }
                 Built.Value(ActionDef(command = "delay", displayName = "Пауза $ms мс",
                     kind = "delay", payload = ms.toString()))
@@ -2995,6 +2995,8 @@ class AgentTools @Inject constructor(
                 "неверная сторона split_screen (действие ${err.index})"
             is ActionValidationError.TelegramReportEmpty ->
                 "в отчёте в Telegram не выбран ни один пункт (действие ${err.index})"
+            is ActionValidationError.DelayInvalid ->
+                "длительность паузы вне 0..${ActionDispatcher.MAX_DELAY_MS} мс (действие ${err.index})"
         }
         return JSONObject().put("error", msg).toString()
     }
@@ -3052,7 +3054,6 @@ class AgentTools @Inject constructor(
         private const val OK = """{"ok":true}"""
         private const val SEARCH_ERROR = """{"error":"поиск недоступен"}"""
         private const val MAX_AUTOMATIONS = 50
-        private const val MAX_DELAY_MS = 60_000
         // The display names buildTrigger gives a service_start and a Gear == 4 trigger.
         private val AGENT_POWER_LABELS = PowerStateRuleMigration.Labels("Запуск приложения", "Gear == D")
         private const val MAX_PLACES = 50

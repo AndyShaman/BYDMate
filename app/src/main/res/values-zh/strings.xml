@@ -2026,6 +2026,7 @@
     <string name="dispatch_tg_report_queued">没有网络，联网后将发送报告</string>
     <string name="dispatch_tg_report_no_bot">请在设置中连接机器人</string>
     <string name="auto_msg_tg_report_empty">操作 #%1$d：请至少选择一项报告内容或填写自定义文字</string>
+    <string name="auto_msg_delay_invalid">操作 #%1$d：暂停时长为 0 到 24 小时</string>
     <string name="automation_action_tg_report">Telegram 报告</string>
     <!-- Telegram reports (3.19): settings and automation editor -->
     <string name="tg_report_field_location_desc">「在地图上打开」链接</string>
@@ -2107,6 +2108,10 @@
     <string name="auto_ui_act_volume">%1$s %2$d</string>
     <string name="auto_ui_seconds">%1$s 秒</string>
     <string name="auto_ui_minutes">%1$s 分钟</string>
+    <string name="auto_ui_hours">%1$s 小时</string>
+    <string name="auto_ui_unit_seconds">秒</string>
+    <string name="auto_ui_unit_minutes">分钟</string>
+    <string name="auto_ui_unit_hours">小时</string>
     <string name="auto_ui_when_today">今天 %1$s</string>
     <string name="auto_ui_when_yesterday">昨天 %1$s</string>
     <string name="auto_ui_when_tomorrow">明天 %1$s</string>

@@ -219,6 +219,7 @@ import com.bydmate.app.ui.widget.WidgetButtonIcons
 import com.bydmate.app.ui.widget.WidgetPreferences
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -2724,7 +2725,11 @@ private fun delayAction(ms: Long, context: Context): ActionDef {
     )
 }
 
-/** «Подождать 30 с»: the wait between two actions. */
+/**
+ * «Подождать [5] [мин]»: the wait between two actions, a number plus its unit, up to 24 h.
+ * An invalid number clears the payload, so the validator blocks saving and names the action.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun DelayActionControls(
     action: ActionDef,
@@ -2732,19 +2737,55 @@ private fun DelayActionControls(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val lc = context.appLocalizedContext()
-    val currentMs = action.payload?.toLongOrNull() ?: 1000L
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.HourglassEmpty, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.auto_ui_wait), fontSize = EDITOR_TEXT, color = TextPrimary)
-        Spacer(Modifier.width(8.dp))
+    val locale = context.appLocalizedContext().resources.configuration.locales[0]
+    fun numberText(ms: Long): Pair<String, DelayUnit> {
+        val (value, unit) = splitDelay(ms)
+        val fmt = NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 3; isGroupingUsed = false }
+        return fmt.format(value) to unit
+    }
+    val payloadMs = action.payload?.toLongOrNull()
+    val initial = payloadMs?.let { numberText(it) }
+    // The typed text lives here: our own update must not rewrite «1,» into «1».
+    var text by remember { mutableStateOf(initial?.first.orEmpty()) }
+    var unit by remember { mutableStateOf(initial?.second ?: DelayUnit.SECONDS) }
+    LaunchedEffect(action.payload) {
+        // A payload set from outside (a preset tile, another rule) replaces the typed text.
+        if (payloadMs != null && payloadMs != parseDelayMs(text, unit)) {
+            numberText(payloadMs).let { (t, u) -> text = t; unit = u }
+        }
+    }
+    fun push(newText: String, newUnit: DelayUnit) {
+        text = newText
+        unit = newUnit
+        val ms = parseDelayMs(newText, newUnit)
+        onUpdate(if (ms != null) delayAction(ms, context) else action.copy(payload = ""))
+    }
+    val units = DelayUnit.entries
+    val unitLabels = listOf(R.string.auto_ui_unit_seconds, R.string.auto_ui_unit_minutes, R.string.auto_ui_unit_hours)
+        .map { stringResource(it) }
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.CenterVertically)) {
+            Icon(Icons.Outlined.HourglassEmpty, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.auto_ui_wait), fontSize = EDITOR_TEXT, color = TextPrimary)
+        }
+        EditorField(
+            value = text,
+            onValueChange = { push(it, unit) },
+            highlight = parseDelayMs(text, unit) == null,
+            keyboardType = KeyboardType.Decimal,
+            centered = true,
+            modifier = Modifier.width(96.dp).align(Alignment.CenterVertically),
+        )
         DropdownField(
-            text = durationText(currentMs, lc),
-            fillWidth = true,
-            items = DELAY_OPTION_MS.map { durationText(it, lc) },
-            onSelect = { i -> onUpdate(delayAction(DELAY_OPTION_MS[i], context)) },
-            modifier = Modifier.weight(1f),
+            text = unitLabels[units.indexOf(unit)],
+            items = unitLabels,
+            onSelect = { i -> push(text, units[i]) },
+            modifier = Modifier.align(Alignment.CenterVertically),
         )
     }
 }

@@ -92,8 +92,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         private const val YANDEX_MUSIC_PACKAGE = "ru.yandex.music"
         private val YOUTUBE_PACKAGES = listOf("anddea.youtube", "com.google.android.youtube")
         private const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
-        // Hard cap on user-set delay action; protects against typos like "60000000".
-        internal const val MAX_DELAY_MS = 60_000L
+        // Hard cap on user-set delay action (24 h); BYDMate only runs while the car is on.
+        internal const val MAX_DELAY_MS = 86_400_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
 
         /**

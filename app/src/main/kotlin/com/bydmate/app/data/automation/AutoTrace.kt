@@ -9,6 +9,7 @@ internal enum class EdgeOutcome(val label: String) {
     FIRE("fire"),
     CONFIRM("confirm"),
     SKIP_COOLDOWN("skip:cooldown"),
+    SKIP_RUNNING("skip:running"),
     SKIP_PARK("skip:park"),
     SKIP_ONCE("skip:once"),
 

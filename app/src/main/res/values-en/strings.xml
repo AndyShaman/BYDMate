@@ -1912,6 +1912,7 @@
     <string name="dispatch_tg_report_queued">No connection, the report will go out when the internet is back</string>
     <string name="dispatch_tg_report_no_bot">Connect the bot in Settings</string>
     <string name="auto_msg_tg_report_empty">Action #%1$d: pick at least one report item or write your own text</string>
+    <string name="auto_msg_delay_invalid">Action #%1$d: pause from 0 to 24 h</string>
     <string name="automation_action_tg_report">Telegram report</string>
     <!-- Telegram reports (3.19): settings and automation editor -->
     <string name="tg_report_field_location_desc">An «Open on the map» link</string>
@@ -1993,6 +1994,10 @@
     <string name="auto_ui_act_volume">%1$s %2$d</string>
     <string name="auto_ui_seconds">%1$s s</string>
     <string name="auto_ui_minutes">%1$s min</string>
+    <string name="auto_ui_hours">%1$s h</string>
+    <string name="auto_ui_unit_seconds">s</string>
+    <string name="auto_ui_unit_minutes">min</string>
+    <string name="auto_ui_unit_hours">h</string>
     <string name="auto_ui_when_today">Today at %1$s</string>
     <string name="auto_ui_when_yesterday">Yesterday at %1$s</string>
     <string name="auto_ui_when_tomorrow">Tomorrow at %1$s</string>

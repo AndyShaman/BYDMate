@@ -706,6 +706,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             is ActionValidationError.SplitScreenSamePackage -> ctx.getString(R.string.auto_msg_split_same_package, err.index)
             is ActionValidationError.SplitScreenInvalidSide -> ctx.getString(R.string.auto_msg_split_invalid_side, err.index)
             is ActionValidationError.TelegramReportEmpty -> ctx.getString(R.string.auto_msg_tg_report_empty, err.index)
+            is ActionValidationError.DelayInvalid -> ctx.getString(R.string.auto_msg_delay_invalid, err.index)
             null -> null
         }
     }

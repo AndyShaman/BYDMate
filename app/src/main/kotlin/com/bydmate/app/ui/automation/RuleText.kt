@@ -212,11 +212,16 @@ private fun quoted(nameRes: Int, detail: String, lc: Context): String {
     return lc.getString(R.string.auto_ui_act_quoted, name, cut)
 }
 
-/** «0,5 с», «30 с», «1 мин». */
+/** «0,5 с», «30 с», «1,5 мин», «2 ч». */
 internal fun durationText(ms: Long, lc: Context): String {
-    if (ms >= 60_000 && ms % 60_000 == 0L) return lc.getString(R.string.auto_ui_minutes, (ms / 60_000).toString())
+    val (value, unit) = splitDelay(ms)
     val fmt = NumberFormat.getNumberInstance(lc.locale()).apply { maximumFractionDigits = 1 }
-    return lc.getString(R.string.auto_ui_seconds, fmt.format(ms / 1000.0))
+    val res = when (unit) {
+        DelayUnit.SECONDS -> R.string.auto_ui_seconds
+        DelayUnit.MINUTES -> R.string.auto_ui_minutes
+        DelayUnit.HOURS -> R.string.auto_ui_hours
+    }
+    return lc.getString(res, fmt.format(value))
 }
 
 private fun onOffText(nameRes: Int, onRes: Int, offRes: Int, payload: String?, lc: Context): String {
@@ -555,4 +560,5 @@ internal fun ActionValidationError.toMissing(lc: Context): Missing.Action = when
     is ActionValidationError.SplitScreenSamePackage -> Missing.Action(index, lc.getString(R.string.auto_msg_split_same_package, index))
     is ActionValidationError.SplitScreenInvalidSide -> Missing.Action(index, lc.getString(R.string.auto_msg_split_invalid_side, index))
     is ActionValidationError.TelegramReportEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_tg_report_empty, index))
+    is ActionValidationError.DelayInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_delay_invalid, index))
 }

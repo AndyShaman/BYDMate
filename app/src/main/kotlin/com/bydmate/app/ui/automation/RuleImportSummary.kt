@@ -114,6 +114,7 @@ internal object RuleImportSummary {
         return if (detail.isBlank()) label else "$label: $detail"
     }
 
+    @Suppress("CyclomaticComplexMethod") // one branch per action kind
     private fun actionDetail(action: ActionDef, lc: Context, autoGo: (JSONObject) -> Boolean): String? {
         val json = payloadJson(action.payload)
         return when (action.kind) {
@@ -122,7 +123,8 @@ internal object RuleImportSummary {
                 listOf(json.optString("title"), json.optString("text")).filter { it.isNotBlank() }.joinToString(" / ")
             "app_launch", "app_close" -> json.optString("packageName")
             "call" -> callDetail(json, lc)
-            "delay", "media_volume" -> action.payload
+            "delay" -> action.payload?.toLongOrNull()?.let { durationText(it, lc) } ?: action.payload
+            "media_volume" -> action.payload
             "sentry", "hotspot", "cluster_projection" ->
                 lc.getString(if (action.payload == "1") R.string.auto_enum_on else R.string.auto_enum_off)
             TELEGRAM_REPORT_KIND -> (action.reportFields().map { lc.getString(it.labelRes) } + action.reportText())

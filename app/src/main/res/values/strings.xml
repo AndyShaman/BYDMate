@@ -2079,6 +2079,7 @@
     <string name="dispatch_tg_report_queued">Нет связи, отчёт уйдёт, когда появится интернет</string>
     <string name="dispatch_tg_report_no_bot">Подключите бота в Настройках</string>
     <string name="auto_msg_tg_report_empty">Действие #%1$d: выберите хотя бы один пункт отчёта или напишите свой текст</string>
+    <string name="auto_msg_delay_invalid">Действие #%1$d: пауза от 0 до 24 ч</string>
     <string name="automation_action_tg_report">Отчёт в Telegram</string>
     <!-- Telegram reports (3.19): settings and automation editor -->
     <string name="tg_report_field_location_desc">Ссылка «Открыть на карте»</string>
@@ -2160,6 +2161,10 @@
     <string name="auto_ui_act_volume">%1$s %2$d</string>
     <string name="auto_ui_seconds">%1$s с</string>
     <string name="auto_ui_minutes">%1$s мин</string>
+    <string name="auto_ui_hours">%1$s ч</string>
+    <string name="auto_ui_unit_seconds">с</string>
+    <string name="auto_ui_unit_minutes">мин</string>
+    <string name="auto_ui_unit_hours">ч</string>
     <string name="auto_ui_when_today">Сегодня в %1$s</string>
     <string name="auto_ui_when_yesterday">Вчера в %1$s</string>
     <string name="auto_ui_when_tomorrow">Завтра в %1$s</string>

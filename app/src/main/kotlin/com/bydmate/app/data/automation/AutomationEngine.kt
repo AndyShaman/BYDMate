@@ -181,6 +181,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     private val driveModeCondition = DriveModeCondition { Log.i(TAG, it) }
     // Rules already logged as «true at the first check» in this process.
     private val firstCheckLogged: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    // Runs in progress per rule id (a run can wait hours in a pause). An automatic fire is
+    // skipped while its rule still runs; manual starts are never gated but are counted.
+    private val runningRuns = ConcurrentHashMap<Long, Int>()
     // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
     // live cache so the a11y key filter can answer "is this key mine?" on the
     // key event itself — a DB read there would run on the input path.
@@ -399,6 +402,14 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                         !previous.matched && matched
                 }
                 if (!shouldFire) continue
+
+                // Still running (e.g. waiting in a pause): the front is consumed, not deferred
+                val runs = runningRuns[rule.id]
+                if (runs != null) {
+                    logSkip(rule, "running", "$runs run in progress")
+                    AutoTrace.edge(rule.id, EdgeOutcome.SKIP_RUNNING, SRC_POLL)
+                    continue
+                }
 
                 // Cooldown (the front above is already consumed, never deferred)
                 val lastFired = rule.lastTriggeredAt ?: 0L
@@ -715,46 +726,54 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // vehicle layer traces under them (a write's late check).
         cause: Long = 0L,
     ): Boolean {
-        // One chime per rule firing, regardless of action kinds (per-rule "Выполнять со звуком").
-        if (rule.playSound) {
-            OverlayNotificationManager.playNotificationSound(context)
-        }
-
-        val results = JSONArray()
-        var allSuccess = true
-
-        for ((i, action) in actions.withIndex()) {
-            // Fresh data per step: a pause may lie between the fire and this step. A speed-gated
-            // step does not trust it either: the dispatcher reads the speed itself right before.
-            val stepData = liveData() ?: data
-            val result = withContext(Trace.causedBy(cause)) {
-                actionDispatcher.dispatch(action.withReportRuleName(rule.name), stepData)
+        runningRuns.merge(rule.id, 1, Int::plus)
+        try {
+            // One chime per rule firing, regardless of action kinds (per-rule "Выполнять со звуком").
+            if (rule.playSound) {
+                OverlayNotificationManager.playNotificationSound(context)
             }
-            AutoTrace.step(rule.id, i + 1, action, result, by = cause)
-            Log.i(
-                TAG,
-                "rule ${rule.id} step ${i + 1}/${actions.size} ${action.kind} speed=${stepData?.speed} " +
-                    "-> ${if (result.success) "ok" else "failed: ${result.reason}"}",
-            )
-            results.put(RuleJournal.recordedAction(action).apply {
-                put("success", result.success)
-                if (result.reason != null) put("reason", result.reason)
-            })
-            if (!result.success) allSuccess = false
-        }
 
-        ruleLogDao.insert(
-            RuleLogEntity(
-                ruleId = rule.id,
-                ruleName = rule.name,
-                triggeredAt = System.currentTimeMillis(),
-                triggersSnapshot = snapshot,
-                actionsResult = results.toString(),
-                success = allSuccess
+            val results = JSONArray()
+            var allSuccess = true
+
+            for ((i, action) in actions.withIndex()) {
+                // Fresh data per step: a pause may lie between the fire and this step. A speed-gated
+                // step does not trust it either: the dispatcher reads the speed itself right before.
+                val stepData = liveData() ?: data
+                if (action.kind == "delay") {
+                    Log.i(TAG, "rule ${rule.id} step ${i + 1}/${actions.size} delay ${action.payload} ms: waiting")
+                }
+                val result = withContext(Trace.causedBy(cause)) {
+                    actionDispatcher.dispatch(action.withReportRuleName(rule.name), stepData)
+                }
+                AutoTrace.step(rule.id, i + 1, action, result, by = cause)
+                Log.i(
+                    TAG,
+                    "rule ${rule.id} step ${i + 1}/${actions.size} ${action.kind} speed=${stepData?.speed} " +
+                        "-> ${if (result.success) "ok" else "failed: ${result.reason}"}",
+                )
+                results.put(RuleJournal.recordedAction(action).apply {
+                    put("success", result.success)
+                    if (result.reason != null) put("reason", result.reason)
+                })
+                if (!result.success) allSuccess = false
+            }
+
+            ruleLogDao.insert(
+                RuleLogEntity(
+                    ruleId = rule.id,
+                    ruleName = rule.name,
+                    triggeredAt = System.currentTimeMillis(),
+                    triggersSnapshot = snapshot,
+                    actionsResult = results.toString(),
+                    success = allSuccess
+                )
             )
-        )
-        Log.i(TAG, "Rule '${rule.name}' executed: success=$allSuccess")
-        return allSuccess
+            Log.i(TAG, "Rule '${rule.name}' executed: success=$allSuccess")
+            return allSuccess
+        } finally {
+            runningRuns.compute(rule.id) { _, n -> if (n == null || n <= 1) null else n - 1 }
+        }
     }
 
     /**
