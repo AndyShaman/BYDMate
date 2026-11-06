@@ -39,6 +39,12 @@ object NaviNotificationParser {
         return "content=$content big=$big"
     }
 
+    /** The recognized actions of every RemoteViews the notification carries, by field name (#301). */
+    internal fun views(notification: Notification, resolveName: (Int) -> String?): Map<String, List<RvAction>> =
+        listOf("contentView", "bigContentView", "headsUpContentView")
+            .mapNotNull { field -> extractRemoteViews(notification, field)?.let { field to extractActions(it, resolveName) } }
+            .toMap()
+
     /** Pure mapping from extracted actions; unit-testable without real notifications. */
     fun fromActions(content: List<RvAction>, big: List<RvAction>): Parsed {
         var maneuverRes: String? = null

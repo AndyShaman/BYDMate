@@ -45,8 +45,11 @@ class MediaSessionListenerService : NotificationListenerService() {
 
     /** Where the unknown-maneuver lines go; logcat in production, a collector in tests. */
     internal var unknownManeuverSink: (String) -> Unit = { Log.i(TAG, it) }
+    internal var emptyShapeSink: (String) -> Unit = { Log.i(TAG, it) }
     // Maneuver icon names this lane could not map, a line per name per 5 min (lane thread).
     private val unknownManeuvers = UnknownManeuverGate(UnknownManeuverGate.MIN_INTERVAL_MS)
+    /** One shape line per outcome kind per 5 min (#301). */
+    private val emptyShapes = UnknownManeuverGate(UnknownManeuverGate.MIN_INTERVAL_MS)
 
     /** Where the notification trace goes (issue #199); logcat in production, a collector in tests. */
     internal var naviNotifSink: (String) -> Unit = { Log.i(TAG, it) }
@@ -186,6 +189,7 @@ class MediaSessionListenerService : NotificationListenerService() {
             if (!NaviRichNotificationParser.hasNaviSignal(rich)) {
                 Log.d(TAG, "rich parse: stub notification, skipped")
                 tracePost(notification, pkg, id, "stub", null)
+                logEmptyShape("stub", notification, resolver)
                 NavGuidanceHub.countNotifEmpty()
                 return
             }
@@ -209,6 +213,7 @@ class MediaSessionListenerService : NotificationListenerService() {
             hubHasKnownManeuver = hubHasKnownManeuver,
         ) ?: run {
             tracePost(notification, pkg, id, "empty", null)
+            logEmptyShape("empty", notification, resolver)
             NavGuidanceHub.countNotifEmpty()
             return
         }
@@ -218,6 +223,21 @@ class MediaSessionListenerService : NotificationListenerService() {
         // Maps drops its own maneuver while the hub knows one (rule R2-1): that 0 is not unknown.
         if (!(isMaps && hubHasKnownManeuver)) {
             logUnknownManeuver(update, "notification extras", "icon=${UnknownManeuverGate.quote(iconName)}")
+        }
+    }
+
+    /** Field diagnostics (#301): what a notification without guidance carries, lengths instead of texts. */
+    private fun logEmptyShape(kind: String, n: Notification, resolver: (Int) -> String?) {
+        if (!emptyShapes.take(kind, System.currentTimeMillis())) return
+        runCatching {
+            val e = n.extras
+            emptyShapeSink(NaviNotificationShape.line(
+                kind, e.keySet(),
+                e.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+                e.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+                e.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+                NaviNotificationParser.views(n, resolver),
+            ))
         }
     }
 
