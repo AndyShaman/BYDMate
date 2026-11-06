@@ -326,9 +326,9 @@ Enable it in **Settings → Display**, "Blind spots" section (off by default). T
 
 A full Russian voice assistant built into BYDMate. Speech is recognized right on the head unit, with no internet: the GigaAM v3 neural network listens and understands Russian. Simple commands run instantly through local parsing, the AI agent handles everything else: a language model with 32 tools that reads the car's data itself, controls body functions, builds routes, runs automations, and answers by voice.
 
-### Why Russian only, for now
+### Why Russian, and Only Russian
 
-Speech recognition in BYDMate runs right in the car, without internet. On Android, a good on-device model for this exists only for Russian. Going through the internet is possible in theory, but slow. So for now the assistant is Russian only, and we will come back to it when good models for other languages appear. The stock BYD voice assistant already understands English and Chinese.
+The stock BYD voice assistant already works natively in English and Chinese. Building another English assistant makes no sense. BYDMate covers what the car does not have at all: Russian. That is why speech recognition, command parsing, and the TTS voices are built specifically for Russian, and there are no plans for an English version of the agent.
 
 ### How to Enable It
 
