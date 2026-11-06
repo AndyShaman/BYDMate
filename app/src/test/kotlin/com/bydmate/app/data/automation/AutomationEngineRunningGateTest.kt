@@ -103,10 +103,16 @@ class AutomationEngineRunningGateTest {
 
         gate.complete(Unit)
         coVerify(timeout = 3000, exactly = 1) { dispatcher.dispatch(stepB, any()) }
-        Thread.sleep(300)  // the last step is dispatched; let the run unwind past its journal write
-
-        engine.coldFront()  // the run is over: fires again
-        coVerify(timeout = 3000, exactly = 2) { dispatcher.dispatch(stepA, any()) }
+        // The last step is dispatched, but the run still writes its journal and releases its mark;
+        // a front that lands before that is consumed as skip:running. Retry until one fires.
+        var firedAgain = false
+        repeat(60) {
+            if (firedAgain) return@repeat
+            engine.coldFront()
+            firedAgain = runCatching { coVerify(atLeast = 2) { dispatcher.dispatch(stepA, any()) } }.isSuccess
+            if (!firedAgain) Thread.sleep(50)
+        }
+        assertEquals(true, firedAgain)
     }
 
     @Test fun `manual start is not gated by a running run`() = runBlocking {
