@@ -1767,7 +1767,7 @@
     <string name="tech_label_battery_power">电池功率</string>
     <string name="tech_label_max_charge">最大充电功率</string>
     <string name="tech_label_max_discharge_allow">最大放电功率</string>
-    <string name="tech_label_max_discharge">电池可用功率</string>
+    <string name="tech_label_max_discharge">电池容量</string>
     <string name="tech_label_motor_temp">电机温度</string>
     <string name="tech_label_inverter_temp">逆变器温度</string>
     <string name="tech_label_rpm">转速 rpm</string>
@@ -1787,6 +1787,7 @@
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
     <string name="tech_value_kw">%1$d kW</string>
+    <string name="tech_value_ah">%1$d Ah</string>
     <!-- %1$.1f = kilowatt-hours -->
     <string name="tech_value_kwh">%1$.1f kWh</string>
     <string name="tech_value_watt">%1$d W</string>
@@ -1804,9 +1805,9 @@
     <string name="tech_hint_power">电池此刻输出多少能量。正值：车辆在消耗（加速、空调）。负值：电池在吸收能量，可能是制动能量回收，也可能是在充电桩充电。第二个数值：电量下降的速度，每小时百分比。停车时代表车载电子设备的耗电。</string>
     <string name="tech_hint_12v">为电子设备供电的普通 12 伏蓄电池电压。车辆启动时为 13…14,5 V。停车时低于 12 V，说明蓄电池在变弱。</string>
     <string name="tech_hint_insulation">高压电池与车身之间的绝缘电阻。数值越大越好：正常为几兆欧。若降到 0,5 MΩ 及以下，说明某处绝缘受损，该去维修了。</string>
-    <string name="tech_hint_bms_limits">这三个数值应用都不做计算，全部是原样读取自电池控制器（BMS）。"最大充电功率"和"最大放电功率"是BMS当前允许的充电和放电上限，诊断扫描仪显示的是同样的数字。"电池可用功率"是另一个更小的数值：BYD没有说明它的含义，但从表现看，这是电池能够持续输出的功率。短时加速时车辆会超过可用值，这是正常的。电池偏冷或接近充满时，三个数值都会更低：冬天充电更慢，能量回收更弱。</string>
+    <string name="tech_hint_bms_limits">这三个数值应用都不做计算，全部是原样读取自电池控制器（BMS）。"最大充电功率"和"最大放电功率"是BMS当前允许的充电和放电上限，诊断扫描仪显示的是同样的数字。"电池容量"是电池包当前的额定容量，单位为安时，诊断扫描仪称之为 Battery pack current nominal capacity。短时加速时车辆会超过允许的功率，这是正常的。电池偏冷或接近充满时，两个功率上限都会更低：冬天充电更慢，能量回收更弱。</string>
     <string name="tech_hint_cells">电池由数百个电芯组成。这里显示最弱的、最强的以及两者之差。差值在 20…30 mV 以内属正常。长期差值偏大，说明某个电芯老化得比其他更快。</string>
-    <string name="tech_hint_motors">电机及其驱动逆变器的温度。日常行驶在 60…80° 以内。长时间加速或拖挂时温度更高，车辆会自行降低功率直到冷却。</string>
+    <string name="tech_hint_motors">电机及其驱动逆变器的温度。日常行驶在 60…80° 以内。长时间加速或拖挂时温度更高，车辆会自行降低功率直到冷却。车辆上报的逆变器温度最低为 30°：停车和平稳行驶时始终显示 30，只有在负载下才会升高。</string>
     <string name="tech_hint_compressor">空调与热泵压缩机消耗多少瓦。它是除电机之外的主要用电设备：夏天酷热、冬天严寒时会明显缩短续航。</string>
     <string name="tech_hint_tyres">来自胎压传感器的每个车轮的压力和温度。行驶中轮胎升温后压力会升高 0,2…0,3 bar，属于正常。若某个车轮明显低于其他，请检查是否漏气。</string>
     <string name="tech_order_hint">长按卡片可调整顺序</string>

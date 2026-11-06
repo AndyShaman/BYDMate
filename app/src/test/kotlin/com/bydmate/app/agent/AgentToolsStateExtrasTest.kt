@@ -76,9 +76,11 @@ class AgentToolsStateExtrasTest {
     }
 
     @Test fun bms_limits_reach_the_model() = runTest {
-        val out = state(snapshot().copy(bmsMaxChargeKw = 88.5, bmsMaxDischargeKw = 210))
+        val out = state(snapshot().copy(bmsMaxChargeKw = 88.5, bmsMaxDischargeKw = 164))
         assertEquals(88.5, out.getDouble("bms_max_charge_kw"), 0.01)
-        assertEquals(210, out.getInt("bms_max_discharge_kw"))
+        // #402: STATISTIC_BATTERY_AVAILABLE_POWER is the pack's current nominal capacity in Ah (scanner match).
+        assertEquals(164, out.getInt("battery_capacity_ah"))
+        assertFalse(out.has("bms_max_discharge_kw"))
     }
 
     @Test fun tyre_temperatures_reach_the_model() = runTest {

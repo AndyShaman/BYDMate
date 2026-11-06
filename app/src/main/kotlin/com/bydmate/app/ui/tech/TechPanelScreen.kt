@@ -449,7 +449,7 @@ private fun LimitsAndCellsCard(state: TechPanelUiState, onHint: (String) -> Unit
         )
         TechRow(
             stringResource(R.string.tech_label_max_discharge),
-            state.bmsMaxDischargeKw?.let { stringResource(R.string.tech_value_kw, it) } ?: DASH,
+            state.bmsMaxDischargeKw?.let { stringResource(R.string.tech_value_ah, it) } ?: DASH,
         )
         Hint(state.openHint, "bmsLimits", R.string.tech_hint_bms_limits)
 
