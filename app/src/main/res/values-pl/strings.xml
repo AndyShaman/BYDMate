@@ -1290,6 +1290,8 @@
     <string name="auto_act_drl_off">Światła dzienne wył.</string>
     <string name="auto_act_hazard_on">Awaryjne: włącz</string>
     <string name="auto_act_hazard_off">Awaryjne: wyłącz</string>
+    <string name="auto_act_rear_logo_light_on">Podświetlenie tylnego logo: włącz</string>
+    <string name="auto_act_rear_logo_light_off">Podświetlenie tylnego logo: wyłącz</string>
     <string name="auto_act_interior_light_on">Oświetlenie wnętrza wł.</string>
     <string name="auto_act_interior_light_off">Oświetlenie wnętrza wył.</string>
     <string name="auto_act_lock_doors">Zablokuj</string>

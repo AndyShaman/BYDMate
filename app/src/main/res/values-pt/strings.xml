@@ -1131,6 +1131,8 @@
     <string name="auto_act_drl_off">DRL desl.</string>
     <string name="auto_act_hazard_on">Pisca-alerta: ligar</string>
     <string name="auto_act_hazard_off">Pisca-alerta: desligar</string>
+    <string name="auto_act_rear_logo_light_on">Luz do logotipo traseiro: ligar</string>
+    <string name="auto_act_rear_logo_light_off">Luz do logotipo traseiro: desligar</string>
     <string name="auto_act_interior_light_on">Luz interna lig.</string>
     <string name="auto_act_interior_light_off">Luz interna desl.</string>
     <string name="auto_act_lock_doors">Travar portas</string>

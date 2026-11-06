@@ -1290,6 +1290,8 @@
     <string name="auto_act_drl_off">ДХА выкл</string>
     <string name="auto_act_hazard_on">Аварыйка: уключыць</string>
     <string name="auto_act_hazard_off">Аварыйка: выключыць</string>
+    <string name="auto_act_rear_logo_light_on">Падсветка задняга лагатыпа: уключыць</string>
+    <string name="auto_act_rear_logo_light_off">Падсветка задняга лагатыпа: выключыць</string>
     <string name="auto_act_interior_light_on">Святло салона ўкл</string>
     <string name="auto_act_interior_light_off">Святло салона выкл</string>
     <string name="auto_act_lock_doors">Заблакаваць</string>

@@ -1294,6 +1294,8 @@
     <string name="auto_act_drl_off">ДХО выкл</string>
     <string name="auto_act_hazard_on">Аварийка: включить</string>
     <string name="auto_act_hazard_off">Аварийка: выключить</string>
+    <string name="auto_act_rear_logo_light_on">Подсветка заднего логотипа: вкл</string>
+    <string name="auto_act_rear_logo_light_off">Подсветка заднего логотипа: выкл</string>
     <string name="auto_act_interior_light_on">Салонный свет вкл</string>
     <string name="auto_act_interior_light_off">Салонный свет выкл</string>
     <string name="auto_act_lock_doors">Заблокировать</string>

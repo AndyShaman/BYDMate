@@ -1215,6 +1215,8 @@
     <string name="auto_act_drl_off">日行灯关</string>
     <string name="auto_act_hazard_on">打开双闪</string>
     <string name="auto_act_hazard_off">关闭双闪</string>
+    <string name="auto_act_rear_logo_light_on">后车标灯：开</string>
+    <string name="auto_act_rear_logo_light_off">后车标灯：关</string>
     <string name="auto_act_interior_light_on">车内灯开</string>
     <string name="auto_act_interior_light_off">车内灯关</string>
     <string name="auto_act_lock_doors">车门上锁</string>

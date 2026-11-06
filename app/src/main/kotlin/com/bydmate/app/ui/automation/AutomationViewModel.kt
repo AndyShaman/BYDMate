@@ -262,6 +262,8 @@ val ACTION_COMMANDS = listOf(
         ActionOption("双闪打开", R.string.auto_act_hazard_on, R.string.auto_cat_light),
         ActionOption("双闪关闭", R.string.auto_act_hazard_off, R.string.auto_cat_light),
         ActionOption("", R.string.toggle_target_hazard, R.string.auto_cat_light, toggleTarget = ActionDispatcher.TOGGLE_HAZARD),
+        ActionOption("后车标灯打开", R.string.auto_act_rear_logo_light_on, R.string.auto_cat_light),
+        ActionOption("后车标灯关闭", R.string.auto_act_rear_logo_light_off, R.string.auto_cat_light),
         ActionOption("打开车内灯", R.string.auto_act_interior_light_on, R.string.auto_cat_light),
         ActionOption("关闭车内灯", R.string.auto_act_interior_light_off, R.string.auto_cat_light),
         ActionOption("打开抬头显示", R.string.auto_act_hud_on, R.string.auto_cat_light),

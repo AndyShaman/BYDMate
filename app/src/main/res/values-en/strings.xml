@@ -1138,6 +1138,8 @@
     <string name="auto_act_drl_off">DRL Off</string>
     <string name="auto_act_hazard_on">Hazard lights: on</string>
     <string name="auto_act_hazard_off">Hazard lights: off</string>
+    <string name="auto_act_rear_logo_light_on">Rear logo light: on</string>
+    <string name="auto_act_rear_logo_light_off">Rear logo light: off</string>
     <string name="auto_act_interior_light_on">Interior Light On</string>
     <string name="auto_act_interior_light_off">Interior Light Off</string>
     <string name="auto_act_lock_doors">Lock Doors</string>
