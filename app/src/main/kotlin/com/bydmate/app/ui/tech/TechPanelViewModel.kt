@@ -282,6 +282,15 @@ data class TechPanelUiState(
 internal fun rpmForDisplay(raw: Int?): Int? = raw?.let { if (it in -1..0) 0 else it }
 
 /**
+ * The car never reports the inverter below 30° (#403): on a cold start at 4° outside with the
+ * motors at 8-11° both inverters read 30, and in a drive they rise to 36-37 and fall back to 30.
+ * So 30 means "30 or colder" and shows as unknown; anything else passes through.
+ */
+internal fun inverterTempForDisplay(raw: Int?): Int? = raw?.takeIf { it != INVERTER_TEMP_FLOOR_C }
+
+private const val INVERTER_TEMP_FLOOR_C = 30
+
+/**
  * Some cars never fill the remaining-energy fid and answer a flat 0 (a hybrid at SoC 39%, no push
  * event in 12 minutes). A pack that still holds charge cannot be empty, so 0 next to a SoC above
  * zero is "no data" and renders as «—». Nothing is derived from SoC in its place.

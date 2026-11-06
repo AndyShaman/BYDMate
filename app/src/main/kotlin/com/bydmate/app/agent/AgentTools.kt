@@ -1065,7 +1065,8 @@ class AgentTools @Inject constructor(
         // What the BMS allows right now; the peak on hard acceleration is higher.
         putIf("bms_max_charge_kw", d.bmsMaxChargeKw)
         putIf("bms_max_discharge_allow_kw", d.bmsMaxDischargeAllowKw)
-        putIf("bms_max_discharge_kw", d.bmsMaxDischargeKw)
+        // Despite its SDK name this fid is the pack's current nominal capacity, Ah (#402).
+        putIf("battery_capacity_ah", d.bmsMaxDischargeKw)
         putIf("voltage_12v", d.voltage12v)
         putIf("battery_temp_avg_c", d.avgBatTemp)
         putIf("battery_temp_max_c", d.maxBatTemp)

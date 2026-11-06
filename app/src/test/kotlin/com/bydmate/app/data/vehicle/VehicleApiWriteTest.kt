@@ -395,6 +395,28 @@ class VehicleApiWriteTest {
         assertTrue(rows.any { it.error == "window_noop" })
     }
 
+    @Test fun `rear logo light on and off write 1 and 2 once each (383)`() = runTest {
+        coEvery { helper.write(1004, 1324621876, any()) } returns true
+        assertTrue((api as VehicleApiImpl).doWrite("rear_logo_light_on", 1).isSuccess)
+        coVerify(exactly = 1) { helper.write(1004, 1324621876, 1) }
+        assertTrue((api as VehicleApiImpl).doWrite("rear_logo_light_off", 2).isSuccess)
+        coVerify(exactly = 1) { helper.write(1004, 1324621876, 2) }
+    }
+
+    @Test fun `rear logo light rejects values outside its single value (383)`() = runTest {
+        for ((name, v) in listOf("rear_logo_light_on" to 0, "rear_logo_light_on" to 2, "rear_logo_light_off" to 3)) {
+            val r = (api as VehicleApiImpl).doWrite(name, v)
+            assertTrue("$name $v", r.exceptionOrNull() is VehicleWriteError.OutOfRange)
+        }
+        coVerify(exactly = 0) { helper.write(any(), any(), any()) }
+    }
+
+    @Test fun `rear logo light is live-validated, helper false is HelperUnreachable (383)`() = runTest {
+        coEvery { helper.write(1004, 1324621876, 1) } returns false
+        val r = (api as VehicleApiImpl).doWrite("rear_logo_light_on", 1)
+        assertTrue(r.exceptionOrNull() is VehicleWriteError.HelperUnreachable)
+    }
+
     @Test fun `dispatch unknown command returns failure AllowlistMiss without helper call`() = runTest {
         val result = api.dispatch("不存在的命令")
         assertTrue(result.isFailure)

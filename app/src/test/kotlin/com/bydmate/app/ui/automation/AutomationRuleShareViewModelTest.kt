@@ -185,6 +185,23 @@ class AutomationRuleShareViewModelTest {
         assertEquals("OR", inserted.captured.triggerLogic)
     }
 
+    @Test fun `a rule the editor would refuse opens the preview with an error and is not saved`() {
+        val vm = vm()
+        vm.importFile(powerStateFile("AND", """{"param":"Gear","chineseName":"档位","operator":"==","value":"9","displayName":"Передача","kind":"param"}"""))
+
+        val draft = requireNotNull(vm.uiState.value.importDraft)
+        assertNotNull(draft.error)
+        vm.confirmImport()
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
+    }
+
+    @Test fun `a valid file opens the preview without an error`() {
+        val vm = vm()
+        vm.importFile(copyFixture("bydmate_rule_speed.json"))
+        assertNull(requireNotNull(vm.uiState.value.importDraft).error)
+    }
+
     @Test fun `unknown kind is refused with the update message`() {
         val vm = vm()
         vm.importFile(copyFixture("bydmate_rule_newer_kind.json"))
@@ -369,6 +386,11 @@ class AutomationRuleShareViewModelTest {
 
         coVerify(exactly = 1) { actionDispatcher.dispatch(windowOpen, fresh) }
         coVerify(exactly = 1) { actionDispatcher.dispatch(sunroofToggle, fresh) }
+    }
+
+    @Test fun `rear logo light actions are not speed gated (383)`() {
+        assertFalse(isSpeedGatedAction(ActionDef("后车标灯打开", "Подсветка заднего логотипа: вкл")))
+        assertFalse(isSpeedGatedAction(ActionDef("后车标灯关闭", "Подсветка заднего логотипа: выкл")))
     }
 
     @Test fun `speed gate covers window, sunroof, frunk and unlock only`() {

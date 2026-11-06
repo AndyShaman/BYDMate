@@ -22,6 +22,18 @@ internal object TripScrub {
 
     private const val MOVING_MIN_KMH = 1.0
     private const val EARTH_RADIUS_M = 6_371_000.0
+    private const val FALLBACK_NORTH_PAD = 0.3
+
+    /**
+     * How much to stretch the route box north (in route heights) so that a fit with [borderPx]
+     * leaves the route the part of the map under the values panel ([topInsetPx] from the top).
+     * A map too small for the panel falls back to the old fixed 30 %.
+     */
+    fun northPadFraction(mapHeightPx: Int, borderPx: Int, topInsetPx: Int): Double {
+        if (topInsetPx <= 0) return 0.0
+        val free = mapHeightPx - 2 * borderPx - topInsetPx
+        return if (free > 0) topInsetPx.toDouble() / free else FALLBACK_NORTH_PAD
+    }
 
     /** Speed scale stops, km/h → ARGB. */
     val SPEED_STOPS: List<Pair<Double, Int>> = listOf(

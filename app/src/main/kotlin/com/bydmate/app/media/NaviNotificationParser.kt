@@ -39,6 +39,27 @@ object NaviNotificationParser {
         return "content=$content big=$big"
     }
 
+    /** The recognized actions of every RemoteViews the notification carries, by field name (#301). */
+    internal fun views(notification: Notification, resolveName: (Int) -> String?): Map<String, List<RvAction>> =
+        listOf("contentView", "bigContentView", "headsUpContentView")
+            .mapNotNull { field ->
+                extractRemoteViews(notification, field)?.let { field to rawActions(it).mapNotNull { a -> shapeAction(a, resolveName) } }
+            }
+            .toMap()
+
+    /** Every action for the shape line: text and image keep their value as in [parse]; any other
+     *  method, or an action with no method (nested views), keeps only its name, never its value. */
+    internal fun shapeAction(action: Any?, resolveName: (Int) -> String?): RvAction? {
+        if (action == null) return null
+        toRvAction(action, resolveName)?.let { return it }
+        return runCatching {
+            val method = findField(action.javaClass, "methodName", "mMethodName")?.get(action) as? String
+                ?: action.javaClass.simpleName
+            val viewId = findField(action.javaClass, "viewId", "mViewId")?.getInt(action)
+            RvAction(viewId?.let { resolveName(it) ?: it.toString() } ?: "?", method, "")
+        }.getOrNull()
+    }
+
     /** Pure mapping from extracted actions; unit-testable without real notifications. */
     fun fromActions(content: List<RvAction>, big: List<RvAction>): Parsed {
         var maneuverRes: String? = null
@@ -72,13 +93,14 @@ object NaviNotificationParser {
 
     private fun extractActions(views: RemoteViews?, resolveName: (Int) -> String?): List<RvAction> {
         if (views == null) return emptyList()
-        val actions = runCatching {
-            val f = RemoteViews::class.java.getDeclaredField("mActions")
-            f.isAccessible = true
-            f.get(views) as? ArrayList<*>
-        }.getOrNull() ?: return emptyList()
-        return actions.mapNotNull { toRvAction(it, resolveName) }
+        return rawActions(views).mapNotNull { toRvAction(it, resolveName) }
     }
+
+    private fun rawActions(views: RemoteViews): List<*> = runCatching {
+        val f = RemoteViews::class.java.getDeclaredField("mActions")
+        f.isAccessible = true
+        f.get(views) as? ArrayList<*>
+    }.getOrNull() ?: emptyList<Any?>()
 
     // Field names differ across Android versions: methodName/value on API <= 30,
     // mMethodName/mValue from 31 (fields may also sit in a superclass). Try both.

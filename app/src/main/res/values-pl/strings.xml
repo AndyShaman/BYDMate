@@ -1290,6 +1290,8 @@
     <string name="auto_act_drl_off">Światła dzienne wył.</string>
     <string name="auto_act_hazard_on">Awaryjne: włącz</string>
     <string name="auto_act_hazard_off">Awaryjne: wyłącz</string>
+    <string name="auto_act_rear_logo_light_on">Podświetlenie tylnego logo: włącz</string>
+    <string name="auto_act_rear_logo_light_off">Podświetlenie tylnego logo: wyłącz</string>
     <string name="auto_act_interior_light_on">Oświetlenie wnętrza wł.</string>
     <string name="auto_act_interior_light_off">Oświetlenie wnętrza wył.</string>
     <string name="auto_act_lock_doors">Zablokuj</string>
@@ -1805,7 +1807,7 @@
     <string name="tech_label_battery_power">moc akumulatora</string>
     <string name="tech_label_max_charge">maks. moc ładowania</string>
     <string name="tech_label_max_discharge_allow">maks. moc rozładowania</string>
-    <string name="tech_label_max_discharge">dostępna moc akumulatora</string>
+    <string name="tech_label_max_discharge">pojemność akumulatora</string>
     <string name="tech_label_motor_temp">temperatura silnika</string>
     <string name="tech_label_inverter_temp">temperatura falownika</string>
     <string name="tech_label_rpm">obroty, obr/min</string>
@@ -1825,6 +1827,7 @@
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
     <string name="tech_value_kw">%1$d kW</string>
+    <string name="tech_value_ah">%1$d Ah</string>
     <!-- %1$.1f = kilowatt-hours -->
     <string name="tech_value_kwh">%1$.1f kWh</string>
     <string name="tech_value_watt">%1$d W</string>
@@ -1842,9 +1845,9 @@
     <string name="tech_hint_power">Ile energii akumulator oddaje w tej chwili. Plus: samochód zużywa (przyspieszanie, klimatyzacja). Minus: akumulator przyjmuje energię: rekuperacja przy hamowaniu albo ładowanie ze stacji. Druga liczba: jak szybko ubywa ładunku, procent na godzinę. Na postoju to zużycie przez elektronikę pokładową.</string>
     <string name="tech_hint_12v">Napięcie zwykłego akumulatora 12 V, który zasila elektronikę. Przy uruchomionym samochodzie 13…14,5 V. Jeśli na postoju spada poniżej 12 V, akumulator słabnie.</string>
     <string name="tech_hint_insulation">Rezystancja między akumulatorem wysokiego napięcia a nadwoziem. Im większa, tym lepiej: normą są pojedyncze megaomy. Spadek do 0,5 MΩ i niżej oznacza uszkodzoną gdzieś izolację, czas do serwisu.</string>
-    <string name="tech_hint_bms_limits">Żadnej z tych trzech liczb aplikacja nie oblicza, tylko odczytuje ze sterownika akumulatora (BMS) w takiej postaci, w jakiej są. „Maks. moc ładowania” i „maks. moc rozładowania” to górne granice, które BMS aktualnie dopuszcza dla ładowania i dla oddawania energii z akumulatora; te same wartości pokazują skanery diagnostyczne. „Dostępna moc akumulatora” to osobna, mniejsza liczba: BYD nie wyjaśnia jej znaczenia, ale z zachowania wynika, że to moc, którą akumulator jest gotów oddawać w sposób ciągły. Przy krótkim przyspieszeniu samochód bierze więcej niż dostępna wartość, to normalne. Przy zimnym lub prawie pełnym akumulatorze wszystkie trzy wartości są niższe: zimą ładowanie jest wolniejsze, a rekuperacja słabsza.</string>
+    <string name="tech_hint_bms_limits">Żadnej z tych trzech liczb aplikacja nie oblicza, tylko odczytuje ze sterownika akumulatora (BMS) w takiej postaci, w jakiej są. „Maks. moc ładowania” i „maks. moc rozładowania” to górne granice, które BMS aktualnie dopuszcza dla ładowania i dla oddawania energii z akumulatora; te same wartości pokazują skanery diagnostyczne. „Pojemność akumulatora” to bieżąca pojemność nominalna pakietu w amperogodzinach, skanery nazywają ją Battery pack current nominal capacity. Przy zimnym lub prawie pełnym akumulatorze obie moce są niższe: zimą ładowanie jest wolniejsze, a rekuperacja słabsza.</string>
     <string name="tech_hint_cells">Akumulator składa się z setek ogniw. Pokazane są najsłabsze, najmocniejsze i różnica między nimi. Różnica do 20…30 mV jest normalna. Stale duża różnica oznacza, że jedno ogniwo starzeje się szybciej niż pozostałe.</string>
-    <string name="tech_hint_motors">Temperatura silników elektrycznych i falowników, które nimi sterują. W zwykłej jeździe do 60…80°. Przy długim przyspieszaniu lub holowaniu grzeją się mocniej, a samochód sam obniża moc, aż ostygną.</string>
+    <string name="tech_hint_motors">Temperatura silników elektrycznych i falowników, które nimi sterują. W zwykłej jeździe do 60…80°. Przy długim przyspieszaniu lub holowaniu grzeją się mocniej, a samochód sam obniża moc, aż ostygną. Poniżej 30° samochód nie podaje temperatury falownika, więc dopóki się nie nagrzeje, jest tam kreska.</string>
     <string name="tech_hint_compressor">Ile watów pobiera sprężarka klimatyzacji i pompy ciepła. To główny odbiornik poza silnikami: latem w upał i zimą na mrozie zauważalnie zjada zasięg.</string>
     <string name="tech_hint_tyres">Ciśnienie i temperatura każdego koła z czujników w oponach. Ciśnienie rośnie o 0,2…0,3 bar w miarę nagrzewania się opon w trasie, to normalne. Jeśli jedno koło ma wyraźnie mniej niż pozostałe, sprawdź, czy nie schodzi z niego powietrze.</string>
     <string name="tech_order_hint">Przytrzymaj kartę, aby zmienić kolejność</string>
@@ -1909,6 +1912,9 @@
     <string name="automation_import_pick_title">Pliki automatyzacji w Download</string>
     <string name="automation_import_pick_empty">Brak plików bydmate_rule_*.json w folderze Download</string>
     <string name="automation_import_invalid">Nie udało się odczytać pliku: to nie jest automatyzacja BYDMate</string>
+    <string name="automation_import_bad_condition">Warunek %1$d w pliku jest zapisany niepoprawnie, tej automatyzacji nie można dodać</string>
+    <string name="automation_import_bad_action">Działanie %1$d w pliku jest zapisane niepoprawnie, tej automatyzacji nie można dodać</string>
+    <string name="automation_import_too_many_actions">Plik zawiera więcej niż %1$d działań, tej automatyzacji nie można dodać</string>
     <string name="automation_import_newer_version">Automatyzacja z nowszej wersji, zaktualizuj aplikację</string>
     <string name="automation_import_power_off_only">Ta automatyzacja mogła zadziałać tylko przy wyłączonym samochodzie, takiego warunku już nie ma</string>
     <string name="automation_import_preview_title">Sprawdź automatyzację</string>

@@ -74,6 +74,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             1023 to 1069547536,  // SET_INTERIOR_ATMOSPHERE_LAMP_BRIGHTNESS_SET (ambient)
             1004 to 1125122118,  // DRL (daytime running lights) on/off
             1004 to 871366669,   // hazard lights — live-validated on Leopard 3 2026-07-31
+            1004 to 1324621876,  // LIGHT_REAR_GLOW_LOGO_STATE_SET (rear logo light, #383) — live-validated on Leopard 3 2026-11-06
             1023 to 850427920,  // fridge WORKING_STATUS_SET (cool/heat/off) — com.byd.car.icebox
             1023 to 850427928,  // fridge TEMP_REGULATION_SET — com.byd.car.icebox
             1023 to 944767029,  // SET_STEERING_WHEEL_HEAT_STATE_SET — BYDAutoSettingDevice, unvalidated
@@ -396,6 +397,10 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // the car refuses the warm-up on a warm battery.
             WriteEntry("battery_preheat_on",  1009, 1324617774, null, 1, 1, "energy", false, "byd-sdk carsetting ChargingPreheat"),
             WriteEntry("battery_preheat_off", 1009, 1324617774, null, 2, 2, "energy", false, "byd-sdk carsetting ChargingPreheat"),
+            // Rear logo light (#383) — dev=1004 carve-out, 1=on, 2=off. No readbackFid: like
+            // hazard, the state follows the write on CAN within ~2 s. Live-validated on Leopard 3 2026-11-06.
+            WriteEntry("rear_logo_light_on",  1004, 1324621876, null, 1, 1, "lights", true, "live-leopard3-2026-11-06"),
+            WriteEntry("rear_logo_light_off", 1004, 1324621876, null, 2, 2, "lights", true, "live-leopard3-2026-11-06"),
             WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),

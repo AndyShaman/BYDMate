@@ -235,6 +235,16 @@ class MediaSessionListenerServiceTest {
     }
 
     @Test
+    fun `a notification without guidance logs its shape under its package (301)`() {
+        val shapes = mutableListOf<String>()
+        service.emptyShapeSink = { shapes.add(it) }
+        postAndRun("ru.yandex.yandexnavi", "Тверская", "")
+        assertEquals(1, shapes.size)
+        assertTrue(shapes[0], shapes[0].startsWith("nav notif shape [empty ru.yandex.yandexnavi]: "))
+        assertFalse(shapes[0], shapes[0].contains("Тверская"))
+    }
+
+    @Test
     fun `extras post without a distance logs nothing`() {
         assertTrue(postAndRun("ru.yandex.yandexnavi", "Тверская", "").isEmpty())
     }

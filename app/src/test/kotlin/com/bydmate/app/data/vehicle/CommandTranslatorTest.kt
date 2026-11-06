@@ -325,6 +325,19 @@ class CommandTranslatorTest {
         assertEquals(2, r?.value)
     }
 
+    // ── Rear logo light, dev=1004 carve-out (#383) ────────────────────────────
+    @Test fun `rear logo light on maps to rear_logo_light_on val 1`() {
+        val r = one("后车标灯打开")
+        assertEquals("rear_logo_light_on", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `rear logo light off maps to rear_logo_light_off val 2`() {
+        val r = one("后车标灯关闭")
+        assertEquals("rear_logo_light_off", r?.actionName)
+        assertEquals(2, r?.value)
+    }
+
     // ── Mirror heat = rear defrost (one button on Leopard 3), validated 2026-05-29 ──
     @Test fun `mirror heat on maps to defrost_rear_on val 1`() {
         val r = one("后视镜加热")

@@ -93,7 +93,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         private val YOUTUBE_PACKAGES = listOf("anddea.youtube", "com.google.android.youtube")
         private const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
         // Hard cap on user-set delay action; protects against typos like "60000000".
-        private const val MAX_DELAY_MS = 60_000L
+        internal const val MAX_DELAY_MS = 60_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
 
         /**

@@ -262,6 +262,8 @@ val ACTION_COMMANDS = listOf(
         ActionOption("双闪打开", R.string.auto_act_hazard_on, R.string.auto_cat_light),
         ActionOption("双闪关闭", R.string.auto_act_hazard_off, R.string.auto_cat_light),
         ActionOption("", R.string.toggle_target_hazard, R.string.auto_cat_light, toggleTarget = ActionDispatcher.TOGGLE_HAZARD),
+        ActionOption("后车标灯打开", R.string.auto_act_rear_logo_light_on, R.string.auto_cat_light),
+        ActionOption("后车标灯关闭", R.string.auto_act_rear_logo_light_off, R.string.auto_cat_light),
         ActionOption("打开车内灯", R.string.auto_act_interior_light_on, R.string.auto_cat_light),
         ActionOption("关闭车内灯", R.string.auto_act_interior_light_off, R.string.auto_cat_light),
         ActionOption("打开抬头显示", R.string.auto_act_hud_on, R.string.auto_cat_light),
@@ -1114,7 +1116,8 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                         return@launch
                     }
                     val rule = parsed.rule.copy(triggers = triggers)
-                    val draft = withContext(ioDispatcher) { importDraft(rule, places, lc) }.copy(token = ++draftToken)
+                    val draft = withContext(ioDispatcher) { importDraft(rule, places, lc) }
+                        .copy(token = ++draftToken, error = importProblem(rule)?.text(lc))
                     _uiState.update { it.copy(importFiles = null, importError = null, importDraft = draft) }
                 }
                 RuleParseResult.NewerVersion ->
@@ -1171,7 +1174,8 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         _uiState.update { s ->
             val draft = s.importDraft?.takeIf { it.token == token && !it.saving } ?: return@update s
             val rule = transform(draft.rule)
-            s.copy(importDraft = draft.copy(rule = rule, preview = RuleImportSummary.preview(rule, context, actionDispatcher::autoGoWillRun), error = null))
+            val error = importProblem(rule)?.text(context.appLocalizedContext())
+            s.copy(importDraft = draft.copy(rule = rule, preview = RuleImportSummary.preview(rule, context, actionDispatcher::autoGoWillRun), error = error))
         }
     }
 
@@ -1204,7 +1208,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                 else -> a.withCall(VALIDATION_PHONE, "", false)
             }
         }
-        val error = validateActions(forValidation) ?: validateTriggers(rule.triggers, -1L, rule.triggerLogic, keyPickedLater = true)
+        val error = validateActions(forValidation) ?: importCheckError(rule)
         if (error != null) {
             _uiState.update { it.copy(importDraft = draft.copy(error = error)) }
             return
@@ -1234,6 +1238,14 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                 if (failure == null) s.copy(importDraft = null) else s.copy(importDraft = current.copy(saving = false, error = failure))
             }
         }
+    }
+
+    /** The [importProblem] of [rule] (logged), then the editor's trigger checks; null when the rule is fine. */
+    private fun importCheckError(rule: SharedRule): String? {
+        val problem = importProblem(rule)
+            ?: return validateTriggers(rule.triggers, -1L, rule.triggerLogic, keyPickedLater = true)
+        Log.i("AutomationViewModel", "import refused: $problem")
+        return problem.text(context.appLocalizedContext())
     }
 
     // --- Starter templates ---

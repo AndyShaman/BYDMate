@@ -82,6 +82,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -116,24 +118,17 @@ fun TripDetailDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         ScaledDialogContent {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                    ) { onDismiss() },
-                contentAlignment = Alignment.Center
-            ) {
+            // The whole app window (between the DiLink status bar and the climate bar): the map needs the height.
+            Box(modifier = Modifier.fillMaxSize()) {
                 Card(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RectangleShape,
                     colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier
-                        .fillMaxWidth(0.92f)
-                        .fillMaxHeight(0.85f)
-                        .clickable { /* absorb click */ }
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     val isStop = (trip.distanceKm ?: 0.0) == 0.0
+                    val scrub = remember(points) { if (points.size >= 2) ScrubData(points) else null }
+                    val scrubState = remember(points) { ScrubState() }
+                    scrub?.let { ScrubPlayback(it, scrubState) }
 
                     Column(
                         modifier = Modifier
@@ -141,7 +136,9 @@ fun TripDetailDialog(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        TripDetailHeader(trip, isStop, onDismiss)
+                        TripDetailHeader(trip, isStop, onDismiss) {
+                            if (scrub != null && scrub.points.size >= CHART_MIN_POINTS) ScrubControls(scrub, scrubState)
+                        }
 
                         // Landscape: map left, stats right
                         Row(
@@ -157,8 +154,8 @@ fun TripDetailDialog(
                                     .fillMaxHeight(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                if (points.size >= 2) {
-                                    TripScrubPane(points = points, tileSource = tileSource)
+                                if (scrub != null) {
+                                    TripScrubPane(data = scrub, state = scrubState, tileSource = tileSource)
                                 } else {
                                     LaunchedEffect(points.size) {
                                         Log.d(SCRUB_TAG, "open: points=${points.size} (no track)")
@@ -283,9 +280,17 @@ fun TripDetailDialog(
     }
 }
 
-/** Title with the weekday and date, the time range below it, a close button on the right. */
+/**
+ * Close button on the left (the driver's side), the title with the weekday and date and the
+ * time range below it, then the window [controls].
+ */
 @Composable
-private fun TripDetailHeader(trip: TripEntity, isStop: Boolean, onDismiss: () -> Unit) {
+private fun TripDetailHeader(
+    trip: TripEntity,
+    isStop: Boolean,
+    onDismiss: () -> Unit,
+    controls: @Composable () -> Unit,
+) {
     // Reading LocalConfiguration ties the date to the app language (see TripsScreen.MonthHeader).
     val locale = LocalConfiguration.current.locales[0]
     val datePattern = stringResource(R.string.trip_detail_date_pattern)
@@ -297,10 +302,32 @@ private fun TripDetailHeader(trip: TripEntity, isStop: Boolean, onDismiss: () ->
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp),
+            .heightIn(min = 56.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(CardSurfaceElevated, CircleShape)
+                    .border(1.dp, CardBorder, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.trip_detail_close),
+                    tint = TextPrimary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 buildAnnotatedString {
@@ -318,27 +345,7 @@ private fun TripDetailHeader(trip: TripEntity, isStop: Boolean, onDismiss: () ->
                 style = TextStyle(fontFeatureSettings = "tnum")
             )
         }
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .clickable { onDismiss() },
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(CardSurfaceElevated, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.trip_detail_close),
-                    tint = TextSecondary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
+        controls()
     }
 }
 
@@ -463,15 +470,15 @@ private const val PLAY_FRAME_MS = 40L
 private const val PLAY_FRAMES = 300
 private const val MIN_RANGE_POINTS = 10
 private const val RANGE_WIDEN_POINTS = 30
+/** Fewer points draw no chart, and the header shows no controls for it. */
+private const val CHART_MIN_POINTS = 4
+/** Border of the route fit, px, as before. */
+private const val FIT_BORDER_PX = 48
 
-/** Map with the values at the cursor, the controls row and the time chart (needs 2+ points). */
-@OptIn(ExperimentalLayoutApi::class)
+/** Logs the opened track and runs «Play»: moves the cursor to the end, then stops. */
 @Composable
-private fun ColumnScope.TripScrubPane(points: List<TripPointEntity>, tileSource: String) {
-    val data = remember(points) { ScrubData(points) }
-    val state = remember(points) { ScrubState() }
-    val withChart = points.size >= 4
-
+private fun ScrubPlayback(data: ScrubData, state: ScrubState) {
+    val points = data.points
     LaunchedEffect(data) {
         Log.d(
             SCRUB_TAG,
@@ -489,7 +496,13 @@ private fun ColumnScope.TripScrubPane(points: List<TripPointEntity>, tileSource:
         }
         state.playing = false
     }
+}
 
+/** Map with the values at the cursor over it and the time chart below (needs 2+ points). */
+@Composable
+private fun ColumnScope.TripScrubPane(data: ScrubData, state: ScrubState, tileSource: String) {
+    // Bottom of the values panel over the map, px: the route is fitted under it.
+    var panelBottomPx by remember { mutableIntStateOf(0) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -500,6 +513,7 @@ private fun ColumnScope.TripScrubPane(points: List<TripPointEntity>, tileSource:
             data = data,
             state = state,
             tileSource = tileSource,
+            topInsetPx = panelBottomPx,
             modifier = Modifier.fillMaxSize()
         )
         ScrubValuesPanel(
@@ -508,12 +522,12 @@ private fun ColumnScope.TripScrubPane(points: List<TripPointEntity>, tileSource:
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
+                .onSizeChanged { panelBottomPx = it.height }
                 .padding(8.dp)
         )
     }
 
-    if (withChart) {
-        ScrubControls(data, state)
+    if (data.points.size >= CHART_MIN_POINTS) {
         ScrubChart(
             data = data,
             state = state,
@@ -656,20 +670,18 @@ private fun ScrubValue(label: String, value: String, unit: String? = null, value
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** «Play», «Speed | Consumption» and «Range» in the header row. */
 @Composable
 private fun ScrubControls(data: ScrubData, state: ScrubState) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val playing = state.playing
         ScrubButton(
             icon = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
             label = stringResource(if (playing) R.string.trip_scrub_pause else R.string.trip_scrub_play),
-            on = false,
-            modifier = Modifier.align(Alignment.CenterVertically)
+            on = false
         ) {
             if (playing) {
                 state.playing = false
@@ -679,25 +691,15 @@ private fun ScrubControls(data: ScrubData, state: ScrubState) {
                 state.playing = true
             }
         }
-        MetricSwitch(data.hasPower, state, Modifier.align(Alignment.CenterVertically))
+        MetricSwitch(data.hasPower, state)
         ScrubButton(
             icon = Icons.Filled.Straighten,
             label = stringResource(R.string.trip_scrub_range_toggle),
-            on = state.rangeMode,
-            modifier = Modifier.align(Alignment.CenterVertically)
+            on = state.rangeMode
         ) {
             state.playing = false
             setRangeMode(state, !state.rangeMode)
         }
-        if (!data.hasPower) {
-            Text(
-                stringResource(R.string.trip_scrub_no_power_hint),
-                color = TextMuted,
-                fontSize = 12.sp,
-                modifier = Modifier.align(Alignment.CenterVertically)
-            )
-        }
-        ScrubLegend(state.metric, Modifier.align(Alignment.CenterVertically))
     }
 }
 
@@ -790,7 +792,7 @@ private fun ScrubLegend(metric: ScrubMetric, modifier: Modifier = Modifier) {
         )
     }
     Row(
-        modifier = modifier.heightIn(min = 48.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -804,8 +806,8 @@ private fun ScrubLegend(metric: ScrubMetric, modifier: Modifier = Modifier) {
         )
         Box(
             modifier = Modifier
-                .size(width = 150.dp, height = 8.dp)
-                .background(brush, RoundedCornerShape(4.dp))
+                .size(width = 110.dp, height = 6.dp)
+                .background(brush, RoundedCornerShape(3.dp))
         )
         Text(
             stringResource(
@@ -969,13 +971,29 @@ private fun ScrubChart(data: ScrubData, state: ScrubState, modifier: Modifier = 
                 }
             }
     ) {
-        Text(
-            stringResource(if (metric == ScrubMetric.SPEED) R.string.trip_scrub_chart_speed else R.string.trip_scrub_chart_power),
-            color = TextMuted,
-            fontSize = 11.sp,
-            maxLines = 1,
-            modifier = Modifier.padding(start = 8.dp, top = 2.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp, top = 2.dp, end = 40.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                stringResource(if (metric == ScrubMetric.SPEED) R.string.trip_scrub_chart_speed else R.string.trip_scrub_chart_power),
+                color = TextMuted,
+                fontSize = 11.sp,
+                maxLines = 1
+            )
+            Text(
+                if (data.hasPower) "" else stringResource(R.string.trip_scrub_no_power_hint),
+                color = TextMuted,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            ScrubLegend(metric)
+        }
     }
 }
 
@@ -1001,6 +1019,7 @@ private fun TripRouteMap(
     data: ScrubData,
     state: ScrubState,
     tileSource: String,
+    topInsetPx: Int,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1067,24 +1086,31 @@ private fun TripRouteMap(
                     state.cursor = i
                 }
 
-                // Fit the route once per points list, never on cursor moves.
-                if (overlay.fittedFor !== geoPoints && geoPoints.size >= 2) {
+                // Fit the route once per points list, never on cursor moves; waits for the
+                // values panel to be measured so the route lands under it.
+                if (overlay.fittedFor !== geoPoints && geoPoints.size >= 2 && topInsetPx > 0) {
                     overlay.fittedFor = geoPoints
-                    try {
-                        val b = BoundingBox.fromGeoPoints(geoPoints)
-                        // Extra room at the top: the values panel covers that part of the map.
-                        val bbox = BoundingBox(
-                            b.latNorth + (b.latNorth - b.latSouth) * 0.3, b.lonEast, b.latSouth, b.lonWest
-                        )
-                        map.post { map.zoomToBoundingBox(bbox, true, 48) }
-                    } catch (_: Exception) {
-                        map.controller.setCenter(geoPoints.first())
-                    }
+                    map.post { fitRoute(map, geoPoints, topInsetPx) }
                 }
                 map.invalidate()
             }
         )
     } // key(tileSource)
+}
+
+/** Zooms to the route, stretched north by the part of the map the values panel covers. */
+@Suppress("TooGenericExceptionCaught") // as before: any osmdroid failure falls back to centering, now logged
+private fun fitRoute(map: MapView, geoPoints: List<GeoPoint>, topInsetPx: Int) {
+    try {
+        val b = BoundingBox.fromGeoPoints(geoPoints)
+        val pad = TripScrub.northPadFraction(map.height, FIT_BORDER_PX, topInsetPx)
+        val bbox = BoundingBox(b.latNorth + (b.latNorth - b.latSouth) * pad, b.lonEast, b.latSouth, b.lonWest)
+        map.zoomToBoundingBox(bbox, true, FIT_BORDER_PX)
+        Log.d(SCRUB_TAG, "fit: map=${map.width}x${map.height} panelBottom=$topInsetPx northPad=${"%.2f".format(pad)}")
+    } catch (e: Exception) {
+        Log.w(SCRUB_TAG, "fit failed: ${e.message}")
+        map.controller.setCenter(geoPoints.first())
+    }
 }
 
 /**

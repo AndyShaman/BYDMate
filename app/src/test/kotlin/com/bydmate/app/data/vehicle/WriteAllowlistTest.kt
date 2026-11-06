@@ -215,6 +215,28 @@ class WriteAllowlistTest {
         assertEquals(2, al.find("drl_off")!!.valueMin)
     }
 
+    @Test fun `rear logo light is carved out of banned dev 1004, its read fids stay banned (383)`() {
+        assertTrue(
+            "rear logo write fid must be carved out of the dev 1004 ban",
+            (1004 to 1324621876) in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS,
+        )
+        for (readFid in listOf(880803910, 880803908, 880803888)) {
+            assertTrue("read fid $readFid must stay banned", WriteAllowlist.isBanned(1004, readFid))
+        }
+        val al = WriteAllowlist.loadProduction { "{}" }
+        for ((name, v) in listOf("rear_logo_light_on" to 1, "rear_logo_light_off" to 2)) {
+            val e = al.find(name)
+            assertNotNull(name, e)
+            assertEquals(1004, e!!.dev)
+            assertEquals(1324621876, e.writeFid)
+            assertEquals(v, e.valueMin)
+            assertEquals(v, e.valueMax)
+            assertEquals("lights", e.category)
+            assertTrue("$name is live-validated on Leopard 3 2026-11-06", e.validated)
+            assertNull(e.readbackFid)
+        }
+    }
+
     @Test fun `hazard is carved out of banned dev 1004`() {
         assertTrue(
             "hazard write fid must be carved out of the dev 1004 ban",

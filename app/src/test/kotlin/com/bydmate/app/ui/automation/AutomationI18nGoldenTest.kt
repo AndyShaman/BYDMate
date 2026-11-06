@@ -85,6 +85,9 @@ class AutomationI18nGoldenTest {
         "氛围灯关闭" to Triple("Амбиент выкл", "Ambient Light Off", "氛围灯关"),
         "打开日行灯" to Triple("ДХО вкл", "DRL On", "日行灯开"),
         "关闭日行灯" to Triple("ДХО выкл", "DRL Off", "日行灯关"),
+        // #383
+        "后车标灯打开" to Triple("Подсветка заднего логотипа: вкл", "Rear logo light: on", "后车标灯：开"),
+        "后车标灯关闭" to Triple("Подсветка заднего логотипа: выкл", "Rear logo light: off", "后车标灯：关"),
         "双闪打开" to Triple("Аварийка: включить", "Hazard lights: on", "打开双闪"),
         "双闪关闭" to Triple("Аварийка: выключить", "Hazard lights: off", "关闭双闪"),
         "打开车内灯" to Triple("Салонный свет вкл", "Interior Light On", "车内灯开"),
@@ -173,6 +176,8 @@ class AutomationI18nGoldenTest {
         "氛围灯关闭" to Triple("Свет", "Light", "灯光"),
         "打开日行灯" to Triple("Свет", "Light", "灯光"),
         "关闭日行灯" to Triple("Свет", "Light", "灯光"),
+        "后车标灯打开" to Triple("Свет", "Light", "灯光"),
+        "后车标灯关闭" to Triple("Свет", "Light", "灯光"),
         "双闪打开" to Triple("Свет", "Light", "灯光"),
         "双闪关闭" to Triple("Свет", "Light", "灯光"),
         "打开车内灯" to Triple("Свет", "Light", "灯光"),
@@ -388,6 +393,12 @@ class AutomationI18nGoldenTest {
 
     @Test fun sunshade_half_and_stop_are_in_the_action_catalog() {
         for (cmd in listOf("遮阳帘打开50", "遮阳帘停止")) {
+            assertTrue("$cmd missing", ACTION_COMMANDS.any { it.command == cmd })
+        }
+    }
+
+    @Test fun rear_logo_light_actions_are_in_the_action_catalog() {
+        for (cmd in listOf("后车标灯打开", "后车标灯关闭")) {
             assertTrue("$cmd missing", ACTION_COMMANDS.any { it.command == cmd })
         }
     }
