@@ -388,6 +388,11 @@ class AutomationRuleShareViewModelTest {
         coVerify(exactly = 1) { actionDispatcher.dispatch(sunroofToggle, fresh) }
     }
 
+    @Test fun `rear logo light actions are not speed gated (383)`() {
+        assertFalse(isSpeedGatedAction(ActionDef("后车标灯打开", "Подсветка заднего логотипа: вкл")))
+        assertFalse(isSpeedGatedAction(ActionDef("后车标灯关闭", "Подсветка заднего логотипа: выкл")))
+    }
+
     @Test fun `speed gate covers window, sunroof, frunk and unlock only`() {
         assertTrue(isSpeedGatedAction(windowOpen))
         assertTrue(isSpeedGatedAction(ActionDef("车门解锁", "Открыть замки")))

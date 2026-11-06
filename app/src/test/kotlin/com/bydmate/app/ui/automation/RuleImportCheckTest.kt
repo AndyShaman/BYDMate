@@ -29,6 +29,10 @@ class RuleImportCheckTest {
     private fun delay(payload: String?) = ActionDef("", "Пауза", kind = "delay", payload = payload)
     private fun schedule(value: String) = TriggerDef("Schedule", "", "==", value, "Расписание", kind = "time_range")
 
+    @Test fun `rear logo light actions pass the import check (383)`() {
+        for (c in listOf("后车标灯打开", "后车标灯关闭")) assertNull(c, importProblem(withAction(ActionDef(c, "x"))))
+    }
+
     @Test fun `a valid base rule passes`() {
         assertNull(importProblem(rule()))
     }
