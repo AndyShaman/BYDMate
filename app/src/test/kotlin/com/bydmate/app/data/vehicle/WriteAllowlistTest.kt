@@ -232,7 +232,7 @@ class WriteAllowlistTest {
             assertEquals(v, e.valueMin)
             assertEquals(v, e.valueMax)
             assertEquals("lights", e.category)
-            assertFalse(e.validated)
+            assertTrue("$name is live-validated on Leopard 3 2026-11-06", e.validated)
             assertNull(e.readbackFid)
         }
     }

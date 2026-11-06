@@ -411,10 +411,10 @@ class VehicleApiWriteTest {
         coVerify(exactly = 0) { helper.write(any(), any(), any()) }
     }
 
-    @Test fun `rear logo light helper false is Unsupported, not HelperUnreachable (383)`() = runTest {
+    @Test fun `rear logo light is live-validated, helper false is HelperUnreachable (383)`() = runTest {
         coEvery { helper.write(1004, 1324621876, 1) } returns false
         val r = (api as VehicleApiImpl).doWrite("rear_logo_light_on", 1)
-        assertTrue(r.exceptionOrNull() is VehicleWriteError.Unsupported)
+        assertTrue(r.exceptionOrNull() is VehicleWriteError.HelperUnreachable)
     }
 
     @Test fun `dispatch unknown command returns failure AllowlistMiss without helper call`() = runTest {
