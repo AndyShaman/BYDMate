@@ -538,11 +538,11 @@ private fun MotorCardRow(row: MotorRow, state: TechPanelUiState) {
         MotorRow.INVERTER_TEMP -> {
             PairRow(
                 stringResource(R.string.tech_label_inverter_temp),
-                state.inverterTempFront?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
-                state.inverterTempRear?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
+                inverterTempForDisplay(state.inverterTempFront)?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
+                inverterTempForDisplay(state.inverterTempRear)?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
             )
             if (anyTemp != null) {
-                TempBarPair(state.inverterTempFront, state.inverterTempRear)
+                TempBarPair(inverterTempForDisplay(state.inverterTempFront), inverterTempForDisplay(state.inverterTempRear))
                 TempScaleCaption()
             }
         }
