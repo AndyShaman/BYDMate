@@ -392,4 +392,20 @@ class TripScrubTest {
         assertEquals(0xFF3B82F6.toInt(), TripScrub.consumptionColor(-50.0))
         assertEquals(TripScrub.NO_DATA_COLOR, TripScrub.consumptionColor(null))
     }
+
+    @Test
+    fun `north pad leaves the route exactly the map height under the values panel`() {
+        // 500 px map, 48 px border, panel bottom at 100 px: the route gets 500 - 96 - 100 = 304 px.
+        val k = TripScrub.northPadFraction(mapHeightPx = 500, borderPx = 48, topInsetPx = 100)
+        assertEquals(100.0 / 304.0, k, 1e-9)
+        // Fitting a box of (1 + k) route heights into 404 px leaves the route 404 / (1 + k) = 304 px.
+        assertEquals(304.0, 404.0 / (1 + k), 1e-6)
+    }
+
+    @Test
+    fun `north pad is zero without a panel and the old 30 percent when the map is too small`() {
+        assertEquals(0.0, TripScrub.northPadFraction(mapHeightPx = 500, borderPx = 48, topInsetPx = 0), 0.0)
+        assertEquals(0.3, TripScrub.northPadFraction(mapHeightPx = 200, borderPx = 48, topInsetPx = 120), 0.0)
+        assertEquals(0.3, TripScrub.northPadFraction(mapHeightPx = 0, borderPx = 48, topInsetPx = 80), 0.0)
+    }
 }
