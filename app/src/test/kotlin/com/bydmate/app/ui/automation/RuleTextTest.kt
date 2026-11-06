@@ -138,6 +138,11 @@ class RuleTextTest {
         assertEquals("подождать 30 с", act(ActionDef("delay_30000", "x", "delay", "30000")))
         assertEquals("подождать 0,5 с", act(ActionDef("delay_500", "x", "delay", "500")))
         assertEquals("подождать 1 мин", act(ActionDef("delay_60000", "x", "delay", "60000")))
+        assertEquals("подождать 5 мин", act(ActionDef("delay_300000", "x", "delay", "300000")))
+        assertEquals("подождать 1 ч", act(ActionDef("delay_3600000", "x", "delay", "3600000")))
+        assertEquals("подождать 1,5 ч", act(ActionDef("delay_5400000", "x", "delay", "5400000")))
+        assertEquals("подождать 1,5 мин", act(ActionDef("delay_90000", "x", "delay", "90000")))
+        assertEquals("подождать 24 ч", act(ActionDef("delay_86400000", "x", "delay", "86400000")))
         assertEquals("уведомление «Закройте дверь»",
             act(newNotificationAction(lc).withNotification("Закройте дверь", "")))
         assertEquals("отчёт в Telegram", act(newTelegramReportAction(lc)))
@@ -282,6 +287,11 @@ class RuleTextTest {
             assertEquals(tag, expected, actionText(off, lc) to actionText(on, lc))
         }
         assertEquals("Центральный экран: выключить не выполнено", journalLine(run(recorded(off, success = false), success = false), ctx, now, zone).what)
+    }
+
+    @Test fun `a long delay reads in hours in English`() {
+        LocalePreferences(ctx).setLanguage("en")
+        assertEquals("wait 2 h", actionText(ActionDef("delay_7200000", "x", "delay", "7200000"), ctx.appLocalizedContext()))
     }
 
     @Test fun `a run shows the parameters it recorded`() {

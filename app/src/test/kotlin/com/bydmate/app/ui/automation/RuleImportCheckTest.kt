@@ -110,11 +110,11 @@ class RuleImportCheckTest {
         )
     }
 
-    @Test fun `delay payload must be a number from 0 to 60000`() {
-        listOf("abc", "-1", "60001", null).forEach {
+    @Test fun `delay payload must be a number from 0 to 86400000`() {
+        listOf("abc", "-1", "86400001", null).forEach {
             assertEquals(it, ImportProblem.Action(1), importProblem(withAction(delay(it))))
         }
-        listOf("60000", "0", "500").forEach {
+        listOf("60000", "60001", "300000", "86400000", "0", "500").forEach {
             assertNull(it, importProblem(withAction(delay(it))))
         }
     }

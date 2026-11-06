@@ -102,6 +102,15 @@ class RuleImportSummaryTest {
         assertTrue(maps, maps.contains(lc.getString(R.string.automation_import_nav_maps)))
     }
 
+    @Test fun `import preview shows a delay as a readable duration`() {
+        val rule = SharedRuleFixture.withActions(
+            ActionDef("", "x", "delay", "300000"),
+            ActionDef("", "x", "delay", "5000"),
+        )
+        val preview = RuleImportSummary.preview(rule, ctx, realDispatcher()::autoGoWillRun)
+        assertEquals(listOf("Пауза: 5 мин", "Пауза: 5 с"), preview.actions)
+    }
+
     private fun realDispatcher() = ActionDispatcher(
         mockk(relaxed = true), mockk(relaxed = true), ctx,
         dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },

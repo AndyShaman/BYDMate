@@ -26,6 +26,26 @@ class RuleDraftValidatorTest {
                 payload = """{"fields":[],"text":"Я выехал"}"""))))
     }
 
+    private fun delay(payload: String?) = ActionDef(command = "", displayName = "x", kind = "delay", payload = payload)
+
+    @Test fun delay_within_24_hours_is_valid() {
+        listOf("300000", "86400000", "0").forEach {
+            assertNull(it, RuleDraftValidator.validateActions(listOf(delay(it))))
+        }
+    }
+
+    @Test fun delay_out_of_range_or_not_a_number_is_invalid() {
+        listOf("86400001", "", null, "-5", "abc").forEach {
+            assertEquals(it, ActionValidationError.DelayInvalid(1), RuleDraftValidator.validateActions(listOf(delay(it))))
+        }
+    }
+
+    @Test fun delay_error_index_is_1_based() {
+        val err = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "车窗关闭", displayName = "x", kind = "param"), delay("86400001")))
+        assertEquals(ActionValidationError.DelayInvalid(2), err)
+    }
+
     @Test fun empty_actions_list_is_valid() {
         assertNull(RuleDraftValidator.validateActions(emptyList()))
     }
