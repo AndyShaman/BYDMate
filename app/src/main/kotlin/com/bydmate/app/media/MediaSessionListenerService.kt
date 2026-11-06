@@ -189,7 +189,7 @@ class MediaSessionListenerService : NotificationListenerService() {
             if (!NaviRichNotificationParser.hasNaviSignal(rich)) {
                 Log.d(TAG, "rich parse: stub notification, skipped")
                 tracePost(notification, pkg, id, "stub", null)
-                logEmptyShape("stub", notification, resolver)
+                logEmptyShape("stub $pkg", notification, resolver)
                 NavGuidanceHub.countNotifEmpty()
                 return
             }
@@ -213,7 +213,7 @@ class MediaSessionListenerService : NotificationListenerService() {
             hubHasKnownManeuver = hubHasKnownManeuver,
         ) ?: run {
             tracePost(notification, pkg, id, "empty", null)
-            logEmptyShape("empty", notification, resolver)
+            logEmptyShape("empty $pkg", notification, resolver)
             NavGuidanceHub.countNotifEmpty()
             return
         }

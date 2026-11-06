@@ -151,7 +151,7 @@ object CommandTranslator {
         "双闪打开" to Resolved("hazard_on",  1),
         "双闪关闭" to Resolved("hazard_off", 0),
 
-        // ── Rear logo light ── UNVALIDATED (dev=1004 carve-out, #383) ─────────
+        // ── Rear logo light ── LIVE_VALIDATED (dev=1004 carve-out, #383) ──────
         "后车标灯打开" to Resolved("rear_logo_light_on",  1),
         "后车标灯关闭" to Resolved("rear_logo_light_off", 2),
 
