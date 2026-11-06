@@ -291,7 +291,7 @@ class RuleTextTest {
 
     @Test fun `a long delay reads in hours in English`() {
         LocalePreferences(ctx).setLanguage("en")
-        assertEquals("wait 2 h", actionText(ActionDef("delay_7200000", "x", "delay", "7200000"), ctx.appLocalizedContext()))
+        assertEquals("Wait 2 h", actionText(ActionDef("delay_7200000", "x", "delay", "7200000"), ctx.appLocalizedContext()))
     }
 
     @Test fun `a run shows the parameters it recorded`() {

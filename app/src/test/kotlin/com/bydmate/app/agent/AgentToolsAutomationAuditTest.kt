@@ -46,16 +46,16 @@ class AgentToolsAutomationAuditTest {
 
     private val socTrigger = """{"kind":"param","param":"SOC","operator":"<","value":"20"}"""
 
-    // Item 9: the editor offers a 60 s pause, the agent may too.
-    @Test fun `a pause of up to 60 s is accepted`() = runTest {
+    // Item 9: the editor offers pauses up to 24 h, the agent may too.
+    @Test fun `a pause of up to 24 h is accepted`() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
         coEvery { ruleDao.insert(any()) } returns 1L
 
-        val ok = create("Пауза", socTrigger, """[{"kind":"delay","ms":60000}]""")
-        val over = create("Длинная", socTrigger, """[{"kind":"delay","ms":60001}]""")
+        val ok = create("Пауза", socTrigger, """[{"kind":"delay","ms":86400000}]""")
+        val over = create("Длинная", socTrigger, """[{"kind":"delay","ms":86400001}]""")
 
         assertTrue(ok.toString(), ok.getBoolean("ok"))
-        assertEquals("не указана длительность паузы (мс, 0..60000)", over.getString("error"))
+        assertEquals("не указана длительность паузы (мс, 0..86400000)", over.getString("error"))
         coVerify(exactly = 1) { ruleDao.insert(any()) }
     }
 

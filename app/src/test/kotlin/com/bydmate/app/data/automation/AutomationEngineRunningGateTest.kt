@@ -148,7 +148,7 @@ class AutomationEngineRunningGateTest {
             coEvery { dispatch(any(), any()) } coAnswers {
                 if (firstArg<ActionDef>() == stepA && first) {
                     first = false
-                    throw RuntimeException("boom")
+                    error("boom")
                 }
                 DispatchResult(success = true)
             }

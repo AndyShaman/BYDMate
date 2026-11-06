@@ -233,7 +233,7 @@ class ActionDispatcherFailureLocaleTest {
         action("split_screen", """{"narrow":"a","wide":"b","side":"up"}""") to "неверная сторона",
         action("split_screen_toggle", null) to "пара для разделения экрана не сохранена",
         action("delay", null) to "Длительность паузы не задана",
-        action("delay", "70000") to "Длительность паузы вне диапазона (0..60000 мс)",
+        action("delay", "86400001") to "Длительность паузы вне диапазона (0..86400000 мс)",
         action("media_volume", null) to "Уровень громкости не задан",
         action("media_volume", "loud") to "Некорректный уровень громкости: loud",
         action("app_launch", null) to "packageName не задан",

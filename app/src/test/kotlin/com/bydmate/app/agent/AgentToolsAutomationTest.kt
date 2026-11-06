@@ -411,28 +411,6 @@ class AgentToolsAutomationTest {
         coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 
-    @Test fun create_automation_delay_300000_ms_is_accepted() = runTest {
-        coEvery { ruleDao.getAllList() } returns emptyList()
-        val slot = slot<RuleEntity>()
-        coEvery { ruleDao.insert(capture(slot)) } returns 1L
-
-        val out = JSONObject(tools().execute(call("create_automation", createArgs(
-            actions = """[{"kind":"delay","ms":300000}]"""))))
-
-        assertTrue(out.toString(), out.getBoolean("ok"))
-        assertEquals("300000", ActionDef.listFromJson(slot.captured.actions)[0].payload)
-    }
-
-    @Test fun create_automation_delay_above_24_hours_reports_russian_error() = runTest {
-        coEvery { ruleDao.getAllList() } returns emptyList()
-
-        val out = JSONObject(tools().execute(call("create_automation", createArgs(
-            actions = """[{"kind":"delay","ms":86400001}]"""))))
-
-        assertEquals("не указана длительность паузы (мс, 0..86400000)", out.getString("error"))
-        coVerify(exactly = 0) { ruleDao.insert(any()) }
-    }
-
     @Test fun create_automation_navigate_missing_lon_reports_russian_error() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
 
