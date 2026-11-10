@@ -106,8 +106,8 @@ object NavGuidanceParser {
  *  short enough for one journal line and without the street a screen text may go on with. */
 object NavManeuverRaw {
     const val MAX_CHARS = 40
-    private val SPACES = Regex("""[\s\p{Z}]+""")
-    private val EDGE_PUNCT = Regex("""^\p{Punct}+|\p{Punct}+$""")
+    internal val SPACES = Regex("""[\s\p{Z}]+""")
+    internal val EDGE_PUNCT = Regex("""^\p{Punct}+|\p{Punct}+$""")
 
     /** From a screen text: the table entry it matched (`key=`), else its words masked (the
      *  maneuver vocabulary kept lowercased, every other word `*`) and its length. */

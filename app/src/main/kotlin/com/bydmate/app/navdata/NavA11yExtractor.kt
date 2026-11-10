@@ -38,8 +38,6 @@ object NavA11yExtractor {
     /** Children of the maneuver node and extras keys per node the unknown-maneuver probe lists. */
     private const val MAX_PROBE_CHILDREN = 6
     private const val MAX_PROBE_EXTRAS = 8
-    private val SPACES = Regex("""[\s\p{Z}]+""")
-    private val EDGE_PUNCT = Regex("""^\p{Punct}+|\p{Punct}+$""")
 
     sealed class ReadResult {
         object NotNavigator : ReadResult()
@@ -178,9 +176,9 @@ object NavA11yExtractor {
      *  vocabulary words), else `*`: any other text may be the route's street. Its length always. */
     internal fun maskValue(raw: String?): String {
         if (raw == null) return "null"
-        val words = raw.split(SPACES).filter { it.isNotEmpty() }
+        val words = raw.split(NavManeuverRaw.SPACES).filter { it.isNotEmpty() }
         val vocabulary = NavManeuverCodes.matchedPhrase(raw) == raw.trim().lowercase() ||
-            (words.isNotEmpty() && words.all { NavManeuverCodes.isVocabularyWord(it.lowercase().replace(EDGE_PUNCT, "")) })
+            (words.isNotEmpty() && words.all { NavManeuverCodes.isVocabularyWord(it.lowercase().replace(NavManeuverRaw.EDGE_PUNCT, "")) })
         return if (vocabulary) "\"$raw\" len=${raw.length}" else "* len=${raw.length}"
     }
 
