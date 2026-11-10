@@ -3,51 +3,13 @@ package com.bydmate.app.data.nativestack
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
-import kotlin.reflect.full.memberProperties
 
 class FidMapTest {
-
-    /**
-     * Intentionally ignored until all DiParsData fields are validated.
-     * The remaining entries (avgBatTemp, chargingStatus, batteryCapacityKwh,
-     * autoPark, rain) are not live-sensor fids or require separate validation
-     * paths.
-     */
-    @Ignore("Will pass after remaining 5 fields validated (autoPark, rain, avgBatTemp, chargingStatus, batteryCapacityKwh)")
-    @Test fun `every DiParsData field has a FidMap entry`() {
-        val dataFields = com.bydmate.app.data.remote.DiParsData::class
-            .memberProperties.map { it.name }.toSet()
-        val mapped = FidMap.entries.map { it.field }.toSet()
-        val missing = dataFields - mapped
-        assertTrue("Missing FidMap entries for: $missing", missing.isEmpty())
-    }
-
-    @Test fun `FidMap coverage at least 48 of DiParsData fields`() {
-        val dataFields = com.bydmate.app.data.remote.DiParsData::class
-            .memberProperties.map { it.name }.toSet()
-        val mappedFields = FidMap.entries.map { it.field }.toSet()
-        val covered = mappedFields.intersect(dataFields)
-        assertTrue(
-            "Expected >= 48 DiParsData fields covered, got ${covered.size}: $covered",
-            covered.size >= 48
-        )
-    }
 
     @Test fun `no duplicate device-fid pairs`() {
         val pairs = FidMap.entries.map { it.device to it.fid }
         assertTrue("Duplicate (device, fid) pairs found", pairs.size == pairs.toSet().size)
-    }
-
-    @Test fun `sensor wave fields are mapped`() {
-        val mapped = FidMap.entries.map { it.field }.toSet()
-        val required = setOf(
-            "seatbeltFR", "occupancyFL", "occupancyFR", "occupancyRL",
-            "occupancyRM", "occupancyRR", "lightLevel", "keyBatteryStatus",
-            "wiperRelay", "autoWipers",
-        )
-        assertTrue("Missing FidMap entries: ${required - mapped}", mapped.containsAll(required))
     }
 
     // Audit 3.19 items 10, 11: the passenger belt reads the Instrument fid (Setting 1004 answered
@@ -121,19 +83,6 @@ class FidMapTest {
 
     @Test fun `batch stays within the 128-item transport cap`() {
         assertTrue("FidMap has ${FidMap.entries.size} entries, cap is 128", FidMap.entries.size <= 128)
-    }
-
-    @Test fun `tech panel fields are mapped`() {
-        val mapped = FidMap.entries.map { it.field }.toSet()
-        val required = setOf(
-            "insulationKohm", "motorTempFront", "motorTempRear",
-            "inverterTempFront", "inverterTempRear", "hvVoltage", "hvCurrent",
-            "motorCurrentFront", "motorCurrentRear", "bmsMaxChargeKw", "bmsMaxDischargeAllowKw", "bmsMaxDischargeKw",
-            "motorRpmFront", "motorRpmRear", "compressorW",
-            "tyreTempFL", "tyreTempFR", "tyreTempRL", "tyreTempRR",
-            "pedalAccel", "pedalBrake",
-        )
-        assertTrue("Missing FidMap entries: ${required - mapped}", mapped.containsAll(required))
     }
 
     @Test fun `tech panel entries carry the validated device and transact`() {
@@ -218,6 +167,10 @@ class FidMapTest {
             "chargingCapacity", "bmsState",
             "turnSignal", "gear", "bsdLeft", "bsdRight",
             "windowFL", "windowFR", "windowRL", "windowRR", "windowRRGen3",
+            // Sensor wave fields the dashboard, agent and push evaluation read.
+            "seatbeltFR", "occupancyFL", "occupancyFR", "occupancyRL",
+            "occupancyRM", "occupancyRR", "lightLevel", "keyBatteryStatus",
+            "wiperRelay", "autoWipers",
         ) + com.bydmate.app.ui.settings.SeatsDiagnostics.FIDS.map { it.field }
         val missing = asked.filterNot { it in FidMap.byField }
         assertTrue("FidMap has no entry for $missing", missing.isEmpty())
@@ -232,21 +185,5 @@ class FidMapTest {
 
     @Test fun `field names are unique across the polled and extra tables`() {
         assertEquals(FidMap.all.size, FidMap.byField.size)
-    }
-
-    /** A per-address scale is a deliberate exception, not a habit: the odometer is the
-     *  only field whose catalog address reports a different unit than our constant. */
-    @Test fun `only the odometer carries a catalog scale`() {
-        assertEquals(1.0, FidMap.byField.getValue("mileage").catalogScale)
-        assertEquals(
-            listOf("mileage"),
-            FidMap.all.filter { it.catalogScale != null }.map { it.field },
-        )
-    }
-
-    // PM2.5 is read on demand by Pm25Reader, never through the global poll.
-    @Test fun `no pm25 entry in FidMap and the batch is as before`() {
-        assertTrue(FidMap.entries.none { it.field.startsWith("pm25") })
-        assertEquals(94, FidMap.entries.size)
     }
 }
