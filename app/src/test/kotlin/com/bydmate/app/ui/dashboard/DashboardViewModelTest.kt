@@ -94,7 +94,6 @@ class DashboardViewModelTest {
         override fun getAll(): Flow<List<TripEntity>> = flowOf(emptyList())
         override suspend fun getById(id: Long): TripEntity? = null
         override fun getByDateRange(from: Long, to: Long): Flow<List<TripEntity>> = flowOf(emptyList())
-        override suspend fun getTodaySummary(dayStart: Long, dayEnd: Long): TripSummary = TripSummary(0.0, 0.0)
         override fun getLastTrip(): Flow<TripEntity?> = flowOf(null)
         override fun getRecent(limit: Int): Flow<List<TripEntity>> = flowOf(emptyList())
         override suspend fun getCount(): Int = 0
@@ -111,10 +110,7 @@ class DashboardViewModelTest {
         override suspend fun deleteById(id: Long) {}
         override suspend fun deleteZeroKmTrips(): Int = 0
         override suspend fun fillOdometerIfEmpty(id: Long, startKm: Double?, endKm: Double?): Int = 0
-        override suspend fun getTripsForCapacityEstimate(minSocDelta: Int, limit: Int): List<TripEntity> = emptyList()
-        override suspend fun getRecentSummary(maxTrips: Int): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getRecentForEma(limit: Int): List<TripEntity> = emptyList()
-        override suspend fun getForEmaSince(fromTs: Long): List<TripEntity> = emptyList()
         override suspend fun getRecentForEmaFiltered(minKm: Double, limit: Int): List<TripEntity> = emptyList()
         override fun observeCounterStats(from: Long, landedFrom: Long): Flow<TripCounterStats> = flowOf(TripCounterStats(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L))
     }
@@ -122,10 +118,8 @@ class DashboardViewModelTest {
     private class StubTripPointDao : TripPointDao {
         override suspend fun insertAll(points: List<TripPointEntity>) {}
         override suspend fun getByTripId(tripId: Long): List<TripPointEntity> = emptyList()
-        override suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity> = emptyList()
         override suspend fun getCount(): Int = 0
         override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
-        override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
         override suspend fun deleteByTripId(tripId: Long): Int = 0
     }
