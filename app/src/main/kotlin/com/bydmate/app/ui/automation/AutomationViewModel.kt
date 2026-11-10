@@ -28,6 +28,7 @@ import com.bydmate.app.data.automation.RuleShare
 import com.bydmate.app.data.automation.RuleShareFiles
 import com.bydmate.app.data.automation.RuleShareUrl
 import com.bydmate.app.data.automation.SharedRule
+import com.bydmate.app.data.automation.serviceStartTrigger
 import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.voice.VoiceUserPhrases
 import com.bydmate.app.data.local.dao.RuleDao
@@ -1268,8 +1269,7 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             triggers = TriggerDef.listToJson(listOf(
                 TriggerDef("ExtTemp", "车外温度", "<", "0",
                     tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
-                TriggerDef("ServiceStart", "服务启动", "==", "true",
-                    tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"), kind = "service_start")
+                serviceStartTrigger(tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"))
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("主驾座椅加热2档",
@@ -1298,8 +1298,7 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             triggers = TriggerDef.listToJson(listOf(
                 TriggerDef("InsideTemp", "车内温度", ">", "30",
                     tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
-                TriggerDef("ServiceStart", "服务启动", "==", "true",
-                    tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"), kind = "service_start")
+                serviceStartTrigger(tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"))
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("主驾座椅通风1档",
@@ -1390,10 +1389,10 @@ internal fun telegramReportTemplates(lang: String): List<RuleEntity> {
             enabled = false,
             triggerLogic = "AND",
             triggers = TriggerDef.listToJson(listOf(
-                TriggerDef("ServiceStart", "服务启动", "==", "true", tName(
+                serviceStartTrigger(tName(
                     "BYDMate 启动", "BYDMate startup", "Запуск BYDMate",
                     "Запуск BYDMate", "Uruchomienie BYDMate", "Inicialização do BYDMate",
-                ), kind = "service_start")
+                ))
             )),
             actions = ActionDef.listToJson(listOf(report(ReportField.SOC, ReportField.RANGE, ReportField.TRIP))),
             cooldownSeconds = 60

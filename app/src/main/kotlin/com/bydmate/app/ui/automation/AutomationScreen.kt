@@ -206,6 +206,7 @@ import java.time.ZoneId
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.minuteToHHmm
+import com.bydmate.app.data.automation.serviceStartTrigger
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
@@ -5046,16 +5047,8 @@ private fun newPlaceTrigger(place: PlaceEntity, context: android.content.Context
     )
 }
 
-private fun newServiceStartTrigger(context: android.content.Context): TriggerDef {
-    return TriggerDef(
-        param = "ServiceStart",
-        chineseName = "服务启动",
-        operator = "==",
-        value = "true",
-        displayName = context.getString(R.string.auto_trig_service_start),
-        kind = "service_start"
-    )
-}
+private fun newServiceStartTrigger(context: android.content.Context): TriggerDef =
+    serviceStartTrigger(context.getString(R.string.auto_trig_service_start))
 
 private fun newNetworkAvailableTrigger(context: android.content.Context): TriggerDef {
     return TriggerDef(
