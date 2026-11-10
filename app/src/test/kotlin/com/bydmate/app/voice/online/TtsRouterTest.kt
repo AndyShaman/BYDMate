@@ -2,17 +2,22 @@ package com.bydmate.app.voice.online
 
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.withTimeout
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -116,7 +121,7 @@ class TtsRouterTest {
      *  (which would install a global uncaught-coroutine-exception collector that -- unrelated to
      *  this router -- also snags a pre-existing leaked exception from VoiceControllerTest's
      *  scheduleClear coroutine and fails whichever test happens to run next). */
-    private fun awaitTrue(deadlineMs: Long = 3_000, pollMs: Long = 20L, condition: () -> Boolean) {
+    private fun awaitTrue(deadlineMs: Long = 10_000, pollMs: Long = 20L, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + deadlineMs
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
@@ -131,6 +136,20 @@ class TtsRouterTest {
     }
 
     private fun testScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // Virtual time for the tests that used to sleep past a backend delay or a timeout: runCurrent()
+    // lets a launched job enter its delay, advanceUntilIdle() plays out everything still scheduled
+    // (nothing in the router loops on a timer). Errors from those coroutines must stay empty.
+    private val scheduler = TestCoroutineScheduler()
+    private val virtualErrors: MutableList<Throwable> = Collections.synchronizedList(mutableListOf())
+    private val virtualScope = CoroutineScope(
+        SupervisorJob() + StandardTestDispatcher(scheduler) + CoroutineExceptionHandler { _, t -> virtualErrors += t })
+
+    @After
+    fun tearDown() {
+        virtualScope.cancel()
+        assertTrue("router coroutines failed: $virtualErrors", virtualErrors.isEmpty())
+    }
 
     // --- speak(): offline source delegates straight through ---
 
@@ -174,10 +193,11 @@ class TtsRouterTest {
             backends = listOf(backend),
             selectedSource = { "gemini" },
             synthTimeoutMs = 100,
+            scope = virtualScope,
         )
         assertTrue(router.speak("привет"))
         // synthTimeoutMs fires long before the backend responds; coroutine resolves to null.
-        Thread.sleep(600)
+        scheduler.advanceUntilIdle()
         assertTrue(delegate.playPcmCalls.isEmpty())
         assertTrue(delegate.speakCalls.isEmpty())    // no offline fallback
         assertTrue(delegate.queueEnqueued.isEmpty())
@@ -187,9 +207,9 @@ class TtsRouterTest {
     fun `speak on online source stays silent on backend exception (no fallback)`() {
         val backend = FakeBackend(fail = true)
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = virtualScope)
         router.speak("привет")
-        Thread.sleep(200) // exception is thrown instantly; let the coroutine finish
+        scheduler.advanceUntilIdle() // exception is thrown instantly; let the coroutine finish
         assertTrue(delegate.playPcmCalls.isEmpty())
         assertTrue(delegate.speakCalls.isEmpty())
     }
@@ -248,13 +268,13 @@ class TtsRouterTest {
     fun `queue silences the remainder when the first sentence fails (no fallback)`() {
         val backend = FlakyBackend(failFrom = 1) // all sentences fail from the very first
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = virtualScope)
         val queue = router.startQueue()!!
         queue.enqueue("Первое.")
         queue.enqueue("Второе.")
         queue.enqueue("Третье.")
         queue.finish()
-        Thread.sleep(500) // all three fail instantly; let both coroutines finish
+        scheduler.advanceUntilIdle() // all three fail instantly; let both coroutines finish
         assertTrue(delegate.playPcmCalls.isEmpty())
         assertTrue(delegate.queueEnqueued.isEmpty()) // no offline fallback
         assertEquals(0, delegate.speakCalls.size)
@@ -277,13 +297,13 @@ class TtsRouterTest {
     fun `stop cancels an in-flight online speak before it can play`() {
         val backend = FakeBackend(delayMs = 1_000)
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = virtualScope)
         router.speak("привет")
-        Thread.sleep(50) // let the coroutine actually enter backend.synthesize()'s delay
+        scheduler.runCurrent() // let the coroutine actually enter backend.synthesize()'s delay
         router.stop()
-        // If cancellation failed, the 1s delay would elapse well within this window and playPcm
-        // would fire; it must not, because stop() tore the coroutine down at ~50ms.
-        Thread.sleep(1_500)
+        // If cancellation failed, the 1s delay would elapse within this run and playPcm would
+        // fire; it must not, because stop() tore the coroutine down inside the delay.
+        scheduler.advanceUntilIdle()
         assertTrue(delegate.playPcmCalls.isEmpty())
         // A structural cancellation must not fall through to the offline voice either -- that
         // would speak the interrupted reply right after the user tried to interrupt it.
@@ -296,12 +316,12 @@ class TtsRouterTest {
     fun `stop cancels an in-flight online queue before the next sentence plays`() {
         val backend = FakeBackend(delayMs = 1_000)
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = virtualScope)
         val queue = router.startQueue()!!
         queue.enqueue("Первое.")
-        Thread.sleep(50)
+        scheduler.runCurrent()
         router.stop()
-        Thread.sleep(1_500)
+        scheduler.advanceUntilIdle()
         assertTrue(delegate.playPcmCalls.isEmpty())
         // A structural cancellation must not fall through to the offline voice either -- the
         // interrupted sentence must not resurface via a speak() call or a freshly started
@@ -490,9 +510,9 @@ class TtsRouterTest {
         assertEquals(1, backend.prewarmCalls)
 
         val offline = CountingBackend()
-        TtsRouter(delegate = FakeTtsEngine(), backends = listOf(offline), selectedSource = { TtsRouter.OFFLINE })
-            .prewarmNetwork()
-        Thread.sleep(100)
+        TtsRouter(delegate = FakeTtsEngine(), backends = listOf(offline), selectedSource = { TtsRouter.OFFLINE },
+            scope = virtualScope).prewarmNetwork()
+        scheduler.advanceUntilIdle()
         assertEquals(0, offline.prewarmCalls)
     }
 

@@ -2,9 +2,16 @@ package com.bydmate.app.voice.online
 
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -16,6 +23,20 @@ import java.util.concurrent.BlockingQueue
  *  superseded by any new speech, consecutive single speaks (automation actions) are not, and stop()
  *  cancels all of it. */
 class TtsRouterInFlightTest {
+
+    // The router's work runs on virtual time: runCurrent() lets a launched job enter the backend's
+    // delay, advanceUntilIdle() plays out every synthesis still scheduled (nothing in the router
+    // loops on a timer). Errors from those coroutines are collected and must stay empty.
+    private val scheduler = TestCoroutineScheduler()
+    private val errors: MutableList<Throwable> = Collections.synchronizedList(mutableListOf())
+    private val scope = CoroutineScope(
+        SupervisorJob() + StandardTestDispatcher(scheduler) + CoroutineExceptionHandler { _, t -> errors += t })
+
+    @After
+    fun tearDown() {
+        scope.cancel()
+        assertTrue("router coroutines failed: $errors", errors.isEmpty())
+    }
 
     private class FakeTtsEngine : TtsEngine {
         val playPcmCalls: MutableList<FloatArray> = Collections.synchronizedList(mutableListOf())
@@ -45,11 +66,11 @@ class TtsRouterInFlightTest {
     fun `a new speak drops an agent reply queue still awaiting synthesis`() {
         val backend = FakeBackend(delayMs = 1_000)
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = scope)
         router.startQueue()!!.enqueue("Старый ответ.")
-        Thread.sleep(50)
+        scheduler.runCurrent()
         router.speak("новый ответ")
-        Thread.sleep(1_500)
+        scheduler.advanceUntilIdle()
         assertEquals(1, delegate.playPcmCalls.size)
     }
 
@@ -59,11 +80,11 @@ class TtsRouterInFlightTest {
     fun `consecutive single speaks all play`() {
         val backend = FakeBackend(delayMs = 1_000)
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = scope)
         router.speak("первое")
-        Thread.sleep(50)
+        scheduler.runCurrent()
         router.speak("второе")
-        Thread.sleep(1_500)
+        scheduler.advanceUntilIdle()
         assertEquals(2, delegate.playPcmCalls.size)
     }
 
@@ -71,12 +92,12 @@ class TtsRouterInFlightTest {
     fun `a new queue drops the previous queue's pending sentences`() {
         val backend = FakeBackend(delayMs = 1_000)
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = scope)
         val old = router.startQueue()!!
         old.enqueue("Старое.")
-        Thread.sleep(50)
+        scheduler.runCurrent()
         router.startQueue()!!.enqueue("Новое.")
-        Thread.sleep(1_500)
+        scheduler.advanceUntilIdle()
         assertEquals(1, delegate.playPcmCalls.size)
         assertFalse(old.enqueue("Ещё старое.")) // superseded
     }
@@ -86,12 +107,12 @@ class TtsRouterInFlightTest {
     fun `stop cancels every single speak still in flight`() {
         val backend = FakeBackend(delayMs = 1_000)
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = scope)
         router.speak("первое")
         router.speak("второе")
-        Thread.sleep(50)
+        scheduler.runCurrent()
         router.stop()
-        Thread.sleep(1_500)
+        scheduler.advanceUntilIdle()
         assertTrue(delegate.playPcmCalls.isEmpty())
     }
 
@@ -99,12 +120,12 @@ class TtsRouterInFlightTest {
     fun `a new queue cancels every single speak still in flight`() {
         val backend = FakeBackend(delayMs = 1_000)
         val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" })
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = scope)
         router.speak("первое")
         router.speak("второе")
-        Thread.sleep(50)
+        scheduler.runCurrent()
         router.startQueue()!!.enqueue("Ответ.")
-        Thread.sleep(1_500)
+        scheduler.advanceUntilIdle()
         assertEquals(1, delegate.playPcmCalls.size)
     }
 }
