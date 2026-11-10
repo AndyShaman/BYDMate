@@ -13,6 +13,7 @@ import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.helper.dtc.DtcAddressResult
 import com.bydmate.app.helper.dtc.DtcEraseResult
 import com.bydmate.app.helper.dtc.DtcScanStatus
+import com.bydmate.app.helper.dtc.DtcScanner
 import com.bydmate.app.helper.dtc.DtcWire
 import com.bydmate.app.ui.automation.isSampleFresh
 import kotlinx.coroutines.CoroutineScope
@@ -46,7 +47,7 @@ enum class DtcScanError {
 data class DtcScanState(
     val phase: DtcScanPhase = DtcScanPhase.IDLE,
     val done: Int = 0,
-    val total: Int = 18,
+    val total: Int = DtcWire.ADDRESSES.size,
     val error: DtcScanError? = null,
     val firmwareHint: Boolean = false,
 )
@@ -160,7 +161,7 @@ class DtcScanRepository(
         val reply = runCatching { helper.dtcScanStart(address.device, address.fid) }.getOrNull()
         Log.i(TAG, "start reply=${replyName(reply)}")
         when (reply) {
-            START_OK, START_BUSY -> poll()
+            DtcScanner.START_OK, DtcScanner.START_BUSY -> poll()
             null -> fail(DtcScanError.DAEMON_UNREACHABLE)
             START_OUTDATED -> fail(DtcScanError.DAEMON_OUTDATED)
             else -> fail(DtcScanError.ABORTED)
@@ -271,7 +272,7 @@ class DtcScanRepository(
         val reply = runCatching { helper.dtcEraseStart(gear.device, gear.fid, speed.device, speed.fid, addrs) }.getOrNull()
         Log.i(TAG, "erase start reply=${replyName(reply)} gear=${gear.device}/${gear.fid} speed=${speed.device}/${speed.fid}")
         when (reply) {
-            START_OK -> pollErase()
+            DtcScanner.START_OK -> pollErase()
             // No reply: the daemon may have started the clears after the call timed out.
             null -> endErase(DtcScanError.STATUS_LOST, mayHaveErased = true)
             START_OUTDATED -> endErase(DtcScanError.DAEMON_OUTDATED)
@@ -409,8 +410,6 @@ class DtcScanRepository(
         private const val GEAR_PARK = 1
         private const val POLL_MS = 1_000L
         private const val MAX_LOST_POLLS = 3
-        private const val START_OK = 0
-        private const val START_BUSY = 1
         private const val START_OUTDATED = -2
         private const val DUMP_HEX = 64
 
@@ -467,7 +466,7 @@ class DtcScanRepository(
 
         private fun replyName(reply: Int?): String = when (reply) {
             null -> "null(unreachable)"
-            START_BUSY -> "1(busy)"
+            DtcScanner.START_BUSY -> "1(busy)"
             START_OUTDATED -> "-2(outdated)"
             else -> reply.toString()
         }
