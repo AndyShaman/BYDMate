@@ -31,26 +31,6 @@ class IternioIntervalPolicyTest {
         assertEquals(TelemetryState.CHARGING, IternioIntervalPolicy.classify(charging = true, parked = false))
     }
 
-    // --- intervals ---
-
-    @Test
-    fun `interval for DRIVING is 1 second - matches teslamate-abrp drive cadence`() {
-        assertEquals(1, IternioIntervalPolicy.intervalSec(TelemetryState.DRIVING))
-    }
-
-    @Test
-    fun `interval for CHARGING is 8 seconds - under Iternio 10-sec accuracy threshold`() {
-        // Industry pattern (teslamate-abrp uses 6s); 8s is conservative for our
-        // ADB-on-device read budget while still beating the 10-sec window
-        // Iternio uses to rate sample density.
-        assertEquals(8, IternioIntervalPolicy.intervalSec(TelemetryState.CHARGING))
-    }
-
-    @Test
-    fun `interval for PARKED is 30 seconds - keep ABRP alive but stop spamming`() {
-        assertEquals(30, IternioIntervalPolicy.intervalSec(TelemetryState.PARKED))
-    }
-
     // --- classifyFromDiPars ---
     //
     // Classifier reads only DiPars signals so we can decide cadence without

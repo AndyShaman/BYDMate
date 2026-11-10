@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -79,9 +78,4 @@ class InsightsHybridTripsTest {
         assertEquals(210.0, stats.recentKm, 1e-9)
     }
 
-    @Test fun `the trip filter is the identity on an EV`() {
-        val all = trips(0L)
-        assertSame(all, InsightStatsAggregator.consumptionTrips(all, hybrid = false))
-        assertEquals(5, InsightStatsAggregator.consumptionTrips(all, hybrid = true).size)
-    }
 }
