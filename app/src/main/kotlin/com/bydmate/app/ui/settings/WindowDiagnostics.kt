@@ -25,12 +25,7 @@ internal object WindowDiagnostics {
      * One line per fid from raw (status, value) pairs in [FIDS] order. A null [readings]
      * (daemon unreachable, timeout, old daemon) or a length mismatch collapses to one line.
      */
-    fun format(readings: List<Pair<Int, Int>>?): List<String> {
-        if (readings == null || readings.size != FIDS.size) return listOf("(unavailable)")
-        return FIDS.mapIndexed { i, (name, fid) ->
-            val (status, value) = readings[i]
-            val rendered = if (status == 0) value.toString() else "(status=$status)"
-            "$name[dev=$DEV fid=$fid]=$rendered"
-        }
-    }
+    fun format(readings: List<Pair<Int, Int>>?): List<String> =
+        FIDS.withReadings(readings)?.map { (row, reading) -> fidDumpRow(row.first, DEV, row.second, reading) }
+            ?: listOf("(unavailable)")
 }

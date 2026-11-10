@@ -21,14 +21,9 @@ internal object HudDiagnostics {
     fun batchItems(): List<BatchReadItem> = FIDS.map { (_, fid) -> BatchReadItem(TX_GET_INT, DEV, fid) }
 
     /** Same shape as [WindowDiagnostics.format]. */
-    fun format(readings: List<Pair<Int, Int>>?): List<String> {
-        if (readings == null || readings.size != FIDS.size) return listOf("(unavailable)")
-        return FIDS.mapIndexed { i, (name, fid) ->
-            val (status, value) = readings[i]
-            val rendered = if (status == 0) value.toString() else "(status=$status)"
-            "$name[dev=$DEV fid=$fid]=$rendered"
-        }
-    }
+    fun format(readings: List<Pair<Int, Int>>?): List<String> =
+        FIDS.withReadings(readings)?.map { (row, reading) -> fidDumpRow(row.first, DEV, row.second, reading) }
+            ?: listOf("(unavailable)")
 
     /** The trace form of the same read: `<set>/<status>`, each the value, `e<status>` for an
      *  autoservice error, `na` without an answer. */
@@ -47,11 +42,8 @@ internal object HudDiagnostics {
 
     /** One `hud_switch:` line from raw (status, value) pairs in [SWITCH_FIDS] order. */
     fun switchLine(readings: List<Pair<Int, Int>>?): String {
-        if (readings == null || readings.size != SWITCH_FIDS.size) return "hud_switch: (unavailable)"
-        return "hud_switch: " + SWITCH_FIDS.mapIndexed { i, (name, fid) ->
-            val (status, value) = readings[i]
-            val rendered = if (status == 0) value.toString() else "(status=$status)"
-            "$name[dev=$DEV fid=$fid]=$rendered"
-        }.joinToString(" ")
+        val rows = SWITCH_FIDS.withReadings(readings) ?: return "hud_switch: (unavailable)"
+        return "hud_switch: " +
+            rows.joinToString(" ") { (row, reading) -> fidDumpRow(row.first, DEV, row.second, reading) }
     }
 }

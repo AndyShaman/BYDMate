@@ -39,11 +39,10 @@ internal object BatteryPreheatDiagnostics {
         readings: List<Pair<Int, Int>>?,
         energyType: String? = readSystemProperty(BatteryPreheatChannel.ENERGY_TYPE_PROP),
     ): String {
-        if (readings == null || readings.size != FIDS.size) return "battery_preheat: (unavailable)"
-        return "battery_preheat: " + FIDS.mapIndexed { i, (name, address) ->
-            val (status, value) = readings[i]
-            val rendered = if (status == 0) value.toString() else "(status=$status)"
-            "$name[dev=${address.first} fid=${address.second}]=$rendered"
-        }.joinToString(" ") + " type=${energyType ?: "err"}"
+        val rows = FIDS.withReadings(readings) ?: return "battery_preheat: (unavailable)"
+        return "battery_preheat: " + rows.joinToString(" ") { (row, reading) ->
+            val (name, address) = row
+            fidDumpRow(name, address.first, address.second, reading)
+        } + " type=${energyType ?: "err"}"
     }
 }
