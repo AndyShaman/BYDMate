@@ -105,8 +105,7 @@ object NavA11yExtractor {
             return "found=${nodes.size} class=$cls desc=${maskValue(descs[read])} " +
                 "node${formatNode(nodeFacts(nodes[read], withDesc = false))} ${probeChildren(nodes[read])}"
         } finally {
-            @Suppress("DEPRECATION")
-            nodes.forEach { runCatching { it.recycle() } }
+            recycleAll(nodes)
         }
     }
 
@@ -189,8 +188,7 @@ object NavA11yExtractor {
         val pkg = runCatching { root.packageName?.toString() }.getOrNull() ?: return false
         return listOf(MANEUVER_ID, DISTANCE_ID, NEXT_STREET_ID, NEXT_MANEUVER_ID, NEXT_DISTANCE_ID).any { id ->
             val nodes = runCatching { root.findAccessibilityNodeInfosByViewId("$pkg:id/$id") }.getOrNull()
-            @Suppress("DEPRECATION")
-            nodes?.forEach { runCatching { it.recycle() } }
+            recycleAll(nodes)
             !nodes.isNullOrEmpty()
         }
     }
@@ -221,10 +219,15 @@ object NavA11yExtractor {
         val pkg = runCatching { root.packageName?.toString() }.getOrNull()
         return TRACED_IDS.joinToString(" ", prefix = "ids[", postfix = "]") { (name, id) ->
             val nodes = runCatching { root.findAccessibilityNodeInfosByViewId("$pkg:id/$id") }.getOrNull()
-            @Suppress("DEPRECATION")
-            nodes?.forEach { runCatching { it.recycle() } }
+            recycleAll(nodes)
             "$name=${nodes?.size ?: "?"}"
         }
+    }
+
+    /** Recycles every node of a lookup; a node that throws does not keep the rest from it. */
+    private fun recycleAll(nodes: List<AccessibilityNodeInfo>?) {
+        @Suppress("DEPRECATION")
+        nodes?.forEach { runCatching { it.recycle() } }
     }
 
     private fun textOf(root: AccessibilityNodeInfo, viewId: String): String? =
