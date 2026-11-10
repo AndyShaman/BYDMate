@@ -125,6 +125,25 @@ class ActionDispatcherFreshSpeedGateTest {
         coVerify(exactly = 0) { vehicleApi.readSpeed() }
     }
 
+    // Frunk is a powered external panel: the open fails safe unless the speed read says 0.
+    @Test fun `the frunk opens only at a confirmed standstill`() = runBlocking {
+        dispatcher.readSpeedNow = { null }
+        assertFalse("null telemetry", dispatcher.dispatch(param(FRUNK_OPEN), null).success)
+        assertFalse("unknown speed", dispatcher.dispatch(param(FRUNK_OPEN), diParsData(speed = null)).success)
+        dispatcher.readSpeedNow = { 50 }
+        assertFalse("moving", dispatcher.dispatch(param(FRUNK_OPEN), diParsData(speed = 50)).success)
+        coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
+
+        dispatcher.readSpeedNow = { 0 }
+        assertTrue("standstill", dispatcher.dispatch(param(FRUNK_OPEN), diParsData(speed = 0)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch(FRUNK_OPEN) }
+    }
+
+    @Test fun `frunk close is ungated even with null telemetry`() = runBlocking {
+        assertTrue(dispatcher.dispatch(param("前备箱关闭"), null).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("前备箱关闭") }
+    }
+
     @Test fun `a closing step reads no speed`() = runBlocking {
         dispatcher.readSpeedNow = { error("must not read") }
 
@@ -134,6 +153,7 @@ class ActionDispatcherFreshSpeedGateTest {
 
     private companion object {
         const val WINDOW_OPEN = "主驾打开100"
+        const val FRUNK_OPEN = "前备箱打开"
         const val FRUNK_SPEED_UNKNOWN = "Скорость неизвестна"
     }
 }

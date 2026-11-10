@@ -3,6 +3,7 @@ package com.bydmate.app.data.automation
 import com.bydmate.app.data.automation.ActionDispatcher.BlockReason
 import com.bydmate.app.data.remote.diParsData
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -10,7 +11,9 @@ import org.junit.Test
 /**
  * Tests for the composite safety gate [ActionDispatcher.safetyBlockReason] which
  * combines blocked-pattern, frunk parked-only, door-unlock, and window/sunroof
- * speed checks into a single pure function used by the "Выполнить сейчас" button.
+ * speed checks into a single pure function used by the "Выполнить сейчас" button,
+ * and of the frunk and door-unlock gates it is built from. Door unlock ("车门解锁")
+ * is forbidden above 30 km/h and at unknown speed; locking ("车门上锁") is never gated.
  */
 class ActionDispatcherSafetyGateTest {
 
@@ -41,6 +44,20 @@ class ActionDispatcherSafetyGateTest {
         assertEquals(BlockReason.UnlockSpeed(31), gate("车门解锁", 31))
         assertNull(gate("车门解锁", 30))
         assertEquals(BlockReason.UnlockSpeedUnknown, ActionDispatcher.safetyBlockReason("车门解锁", null))
+    }
+
+    @Test fun `only the frunk open is a frunk open, not the rear trunk or a window`() {
+        assertFalse(ActionDispatcher.isFrontTrunkOpenCommand("开后备箱"))
+        assertFalse(ActionDispatcher.isFrontTrunkOpenCommand("主驾打开100"))
+    }
+
+    @Test fun `unlock gate passes parked, blocks fast, never gates lock or other commands`() {
+        assertFalse(ActionDispatcher.isDoorUnlockCommand("车门上锁"))
+        assertNull(ActionDispatcher.unlockGateBlockReason("车门解锁", 0))
+        assertEquals(BlockReason.UnlockSpeed(90), ActionDispatcher.unlockGateBlockReason("车门解锁", 90))
+        assertNull(ActionDispatcher.unlockGateBlockReason("车门上锁", 120))
+        assertNull(ActionDispatcher.unlockGateBlockReason("车门上锁", null))
+        assertNull(ActionDispatcher.unlockGateBlockReason("车窗全开", 200))
     }
 
     @Test fun `window open allowed when whole snapshot missing - existing semantics`() {
