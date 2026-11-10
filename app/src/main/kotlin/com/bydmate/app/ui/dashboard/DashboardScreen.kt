@@ -1242,18 +1242,6 @@ private fun StyledInsightText(text: String, bulletColor: Color) {
     Text(annotated, fontSize = 13.sp, lineHeight = 19.sp)
 }
 
-@Composable
-private fun DetailRow(label: String, value: String, valueColor: Color) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, color = TextSecondary, fontSize = 14.sp)
-        Text(value, color = valueColor, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace)
-    }
-}
-
 // ============================================================================
 // Shared UI components
 // ============================================================================
