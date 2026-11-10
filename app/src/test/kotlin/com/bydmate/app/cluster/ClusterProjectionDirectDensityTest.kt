@@ -54,9 +54,10 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  *   - a latched package → no density call at all on later sends.
  *
  * Test mechanics mirror [ClusterProjectionDirectDeathWatchTest] / [ClusterProjectionSendFailureTest]:
- * idle → the CPM coroutine suspends at withContext(IO) for the write-ahead marker; Thread.sleep →
- * the real IO thread commits and posts the continuation back; idleFor advances the sandbox
- * looper's VIRTUAL clock so the 150 ms settle delay fires without consuming wall time.
+ * idle → the CPM coroutine suspends at withContext(IO) for the write-ahead marker; a short
+ * Thread.sleep between drains → the real IO thread commits and posts the continuation back;
+ * idleFor advances the sandbox looper's VIRTUAL clock so the 150 ms settle delay fires without
+ * consuming wall time.
  */
 @RunWith(RobolectricTestRunner::class)
 class ClusterProjectionDirectDensityTest {
@@ -154,7 +155,7 @@ class ClusterProjectionDirectDensityTest {
         coEvery { helper.getTaskState(NAVI_PACKAGE) } returns taskOnMainScreen()
 
         ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap())
-        pumpThroughSettle()
+        pumpThroughSettle(helper)
 
         coVerifyOrder {
             helper.setDisplayDensity(addedDisplayId, match { it > 0 })
@@ -185,7 +186,7 @@ class ClusterProjectionDirectDensityTest {
         coEvery { helper.getTaskState(NAVI_PACKAGE) } returns taskOnMainScreen()
 
         ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap())
-        pumpThroughSettle()
+        pumpThroughSettle(helper)
 
         coVerifyOrder {
             helper.setDisplayDensity(addedDisplayId, match { it > 0 })
@@ -218,7 +219,7 @@ class ClusterProjectionDirectDensityTest {
         }
 
         ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap())
-        pumpThroughSettle()
+        pumpThroughSettle(helper)
 
         coVerify(exactly = 0) { helper.setDisplayDensity(addedDisplayId, 0) }
         assertTrue(
@@ -853,7 +854,8 @@ class ClusterProjectionDirectDensityTest {
      */
     private fun awaitMode(mode: ClusterMode) {
         val shadow = shadowOf(Looper.getMainLooper())
-        for (attempt in 0 until 40) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
             shadow.idle()
             if (ClusterProjectionManager.currentMode == mode) return
             shadow.idleFor(SETTLE_MS, MILLISECONDS)
@@ -864,12 +866,23 @@ class ClusterProjectionDirectDensityTest {
         )
     }
 
-    /** Same pumping for paths that never reach FULLSCREEN (the VD fallback owns the tail). */
-    private fun pumpThroughSettle() {
+    /**
+     * Same pumping for paths that never reach FULLSCREEN (the VD fallback owns the tail): drains
+     * the main looper (the real IO thread posts the write-ahead marker continuation back) until
+     * the scaled density is sent, i.e. the coroutine sits in the pre-launch settle delay, then
+     * moves the virtual clock past it so the launch and its failure branch run.
+     */
+    private fun pumpThroughSettle(helper: HelperClient) {
         val shadow = shadowOf(Looper.getMainLooper())
-        shadow.idle()
-        Thread.sleep(300)
-        shadow.idle()
+        val densitySent = {
+            runCatching { coVerify { helper.setDisplayDensity(any(), match { it != 0 }) } }.isSuccess
+        }
+        val deadline = System.currentTimeMillis() + 10_000
+        while (!densitySent() && System.currentTimeMillis() < deadline) {
+            shadow.idle()
+            if (!densitySent()) Thread.sleep(10)
+        }
+        if (!densitySent()) throw AssertionError("density was not sent before launch: $journalDump")
         shadow.idleFor(SETTLE_MS, MILLISECONDS)
     }
 

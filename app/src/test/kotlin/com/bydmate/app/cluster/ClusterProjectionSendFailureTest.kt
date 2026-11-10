@@ -15,6 +15,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.Job
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -42,13 +43,11 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  *     grace normally. onClusterSendFailed is NOT called.
  *
  * Test mechanics:
- *   Idle 1: drain main looper — starts CPM coroutine; runs until withContext(IO) for the
- *           write-ahead marker and suspends.
- *   Thread.sleep(300): lets the real IO thread commit the SharedPreferences write-ahead
- *           marker and post the continuation to the sandbox main looper.
- *   Idle 2: resumes from IO; launchFreeform returns UNAVAILABLE or FAILED and the
- *           branch-under-test runs. Falls through to VD path; addOverlayAndAwaitSurface
- *           does wm.addView (shadow WM), then suspends at ready.await().
+ *   [drainUntilSurfaceWait]: drains the main looper and lets the real IO thread commit the
+ *           SharedPreferences write-ahead marker and post the continuation back, until
+ *           overlayView is set: launchFreeform has returned UNAVAILABLE or FAILED, the
+ *           branch-under-test has run, and the VD path (addOverlayAndAwaitSurface, wm.addView on
+ *           the shadow WM) is suspended at ready.await(). The virtual clock does not move.
  *   idleFor(SURFACE_TIMEOUT_MS + 1, MILLISECONDS): advances the sandbox looper's virtual
  *           clock past the withTimeoutOrNull deadline, firing the timeout and resuming the
  *           continuation that calls onClusterSendFailed.
@@ -88,6 +87,7 @@ class ClusterProjectionSendFailureTest {
         ShadowChoreographer.setPaused(true)
 
         ShadowSettings.setCanDrawOverlays(true)
+        resetManagerState()
 
         val prefs = context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().clear().commit()
@@ -140,10 +140,7 @@ class ClusterProjectionSendFailureTest {
 
         ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap)
 
-        val shadow = shadowOf(Looper.getMainLooper())
-        shadow.idle()
-        Thread.sleep(300)
-        shadow.idle()  // UNAVAILABLE branch: no onClusterSendFailed call; VD path suspends at ready.await()
+        drainUntilSurfaceWait()  // UNAVAILABLE branch: no onClusterSendFailed call; VD path suspends at ready.await()
 
         assertNull(
             "CPM must NOT invoke onClusterSendFailed at the UNAVAILABLE branch: " +
@@ -173,10 +170,7 @@ class ClusterProjectionSendFailureTest {
 
         ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap)
 
-        val shadow = shadowOf(Looper.getMainLooper())
-        shadow.idle()
-        Thread.sleep(300)
-        shadow.idle()  // FAILED branch: no onClusterSendFailed call; VD path suspends at ready.await()
+        drainUntilSurfaceWait()  // FAILED branch: no onClusterSendFailed call; VD path suspends at ready.await()
 
         assertNull(
             "CPM must NOT invoke onClusterSendFailed at the FAILED branch: " +
@@ -216,10 +210,8 @@ class ClusterProjectionSendFailureTest {
 
         ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap)
 
+        drainUntilSurfaceWait()  // UNAVAILABLE: no call; falls through; VD path suspends at surface ready.await()
         val shadow = shadowOf(Looper.getMainLooper())
-        shadow.idle()
-        Thread.sleep(300)
-        shadow.idle()  // UNAVAILABLE: no call; falls through; VD path suspends at surface ready.await()
 
         // Fire all remaining scheduled tasks including the 3000ms surface timeout.
         shadow.runToEndOfTasks()
@@ -301,34 +293,15 @@ class ClusterProjectionSendFailureTest {
 
         ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap)
 
-        val overlayViewField = ClusterProjectionManager::class.java.getDeclaredField("overlayView")
-        overlayViewField.isAccessible = true
-
         val shadow = shadowOf(Looper.getMainLooper())
 
-        // Idle 1: drain main looper — CPM coroutine starts and suspends at withContext(IO) inside
-        // recoverStaleDirectDensity.
-        shadow.idle()
-        // Let the real IO thread commit the write-ahead marker; both IO dispatches
-        // (recoverStaleDirectDensity and the write-ahead prefs.commit) complete in wall time.
-        Thread.sleep(300)
-
-        // Idle 2: resume from IO; coroutine runs tryDirectProjection (count=1), UNAVAILABLE branch,
-        // VD-path entry re-arm (count=2), createVirtualDisplay, wm.addView, then suspends at
-        // ready.await(). With ShadowChoreographer.setPaused(true) (set in setUp), scheduleVsync()
-        // uses the clock-listener path and does NOT advance the virtual clock here, so the
-        // 3000ms surface timeout cannot fire during this idle.
-        shadow.idle()
-
-        // CPM sets overlayView = container immediately before ready.await(); a non-null value
-        // confirms the coroutine has reached the surface-wait step. This avoids the
-        // ShadowWindowManagerImpl.views Multimap, whose display-id indexing is fragile across
-        // Robolectric test runs.
-        val container = overlayViewField.get(ClusterProjectionManager) as? FrameLayout
-        checkNotNull(container) {
-            "ClusterProjectionManager.overlayView is null after idle2 — coroutine did not reach " +
-            "addOverlayAndAwaitSurface. Possible cause: wm.addView threw before overlayView was set."
-        }
+        // Drain until the surface wait: both IO dispatches (recoverStaleDirectDensity and the
+        // write-ahead prefs.commit) complete in wall time, then the coroutine runs
+        // tryDirectProjection (count=1), UNAVAILABLE branch, VD-path entry re-arm (count=2),
+        // wm.addView, and suspends at ready.await(). With ShadowChoreographer.setPaused(true) (set
+        // in setUp), scheduleVsync() uses the clock-listener path and does NOT advance the virtual
+        // clock here, so the 3000ms surface timeout cannot fire during this drain.
+        val container = drainUntilSurfaceWait()
         val surfaceView = container.getChildAt(0) as SurfaceView
 
         // Fire surfaceCreated with a mock holder so ready.complete(mockSurface) runs.
@@ -351,4 +324,49 @@ class ClusterProjectionSendFailureTest {
             3, beforeCallCount,
         )
     }
+
+    /**
+     * Drains the main looper until the VD path waits for its surface. CPM sets overlayView =
+     * container immediately before ready.await(); a non-null value confirms the coroutine has
+     * reached the surface-wait step (and that the direct branch under test is behind it). This
+     * avoids the ShadowWindowManagerImpl.views Multimap, whose display-id indexing is fragile
+     * across Robolectric test runs. Thread.sleep between drains lets the real IO thread post its
+     * continuation back; the virtual clock is NOT advanced, so the surface timeout cannot fire.
+     */
+    private fun drainUntilSurfaceWait(): FrameLayout {
+        val shadow = shadowOf(Looper.getMainLooper())
+        val deadline = System.currentTimeMillis() + 10_000
+        while (overlayView() == null && System.currentTimeMillis() < deadline) {
+            shadow.idle()
+            if (overlayView() == null) Thread.sleep(10)
+        }
+        return checkNotNull(overlayView()) {
+            "ClusterProjectionManager.overlayView is null after 10 s — coroutine did not reach " +
+            "addOverlayAndAwaitSurface. Possible cause: wm.addView threw before overlayView was set."
+        }
+    }
+
+    private fun overlayView(): FrameLayout? =
+        field("overlayView").get(ClusterProjectionManager) as? FrameLayout
+
+    /** Same process-wide state reset as ClusterProjectionDirectDeathWatchTest. */
+    private fun resetManagerState() {
+        field("directDeathWatchJob").let { f ->
+            (f.get(ClusterProjectionManager) as? Job)?.cancel()
+            f.set(ClusterProjectionManager, null)
+        }
+        field("currentMode").set(ClusterProjectionManager, ClusterMode.OFF)
+        field("projectedPackage").set(ClusterProjectionManager, null)
+        field("directDisplayId").set(ClusterProjectionManager, -1)
+        field("remoteDisplayId").set(ClusterProjectionManager, -1)
+        field("overlayView").set(ClusterProjectionManager, null)
+        field("journal").set(ClusterProjectionManager, null)
+        field("frame").set(ClusterProjectionManager, null)
+        ClusterJournal::class.java.getDeclaredField("instance")
+            .apply { isAccessible = true }
+            .set(null, null)
+    }
+
+    private fun field(name: String) =
+        ClusterProjectionManager::class.java.getDeclaredField(name).apply { isAccessible = true }
 }

@@ -275,7 +275,8 @@ class ClusterProjectionDirectDeathWatchTest {
         ClusterProjectionManager.setMode(context, ClusterMode.FULLSCREEN, helper, bootstrap())
         // A scaled send settles 150 ms before the launch, so this wait has to move the clock.
         val shadow = shadowOf(Looper.getMainLooper())
-        for (attempt in 0 until 40) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
             shadow.idle()
             if (ClusterProjectionManager.currentMode == ClusterMode.FULLSCREEN) break
             shadow.idleFor(150, MILLISECONDS)
@@ -438,7 +439,8 @@ class ClusterProjectionDirectDeathWatchTest {
      */
     private fun awaitMode(mode: ClusterMode) {
         val shadow = shadowOf(Looper.getMainLooper())
-        for (attempt in 0 until 40) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
             shadow.idle()
             if (ClusterProjectionManager.currentMode == mode) return
             Thread.sleep(25)
