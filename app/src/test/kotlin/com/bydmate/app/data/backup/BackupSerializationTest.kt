@@ -16,56 +16,29 @@ class BackupSerializationTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `round-trip preserves String values`() {
-        val input = mapOf("file1" to mapOf<String, Any?>("key_str" to "hello world"))
-        val result = BackupManager.deserializePrefs(BackupManager.serializePrefs(input))
-        assertEquals("hello world", result["file1"]!!["key_str"])
-    }
-
-    @Test
-    fun `round-trip preserves Int values`() {
-        val input = mapOf("file1" to mapOf<String, Any?>("key_int" to 42))
-        val result = BackupManager.deserializePrefs(BackupManager.serializePrefs(input))
-        assertEquals(42, result["file1"]!!["key_int"])
-    }
-
-    @Test
-    fun `round-trip preserves Long values`() {
-        val input = mapOf("file1" to mapOf<String, Any?>("key_long" to 1_234_567_890_123L))
-        val result = BackupManager.deserializePrefs(BackupManager.serializePrefs(input))
-        assertEquals(1_234_567_890_123L, result["file1"]!!["key_long"])
-    }
-
-    @Test
-    fun `round-trip preserves Float values`() {
-        val input = mapOf("file1" to mapOf<String, Any?>("key_float" to 3.14f))
-        val result = BackupManager.deserializePrefs(BackupManager.serializePrefs(input))
-        // Float stored as Double then read back; compare with a small tolerance
-        val restored = result["file1"]!!["key_float"] as Float
-        assertEquals(3.14f, restored, 0.0001f)
-    }
-
-    @Test
-    fun `round-trip preserves Boolean true and false`() {
-        val input = mapOf(
-            "file1" to mapOf<String, Any?>(
-                "flag_true" to true,
-                "flag_false" to false,
-            )
+    fun `round-trip preserves every value type`() {
+        // label to the one prefs file serialized and read back on its own
+        val cases = listOf(
+            "String" to mapOf<String, Any?>("key_str" to "hello world"),
+            "Int" to mapOf<String, Any?>("key_int" to 42),
+            "Long" to mapOf<String, Any?>("key_long" to 1_234_567_890_123L),
+            // Float stored as Double then read back; compare with a small tolerance
+            "Float" to mapOf<String, Any?>("key_float" to 3.14f),
+            "Boolean true and false" to mapOf<String, Any?>("flag_true" to true, "flag_false" to false),
+            "StringSet" to mapOf<String, Any?>("key_set" to setOf("alpha", "beta", "gamma")),
         )
-        val result = BackupManager.deserializePrefs(BackupManager.serializePrefs(input))
-        assertEquals(true, result["file1"]!!["flag_true"])
-        assertEquals(false, result["file1"]!!["flag_false"])
-    }
-
-    @Test
-    fun `round-trip preserves StringSet values`() {
-        val original: Set<String> = setOf("alpha", "beta", "gamma")
-        val input = mapOf("file1" to mapOf<String, Any?>("key_set" to original))
-        val result = BackupManager.deserializePrefs(BackupManager.serializePrefs(input))
-        @Suppress("UNCHECKED_CAST")
-        val restored = result["file1"]!!["key_set"] as Set<String>
-        assertEquals(original, restored)
+        for ((label, prefs) in cases) {
+            val input = mapOf("file1" to prefs)
+            val result = BackupManager.deserializePrefs(BackupManager.serializePrefs(input))
+            for ((key, value) in prefs) {
+                val restored = result["file1"]!![key]
+                if (value is Float) {
+                    assertEquals("case: $label", value, restored as Float, 0.0001f)
+                } else {
+                    assertEquals("case: $label", value, restored)
+                }
+            }
+        }
     }
 
     @Test
@@ -129,22 +102,20 @@ class BackupSerializationTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `isRestorable returns true when backup schema equals current`() {
-        assertTrue(BackupManager.isRestorable(backupSchemaVersion = 15, currentSchemaVersion = 15))
-    }
-
-    @Test
-    fun `isRestorable returns true when backup schema is older than current`() {
-        assertTrue(BackupManager.isRestorable(backupSchemaVersion = 14, currentSchemaVersion = 15))
-    }
-
-    @Test
-    fun `isRestorable returns false when backup schema is newer than current`() {
-        assertFalse(BackupManager.isRestorable(backupSchemaVersion = 16, currentSchemaVersion = 15))
-    }
-
-    @Test
-    fun `isRestorable returns false for significantly newer backup`() {
-        assertFalse(BackupManager.isRestorable(backupSchemaVersion = 20, currentSchemaVersion = 15))
+    fun `isRestorable accepts an equal or older backup schema and refuses a newer one`() {
+        // label, backup schema (current is 15), expected restorable
+        val cases = listOf(
+            Triple("equal to current", 15, true),
+            Triple("older than current", 14, true),
+            Triple("newer than current", 16, false),
+            Triple("significantly newer", 20, false),
+        )
+        for ((label, backup, expected) in cases) {
+            assertEquals(
+                "case: $label",
+                expected,
+                BackupManager.isRestorable(backupSchemaVersion = backup, currentSchemaVersion = 15),
+            )
+        }
     }
 }
