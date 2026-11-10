@@ -13,8 +13,7 @@ class FitWholeRowsTest {
 
     private class Stretched(
         val label: String,
-        val rowCount: Int,
-        val rowHeight: Int,
+        val heights: List<Int>,
         val spacing: Int,
         val availableHeight: Int,
         val shown: Int,
@@ -24,16 +23,16 @@ class FitWholeRowsTest {
     @Test fun `rows that fit are shown and the leftover is spread so they fill the height exactly`() {
         val cases = listOf(
             // 6 x 51 + 5 x 6 = 336, 102 px left over
-            Stretched("six rows fit, leftover spread evenly", 7, 51, 6, 438, 6, List(6) { 68 }),
+            Stretched("six rows fit, leftover spread evenly", List(7) { 51 }, 6, 438, 6, List(6) { 68 }),
             // 6 x 56 + 5 x 6 = 366, 34 px left over: 5 each, 4 rows get one more
-            Stretched("uneven leftover goes to the first rows", 7, 56, 6, 400, 6, listOf(62, 62, 62, 62, 61, 61)),
+            Stretched("uneven leftover goes to the first rows", List(7) { 56 }, 6, 400, 6, listOf(62, 62, 62, 62, 61, 61)),
             // 6 x 61 + 5 x 6 = 396 > 362; 5 x 61 + 4 x 6 = 329
-            Stretched("only five fit, five are stretched to the bottom", 7, 61, 6, 362, 5),
-            Stretched("more room than six need still shows six", 7, 40, 4, 1000, 6),
-            Stretched("exactly six trips are stretched like a longer list", 6, 40, 4, 500, 6),
+            Stretched("only five fit, five are stretched to the bottom", List(7) { 61 }, 6, 362, 5),
+            Stretched("more room than six need still shows six", List(7) { 40 }, 4, 1000, 6),
+            Stretched("exactly six trips are stretched like a longer list", List(6) { 40 }, 4, 500, 6),
         )
         for (c in cases) {
-            val heights = fitWholeRows(List(c.rowCount) { c.rowHeight }, c.spacing, c.availableHeight, maxRows = 6)
+            val heights = fitWholeRows(c.heights, c.spacing, c.availableHeight, maxRows = 6)
             assertEquals("case: ${c.label}", c.shown, heights.size)
             assertEquals("case: ${c.label}", c.availableHeight, total(heights, c.spacing))
             c.exactHeights?.let { assertEquals("case: ${c.label}", it, heights) }
