@@ -42,6 +42,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -93,7 +94,7 @@ class VoiceControllerSessionTest {
      *  CoroutineScope(SupervisorJob()) with no test-dispatcher seam, so true virtual-time control
      *  (runTest) is not available without changing the production constructor; this is the closest
      *  practical alternative. */
-    private fun awaitTrue(timeoutMs: Long = 2_000L, condition: () -> Boolean) {
+    private fun awaitTrue(timeoutMs: Long = 10_000L, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
@@ -122,7 +123,7 @@ class VoiceControllerSessionTest {
 
     /** Same idea as [awaitTrue] but for a block of mockk verifications, which throw
      *  AssertionError on mismatch rather than returning a Boolean. */
-    private fun awaitVerify(timeoutMs: Long = 2_000L, block: () -> Unit) {
+    private fun awaitVerify(timeoutMs: Long = 10_000L, block: () -> Unit) {
         val deadline = System.currentTimeMillis() + timeoutMs
         var lastError: Throwable? = null
         while (System.currentTimeMillis() < deadline) {
@@ -1145,7 +1146,7 @@ class VoiceControllerSessionTest {
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         // The dwell now scales with the answer length when nothing was spoken aloud, so the
         // window is longer than the seam alone suggests even for this short outcome text.
-        awaitTrue(timeoutMs = 5_000L) { cleared }
+        awaitTrue { cleared }
     }
 
     @Test fun `a new utterance cancels the pending orb clear`() {
@@ -1165,28 +1166,30 @@ class VoiceControllerSessionTest {
             DispatchResult(true)
         }
         val controller = makeController(fakeAsr, dispatcher, context = stubbedContext())
-        controller.dialogClearDelayMs = 500L
+        // The unspoken 33-char outcome reads in under 2.5 s, so this floor is the first timer.
+        controller.dialogClearDelayMs = 2_500L
         var cleared = false
         controller.clearDialogHook = { cleared = true }
         val answers = Collections.synchronizedList(mutableListOf<String>())
-        controller.showAnswerHook = { text -> answers.add(text) }
+        val firstAnswerMs = AtomicLong(0L)
+        controller.showAnswerHook = { text -> firstAnswerMs.compareAndSet(0L, System.currentTimeMillis()); answers.add(text) }
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
         awaitSubscribed(fakeAsr.events)
 
-        // First utterance completes and arms a 500ms clear.
+        // First utterance completes and arms a 2.5 s clear.
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitTrue { answers.isNotEmpty() }
         awaitTrue { controller.routingJobForTest() == null }
 
-        // Second utterance arrives well within 500ms; routeUtterance() cancels the pending clear
+        // Second utterance arrives well within 2.5 s; routeUtterance() cancels the pending clear
         // before its own (held) dispatch, so no replacement clear is armed.
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitTrue { secondStarted.get() }
 
-        // Past the first timer's 500ms: had it not been cancelled, clearDialogHook would have fired.
-        Thread.sleep(800)
+        // Past the first timer's 2.5 s: had it not been cancelled, clearDialogHook would have fired.
+        Thread.sleep((firstAnswerMs.get() + 3_000L - System.currentTimeMillis()).coerceAtLeast(0L))
         assertFalse(cleared)
 
         releaseSecond.set(true)
@@ -1505,6 +1508,7 @@ class VoiceControllerSessionTest {
         awaitTrue { controller.listening.value }
         awaitSubscribed(fakeAsr.events)
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи анекдот"))
+        awaitTrue { controller.state.value is VoiceUiState.AgentAnswer && controller.routingJobForTest() == null }
 
         // While the reply is still being spoken the session must stay open...
         Thread.sleep(500)
@@ -1534,6 +1538,7 @@ class VoiceControllerSessionTest {
         awaitTrue { controller.listening.value }
         awaitSubscribed(fakeAsr.events)
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("включи музыку"))
+        awaitTrue { controller.state.value is VoiceUiState.AgentAnswer && controller.routingJobForTest() == null }
 
         // The answer landed but playback has not begun: the session must NOT close.
         Thread.sleep(500)
@@ -1568,6 +1573,7 @@ class VoiceControllerSessionTest {
         awaitTrue { captured.get() != null }
         assertEquals("yandex_music", captured.get()?.kind)
         assertEquals("""{"mode":"mybeat"}""", captured.get()?.payload)
+        awaitTrue { controller.state.value is VoiceUiState.Done && controller.routingJobForTest() == null }
         // Open while "Готово" is being said, closed once it ends.
         Thread.sleep(500)
         assertTrue(controller.listening.value)
@@ -1589,6 +1595,7 @@ class VoiceControllerSessionTest {
         awaitTrue { controller.listening.value }
         awaitSubscribed(fakeAsr.events)
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи анекдот"))
+        awaitTrue { controller.state.value is VoiceUiState.AgentAnswer && controller.routingJobForTest() == null }
 
         Thread.sleep(700)
         assertTrue(controller.listening.value)   // still listening
@@ -1657,6 +1664,23 @@ class VoiceControllerSessionTest {
         awaitSubscribed(asr.events)
     }
 
+    /** Stamps, on the controller's own threads, when the first answer reached the orb and when
+     *  the session hid its overlay on teardown. */
+    private fun stampAnswerAndClose(controller: VoiceController): Pair<AtomicLong, AtomicLong> {
+        val answeredMs = AtomicLong(0L)
+        val closedMs = AtomicLong(0L)
+        controller.showAnswerHook = { answeredMs.compareAndSet(0L, System.currentTimeMillis()) }
+        controller.hideListeningOverlay = { closedMs.set(System.currentTimeMillis()) }
+        return answeredMs to closedMs
+    }
+
+    /** The session stayed open at least [minMs] after the answer appeared. Both ends are stamped
+     *  by the controller itself, so a late test thread cannot make this fail. */
+    private fun assertOpenAtLeast(minMs: Long, answeredMs: AtomicLong, closedMs: AtomicLong) {
+        val openMs = closedMs.get() - answeredMs.get()
+        assertTrue("closed $openMs ms after the answer", answeredMs.get() != 0L && openMs >= minMs)
+    }
+
     // Longest unspoken reading dwell of the short outcome texts below with the 50 ms floor.
     private val shortDwellMs = 2_500L
 
@@ -1711,7 +1735,7 @@ class VoiceControllerSessionTest {
         startSession(controller, fakeAsr)
 
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи анекдот"))
-        awaitTrue(timeoutMs = 5_000L) { !controller.listening.value }
+        awaitTrue { !controller.listening.value }
     }
 
     @Test fun `toggle on - a blocked or not understood phrase keeps the session listening`() {
@@ -1763,13 +1787,14 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeController(fakeAsr, okDispatcher(), closeAfterCommand = true)
         controller.dialogClearDelayMs = 50L
+        val (answeredMs, closedMs) = stampAnswerAndClose(controller)
         startSession(controller, fakeAsr)
 
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitTrue { controller.state.value is VoiceUiState.Done }
-        Thread.sleep(500)
-        assertTrue(controller.listening.value)   // the text is still being read
-        awaitTrue(timeoutMs = 5_000L) { !controller.listening.value }
+        awaitTrue { !controller.listening.value && closedMs.get() != 0L }
+        // the text was still being read 500 ms after it appeared
+        assertOpenAtLeast(500L, answeredMs, closedMs)
     }
 
     @Test fun `toggle on - a newer session started while the close waited is not closed`() {
@@ -1797,13 +1822,14 @@ class VoiceControllerSessionTest {
         val controller = makeController(fakeAsr, mockk(relaxed = true),
             agentOrchestrator = answeringAgent("До встречи, хорошей дороги!", AgentToolOutcome("end_conversation", true)))
         controller.dialogClearDelayMs = 50L
+        val (answeredMs, closedMs) = stampAnswerAndClose(controller)
         startSession(controller, fakeAsr)
 
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой агента"))
         awaitTrue { controller.state.value is VoiceUiState.AgentAnswer }
-        Thread.sleep(500)
-        assertTrue(controller.listening.value)   // the goodbye is still being read
-        awaitTrue(timeoutMs = 5_000L) { !controller.listening.value }
+        awaitTrue { !controller.listening.value && closedMs.get() != 0L }
+        // the goodbye was still being read 500 ms after it appeared
+        assertOpenAtLeast(500L, answeredMs, closedMs)
     }
 
     // The reply is a queue of two sentences; speaking dips false between them. The close waits

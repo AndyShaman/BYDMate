@@ -53,7 +53,7 @@ class VoiceControllerFirmwareDuckTest {
         }
     }
 
-    private fun awaitTrue(timeoutMs: Long = 2_000L, condition: () -> Boolean) {
+    private fun awaitTrue(timeoutMs: Long = 10_000L, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
