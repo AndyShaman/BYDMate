@@ -420,6 +420,51 @@ class ChargesViewModelTest {
     }
 
     @Test
+    fun `groupChargesByMonthDay_emptyList_returnsEmpty`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val result = vm.groupChargesByMonthDay(emptyList())
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `toggleMonth_addsToExpanded`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.toggleMonth("2026-04")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("2026-04" in vm.uiState.value.expandedMonths)
+    }
+
+    @Test
+    fun `toggleMonth_removesFromExpanded`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.toggleMonth("2026-04")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue("2026-04" in vm.uiState.value.expandedMonths)
+
+        vm.toggleMonth("2026-04")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse("2026-04" in vm.uiState.value.expandedMonths)
+    }
+
+    @Test
+    fun `toggleDay_addsToExpanded`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.toggleDay("2026-04-25")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("2026-04-25" in vm.uiState.value.expandedDays)
+    }
+
+    @Test
     fun `loadAutoserviceState_connected_returnsConnectedTrue`() = runTest {
         val vm = buildViewModel(
             batteryReading = BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L),
@@ -571,6 +616,21 @@ class ChargesViewModelTest {
         assertEquals(35.0, vm.uiState.value.lifetimeAcKwh, 0.01)
         assertEquals(50.0, vm.uiState.value.lifetimeDcKwh, 0.01)
         assertEquals(85.0, vm.uiState.value.lifetimeTotalKwh, 0.01)
+    }
+
+    @Test
+    fun `sohSeries_populatedFromSnapshots`() = runTest {
+        val snapshots = listOf(
+            BatterySnapshotEntity(id = 1, timestamp = 1000L, socStart = 10, socEnd = 80,
+                kwhCharged = 50.0, sohPercent = 100.0, calculatedCapacityKwh = 72.9),
+            BatterySnapshotEntity(id = 2, timestamp = 2000L, socStart = 20, socEnd = 90,
+                kwhCharged = 55.0, sohPercent = 99.5, calculatedCapacityKwh = 72.6)
+        )
+        val vm = buildViewModel(snapshots = snapshots)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2, vm.uiState.value.sohSeries.size)
+        assertEquals(2, vm.uiState.value.capacitySeries.size)
     }
 
     @Test
