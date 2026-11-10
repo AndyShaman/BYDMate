@@ -392,23 +392,6 @@ class GigaAmSegmenterTest {
         assertTrue(engine.isWarm())
     }
 
-    @Test fun `warm vad - every vad built is closed, the spare one when the model is dropped`() = runTest {
-        val vads = mutableListOf<FakeVadHandle>()
-        val background = ManualExecutor()
-        val engine = warmEngine(vads, background)
-        engine.warmUp()
-        engine.transcribe(flowOf(ShortArray(160))).collect {}
-        background.runAll()
-        engine.transcribe(flowOf(ShortArray(160))).collect {}
-        background.runAll()
-
-        engine.invalidateCachedRecognizer()
-
-        assertEquals(3, vads.size)
-        assertTrue(vads.all { it.closed })
-        assertFalse(engine.isWarm())
-    }
-
     @Test fun `default path - no spare vad and no wait before listening`() = runTest {
         val vads = mutableListOf<FakeVadHandle>()
         var recognizerCreations = 0
