@@ -7,7 +7,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.bydmate.app.data.local.entity.TariffPeriodEntity
-import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TariffPeriodDao {
@@ -23,9 +22,6 @@ interface TariffPeriodDao {
     /** Ascending by start: the order [com.bydmate.app.domain.cost.TariffSchedule] expects. */
     @Query("SELECT * FROM tariff_periods ORDER BY start_ts ASC")
     suspend fun getAllAsc(): List<TariffPeriodEntity>
-
-    @Query("SELECT * FROM tariff_periods ORDER BY start_ts DESC")
-    fun observeAll(): Flow<List<TariffPeriodEntity>>
 
     /** The period already sitting on that date, if any: `start_ts` is unique. */
     @Query("SELECT * FROM tariff_periods WHERE start_ts = :startTs LIMIT 1")

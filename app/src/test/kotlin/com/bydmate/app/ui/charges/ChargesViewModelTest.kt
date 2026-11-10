@@ -71,7 +71,6 @@ class ChargesViewModelTest {
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
     private class FakeChargeDao(
@@ -102,7 +101,6 @@ class ChargesViewModelTest {
         override fun getLastCharge(): Flow<ChargeEntity?> = flowOf(null)
         override suspend fun getLastSuspendedCharge(): ChargeEntity? = null
         override suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity> = emptyList()
-        override suspend fun getLastChargeSync(): ChargeEntity? = null
         override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
         override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = autoserviceCharges

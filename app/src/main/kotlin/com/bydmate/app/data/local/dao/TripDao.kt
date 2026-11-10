@@ -50,9 +50,6 @@ interface TripDao {
     @Query("UPDATE trips SET byd_id = NULL WHERE id = :id AND byd_id = :bydId")
     suspend fun unlinkBydId(id: Long, bydId: Long): Int
 
-    @Query("SELECT * FROM trips WHERE soc_start IS NULL AND source = 'energydata'")
-    suspend fun getTripsWithoutSoc(): List<TripEntity>
-
     /**
      * DM-i: energydata trips since [sinceTs] that have no fuel counters attached yet. Older
      * trips are left out: their snapshot pair can no longer appear.

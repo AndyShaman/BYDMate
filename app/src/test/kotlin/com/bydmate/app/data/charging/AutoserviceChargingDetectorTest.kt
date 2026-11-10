@@ -59,7 +59,6 @@ class AutoserviceChargingDetectorTest {
         override fun getLastCharge(): Flow<ChargeEntity?> = flowOf(inserted.lastOrNull())
         override suspend fun getLastSuspendedCharge(): ChargeEntity? = null
         override suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity> = emptyList()
-        override suspend fun getLastChargeSync(): ChargeEntity? = inserted.lastOrNull()
         override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
         override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> =

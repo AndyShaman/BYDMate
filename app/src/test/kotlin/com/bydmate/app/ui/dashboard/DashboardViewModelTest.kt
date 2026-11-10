@@ -84,7 +84,6 @@ class DashboardViewModelTest {
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
     // --- Stub DAOs ---
@@ -100,7 +99,6 @@ class DashboardViewModelTest {
         override fun getRecent(limit: Int): Flow<List<TripEntity>> = flowOf(emptyList())
         override suspend fun getCount(): Int = 0
         override suspend fun getByBydId(bydId: Long): TripEntity? = null
-        override suspend fun getTripsWithoutSoc(): List<TripEntity> = emptyList()
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
@@ -126,24 +124,19 @@ class DashboardViewModelTest {
         override suspend fun getByTripId(tripId: Long): List<TripPointEntity> = emptyList()
         override suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity> = emptyList()
         override suspend fun getCount(): Int = 0
-        override suspend fun getAll(): List<TripPointEntity> = emptyList()
         override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
         override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
-        override suspend fun insert(point: TripPointEntity): Long = 0L
         override suspend fun deleteByTripId(tripId: Long): Int = 0
     }
 
     private class StubIdleDrainDao : IdleDrainDao {
         override suspend fun insert(drain: IdleDrainEntity): Long = 0L
         override suspend fun update(drain: IdleDrainEntity) {}
-        override fun getByDateRange(from: Long, to: Long): Flow<List<IdleDrainEntity>> = flowOf(emptyList())
-        override suspend fun getTodayDrainKwh(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getCount(): Int = 0
         override suspend fun getAll(): List<IdleDrainEntity> = emptyList()
         override suspend fun getTotalKwh(): Double = 0.0
         override suspend fun deleteAll() {}
-        override suspend fun getTodayDrainHours(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getKwhSince(since: Long): Double = 0.0
         override suspend fun getHoursSince(since: Long): Double = 0.0
         override suspend fun getKwhBetween(from: Long, to: Long): Double = 0.0
@@ -161,7 +154,6 @@ class DashboardViewModelTest {
         override fun getLastCharge(): Flow<com.bydmate.app.data.local.entity.ChargeEntity?> = flowOf(null)
         override suspend fun getLastSuspendedCharge(): com.bydmate.app.data.local.entity.ChargeEntity? = null
         override suspend fun getStaleSessions(cutoffTs: Long): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
-        override suspend fun getLastChargeSync(): com.bydmate.app.data.local.entity.ChargeEntity? = null
         override suspend fun getRecentChargesWithBatteryData(): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
         override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()

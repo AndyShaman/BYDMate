@@ -109,7 +109,6 @@ class ChargingStateStoreTest {
             override suspend fun setAll(settings: List<SettingEntity>) {
                 setAllCalls++; settings.forEach { map[it.key] = it.value ?: "" }
             }
-            override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
         }
         val dao = RecordingDao()
         val s = ChargingStateStore(SettingsRepository(dao, mockk(relaxed = true)))

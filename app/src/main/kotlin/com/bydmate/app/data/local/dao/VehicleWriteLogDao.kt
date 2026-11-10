@@ -9,9 +9,6 @@ import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 interface VehicleWriteLogDao {
     @Insert suspend fun insert(entity: VehicleWriteLogEntity)
 
-    @Query("SELECT * FROM vehicle_write_log ORDER BY ts DESC LIMIT 200")
-    suspend fun getLast200(): List<VehicleWriteLogEntity>
-
     /** The [limit] newest rows, newest first: the dump's vehicle writes section. */
     @Query("SELECT * FROM vehicle_write_log ORDER BY id DESC LIMIT :limit")
     suspend fun getLatest(limit: Int): List<VehicleWriteLogEntity>

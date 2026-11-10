@@ -19,9 +19,6 @@ interface TripPointDao {
     @Query("SELECT COUNT(*) FROM trip_points")
     suspend fun getCount(): Int
 
-    @Query("SELECT * FROM trip_points ORDER BY trip_id, timestamp ASC")
-    suspend fun getAll(): List<TripPointEntity>
-
     /**
      * Delete old points keeping every Nth one per trip.
      * Points older than [cutoff] are thinned to ~1 per [intervalMs].
@@ -42,9 +39,6 @@ interface TripPointDao {
 
     @Query("UPDATE trip_points SET trip_id = :tripId WHERE timestamp BETWEEN :from AND :to AND trip_id = 0")
     suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int
-
-    @Insert
-    suspend fun insert(point: TripPointEntity): Long
 
     @Query("DELETE FROM trip_points WHERE trip_id = :tripId")
     suspend fun deleteByTripId(tripId: Long): Int

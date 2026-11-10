@@ -118,7 +118,6 @@ class SettingsViewModelTest {
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
     private open class StubTripDao : TripDao {
@@ -132,7 +131,6 @@ class SettingsViewModelTest {
         override fun getRecent(limit: Int): Flow<List<TripEntity>> = flowOf(emptyList())
         override suspend fun getCount(): Int = 0
         override suspend fun getByBydId(bydId: Long): TripEntity? = null
-        override suspend fun getTripsWithoutSoc(): List<TripEntity> = emptyList()
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
@@ -158,11 +156,9 @@ class SettingsViewModelTest {
         override suspend fun getByTripId(tripId: Long): List<TripPointEntity> = emptyList()
         override suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity> = emptyList()
         override suspend fun getCount(): Int = 0
-        override suspend fun getAll(): List<TripPointEntity> = emptyList()
         override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
         override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
-        override suspend fun insert(point: TripPointEntity): Long = 0L
         override suspend fun deleteByTripId(tripId: Long): Int = 0
     }
 
@@ -176,7 +172,6 @@ class SettingsViewModelTest {
         override fun getLastCharge(): Flow<ChargeEntity?> = flowOf(null)
         override suspend fun getLastSuspendedCharge(): ChargeEntity? = null
         override suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity> = emptyList()
-        override suspend fun getLastChargeSync(): ChargeEntity? = null
         override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
         override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = emptyList()
@@ -193,13 +188,10 @@ class SettingsViewModelTest {
     private class StubIdleDrainDao : IdleDrainDao {
         override suspend fun insert(drain: IdleDrainEntity): Long = 0L
         override suspend fun update(drain: IdleDrainEntity) {}
-        override fun getByDateRange(from: Long, to: Long): Flow<List<IdleDrainEntity>> = flowOf(emptyList())
-        override suspend fun getTodayDrainKwh(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getCount(): Int = 0
         override suspend fun getAll(): List<IdleDrainEntity> = emptyList()
         override suspend fun getTotalKwh(): Double = 0.0
         override suspend fun deleteAll() {}
-        override suspend fun getTodayDrainHours(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getKwhSince(since: Long): Double = 0.0
         override suspend fun getHoursSince(since: Long): Double = 0.0
         override suspend fun getKwhBetween(from: Long, to: Long): Double = 0.0
@@ -247,7 +239,6 @@ class SettingsViewModelTest {
         }
         override suspend fun delete(period: TariffPeriodEntity) { rows.removeAll { it.id == period.id } }
         override suspend fun getAllAsc(): List<TariffPeriodEntity> = rows.sortedBy { it.startTs }
-        override fun observeAll(): Flow<List<TariffPeriodEntity>> = flowOf(rows.sortedByDescending { it.startTs })
         override suspend fun getByStartTs(startTs: Long): TariffPeriodEntity? = rows.find { it.startTs == startTs }
         override suspend fun count(): Int = rows.size
     }

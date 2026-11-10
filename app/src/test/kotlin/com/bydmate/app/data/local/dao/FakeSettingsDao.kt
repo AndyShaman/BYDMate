@@ -16,5 +16,4 @@ class FakeSettingsDao(initial: Map<String, String> = emptyMap()) : SettingsDao {
     override fun observe(key: String): Flow<String?> = flowOf(map[key])
     override suspend fun set(setting: SettingEntity) { map[setting.key] = setting.value ?: "" }
     override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-    override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
 }
