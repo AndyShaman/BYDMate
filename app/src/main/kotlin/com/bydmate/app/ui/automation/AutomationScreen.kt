@@ -49,7 +49,6 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Navigation
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -64,7 +63,6 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -355,171 +353,6 @@ fun AutomationScreen(
             containerColor = CardSurface
         )
     }
-}
-
-// --- Shared Composables ---
-
-@Composable
-private fun AutoChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        modifier = modifier,
-        label = { Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium) },
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = AccentGreen,
-            selectedLabelColor = NavyDark,
-            containerColor = CardSurface,
-            labelColor = TextSecondary
-        ),
-        shape = RoundedCornerShape(8.dp),
-        border = FilterChipDefaults.filterChipBorder(
-            borderColor = Color.Transparent,
-            selectedBorderColor = Color.Transparent,
-            enabled = true, selected = selected
-        )
-    )
-}
-
-@Composable
-internal fun SectionHeader(text: String) {
-    Text(
-        text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextSecondary,
-        letterSpacing = 1.2.sp,
-        modifier = Modifier.padding(bottom = 10.dp)
-    )
-}
-
-@Composable
-internal fun SettingRow(label: String, content: @Composable () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, fontSize = EDITOR_TEXT, color = TextPrimary, modifier = Modifier.weight(1f))
-        Row(verticalAlignment = Alignment.CenterVertically) { content() }
-    }
-}
-
-@Composable
-internal fun NotificationActionControls(
-    action: ActionDef,
-    onUpdate: (ActionDef) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var editing by remember { mutableStateOf(false) }
-    val title = action.notificationTitle()
-    val text = action.notificationText()
-    val preview = when {
-        title.isNotBlank() && text.isNotBlank() -> "$title — $text"
-        title.isNotBlank() -> title
-        text.isNotBlank() -> text
-        else -> stringResource(R.string.automation_tap_to_configure)
-    }
-
-    Row(
-        modifier = modifier
-            .background(CardSurface, RoundedCornerShape(6.dp))
-            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
-            .clickable { editing = true }
-            .heightIn(min = FIELD_HEIGHT)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Notifications,
-            contentDescription = null,
-            tint = AccentTeal,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = preview,
-            fontSize = 16.sp,
-            color = if (title.isBlank() && text.isBlank()) TextSecondary else TextPrimary,
-            maxLines = 1
-        )
-    }
-
-    if (editing) {
-        NotificationEditDialog(
-            initialTitle = title,
-            initialText = text,
-            onDismiss = { editing = false },
-            onSave = { newTitle, newText ->
-                onUpdate(action.withNotification(newTitle, newText))
-                editing = false
-            }
-        )
-    }
-}
-
-@Composable
-private fun NotificationEditDialog(
-    initialTitle: String,
-    initialText: String,
-    onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit
-) {
-    var titleText by rememberSaveable { mutableStateOf(initialTitle) }
-    var bodyText by rememberSaveable { mutableStateOf(initialText) }
-    val canSave = titleText.trim().isNotBlank() && titleText.trim().length <= 40
-
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = TextPrimary,
-        unfocusedTextColor = TextPrimary,
-        focusedBorderColor = AccentGreen,
-        unfocusedBorderColor = CardBorder,
-        focusedLabelColor = AccentGreen,
-        unfocusedLabelColor = TextSecondary,
-        cursorColor = AccentGreen
-    )
-
-    AppAlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = CardSurface,
-        title = {
-            Text(
-                text = stringResource(R.string.automation_action_notification),
-                color = TextPrimary,
-                fontSize = 16.sp
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = titleText,
-                    onValueChange = { if (it.length <= 40) titleText = it },
-                    label = { Text(stringResource(R.string.automation_notification_title_label)) },
-                    singleLine = true,
-                    isError = titleText.isNotEmpty() && !canSave,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = bodyText,
-                    onValueChange = { if (it.length <= 200) bodyText = it },
-                    label = { Text(stringResource(R.string.automation_notification_body_label)) },
-                    maxLines = 3,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { if (canSave) onSave(titleText.trim(), bodyText.trim()) }, enabled = canSave) {
-                Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
-            }
-        }
-    )
 }
 
 // --- Speak Action Controls (v3.6) ---
