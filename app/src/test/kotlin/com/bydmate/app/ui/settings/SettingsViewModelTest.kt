@@ -95,6 +95,19 @@ class SettingsViewModelTest {
     private val agentOrchestrator: AgentOrchestrator = mockk(relaxed = true)
     private val energyDataDeadDetector: EnergyDataDeadDetector = mockk(relaxed = true)
 
+    // Collaborators the diagnostic header reads; lazy, so a test that never touches them pays as before.
+    private val ruleDao: com.bydmate.app.data.local.dao.RuleDao by lazy { mockk(relaxed = true) }
+    private val automationEngine: com.bydmate.app.data.automation.AutomationEngine by lazy { mockk(relaxed = true) }
+    private val hudController: com.bydmate.app.hud.HudController by lazy { mockk(relaxed = true) }
+    private val blindSpotController: com.bydmate.app.camera.BlindSpotController by lazy { mockk(relaxed = true) }
+    private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge by lazy { mockk(relaxed = true) }
+    private val splitPreferences: com.bydmate.app.split.SplitPreferences by lazy { mockk(relaxed = true) }
+    private val splitSessionManager: com.bydmate.app.split.SplitSessionManager by lazy { mockk(relaxed = true) }
+    private val cloudOverWifiManager: com.bydmate.app.data.autoservice.CloudOverWifiManager by lazy { mockk(relaxed = true) }
+    private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter by lazy { mockk(relaxed = true) }
+    private val vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao by lazy { mockk(relaxed = true) }
+    private val fidPushChannel: com.bydmate.app.data.push.FidPushChannel by lazy { mockk(relaxed = true) }
+
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
@@ -311,11 +324,11 @@ class SettingsViewModelTest {
             llmConnectionResolver = llmConnectionResolver ?: mockk(relaxed = true),
             openRouterClient = openRouterClient,
             energyDataDeadDetector = energyDataDeadDetector,
-            hudController = mockk(relaxed = true),
+            hudController = hudController,
             logRecorder = logRecorder,
-            fidPushChannel = mockk(relaxed = true),
-            splitPreferences = mockk(relaxed = true),
-            splitSessionManager = mockk(relaxed = true),
+            fidPushChannel = fidPushChannel,
+            splitPreferences = splitPreferences,
+            splitSessionManager = splitSessionManager,
             splitJournal = com.bydmate.app.split.NoSplitJournal,
             driverMemory = com.bydmate.app.agent.DriverMemory(
                 ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
@@ -328,15 +341,15 @@ class SettingsViewModelTest {
                 mockk(relaxed = true),
                 kotlinx.coroutines.test.TestScope(),
             ),
-            cloudOverWifiManager = mockk(relaxed = true),
+            cloudOverWifiManager = cloudOverWifiManager,
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
-            ruleDao = mockk(relaxed = true),
-            automationEngine = mockk(relaxed = true),
+            ruleDao = ruleDao,
+            automationEngine = automationEngine,
             voiceJournal = voiceJournal,
             tariffPeriodDao = tariffPeriodDaoOverride ?: mockk(relaxed = true),
             costCalculator = exportCostCalculator ?: mockk(relaxed = true),
-            blindSpotController = mockk(relaxed = true),
+            blindSpotController = blindSpotController,
             adbVerdictMonitor = mockk(relaxed = true) {
                 io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
                 io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -345,9 +358,9 @@ class SettingsViewModelTest {
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
             logTelegramSender = logTelegramSender,
-            telegramReporter = mockk(relaxed = true),
-            clusterMusicBridge = mockk(relaxed = true),
-            vehicleWriteLogDao = mockk(relaxed = true),
+            telegramReporter = telegramReporter,
+            clusterMusicBridge = clusterMusicBridge,
+            vehicleWriteLogDao = vehicleWriteLogDao,
             vehicleKindMonitor = vehicleKind?.let { com.bydmate.app.data.nativestack.kindMonitor(it) }
                 ?: mockk(relaxed = true),
         )
@@ -1432,6 +1445,136 @@ class SettingsViewModelTest {
         val events = section.lines().filter { it.isNotBlank() && !it.startsWith("-- ") }.map { it.substringAfter(' ') }
         assertEquals(listOf("user   ptt listening=false #1", "voice  session-start #2 by=#1"), events)
         assertTrue(header, header.indexOf("--- last crash ---") < header.indexOf("--- trace ---"))
+    }
+
+    /**
+     * Pins the whole header text as one string, so moving the writer into its own class cannot
+     * change a character of what users send us. The reference is `diagnostic-dump/reference-header.txt`.
+     */
+    @Test fun `the diagnostic header text is pinned as a whole`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        // Every time in the header is printed in the default zone: pin it so the test is the same on any machine.
+        val zone = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+        try {
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).edit()
+                .putString("tts_source", "minimax").putString("tts_voice", "anna").putString("agent_gender", "f")
+                .putBoolean("voice_enabled", true).putInt("voice_keycode", 321).commit()
+            ctx.getSharedPreferences(com.bydmate.app.service.BootReceiver.PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putString(com.bydmate.app.service.BootReceiver.KEY_CHAIN_LOG, "boot>worker>service").commit()
+            ctx.getSharedPreferences(com.bydmate.app.hud.HudController.PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putBoolean(com.bydmate.app.hud.HudController.KEY_ENABLED, true).commit()
+            val journal = com.bydmate.app.voice.VoiceJournal()
+            journal.add(
+                com.bydmate.app.voice.VoiceJournalEntry(
+                    timestampMs = 1_700_000_000_000L,
+                    transcript = "закрой окна",
+                    route = com.bydmate.app.voice.VoiceJournalEntry.Route.AGENT,
+                    detail = "Окна закрыты",
+                    outcome = com.bydmate.app.voice.VoiceJournalEntry.Outcome.OK,
+                    tools = listOf(com.bydmate.app.agent.AgentToolOutcome("vehicle_control", true)),
+                    answer = "Окна закрыты",
+                )
+            )
+            vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV
+            val vm = buildViewModel(voiceJournal = journal)
+            testDispatcher.scheduler.advanceUntilIdle()
+            fillHeaderSettings()
+            vm.setRouteNavigator(RouteNavigatorUris.DGIS)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            stubHeaderCollaborators()
+
+            vm.startLogRecording()
+            testDispatcher.scheduler.advanceUntilIdle()
+            val header = awaitDiagnosticHeader(until = "===============================")
+            // The only lines the set-up cannot fix; everything else is compared character for character.
+            val normalized = header
+                // timestamp: the moment the header was written.
+                .replace(Regex("(?m)^timestamp: \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"), "timestamp: <now>")
+                // app: the version name and code move with every release.
+                .replace(Regex("(?m)^(app: \\S+) v\\S+ \\(code=\\d+\\)$"), "$1 v<version> (code=<code>)")
+            val reference = javaClass.getResourceAsStream("/diagnostic-dump/reference-header.txt")!!
+                .bufferedReader().use { it.readText() }
+            assertEquals(reference, normalized)
+        } finally {
+            java.util.TimeZone.setDefault(zone)
+        }
+    }
+
+    /** The stored settings the pinned header prints; fixed values only. */
+    private fun fillHeaderSettings() {
+        settingsDao.map.putAll(
+            mapOf(
+                SettingsRepository.KEY_BATTERY_CAPACITY to "72,9",
+                SettingsRepository.KEY_ABRP_ENABLED to "true",
+                SettingsRepository.KEY_ABRP_USER_TOKEN to "abc12345",
+                SettingsRepository.KEY_ABRP_CAR_MODEL to "byd:leopard3",
+                SettingsRepository.KEY_CHARGING_BASELINE_SOC to "64",
+                SettingsRepository.KEY_LAST_MILEAGE_KM to "12345.5",
+                SettingsRepository.KEY_LAST_STATE_TS to "1700000000000",
+                SettingsRepository.KEY_CATCHUP_JOURNAL to "2023-11-14 22:13:20 STILL_CHARGING soc=64",
+                SettingsRepository.KEY_AUTO_BACKUP_PERIOD to "daily",
+                SettingsRepository.KEY_AUTO_BACKUP_LAST_TS to "1700000000000",
+                SettingsRepository.KEY_AUTO_BACKUP_LAST_RESULT to "ok",
+                SettingsRepository.KEY_AUTO_BACKUP_PENDING_UPLOAD to "/sdcard/backup-1.zip",
+                SettingsRepository.KEY_TG_BACKUP_TOKEN to "123456:SECRET",
+                SettingsRepository.KEY_TG_BACKUP_CHAT_ID to "987654321",
+                SettingsRepository.KEY_TG_BACKUP_BOT_NAME to "test_bot",
+                SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT to "true",
+                "trip1_reset_ts" to "1700000000000",
+                "trip1_corr_km" to "1.5",
+            )
+        )
+    }
+
+    /** What the relaxed collaborators answer while the pinned header is written. */
+    private fun stubHeaderCollaborators() {
+        coEvery { ruleDao.getAllList() } returns listOf(
+            com.bydmate.app.data.local.entity.RuleEntity(
+                id = 7, name = "Morning", triggers = "[]", actions = "[]", lastTriggeredAt = 1_700_000_000_000L,
+            )
+        )
+        coEvery { automationEngine.serviceStartDumpLine() } returns "service_start: fixed"
+        coEvery { automationEngine.journalDumpLines() } returns listOf("journal line 1", "journal line 2")
+        every { automationEngine.paramSnapshotLine(any()) } returns "params: fixed"
+        every { hudController.status } returns kotlinx.coroutines.flow.MutableStateFlow(
+            com.bydmate.app.hud.HudController.Status.ON
+        )
+        every { hudController.mode() } returns 2
+        every { hudController.diag() } returns com.bydmate.app.hud.HudController.HudDiag(
+            framesSent = 10, lastFrameTs = 20, lastRc = 0, nonZeroRcCount = 1,
+        )
+        every { blindSpotController.dumpLines() } returns listOf("blind line")
+        every { clusterMusicBridge.dumpLines() } returns listOf("music line")
+        coEvery { cloudOverWifiManager.dumpLine() } returns "cloud_over_wifi: fixed"
+        coEvery { telegramReporter.diagnosticsLines() } returns listOf("reporter line")
+        coEvery { fidPushChannel.diagnosticsSnapshot() } returns listOf("push line")
+        coEvery { vehicleWriteLogDao.getLatest(any()) } returns listOf(
+            com.bydmate.app.data.local.entity.VehicleWriteLogEntity(
+                ts = 1_700_000_000_000L, actionName = "seat_heat", dev = 1, fid = 2, requested = 3,
+                readback = 3, status = 0, error = null, validated = true,
+            )
+        )
+        val pair = com.bydmate.app.split.SplitPair("pkg.narrow", "pkg.wide", com.bydmate.app.split.SplitSide.LEFT)
+        every { splitPreferences.getLastPair() } returns pair
+        every { splitPreferences.getMenuPair() } returns pair
+        every { splitPreferences.getSessionPair() } returns pair
+        every { splitPreferences.isFeatureEnabled() } returns true
+        every { splitPreferences.getSteeringKeyCode() } returns 322
+        every { splitSessionManager.state } returns kotlinx.coroutines.flow.MutableStateFlow<com.bydmate.app.split.SplitSessionState>(
+            com.bydmate.app.split.SplitSessionState.Active(pair, 11, 12)
+        )
+        every { splitSessionManager.departedPanePkgs() } returns setOf("pkg.gone")
+        every { windowChannelStore.winner() } returns com.bydmate.app.data.vehicle.WindowChannel.PERCENT
+        every { helperBootstrap.daemonEverAlive() } returns true
+        every { helperBootstrap.lastSpawnFailure() } returns com.bydmate.app.data.vehicle.HelperBootstrap.SpawnFailure(
+            1_700_000_000_000L, com.bydmate.app.data.vehicle.HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE, "detail one\ndetail two",
+        )
+        coEvery { helperClient.isAlive() } returns true
+        coEvery { helperClient.readBatch(any()) } answers {
+            firstArg<List<com.bydmate.app.data.vehicle.BatchReadItem>>().mapIndexed { i, _ -> 0 to (i % 3) }
+        }
     }
 
     /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance.
