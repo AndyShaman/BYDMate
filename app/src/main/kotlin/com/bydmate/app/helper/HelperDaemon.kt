@@ -1387,7 +1387,7 @@ private fun activityTaskManager(): Any =
         ?: throw IllegalStateException("ActivityTaskManager.getService() returned null")
 
 /** Walks the superclass chain for a declared field [name] (mirrors CarControlImpl.findField). */
-private fun fieldByName(target: Any, name: String): java.lang.reflect.Field? {
+internal fun fieldByName(target: Any, name: String): java.lang.reflect.Field? {
     var cls: Class<*>? = target.javaClass
     while (cls != null) {
         try { return cls.getDeclaredField(name) } catch (e: NoSuchFieldException) { cls = cls.superclass }
@@ -1439,16 +1439,8 @@ internal fun findTaskId(packageName: String, atm: (Int) -> List<*>? = ::atmTasks
     val tasks = atm(100) ?: return -1
     for (task in tasks) {
         if (task == null) continue
-        val pkg = listOf("topActivity", "baseActivity").firstNotNullOfOrNull { fieldName ->
-            fieldByName(task, fieldName)?.let { f ->
-                f.isAccessible = true
-                (f.get(task) as? android.content.ComponentName)?.packageName
-            }
-        }
-        if (pkg == packageName) {
-            val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
-            idField.isAccessible = true
-            return idField.getInt(task)
+        if (taskPackage(task) == packageName) {
+            return taskIdOf(task) ?: continue
         }
     }
     return -1
@@ -1459,15 +1451,8 @@ internal fun packageForTask(taskId: Int, atm: (Int) -> List<*>? = ::atmTasks): S
     val tasks = atm(100) ?: return@runCatching null
     for (task in tasks) {
         if (task == null) continue
-        val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
-        idField.isAccessible = true
-        if (idField.getInt(task) != taskId) continue
-        return@runCatching listOf("topActivity", "baseActivity").firstNotNullOfOrNull { fieldName ->
-            fieldByName(task, fieldName)?.let { f ->
-                f.isAccessible = true
-                (f.get(task) as? android.content.ComponentName)?.packageName
-            }
-        }
+        if (taskIdOf(task) != taskId) continue
+        return@runCatching taskPackage(task)
     }
     null
 }.getOrNull()
@@ -1481,12 +1466,7 @@ internal fun packageForTask(taskId: Int, atm: (Int) -> List<*>? = ::atmTasks): S
 internal fun topTaskPackage(atm: (Int) -> List<*>? = ::atmTasks): String? = runCatching {
     val tasks = atm(1) ?: return@runCatching null
     val task = tasks.firstOrNull() ?: return@runCatching null
-    listOf("topActivity", "baseActivity").firstNotNullOfOrNull { fieldName ->
-        fieldByName(task, fieldName)?.let { f ->
-            f.isAccessible = true
-            (f.get(task) as? android.content.ComponentName)?.packageName
-        }
-    }
+    taskPackage(task)
 }.getOrNull()
 
 /**
@@ -1524,31 +1504,19 @@ internal fun topTaskInfo(atm: (Int) -> List<*>? = ::atmTasks): TopTaskInfo? = ru
     // to 0 (which would synthesise main-display presence and falsely trigger COVERED teardown).
     val task = tasks.firstOrNull { rawTask ->
         rawTask != null &&
-        runCatching {
-            fieldByName(rawTask, "displayId")?.let { f -> f.isAccessible = true; f.getInt(rawTask) == 0 } ?: false
-        }.getOrDefault(false)
+        runCatching { taskDisplayId(rawTask, fallback = -1) == 0 }.getOrDefault(false)
     } ?: return@runCatching null
-    val pkg = listOf("topActivity", "baseActivity").firstNotNullOfOrNull { name ->
-        fieldByName(task, name)?.let { f -> f.isAccessible = true; (f.get(task) as? android.content.ComponentName)?.packageName }
-    } ?: return@runCatching null
-    val taskId = (fieldByName(task, "taskId") ?: fieldByName(task, "id"))
-        ?.let { f -> f.isAccessible = true; f.getInt(task) } ?: -1
+    val pkg = taskPackage(task) ?: return@runCatching null
+    val taskId = taskIdOf(task) ?: -1
     // Require windowConfiguration: returning null on failure prevents synthesising FULLSCREEN@display0,
     // which would look like a foreign fullscreen app and falsely trigger COVERED teardown (Q3-1).
-    val configField = fieldByName(task, "configuration") ?: return@runCatching null
-    configField.isAccessible = true
-    val cfg = configField.get(task) ?: return@runCatching null
-    val winConfigField = fieldByName(cfg, "windowConfiguration") ?: return@runCatching null
-    winConfigField.isAccessible = true
-    val winConfig = winConfigField.get(cfg) ?: return@runCatching null
+    val winConfig = taskWindowConfiguration(task) ?: return@runCatching null
     // getWindowingMode throws → outer runCatching catches → getOrNull() returns null (safe).
     val windowingMode = winConfig.javaClass.getMethod("getWindowingMode").invoke(winConfig) as Int
     val activityType = runCatching {
         winConfig.javaClass.getMethod("getActivityType").invoke(winConfig) as Int
     }.getOrDefault(-1)
-    val displayId = runCatching {
-        fieldByName(task, "displayId")?.let { f -> f.isAccessible = true; f.getInt(task) } ?: 0
-    }.getOrDefault(0)
+    val displayId = runCatching { taskDisplayId(task, fallback = 0) }.getOrDefault(0)
     // -1 (unknown) rather than a guess: the client treats anything but 1 as "not visible".
     val visible = runCatching {
         fieldByName(task, "isVisible")?.let { f ->
@@ -1582,22 +1550,9 @@ internal fun findTaskState(packageName: String, atm: (Int) -> List<*>? = ::atmTa
     val tasks = atm(100) ?: return@runCatching null
     for (task in tasks) {
         if (task == null) continue
-        val pkg = listOf("topActivity", "baseActivity").firstNotNullOfOrNull { fieldName ->
-            fieldByName(task, fieldName)?.let { f ->
-                f.isAccessible = true
-                (f.get(task) as? android.content.ComponentName)?.packageName
-            }
-        }
-        if (pkg != packageName) continue
-        val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
-        idField.isAccessible = true
-        val taskId = idField.getInt(task)
-        val configField = fieldByName(task, "configuration") ?: return@runCatching null
-        configField.isAccessible = true
-        val config = configField.get(task) ?: return@runCatching null
-        val winConfigField = fieldByName(config, "windowConfiguration") ?: return@runCatching null
-        winConfigField.isAccessible = true
-        val winConfig = winConfigField.get(config) ?: return@runCatching null
+        if (taskPackage(task) != packageName) continue
+        val taskId = taskIdOf(task) ?: continue
+        val winConfig = taskWindowConfiguration(task) ?: return@runCatching null
         val mode = winConfig.javaClass.getMethod("getWindowingMode").invoke(winConfig) as Int
         // getBounds() returns a live Rect; fall back to the backing field on ROMs that hide the getter.
         val bounds: android.graphics.Rect = runCatching {
@@ -1612,9 +1567,7 @@ internal fun findTaskState(packageName: String, atm: (Int) -> List<*>? = ::atmTa
         // IllegalAccessException from isAccessible/getInt must not propagate to the outer
         // runCatching, which would make findTaskState return null and trigger a spurious
         // PaneClosed storm on every watchdog tick.
-        val displayId = runCatching {
-            fieldByName(task, "displayId")?.let { f -> f.isAccessible = true; f.getInt(task) } ?: 0
-        }.getOrDefault(0)
+        val displayId = runCatching { taskDisplayId(task, fallback = 0) }.getOrDefault(0)
         return@runCatching TaskWindowState(taskId, mode, bounds.left, bounds.top, bounds.right, bounds.bottom, displayId)
     }
     null
@@ -1656,17 +1609,10 @@ internal fun taskModeState(taskId: Int, atm: (Int) -> List<*>? = ::atmTasks): Ta
     val tasks = atm(100) ?: return@runCatching null
     for (task in tasks) {
         if (task == null) continue
-        val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
-        idField.isAccessible = true
-        if (idField.getInt(task) != taskId) continue
-        val configField = fieldByName(task, "configuration") ?: return@runCatching null
-        configField.isAccessible = true
-        val config = configField.get(task) ?: return@runCatching null
-        val winConfigField = fieldByName(config, "windowConfiguration") ?: return@runCatching null
-        winConfigField.isAccessible = true
-        val winConfig = winConfigField.get(config) ?: return@runCatching null
+        if (taskIdOf(task) != taskId) continue
+        val winConfig = taskWindowConfiguration(task) ?: return@runCatching null
         val mode = winConfig.javaClass.getMethod("getWindowingMode").invoke(winConfig) as Int
-        val display = fieldByName(task, "displayId")?.let { f -> f.isAccessible = true; f.getInt(task) } ?: -1
+        val display = taskDisplayId(task, fallback = -1)
         return@runCatching TaskModeState(mode, display)
     }
     null
@@ -1682,15 +1628,8 @@ internal fun taskActivityType(taskId: Int, atm: (Int) -> List<*>? = ::atmTasks):
     val tasks = atm(100) ?: return@runCatching -1
     for (task in tasks) {
         if (task == null) continue
-        val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
-        idField.isAccessible = true
-        if (idField.getInt(task) != taskId) continue
-        val configField = fieldByName(task, "configuration") ?: return@runCatching -1
-        configField.isAccessible = true
-        val config = configField.get(task) ?: return@runCatching -1
-        val winConfigField = fieldByName(config, "windowConfiguration") ?: return@runCatching -1
-        winConfigField.isAccessible = true
-        val winConfig = winConfigField.get(config) ?: return@runCatching -1
+        if (taskIdOf(task) != taskId) continue
+        val winConfig = taskWindowConfiguration(task) ?: return@runCatching -1
         return@runCatching winConfig.javaClass.getMethod("getActivityType").invoke(winConfig) as Int
     }
     -1
