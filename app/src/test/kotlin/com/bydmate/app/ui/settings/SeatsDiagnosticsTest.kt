@@ -13,6 +13,16 @@ class SeatsDiagnosticsTest {
 
     private fun okReadings(vararg values: Int) = values.map { 0 to it }
 
+    @Test fun `batch items mirror the fid table as tx 5 reads`() {
+        assertEquals(SeatsDiagnostics.FIDS.size, SeatsDiagnostics.batchItems().size)
+        SeatsDiagnostics.FIDS.forEachIndexed { i, f ->
+            val item = SeatsDiagnostics.batchItems()[i]
+            assertEquals("tx for ${f.name}", 5, item.tx)
+            assertEquals("dev for ${f.name}", f.dev, item.dev)
+            assertEquals("fid for ${f.name}", f.fid, item.fid)
+        }
+    }
+
     /** The candidate families are the whole point of the next field dump: 3CE for the front
      *  seats, LRSE for the rear ones. They must be read-only additions to the same batch. */
     @Test fun `candidate status families are sampled read-only`() {
