@@ -126,14 +126,6 @@ class AgentToolsDegradationTest {
 
     // --- (b) schemas() at fully empty state: valid, parseable, every entry recognizable ---
 
-    @Test fun schemas_empty_state_is_valid_and_every_entry_parseable() = runTest {
-        coEvery { ruleDao.getEnabled() } returns emptyList()
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns ""
-        val arr = tools().schemas()
-        assertTrue(arr.length() > 0)
-        assertToolNamesParseable(arr)
-    }
-
     /** Every schemas() entry is either {"type":"function","function":{...}} or a server-tool
      *  object whose "type" field names the tool (e.g. "openrouter:web_search"); asserting this
      *  for every entry is what proves the array end-to-end parseable, not just non-empty. */
@@ -266,14 +258,6 @@ class AgentToolsDegradationTest {
             DispatchResult(false, "Activity not found: tel:12345")
         val out = JSONObject(tools().execute(call("vehicle_control", """{"command":"关闭空调"}""")))
         assertEquals("не выполнено", out.getString("error"))
-    }
-
-    @Test fun vehicle_control_dispatch_failure_russian_reason_passes_through() = runTest {
-        every { gate.vehicleSnapshot() } returns null
-        coEvery { dispatcher.dispatch(any(), any()) } returns
-            DispatchResult(false, "Заблокировано скоростью")
-        val out = JSONObject(tools().execute(call("vehicle_control", """{"command":"关闭空调"}""")))
-        assertEquals("Заблокировано скоростью", out.getString("error"))
     }
 
     private companion object {

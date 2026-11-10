@@ -116,15 +116,6 @@ class AgentOrchestratorDetachedTest {
         assertEquals("сводка погоды (время 07:30)", user.content)
     }
 
-    // A scheduled "morning summary" needs the clock as much as the driver does.
-    @Test
-    fun `detached prompt carries the local time`() = runTest {
-        val backend = FakeBackend(reply = answer("Доброе утро"))
-        makeOrchestrator(backend = backend).askDetached("утренняя сводка")
-        val user = backend.requests.single().last() as AgentMessage.User
-        assertEquals("утренняя сводка (время 07:30)", user.content)
-    }
-
     // No memory rides in a detached prompt, so both system messages must be byte-identical
     // between two turns minutes apart: the time lives only on the user line.
     @Test

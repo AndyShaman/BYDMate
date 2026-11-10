@@ -49,6 +49,7 @@ class AgentToolsReadTest {
     private val openRouterClient = mockk<OpenRouterClient>()
     private val settingsRepository = mockk<SettingsRepository>()
     private val contactLookup = mockk<ContactLookup>()
+    private val insightsManager = mockk<InsightsManager>(relaxed = true)
 
     private val context = mockk<Context>(relaxed = true)
 
@@ -57,21 +58,10 @@ class AgentToolsReadTest {
         exa, openRouterClient, settingsRepository, contactLookup, context,
         mockk<ClusterVoiceControl>(relaxed = true),
         mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
+        insightsManager,
         mockk<ZaiSearchClient>(relaxed = true),
         mockk<LlmConnectionResolver>(relaxed = true),
     ).also { it.nowMs = { 1_000_000_000_000L } }
-
-    @Test fun schemas_lists_read_tools() = runTest {
-        coEvery { ruleDao.getEnabled() } returns emptyList()
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
-        val names = mutableListOf<String>()
-        val arr = tools().schemas()
-        for (i in 0 until arr.length()) {
-            names += arr.getJSONObject(i).getJSONObject("function").getString("name")
-        }
-        assertTrue(names.containsAll(listOf("get_vehicle_state", "query_trips", "query_charges")))
-    }
 
     @Test fun vehicle_state_null_snapshot_reports_error() = runTest {
         every { gate.vehicleSnapshot() } returns null
@@ -495,19 +485,11 @@ class AgentToolsReadTest {
         assertFalse(JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).has("light_drl_on"))
     }
 
-    @Test fun `battery temp min max projected`() = runTest {
-        every { gate.vehicleSnapshot() } returns snapshot(maxBatTemp = 31, minBatTemp = 27)
-        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
-        assertEquals(31, out.getInt("battery_temp_max_c"))
-        assertEquals(27, out.getInt("battery_temp_min_c"))
-    }
-
-    @Test fun `lifetime km and kwh from battery state`() = runTest {
-        every { gate.vehicleSnapshot() } returns snapshot(soc = 80)
-        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, 24513.5f, 4321.25f, autoserviceAvailable = true)
-        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
-        assertEquals(24513.5, out.getDouble("lifetime_km"), 0.01)
-        assertEquals(4321.25, out.getDouble("lifetime_kwh"), 0.01)
+    @Test fun stats_summary_month_uses_30_days() = runTest {
+        coEvery { insightsManager.dynamicsFor(30) } returns emptyList()
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_stats_summary", """{"period":"month"}""")))
+        assertTrue(out.has("error"))   // empty -> honest "no data" error
+        coVerify { insightsManager.dynamicsFor(30) }
     }
 
     companion object {

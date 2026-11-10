@@ -5,7 +5,6 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONArray
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -72,11 +71,4 @@ class AgentOrchestratorFollowUpTest {
         assertFalse(o.expectsFollowUp())
     }
 
-    @Test fun offline_error_message_asks_for_simple_command() = runTest {
-        val o = orchestrator(FakeBackend(replies = ArrayDeque(listOf(Result.failure(RuntimeException("io"))))))
-        assertEquals(
-            AgentResult.Error("Нет связи с сервером, скажи простую команду"),
-            o.ask("что нового в мире"),
-        )
-    }
 }

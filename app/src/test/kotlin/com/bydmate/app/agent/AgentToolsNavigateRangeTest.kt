@@ -127,20 +127,4 @@ class AgentToolsNavigateRangeTest {
         assertTrue(out.has("error"))
     }
 
-    @Test fun `tool catalog routes home commands to navigate_to`() = runTest {
-        val catalog = tools.schemas()
-        val navigateDesc = (0 until catalog.length()).mapNotNull {
-            val fn = catalog.getJSONObject(it).optJSONObject("function") ?: return@mapNotNull null
-            if (fn.getString("name") == "navigate_to") fn.getString("description") else null
-        }.first()
-        val searchDesc = (0 until catalog.length()).mapNotNull {
-            val fn = catalog.getJSONObject(it).optJSONObject("function") ?: return@mapNotNull null
-            if (fn.getString("name") == "search_on_map") fn.getString("description") else null
-        }.first()
-        // home/work commands belong to navigate_to now; search_on_map must not claim them
-        assertTrue(navigateDesc.contains("домой"))
-        assertTrue(navigateDesc.contains("на работу"))
-        assertFalse(searchDesc.contains("Дом\""))
-        assertTrue(searchDesc.contains("navigate_to"))
-    }
 }

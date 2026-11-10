@@ -146,17 +146,4 @@ class AgentToolsCallContactTest {
         assertEquals("не удалось прочитать контакты", out.getString("error"))
     }
 
-    @Test fun schemas_lists_call_contact() = runTest {
-        coEvery { ruleDao.getEnabled() } returns emptyList()
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
-        val arr = tools().schemas()
-        var found = false
-        for (i in 0 until arr.length()) {
-            val obj = arr.getJSONObject(i)
-            if (obj.has("function") && obj.getJSONObject("function").getString("name") == "call_contact") {
-                found = true
-            }
-        }
-        assertTrue(found)
-    }
 }

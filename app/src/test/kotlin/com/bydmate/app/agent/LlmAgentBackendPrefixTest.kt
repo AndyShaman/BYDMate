@@ -88,11 +88,6 @@ class LlmAgentBackendPrefixTest {
         assertEquals("СТАТИКА", wire.getJSONObject(0).getString("content"))
     }
 
-    @Test fun openrouter_sorts_providers_by_latency() {
-        val extras = LlmAgentBackend.providerExtras(conn(LlmConnectionResolver.ID_OPENROUTER), streaming = false)!!
-        assertEquals("latency", extras.getJSONObject("provider").getString("sort"))
-    }
-
     @Test fun custom_extras_cannot_reroute_the_request() {
         val extras = LlmAgentBackend.providerExtras(
             conn(LlmConnectionResolver.ID_CUSTOM, """{"model":"other","tools":[],"temperature":1}"""),

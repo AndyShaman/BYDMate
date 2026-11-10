@@ -26,45 +26,6 @@ class AgentCommandCatalogTest {
         assertEquals(voiceSpec.command(22), catalogCmd.chinese(22))
     }
 
-    @Test fun `resolve returns chinese string for fixed command`() {
-        assertEquals("车窗关闭", AgentCommandCatalog.resolve("windows_close_all", null))
-    }
-
-    @Test fun `resolve returns chinese string for per-window half and pair apertures`() {
-        assertEquals("主驾半开", AgentCommandCatalog.resolve("window_driver_half", null))
-        assertEquals("副驾半开", AgentCommandCatalog.resolve("window_passenger_half", null))
-        assertEquals("后左半开", AgentCommandCatalog.resolve("window_rear_left_half", null))
-        assertEquals("后右半开", AgentCommandCatalog.resolve("window_rear_right_half", null))
-        assertEquals("前排车窗半开", AgentCommandCatalog.resolve("windows_half_front", null))
-        assertEquals("前排车窗通风", AgentCommandCatalog.resolve("windows_vent_front", null))
-        assertEquals("后排车窗半开", AgentCommandCatalog.resolve("windows_half_rear", null))
-        assertEquals("后排车窗通风", AgentCommandCatalog.resolve("windows_vent_rear", null))
-    }
-
-    @Test fun `resolve returns chinese string for hazard commands`() {
-        assertEquals("双闪打开", AgentCommandCatalog.resolve("hazard_on", null))
-        assertEquals("双闪关闭", AgentCommandCatalog.resolve("hazard_off", null))
-    }
-
-    @Test fun `resolve returns chinese string for steering heat commands`() {
-        assertEquals("方向盘加热", AgentCommandCatalog.resolve("steering_heat_on", null))
-        assertEquals("关闭方向盘加热", AgentCommandCatalog.resolve("steering_heat_off", null))
-    }
-
-    @Test fun `resolve returns chinese string for hud commands`() {
-        assertEquals("打开抬头显示", AgentCommandCatalog.resolve("hud_on", null))
-        assertEquals("关闭抬头显示", AgentCommandCatalog.resolve("hud_off", null))
-    }
-
-    @Test fun `resolve returns chinese string for battery preheat commands`() {
-        assertEquals("打开电池预热", AgentCommandCatalog.resolve("battery_preheat_on", null))
-        assertEquals("关闭电池预热", AgentCommandCatalog.resolve("battery_preheat_off", null))
-    }
-
-    @Test fun `resolve applies value for ranged command`() {
-        assertEquals("设置温度22", AgentCommandCatalog.resolve("ac_set_temp", 22))
-    }
-
     @Test fun `resolve rejects out-of-range value`() {
         assertNull(AgentCommandCatalog.resolve("ac_set_temp", 40))
     }

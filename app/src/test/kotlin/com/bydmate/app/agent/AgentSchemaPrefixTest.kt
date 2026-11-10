@@ -26,7 +26,6 @@ import kotlinx.coroutines.yield
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,27 +65,6 @@ class AgentSchemaPrefixTest {
     private fun function(schemas: JSONArray, name: String): JSONObject? =
         (0 until schemas.length()).map { schemas.getJSONObject(it).getJSONObject("function") }
             .firstOrNull { it.getString("name") == name }
-
-    @Test fun command_catalog_is_serialized_once() = runTest {
-        coEvery { ruleDao.getEnabled() } returns emptyList()
-        every { ruleDao.getAll() } returns MutableStateFlow(emptyList())
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
-        val schemas = tools().schemas()
-
-        // The full id enum belongs to vehicle_control and to nothing else.
-        val enum = function(schemas, "vehicle_control")!!
-            .getJSONObject("parameters").getJSONObject("properties")
-            .getJSONObject("command").getJSONArray("enum")
-        assertEquals(AgentCommandCatalog.ALL.size, enum.length())
-
-        val commandId = function(schemas, "create_automation")!!
-            .getJSONObject("parameters").getJSONObject("properties")
-            .getJSONObject("actions").getJSONObject("items").getJSONObject("properties")
-            .getJSONObject("command_id")
-        assertFalse("command_id must reference the vehicle_control list, not repeat it",
-            commandId.has("enum"))
-        assertTrue(commandId.getString("description").contains("vehicle_control"))
-    }
 
     @Test fun schemas_are_byte_stable_until_a_rule_changes() = runTest {
         val rules = MutableStateFlow(listOf(

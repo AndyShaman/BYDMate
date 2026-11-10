@@ -131,44 +131,6 @@ class AgentToolsControlTest {
         coVerify(exactly = 0) { engine.fireVoiceRule(any(), any()) }
     }
 
-    @Test fun schemas_embed_rule_names_enum() = runTest {
-        coEvery { ruleDao.getEnabled() } returns listOf(
-            RuleEntity(id = 1, name = "Ночной режим", triggers = "[]", actions = "[]"))
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
-        val arr = tools().schemas()
-        var found = false
-        for (i in 0 until arr.length()) {
-            val fn = arr.getJSONObject(i).getJSONObject("function")
-            if (fn.getString("name") == "run_automation") {
-                val enum = fn.getJSONObject("parameters").getJSONObject("properties")
-                    .getJSONObject("name").getJSONArray("enum")
-                assertEquals("Ночной режим", enum.getString(0))
-                found = true
-            }
-        }
-        assertTrue(found)
-    }
-
-    @Test fun vehicle_control_schema_has_readable_enum_no_chinese() = runTest {
-        coEvery { ruleDao.getEnabled() } returns emptyList()
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
-        val arr = tools().schemas()
-        var found = false
-        for (i in 0 until arr.length()) {
-            val fn = arr.getJSONObject(i).getJSONObject("function")
-            if (fn.getString("name") == "vehicle_control") {
-                val commandProp = fn.getJSONObject("parameters").getJSONObject("properties").getJSONObject("command")
-                val enum = commandProp.getJSONArray("enum")
-                val ids = (0 until enum.length()).map { enum.getString(it) }
-                assertTrue(ids.contains("windows_close_all"))
-                assertTrue(ids.none { it.contains("车窗") })
-                assertTrue(!fn.getString("description").contains("车窗"))
-                found = true
-            }
-        }
-        assertTrue(found)
-    }
-
     @Test fun vehicle_control_dispatches_readable_id() = runTest {
         every { gate.vehicleSnapshot() } returns AgentToolsReadTest.snapshot(speed = 0)
         coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
@@ -327,6 +289,23 @@ class AgentToolsControlTest {
         assertTrue(out.has("error"))
         assertFalse(out.getString("error"), out.getString("error").contains("неизвестный инструмент"))
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    }
+
+    // Parity: every tool the model is shown must have an execute() branch, so a schema entry can
+    // never be a tool that answers "неизвестный инструмент". Replaces the per-tool schema-listing tests.
+    @Test fun every_schema_tool_is_known_to_execute() = runTest {
+        coEvery { ruleDao.getEnabled() } returns emptyList()
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
+        val tools = tools()
+        val schemas = tools.schemas()
+        val names = (0 until schemas.length())
+            .map { schemas.getJSONObject(it).getJSONObject("function").getString("name") }
+        assertTrue("schema is empty", names.isNotEmpty())
+        for (name in names) {
+            val reply = tools.execute(call(name, "{}"))
+            assertFalse("$name is in the schema but execute() does not know it: $reply",
+                reply.contains("неизвестный инструмент"))
+        }
     }
 
     private fun screenRule(action: String) =

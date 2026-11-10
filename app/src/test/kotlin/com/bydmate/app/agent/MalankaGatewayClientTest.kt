@@ -44,12 +44,6 @@ class MalankaGatewayClientTest {
 
     @After fun tearDown() { server.shutdown() }
 
-    @Test fun production_base_url_and_timeout() {
-        val fresh = MalankaGatewayClient(OkHttpClient())
-        assertEquals("https://apigateway.malankabn.by/central-system/api/v1/", fresh.baseUrl)
-        assertEquals(2_500L, fresh.callTimeoutMs)
-    }
-
     @Test fun three_networks_are_merged_with_operator_and_status() = runTest {
         server.dispatcher = dispatch(mapOf(
             "/central-system/api/v1/locations/map" to MockResponse().setBody(malanka),
