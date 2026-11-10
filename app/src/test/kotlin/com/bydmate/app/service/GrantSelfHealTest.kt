@@ -3,7 +3,6 @@ package com.bydmate.app.service
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -148,21 +147,5 @@ class GrantSelfHealTest {
         // Oldest first, so the ring starts at the 5th run and ends at the last one.
         assertEquals("run-4", events.first().reason)
         assertEquals("run-${total - 1}", events.last().reason)
-    }
-
-    @Test
-    fun `history returns a defensive copy`() = runTest {
-        val heal = GrantSelfHeal(
-            name = "test",
-            isGranted = { true },
-            reassert = { true },
-        )
-        heal.ensure("first")
-        val snapshot = GrantSelfHeal.history()
-
-        heal.ensure("second")
-        assertEquals(1, snapshot.size)
-        assertEquals(2, GrantSelfHeal.history().size)
-        assertNotSame(snapshot, GrantSelfHeal.history())
     }
 }

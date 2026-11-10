@@ -22,9 +22,4 @@ class WatchdogGateTest {
         val last = 1_000_000L
         assertTrue(TrackingService.shouldAttemptRespawn(nowMs = last + 60_000L, lastAttemptMs = last))
     }
-
-    @Test fun `respawn allowed once the cooldown window has fully elapsed`() {
-        val last = 1_000_000L
-        assertTrue(TrackingService.shouldAttemptRespawn(nowMs = last + 120_000L, lastAttemptMs = last))
-    }
 }

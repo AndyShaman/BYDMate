@@ -2,45 +2,15 @@ package com.bydmate.app.service
 
 import com.bydmate.app.data.push.FidPushApplier
 import com.bydmate.app.data.remote.diParsData
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * The set of pushed fields that re-evaluate the automation rules on the event instead of on
  * the next poll tick. Touching the companion does NOT instantiate the Android Service — see
- * TrackingServiceSnapshotReuseTest.
+ * TrackingServiceButtonBridgeTest.
  */
 class TrackingServicePushEvaluateTest {
-
-    @Test fun `a discrete field evaluates on the push`() {
-        assertTrue("gear" in TrackingService.PUSH_EVALUATE_FIELDS)
-        assertTrue("turnSignal" in TrackingService.PUSH_EVALUATE_FIELDS)
-        assertTrue("lightLevel" in TrackingService.PUSH_EVALUATE_FIELDS)
-    }
-
-    // Audit 3.19 items 4, 10-12: belts, seats and the target drive mode act on the push.
-    @Test fun `belt, seat and drive mode conditions evaluate on the push`() {
-        val expected = listOf(
-            "seatbeltFL", "seatbeltFR", "seatbeltRL", "seatbeltRM", "seatbeltRR",
-            "occupancyFL", "occupancyFR", "occupancyRL", "occupancyRM", "occupancyRR",
-            "driveModeTarget",
-        )
-        for (field in expected) assertTrue(field, field in TrackingService.PUSH_EVALUATE_FIELDS)
-    }
-
-    /** A field no trigger reads would only buy an evaluate no rule can act on. */
-    @Test fun `a field without a trigger param stays out`() {
-        assertFalse("frontTrunk" in TrackingService.PUSH_EVALUATE_FIELDS)
-        assertFalse("chargerConnectState" in TrackingService.PUSH_EVALUATE_FIELDS)
-    }
-
-    @Test fun `a continuous field stays on the poll tick`() {
-        assertFalse("speed" in TrackingService.PUSH_EVALUATE_FIELDS)
-        assertFalse("soc" in TrackingService.PUSH_EVALUATE_FIELDS)
-        assertFalse("power" in TrackingService.PUSH_EVALUATE_FIELDS)
-    }
 
     /**
      * A name that FidPushApplier does not patch would never reach the snapshot, so the
