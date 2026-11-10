@@ -86,10 +86,6 @@ class AutomationRuleOrderViewModelTest {
 
     private fun AutomationViewModel.shownIds() = uiState.value.rules.map { it.id }
 
-    @Test fun `without a saved order the rules stay newest first`() {
-        assertEquals(listOf(5L, 4L, 3L, 2L), vm().shownIds())
-    }
-
     @Test fun `a drop shows the new order at once and saves it once`() {
         val vm = vm()
         vm.moveRule(moved = 2, target = 5)

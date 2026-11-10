@@ -136,6 +136,12 @@ class RuleDraftValidatorTest {
         assertEquals(TriggerValidationError.VoicePhraseTaken("r2"), RuleDraftValidator.validateTriggers(triggers, -1L, existing))
     }
 
+    @Test fun voice_phrase_taken_by_other_rule_in_a_different_letter_case_is_invalid() {
+        val triggers = listOf(TriggerDef(param = "Voice", chineseName = "语音", operator = "==", value = "Навигатор", displayName = "x", kind = "voice"))
+        val existing = listOf(ruleWithVoice(id = 2, phrase = "навигатор"))
+        assertEquals(TriggerValidationError.VoicePhraseTaken("r2"), RuleDraftValidator.validateTriggers(triggers, -1L, existing))
+    }
+
     @Test fun voice_phrase_taken_by_the_rule_being_edited_is_not_a_collision() {
         val triggers = listOf(TriggerDef(param = "Voice", chineseName = "语音", operator = "==", value = "навигатор", displayName = "x", kind = "voice"))
         val existing = listOf(ruleWithVoice(id = 7, phrase = "навигатор"))

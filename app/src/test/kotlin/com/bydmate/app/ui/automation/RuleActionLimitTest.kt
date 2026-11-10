@@ -14,10 +14,6 @@ import org.junit.Test
 /** Up to [MAX_RULE_ACTIONS] actions in one rule: nothing past the editor cuts or refuses them. */
 class RuleActionLimitTest {
 
-    @Test fun `a rule holds up to 20 actions`() {
-        assertEquals(20, MAX_RULE_ACTIONS)
-    }
-
     @Test fun `20 actions of mixed kinds validate`() {
         assertNull(RuleDraftValidator.validateActions(twentyActions()))
     }

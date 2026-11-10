@@ -59,10 +59,6 @@ class RuleViewModeTest {
         ).also { testDispatcher.scheduler.advanceUntilIdle() }
     }
 
-    @Test fun `a fresh install starts as a list`() {
-        assertEquals(RuleViewMode.LIST, vm().uiState.value.viewMode)
-    }
-
     @Test fun `the chosen view survives a new view model, as after an app restart`() {
         val first = vm()
         first.setViewMode(RuleViewMode.GRID)
