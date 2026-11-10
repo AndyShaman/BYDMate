@@ -219,7 +219,7 @@ class HudArmingTest {
         val car = leftoverCar()
         val lines = mutableListOf<String>()
         val a = arming(car, lines)
-        val r = a.disarmLeftover(guided = false)
+        val r = a.disarmLeftover()
         assertEquals(
             listOf("sdk 4", "set 1023/1276174357=1", "set 1014/1083203624=0", "set 1014/1262485592=0"),
             car.calls,
@@ -228,14 +228,14 @@ class HudArmingTest {
         assertTrue(lines.single().startsWith("hud disarm: reason=leftover navi rc=0 screen=1 rc=1 ok=true "))
         assertFalse(prefs.contains(HudArming.KEY_AS_FOUND))
         assertFalse(a.armed)
-        assertNull(a.disarmLeftover(guided = false))   // nothing left the second time
+        assertNull(a.disarmLeftover())   // nothing left the second time
         assertEquals(4, car.calls.size)
     }
 
     @Test fun `a leftover at a fullscreen cluster waits for the next start`() = runTest {
         val car = leftoverCar().apply { state[HudArming.CLUSTER] = 4 }
         val lines = mutableListOf<String>()
-        val r = arming(car, lines).disarmLeftover(guided = false)!!
+        val r = arming(car, lines).disarmLeftover()!!
         assertEquals(listOf("set 1007/1138753594=4", "set 1014/1083203624=0", "set 1014/1262485592=0"), car.calls)
         assertTrue(r.ok)
         assertTrue(lines.single().startsWith("hud disarm: reason=leftover navi rc=1 screen=1 rc=deferred ok=true "))
@@ -243,7 +243,7 @@ class HudArmingTest {
         // The next start, the cluster back to normal: the layout goes back and the key goes.
         car.state[HudArming.CLUSTER] = 0
         car.calls.clear()
-        arming(car).disarmLeftover(guided = false)
+        arming(car).disarmLeftover()
         assertTrue("set 1023/1276174357=1" in car.calls)
         assertFalse(prefs.contains(HudArming.KEY_AS_FOUND))
     }
@@ -302,7 +302,7 @@ class HudArmingTest {
 
     @Test fun `no leftover key writes and reads nothing`() = runTest {
         val car = FakeCar()
-        assertNull(arming(car).disarmLeftover(guided = false))
+        assertNull(arming(car).disarmLeftover())
         assertTrue(car.calls.isEmpty())
         coVerify(exactly = 0) { car.helper.readBatch(any()) }
     }
@@ -324,12 +324,12 @@ class HudArmingTest {
         assertEquals(2, car.state[HudArming.NAVI])
         car.calls.clear()
         val lines = mutableListOf<String>()
-        val r = arming(car, lines).disarmLeftover(guided = false)   // the next start
+        val r = arming(car, lines).disarmLeftover()   // the next start
         assertEquals(listOf("sdk 4", "set 1014/1083203624=0", "set 1014/1262485592=0"), car.calls)
         assertTrue(r!!.ok)
         assertTrue(lines.single().startsWith("hud disarm: reason=leftover navi rc=0 screen=na rc=skipped ok=true "))
         assertFalse(prefs.contains(HudArming.KEY_ARMED))
-        assertNull(arming(car).disarmLeftover(guided = false))   // nothing left the second time
+        assertNull(arming(car).disarmLeftover())   // nothing left the second time
     }
 
     @Test fun `a clean disarm clears the armed marker, a refused one keeps it`() = runTest {
@@ -344,13 +344,6 @@ class HudArmingTest {
         car.writeErrors[HudArming.ISA] = -10011
         assertFalse(a.disarm().ok)
         assertTrue(prefs.getBoolean(HudArming.KEY_ARMED, false))
-    }
-
-    @Test fun `a guided route leaves the leftover to its own arm and disarm`() = runTest {
-        val car = leftoverCar()
-        assertNull(arming(car).disarmLeftover(guided = true))
-        assertTrue(car.calls.isEmpty())
-        assertEquals(1, prefs.getInt(HudArming.KEY_AS_FOUND, -1))
     }
 
     // --- re-arm ---

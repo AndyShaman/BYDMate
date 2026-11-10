@@ -221,7 +221,7 @@ class HudController @Inject constructor(
         when {
             !HudArming.leftover(prefs()) -> true
             retry -> arm.retryDeferred()
-            else -> arm.disarmLeftover(guided = false)?.screenDeferred != true
+            else -> arm.disarmLeftover()?.screenDeferred != true
         }
     }.getOrElse {
         Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}")
@@ -395,7 +395,7 @@ class HudController @Inject constructor(
         if (!helperBootstrap.ensureRunning()) return
         runCatching {
             HudWayChannels.clearCanLeftover(HudCanChannel(helperClient), prefs())
-            HudArming(helperClient, prefs()).disarmLeftover(guided = false)
+            HudArming(helperClient, prefs()).disarmLeftover()
         }.onFailure {
             if (it is CancellationException) throw it
             Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}")
