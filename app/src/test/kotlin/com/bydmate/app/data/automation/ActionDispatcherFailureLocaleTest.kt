@@ -41,13 +41,7 @@ class ActionDispatcherFailureLocaleTest {
     private val vehicleApi = mockk<VehicleApi>(relaxed = true)
     private val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
     private val split = mockk<SplitSessionManager>(relaxed = true)
-    private val dispatcher = ActionDispatcher(vehicleApi, mockk<HelperClient>(relaxed = true), app,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        cluster,
-        mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-        split,
-        AppStrings(app), dagger.Lazy { io.mockk.mockk(relaxed = true) },
-    ).also {
+    private val dispatcher = testDispatcher(vehicleApi = vehicleApi, context = app, clusterVoiceControl = cluster, splitSessionManager = split, appStrings = AppStrings(app)).also {
         it.clusterPollIntervalMs = 1L
         it.readSpeedNow = { 0 } // a standing car unless a test says otherwise
     }

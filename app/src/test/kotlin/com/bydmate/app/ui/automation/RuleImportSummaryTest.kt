@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.R
 import com.bydmate.app.data.automation.ActionDispatcher
+import com.bydmate.app.data.automation.testDispatcher
 import com.bydmate.app.data.automation.SharedRule
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
@@ -111,12 +112,7 @@ class RuleImportSummaryTest {
         assertEquals(listOf("Пауза: 5 мин", "Пауза: 5 с"), preview.actions)
     }
 
-    private fun realDispatcher() = ActionDispatcher(
-        mockk(relaxed = true), mockk(relaxed = true), ctx,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-        com.bydmate.app.util.AppStrings(ctx), dagger.Lazy { io.mockk.mockk(relaxed = true) },
-    )
+    private fun realDispatcher() = testDispatcher(context = ctx, appStrings = com.bydmate.app.util.AppStrings(ctx))
 
     private object SharedRuleFixture {
         fun withActions(vararg actions: ActionDef) = SharedRule(

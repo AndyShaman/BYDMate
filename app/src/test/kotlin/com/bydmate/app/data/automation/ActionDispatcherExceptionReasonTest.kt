@@ -40,11 +40,7 @@ class ActionDispatcherExceptionReasonTest {
     private val split = mockk<SplitSessionManager>(relaxed = true) {
         every { state } returns MutableStateFlow(SplitSessionState.Idle)
     }
-    private val dispatcher = ActionDispatcher(mockk(relaxed = true), mockk(relaxed = true), context,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        mockk(relaxed = true), mockk(relaxed = true), split,
-        strings, dagger.Lazy { mockk(relaxed = true) },
-    )
+    private val dispatcher = testDispatcher(context = context, splitSessionManager = split, appStrings = strings)
 
     private val url = ActionDef(command = "url", displayName = "u", kind = "url",
         payload = """{"url":"https://api.example.com/hook?token=SECRET"}""")

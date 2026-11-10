@@ -44,12 +44,7 @@ class ActionDispatcherMediaKeyTest {
         every { appStrings.get(R.string.dispatch_media_key_failed, *anyVararg()) } answers {
             "Плеер не принял команду: ${(args[1] as Array<*>)[0]}"
         }
-        dispatcher = ActionDispatcher(mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            appStrings, dagger.Lazy { mockk(relaxed = true) })
+        dispatcher = testDispatcher(context = context, appStrings = appStrings)
         dispatcher.sendMediaKey = { controller, keyCode -> sent += controller.packageName to keyCode; true }
     }
 
@@ -163,12 +158,7 @@ class ActionDispatcherMediaKeyTest {
     }
 
     @Test fun `the default sender goes through the session's transport controls`() = runBlocking {
-        val fresh = ActionDispatcher(mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            appStrings, dagger.Lazy { mockk(relaxed = true) })
+        val fresh = testDispatcher(context = context, appStrings = appStrings)
         val controls = mockk<MediaController.TransportControls>(relaxed = true)
         val player = session("a.player", 3)
         every { player.transportControls } returns controls
@@ -180,12 +170,7 @@ class ActionDispatcherMediaKeyTest {
     }
 
     @Test fun `a dead session token is a failure, not a crash`() = runBlocking {
-        val fresh = ActionDispatcher(mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            appStrings, dagger.Lazy { mockk(relaxed = true) })
+        val fresh = testDispatcher(context = context, appStrings = appStrings)
         val player = session("a.player", 3)
         every { player.transportControls } throws IllegalStateException("dead")
         fresh.activeMediaControllers = { listOf(player) }

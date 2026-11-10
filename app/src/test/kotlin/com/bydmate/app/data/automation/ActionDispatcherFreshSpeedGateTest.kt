@@ -35,13 +35,7 @@ class ActionDispatcherFreshSpeedGateTest {
         every { createConfigurationContext(any()) } answers { self as Context }
         every { getString(R.string.gate_frunk_speed_unknown) } returns FRUNK_SPEED_UNKNOWN
     }
-    private val dispatcher = ActionDispatcher(vehicleApi, helper, context,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-        mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { mockk(relaxed = true) },
-    )
+    private val dispatcher = testDispatcher(vehicleApi, helper, context)
 
     private fun param(command: String) = ActionDef(command = command, displayName = command, kind = "param")
 

@@ -31,11 +31,7 @@ class ActionDispatcherVoiceActionsTest {
         val context = mockk<Context>(relaxed = true)
         val notificationManager = mockk<NotificationManager>(relaxed = true)
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
-        return ActionDispatcher(vehicleApi, helper, context, dagger.Lazy { voiceActions },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { io.mockk.mockk(relaxed = true) })
+        return testDispatcher(vehicleApi, helper, context, voiceActions = voiceActions)
     }
 
     // Factory for the cluster_projection tests below: same shape, but takes the
@@ -51,10 +47,7 @@ class ActionDispatcherVoiceActionsTest {
         val strings = mockk<com.bydmate.app.util.AppStrings>(relaxed = true)
         every { strings.get(R.string.dispatch_cluster_not_on) } returns "проекция на приборку не включилась"
         every { strings.get(R.string.dispatch_cluster_daemon_restarting) } returns "служебный процесс перезапускается"
-        return ActionDispatcher(vehicleApi, helper, context, dagger.Lazy { voiceActions }, clusterVoiceControl,
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            strings, dagger.Lazy { io.mockk.mockk(relaxed = true) })
+        return testDispatcher(vehicleApi, helper, context, voiceActions = voiceActions, clusterVoiceControl = clusterVoiceControl, appStrings = strings)
     }
 
     @Test fun `speak action routes payload text to the coordinator`() = runTest {

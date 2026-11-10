@@ -36,14 +36,7 @@ class ActionDispatcherSplitScreenTest {
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         // Relaxed context.getString() returns "" — enough to verify success=false for error cases.
-        dispatcher = ActionDispatcher(
-            vehicleApi, helper, context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            splitManager,
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { io.mockk.mockk(relaxed = true) },
-        )
+        dispatcher = testDispatcher(vehicleApi, helper, context, splitSessionManager = splitManager)
     }
 
     private fun splitAction(

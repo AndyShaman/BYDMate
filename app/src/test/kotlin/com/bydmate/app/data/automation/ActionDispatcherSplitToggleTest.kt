@@ -39,14 +39,7 @@ class ActionDispatcherSplitToggleTest {
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns
             mockk<NotificationManager>(relaxed = true)
-        dispatcher = ActionDispatcher(
-            mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            splitManager,
-            strings, dagger.Lazy { io.mockk.mockk(relaxed = true) },
-        )
+        dispatcher = testDispatcher(context = context, splitSessionManager = splitManager, appStrings = strings)
     }
 
     private fun action(kind: String) =

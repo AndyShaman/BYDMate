@@ -33,14 +33,7 @@ class ActionDispatcherTelegramReportTest {
 
     private val ctx: Context get() = ApplicationProvider.getApplicationContext()
     private val reporter = mockk<TelegramReporter>()
-    private val dispatcher = ActionDispatcher(
-        mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), ctx,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-        AppStrings(ctx), dagger.Lazy { reporter },
-    )
+    private val dispatcher = testDispatcher(context = ctx, appStrings = AppStrings(ctx), telegramReporter = reporter)
 
     private val action = ActionDef(
         command = TELEGRAM_REPORT_KIND, displayName = "Отчёт в Telegram", kind = TELEGRAM_REPORT_KIND,
