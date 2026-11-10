@@ -53,17 +53,12 @@ enum class DashboardPeriod { TODAY, WEEK, MONTH, YEAR, ALL }
 data class DashboardUiState(
     val soc: Int? = null,
     val odometer: Double? = null,
-    val speed: Int? = null,
     val period: DashboardPeriod = DashboardPeriod.WEEK,
     val totalKm: Double = 0.0,
     val totalKwh: Double = 0.0,
     val avgConsumption: Double = 0.0,
     val totalCost: Double = 0.0,
     val tripCount: Int = 0,
-    // Legacy aliases for backward compat
-    val totalKmToday: Double = 0.0,
-    val totalKwhToday: Double = 0.0,
-    val lastTrip: TripEntity? = null,
     val recentTrips: List<TripEntity> = emptyList(),
     val isServiceRunning: Boolean = false,
     val currencySymbol: String = "BYN",
@@ -91,8 +86,6 @@ data class DashboardUiState(
     val adbVerdict: AdbVerdict? = null,
     val adbChecking: Boolean = false,
     val currentSoh: Float? = null,
-    val currentLifetimeKm: Float? = null,
-    val currentLifetimeKwh: Float? = null,
     // Widget-style stats around SOC ring (mirror FloatingWidgetView bindings).
     val insideTemp: Int? = null,
     val tripDistanceKm: Double? = null,
@@ -178,7 +171,6 @@ class DashboardViewModel @Inject constructor(
     init {
         cleanupBadIdleDrainData()
         observeLiveData()
-        observeLastTrip()
         observeRecentTrips()
         loadCurrency()
         loadInsight()
@@ -284,7 +276,6 @@ class DashboardViewModel @Inject constructor(
                     val newSoc = data?.soc ?: current.soc
                     current.copy(
                         soc = newSoc,
-                        speed = data?.speed ?: current.speed,
                         odometer = data?.mileage ?: current.odometer,
                         isServiceRunning = running,
                         avgBatTemp = data?.avgBatTemp ?: current.avgBatTemp,
@@ -336,15 +327,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    /** Observe the most recent trip from the database. */
-    private fun observeLastTrip() {
-        viewModelScope.launch {
-            tripRepository.getLastTrip().collect { trip ->
-                _uiState.update { it.copy(lastTrip = trip) }
-            }
-        }
-    }
-
     private fun observeRecentTrips() {
         viewModelScope.launch {
             tripRepository.getRecentTrips(7).collect { trips ->
@@ -389,8 +371,6 @@ class DashboardViewModel @Inject constructor(
                     avgConsumption = avg,
                     totalCost = summary.totalCost,
                     tripCount = summary.tripCount,
-                    totalKmToday = if (period == DashboardPeriod.TODAY) summary.totalKm else it.totalKmToday,
-                    totalKwhToday = if (period == DashboardPeriod.TODAY) summary.totalKwh else it.totalKwhToday,
                     periodLiters = totals?.liters,
                     periodLitersKm = totals?.litersKm,
                     periodHevKm = totals?.hevKm,
@@ -490,8 +470,6 @@ class DashboardViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 currentSoh = state.sohPercent,
-                currentLifetimeKm = state.lifetimeKm,
-                currentLifetimeKwh = state.lifetimeKwh,
             )
         }
     }
