@@ -19,6 +19,9 @@ class HudAmapBroadcaster(private val context: Context) {
     companion object {
         private const val TAG = "HudAmapBroadcaster"
         const val ACTION = "AUTONAVI_STANDARD_BROADCAST_SEND"
+        /** 0x11000000: RECEIVER_FOREGROUND | hidden RECEIVER_INCLUDE_BACKGROUND (see buildGuideIntent);
+         *  HudAmapClusterLoop sends with the same flags. */
+        internal const val RECEIVER_FLAGS = 285212672
         val RECEIVER_PACKAGES = listOf("com.byd.amapservice", "com.example.amapservice")
 
         /** Maps our internal maneuver code to the canonical AutoNavi NEW_ICON value decoded
@@ -138,7 +141,7 @@ class HudAmapBroadcaster(private val context: Context) {
             intent.putExtra("ROUTE_REMAIN_TIME_AUTO", timeStr)
             intent.putExtra("ROUTE_REMAIN_TIME_STRING", timeStr)
         }
-        intent.addFlags(285212672)  // 0x11000000: RECEIVER_FOREGROUND | hidden RECEIVER_INCLUDE_BACKGROUND
+        intent.addFlags(RECEIVER_FLAGS)  // 0x11000000: RECEIVER_FOREGROUND | hidden RECEIVER_INCLUDE_BACKGROUND
         return intent
     }
 
@@ -158,7 +161,7 @@ class HudAmapBroadcaster(private val context: Context) {
             intent.putExtra("NEXT_ROAD_NAME", "")
             intent.putExtra("ROUTE_REMAIN_DIS", -1)
             intent.putExtra("ROUTE_REMAIN_TIME", -1)
-            intent.addFlags(285212672)
+            intent.addFlags(RECEIVER_FLAGS)
             sendAll(intent)
             stopsSent++
         } catch (e: Exception) {
