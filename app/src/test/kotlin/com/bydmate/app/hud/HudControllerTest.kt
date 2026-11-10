@@ -11,6 +11,7 @@ import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.HudNaviReply
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.navdata.NavGuidance
 import com.bydmate.app.navdata.NavGuidanceHub
@@ -31,6 +32,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -43,6 +45,8 @@ class HudControllerTest {
     private val helperClient = mockk<HelperClient>(relaxed = true)
     private val helperBootstrap = mockk<HelperBootstrap>(relaxed = true)
     private val time = HudVirtualTime()
+
+    @get:Rule val trace = TraceRecorder()
 
     private fun controller(bridge: HudSomeIpBridge? = null): HudController =
         HudController(context, helperClient, helperBootstrap).apply {
@@ -232,6 +236,7 @@ class HudControllerTest {
         c.startIfEnabled()
         assertEquals(HudController.Status.ON, c.status.value)
         coVerify(exactly = 1) { helperClient.hudNaviStatus(4) }
+        coVerify { helperClient.enableAccessibilityService() }
         assertEquals(1, state[HudArming.SCREEN])
         assertEquals(0, state[HudArming.CAN_NAVI])
         assertEquals(0, state[HudArming.ISA])
@@ -263,6 +268,19 @@ class HudControllerTest {
         val c = controller(bridge)
         c.setEnabled(true)
         assertEquals(HudController.Status.BIND_FAILED, c.status.value)
+    }
+
+    @Test fun `the output on and off are status lines, the way goes to the route summary`() {
+        installSomeIp()
+        coEvery { helperBootstrap.ensureRunning() } returns true
+        val c = controller(connectedBridge())
+        c.setEnabled(true)
+        assertEquals(HudController.MODE_GLASS_ONLY, NavGuidanceHub.hudWay)
+        c.setEnabled(false)
+        awaitTrue { c.status.value == HudController.Status.OFF }
+        assertEquals(0, NavGuidanceHub.hudWay)
+        val status = trace.events().filter { it.contains(" status ") }.map { it.substringAfter("status ").substringBefore(" #") }
+        assertEquals(listOf("to=connecting", "to=on rc=0", "to=off"), status)
     }
 
     // --- #301: the cluster card through the Amap adapter, only without the gateway ---

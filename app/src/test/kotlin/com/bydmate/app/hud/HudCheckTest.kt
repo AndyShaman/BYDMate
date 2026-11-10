@@ -298,6 +298,23 @@ class HudCheckTest {
         expected.zip(sent).forEach { (e, a) -> assertTrue(e.payload.contentEquals(a.second)) }
     }
 
+    @Test fun `step 4 traces every service start and stop with its id and rc`() = runTest {
+        val s = setup()
+        every { s.bridge.startService(0xB820282020000L) } returns 11
+        s.check.run()
+        val services = trace.events().filter { it.contains("probe-service") }
+        // The six of step 4 and the navigation service of steps 1 and 2, each started and stopped.
+        assertEquals(14, services.size)
+        assertTrue(services.any { it.contains("op=start") && it.contains("id=0xb010a00010000") && it.contains("rc=0") })
+        assertTrue(services.any { it.contains("op=stop") && it.contains("id=0xb010a00010000") })
+        assertTrue(services.any { it.contains("op=start") && it.contains("id=0xb820282020000") && it.contains("rc=11") })
+        assertTrue(services.any { it.contains("op=stop") && it.contains("id=0xb001700170000") && it.contains("rc=0") })
+        val step = trace.events().single { it.contains("probe-step") && it.contains("step=4") }
+        listOf("chan=someip-lmcn", "started=5/6", "marker=444").forEach { assertTrue("$it in $step", step.contains(it)) }
+        assertEquals(10, trace.events().count { it.contains("probe-fire") })
+        assertTrue(s.probeLines().any { it.contains("services={0xb000700070000:0,0xb820282020000:11,") })
+    }
+
     @Test fun `no gateway skips step 4`() = runTest {
         val s = setup(gatewayPresent = false)
         s.check.run()

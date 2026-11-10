@@ -228,4 +228,31 @@ class HudPushLoopTest {
             assertTrue("street \"$word\" leaked into the trace: $events", events.none { it.contains(word) })
         }
     }
+
+    @Test fun `tick_updates_diag_counters_and_records_nonzero_rc`() {
+        activeHub(nowMs = 1000L)
+        val sink = FakeSink()
+        val loop = HudPushLoop(sink, nowMsProvider = { 1000L })
+        loop.tick(wasActive = false)
+        assertEquals(1L, loop.framesSent)
+        assertTrue(loop.lastFrameTs > 0L)
+        assertEquals(0, loop.lastRc)
+        assertEquals(0L, loop.nonZeroRcCount)
+
+        sink.nextRc = -5
+        loop.tick(wasActive = true)
+        assertEquals(2L, loop.framesSent)
+        assertEquals(-5, loop.lastRc)
+        assertEquals(1L, loop.nonZeroRcCount)
+    }
+
+    @Test fun `frames and their rc go to the route summary`() {
+        activeHub(nowMs = 1000L)
+        val sink = FakeSink()
+        val loop = HudPushLoop(sink, nowMsProvider = { 1000L })
+        loop.tick(wasActive = false)
+        sink.nextRc = -5
+        loop.tick(wasActive = true)
+        assertTrue(NavGuidanceHub.routeSummary(nowMs = 1000L).contains(" frames=2 rc={-5:1,0:1} "))
+    }
 }

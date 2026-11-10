@@ -132,6 +132,36 @@ class HudWayChannelsTest {
 
     // --- way 2: the CAN fields ---
 
+    @Test fun `way 2 writes the maneuver, distance and road on the first tick and nothing while they hold`() = runTest {
+        val c = channels(2)
+        route()
+        c.tick(active = true)
+        assertEquals(listOf("set $icon=2", "set $ahead=2", "set $dist=300", "buf $road=Main St"), calls)
+        calls.clear()
+        c.tick(active = true)
+        c.tick(active = true)
+        assertTrue(calls.isEmpty())
+        assertTrue(prefs.getBoolean(HudWayChannels.KEY_CAN_LEFT, false))
+    }
+
+    @Test fun `way 2 rewrites the guidance fields on a distance change and the road only when it changes`() = runTest {
+        val c = channels(2)
+        route()
+        c.tick(active = true)
+        calls.clear()
+        route(dist = 250)
+        c.tick(active = true)
+        assertEquals(listOf("set $icon=2", "set $ahead=2", "set $dist=250"), calls)
+        calls.clear()
+        route(dist = 250, road = "Side Rd")
+        c.tick(active = true)
+        assertEquals(listOf("buf $road=Side Rd"), calls)
+        calls.clear()
+        route(gaode = 1, dist = 250, road = "Side Rd")
+        c.tick(active = true)
+        assertEquals(listOf("set $icon=1", "set $ahead=1", "set $dist=250"), calls)
+    }
+
     /** Way 2 must not change by a single write or its order: start, icon change, distance change,
      *  street change and end, with the remaining time and distance known all along. */
     @Test fun `way 2 pins its whole write sequence for a route`() = runTest {
@@ -885,6 +915,24 @@ class HudWayChannelsTest {
     }
 
     // --- diagnostics ---
+
+    @Test fun `each route leaves one start and one end line with the channels and the CAN counts`() = runTest {
+        val c = channels(3)
+        route()
+        c.tick(active = true)
+        route(dist = 200)
+        c.tick(active = true)
+        c.tick(active = false)
+        val start = lines.single { it.startsWith("hud way: route start") }
+        assertTrue(start, start.contains("way=3") && start.contains("channels=can,someip-lmcn") && start.contains("services={"))
+        val end = lines.single { it.startsWith("hud way: route end") }
+        // Two guidance writes of three fids, one road write and the rest of route's five: twelve accepted.
+        assertTrue(end, end.contains("can accepted=12 refused=0") && end.contains("clear=ok") && end.contains("fire={"))
+        val events = trace.events()
+        assertTrue(events.any { it.contains("way-route ") && it.contains("way=3") && it.contains("started=6/6") })
+        assertTrue(events.any { it.contains("way-route-end") && it.contains("can-ok=12") && it.contains("can-refused=0") })
+        assertEquals(12, c.canAccepted)
+    }
 
     @Test fun `coordinates never reach a line or a trace event`() = runTest {
         val c = channels(3)

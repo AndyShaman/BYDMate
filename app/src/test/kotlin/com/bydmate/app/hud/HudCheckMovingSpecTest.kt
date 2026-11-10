@@ -192,4 +192,13 @@ class HudCheckMovingSpecTest {
         // The route's hand-over: the status and the layout stay up for the projection.
         assertFalse(s.wrote(HudArming.NAVI, HudArming.NAVI_CLOSED))
         assertTrue(prefs().contains(HudArming.KEY_AS_FOUND))
-    }}
+    }
+
+    @Test fun `R6 a route alone during the check still ends as RouteStarted`() = runTest {
+        val s = setup { 0 }
+        s.check.guidanceActive = { testScheduler.currentTime >= 25_000 }
+        s.check.run()
+        assertEquals(HudCheck.State.RouteStarted, s.check.state.value)
+        assertTrue(s.lines.contains("hudprobe: aborted reason=guidance step=2"))
+    }
+}
