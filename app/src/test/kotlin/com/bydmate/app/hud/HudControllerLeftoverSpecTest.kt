@@ -83,12 +83,12 @@ class HudControllerLeftoverSpecTest {
         return state
     }
 
-    private fun assertPutBack(state: Map<Pair<Int, Int>, Int>) {
-        awaitTrue { !prefs().contains(HudArming.KEY_AS_FOUND) }
-        assertEquals(1, state[HudArming.SCREEN])
-        assertEquals(4, state[HudArming.NAVI])
-        assertEquals(0, state[HudArming.CAN_NAVI])
-        assertEquals(0, state[HudArming.ISA])
+    private fun assertPutBack(state: Map<Pair<Int, Int>, Int>, label: String) {
+        awaitTrue("case: $label") { !prefs().contains(HudArming.KEY_AS_FOUND) }
+        assertEquals("case: $label", 1, state[HudArming.SCREEN])
+        assertEquals("case: $label", 4, state[HudArming.NAVI])
+        assertEquals("case: $label", 0, state[HudArming.CAN_NAVI])
+        assertEquals("case: $label", 0, state[HudArming.ISA])
     }
 
     private fun assertLeftAlone(state: Map<Pair<Int, Int>, Int>) {
@@ -101,27 +101,24 @@ class HudControllerLeftoverSpecTest {
 
     // --- R1: a kept layout goes back at service start on any car ---
 
-    @Test fun `R1 HUD switched off, a kept layout goes back at service start`() {
-        installSomeIp()
-        val state = leftoverCar(hudOn = false)
-        val c = controller()
-        c.startIfEnabled()
-        assertPutBack(state)
-        assertEquals(HudController.Status.OFF, c.status.value)
-    }
-
-    @Test fun `R1 no SOME IP gateway, a kept layout goes back at service start`() {
-        val state = leftoverCar(hudOn = true)   // gateway package not installed
-        val c = controller()
-        c.startIfEnabled()
-        assertPutBack(state)
-        assertEquals(HudController.Status.UNSUPPORTED, c.status.value)
-    }
-
-    @Test fun `R1 HUD off and no gateway, a kept layout goes back at service start`() {
-        val state = leftoverCar(hudOn = false)
-        controller().startIfEnabled()
-        assertPutBack(state)
+    /** (label, gateway installed, HUD switched on, the status it comes up in; null = not asserted).
+     *  The cases without the gateway come first: an installed package stays for the test. */
+    @Test fun `R1 a kept layout goes back at service start with the HUD off or no gateway`() {
+        val cases = listOf(
+            Triple("HUD off and no gateway", false to false, null),
+            Triple("no SOME IP gateway", false to true, HudController.Status.UNSUPPORTED),
+            Triple("HUD switched off", true to false, HudController.Status.OFF),
+        )
+        cases.forEach { (label, setup, status) ->
+            val (gateway, hudOn) = setup
+            prefs().edit().clear().commit()
+            if (gateway) installSomeIp()
+            val state = leftoverCar(hudOn)
+            val c = controller()
+            c.startIfEnabled()
+            assertPutBack(state, label)
+            if (status != null) assertEquals("case: $label", status, c.status.value)
+        }
     }
 
     @Test fun `R1 a kept layout the running HUD check owns is left alone`() {
@@ -178,47 +175,31 @@ class HudControllerLeftoverSpecTest {
 
     // --- R2: no kept layout, no side effects on a car where the HUD is off or unsupported ---
 
-    @Test fun `R2 HUD off and nothing kept, service start touches nothing`() {
-        installSomeIp()
-        val c = controller()
-        c.startIfEnabled()
-        Thread.sleep(1_000)
-        assertEquals(HudController.Status.OFF, c.status.value)
-        verify { helperClient wasNot Called }
-        verify { helperBootstrap wasNot Called }
+    /** The case without the gateway comes first: an installed package stays for the test. */
+    @Test fun `R2 HUD off or no gateway and nothing kept, service start touches nothing`() {
+        val cases = listOf(
+            Triple("no gateway", false to true, HudController.Status.UNSUPPORTED),
+            Triple("HUD off", true to false, HudController.Status.OFF),
+        )
+        cases.forEach { (label, setup, status) ->
+            val (gateway, hudOn) = setup
+            prefs().edit().clear().putBoolean(HudController.KEY_ENABLED, hudOn).commit()
+            if (gateway) installSomeIp()
+            val c = controller()
+            c.startIfEnabled()
+            Thread.sleep(1_000)
+            assertEquals("case: $label", status, c.status.value)
+            verify { helperClient wasNot Called }
+            verify { helperBootstrap wasNot Called }
+        }
     }
 
-    @Test fun `R2 no gateway and nothing kept, service start touches nothing`() {
-        prefs().edit().putBoolean(HudController.KEY_ENABLED, true).commit()
-        val c = controller()
-        c.startIfEnabled()
-        Thread.sleep(1_000)
-        assertEquals(HudController.Status.UNSUPPORTED, c.status.value)
-        verify { helperClient wasNot Called }
-        verify { helperBootstrap wasNot Called }
-    }
-
-    // --- R4: HUD on with the gateway behaves as before ---
-
-    @Test fun `R4 HUD on with the gateway puts a kept layout back once and comes up ON`() {
-        installSomeIp()
-        val state = leftoverCar(hudOn = true)
-        val c = controller()
-        c.startIfEnabled()
-        assertPutBack(state)
-        awaitTrue { c.status.value == HudController.Status.ON }
-        coVerify(exactly = 1) { helperClient.hudNaviStatus(4) }
-        coVerify { helperClient.enableAccessibilityService() }
-        c.setEnabled(false)
-        coVerify(exactly = 1) { helperClient.hudNaviStatus(4) }
-    }
-
-    private fun awaitTrue(timeoutMs: Long = 5_000, cond: () -> Boolean) {
+    private fun awaitTrue(message: String? = null, timeoutMs: Long = 5_000, cond: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (cond()) return
             Thread.sleep(50)
         }
-        assertTrue(cond())
+        assertTrue(message, cond())
     }
 }

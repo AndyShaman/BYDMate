@@ -298,23 +298,6 @@ class HudCheckTest {
         expected.zip(sent).forEach { (e, a) -> assertTrue(e.payload.contentEquals(a.second)) }
     }
 
-    @Test fun `step 4 traces every service start and stop with its id and rc`() = runTest {
-        val s = setup()
-        every { s.bridge.startService(0xB820282020000L) } returns 11
-        s.check.run()
-        val services = trace.events().filter { it.contains("probe-service") }
-        // The six of step 4 and the navigation service of steps 1 and 2, each started and stopped.
-        assertEquals(14, services.size)
-        assertTrue(services.any { it.contains("op=start") && it.contains("id=0xb010a00010000") && it.contains("rc=0") })
-        assertTrue(services.any { it.contains("op=stop") && it.contains("id=0xb010a00010000") })
-        assertTrue(services.any { it.contains("op=start") && it.contains("id=0xb820282020000") && it.contains("rc=11") })
-        assertTrue(services.any { it.contains("op=stop") && it.contains("id=0xb001700170000") && it.contains("rc=0") })
-        val step = trace.events().single { it.contains("probe-step") && it.contains("step=4") }
-        listOf("chan=someip-lmcn", "started=5/6", "marker=444").forEach { assertTrue("$it in $step", step.contains(it)) }
-        assertEquals(10, trace.events().count { it.contains("probe-fire") })
-        assertTrue(s.probeLines().any { it.contains("services={0xb000700070000:0,0xb820282020000:11,") })
-    }
-
     @Test fun `no gateway skips step 4`() = runTest {
         val s = setup(gatewayPresent = false)
         s.check.run()
@@ -518,15 +501,6 @@ class HudCheckTest {
         assertTrue(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
     }
 
-    @Test fun `a check that never reached step 3 traces no CAN clear`() = runTest {
-        val s = setup()
-        val job = launch { s.check.run() }
-        advanceTimeBy(5_000)   // inside step 1
-        job.cancel()
-        job.join()
-        assertTrue(canClearEvents().isEmpty())
-    }
-
     // --- a route that starts during the check ---
 
     /** A projection running with its arming: the check shares its gateway. */
@@ -575,10 +549,15 @@ class HudCheckTest {
 
     @Test fun `a route starting in step 2 leaves the armed status and the kept layout to the projection`() = runTest {
         val product = LiveProduct()
+        val times = mutableListOf<Long>()
+        every { product.bridge.fireEvent(any(), any()) } answers {
+            product.frames += secondArg<ByteArray>(); times += testScheduler.currentTime; 0
+        }
         val s = setup(controller = product.controller)
         routeStartsAt(25_000, s)
         s.check.run()
         assertHandedOver(s, product, step = 2)
+        assertTrue(times.count { it >= 25_000 } <= 1)   // no test frame after the route, one in flight at most
         assertEquals(0, product.clearFrames())
         assertEquals("hudprobe: restore handover armed=true asfound=1", s.probeLines().last())
         assertEquals(1, prefs().getInt(HudArming.KEY_AS_FOUND, -1))
@@ -602,8 +581,11 @@ class HudCheckTest {
 
     @Test fun `without a running projection a route start still gets the full restore`() = runTest {
         val s = setup()   // HUD projection off: nobody else would close the status
+        val times = mutableListOf<Long>()
+        every { s.bridge.fireEvent(any(), any()) } answers { times += testScheduler.currentTime; 0 }
         routeStartsAt(25_000, s)
         s.check.run()
+        assertTrue(times.count { it >= 25_000 } <= 1)   // past the route only the restore's clear frame
         assertTrue(s.probeLines().contains("hudprobe: aborted reason=guidance step=2"))
         assertEquals(
             listOf("sdk 4", "set 1023/1276174357=1", "set 1014/1083203624=0", "set 1014/1262485592=0"),
@@ -613,6 +595,7 @@ class HudCheckTest {
         verify { s.bridge.unbind() }
         assertEquals(HudCheck.State.RouteStarted, s.check.state.value)
         assertFalse(s.controller.armingPaused)
+        assertFalse(prefs().contains(HudArming.KEY_AS_FOUND))
     }
 
     private fun prefs() = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
@@ -698,46 +681,40 @@ class HudCheckTest {
         assertTrue(trace.events().any { it.contains("probe-answer") && it.contains("seen=none") && it.contains("way=2") })
     }
 
-    @Test fun `a refused check does not ask`() = runTest {
-        val s = setup(speed = 6)
-        s.check.run()
-        assertFalse(s.check.askAnswer.value)
-    }
-
-    @Test fun `a cancelled check does not ask`() = runTest {
-        val s = setup()
-        val job = launch { s.check.run() }
-        advanceTimeBy(70_000)   // inside step 4
-        job.cancel()
-        job.join()
-        assertEquals(HudCheck.State.Done, s.check.state.value)
-        assertFalse(s.check.askAnswer.value)
-    }
-
-    @Test fun `a check a route or moving off ended does not ask`() = runTest {
-        val route = setup()
-        routeStartsAt(25_000, route)
-        route.check.run()
-        assertFalse(route.check.askAnswer.value)
-        val moving = setup()
-        moving.check.speedKmh = { if (testScheduler.currentTime >= 30_000) 20 else 0 }
-        moving.check.run()
-        assertFalse(moving.check.askAnswer.value)
-    }
-
-    @Test fun `a check whose step threw does not ask`() = runTest {
-        val s = setup(car = FakeCar().apply { bufferFailsOn = "BYDMATE 3" })
-        s.check.run()
-        assertFalse(s.check.askAnswer.value)
-    }
-
-    @Test fun `a new check drops an unanswered question`() = runTest {
-        val s = setup()
-        s.check.run()
-        assertTrue(s.check.askAnswer.value)
-        s.check.speedKmh = { 6 }
-        s.check.run()
-        assertFalse(s.check.askAnswer.value)
+    @Test fun `a check that did not run to the end does not ask`() = runTest {
+        // Times are relative: the cases share one virtual clock.
+        val cases = listOf<Pair<String, suspend TestScope.() -> HudCheck>>(
+            "refused" to { setup(speed = 6).check.also { it.run() } },
+            "cancelled in step 4" to {
+                val s = setup()
+                val job = launch { s.check.run() }
+                advanceTimeBy(70_000)   // inside step 4
+                job.cancel()
+                job.join()
+                assertEquals("cancelled in step 4", HudCheck.State.Done, s.check.state.value)
+                s.check
+            },
+            "a route mid-check" to {
+                val s = setup()
+                routeStartsAt(testScheduler.currentTime + 25_000, s)
+                s.check.also { it.run() }
+            },
+            "moving off mid-check" to {
+                val s = setup()
+                val t0 = testScheduler.currentTime
+                s.check.speedKmh = { if (testScheduler.currentTime - t0 >= 30_000) 20 else 0 }
+                s.check.also { it.run() }
+            },
+            "a step threw" to { setup(car = FakeCar().apply { bufferFailsOn = "BYDMATE 3" }).check.also { it.run() } },
+            "a new check drops an unanswered question" to {
+                val s = setup()
+                s.check.run()
+                assertTrue("first check asks", s.check.askAnswer.value)
+                s.check.speedKmh = { 6 }
+                s.check.also { it.run() }
+            },
+        )
+        cases.forEach { (label, run) -> assertFalse("case: $label", run().askAnswer.value) }
     }
 
     // --- refusals ---

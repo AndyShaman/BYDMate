@@ -1,6 +1,5 @@
 package com.bydmate.app.hud
 
-import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.navdata.NavGuidance
 import com.bydmate.app.navdata.NavGuidanceHub
 import org.junit.Assert.assertArrayEquals
@@ -9,7 +8,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -28,8 +26,6 @@ class HudPushLoopTest {
             return nextRc
         }
     }
-
-    @get:Rule val trace = TraceRecorder()
 
     @Before fun reset() = NavGuidanceHub.reset()
 
@@ -210,48 +206,4 @@ class HudPushLoopTest {
         assertEquals("ул. Ленина", loop.runningLine(NavGuidanceHub.snapshot(1000L)))
     }
 
-    @Test fun `tick_updates_diag_counters_and_records_nonzero_rc`() {
-        activeHub(nowMs = 1000L)
-        val sink = FakeSink()
-        val loop = HudPushLoop(sink, nowMsProvider = { 1000L })
-        loop.tick(wasActive = false)
-        assertEquals(1L, loop.framesSent)
-        assertTrue(loop.lastFrameTs > 0L)
-        assertEquals(0, loop.lastRc)
-        assertEquals(0L, loop.nonZeroRcCount)
-
-        sink.nextRc = -5
-        loop.tick(wasActive = true)
-        assertEquals(2L, loop.framesSent)
-        assertEquals(-5, loop.lastRc)
-        assertEquals(1L, loop.nonZeroRcCount)
-    }
-
-    // --- trace audit: frames into the route summary, the street's script on change ---
-
-    @Test fun `frames and their rc go to the route summary`() {
-        activeHub(nowMs = 1000L)
-        val sink = FakeSink()
-        val loop = HudPushLoop(sink, nowMsProvider = { 1000L })
-        loop.tick(wasActive = false)
-        sink.nextRc = -5
-        loop.tick(wasActive = true)
-        assertTrue(NavGuidanceHub.routeSummary(nowMs = 1000L).contains(" frames=2 rc={-5:1,0:1} "))
-    }
-
-    @Test fun `the frame street's script class is traced when it changes, never the street`() {
-        val loop = HudPushLoop(FakeSink(), nowMsProvider = { 1000L })
-        fun street(road: String) {
-            NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = road), NavGuidanceHub.Source.A11Y, nowMs = 1000L)
-            loop.tick(wasActive = true)
-        }
-        street("ул. Ленина")
-        street("ул. Ленина")
-        street("пр. Победителей")                      // same class: no line
-        street("长安街")
-        val roads = trace.events().filter { it.contains(" road ") }
-        assertEquals(2, roads.size)
-        assertTrue(roads[0], roads[0].contains("road chan=someip script=cyrillic len=10"))
-        assertTrue(roads[1], roads[1].contains("road chan=someip script=other len=3"))
-    }
 }

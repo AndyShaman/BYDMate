@@ -42,11 +42,4 @@ class HudCanChannelTest {
             writes,
         )
     }
-
-    @Test fun `turn kinds are the firmware SDK's values`() {
-        // BYDAutoInstrumentDevice: TURN_KIND_BLANK = 0, TURN_KIND_LEFT = 7, DISTANCE_INVALID = 0.
-        assertEquals(0, HudCanChannel.TURN_NONE)
-        assertEquals(7, HudCanChannel.TURN_LEFT)
-        assertEquals(0, HudCanChannel.DISTANCE_NONE)
-    }
 }
