@@ -55,7 +55,7 @@ class AvmCameraProbeJarFallbackTest {
         assertTrue(probe.discover())
         lookupLoaders.clear()
 
-        assertTrue(probe.open(2, mockk<Surface>(relaxed = true)))
+        assertTrue(probe.openWarm(mapOf(2 to mockk<Surface>(relaxed = true))))
 
         assertTrue(lookupLoaders.isNotEmpty())
         assertTrue(lookupLoaders.all { it === jarLoader })

@@ -72,7 +72,7 @@ class AvmCameraProbeTraceTest {
     @Test fun `an open without a camera id is traced as failed`() {
         val bare = AvmCameraProbe()
 
-        assertEquals(false, bare.open(2, left))
+        assertEquals(false, bare.openWarm(mapOf(2 to left)))
 
         assertEquals(listOf("camera open ok=false id=-1 indexes=2 error=no_camera_id"), events())
     }
