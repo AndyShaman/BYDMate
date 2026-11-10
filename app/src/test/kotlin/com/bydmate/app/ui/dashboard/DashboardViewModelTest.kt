@@ -51,6 +51,7 @@ import org.junit.Test
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.verify
 import io.mockk.mockk
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -339,6 +340,39 @@ class DashboardViewModelTest {
         voltage12v = 14f,
         readAtMs = 0L
     )
+
+    @Test
+    fun `adbVerdict and adbChecking mirror the monitor`() = runTest {
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(battery = null, available = false)
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(vm.uiState.value.adbVerdict)
+        assertFalse(vm.uiState.value.adbChecking)
+
+        adbVerdictFlow.value = AdbVerdict.NOT_ENABLED
+        adbCheckingFlow.value = true
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(AdbVerdict.NOT_ENABLED, vm.uiState.value.adbVerdict)
+        assertTrue(vm.uiState.value.adbChecking)
+
+        adbVerdictFlow.value = null
+        adbCheckingFlow.value = false
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(vm.uiState.value.adbVerdict)
+        assertFalse(vm.uiState.value.adbChecking)
+    }
+
+    @Test
+    fun `recheckAdb and enableAdbRestore go through the monitor`() = runTest {
+        val vm = buildViewModel(fakeAutoservice = FakeAutoservice(sampleReading, available = true))
+
+        vm.recheckAdb()
+        vm.enableAdbRestore()
+
+        verify { adbVerdictMonitor.recheck("dashboard") }
+        verify { adbVerdictMonitor.enableRestoreAndRecheck() }
+    }
 
     // --- DM-i hybrid period sums (#184) ---
 
