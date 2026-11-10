@@ -12,6 +12,16 @@ class AgentCatalogFridgeFrontTrunkTest {
         assertNull(AgentCommandCatalog.resolve("fridge_cool", null))
     }
 
+    // Translator: dynamic fridge setpoints must fan out to mode + temp with the
+    // documented raw shift (cool raw = C + 19) and clamp to the validated window.
+    @Test fun translator_resolves_dynamic_fridge_cool() {
+        val r = CommandTranslator.resolve("冰箱制冷-4度")
+        assertEquals(
+            listOf("fridge_mode" to 1, "fridge_temp_cool" to 15),
+            r.map { it.actionName to it.value },
+        )
+    }
+
     @Test fun translator_clamps_fridge_heat() {
         val r = CommandTranslator.resolve("冰箱制热99度")
         assertEquals(
