@@ -2391,21 +2391,6 @@ class AgentTools @Inject constructor(
     // Accepts a JSON boolean or the strings "true"/"false" (some LLMs emit stringified
     // booleans); anything else (missing key, null, number) is treated as unspecified so a
     // malformed call can never silently disable a rule.
-    private fun requireEnabledArg(args: JSONObject): Boolean? {
-        if (!args.has("enabled") || args.isNull("enabled")) return null
-        return when (val raw = args.get("enabled")) {
-            is Boolean -> raw
-            is String -> when (raw.trim().lowercase()) {
-                "true" -> true
-                "false" -> false
-                else -> null
-            }
-            else -> null
-        }
-    }
-
-    // Same acceptance rule as requireEnabledArg, generalized to an arbitrary key (used by
-    // create_automation's sentry action "on" field).
     private fun requireBoolArg(args: JSONObject, key: String): Boolean? {
         if (!args.has(key) || args.isNull(key)) return null
         return when (val raw = args.get(key)) {
@@ -2531,7 +2516,7 @@ class AgentTools @Inject constructor(
     private suspend fun setAutomationEnabled(args: JSONObject): String {
         val name = args.optString("name").trim()
         if (name.isEmpty()) return """{"error":"не указано имя"}"""
-        val enabled = requireEnabledArg(args) ?: return """{"error":"не указано значение enabled"}"""
+        val enabled = requireBoolArg(args, "enabled") ?: return """{"error":"не указано значение enabled"}"""
         val matches = runCatchingCancellable { ruleDao.getAllList() }
             .getOrElse { return """{"error":"не удалось изменить автоматизацию"}""" }
             .filter { it.name.trim().equals(name, ignoreCase = true) }
