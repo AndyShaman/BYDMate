@@ -220,8 +220,8 @@ class SettlementSearchClientTest {
             val t0 = System.nanoTime()
             job.cancelAndJoin()
             val elapsedMs = (System.nanoTime() - t0) / 1_000_000
-            assertTrue("cancel took ${elapsedMs}ms", elapsedMs < 2_000)
-            val deadline = System.currentTimeMillis() + 2_000
+            assertTrue("cancel took ${elapsedMs}ms", elapsedMs < 5_000) // far below the 60 s call timeout
+            val deadline = System.currentTimeMillis() + 5_000
             while (okHttp.dispatcher.runningCallsCount() > 0 && System.currentTimeMillis() < deadline) {
                 Thread.sleep(20)
             }

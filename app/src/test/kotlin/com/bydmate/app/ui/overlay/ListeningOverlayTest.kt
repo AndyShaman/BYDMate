@@ -3,12 +3,13 @@ package com.bydmate.app.ui.overlay
 import android.content.Context
 import io.mockk.mockk
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -116,10 +117,12 @@ class ListeningOverlayTest {
     // before withContext(Dispatchers.Main) -- two concurrent show() calls can both pass it while
     // active is still null. Uses a real single-thread Main dispatcher (not the class's Unconfined
     // one) so the two calls' Main blocks genuinely queue behind each other, and a latch inside
-    // attachWindow holds the first call inside its Main block until the second call has had time
-    // to pass its own pre-dispatch check and queue behind it -- reproducing the exact race window.
+    // attachWindow holds the first call inside its Main block until the second call has passed its
+    // own pre-dispatch check (the permission check right after it) and its Main block sits in the
+    // executor's queue behind the first -- reproducing the exact race window every time.
     @Test fun `two concurrent show calls attach exactly once`() = runBlocking {
-        val mainExecutor = Executors.newSingleThreadExecutor()
+        val mainQueue = LinkedBlockingQueue<Runnable>()
+        val mainExecutor = ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, mainQueue)
         Dispatchers.setMain(mainExecutor.asCoroutineDispatcher())
         try {
             var attachCount = 0
@@ -134,11 +137,22 @@ class ListeningOverlayTest {
                 FakeHandle()
             }
             ListeningOverlay.poster = { it.run() }
+            val permissionChecks = AtomicInteger()
+            val secondPassedCheck = CountDownLatch(1)
+            ListeningOverlay.permissionCheck = {
+                if (permissionChecks.incrementAndGet() == 2) secondPassedCheck.countDown()
+                true
+            }
 
             val job1 = launch(Dispatchers.IO) { ListeningOverlay.show(context, "a") }
             assertTrue(firstAttachStarted.await(2, TimeUnit.SECONDS)) // job1 is inside attachWindow; active still null
             val job2 = launch(Dispatchers.IO) { ListeningOverlay.show(context, "b") }
-            delay(200) // let job2 pass its pre-dispatch check and queue on Main behind job1
+            // job2 passed its pre-dispatch check while active is still null...
+            assertTrue(secondPassedCheck.await(10, TimeUnit.SECONDS))
+            // ...and its Main block is queued behind job1's.
+            val deadline = System.currentTimeMillis() + 10_000
+            while (mainQueue.size < 1 && System.currentTimeMillis() < deadline) Thread.sleep(5)
+            assertEquals("job2's Main block queued behind job1", 1, mainQueue.size)
             releaseFirstAttach.countDown() // let job1's attachWindow return and commit `active`
             job1.join()
             job2.join()
