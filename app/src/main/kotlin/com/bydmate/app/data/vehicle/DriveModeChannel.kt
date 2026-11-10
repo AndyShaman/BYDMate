@@ -36,6 +36,16 @@ enum class DriveMode(val value: Int, val actionName: String, val supportFid: Int
     }
 }
 
+/**
+ * The speed a terrain mode is judged on, km/h, read by [read] from the speed fid. Rounded UP, not
+ * truncated: a plain toInt() turns 15.9 km/h into 15 and lets a terrain mode through above the
+ * owner's 15 km/h limit (finding 2026-09-27). Null when the read gives nothing.
+ */
+internal suspend fun guardSpeedKmh(read: suspend (dev: Int, fid: Int) -> Float?): Int? {
+    val address = FidAddresses.of("speed")
+    return read(address.device, address.fid)?.let { kotlin.math.ceil(it).toInt() }
+}
+
 /** Raw dev=1023 int read (support flag or target mode). Null means the read did not complete. */
 fun interface DriveModeReader {
     suspend fun read(fid: Int): Int?
@@ -167,15 +177,11 @@ class DriveModeChannel(
         return false
     }
 
-    /** Rounded UP, not truncated — same reasoning as VehicleApiImpl's pre-write speed closure: a
-     *  plain toInt() would turn 15.9 km/h into 15 and let a terrain mode through above the limit.
-     *  A throwing read is a failed read (unknown), not a verdict. */
-    private suspend fun readGuardSpeed(locked: LockedReader): Int? {
-        val address = FidAddresses.of("speed")
-        return runCatching { locked.readFloat(address.device, address.fid) }
+    /** [guardSpeedKmh] through the held lock. A throwing read is a failed read (unknown), not a verdict. */
+    private suspend fun readGuardSpeed(locked: LockedReader): Int? = guardSpeedKmh { dev, fid ->
+        runCatching { locked.readFloat(dev, fid) }
             .onFailure { if (it is CancellationException) throw it }
             .getOrNull()
-            ?.let { kotlin.math.ceil(it).toInt() }
     }
 
     /** What one attempt has seen so far; [done] writes its single log line. [kmh] is mutable:
