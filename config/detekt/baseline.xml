@@ -206,6 +206,8 @@
     <ID>LargeClass:AgentTools.kt$AgentTools</ID>
     <ID>LargeClass:AutoserviceChargingDetectorTest.kt$AutoserviceChargingDetectorTest</ID>
     <ID>LargeClass:ClusterProjectionManager.kt$ClusterProjectionManager</ID>
+    <ID>LargeClass:DiagnosticDumpWriter.kt$DiagnosticDumpWriter</ID>
+    <ID>LargeClass:DiagnosticDumpWriter.kt$DiagnosticDumpWriter</ID>
     <ID>LargeClass:SettingsViewModel.kt$SettingsViewModel : ViewModel</ID>
     <ID>LargeClass:SettingsViewModelTest.kt$SettingsViewModelTest</ID>
     <ID>LargeClass:SherpaTtsEngineTest.kt$SherpaTtsEngineTest</ID>
@@ -465,6 +467,8 @@
     <ID>TooGenericExceptionCaught:ConfirmOverlayManager.kt$ConfirmOverlayManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CrashLog.kt$CrashLog$e: Exception</ID>
     <ID>TooGenericExceptionCaught:DataThinningWorker.kt$DataThinningWorker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:DiagnosticDumpWriter.kt$DiagnosticDumpWriter$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:DiagnosticDumpWriter.kt$DiagnosticDumpWriter$e: Exception</ID>
     <ID>TooGenericExceptionCaught:DriveModeRuleMigration.kt$DriveModeRuleMigration$e: Exception</ID>
     <ID>TooGenericExceptionCaught:EnergyDataReader.kt$EnergyDataReader$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FidCatalogManager.kt$FidCatalogManager$e: Exception</ID>
