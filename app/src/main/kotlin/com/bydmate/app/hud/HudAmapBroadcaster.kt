@@ -125,8 +125,7 @@ class HudAmapBroadcaster(private val context: Context) {
             intent.putExtra("ROUNG_ABOUT_NUM", s.maneuverGaode - 24)
         }
         // 1..10 m lifted to the glass floor (below it the glass draws "现在", #294); 0 = unknown stays.
-        val segDis = if (s.distanceMeters in 1 until HudProtobufBuilder.MIN_DISTANCE_METERS)
-            HudProtobufBuilder.MIN_DISTANCE_METERS else s.distanceMeters
+        val segDis = HudWayChannels.glassDistance(s.distanceMeters)
         intent.putExtra("SEG_REMAIN_DIS", segDis)
         intent.putExtra("NEXT_ROAD_NAME", s.road)
         intent.putExtra("ROUTE_REMAIN_DIS", routeRemDis)

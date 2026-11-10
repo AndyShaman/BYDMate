@@ -54,8 +54,7 @@ class HudAmapClusterLoop(
             if (s.maneuverGaode in 25..34) {
                 intent.putExtra("ROUNG_ABOUT_NUM", s.maneuverGaode - 24)
             }
-            val segDis = if (s.distanceMeters in 1 until HudProtobufBuilder.MIN_DISTANCE_METERS)
-                HudProtobufBuilder.MIN_DISTANCE_METERS else s.distanceMeters
+            val segDis = HudWayChannels.glassDistance(s.distanceMeters)
             intent.putExtra("SEG_REMAIN_DIS", segDis)
             intent.putExtra("NEXT_ROAD_NAME", s.road)
             intent.putExtra("ROUTE_REMAIN_DIS", routeRemDis)
