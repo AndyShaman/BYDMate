@@ -25,6 +25,7 @@ object NavGuidanceParser {
     private val DIST_M = Regex("""(\d+)\s*(м|m)(?!\S)""", RegexOption.IGNORE_CASE)
     private val ETA_HR_MIN = Regex("""(\d+)\s*ч\s*(\d+)\s*мин""", RegexOption.IGNORE_CASE)
     private val ETA_MIN = Regex("""(\d+)\s*мин""", RegexOption.IGNORE_CASE)
+    private val DIGITS = Regex("""\d+""")
 
     data class RawFields(
         val maneuverDesc: String?,   // image_maneuverballoon_maneuver contentDescription
@@ -81,7 +82,7 @@ object NavGuidanceParser {
     }
 
     private fun exitNumberOf(raw: RawFields): Int? =
-        raw.exitNumber?.let { Regex("""\d+""").find(it)?.value }?.toIntOrNull()
+        raw.exitNumber?.let { DIGITS.find(it)?.value }?.toIntOrNull()
 
     private fun resolveDistance(distance: String?, unit: String?): Int {
         val rawText = distance?.trim() ?: return 0

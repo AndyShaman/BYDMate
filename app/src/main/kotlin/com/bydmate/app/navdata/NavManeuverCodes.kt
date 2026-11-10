@@ -25,6 +25,7 @@ object NavManeuverCodes {
     const val GAODE_TOLL = 47
 
     private val ROUNDABOUT_EXIT_RE = Regex("""(\d+)[-‑]й\s+съезд""")
+    private val WHITESPACE = Regex("\\s+")
 
     fun fromA11yDescription(text: String?): Int {
         if (text == null || text.isBlank()) return 0
@@ -57,7 +58,7 @@ object NavManeuverCodes {
             // Only what the donor's phrases leave at 0 goes to the competitors: a maneuver read
             // before reads the same.
             else -> fromRussianTextFallback(lower).takeIf { it != 0 }
-                ?: fromCompetitors(lower.replace(Regex("\\s+"), " "))
+                ?: fromCompetitors(lower.replace(WHITESPACE, " "))
         }
     }
 
@@ -173,15 +174,22 @@ object NavManeuverCodes {
         "туннель" to GAODE_TUNNEL,
         "тоннель" to GAODE_TUNNEL,
     )
+    private val WORD_BOUNDARY_RES = wordBoundaryRes(WORD_BOUNDARY_PHRASES)
+
+    /** A phrase as a whole word: start, whitespace or punctuation on either side. */
+    private fun wordBoundaryRes(phrases: Map<String, Int>): List<Pair<Regex, Int>> = phrases.map { (phrase, code) ->
+        Regex("""(?:^|\s|[\p{Punct}])${Regex.escape(phrase)}(?:$|\s|[\p{Punct}])""") to code
+    }
+
+    /** The code of the first phrase found in [norm], in table order; null when none is. */
+    private fun firstWordMatch(res: List<Pair<Regex, Int>>, norm: String): Int? =
+        res.firstOrNull { (re, _) -> re.containsMatchIn(norm) }?.second
 
     private fun fromRussianTextFallback(lower: String): Int {
         // lower is already NBSP-normalized by fromA11yDescription
-        val norm = lower.replace(Regex("\\s+"), " ")
+        val norm = lower.replace(WHITESPACE, " ")
         for ((phrase, code) in RU_PHRASES) if (phrase in norm) return code
-        for ((phrase, code) in WORD_BOUNDARY_PHRASES) {
-            if (Regex("""(?:^|\s|[\p{Punct}])${Regex.escape(phrase)}(?:$|\s|[\p{Punct}])""").containsMatchIn(norm)) return code
-        }
-        return 0
+        return firstWordMatch(WORD_BOUNDARY_RES, norm) ?: 0
     }
 
     // -- the competitors' dictionaries, for what the donor tables leave at 0 --
@@ -362,17 +370,15 @@ object NavManeuverCodes {
         "платный" to GAODE_TOLL,
         "пошлина" to GAODE_TOLL,
     )
+    private val RICH_WORD_BOUNDARY_RES = wordBoundaryRes(RICH_WORD_BOUNDARY)
 
     /** Donor ManeuverMapper.fromRussianText collapsed straight to GAODE; 0 = not a maneuver.
      *  Used by the rich notification path only (fromA11yDescription stays byte-identical). */
     fun richPhraseGaode(text: String?): Int {
         if (text.isNullOrBlank()) return 0
-        val norm = text.lowercase().trim().replace('\u00A0', ' ').replace(Regex("\\s+"), " ")
+        val norm = text.lowercase().trim().replace('\u00A0', ' ').replace(WHITESPACE, " ")
         for ((phrase, code) in RU_PHRASES) if (phrase in norm) return code
-        for ((phrase, code) in RICH_WORD_BOUNDARY) {
-            if (Regex("""(?:^|\s|[\p{Punct}])${Regex.escape(phrase)}(?:$|\s|[\p{Punct}])""").containsMatchIn(norm)) return code
-        }
-        return 0
+        return firstWordMatch(RICH_WORD_BOUNDARY_RES, norm) ?: 0
     }
 
     /** Donor ManeuverMapper EN_ICON_NAMES collapsed through toGaode. */
@@ -473,7 +479,7 @@ object NavManeuverCodes {
     fun matchedPhrase(text: String?): String? {
         if (text.isNullOrBlank()) return null
         if (text == ">>>") return text
-        val norm = text.lowercase().trim().replace(' ', ' ').replace(Regex("\\s+"), " ")
+        val norm = text.lowercase().trim().replace(' ', ' ').replace(WHITESPACE, " ")
         ROUNDABOUT_EXIT_RE.find(norm)?.let { return it.value }
         RU_PHRASES.keys.firstOrNull { it in norm }?.let { return it }
         A11Y_ONLY_PHRASES.firstOrNull { it in norm }?.let { return it }
