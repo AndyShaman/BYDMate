@@ -5,6 +5,8 @@ import android.media.AudioTrack
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -210,7 +212,8 @@ class SherpaTtsEngineTest {
         val queue = engine.startQueue()!!
         queue.enqueue("Текст.")   // createTts() fails on JVM -> nothing plays, speaking stays false
         queue.finish()
-        Thread.sleep(200)          // let the single worker drain its jobs
+        // finish()'s worker block completes awaitPlayed() last, after the worker drained its jobs.
+        runBlocking { withTimeout(10_000) { queue.awaitPlayed() } }
         assertFalse(engine.speaking.value)
     }
 
@@ -894,7 +897,8 @@ class SherpaTtsEngineTest {
         engine.primePcmCacheForTest("k", floatArrayOf(1f, 2f))
         assertEquals(1, engine.pcmCacheSizeForTest())
         engine.reload()
-        Thread.sleep(200)   // let the single worker drain its job
+        val deadline = System.currentTimeMillis() + 10_000   // the single worker drains its job
+        while (System.currentTimeMillis() < deadline && engine.pcmCacheSizeForTest() != 0) Thread.sleep(5)
         assertEquals(0, engine.pcmCacheSizeForTest())
     }
 
@@ -915,7 +919,10 @@ class SherpaTtsEngineTest {
         val engine = SherpaTtsEngine(mm)
         val gen = engine.generationForTest()
         engine.warmUp()     // createTts() itself fails on the JVM -- only the attempt is observable
-        Thread.sleep(200)   // let the single worker drain its job
+        val deadline = System.currentTimeMillis() + 10_000   // the single worker runs its job
+        while (System.currentTimeMillis() < deadline && runCatching { verify { mm.modelDirPath(any()) } }.isFailure) {
+            Thread.sleep(20)
+        }
         verify { mm.modelDirPath(any()) }
         assertEquals(gen, engine.generationForTest())   // warming is not speech: no supersession
         assertFalse(engine.speaking.value)
