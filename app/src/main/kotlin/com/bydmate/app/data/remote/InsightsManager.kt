@@ -44,8 +44,6 @@ class InsightsManager @Inject constructor(
     companion object {
         private const val TAG = "InsightsManager"
         private const val PREFS_NAME = "insights_cache"
-        private const val KEY_INSIGHT_JSON = "insight_json"
-        private const val KEY_INSIGHT_DATE = "insight_date"
         private const val KEY_MODELS_JSON = "models_json"
         private const val KEY_MODELS_DATE = "models_date"
         private const val KEY_V12_HISTORY = "v12_history"   // JSON array of {date:"yyyy-MM-dd", volts:Double}, max 7 entries
@@ -517,7 +515,6 @@ class InsightsManager @Inject constructor(
             bestTripCons = best?.kwhPer100km,
             bestTripKm = best?.distanceKm,
             worstTripCons = worst?.kwhPer100km,
-            worstTripKm = worst?.distanceKm,
             recentCost = recentCost,
             currencyCode = currency.code,
             drainKwh = drainKwh,

@@ -472,12 +472,6 @@ object LocalInsightEngine {
         )
     }
 
-    fun notEnoughData(res: Resources): TextResult = TextResult(
-        title = res.getString(R.string.local_insight_not_enough_data_title),
-        summary = res.getString(R.string.local_insight_not_enough_data_summary),
-        insights = emptyList(),
-    )
-
     private fun summaryForConsumptionRise(
         stats: InsightStats,
         shortPct: Double,

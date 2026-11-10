@@ -1,7 +1,7 @@
 package com.bydmate.app.data.remote
 
 /**
- * Aggregated driving statistics for local insight rules and LLM prompts.
+ * Aggregated driving statistics for the local insight rules.
  * Built once per refresh from Room — no GPS or personal identifiers.
  */
 data class InsightStats(
@@ -19,7 +19,6 @@ data class InsightStats(
     val bestTripCons: Double?,
     val bestTripKm: Double?,
     val worstTripCons: Double?,
-    val worstTripKm: Double?,
     val recentCost: Double,
     val currencyCode: String,
     val drainKwh: Double,

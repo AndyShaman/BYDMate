@@ -76,13 +76,6 @@ class LocalInsightEngineTest {
     }
 
     @Test
-    fun `not enough data template`() {
-        val result = LocalInsightEngine.notEnoughData(res("ru"))
-        assertTrue(result.insights.isEmpty())
-        assertTrue(result.title.isNotBlank())
-    }
-
-    @Test
     fun `night idle insight when significant`() {
         val stats = baseStats().copy(
             drainKwh = 6.0,
@@ -243,7 +236,6 @@ class LocalInsightEngineTest {
         bestTripCons = 14.0,
         bestTripKm = 30.0,
         worstTripCons = 24.0,
-        worstTripKm = 5.0,
         recentCost = 0.0,
         currencyCode = "RUB",
         drainKwh = drainKwh,
