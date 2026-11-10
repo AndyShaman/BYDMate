@@ -215,7 +215,6 @@ object WidgetController {
     private var expandedState = mutableStateOf(false)
     @Volatile private var collapsedX: Int = 0
     @Volatile private var collapsedY: Int = 0
-    private var buttonLayerView: ComposeView? = null
     private var buttonLifecycle: OverlayLifecycleOwner? = null
     private var rootContainer: android.widget.FrameLayout? = null
 
@@ -323,7 +322,6 @@ object WidgetController {
                 )
             }
         }
-        buttonLayerView = buttonCompose
 
         // Transparent container: button layer fills the window; the panel pins to
         // the top so the single bottom-row button pocket appears below it on expand.
@@ -430,7 +428,6 @@ object WidgetController {
         widgetLifecycle?.onDestroy()
         buttonLifecycle?.onDestroy()
         widgetView = null
-        buttonLayerView = null
         rootContainer = null
         widgetLifecycle = null
         buttonLifecycle = null
@@ -890,15 +887,6 @@ object WidgetController {
         return if (reason != null) Trace.event(TraceArea.WIDGET, "hide", "reason" to reason, by = cause)
         else Trace.event(TraceArea.WIDGET, "show", "was" to previous, by = cause)
     }
-
-    /** Boolean wrapper over [hideReason] for callers that only need the yes/no answer. */
-    fun shouldHideOverlay(
-        cameraActive: Boolean,
-        youtubeForeground: Boolean,
-        hideOnYoutube: Boolean,
-        foregroundPkg: String?,
-        hideInApps: Set<String>,
-    ): Boolean = hideReason(cameraActive, youtubeForeground, hideOnYoutube, foregroundPkg, hideInApps) != null
 
     /**
      * Split-mode left tap, as an inverse toggle: no session → restore the last pair
