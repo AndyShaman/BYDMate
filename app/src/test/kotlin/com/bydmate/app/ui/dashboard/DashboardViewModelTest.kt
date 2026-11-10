@@ -94,7 +94,6 @@ class DashboardViewModelTest {
         override fun getAll(): Flow<List<TripEntity>> = flowOf(emptyList())
         override suspend fun getById(id: Long): TripEntity? = null
         override fun getByDateRange(from: Long, to: Long): Flow<List<TripEntity>> = flowOf(emptyList())
-        override fun getLastTrip(): Flow<TripEntity?> = flowOf(null)
         override fun getRecent(limit: Int): Flow<List<TripEntity>> = flowOf(emptyList())
         override suspend fun getCount(): Int = 0
         override suspend fun getByBydId(bydId: Long): TripEntity? = null
@@ -145,11 +144,7 @@ class DashboardViewModelTest {
         override fun getByDateRange(from: Long, to: Long): Flow<List<com.bydmate.app.data.local.entity.ChargeEntity>> = flowOf(emptyList())
         override suspend fun getPeriodSummary(from: Long, to: Long): com.bydmate.app.data.local.dao.ChargeSummary =
             com.bydmate.app.data.local.dao.ChargeSummary(0, 0.0, 0.0)
-        override fun getLastCharge(): Flow<com.bydmate.app.data.local.entity.ChargeEntity?> = flowOf(null)
-        override suspend fun getLastSuspendedCharge(): com.bydmate.app.data.local.entity.ChargeEntity? = null
-        override suspend fun getStaleSessions(cutoffTs: Long): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
         override suspend fun getRecentChargesWithBatteryData(): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
-        override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0
@@ -212,7 +207,6 @@ class DashboardViewModelTest {
         override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0L
         override suspend fun getLast(): BatterySnapshotEntity? = null
-        override suspend fun getCount(): Int = 0
     }
 
     // --- Fake AutoserviceClient ---

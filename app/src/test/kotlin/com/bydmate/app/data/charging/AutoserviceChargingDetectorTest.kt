@@ -7,7 +7,6 @@ import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.dao.FakeSettingsDao
 import com.bydmate.app.data.local.entity.ChargeEntity
-import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.BatteryHealthRepository
@@ -56,11 +55,7 @@ class AutoserviceChargingDetectorTest {
         override suspend fun getById(id: Long): ChargeEntity? = inserted.find { it.id == id }
         override fun getByDateRange(from: Long, to: Long): Flow<List<ChargeEntity>> = flowOf(emptyList())
         override suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary = ChargeSummary(0, 0.0, 0.0)
-        override fun getLastCharge(): Flow<ChargeEntity?> = flowOf(inserted.lastOrNull())
-        override suspend fun getLastSuspendedCharge(): ChargeEntity? = null
-        override suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity> = emptyList()
         override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
-        override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> =
             inserted.filter { it.detectionSource?.startsWith("autoservice_") == true }
         override suspend fun hasLegacyCharges(): Boolean =
@@ -89,13 +84,6 @@ class AutoserviceChargingDetectorTest {
             inserted.filter { it.startTs >= since && it.status == "COMPLETED" }
     }
 
-    private object NullChargePointDao : com.bydmate.app.data.local.dao.ChargePointDao {
-        override suspend fun insertAll(points: List<ChargePointEntity>) {}
-        override suspend fun getByChargeId(chargeId: Long): List<ChargePointEntity> = emptyList()
-        override suspend fun getCount(): Int = 0
-        override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
-    }
-
     private class FakeParsReader(
         private val data: DiParsData? = null
     ) : ParsReader {
@@ -113,7 +101,6 @@ class AutoserviceChargingDetectorTest {
         override fun getRecent(limit: Int): Flow<List<com.bydmate.app.data.local.entity.BatterySnapshotEntity>> =
             flowOf(emptyList())
         override suspend fun getLast(): com.bydmate.app.data.local.entity.BatterySnapshotEntity? = null
-        override suspend fun getCount(): Int = inserted.size
     }
 
     private data class TestSetup(
@@ -148,7 +135,7 @@ class AutoserviceChargingDetectorTest {
     ): TestSetup {
         val auto = FakeAutoservice(battery, charging, autoserviceAvailable)
         val dao = RecordingDao()
-        val chargeRepo = ChargeRepository(dao, NullChargePointDao)
+        val chargeRepo = ChargeRepository(dao)
         val snapshotDao = RecordingBatterySnapshotDao()
         val healthRepo = BatteryHealthRepository(snapshotDao)
 

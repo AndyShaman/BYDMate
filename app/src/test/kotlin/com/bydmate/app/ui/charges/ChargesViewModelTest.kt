@@ -5,12 +5,10 @@ import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
-import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
-import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
@@ -98,11 +96,7 @@ class ChargesViewModelTest {
             flowOf(chargesFlow.value.filter { it.startTs in from..to })
         override suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary =
             ChargeSummary(0, 0.0, 0.0)
-        override fun getLastCharge(): Flow<ChargeEntity?> = flowOf(null)
-        override suspend fun getLastSuspendedCharge(): ChargeEntity? = null
-        override suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity> = emptyList()
         override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
-        override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = autoserviceCharges
         override suspend fun hasLegacyCharges(): Boolean = legacyExists
         override suspend fun deleteEmpty(): Int {
@@ -125,13 +119,6 @@ class ChargesViewModelTest {
             }
     }
 
-    private class StubChargePointDao : ChargePointDao {
-        override suspend fun insertAll(points: List<ChargePointEntity>) {}
-        override suspend fun getByChargeId(chargeId: Long): List<ChargePointEntity> = emptyList()
-        override suspend fun getCount(): Int = 0
-        override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
-    }
-
     private class FakeBatterySnapshotDao(
         private val snapshots: List<BatterySnapshotEntity> = emptyList()
     ) : BatterySnapshotDao {
@@ -139,7 +126,6 @@ class ChargesViewModelTest {
         override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(snapshots.take(limit))
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0L
         override suspend fun getLast(): BatterySnapshotEntity? = snapshots.firstOrNull()
-        override suspend fun getCount(): Int = snapshots.size
     }
 
     private class FakeAutoserviceClient(
@@ -207,7 +193,7 @@ class ChargesViewModelTest {
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val chargeDao = FakeChargeDao(chargesFlow, autoserviceCharges, legacyExists)
-        val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
+        val chargeRepo = ChargeRepository(chargeDao)
 
         val snapshotDao = FakeBatterySnapshotDao(snapshots)
         val autoservice = FakeAutoserviceClient(batteryReading, autoserviceAvailable)

@@ -63,7 +63,6 @@ class PlacesViewModelTest {
             deletedIds += place.id
             placesFlow.value = placesFlow.value.filter { it.id != place.id }
         }
-        override suspend fun getCount() = placesFlow.value.size
     }
 
     private class FakeRuleDao(

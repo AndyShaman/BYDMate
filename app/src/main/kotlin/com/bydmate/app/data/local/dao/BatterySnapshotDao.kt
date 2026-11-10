@@ -19,7 +19,4 @@ interface BatterySnapshotDao {
 
     @Query("SELECT * FROM battery_snapshots ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLast(): BatterySnapshotEntity?
-
-    @Query("SELECT COUNT(*) FROM battery_snapshots")
-    suspend fun getCount(): Int
 }

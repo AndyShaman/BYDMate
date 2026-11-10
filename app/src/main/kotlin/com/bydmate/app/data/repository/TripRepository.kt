@@ -57,8 +57,6 @@ class TripRepository @Inject constructor(
     fun getTripsByDateRange(from: Long, to: Long): Flow<List<TripEntity>> =
         tripDao.getByDateRange(from, to)
 
-    fun getLastTrip(): Flow<TripEntity?> = tripDao.getLastTrip()
-
     fun getRecentTrips(limit: Int = 5): Flow<List<TripEntity>> = tripDao.getRecent(limit)
 
     suspend fun getTripCount(): Int = tripDao.getCount()

@@ -10,9 +10,6 @@ interface ChargePointDao {
     @Insert
     suspend fun insertAll(points: List<ChargePointEntity>)
 
-    @Query("SELECT * FROM charge_points WHERE charge_id = :chargeId ORDER BY timestamp ASC")
-    suspend fun getByChargeId(chargeId: Long): List<ChargePointEntity>
-
     @Query("SELECT COUNT(*) FROM charge_points")
     suspend fun getCount(): Int
 

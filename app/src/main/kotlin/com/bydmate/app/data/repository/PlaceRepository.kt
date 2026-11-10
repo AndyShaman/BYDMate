@@ -19,7 +19,6 @@ class PlaceRepository @Inject constructor(
     suspend fun insert(place: PlaceEntity): Long = placeDao.insert(place)
     suspend fun update(place: PlaceEntity) = placeDao.update(place)
     suspend fun delete(place: PlaceEntity) = placeDao.delete(place)
-    suspend fun getCount(): Int = placeDao.getCount()
 
     /** Emits on every change of the rules table: place usage counts follow it. */
     fun ruleChanges(): Flow<List<RuleEntity>> = ruleDao.getAll()

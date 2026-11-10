@@ -24,9 +24,6 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE start_ts >= :from AND start_ts <= :to ORDER BY start_ts DESC")
     fun getByDateRange(from: Long, to: Long): Flow<List<TripEntity>>
 
-    @Query("SELECT * FROM trips ORDER BY start_ts DESC LIMIT 1")
-    fun getLastTrip(): Flow<TripEntity?>
-
     @Query("SELECT * FROM trips ORDER BY start_ts DESC LIMIT :limit")
     fun getRecent(limit: Int = 5): Flow<List<TripEntity>>
 

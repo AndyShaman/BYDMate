@@ -57,7 +57,6 @@ class BatteryStateRepositoryTest {
         override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0
         override suspend fun getLast(): BatterySnapshotEntity? = lastValue
-        override suspend fun getCount(): Int = 0
     }
 
     private fun fakeBatteryHealth(last: BatterySnapshotEntity?): BatteryHealthRepository =
