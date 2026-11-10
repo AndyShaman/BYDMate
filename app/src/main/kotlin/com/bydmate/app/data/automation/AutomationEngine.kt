@@ -725,7 +725,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // Trace id of the edge that fired the rule: the cause of its step lines and of what the
         // vehicle layer traces under them (a write's late check).
         cause: Long = 0L,
-    ): Boolean {
+    ) {
         runningRuns.merge(rule.id, 1, Int::plus)
         try {
             // One chime per rule firing, regardless of action kinds (per-rule "Выполнять со звуком").
@@ -770,7 +770,6 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 )
             )
             Log.i(TAG, "Rule '${rule.name}' executed: success=$allSuccess")
-            return allSuccess
         } finally {
             runningRuns.compute(rule.id) { _, n -> if (n == null || n <= 1) null else n - 1 }
         }
