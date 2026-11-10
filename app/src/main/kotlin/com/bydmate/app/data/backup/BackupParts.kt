@@ -1,5 +1,8 @@
 package com.bydmate.app.data.backup
 
+import com.bydmate.app.data.nativestack.BatchReadGate
+import com.bydmate.app.data.repository.SettingsRepository
+
 /**
  * The three independent parts of a configuration archive (#238). [id] is the value stored in the
  * manifest `parts` array and in the `auto_backup_parts` / `manual_backup_parts` settings.
@@ -46,57 +49,57 @@ object BackupParts {
 
     /** Settings keys tied to the trip and charge history. */
     val TABLES_SETTINGS_KEYS: Set<String> = setOf(
-        "last_energydata_import_ts",
-        "dedup_cleanup_done",
-        "energy_ids_recycled",
-        "idle_drain_cleanup_done",
-        "consumption_recalc_done",
-        "idle_drain_v2_cleanup",
-        "energydata_kwh_sanity_v1_done",
-        "migration_v2_4_17_done",
-        "insight_cache_v2_migration_done",
-        "migration_v281_data_source_done",
+        SettingsRepository.KEY_LAST_ENERGYDATA_IMPORT_TS,
+        SettingsRepository.KEY_DEDUP_CLEANUP_DONE,
+        SettingsRepository.KEY_ENERGY_IDS_RECYCLED,
+        SettingsRepository.KEY_IDLE_DRAIN_CLEANUP_DONE,
+        SettingsRepository.KEY_CONSUMPTION_RECALC_DONE,
+        SettingsRepository.KEY_IDLE_DRAIN_V2_CLEANUP,
+        SettingsRepository.KEY_ENERGY_KWH_SANITY_DONE,
+        SettingsRepository.KEY_MIGRATION_V2_4_17,
+        SettingsRepository.KEY_INSIGHT_CACHE_V2_MIGRATION_DONE,
+        SettingsRepository.KEY_MIGRATION_V281_DATA_SOURCE,
     ) + (1..2).flatMap { n ->
         listOf("reset_ts", "corr_km", "corr_kwh", "corr_ms", "corr_excl").map { "trip${n}_$it" }
     }
 
     /** Secrets and the addresses they are sent to. */
     val KEYS_SETTINGS_KEYS: Set<String> = setOf(
-        "openrouter_api_key",
-        "exa_api_key",
-        "zai_api_key",
-        "custom_llm_api_key",
-        "alice_api_key",
-        "abrp_api_key",
-        "abrp_user_token",
-        "webhook_secret",
-        "tg_backup_token",
-        "tg_backup_chat_id",
-        "minimax_tts_key",
-        "alice_endpoint",
-        "webhook_url",
-        "custom_llm_base_url",
-        "tg_backup_bot_name",
-        "tg_backup_chat_name",
+        SettingsRepository.KEY_OPENROUTER_API_KEY,
+        SettingsRepository.KEY_EXA_API_KEY,
+        SettingsRepository.KEY_ZAI_API_KEY,
+        SettingsRepository.KEY_CUSTOM_API_KEY,
+        SettingsRepository.KEY_ALICE_API_KEY,
+        SettingsRepository.KEY_ABRP_API_KEY,
+        SettingsRepository.KEY_ABRP_USER_TOKEN,
+        SettingsRepository.KEY_WEBHOOK_SECRET,
+        SettingsRepository.KEY_TG_BACKUP_TOKEN,
+        SettingsRepository.KEY_TG_BACKUP_CHAT_ID,
+        SettingsRepository.KEY_MINIMAX_TTS_KEY,
+        SettingsRepository.KEY_ALICE_ENDPOINT,
+        SettingsRepository.KEY_WEBHOOK_URL,
+        SettingsRepository.KEY_CUSTOM_BASE_URL,
+        SettingsRepository.KEY_TG_BACKUP_BOT_NAME,
+        SettingsRepository.KEY_TG_BACKUP_CHAT_NAME,
     )
 
     val RUNTIME_SETTINGS_KEYS: Set<String> = setOf(
         "last_known_soc",
         "last_soc_timestamp",
-        "charging_baseline_soc",
-        "charge_pending",
-        "catchup_journal",
-        "last_mileage_km",
-        "last_capacity_kwh",
-        "last_state_ts",
-        "batch_read_state",
-        "batch_read_fp",
-        "batch_read_ok",
-        "batch_read_mm",
-        "auto_backup_last_ts",
-        "auto_backup_last_result",
-        "auto_backup_pending_upload",
-        "tg_report_outbox",
+        SettingsRepository.KEY_CHARGING_BASELINE_SOC,
+        SettingsRepository.KEY_CHARGE_PENDING,
+        SettingsRepository.KEY_CATCHUP_JOURNAL,
+        SettingsRepository.KEY_LAST_MILEAGE_KM,
+        SettingsRepository.KEY_LAST_CAPACITY_KWH,
+        SettingsRepository.KEY_LAST_STATE_TS,
+        BatchReadGate.KEY_STATE,
+        BatchReadGate.KEY_FP,
+        BatchReadGate.KEY_OK,
+        BatchReadGate.KEY_MM,
+        SettingsRepository.KEY_AUTO_BACKUP_LAST_TS,
+        SettingsRepository.KEY_AUTO_BACKUP_LAST_RESULT,
+        SettingsRepository.KEY_AUTO_BACKUP_PENDING_UPLOAD,
+        SettingsRepository.KEY_TG_REPORT_OUTBOX,
     )
 
     fun tablesOf(part: BackupPart): List<String> = when (part) {
