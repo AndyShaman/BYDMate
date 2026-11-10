@@ -307,6 +307,10 @@ class SplitOverlayControllerMenuTest {
         // narrowSide = RIGHT → the left column is the WIDE pane; the view must have been synced.
         assertEquals(PickerMode.ChangePane(Pane.WIDE), controller.logic.pickerMode)
         assertEquals(R.string.split_picker_title_left, view.pickerTitleRes)
+        // Exclusion filter that syncLogicToView applies:
+        val excluded = controller.buildExcludedPackages(controller.logic.pickerMode)
+        assertTrue(excluded.contains("pkg.narrow"))
+        assertTrue(excluded.contains("pkg.wide"))
     }
 
     // ── H2 fix: Idle-picker teardown via ACTION_CLOSE_SYSTEM_DIALOGS ─────────

@@ -517,6 +517,15 @@ class TtsRouterTest {
     }
 
     @Test
+    fun `playPcm delegates to the offline engine`() {
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, selectedSource = { TtsRouter.OFFLINE })
+        val samples = floatArrayOf(0.1f, 0.2f)
+        assertTrue(router.playPcm(samples, 16_000))
+        assertEquals(listOf(samples to 16_000), delegate.playPcmCalls)
+    }
+
+    @Test
     fun `empty synthesized audio is never cached`() {
         val calls = Collections.synchronizedList(mutableListOf<String>())
         val backend = object : OnlineTtsBackend {

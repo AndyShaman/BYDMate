@@ -22,6 +22,12 @@ class ChargeConnectorSettingTest {
         assertEquals(ChargeConnector.GBT, repo.getChargeConnector())
     }
 
+    @Test fun chosen_connector_persists() = runTest {
+        repo.setChargeConnector(ChargeConnector.CCS2)
+        assertEquals("ccs2", dao.map[SettingsRepository.KEY_CHARGE_CONNECTOR])
+        assertEquals(ChargeConnector.CCS2, repo.getChargeConnector())
+    }
+
     @Test fun unknown_stored_value_falls_back_to_gbt() = runTest {
         dao.map[SettingsRepository.KEY_CHARGE_CONNECTOR] = "tesla"
         assertEquals(ChargeConnector.GBT, repo.getChargeConnector())

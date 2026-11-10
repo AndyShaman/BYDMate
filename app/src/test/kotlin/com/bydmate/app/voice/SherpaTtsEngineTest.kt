@@ -447,6 +447,18 @@ class SherpaTtsEngineTest {
         assertEquals(2, written)
     }
 
+    // --- Task 5: dataDir only for PIPER (espeak-ng-data); VITS_MULTI ships no espeak data ---
+
+    @Test
+    fun `dataDirFor points at espeak-ng-data for PIPER voices`() {
+        assertEquals("/some/dir/espeak-ng-data", SherpaTtsEngine.dataDirFor(TtsVoiceEngine.PIPER, "/some/dir"))
+    }
+
+    @Test
+    fun `dataDirFor is empty for VITS_MULTI voices`() {
+        assertEquals("", SherpaTtsEngine.dataDirFor(TtsVoiceEngine.VITS_MULTI, "/some/dir"))
+    }
+
     // --- Wave P, Task 6: 8-second AudioTrack lookahead buffer removes inter-sentence pauses ---
 
     @Test
@@ -919,10 +931,16 @@ class SherpaTtsEngineTest {
         val engine = SherpaTtsEngine(mm)
         val gen = engine.generationForTest()
         engine.warmUp()     // createTts() itself fails on the JVM -- only the attempt is observable
-        val deadline = System.currentTimeMillis() + 10_000   // the single worker runs its job
-        while (System.currentTimeMillis() < deadline && runCatching { verify { mm.modelDirPath(any()) } }.isFailure) {
+        // Barrier: a second warmUp() queues behind the first on the single worker, so its own
+        // attempt (the second modelDirPath call) starts only after the first job has finished.
+        engine.warmUp()
+        val deadline = System.currentTimeMillis() + 10_000   // the single worker runs its jobs
+        while (System.currentTimeMillis() < deadline &&
+            runCatching { verify(exactly = 2) { mm.modelDirPath(any()) } }.isFailure
+        ) {
             Thread.sleep(20)
         }
+        verify(exactly = 2) { mm.modelDirPath(any()) }   // the first warmUp job is done
         verify { mm.modelDirPath(any()) }
         assertEquals(gen, engine.generationForTest())   // warming is not speech: no supersession
         assertFalse(engine.speaking.value)

@@ -138,6 +138,26 @@ class AgentToolsControlTest {
         coVerify(exactly = 0) { engine.fireVoiceRule(any(), any()) }
     }
 
+    @Test fun vehicle_control_schema_has_readable_enum_no_chinese() = runTest {
+        coEvery { ruleDao.getEnabled() } returns emptyList()
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
+        val arr = tools().schemas()
+        var found = false
+        for (i in 0 until arr.length()) {
+            val fn = arr.getJSONObject(i).getJSONObject("function")
+            if (fn.getString("name") == "vehicle_control") {
+                val commandProp = fn.getJSONObject("parameters").getJSONObject("properties").getJSONObject("command")
+                val enum = commandProp.getJSONArray("enum")
+                val ids = (0 until enum.length()).map { enum.getString(it) }
+                assertTrue(ids.contains("windows_close_all"))
+                assertTrue(ids.none { it.contains("车窗") })
+                assertTrue(!fn.getString("description").contains("车窗"))
+                found = true
+            }
+        }
+        assertTrue(found)
+    }
+
     @Test fun vehicle_control_dispatches_readable_id() = runTest {
         every { gate.vehicleSnapshot() } returns AgentToolsReadTest.snapshot(speed = 0)
         coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)

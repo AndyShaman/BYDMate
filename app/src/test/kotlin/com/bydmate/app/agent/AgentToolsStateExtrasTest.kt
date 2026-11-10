@@ -85,6 +85,13 @@ class AgentToolsStateExtrasTest {
         assertFalse(out.has("bms_max_discharge_kw"))
     }
 
+    @Test fun tyre_temperatures_reach_the_model() = runTest {
+        val out = state(snapshot().copy(
+            tyreTempFL = 31, tyreTempFR = 32, tyreTempRL = 30, tyreTempRR = 45))
+        assertEquals(31, out.getInt("tire_temp_fl_c"))
+        assertEquals(45, out.getInt("tire_temp_rr_c"))
+    }
+
     // The agent can set the blow direction since 5e96ad5d; reading it back uses the same enum.
     @Test fun blow_direction_comes_back_as_a_russian_label() = runTest {
         assertEquals("в ноги", state(snapshot().copy(acWindMode = 3)).getString("ac_wind_mode"))

@@ -83,6 +83,17 @@ class AgentToolsSearchTest {
         }
     }
 
+    // (b) Exa key present -> same unconditional web_search, no server-tool either.
+    @Test fun schemas_with_exa_key_declares_same_web_search_function_tool() = runTest {
+        coEvery { ruleDao.getEnabled() } returns emptyList()
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key-123"
+        val arr = tools().schemas()
+        assertTrue(toolNames(arr).contains("web_search"))
+        for (i in 0 until arr.length()) {
+            assertFalse(arr.getJSONObject(i).optString("type") == "openrouter:web_search")
+        }
+    }
+
     // (1) Exa key present, Exa succeeds -> Exa result, zai/openrouter never called.
     @Test fun execute_web_search_exa_success_short_circuits_native_fallback() = runTest {
         coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key-123"

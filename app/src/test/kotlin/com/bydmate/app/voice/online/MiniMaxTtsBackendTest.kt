@@ -113,6 +113,12 @@ class MiniMaxTtsBackendTest {
     // --- configured() ---
 
     @Test
+    fun `configured is true when the MiniMax key is set`() = runTest {
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "") } returns "mm-key"
+        assertTrue(backend.configured())
+    }
+
+    @Test
     fun `configured is false when the MiniMax key is blank`() = runTest {
         coEvery { settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "") } returns ""
         assertFalse(backend.configured())

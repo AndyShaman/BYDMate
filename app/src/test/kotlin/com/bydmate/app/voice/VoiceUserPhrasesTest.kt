@@ -42,6 +42,32 @@ class VoiceUserPhrasesTest {
         assertNull(p.match("ну давай задраить люки быстро"))
     }
 
+    @Test fun `fillers punctuation case and yo are ignored`() {
+        val p = VoiceUserPhrases().apply { add(open, "Ёлки открыть") }
+        assertEquals(open, p.match("Эй, слушай, елки открыть мне, пожалуйста!")?.id)
+    }
+
+    // Matching is word for word: another inflection does not match, so the parser keeps it.
+    @Test fun `another inflection of the phrase does not match`() {
+        val p = VoiceUserPhrases().apply { add(close, "открой окна") }
+        assertNull(p.match("открой окно"))
+        assertEquals(close, p.match("слушай открой окна пожалуйста")?.id)
+    }
+
+    @Test fun `no partial-word match`() {
+        val p = VoiceUserPhrases().apply { add(close, "окно") }
+        assertNull(p.match("окновать"))
+    }
+
+    @Test fun `each phrase matches only itself`() {
+        val p = VoiceUserPhrases().apply {
+            add(open, "проветрить")
+            add(close, "хватит проветрить")
+        }
+        assertEquals(close, p.match("хватит проветрить")?.id)
+        assertEquals(open, p.match("проветрить")?.id)
+    }
+
     @Test fun `remove drops the phrase`() {
         val p = VoiceUserPhrases().apply { add(close, "задраить люки"); remove(close, "задраить люки") }
         assertNull(p.match("задраить люки"))

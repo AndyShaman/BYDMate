@@ -342,6 +342,33 @@ class TelegramReporterTest {
         )
     }
 
+    @Test fun `the dump shows the armed age, the daemon and what the daemon says`() = runBlocking {
+        offState.armedAtMs = now - 12_000L
+        offState.daemon = PowerOffArmState.DAEMON_OK
+        val last = OffReportOutcome("a1", OffReportState.SENT, now, now + 1_400L, 2, "200")
+        val fids = listOf(OffReportFid(1001, 315621418, "OK"), OffReportFid(1023, 315621408, "pending"))
+        coEvery { helper.offReportStatus("") } returns
+            OffReportStatus(OffReportOutcome("", OffReportState.UNKNOWN), "a2", now, 1, last, fids, pending = 3)
+        val lines = reporter.diagnosticsLines()
+        assertEquals(
+            "telegram report: off=off fields=[location,soc,range,odometer,trip] armed=12s daemon=ok pending=3 outbox=0",
+            lines[0],
+        )
+        assertEquals(
+            "telegram report last_off: sent id=a1 off=${TelegramReportBuilder.formatDateTime(now)} " +
+                "attempts=2 rc=200 sent_after=1400ms",
+            lines[1],
+        )
+        assertEquals("telegram report listener: 315621418=OK 315621408=pending", lines[2])
+    }
+
+    @Test fun `the dump says so when the daemon does not answer`() = runBlocking {
+        val lines = reporter.diagnosticsLines()
+        assertTrue(lines[0].endsWith("daemon=- pending=- outbox=0"))
+        assertEquals("telegram report last_off: -", lines[1])
+        assertEquals("telegram report listener: -", lines[2])
+    }
+
     @Test fun `the live state carries both dashboard counters, computed from their reset anchors as on the dashboard`() = runBlocking {
         val anchor1 = TripResetState(resetTs = now - 6 * 86_400_000L, corrKm = 0.0, corrKwh = 0.0, corrMs = 0L)
         settings.setTripResetState(1, anchor1)

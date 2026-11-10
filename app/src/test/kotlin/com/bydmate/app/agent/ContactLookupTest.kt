@@ -1,11 +1,16 @@
 package com.bydmate.app.agent
 
+import android.Manifest
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -13,6 +18,33 @@ import org.robolectric.annotation.Config
 class ContactLookupTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
+
+    @Test fun hasPermission_false_when_not_granted() {
+        val lookup = ContactLookup(context)
+        assertFalse(lookup.hasPermission())
+    }
+
+    @Test fun hasPermission_true_when_granted() {
+        shadowOf(context).grantPermissions(Manifest.permission.READ_CONTACTS)
+        val lookup = ContactLookup(context)
+        assertTrue(lookup.hasPermission())
+    }
+
+    // findByName goes through the resolver seam — ContentResolver itself is never
+    // touched in a JVM test.
+    @Test fun findByName_delegates_to_resolver_seam() = runTest {
+        val lookup = ContactLookup(context)
+        lookup.resolver = { query -> listOf(ContactLookup.Match("Найдено: $query", "+70000000000")) }
+        val matches = lookup.findByName("Мама")
+        assertEquals(1, matches.size)
+        assertEquals("Найдено: Мама", matches[0].name)
+    }
+
+    @Test fun findByName_empty_resolver_result_is_empty_list() = runTest {
+        val lookup = ContactLookup(context)
+        lookup.resolver = { emptyList() }
+        assertTrue(lookup.findByName("Никто").isEmpty())
+    }
 
     // filterRows is the pure per-row logic queryContacts feeds from the cursor — no SQL
     // selection is applied upstream, so this is where Cyrillic case-insensitivity actually

@@ -238,4 +238,14 @@ class AgentToolsPlacesTest {
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
+    @Test fun schemas_expose_places_tools() = runTest {
+        coEvery { ruleDao.getEnabled() } returns emptyList()
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns ""
+        val arr = tools().schemas()
+        val names = (0 until arr.length()).mapNotNull {
+            arr.getJSONObject(it).optJSONObject("function")?.getString("name")
+        }
+        assertTrue(names.contains("list_places"))
+        assertTrue(names.contains("create_place"))
+    }
 }

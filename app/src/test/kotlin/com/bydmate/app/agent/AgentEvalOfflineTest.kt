@@ -9,15 +9,30 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Wave 6, offline half: the eval set itself has to be valid before it is worth spending tokens
  * on a live model. Every expected tool must exist in the schema the model is shown, every
- * command id must exist in the catalog. The live half lives in scripts/agent-eval.sh.
+ * command id must exist in the catalog, and the loop must carry each expectation end to end
+ * when a fake model produces it. The live half lives in scripts/agent-eval.sh.
  */
 class AgentEvalOfflineTest {
+
+    private class FakeBackend(private val scripted: List<Result<AgentReply>>) : AgentBackend {
+        private var index = 0
+        override suspend fun isConfigured() = true
+        override suspend fun chat(
+            messages: List<AgentMessage>,
+            tools: JSONArray?,
+            onDelta: ((String) -> Unit)?,
+        ): Result<AgentReply> = scripted[index++]
+    }
+
+    private val repo = mockk<SettingsRepository>()
 
     private fun realTools() = agentTools(
         ruleDao = mockk<RuleDao>().also {
@@ -52,5 +67,41 @@ class AgentEvalOfflineTest {
             .flatMap { it.args }
             .filterNot { it in ids }
         assertTrue("eval expects command ids that do not exist: $missing", missing.isEmpty())
+    }
+
+    // The harness, not the model: a scripted tool call must actually reach AgentTools and come
+    // back as an answer, for every acting case in the set.
+    @Test fun an_acting_case_runs_through_the_loop() = runTest {
+        coEvery { repo.isAgentEnabled() } returns true
+        val tools = mockk<AgentTools>()
+        coEvery { tools.schemas() } returns JSONArray()
+        val calls = mutableListOf<String>()
+        coEvery { tools.execute(any(), any()) } coAnswers {
+            calls += (firstArg<AgentToolCall>()).name
+            """{"ok":true}"""
+        }
+        for (case in AgentEvalCases.ACT) {
+            val backend = FakeBackend(listOf(
+                Result.success(AgentReply(null, listOf(
+                    AgentToolCall("c1", case.tool!!, """{"command":"${case.args.firstOrNull() ?: ""}"}""")))),
+                Result.success(AgentReply("Готово", emptyList())),
+            ))
+            val result = AgentOrchestrator(backend, tools, repo).ask(case.utterance)
+            assertTrue(case.utterance, result is AgentResult.Answer)
+        }
+        assertEquals(AgentEvalCases.ACT.map { it.tool }, calls)
+    }
+
+    // A "don't act" case that the model answers in words must leave the car alone.
+    @Test fun a_no_act_case_touches_nothing() = runTest {
+        coEvery { repo.isAgentEnabled() } returns true
+        val tools = mockk<AgentTools>()
+        coEvery { tools.schemas() } returns JSONArray()
+        for (case in AgentEvalCases.NO_ACT) {
+            val backend = FakeBackend(listOf(Result.success(AgentReply("Понял", emptyList()))))
+            val result = AgentOrchestrator(backend, tools, repo).ask(case.utterance)
+            assertEquals(case.utterance, "Понял", (result as AgentResult.Answer).text)
+        }
+        // tools.execute is not stubbed at all: any call would fail the test with a mockk error.
     }
 }
