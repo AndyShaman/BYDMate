@@ -150,17 +150,8 @@
             </intent-filter>
         </receiver>
 
-        <!-- UI7 cluster probe (test builds): driven from a Mac with `am broadcast`, see ClusterProbeRunner -->
-        <receiver
-            android:name=".cluster.ClusterProbeReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.bydmate.app.CLUSTER_PROBE" />
-            </intent-filter>
-        </receiver>
-
-        <!-- Diagnostic fid recorder (scripts/fid-record.sh). Exported like the cluster probe and
-             gated to -test/debug builds inside the receiver. -->
+        <!-- Diagnostic fid recorder (scripts/fid-record.sh). Exported and gated to -test/debug
+             builds inside the receiver. -->
         <receiver
             android:name=".data.push.FidRecorderReceiver"
             android:exported="true">

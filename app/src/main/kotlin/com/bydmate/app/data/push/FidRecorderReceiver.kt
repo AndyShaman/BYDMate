@@ -21,8 +21,7 @@ import kotlinx.coroutines.launch
  * in-app log recorder use, so one `logcat -s FidRec` follows the whole run.
  *
  * The receiver stays exported (the manifest is shared), so it is gated to `-test` builds plus local
- * debug builds exactly like [com.bydmate.app.cluster.ClusterProbeReceiver]: a public build ignores
- * the broadcast.
+ * debug builds: a public build ignores the broadcast.
  */
 class FidRecorderReceiver : BroadcastReceiver() {
 
