@@ -208,20 +208,14 @@ class BlindSpotPositionOverlay {
      * left one — the same rule [BlindSpotController] shows the camera with.
      */
     private fun placement(context: Context, metrics: DisplayMetrics): Rect {
-        val prefs = prefs(context)
-        val widthPct = prefs.widthPct()
-        val shape = PipShape(
-            widthPct, prefs.getBoolean(BlindSpotPreferences.KEY_PIP_ROTATE_90, false))
+        val prefs = BlindSpotPreferences(context)
+        val shape = prefs.pipShape
         val rightRect = BlindSpotPreferences.placedPipRect(
-            metrics.widthPixels, metrics.heightPixels, shape,
-            prefs.getInt(BlindSpotPreferences.KEY_PIP_X_PX, BlindSpotPreferences.UNSET_PX),
-            prefs.getInt(BlindSpotPreferences.KEY_PIP_Y_PX, BlindSpotPreferences.UNSET_PX),
+            metrics.widthPixels, metrics.heightPixels, shape, prefs.pipXPx, prefs.pipYPx,
         )
         if (side == Side.RIGHT) return rightRect
         return BlindSpotPreferences.leftPipRect(
-            metrics.widthPixels, metrics.heightPixels, shape,
-            prefs.getInt(BlindSpotPreferences.KEY_LEFT_PIP_X_PX, BlindSpotPreferences.UNSET_PX),
-            prefs.getInt(BlindSpotPreferences.KEY_LEFT_PIP_Y_PX, BlindSpotPreferences.UNSET_PX),
+            metrics.widthPixels, metrics.heightPixels, shape, prefs.leftPipXPx, prefs.leftPipYPx,
             rightRect,
         )
     }
@@ -236,9 +230,6 @@ class BlindSpotPositionOverlay {
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(BlindSpotPreferences.PREFS_NAME, Context.MODE_PRIVATE)
-
-    private fun SharedPreferences.widthPct(): Int = getInt(
-        BlindSpotPreferences.KEY_PIP_WIDTH_PCT, BlindSpotPreferences.DEFAULT_PIP_WIDTH_PCT)
 
     private fun realMetrics(context: Context): DisplayMetrics {
         val display = (context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
