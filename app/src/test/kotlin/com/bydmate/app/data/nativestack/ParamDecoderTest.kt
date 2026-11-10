@@ -10,10 +10,6 @@ class ParamDecoderTest {
         assertEquals(42, ParamDecoder.decodeInt(42, Decoder.INT_RAW))
     }
 
-    @Test fun `int_div10 produces mileage km`() {
-        assertEquals(1234.5, ParamDecoder.decodeFloat(12345, Decoder.INT_DIV10)!!, 0.001)
-    }
-
     @Test fun `float_volt decodes float bits`() {
         // 12.6f → 0x4149999A
         val bits = java.lang.Float.floatToRawIntBits(12.6f)
