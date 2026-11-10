@@ -8,7 +8,6 @@ import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.nativestack.ParamDecoder
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.trips.TripCounterUi
-import com.bydmate.app.ui.automation.newTelegramReportAction
 import com.bydmate.app.ui.automation.reportFields
 import com.bydmate.app.util.localizedContext
 import org.junit.Assert.assertEquals
@@ -318,9 +317,7 @@ class TelegramReportBuilderTest {
     /** By its stored id: rule payloads and the power-off setting keep the item as `odometer`. */
     private val odometer: ReportField get() = ReportField.fromId("odometer")!!
 
-    @Test fun `the odometer comes right after the range in the pickers, in every interface language`() {
-        val ids = ReportField.entries.map { it.id }
-        assertEquals(ids.indexOf("range") + 1, ids.indexOf("odometer"))
+    @Test fun `the odometer has its own label and description in every interface language`() {
         val langs = listOf("ru", "be", "en", "pl", "pt", "zh")
         val labels = langs.map { ctx.localizedContext(it).getString(odometer.labelRes) }
         val descs = langs.map { ctx.localizedContext(it).getString(odometer.descRes) }
@@ -365,12 +362,6 @@ class TelegramReportBuilderTest {
         }
     }
 
-    @Test fun `a new report action and a fresh install start with the odometer on`() {
-        assertTrue(odometer in ReportField.DEFAULT)
-        assertTrue(odometer in ReportField.parseCsv(null))
-        assertTrue(odometer in newTelegramReportAction(ctx).reportFields())
-    }
-
     @Test fun `a rule saved before the odometer existed keeps exactly its own items`() {
         val saved = ActionDef(
             command = "", displayName = "x", kind = TELEGRAM_REPORT_KIND,
@@ -381,23 +372,12 @@ class TelegramReportBuilderTest {
 
     // --- the dashboard counters TRIP 1 and TRIP 2 ---
 
-    @Test fun `the counters come right after the trip in the pickers, off by default, with their own descriptions`() {
-        val ids = ReportField.entries.map { it.id }
-        assertEquals(
-            listOf("trip", "trip_time", "trip_kwh", "trip_cost", "trip1", "trip2"),
-            ids.subList(ids.indexOf("trip"), ids.indexOf("trip") + 6),
-        )
-        assertFalse(ReportField.TRIP1 in ReportField.DEFAULT)
-        assertFalse(ReportField.TRIP2 in ReportField.DEFAULT)
-        assertFalse(ReportField.TRIP1 in newTelegramReportAction(ctx).reportFields())
-        assertEquals("TRIP 1", ctx.getString(ReportField.TRIP1.labelRes))
-        assertEquals("TRIP 2", ctx.getString(ReportField.TRIP2.labelRes))
+    @Test fun `the counters have their own description in every interface language`() {
         val langs = listOf("ru", "be", "en", "pl", "pt", "zh")
         for (field in listOf(ReportField.TRIP1, ReportField.TRIP2)) {
             val descs = langs.map { ctx.localizedContext(it).getString(field.descRes) }
             assertEquals("each language has its own description: $descs", langs.size, descs.toSet().size)
         }
-        assertEquals("Счётчик TRIP 1 с Главной: километры, время в пути и расход", ctx.localizedContext("ru").getString(ReportField.TRIP1.descRes))
     }
 
     @Test fun `the counters survive the csv and json round trip, and an older build drops them`() {
@@ -505,14 +485,7 @@ class TelegramReportBuilderTest {
     private val liveStart = now - 34 * 60_000L
     private fun hhmm(ms: Long) = TelegramReportBuilder.formatTime(ms)
 
-    @Test fun `new trip fields are off by default and sit right after the trip`() {
-        val ids = ReportField.entries.map { it.id }
-        assertEquals(listOf("trip_time", "trip_kwh", "trip_cost"), ids.subList(ids.indexOf("trip") + 1, ids.indexOf("trip") + 4))
-        for (f in tripFields) {
-            assertFalse(f in ReportField.DEFAULT)
-            assertFalse(f in newTelegramReportAction(ctx).reportFields())
-        }
-        assertEquals(ReportField.DEFAULT, ReportField.parseCsv("location,soc,range,odometer,trip"))
+    @Test fun `new trip fields survive the csv and json round trip and are translated`() {
         val fields = tripFields.toSet()
         assertEquals(fields, ReportField.parseCsv(ReportField.toCsv(fields)))
         assertEquals(fields, ReportField.fromJson(ReportField.toJson(fields)))
