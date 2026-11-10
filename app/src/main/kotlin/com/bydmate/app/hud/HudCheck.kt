@@ -325,7 +325,7 @@ class HudCheck @Inject constructor(
         while (elapsedMs < stepMs) {
             watchGuidance(step)
             run.sink?.let { sink ->
-                val rc = runCatching { sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, frame) }.getOrDefault(FIRE_THREW)
+                val rc = runCatching { sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, frame) }.getOrDefault(HudSomeIpBridge.THREW)
                 rcs[rc] = (rcs[rc] ?: 0) + 1
             }
             delay(HudPushLoop.PERIOD_MS)
@@ -353,7 +353,7 @@ class HudCheck @Inject constructor(
             HudLauncherMapCnFrames.update(
                 iconId = LMCN_LEFT, distanceM = MARKER_4, remainDistanceM = LMCN_REMAIN_M, remainTimeS = LMCN_REMAIN_S,
                 position = position, routeId = run.lmcnRouteId, counter = counter, nowMs = nowMs(),
-            ).forEach { e -> count(rcs, e.topic, fire(gateway, e)) }
+            ).forEach { e -> HudSomeIpBridge.countFire(rcs, e.topic, HudSomeIpBridge.fire(gateway, e)) }
             counter = (counter + 1) and COUNTER_MASK
             delay(HudLauncherMapCnFrames.PERIOD_MS)
             elapsedMs += HudLauncherMapCnFrames.PERIOD_MS
@@ -367,30 +367,22 @@ class HudCheck @Inject constructor(
         return rcs
     }
 
-    private fun fire(gateway: HudSomeIpBridge, e: HudLauncherMapCnFrames.Event): Int =
-        runCatching { gateway.fireEvent(e.topic, e.payload) }.getOrDefault(FIRE_THREW)
-
-    private fun count(rcs: MutableMap<Long, MutableMap<Int, Int>>, topic: Long, rc: Int) {
-        val counts = rcs.getOrPut(topic) { sortedMapOf() }
-        counts[rc] = (counts[rc] ?: 0) + 1
-    }
-
     /** Step 4's cleanup, whatever ended it: the off events, then every service it started. */
     private fun stopLmcn(run: Run) {
         val gateway = run.gateway ?: return
         if (run.lmcnServices.isEmpty()) return
         val rcs = LinkedHashMap<Long, MutableMap<Int, Int>>()
-        val off = HudLauncherMapCnFrames.stop(run.lmcnRouteId, nowMs()).map { e -> fire(gateway, e).also { count(rcs, e.topic, it) } }
+        val off = HudLauncherMapCnFrames.stop(run.lmcnRouteId, nowMs()).map { e -> HudSomeIpBridge.fire(gateway, e).also { HudSomeIpBridge.countFire(rcs, e.topic, it) } }
         val stopped = LinkedHashMap<Long, Int>()
         run.lmcnServices.keys.forEach { id ->
-            val rc = runCatching { gateway.stopService(id) }.getOrDefault(FIRE_THREW)
+            val rc = runCatching { gateway.stopService(id) }.getOrDefault(HudSomeIpBridge.THREW)
             stopped[id] = rc
             traceService("stop", id, rc)
         }
         if (HudWayChannels.stopsAnswered(off + stopped.values)) run.prefs.edit().remove(HudWayChannels.KEY_LMCN_LEFT).apply()
         val fired = HudSomeIpBridge.describeFires(rcs)
         log("hudprobe: lmcn stop fire=$fired services=${HudSomeIpBridge.describeServices(stopped)}")
-        Trace.event(TraceArea.HUD, "probe-lmcn-stop", "fire" to fired, "stopped" to okCount(stopped))
+        Trace.event(TraceArea.HUD, "probe-lmcn-stop", "fire" to fired, "stopped" to HudSomeIpBridge.okCount(stopped))
     }
 
     /** Blanks step 3's CAN fields with its line and trace event; [Run.canShown] and the marker stay
@@ -524,7 +516,7 @@ class HudCheck @Inject constructor(
     }
 
     private fun logSomeIpStep(step: Int, armed: Boolean, startRc: String, rcs: Map<Int, Int>, marker: Int) {
-        val fired = histogram(rcs)
+        val fired = HudSomeIpBridge.histogram(rcs)
         log("hudprobe: step=$step chan=someip-ui7 armed=$armed start_rc=$startRc fire_rc=$fired marker=${marker}m")
         Trace.event(
             TraceArea.HUD, "probe-step", "step" to step, "chan" to "someip-ui7", "armed" to armed,
@@ -539,24 +531,17 @@ class HudCheck @Inject constructor(
         // A trace value holds 80 characters: the step gets the summary, each topic its own line.
         Trace.event(
             TraceArea.HUD, "probe-step", "step" to 4, "chan" to "someip-lmcn",
-            "started" to if (run.lmcnServices.isEmpty()) run.startRc else okCount(run.lmcnServices),
+            "started" to if (run.lmcnServices.isEmpty()) run.startRc else HudSomeIpBridge.okCount(run.lmcnServices),
             "fired" to rcs.values.sumOf { it.values.sum() }, "marker" to MARKER_4,
         )
         rcs.forEach { (topic, counts) ->
-            Trace.event(TraceArea.HUD, "probe-fire", "topic" to HudSomeIpBridge.hex(topic), "rc" to histogram(counts))
+            Trace.event(TraceArea.HUD, "probe-fire", "topic" to HudSomeIpBridge.hex(topic), "rc" to HudSomeIpBridge.histogram(counts))
         }
     }
 
     private fun traceService(op: String, id: Long, rc: Int) {
         Trace.event(TraceArea.HUD, "probe-service", "op" to op, "id" to HudSomeIpBridge.hex(id), "rc" to rc)
     }
-
-    /** `5/6`: how many of [services] answered 0. */
-    private fun okCount(services: Map<Long, Int>): String = "${services.values.count { it == 0 }}/${services.size}"
-
-    /** `{0:66,1:1}`: each fireEvent rc with its count, the form the log line promises. */
-    private fun histogram(rcs: Map<Int, Int>): String =
-        rcs.entries.joinToString(",", prefix = "{", postfix = "}") { "${it.key}:${it.value}" }
 
     /** The speed through the daemon, rounded up like the other speed gates; null when unknown. */
     private suspend fun readSpeed(): Int? {
@@ -585,8 +570,6 @@ class HudCheck @Inject constructor(
         private const val COUNTER_MASK = 0xFF
         /** A plain turn arrow for the SOME/IP steps (gaode code, f28 draws its chevron). */
         private const val GAODE_TURN = 2
-        /** rc slot of a gateway call (fireEvent, stopService) that threw instead of answering. */
-        private const val FIRE_THREW = -3
         /** Our own gateway binding may retry for over a minute; the check cannot wait that long. */
         private const val BIND_TIMEOUT_MS = 15_000L
         /** How often the CAN step looks for a route between its 5 s re-sends. */

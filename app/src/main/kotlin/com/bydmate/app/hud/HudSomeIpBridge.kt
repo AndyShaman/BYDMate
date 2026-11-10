@@ -63,6 +63,26 @@ class HudSomeIpBridge(
         fun describeServices(services: Map<Long, Int>): String =
             services.entries.joinToString(",", "{", "}") { "${hex(it.key)}:${it.value}" }
 
+        /** rc slot of a gateway call (startService, stopService, fireEvent) that threw instead of answering. */
+        const val THREW = -3
+
+        /** [e] through [gateway]; [THREW] when the call threw. */
+        internal fun fire(gateway: HudSomeIpBridge, e: HudLauncherMapCnFrames.Event): Int =
+            runCatching { gateway.fireEvent(e.topic, e.payload) }.getOrDefault(THREW)
+
+        /** One more [rc] for [topic] in [rcs], the rcs of a topic kept sorted. */
+        internal fun countFire(rcs: MutableMap<Long, MutableMap<Int, Int>>, topic: Long, rc: Int) {
+            val counts = rcs.getOrPut(topic) { sortedMapOf() }
+            counts[rc] = (counts[rc] ?: 0) + 1
+        }
+
+        /** `5/6`: how many of [services] answered 0. */
+        internal fun okCount(services: Map<Long, Int>): String = "${services.values.count { it == 0 }}/${services.size}"
+
+        /** `{0:66,1:1}`: each fireEvent rc with its count, the form the log line promises. */
+        internal fun histogram(rcs: Map<Int, Int>): String =
+            rcs.entries.joinToString(",", prefix = "{", postfix = "}") { "${it.key}:${it.value}" }
+
         /** `{0x4010a00018001:{0:66,1:1}}`: [fireCounts] for a log line or the dump. */
         fun describeFires(fires: Map<Long, Map<Int, Int>>): String =
             fires.entries.joinToString(",", "{", "}") { (topic, rcs) ->
