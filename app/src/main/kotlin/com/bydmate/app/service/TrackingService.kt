@@ -148,7 +148,6 @@ class TrackingService : Service(), LocationListener {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeLockRenewer: WakeLockRenewer? = null
     private var locationManager: LocationManager? = null
-    private var firstDataReceived = false
 
     // Widget session (ignition-on → ignition-off) — decoupled from TripTracker GPS state.
     // Primary signal: DiPars powerState ≥ 1. Fallback when powerState is unreliable:
@@ -358,28 +357,6 @@ class TrackingService : Service(), LocationListener {
          *  WatchdogGateTest can exercise it directly without touching Android. */
         internal fun shouldAttemptRespawn(nowMs: Long, lastAttemptMs: Long): Boolean =
             nowMs - lastAttemptMs >= HELPER_RESPAWN_COOLDOWN_MS
-
-        /**
-         * П4a: gun-connect-state sample for the edge detector, reused from this tick's
-         * already-fetched snapshot instead of a second dedicated getInt(DEV_CHARGING,
-         * FID_GUN_CONNECT_STATE) round-trip — same fid either way (FidMap "chargeGunState"
-         * = dev 1009 / fid 876609586, decoded through the same AutoserviceClientImpl.getInt
-         * / SentinelDecoder pipeline). Null passes straight through unchanged:
-         * GunStateEdgeDetector.onSample already no-ops on null (transient sentinel/decode
-         * glitch) rather than firing a phantom edge. internal (not private) so
-         * TrackingServiceSnapshotReuseTest can pin this without touching Android.
-         */
-        internal fun gunStateFromSnapshot(data: DiParsData): Int? = data.chargeGunState
-
-        /**
-         * П4b: ABRP engine power sample reused from this tick's snapshot instead of a
-         * dedicated getEnginePowerKw() ADB read per Iternio send — same fid either way
-         * (FidMap "power" = dev 1012 / fid 339738656, same as FID_ENGINE_POWER). May be
-         * up to one poll tick stale, acceptable at the 1 Hz drive cadence. Null passes
-         * straight through so IternioTelemetryClient falls back to DiPars power, same
-         * as a failed/timed-out dedicated read used to.
-         */
-        internal fun enginePowerKwFromSnapshot(data: DiParsData): Int? = data.power?.toInt()
 
         /**
          * The pushed fields [applyPushEvent] re-evaluates the automation rules on, straight
@@ -1368,10 +1345,10 @@ class TrackingService : Service(), LocationListener {
                     runCatching { autoserviceClient.readChargingSnapshot() }.getOrNull()
                 } else null
                 // ENG_POW: reused from this tick's already-fetched snapshot instead of
-                // a dedicated ADB read per send (same fid as getEnginePowerKw — see
-                // enginePowerKwFromSnapshot). May be up to one poll tick stale, fine at
+                // a dedicated ADB read per send (FidMap "power" = dev 1012 / fid 339738656,
+                // same fid as getEnginePowerKw). May be up to one poll tick stale, fine at
                 // 1 Hz. Null → client falls back to DiPars power.
-                val enginePowerKw: Int? = enginePowerKwFromSnapshot(data)
+                val enginePowerKw: Int? = data.power?.toInt()
 
                 // Built once per tick and shared: each target's own GPS toggle is the only
                 // per-target difference, so those fields go into a copy (see [withLocation]).
@@ -1734,13 +1711,6 @@ class TrackingService : Service(), LocationListener {
                         }
                     }
 
-                    // On first data after startup: detect offline charging
-                    if (!firstDataReceived) {
-                        firstDataReceived = true
-                        data.soc?.let { currentSoc ->
-                            detectOfflineCharge(currentSoc)
-                        }
-                    }
                     val loc = _lastLocation.value
                     tripTracker.onData(data, loc)
 
@@ -1845,7 +1815,8 @@ class TrackingService : Service(), LocationListener {
 
     /**
      * Feed the autoservice gun-connect-state from this tick's already-fetched
-     * snapshot ([gunStateFromSnapshot]) into the edge detector and, when it
+     * snapshot (FidMap "chargeGunState" = dev 1009 / fid 876609586; null passes
+     * straight through, GunStateEdgeDetector.onSample no-ops on it) into the edge detector and, when it
      * crosses connected→disconnected, fire a runCatchUp so the just-finished
      * session is written as a row. Runs on Dispatchers.IO via serviceScope.
      *
@@ -1856,7 +1827,7 @@ class TrackingService : Service(), LocationListener {
     private suspend fun pollGunStateForEdge(data: DiParsData) {
         if (!pollGunInFlight.compareAndSet(false, true)) return
         try {
-            val gun = gunStateFromSnapshot(data)
+            val gun = data.chargeGunState
             val edge = gunEdgeDetector.onSample(gun)
             if (!edge) return
             val powerForClassify = synchronized(powerLock) {
@@ -1917,14 +1888,6 @@ class TrackingService : Service(), LocationListener {
         } finally {
             catchUpRetryInFlight.set(false)
         }
-    }
-
-    private fun detectOfflineCharge(currentSoc: Int) {
-        // Autoservice is always on — AutoserviceChargingDetector.runCatchUp is the
-        // source of truth for offline charge detection (lifetime_kwh delta is more
-        // accurate than SOC delta and survives BMS calibration ticks). Legacy SOC-delta
-        // path removed to eliminate duplicate ChargeEntity inserts.
-        Log.d(TAG, "detectOfflineCharge: deferred to autoservice detector (currentSoc=$currentSoc)")
     }
 
     /**
