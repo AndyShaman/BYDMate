@@ -367,6 +367,7 @@
     <ID>MatchingDeclarationName:AppNavigation.kt$Screen</ID>
     <ID>MatchingDeclarationName:ScheduleTrigger.kt$ScheduleSpec</ID>
     <ID>MatchingDeclarationName:SettingRows.kt$SettingButtonStyle</ID>
+    <ID>MatchingDeclarationName:SettingsScreen.kt$SettingsSection</ID>
     <ID>MatchingDeclarationName:SplitPairPicker.kt$SplitRole</ID>
     <ID>MatchingDeclarationName:UpdateDialog.kt$UpdateState</ID>
     <ID>MayBeConst:DumpFidsCoreTest.kt$DumpFidsCoreTest.FakeConstants$@JvmField val ALPHA: Int = 1</ID>
@@ -546,7 +547,12 @@
     <ID>TooManyFunctions:AgentTools.kt$AgentTools</ID>
     <ID>TooManyFunctions:AppDatabase.kt$AppDatabase : RoomDatabase</ID>
     <ID>TooManyFunctions:AppModule.kt$AppModule</ID>
+    <ID>TooManyFunctions:AutomationActionControls.kt$com.bydmate.app.ui.automation.AutomationActionControls.kt</ID>
+    <ID>TooManyFunctions:AutomationActionRow.kt$com.bydmate.app.ui.automation.AutomationActionRow.kt</ID>
+    <ID>TooManyFunctions:AutomationCallNavControls.kt$com.bydmate.app.ui.automation.AutomationCallNavControls.kt</ID>
+    <ID>TooManyFunctions:AutomationEditorDialog.kt$com.bydmate.app.ui.automation.AutomationEditorDialog.kt</ID>
     <ID>TooManyFunctions:AutomationEngine.kt$AutomationEngine</ID>
+    <ID>TooManyFunctions:AutomationRuleList.kt$com.bydmate.app.ui.automation.AutomationRuleList.kt</ID>
     <ID>TooManyFunctions:AutomationViewModel.kt$AutomationViewModel : ViewModel</ID>
     <ID>TooManyFunctions:AutomationViewModel.kt$com.bydmate.app.ui.automation.AutomationViewModel.kt</ID>
     <ID>TooManyFunctions:BlindSpotController.kt$BlindSpotController</ID>
@@ -584,7 +590,9 @@
     <ID>TooManyFunctions:NluParser.kt$NluParser</ID>
     <ID>TooManyFunctions:RuleDao.kt$RuleDao</ID>
     <ID>TooManyFunctions:SettingRows.kt$com.bydmate.app.ui.settings.SettingRows.kt</ID>
+    <ID>TooManyFunctions:SettingsAppVoice.kt$com.bydmate.app.ui.settings.SettingsAppVoice.kt</ID>
     <ID>TooManyFunctions:SettingsRepository.kt$SettingsRepository</ID>
+    <ID>TooManyFunctions:SettingsService.kt$com.bydmate.app.ui.settings.SettingsService.kt</ID>
     <ID>TooManyFunctions:SettingsViewModel.kt$SettingsViewModel : ViewModel</ID>
     <ID>TooManyFunctions:SherpaTtsEngine.kt$SherpaTtsEngine : TtsEngine</ID>
     <ID>TooManyFunctions:SherpaTtsEngine.kt$SherpaTtsEngine$Companion</ID>
