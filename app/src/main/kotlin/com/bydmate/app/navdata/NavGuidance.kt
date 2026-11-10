@@ -21,8 +21,8 @@ data class NavGuidance(
  *  extractor and the notification channel; every field is optional and soft-fails. */
 object NavGuidanceParser {
 
-    private val DIST_KM = Regex("""(\d+(?:[.,]\d+)?)\s*(км|km)(?!\S)""", RegexOption.IGNORE_CASE)
-    private val DIST_M = Regex("""(\d+)\s*(м|m)(?!\S)""", RegexOption.IGNORE_CASE)
+    internal val DIST_KM = Regex("""(\d+(?:[.,]\d+)?)\s*(км|km)(?!\S)""", RegexOption.IGNORE_CASE)
+    internal val DIST_M = Regex("""(\d+)\s*(м|m)(?!\S)""", RegexOption.IGNORE_CASE)
     private val ETA_HR_MIN = Regex("""(\d+)\s*ч\s*(\d+)\s*мин""", RegexOption.IGNORE_CASE)
     private val ETA_MIN = Regex("""(\d+)\s*мин""", RegexOption.IGNORE_CASE)
     private val DIGITS = Regex("""\d+""")
@@ -64,11 +64,17 @@ object NavGuidanceParser {
     /** Combined "300 м" / "1,2 км" string -> meters (notification distance, eta distance). */
     fun parseDistanceText(text: String?): Int {
         val s = text?.trim() ?: return 0
+        return parseDistanceMeters(s) ?: 0
+    }
+
+    /** "300 м" / "1,2 км" anywhere in [s] -> meters; null when there is none or its number does
+     *  not parse. Shared with the rich notification lane, which keeps the null. */
+    internal fun parseDistanceMeters(s: String): Int? {
         DIST_KM.find(s)?.let {
-            return ((it.groupValues[1].replace(',', '.').toDoubleOrNull() ?: 0.0) * 1000).toInt()
+            return (it.groupValues[1].replace(',', '.').toDoubleOrNull()?.times(1000))?.toInt()
         }
-        DIST_M.find(s)?.let { return it.groupValues[1].toIntOrNull() ?: 0 }
-        return 0
+        DIST_M.find(s)?.let { return it.groupValues[1].toIntOrNull() }
+        return null
     }
 
     private fun resolveManeuver(raw: RawFields): Int {
