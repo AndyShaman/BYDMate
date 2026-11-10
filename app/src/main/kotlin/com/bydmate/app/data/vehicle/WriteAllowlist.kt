@@ -44,12 +44,9 @@ data class WriteEntry(
 
 class WriteAllowlist(private val map: Map<String, WriteEntry>) {
     val size: Int get() = map.size
-    val validatedCount: Int get() = map.values.count { it.validated }
     val entries: Collection<WriteEntry> get() = map.values
     fun find(actionName: String): WriteEntry? = map[actionName.lowercase()]
     fun allEntries(): Collection<WriteEntry> = map.values
-    fun entriesByCategory(category: String): Collection<WriteEntry> =
-        map.values.filter { it.category == category }
 
     companion object {
         private const val TAG = "WriteAllowlist"
