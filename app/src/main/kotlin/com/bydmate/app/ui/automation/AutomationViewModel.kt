@@ -18,7 +18,6 @@ import com.bydmate.app.BuildConfig
 import com.bydmate.app.R
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
-import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.PowerStateRuleMigration
 import com.bydmate.app.data.automation.RuleDraftValidator
@@ -681,30 +680,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
 
     private fun validateActions(actions: List<ActionDef>): String? {
         val ctx = context.appLocalizedContext()
-        return when (val err = RuleDraftValidator.validateActions(actions)) {
-            is ActionValidationError.CommandMissing -> ctx.getString(R.string.auto_msg_command_missing, err.index)
-            is ActionValidationError.NotifTitleEmpty -> ctx.getString(R.string.auto_msg_notif_title_empty, err.index)
-            is ActionValidationError.AppNotSelected -> ctx.getString(R.string.auto_msg_app_not_selected, err.index)
-            is ActionValidationError.PhoneInvalid -> ctx.getString(R.string.auto_msg_phone_invalid, err.index)
-            is ActionValidationError.NavDestMissing -> ctx.getString(R.string.auto_msg_nav_dest_missing, err.index)
-            is ActionValidationError.UrlEmpty -> ctx.getString(R.string.auto_msg_url_empty, err.index)
-            is ActionValidationError.UrlNoScheme -> ctx.getString(R.string.auto_msg_url_no_scheme, err.index)
-            is ActionValidationError.YandexMusicModeMissing -> ctx.getString(R.string.auto_msg_ymusic_mode_missing, err.index)
-            is ActionValidationError.MediaVolumeMissing -> ctx.getString(R.string.auto_msg_media_volume_missing, err.index)
-            is ActionValidationError.SentryInvalid -> ctx.getString(R.string.auto_msg_sentry_invalid, err.index)
-            is ActionValidationError.HotspotInvalid -> ctx.getString(R.string.auto_msg_hotspot_invalid, err.index)
-            is ActionValidationError.ScreenInvalid -> ctx.getString(R.string.auto_msg_screen_invalid, err.index)
-            is ActionValidationError.MediaKeyInvalid -> ctx.getString(R.string.auto_msg_media_key_invalid, err.index)
-            is ActionValidationError.SpeakTextEmpty -> ctx.getString(R.string.auto_msg_speak_text_empty, err.index)
-            is ActionValidationError.AgentQueryPromptEmpty -> ctx.getString(R.string.auto_msg_agent_query_prompt_empty, err.index)
-            is ActionValidationError.SplitScreenNarrowEmpty -> ctx.getString(R.string.auto_msg_split_narrow_empty, err.index)
-            is ActionValidationError.SplitScreenWideEmpty -> ctx.getString(R.string.auto_msg_split_wide_empty, err.index)
-            is ActionValidationError.SplitScreenSamePackage -> ctx.getString(R.string.auto_msg_split_same_package, err.index)
-            is ActionValidationError.SplitScreenInvalidSide -> ctx.getString(R.string.auto_msg_split_invalid_side, err.index)
-            is ActionValidationError.TelegramReportEmpty -> ctx.getString(R.string.auto_msg_tg_report_empty, err.index)
-            is ActionValidationError.DelayInvalid -> ctx.getString(R.string.auto_msg_delay_invalid, err.index)
-            null -> null
-        }
+        return RuleDraftValidator.validateActions(actions)?.toMissing(ctx)?.message
     }
 
     private fun validateTriggers(
