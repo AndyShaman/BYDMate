@@ -91,7 +91,7 @@ class AutoserviceChargingDetector @Inject constructor(
         // baselines and counter overruns.
         const val SOC_SANITY_RATIO_LOW = 0.70
         const val SOC_SANITY_RATIO_HIGH = 1.30
-        // Min SOC delta for BatterySnapshot capacity calculation (matches BatteryHealthRepository).
+        // Min SOC delta for BatterySnapshot capacity calculation (BatteryHealthRepository uses it too).
         const val MIN_SOC_DELTA_FOR_SNAPSHOT = 5
         // Minimum SOC rise (percentage points) for a wake-up jump to count as a
         // real charging session. Anything below this is noise: a BMS/LFP
