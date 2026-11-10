@@ -1,10 +1,8 @@
 package com.bydmate.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -17,8 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.SwitchColors
@@ -53,7 +49,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bydmate.app.R
-import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.ui.theme.*
 import java.text.SimpleDateFormat
@@ -425,178 +420,5 @@ fun TripCard(
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
-    }
-}
-
-// ============================================================================
-// ChargeCard
-// ============================================================================
-
-@Composable
-fun ChargeCard(
-    charge: ChargeEntity,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    currencySymbol: String = "BYN"
-) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurface),
-        border = BorderStroke(1.dp, CardBorder.copy(alpha = 0.3f)),
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            // Line 1: time range, type badge, SOC range, kWh
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val timeRange = buildString {
-                    append(formatTime(charge.startTs))
-                    append("–")
-                    append(charge.endTs?.let { formatTime(it) } ?: "…")
-                }
-                Text(text = timeRange, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-
-                if (charge.type != null) {
-                    val badgeColor = if (charge.type == "DC") AccentOrange else AccentBlue
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .background(color = badgeColor, shape = RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 1.dp)
-                    ) {
-                        Text(text = charge.type, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                val socText = buildString {
-                    append(charge.socStart?.let { "$it%" } ?: "—")
-                    append("→")
-                    append(charge.socEnd?.let { "$it%" } ?: "—")
-                }
-                Text(text = socText, color = TextPrimary, fontSize = 14.sp)
-
-                val kwhText = charge.kwhCharged?.let { "%.1f кВт·ч".format(it) } ?: "—"
-                Text(text = kwhText, color = TextPrimary, fontSize = 14.sp)
-            }
-
-            // Line 2: duration, avg power, bat temp, cost
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (charge.endTs != null) {
-                    Text(text = formatDuration(ctx, charge.startTs, charge.endTs), color = TextSecondary, fontSize = 14.sp)
-                }
-
-                if (charge.avgPowerKw != null) {
-                    Text(text = "avg %.1f кВт".format(charge.avgPowerKw), color = TextSecondary, fontSize = 14.sp)
-                }
-
-                if (charge.batTempAvg != null) {
-                    Text(text = "bat %.0f°C".format(charge.batTempAvg), color = TextSecondary, fontSize = 14.sp)
-                }
-
-                val costText = charge.cost?.let { "%.2f %s".format(it, currencySymbol) } ?: ""
-                if (costText.isNotEmpty()) {
-                    Text(text = costText, color = AccentGreen, fontSize = 14.sp)
-                }
-            }
-        }
-    }
-}
-
-// ============================================================================
-// SummaryRow
-// ============================================================================
-
-@Composable
-fun SummaryRow(
-    totalKm: Double,
-    totalKwh: Double,
-    avgKwhPer100km: Double,
-    totalCost: Double = 0.0,
-    currencySymbol: String = "",
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        SummaryStatBox(
-            value = "%.1f".format(totalKm),
-            unit = stringResource(R.string.summary_unit_km),
-            label = stringResource(R.string.summary_label_mileage),
-            valueColor = TextPrimary,
-            modifier = Modifier.weight(1f)
-        )
-        SummaryStatBox(
-            value = "%.1f".format(totalKwh),
-            unit = stringResource(R.string.summary_unit_kwh),
-            label = stringResource(R.string.summary_label_energy),
-            valueColor = TextPrimary,
-            modifier = Modifier.weight(1f)
-        )
-        SummaryStatBox(
-            value = "%.1f".format(avgKwhPer100km),
-            unit = stringResource(R.string.summary_unit_kwh_per_100km),
-            label = stringResource(R.string.summary_label_consumption),
-            valueColor = consumptionColor(avgKwhPer100km),
-            modifier = Modifier.weight(1f)
-        )
-        if (totalCost > 0) {
-            SummaryStatBox(
-                value = "%.0f".format(totalCost),
-                unit = currencySymbol,
-                label = stringResource(R.string.summary_label_cost),
-                valueColor = AccentGreen,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun SummaryStatBox(
-    value: String,
-    unit: String,
-    label: String,
-    valueColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .background(color = CardSurface, shape = RoundedCornerShape(16.dp))
-            .height(76.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(text = value, color = valueColor, fontSize = 20.sp, fontWeight = FontWeight.Medium)
-                Text(
-                    text = " $unit",
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(bottom = 2.dp)
-                )
-            }
-            Text(text = label, color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        }
     }
 }
