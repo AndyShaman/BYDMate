@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.settings
 
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.BatteryPreheatChannel
 import com.bydmate.app.data.vehicle.WriteAllowlist
@@ -44,6 +45,4 @@ internal object BatteryPreheatDiagnostics {
             "$name[dev=${address.first} fid=${address.second}]=$rendered"
         }.joinToString(" ") + " type=${energyType ?: "err"}"
     }
-
-    private const val TX_GET_INT = 5
 }

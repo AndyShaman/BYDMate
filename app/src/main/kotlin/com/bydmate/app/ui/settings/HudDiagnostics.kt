@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.settings
 
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.WriteAllowlist
 
@@ -53,6 +54,4 @@ internal object HudDiagnostics {
             "$name[dev=$DEV fid=$fid]=$rendered"
         }.joinToString(" ")
     }
-
-    private const val TX_GET_INT = 5
 }

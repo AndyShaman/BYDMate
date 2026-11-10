@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.settings
 
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.vehicle.BatchReadItem
 
 /**
@@ -32,6 +33,4 @@ internal object WindowDiagnostics {
             "$name[dev=$DEV fid=$fid]=$rendered"
         }
     }
-
-    private const val TX_GET_INT = 5
 }

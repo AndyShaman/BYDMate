@@ -1,6 +1,7 @@
 package com.bydmate.app.data.dtc
 
 import android.util.Log
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
@@ -18,7 +19,6 @@ object CarAutoType {
     private const val TAG = "CarAutoType"
     private const val DEV = 1001
     private const val FID = 1087373328
-    private const val TX_GET_INT = 5
     private const val PROP = "persist.sys.AutoType"
 
     /** BYD's own DiCarServer skips these as "no model". */

@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.settings
 
 import android.content.Context
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.SeatCommandJournal
@@ -98,6 +99,4 @@ internal object SeatsDiagnostics {
         ).lines()
         return lines.ifEmpty { listOf("(none)") }
     }
-
-    private const val TX_GET_INT = 5
 }

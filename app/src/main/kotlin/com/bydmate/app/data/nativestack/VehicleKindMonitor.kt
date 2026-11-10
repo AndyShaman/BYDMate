@@ -1,6 +1,7 @@
 package com.bydmate.app.data.nativestack
 
 import android.util.Log
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
@@ -140,6 +141,5 @@ class VehicleKindMonitor @Inject constructor(
             BatchReadItem(TX_GET_INT, VehicleKindDetector.DEV, VehicleKindDetector.MILEAGE_EV_FID),
             BatchReadItem(TX_GET_INT, VehicleKindDetector.DEV, VehicleKindDetector.FUEL_PERCENT_FID),
         )
-        private const val TX_GET_INT = 5
     }
 }
