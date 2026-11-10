@@ -769,7 +769,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         val snapshot = gate.vehicleSnapshot()
         val cmdLog = commands.joinToString("+")
         // Fail CLOSED on unknown speed for window- and sunroof-open commands (both speed-gated
-        // predicates after the T12 split): ActionDispatcher.getBlockReason() returns null
+        // predicates after the T12 split): ActionDispatcher.safetyBlockReason() returns null
         // (no block) when data == null, so without this guard a voice "открой окна"/"открой люк"
         // at unknown speed would dispatch unchecked. Sunshade needs no speed and is not held.
         // Automations keep the fail-soft data==null semantics untouched.

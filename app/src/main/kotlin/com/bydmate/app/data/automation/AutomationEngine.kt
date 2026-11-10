@@ -797,7 +797,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             return VoiceFireResult.ParkRequired
         }
 
-        // Fail-closed: getBlockReason() allows window/sunroof-open when the whole snapshot
+        // Fail-closed: safetyBlockReason() allows window/sunroof-open when the whole snapshot
         // is missing. Guard here so voice automations can't open either at unknown speed
         // (both are speed-gated predicates after the T12 split; sunshade is not held).
         if (data == null && actions.any {

@@ -1073,7 +1073,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val blockReason = if (isSpeedGated(action.command)) {
             speedOnlyBlockReason(action.command, gateSpeed(action.command))
         } else {
-            getBlockReason(action.command, data)
+            safetyBlockReason(action.command, data)
         }
         if (blockReason != null) {
             Log.w(TAG, "Blocked '${action.command}': $blockReason")
@@ -1105,11 +1105,6 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
 
     /** A failed [VehicleApi] write in the app language, the same text a rule step reports. */
     fun vehicleFailureReason(err: Throwable): String = paramFailureReason(err, appStrings)
-
-    // Delegate to the companion pure function so all callers (dispatch + manual test button)
-    // share identical gate logic.
-    private fun getBlockReason(command: String, data: DiParsData?): BlockReason? =
-        safetyBlockReason(command, data)
 
     // --- notifications (user-visible) ---
 

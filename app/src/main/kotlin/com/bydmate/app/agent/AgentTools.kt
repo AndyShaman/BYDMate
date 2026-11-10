@@ -1522,7 +1522,7 @@ class AgentTools @Inject constructor(
             ?: input.takeIf { CommandTranslator.resolve(it).isNotEmpty() }
             ?: return unknownCommandError(input)
         val snapshot = gate.vehicleSnapshot()
-        // Fail-closed, same invariant as VoiceController.execute: getBlockReason()
+        // Fail-closed, same invariant as VoiceController.execute: safetyBlockReason()
         // allows window-open when the whole snapshot is missing, so refuse here.
         if (snapshot == null && (ActionDispatcher.isWindowOpenCommand(command) || ActionDispatcher.isSunroofOpenCommand(command))) {
             return """{"error":"скорость неизвестна, окна и люк не открываю"}"""

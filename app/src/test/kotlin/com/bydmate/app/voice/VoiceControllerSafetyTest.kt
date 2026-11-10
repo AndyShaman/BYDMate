@@ -263,7 +263,7 @@ class VoiceControllerSafetyTest {
 
     /**
      * Fix (Finding 1): a window-OPEN command with an unknown (null) vehicle snapshot must fail
-     * CLOSED — ActionDispatcher.getBlockReason() returns null (no block) when data == null, which
+     * CLOSED — ActionDispatcher.safetyBlockReason() returns null (no block) when data == null, which
      * would otherwise let a voice "открой окна" through unchecked at unknown speed. VoiceController
      * must intercept this itself, before ever calling dispatch.
      * "открой окна" resolves to "车窗全开" (isWindowOpenCommand == true).
