@@ -205,41 +205,33 @@ class SettingsViewModelConnectionsTest {
         val logRecorder = com.bydmate.app.diagnostics.LogRecorder(ctx) {
             throw UnsupportedOperationException("no logcat in tests")
         }
-        return SettingsViewModel(
+        val localePreferences = LocalePreferences(ctx)
+        val energyDataDeadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector = mockk(relaxed = true)
+        val splitPreferences: com.bydmate.app.split.SplitPreferences = mockk(relaxed = true)
+        val ruleDao: com.bydmate.app.data.local.dao.RuleDao = mockk(relaxed = true)
+        val costCalculator: com.bydmate.app.domain.cost.CostCalculator = mockk(relaxed = true)
+        val adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor = mockk(relaxed = true) {
+            io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
+            io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
+        }
+        val vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor = mockk(relaxed = true)
+        val dumpWriter = DiagnosticDumpWriter(
             appContext = ctx,
             settingsRepository = settingsRepo,
-            updateChecker = UpdateChecker(httpClient, com.bydmate.app.util.AppStrings(ctx)),
             historyImporter = historyImporter,
-            insightsManager = insightsManager,
-            localePreferences = LocalePreferences(ctx),
-            backupManager = backupManager,
+            localePreferences = localePreferences,
             chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
             catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
-            ttsModelManager = ttsModelManager,
-            ruStressMarker = com.bydmate.app.voice.RuStressMarker { null },
-            gigaAmModelManager = gigaAmModelManager,
-            continuousAsr = continuousAsr,
-            ttsEngine = ttsEngine,
-            seatChannelStore = seatChannelStore,
             windowChannelStore = windowChannelStore,
             helperClient = helperClient,
             helperBootstrap = helperBootstrap,
-            agentOrchestrator = agentOrchestrator,
             llmConnectionResolver = llmConnectionResolver,
-            openRouterClient = openRouterClient,
-            energyDataDeadDetector = mockk(relaxed = true),
+            energyDataDeadDetector = energyDataDeadDetector,
             hudController = mockk(relaxed = true),
-            logRecorder = logRecorder,
             fidPushChannel = mockk(relaxed = true),
-            splitPreferences = mockk(relaxed = true),
+            splitPreferences = splitPreferences,
             splitSessionManager = mockk(relaxed = true),
             splitJournal = com.bydmate.app.split.NoSplitJournal,
-            driverMemory = com.bydmate.app.agent.DriverMemory(
-                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-            ),
-            dayMemory = com.bydmate.app.agent.DayMemory(
-                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-            ),
             adbRestoreManager = com.bydmate.app.data.autoservice.AdbRestoreManager(
                 com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx),
                 mockk(relaxed = true),
@@ -248,26 +240,57 @@ class SettingsViewModelConnectionsTest {
             cloudOverWifiManager = mockk(relaxed = true),
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
-            ruleDao = mockk(relaxed = true),
+            ruleDao = ruleDao,
             automationEngine = mockk(relaxed = true),
             voiceJournal = com.bydmate.app.voice.VoiceJournal(),
-            tariffPeriodDao = mockk(relaxed = true),
-            costCalculator = mockk(relaxed = true),
+            costCalculator = costCalculator,
             blindSpotController = mockk(relaxed = true),
-            adbVerdictMonitor = mockk(relaxed = true) {
-                io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
-                io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
-            },
+            adbVerdictMonitor = adbVerdictMonitor,
+            telegramReporter = mockk(relaxed = true),
+            clusterMusicBridge = mockk(relaxed = true),
+            vehicleWriteLogDao = mockk(relaxed = true),
+            vehicleKindMonitor = vehicleKindMonitor,
+        )
+        return SettingsViewModel(
+            appContext = ctx,
+            settingsRepository = settingsRepo,
+            updateChecker = UpdateChecker(httpClient, com.bydmate.app.util.AppStrings(ctx)),
+            historyImporter = historyImporter,
+            insightsManager = insightsManager,
+            localePreferences = localePreferences,
+            backupManager = backupManager,
+            ttsModelManager = ttsModelManager,
+            ruStressMarker = com.bydmate.app.voice.RuStressMarker { null },
+            gigaAmModelManager = gigaAmModelManager,
+            continuousAsr = continuousAsr,
+            ttsEngine = ttsEngine,
+            seatChannelStore = seatChannelStore,
+            helperClient = helperClient,
+            helperBootstrap = helperBootstrap,
+            agentOrchestrator = agentOrchestrator,
+            llmConnectionResolver = llmConnectionResolver,
+            openRouterClient = openRouterClient,
+            energyDataDeadDetector = energyDataDeadDetector,
+            logRecorder = logRecorder,
+            dumpWriter = dumpWriter,
+            splitPreferences = splitPreferences,
+            driverMemory = com.bydmate.app.agent.DriverMemory(
+                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            ),
+            dayMemory = com.bydmate.app.agent.DayMemory(
+                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            ),
+            ruleDao = ruleDao,
+            tariffPeriodDao = mockk(relaxed = true),
+            costCalculator = costCalculator,
+            adbVerdictMonitor = adbVerdictMonitor,
             telegramBackupSink = mockk(relaxed = true),
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
             logTelegramSender = com.bydmate.app.diagnostics.LogTelegramSender(
                 logRecorder, settingsRepo, mockk(relaxed = true), com.bydmate.app.util.AppStrings(ctx),
             ),
-            telegramReporter = mockk(relaxed = true),
-            clusterMusicBridge = mockk(relaxed = true),
-            vehicleWriteLogDao = mockk(relaxed = true),
-            vehicleKindMonitor = mockk(relaxed = true),
+            vehicleKindMonitor = vehicleKindMonitor,
         )
     }
 

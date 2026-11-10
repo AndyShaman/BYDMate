@@ -22,7 +22,7 @@ class HelperDiagnosticsTest {
 
     @Test fun `a hanging steering heat batch still yields liveness and seats`() = runTest {
         coEvery { helper.readBatch(SteeringHeatDiagnostics.batchItems()) } coAnswers { awaitCancellation() }
-        val diag = SettingsViewModel.collectHelperDiagnostics(
+        val diag = DiagnosticDumpWriter.collectHelperDiagnostics(
             backgroundScope, helper, 3_000L, StandardTestDispatcher(testScheduler),
         )
         assertEquals(true, diag.alive)
@@ -34,19 +34,19 @@ class HelperDiagnosticsTest {
     @Test fun `all four sections come back when the daemon answers`() = runTest {
         coEvery { helper.readBatch(SteeringHeatDiagnostics.batchItems()) } returns steering
         coEvery { helper.readBatch(WindowDiagnostics.batchItems()) } returns windows
-        val diag = SettingsViewModel.collectHelperDiagnostics(
+        val diag = DiagnosticDumpWriter.collectHelperDiagnostics(
             backgroundScope, helper, 3_000L, StandardTestDispatcher(testScheduler),
         )
-        assertEquals(SettingsViewModel.HelperDiagnostics(true, seats, steering, windows), diag)
+        assertEquals(DiagnosticDumpWriter.HelperDiagnostics(true, seats, steering, windows), diag)
     }
 
     @Test fun `a hanging window batch still yields the other sections`() = runTest {
         coEvery { helper.readBatch(SteeringHeatDiagnostics.batchItems()) } returns steering
         coEvery { helper.readBatch(WindowDiagnostics.batchItems()) } coAnswers { awaitCancellation() }
-        val diag = SettingsViewModel.collectHelperDiagnostics(
+        val diag = DiagnosticDumpWriter.collectHelperDiagnostics(
             backgroundScope, helper, 3_000L, StandardTestDispatcher(testScheduler),
         )
-        assertEquals(SettingsViewModel.HelperDiagnostics(true, seats, steering, null), diag)
+        assertEquals(DiagnosticDumpWriter.HelperDiagnostics(true, seats, steering, null), diag)
     }
 
     @Test fun `window fids are printed with their device and fid`() {

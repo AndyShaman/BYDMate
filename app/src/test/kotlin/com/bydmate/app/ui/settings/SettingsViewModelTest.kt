@@ -301,41 +301,32 @@ class SettingsViewModelTest {
         logTelegramSender = com.bydmate.app.diagnostics.LogTelegramSender(
             logRecorder, settingsRepo, telegramBackupSink, com.bydmate.app.util.AppStrings(ctx),
         )
-        return SettingsViewModel(
+        val localePreferences = LocalePreferences(ctx)
+        val resolvedLlmConnectionResolver = llmConnectionResolver ?: mockk(relaxed = true)
+        val costCalculator = exportCostCalculator ?: mockk(relaxed = true)
+        val adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor = mockk(relaxed = true) {
+            io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
+            io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
+        }
+        val vehicleKindMonitor = vehicleKind?.let { com.bydmate.app.data.nativestack.kindMonitor(it) }
+            ?: mockk(relaxed = true)
+        val dumpWriter = DiagnosticDumpWriter(
             appContext = ctx,
             settingsRepository = settingsRepo,
-            updateChecker = resolvedUpdateChecker,
             historyImporter = historyImporter,
-            insightsManager = insightsManager,
-            localePreferences = LocalePreferences(ctx),
-            backupManager = backupManager,
+            localePreferences = localePreferences,
             chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
             catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
-            ttsModelManager = resolvedTtsModelManager,
-            ruStressMarker = com.bydmate.app.voice.RuStressMarker { null },
-            gigaAmModelManager = resolvedGigaAmModelManager,
-            continuousAsr = continuousAsr,
-            ttsEngine = resolvedTtsEngine,
-            seatChannelStore = seatChannelStore,
             windowChannelStore = windowChannelStore,
             helperClient = helperClient,
             helperBootstrap = helperBootstrap,
-            agentOrchestrator = agentOrchestrator,
-            llmConnectionResolver = llmConnectionResolver ?: mockk(relaxed = true),
-            openRouterClient = openRouterClient,
+            llmConnectionResolver = resolvedLlmConnectionResolver,
             energyDataDeadDetector = energyDataDeadDetector,
             hudController = hudController,
-            logRecorder = logRecorder,
             fidPushChannel = fidPushChannel,
             splitPreferences = splitPreferences,
             splitSessionManager = splitSessionManager,
             splitJournal = com.bydmate.app.split.NoSplitJournal,
-            driverMemory = com.bydmate.app.agent.DriverMemory(
-                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-            ),
-            dayMemory = com.bydmate.app.agent.DayMemory(
-                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-            ),
             adbRestoreManager = com.bydmate.app.data.autoservice.AdbRestoreManager(
                 com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx),
                 mockk(relaxed = true),
@@ -347,22 +338,52 @@ class SettingsViewModelTest {
             ruleDao = ruleDao,
             automationEngine = automationEngine,
             voiceJournal = voiceJournal,
-            tariffPeriodDao = tariffPeriodDaoOverride ?: mockk(relaxed = true),
-            costCalculator = exportCostCalculator ?: mockk(relaxed = true),
+            costCalculator = costCalculator,
             blindSpotController = blindSpotController,
-            adbVerdictMonitor = mockk(relaxed = true) {
-                io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
-                io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
-            },
+            adbVerdictMonitor = adbVerdictMonitor,
+            telegramReporter = telegramReporter,
+            clusterMusicBridge = clusterMusicBridge,
+            vehicleWriteLogDao = vehicleWriteLogDao,
+            vehicleKindMonitor = vehicleKindMonitor,
+        )
+        return SettingsViewModel(
+            appContext = ctx,
+            settingsRepository = settingsRepo,
+            updateChecker = resolvedUpdateChecker,
+            historyImporter = historyImporter,
+            insightsManager = insightsManager,
+            localePreferences = localePreferences,
+            backupManager = backupManager,
+            ttsModelManager = resolvedTtsModelManager,
+            ruStressMarker = com.bydmate.app.voice.RuStressMarker { null },
+            gigaAmModelManager = resolvedGigaAmModelManager,
+            continuousAsr = continuousAsr,
+            ttsEngine = resolvedTtsEngine,
+            seatChannelStore = seatChannelStore,
+            helperClient = helperClient,
+            helperBootstrap = helperBootstrap,
+            agentOrchestrator = agentOrchestrator,
+            llmConnectionResolver = resolvedLlmConnectionResolver,
+            openRouterClient = openRouterClient,
+            energyDataDeadDetector = energyDataDeadDetector,
+            logRecorder = logRecorder,
+            dumpWriter = dumpWriter,
+            splitPreferences = splitPreferences,
+            driverMemory = com.bydmate.app.agent.DriverMemory(
+                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            ),
+            dayMemory = com.bydmate.app.agent.DayMemory(
+                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            ),
+            ruleDao = ruleDao,
+            tariffPeriodDao = tariffPeriodDaoOverride ?: mockk(relaxed = true),
+            costCalculator = costCalculator,
+            adbVerdictMonitor = adbVerdictMonitor,
             telegramBackupSink = telegramBackupSink,
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
             logTelegramSender = logTelegramSender,
-            telegramReporter = telegramReporter,
-            clusterMusicBridge = clusterMusicBridge,
-            vehicleWriteLogDao = vehicleWriteLogDao,
-            vehicleKindMonitor = vehicleKind?.let { com.bydmate.app.data.nativestack.kindMonitor(it) }
-                ?: mockk(relaxed = true),
+            vehicleKindMonitor = vehicleKindMonitor,
         )
     }
 
