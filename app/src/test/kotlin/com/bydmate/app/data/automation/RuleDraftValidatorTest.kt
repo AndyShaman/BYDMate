@@ -3,247 +3,97 @@ package com.bydmate.app.data.automation
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RuleDraftValidatorTest {
 
     // --- validateActions ---
 
-    @Test fun telegram_report_without_items_or_text_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "telegram_report", displayName = "x", kind = "telegram_report",
-                payload = """{"fields":[],"text":"  "}""")))
-        assertEquals(ActionValidationError.TelegramReportEmpty(1), err)
+    private class StepCase(val label: String, val step: ActionDef, val expected: ActionValidationError?)
+
+    private fun step(kind: String, payload: String?, command: String = "") =
+        ActionDef(command = command, displayName = "x", kind = kind, payload = payload)
+
+    private fun delay(payload: String?) = step("delay", payload)
+
+    private val stepCases by lazy {
+        listOf(
+            StepCase("telegram_report without items or text", step("telegram_report", """{"fields":[],"text":"  "}""",
+                "telegram_report"), ActionValidationError.TelegramReportEmpty(1)),
+            StepCase("telegram_report with only own text", step("telegram_report", """{"fields":[],"text":"Я выехал"}""",
+                "telegram_report"), null),
+            StepCase("delay 300000", delay("300000"), null),
+            StepCase("delay 86400000 (24 h)", delay("86400000"), null),
+            StepCase("delay 0", delay("0"), null),
+            StepCase("delay 86400001", delay("86400001"), ActionValidationError.DelayInvalid(1)),
+            StepCase("delay empty", delay(""), ActionValidationError.DelayInvalid(1)),
+            StepCase("delay null", delay(null), ActionValidationError.DelayInvalid(1)),
+            StepCase("delay -5", delay("-5"), ActionValidationError.DelayInvalid(1)),
+            StepCase("delay abc", delay("abc"), ActionValidationError.DelayInvalid(1)),
+            StepCase("param blank command", step("param", null), ActionValidationError.CommandMissing(1)),
+            StepCase("param with command", step("param", null, "车窗关闭"), null),
+            StepCase("notification_silent blank title", step("notification_silent", """{"title":"","text":""}"""),
+                ActionValidationError.NotifTitleEmpty(1)),
+            StepCase("merged notification kind with blank title", step("notification", """{"title":"","text":"body"}"""),
+                ActionValidationError.NotifTitleEmpty(1)),
+            StepCase("app_launch blank package", step("app_launch", """{"packageName":"","appLabel":""}"""),
+                ActionValidationError.AppNotSelected(1)),
+            StepCase("app_close blank package", step("app_close", """{"packageName":"","appLabel":""}"""),
+                ActionValidationError.AppNotSelected(1)),
+            StepCase("media_key play", step("media_key", "play"), null),
+            StepCase("media_key pause", step("media_key", "pause"), null),
+            StepCase("media_key toggle", step("media_key", "toggle"), ActionValidationError.MediaKeyInvalid(1)),
+            StepCase("call phone too short", step("call", """{"phone":"123"}"""), ActionValidationError.PhoneInvalid(1)),
+            StepCase("call valid phone", step("call", """{"phone":"+79161234567"}"""), null),
+            StepCase("navigate both zero", step("navigate", """{"lat":0,"lon":0}"""), ActionValidationError.NavDestMissing(1)),
+            StepCase("navigate valid coords", step("navigate", """{"lat":55.7,"lon":37.6}"""), null),
+            StepCase("url empty", step("url", """{"url":""}"""), ActionValidationError.UrlEmpty(1)),
+            StepCase("url no scheme", step("url", """{"url":"example.com"}"""), ActionValidationError.UrlNoScheme(1)),
+            StepCase("url with scheme", step("url", """{"url":"https://example.com"}"""), null),
+            StepCase("yandex_music blank mode", step("yandex_music", """{"mode":""}"""),
+                ActionValidationError.YandexMusicModeMissing(1)),
+            // Signed "-N" is a relative volume step (ActionDispatcher.resolveVolumeOp), not an
+            // absolute negative level, so it is valid — was previously (incorrectly) rejected.
+            StepCase("media_volume signed negative is a relative step", step("media_volume", "-1", "media_volume"), null),
+            StepCase("media_volume level", step("media_volume", "5", "media_volume"), null),
+            StepCase("media_volume mute", step("media_volume", "mute", "media_volume"), null),
+            StepCase("media_volume unmute", step("media_volume", "unmute", "media_volume"), null),
+            StepCase("media_volume garbage", step("media_volume", "loud", "media_volume"),
+                ActionValidationError.MediaVolumeMissing(1)),
+            StepCase("sentry 2", step("sentry", "2", "sentry"), ActionValidationError.SentryInvalid(1)),
+            StepCase("sentry 1", step("sentry", "1", "sentry"), null),
+            StepCase("screen 0", step("screen", "0", "screen"), null),
+            StepCase("screen 1", step("screen", "1", "screen"), null),
+            StepCase("screen 2", step("screen", "2", "screen"), ActionValidationError.ScreenInvalid(1)),
+            StepCase("screen null", step("screen", null, "screen"), ActionValidationError.ScreenInvalid(1)),
+            StepCase("hotspot 2", step("hotspot", "2", "hotspot"), ActionValidationError.HotspotInvalid(1)),
+            StepCase("hotspot on (1)", step("hotspot", "1", "hotspot"), null),
+            StepCase("hotspot off (0)", step("hotspot", "0", "hotspot"), null),
+            StepCase("hotspot garbage", step("hotspot", "on", "hotspot"), ActionValidationError.HotspotInvalid(1)),
+            StepCase("speak blank text", step("speak", """{"text":""}"""), ActionValidationError.SpeakTextEmpty(1)),
+            StepCase("speak with text", step("speak", """{"text":"Добро пожаловать"}"""), null),
+            StepCase("agent_query blank prompt", step("agent_query", """{"prompt":""}"""),
+                ActionValidationError.AgentQueryPromptEmpty(1)),
+            StepCase("agent_query with prompt", step("agent_query", """{"prompt":"Какой заряд?"}"""), null),
+        )
     }
 
-    @Test fun telegram_report_with_only_own_text_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "telegram_report", displayName = "x", kind = "telegram_report",
-                payload = """{"fields":[],"text":"Я выехал"}"""))))
-    }
-
-    private fun delay(payload: String?) = ActionDef(command = "", displayName = "x", kind = "delay", payload = payload)
-
-    @Test fun delay_within_24_hours_is_valid() {
-        listOf("300000", "86400000", "0").forEach {
-            assertNull(it, RuleDraftValidator.validateActions(listOf(delay(it))))
+    @Test fun `each kind of step with its payload is valid or names its error`() {
+        for (c in stepCases) {
+            assertEquals("case: ${c.label}", c.expected, RuleDraftValidator.validateActions(listOf(c.step)))
         }
     }
 
-    @Test fun delay_out_of_range_or_not_a_number_is_invalid() {
-        listOf("86400001", "", null, "-5", "abc").forEach {
-            assertEquals(it, ActionValidationError.DelayInvalid(1), RuleDraftValidator.validateActions(listOf(delay(it))))
-        }
-    }
-
-    @Test fun delay_error_index_is_1_based() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "车窗关闭", displayName = "x", kind = "param"), delay("86400001")))
-        assertEquals(ActionValidationError.DelayInvalid(2), err)
-    }
-
-    @Test fun empty_actions_list_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(emptyList()))
-    }
-
-    @Test fun param_action_blank_command_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "param")))
-        assertEquals(ActionValidationError.CommandMissing(1), err)
-    }
-
-    @Test fun param_action_with_command_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "车窗关闭", displayName = "x", kind = "param"))))
-    }
-
-    @Test fun notification_action_blank_title_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "notification_silent",
-                payload = """{"title":"","text":""}""")))
-        assertEquals(ActionValidationError.NotifTitleEmpty(1), err)
-    }
-
-    @Test fun `merged notification kind with blank title is rejected`() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "notification",
-                payload = """{"title":"","text":"body"}""")
-        ))
-        assertTrue(err is ActionValidationError.NotifTitleEmpty)
-    }
-
-    @Test fun app_launch_action_blank_package_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "app_launch",
-                payload = """{"packageName":"","appLabel":""}""")))
-        assertEquals(ActionValidationError.AppNotSelected(1), err)
-    }
-
-    @Test fun app_close_action_blank_package_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "app_close",
-                payload = """{"packageName":"","appLabel":""}""")))
-        assertEquals(ActionValidationError.AppNotSelected(1), err)
-    }
-
-    @Test fun media_key_action_takes_only_play_or_pause() {
-        fun key(p: String) = listOf(ActionDef(command = "", displayName = "x", kind = "media_key", payload = p))
-        assertEquals(null, RuleDraftValidator.validateActions(key("play")))
-        assertEquals(null, RuleDraftValidator.validateActions(key("pause")))
-        assertEquals(ActionValidationError.MediaKeyInvalid(1), RuleDraftValidator.validateActions(key("toggle")))
-    }
-
-    @Test fun call_action_phone_too_short_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "call", payload = """{"phone":"123"}""")))
-        assertEquals(ActionValidationError.PhoneInvalid(1), err)
-    }
-
-    @Test fun call_action_valid_phone_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "call", payload = """{"phone":"+79161234567"}"""))))
-    }
-
-    @Test fun navigate_action_both_zero_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "navigate", payload = """{"lat":0,"lon":0}""")))
-        assertEquals(ActionValidationError.NavDestMissing(1), err)
-    }
-
-    @Test fun navigate_action_valid_coords_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "navigate", payload = """{"lat":55.7,"lon":37.6}"""))))
-    }
-
-    @Test fun url_action_empty_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "url", payload = """{"url":""}""")))
-        assertEquals(ActionValidationError.UrlEmpty(1), err)
-    }
-
-    @Test fun url_action_no_scheme_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "url", payload = """{"url":"example.com"}""")))
-        assertEquals(ActionValidationError.UrlNoScheme(1), err)
-    }
-
-    @Test fun url_action_with_scheme_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "url", payload = """{"url":"https://example.com"}"""))))
-    }
-
-    @Test fun yandex_music_action_blank_mode_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "yandex_music", payload = """{"mode":""}""")))
-        assertEquals(ActionValidationError.YandexMusicModeMissing(1), err)
-    }
-
-    // Signed "-N" is a relative volume step (ActionDispatcher.resolveVolumeOp), not an
-    // absolute negative level, so it is valid — was previously (incorrectly) rejected.
-    @Test fun media_volume_action_signed_negative_is_valid_relative_step() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "media_volume", displayName = "x", kind = "media_volume", payload = "-1"))))
-    }
-
-    @Test fun media_volume_action_valid_level_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "media_volume", displayName = "x", kind = "media_volume", payload = "5"))))
-    }
-
-    @Test fun media_volume_action_mute_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "media_volume", displayName = "x", kind = "media_volume", payload = "mute"))))
-    }
-
-    @Test fun media_volume_action_unmute_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "media_volume", displayName = "x", kind = "media_volume", payload = "unmute"))))
-    }
-
-    @Test fun media_volume_action_garbage_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "media_volume", displayName = "x", kind = "media_volume", payload = "loud")))
-        assertEquals(ActionValidationError.MediaVolumeMissing(1), err)
-    }
-
-    @Test fun sentry_action_invalid_payload_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "sentry", displayName = "x", kind = "sentry", payload = "2")))
-        assertEquals(ActionValidationError.SentryInvalid(1), err)
-    }
-
-    @Test fun sentry_action_valid_payload_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "sentry", displayName = "x", kind = "sentry", payload = "1"))))
-    }
-
-    @Test fun screen_action_payload_is_0_or_1() {
-        fun check(payload: String?) = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "screen", displayName = "x", kind = "screen", payload = payload)))
-        assertNull(check("0"))
-        assertNull(check("1"))
-        assertEquals(ActionValidationError.ScreenInvalid(1), check("2"))
-        assertEquals(ActionValidationError.ScreenInvalid(1), check(null))
-    }
-
-    @Test fun hotspot_action_invalid_payload_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "2")))
-        assertEquals(ActionValidationError.HotspotInvalid(1), err)
-    }
-
-    @Test fun hotspot_action_valid_payload_on_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "1"))))
-    }
-
-    @Test fun hotspot_action_valid_payload_off_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "0"))))
-    }
-
-    @Test fun hotspot_action_garbage_payload_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "on")))
-        assertEquals(ActionValidationError.HotspotInvalid(1), err)
-    }
-
-    @Test fun speak_action_blank_text_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "speak",
-                payload = """{"text":""}""")))
-        assertEquals(ActionValidationError.SpeakTextEmpty(1), err)
-    }
-
-    @Test fun speak_action_with_text_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "speak",
-                payload = """{"text":"Добро пожаловать"}"""))))
-    }
-
-    @Test fun agent_query_action_blank_prompt_is_invalid() {
-        val err = RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "agent_query",
-                payload = """{"prompt":""}""")))
-        assertEquals(ActionValidationError.AgentQueryPromptEmpty(1), err)
-    }
-
-    @Test fun agent_query_action_with_prompt_is_valid() {
-        assertNull(RuleDraftValidator.validateActions(listOf(
-            ActionDef(command = "", displayName = "x", kind = "agent_query",
-                payload = """{"prompt":"Какой заряд?"}"""))))
-    }
-
-    @Test fun second_action_failing_reports_index_2() {
-        val err = RuleDraftValidator.validateActions(listOf(
+    @Test fun `an empty step list is valid and an error names its 1-based step`() {
+        assertNull("no steps", RuleDraftValidator.validateActions(emptyList()))
+        assertEquals("bad delay second", ActionValidationError.DelayInvalid(2),
+            RuleDraftValidator.validateActions(listOf(step("param", null, "车窗关闭"), delay("86400001"))))
+        assertEquals("bad command second", ActionValidationError.CommandMissing(2), RuleDraftValidator.validateActions(listOf(
             ActionDef(command = "车窗关闭", displayName = "ok", kind = "param"),
             ActionDef(command = "", displayName = "bad", kind = "param"),
-        ))
-        assertEquals(ActionValidationError.CommandMissing(2), err)
+        )))
     }
 
     // --- validateTriggers ---
