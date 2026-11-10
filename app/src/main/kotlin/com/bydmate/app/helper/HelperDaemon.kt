@@ -2446,6 +2446,8 @@ private fun setHotspot(ctx: Context, enable: Boolean): Boolean {
     }
 }
 
+private val GLOBAL_SETTING_KEYS = setOf("sentrymode_enabled_switch", "enable_freeform_support", "auto_time_zone")
+
 /**
  * Settings.Global whitelist for TX_PUT_GLOBAL_SETTING: the sentry-mode master switch, the
  * freeform windowing flag (direct cluster projection; the framework reads it once at boot) and
@@ -2453,11 +2455,11 @@ private fun setHotspot(ctx: Context, enable: Boolean): Boolean {
  * Values are bounded to 0/1. Anything else is rejected before any shell command runs.
  */
 internal fun globalSettingAllowed(key: String, value: Int): Boolean =
-    key in setOf("sentrymode_enabled_switch", "enable_freeform_support", "auto_time_zone") && value in 0..1
+    key in GLOBAL_SETTING_KEYS && value in 0..1
 
 /** Keys [HelperBinderProtocol.TX_GET_GLOBAL_SETTING] may read back: the write whitelist's keys. */
 internal fun globalSettingReadable(key: String): Boolean =
-    key in setOf("sentrymode_enabled_switch", "enable_freeform_support", "auto_time_zone")
+    key in GLOBAL_SETTING_KEYS
 
 /** How long the read below waits for `settings get global` before it gives up on it. */
 internal const val GLOBAL_SETTING_READ_TIMEOUT_MS = 2000L
@@ -2508,6 +2510,8 @@ private fun readSecure(key: String): String? {
     return if (r.stdout == "null") "" else r.stdout
 }
 
+private val PACKAGE_NAME_REGEX = Regex("[A-Za-z0-9_.]+")
+
 /**
  * Resolves [packageName]'s launcher component via `cmd package resolve-activity`. Returns null
  * when nothing resolves or the package name is not a valid Android package name.
@@ -2515,7 +2519,7 @@ private fun readSecure(key: String): String? {
  * is then passed as a positional arg ($1) so it is never re-parsed by the shell.
  */
 private fun resolveLaunchComponent(packageName: String): String? {
-    if (!packageName.matches(Regex("[A-Za-z0-9_.]+"))) return null
+    if (!packageName.matches(PACKAGE_NAME_REGEX)) return null
     val resolve = shExec("cmd package resolve-activity --brief -c android.intent.category.LAUNCHER \"\$1\"", packageName)
     return resolve.stdout.lineSequence().firstOrNull { it.contains("/") && !it.startsWith("No ") }?.trim()
 }
@@ -2543,7 +2547,7 @@ internal fun launchAppCore(
     resolveComponent: (String) -> String?,
     shell: (String, List<String>) -> String,
 ): Boolean {
-    if (!packageName.matches(Regex("[A-Za-z0-9_.]+"))) return false
+    if (!packageName.matches(PACKAGE_NAME_REGEX)) return false
     // STANDARD is what `am start` assigns by default — only RECENTS needs the explicit flag.
     val typeFlag = if (activityType == ACTIVITY_TYPE_RECENTS) "--activityType $ACTIVITY_TYPE_RECENTS " else ""
     // displayId != 0 births the task on the target display: 2GIS/Qt dies on a cross-display move.
@@ -2612,7 +2616,7 @@ internal fun raiseFreeformTaskCore(
     sleep: (Long) -> Unit = { _ -> },
     stateOf: (Int) -> TaskModeState? = { _ -> null },
 ): Boolean {
-    if (!packageName.matches(Regex("[A-Za-z0-9_.]+"))) return false
+    if (!packageName.matches(PACKAGE_NAME_REGEX)) return false
     val component = resolveComponent(packageName) ?: return false
     val taskId = taskIdForPackage(packageName)
     val activityType = if (taskId != -1) getActivityType(taskId) else -1
