@@ -8,7 +8,7 @@ import android.content.Context
  * odometer/energy baselines so that after a process restart the live delta
  * still covers the whole session (same as TripRecorder's last_state mechanism).
  *
- * Cleared on ignition-off (powerState 0 + 30 sec idle) so the next session
+ * Cleared on ignition-off (powerState 0 + 10 sec idle) so the next session
  * gets a fresh sessionStartedAt.
  */
 data class PersistedSession(

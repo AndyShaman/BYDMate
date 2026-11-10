@@ -151,7 +151,7 @@ class TrackingService : Service(), LocationListener {
 
     // Widget session (ignition-on → ignition-off) — decoupled from TripTracker GPS state.
     // Primary signal: DiPars powerState ≥ 1. Fallback when powerState is unreliable:
-    // tripTracker.state == DRIVING. Session closes when both are inactive for 30 sec
+    // tripTracker.state == DRIVING. Session closes when both are inactive for 10 sec
     // so a short powerState glitch doesn't split one physical trip into two.
     private lateinit var sessionPersistence: SessionPersistence
     @Volatile private var sessionLastActiveTs: Long = 0L
@@ -316,8 +316,8 @@ class TrackingService : Service(), LocationListener {
         // consider the session closed. 10 sec survives brief powerState blips; it stays
         // short because DiLink dies almost instantly at ignition-off (onSessionEnd rarely
         // fires), so reconcileStaleOpenSession promotes the stale pending after this idle.
-        // HistoryImporter.PENDING_SESSION_IDLE_CLOSE_MS mirrors this — keep them in sync.
-        private const val SESSION_IDLE_CLOSE_MS = 10_000L
+        // HistoryImporter reconciles with the same value.
+        internal const val SESSION_IDLE_CLOSE_MS = 10_000L
         // Throttle for the periodic INFO summary so logcat doesn't get flooded.
         private const val SUMMARY_LOG_INTERVAL_MS = 60_000L
         // Guidance-active re-arm of the notification-listener grant: one 6×5 s
@@ -656,7 +656,7 @@ class TrackingService : Service(), LocationListener {
         )
 
         // Finalize a driving session left open by a hard power-cut at ignition-off
-        // (the head unit dies before the 30-sec idle-close can fire onSessionEnd),
+        // (the head unit dies before the 10-sec idle-close can fire onSessionEnd),
         // so its last live SOC still becomes a trip bookmark. No-op when there is
         // no open session, or when it is still live (brief mid-drive restart).
         lastSessionRepository.reconcileStaleOpenSession(

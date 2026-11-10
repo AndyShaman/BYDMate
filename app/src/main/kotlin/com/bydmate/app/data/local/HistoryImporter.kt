@@ -49,9 +49,6 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         private const val TAG = "HistoryImporter"
         private const val MIN_TRIP_DURATION_SEC = 30L
         private const val DEDUP_WINDOW_MS = 300_000L // ±5 min for time-based dedup
-        // Mirror of TrackingService.SESSION_IDLE_CLOSE_MS — the idle gap after which an
-        // open SOC session is considered finished and promotable to a completed bookmark.
-        private const val PENDING_SESSION_IDLE_CLOSE_MS = 10_000L
 
         /**
          * An energydata row starting later than now + this is from the future (head unit clock
@@ -175,7 +172,7 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
         // promoted, write socStart/socEnd=null, and the watermark below would lock that loss
         // in forever. Reconcile here so every import path promotes the stale pending first.
         lastSessionRepository.reconcileStaleOpenSession(
-            System.currentTimeMillis(), PENDING_SESSION_IDLE_CLOSE_MS)
+            System.currentTimeMillis(), TrackingService.SESSION_IDLE_CLOSE_MS)
 
         val lastImportTs = settingsRepository.getLastEnergyImportTs()
         // Until recycling is known the whole source is read: the records it hid already sit below
