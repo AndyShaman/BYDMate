@@ -189,7 +189,6 @@
     <ID>EmptyFunctionBlock:SplitSessionManagerVerdictTest.kt$VerdictFakeBackdrop${}</ID>
     <ID>EmptyFunctionBlock:VehicleApiFailSoftTest.kt$VehicleApiFailSoftTest.&lt;no name provided&gt;${}</ID>
     <ID>EmptyFunctionBlock:VehicleApiNonCancellableTest.kt$VehicleApiNonCancellableTest.&lt;no name provided&gt;${}</ID>
-    <ID>EmptyFunctionBlock:VehicleApiReadTest.kt$VehicleApiReadTest.&lt;no name provided&gt;${}</ID>
     <ID>EmptyFunctionBlock:VehicleApiSeatOutcomeTest.kt$VehicleApiSeatOutcomeTest.&lt;no name provided&gt;${}</ID>
     <ID>EmptyFunctionBlock:VehicleApiWindowRoutingTest.kt$VehicleApiWindowRoutingTest.&lt;no name provided&gt;${}</ID>
     <ID>EmptyFunctionBlock:VehicleApiWriteTest.kt$VehicleApiWriteTest.&lt;no name provided&gt;${}</ID>
@@ -290,8 +289,6 @@
     <ID>LongParameterList:BlindSpotPreferences.kt$BlindSpotPreferences.Companion$( displayW: Int, displayH: Int, shape: PipShape, leftX: Int, leftY: Int, rightRect: Rect, )</ID>
     <ID>LongParameterList:ChargesViewModelTest.kt$ChargesViewModelTest$( chargesFlow: MutableStateFlow&lt;List&lt;ChargeEntity&gt;&gt; = MutableStateFlow(emptyList()), autoserviceCharges: List&lt;ChargeEntity&gt; = emptyList(), legacyExists: Boolean = false, batteryReading: BatteryReading? = null, autoserviceAvailable: Boolean = true, snapshots: List&lt;BatterySnapshotEntity&gt; = emptyList(), batteryCapacityKwh: String = "72.9" )</ID>
     <ID>LongParameterList:ChargesViewModelTest.kt$ChargesViewModelTest$( id: Long, startTs: Long, kwhCharged: Double? = 10.0, gunState: Int? = 2, type: String? = when (gunState) { 2 -&gt; "AC"; 3, 4 -&gt; "DC"; else -&gt; null }, cost: Double? = 2.0, detectionSource: String? = "autoservice_detector" )</ID>
-    <ID>LongParameterList:ClusterProbeRunner.kt$ClusterProbeRunner$( private val helper: HelperClient, private val journal: (String) -&gt; Unit, private val platformized: () -&gt; Boolean, private val menu: ClusterMenuClient, private val dicar: DiCarInstrumentClient, private val prefs: SharedPreferences, private val scope: CoroutineScope, )</ID>
-    <ID>LongParameterList:ClusterProbeRunnerTest.kt$ClusterProbeRunnerTest$( cmd: String, holdSec: Int = 1, watchSec: Int = 1, items: List&lt;String&gt; = emptyList(), what: String? = null, value: Int = 0, )</ID>
     <ID>LongParameterList:ClusterProjectionManager.kt$ClusterProjectionManager$( context: Context, helper: HelperClient, pkg: String, displayId: Int, bounds: IntArray, densityApplied: Int, )</ID>
     <ID>LongParameterList:ClusterProjectionState.kt$( mode: ClusterMode, clusterW: Int, clusterH: Int, widthPct: Int = MAX_PROJECTION_PCT, heightPct: Int = MAX_PROJECTION_PCT, offsetXPct: Int = CENTER_OFFSET_PCT, offsetYPct: Int = CENTER_OFFSET_PCT, )</ID>
     <ID>LongParameterList:ConfirmOverlayManager.kt$ConfirmOverlayManager$( context: Context, ruleName: String, actionsSummary: String, onConfirm: () -&gt; Unit, onCancel: () -&gt; Unit, timeoutMs: Long = DEFAULT_TIMEOUT_MS, )</ID>
@@ -467,8 +464,6 @@
     <ID>TooGenericExceptionCaught:BootReceiver.kt$BootReceiver$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CameraStateMonitor.kt$CameraStateMonitor$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ChainLog.kt$ChainLog$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:ClusterProbeClients.kt$DiCarProviderClient$e: Throwable</ID>
-    <ID>TooGenericExceptionCaught:ClusterProbeRunner.kt$ClusterProbeRunner$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:ClusterProjectionManager.kt$ClusterProjectionManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ConfirmOverlayManager.kt$ConfirmOverlayManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CrashLog.kt$CrashLog$e: Exception</ID>
@@ -564,7 +559,6 @@
     <ID>TooManyFunctions:ChargesViewModel.kt$ChargesViewModel : ViewModel</ID>
     <ID>TooManyFunctions:ClusterDisplayDiag.kt$ClusterDisplayDiag</ID>
     <ID>TooManyFunctions:ClusterFrameUi7.kt$ClusterFrameUi7</ID>
-    <ID>TooManyFunctions:ClusterProbeRunner.kt$ClusterProbeRunner</ID>
     <ID>TooManyFunctions:ClusterProjectionManager.kt$ClusterProjectionManager</ID>
     <ID>TooManyFunctions:ClusterProjectionState.kt$com.bydmate.app.cluster.ClusterProjectionState.kt</ID>
     <ID>TooManyFunctions:Components.kt$com.bydmate.app.ui.components.Components.kt</ID>
@@ -654,7 +648,6 @@
     <ID>UseCheckOrError:BackupManager.kt$BackupManager.Companion$throw IllegalStateException("Файл бэкапа повреждён: запись превышает допустимый размер")</ID>
     <ID>UseCheckOrError:BackupManager.kt$BackupManager.Companion$throw IllegalStateException("Файл бэкапа повреждён: слишком много записей в архиве")</ID>
     <ID>UseCheckOrError:BackupManager.kt$BackupManager.Companion$throw IllegalStateException("Файл бэкапа слишком большой")</ID>
-    <ID>UseCheckOrError:ClusterProbeRunnerTest.kt$ClusterProbeRunnerTest.FakeMenuClient$throw IllegalStateException("menu service is gone")</ID>
     <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException( "freeform not supported: probe start coerced task=$taskId to mode=${after.windowingMode}" )</ID>
     <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("ActivityManager.getService() returned null")</ID>
     <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("ActivityTaskManager.getService() returned null")</ID>
