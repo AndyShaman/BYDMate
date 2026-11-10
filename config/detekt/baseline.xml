@@ -28,7 +28,7 @@
     <ID>ComplexCondition:NaviRouteHolder.kt$NaviRouteHolder$title.isNullOrBlank() &amp;&amp; text.isNullOrBlank() &amp;&amp; subText.isNullOrBlank() &amp;&amp; !hasParsed</ID>
     <ID>ComplexCondition:PlaceEditDialog.kt$initial == null &amp;&amp; latText.isEmpty() &amp;&amp; lonText.isEmpty() &amp;&amp; loc != null</ID>
     <ID>ComplexCondition:RuleDraftValidator.kt$RuleDraftValidator$lat == null || lon == null || (lat == 0.0 &amp;&amp; lon == 0.0)</ID>
-    <ID>ComplexCondition:SettingsScreen.kt$splitEnabled &amp;&amp; !nativeMode &amp;&amp; !split37Firmware &amp;&amp; (splitFreeformUnsupported || splitRebootPending)</ID>
+    <ID>ComplexCondition:SettingsSplit.kt$splitEnabled &amp;&amp; !nativeMode &amp;&amp; !split37Firmware &amp;&amp; (splitFreeformUnsupported || splitRebootPending)</ID>
     <ID>ComplexCondition:SharedAdaptiveLoop.kt$SharedAdaptiveLoop$prev != null &amp;&amp; prev.soc == data.soc &amp;&amp; prev.mileage == data.mileage &amp;&amp; prev.totalElec == data.totalElecConsumption &amp;&amp; prev.ignition == ignition &amp;&amp; now - prev.ts &lt; HEARTBEAT_MS</ID>
     <ID>ComplexCondition:SplitSessionManager.kt$SplitSessionManager$raised != null &amp;&amp; raised.taskId != -1 &amp;&amp; raised.windowingMode == WINDOWING_FREEFORM &amp;&amp; raised.displayId == DISPLAY_SPLIT</ID>
     <ID>ComplexCondition:SplitSessionManager.kt$SplitSessionManager$reReads &lt; PANE_DISPLAY_REREADS &amp;&amp; existing != null &amp;&amp; existing.taskId != -1 &amp;&amp; existing.displayId &lt; DISPLAY_SPLIT</ID>
@@ -424,7 +424,7 @@
     <ID>SwallowedException:OpenRouterTtsBackendTest.kt$OpenRouterTtsBackendTest$e: IOException</ID>
     <ID>SwallowedException:RuleDraftValidator.kt$RuleDraftValidator$e: Exception</ID>
     <ID>SwallowedException:ScheduleTrigger.kt$ScheduleSpec.Companion$e: Exception</ID>
-    <ID>SwallowedException:SettingsScreen.kt$e: Exception</ID>
+    <ID>SwallowedException:SettingsWidgetDisplay.kt$e: Exception</ID>
     <ID>SwallowedException:SherpaTtsEngine.kt$SherpaTtsEngine$e: TimeoutException</ID>
     <ID>SwallowedException:SplitOverlayController.kt$SplitOverlayController$e: TimeoutCancellationException</ID>
     <ID>SwallowedException:SplitSessionManagerTest.kt$SplitSessionManagerTest$e: CancellationException</ID>
@@ -497,8 +497,8 @@
     <ID>TooGenericExceptionCaught:RuleEntity.kt$TriggerDef.Companion$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ScheduleTrigger.kt$ScheduleSpec.Companion$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ServiceStartWorker.kt$ServiceStartWorker$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:SettingsScreen.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SettingsViewModel.kt$SettingsViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SettingsWidgetDisplay.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SplitOverlayController.kt$SplitOverlayController$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SplitPillView.kt$SplitPillView$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SteeringWheelKeyService.kt$SteeringWheelKeyService$e: Exception</ID>
@@ -547,7 +547,6 @@
     <ID>TooManyFunctions:AppDatabase.kt$AppDatabase : RoomDatabase</ID>
     <ID>TooManyFunctions:AppModule.kt$AppModule</ID>
     <ID>TooManyFunctions:AutomationEngine.kt$AutomationEngine</ID>
-    <ID>TooManyFunctions:AutomationScreen.kt$com.bydmate.app.ui.automation.AutomationScreen.kt</ID>
     <ID>TooManyFunctions:AutomationViewModel.kt$AutomationViewModel : ViewModel</ID>
     <ID>TooManyFunctions:AutomationViewModel.kt$com.bydmate.app.ui.automation.AutomationViewModel.kt</ID>
     <ID>TooManyFunctions:BlindSpotController.kt$BlindSpotController</ID>
@@ -586,7 +585,6 @@
     <ID>TooManyFunctions:RuleDao.kt$RuleDao</ID>
     <ID>TooManyFunctions:SettingRows.kt$com.bydmate.app.ui.settings.SettingRows.kt</ID>
     <ID>TooManyFunctions:SettingsRepository.kt$SettingsRepository</ID>
-    <ID>TooManyFunctions:SettingsScreen.kt$com.bydmate.app.ui.settings.SettingsScreen.kt</ID>
     <ID>TooManyFunctions:SettingsViewModel.kt$SettingsViewModel : ViewModel</ID>
     <ID>TooManyFunctions:SherpaTtsEngine.kt$SherpaTtsEngine : TtsEngine</ID>
     <ID>TooManyFunctions:SherpaTtsEngine.kt$SherpaTtsEngine$Companion</ID>
@@ -669,12 +667,26 @@
     <ID>WildcardImport:AgentChatScreen.kt$import androidx.compose.runtime.*</ID>
     <ID>WildcardImport:AgentChatScreen.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:AppNavigation.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationActionControls.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationActionRow.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationCallNavControls.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationEditorDialog.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationJournalDialog.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationPickers.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationRuleList.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:AutomationScreen.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationShared.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:AutomationSplitControls.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:ChargesScreen.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:Components.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:DashboardScreen.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:OverlayNotificationManager.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:SettingsAppVoice.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:SettingsBatteryIntegrations.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:SettingsScreen.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:SettingsService.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:SettingsSplit.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:SettingsWidgetDisplay.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:TripDetailDialog.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:TripsScreen.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:UpdateDialog.kt$import com.bydmate.app.ui.theme.*</ID>
