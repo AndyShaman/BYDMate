@@ -231,6 +231,39 @@ class ClusterDisplayDiagTest {
         assertTrue(lines.all { it.length <= ClusterDisplayDiag.MAX_WM_LINE + 4 })
     }
 
+    /** `dumpsys activity activities` on Android 10: the plural header line precedes the blob. */
+    private val ACTIVITIES = """
+        Display #0 (activities from top to bottom):
+          Stack #4075:
+            * ActivityRecord{a1b2c3 u0 ru.yandex.yandexnavi/.MainActivity t4075}
+              packageName=ru.yandex.yandexnavi processName=ru.yandex.yandexnavi
+              mActivityComponent=ru.yandex.yandexnavi/.MainActivity
+              mLastReportedConfigurations:
+               mLastReportedConfiguration={1.0 ?mcc?mnc [ru_RU] ldltr sw360dp w960dp h360dp 160dpi lrg land finger qwerty/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1920, 720) mAppBounds=Rect(0, 0 - 1920, 720) mWindowingMode=freeform mDisplayWindowingMode=fullscreen mActivityType=standard} s.6}
+              resumed=true
+    """.trimIndent()
+
+    @Test
+    fun `nav task config reports the dpi the activity itself received`() {
+        val lines = ClusterDisplayDiag.taskConfigLines(ACTIVITIES, "ru.yandex.yandexnavi")
+        assertEquals(1, lines.size)
+        assertTrue(
+            "the component and its reported dpi must be on the line: ${lines[0]}",
+            lines[0].startsWith("ru.yandex.yandexnavi/.MainActivity dpi=160 raw=\""),
+        )
+    }
+
+    @Test
+    fun `nav task config survives the singular spelling and a missing dpi`() {
+        val singular = """
+              * ActivityRecord{a1b2c3 u0 ru.yandex.yandexnavi/.MainActivity t4075}
+                mLastReportedConfiguration={1.0 ?mcc?mnc [ru_RU] ldltr sw360dp land finger}
+        """.trimIndent()
+        val lines = ClusterDisplayDiag.taskConfigLines(singular, "ru.yandex.yandexnavi")
+        assertEquals(1, lines.size)
+        assertTrue("missing dpi must read as ?: ${lines[0]}", lines[0].contains(" dpi=? "))
+    }
+
     @Test
     fun `nav task config caps the number of records`() {
         val many = (1..5).joinToString("\n") { i ->
