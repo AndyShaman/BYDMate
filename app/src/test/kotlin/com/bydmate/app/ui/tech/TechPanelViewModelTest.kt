@@ -157,7 +157,7 @@ class TechPanelViewModelTest {
     ): TechPanelViewModel {
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } returns (
-            battery ?: BatteryState(null, null, null, null, null, autoserviceAvailable = false)
+            battery ?: BatteryState(null, null, null, null, autoserviceAvailable = false)
             )
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns avg
@@ -195,7 +195,7 @@ class TechPanelViewModelTest {
     fun `online flag follows the live connection flag`() = runTest {
         val vm = buildViewModel(
             battery = BatteryState(
-                socNow = 43f, voltage12v = 13.9f, sohPercent = 99f,
+                socNow = 43f, sohPercent = 99f,
                 lifetimeKm = 3802f, lifetimeKwh = 1240f, autoserviceAvailable = true,
             ),
         )
@@ -216,7 +216,7 @@ class TechPanelViewModelTest {
     fun `battery state read on open fills SoH, lifetime and the online flag`() = runTest {
         val vm = buildViewModel(
             battery = BatteryState(
-                socNow = 43f, voltage12v = 13.9f, sohPercent = 99f,
+                socNow = 43f, sohPercent = 99f,
                 lifetimeKm = 3802f, lifetimeKwh = 1240f, autoserviceAvailable = true,
             ),
             avg = AvgSoc(sinceCharge = 52, allTime = 58),

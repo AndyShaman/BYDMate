@@ -166,7 +166,7 @@ class AgentToolsRouteEnergyTest {
     @Test fun `vehicle_state includes battery_effective_capacity when soh in sanity range`() = runTest {
         every { gate.vehicleSnapshot() } returns AgentToolsReadTest.snapshot(soc = 50, totalElec = 1234.5)
         coEvery { battery.refresh() } returns BatteryState(
-            socNow = 50f, voltage12v = null, sohPercent = 85f,
+            socNow = 50f, sohPercent = 85f,
             lifetimeKm = null, lifetimeKwh = null, autoserviceAvailable = true,
         )
         coEvery { range.estimateDetailed(50, 1234.5) } returns RangeEstimate(

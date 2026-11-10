@@ -74,7 +74,6 @@ class BatteryStateRepositoryTest {
         assertEquals(91.0f, state.socNow!!, 0.01f)
         assertEquals(602.7f, state.lifetimeKwh!!, 0.01f)
         assertEquals(2091.0f, state.lifetimeKm!!, 0.01f)
-        assertEquals(14.0f, state.voltage12v!!, 0.01f)
         assertTrue(state.autoserviceAvailable)
     }
 
