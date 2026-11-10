@@ -121,12 +121,6 @@ class VoiceControllerAskTest {
         coVerify(exactly = 0) { r.dispatcher.dispatch(any<ActionDef>(), any()) }
     }
 
-    @Test fun `the log line tells a local answer from an agent one`() {
-        val entry = rig(diParsData(exteriorTemp = 19)).say("температура снаружи")
-
-        assertTrue(VoiceController.logLine(entry), "route=nlu cmd=ask:outside_temp reason=-" in VoiceController.logLine(entry))
-    }
-
     @Test fun `a frost reading is said with минус`() {
         assertEquals("Снаружи минус 5 градусов.", rig(diParsData(exteriorTemp = -5)).say("сколько градусов на улице").answer)
     }

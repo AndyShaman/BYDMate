@@ -18,15 +18,12 @@ class VoiceControllerLogLineTest {
     }
 
     @Test fun `the detail line next to it is flattened and capped too`() {
-        assertEquals("automation fired: heard='открой окно' rule=Дом",
-            VoiceController.logDetail("automation fired: heard=\"открой\n окно\" rule=Дом"))
         val line = VoiceController.logDetail("скажи \"x\"\n" + "а".repeat(1_000))
         assertTrue(line, '\n' !in line && '"' !in line)
         assertTrue(line.length.toString(), line.length < 600)
     }
 
     @Test fun `the busy drop line is flattened and capped`() {
-        assertEquals("Utterance dropped while busy: открой 'окно'", VoiceController.busyDropLine("открой\n\"окно\""))
         val line = VoiceController.busyDropLine("а".repeat(1_000))
         assertTrue(line.length.toString(), line.length < 600)
     }

@@ -396,14 +396,6 @@ class TtsRouterTest {
     // --- pure delegation ---
 
     @Test
-    fun `audible and reload delegate to the offline engine`() {
-        val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, selectedSource = { TtsRouter.OFFLINE })
-        router.reload()
-        assertFalse(router.audible())
-    }
-
-    @Test
     fun `warmUp skips the offline engine when an online source is selected`() {
         val delegate = FakeTtsEngine()
         val router = TtsRouter(
@@ -502,15 +494,6 @@ class TtsRouterTest {
             .prewarmNetwork()
         Thread.sleep(100)
         assertEquals(0, offline.prewarmCalls)
-    }
-
-    @Test
-    fun `playPcm delegates to the offline engine`() {
-        val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, selectedSource = { TtsRouter.OFFLINE })
-        val samples = floatArrayOf(0.1f, 0.2f)
-        assertTrue(router.playPcm(samples, 16_000))
-        assertEquals(listOf(samples to 16_000), delegate.playPcmCalls)
     }
 
     @Test

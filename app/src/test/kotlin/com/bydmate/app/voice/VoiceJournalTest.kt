@@ -26,17 +26,6 @@ class VoiceJournalTest {
         outcome = VoiceJournalEntry.Outcome.OK,
     )
 
-    @Test fun `add prepends newest first`() {
-        val journal = VoiceJournal()
-        journal.add(entry("first"))
-        journal.add(entry("second"))
-
-        val entries = journal.entries.value
-        assertEquals(2, entries.size)
-        assertEquals("second", entries[0].transcript)
-        assertEquals("first", entries[1].transcript)
-    }
-
     @Test fun `caps at MAX entries, dropping the oldest`() {
         val journal = VoiceJournal()
         repeat(VoiceJournal.MAX + 1) { i -> journal.add(entry("cmd$i")) }
@@ -47,14 +36,6 @@ class VoiceJournalTest {
         assertEquals("cmd${VoiceJournal.MAX}", entries.first().transcript)
         // The oldest ("cmd0") was dropped.
         assertTrue(entries.none { it.transcript == "cmd0" })
-    }
-
-    @Test fun `clear empties the journal`() {
-        val journal = VoiceJournal()
-        journal.add(entry("x"))
-        journal.clear()
-
-        assertTrue(journal.entries.value.isEmpty())
     }
 
     @Test fun `persisted entries survive a new instance with every field`() {

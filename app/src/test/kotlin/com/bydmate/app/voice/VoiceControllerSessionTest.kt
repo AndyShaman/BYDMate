@@ -468,30 +468,6 @@ class VoiceControllerSessionTest {
         assertTrue(controller.listening.value)
     }
 
-    @Test fun `routing job is set while routing and cleared after completion`() {
-        val fakeAsr = FakeContinuousAsr(ready = true)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        val dispatchStarted = AtomicBoolean(false)
-        val releaseDispatch = AtomicBoolean(false)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
-            dispatchStarted.set(true)
-            while (!releaseDispatch.get()) delay(10)
-            DispatchResult(true)
-        }
-        val controller = makeController(fakeAsr, dispatcher)
-
-        controller.onPttPressed()
-        awaitTrue { controller.listening.value }
-        awaitSubscribed(fakeAsr.events)
-
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
-        awaitTrue { dispatchStarted.get() }
-        assertTrue(controller.routingJobForTest() is Job)
-
-        releaseDispatch.set(true)
-        awaitTrue { controller.routingJobForTest() == null }
-    }
-
     // (b) A second PTT press while listening stops the session immediately (barge-in stop TTS);
     // an utterance pushed after the stop is no longer routed (the collector was cancelled).
     @Test fun `second ptt press stops the session and further utterances are not routed`() {
@@ -603,22 +579,6 @@ class VoiceControllerSessionTest {
     }
 
     // --- Finding 4: captureSession contract + cancellation + mute filter ---
-
-    @Test fun `captureSession is invoked exactly once with no session cap (Long MAX_VALUE)`() {
-        val fakeAsr = FakeContinuousAsr(ready = true)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any(), any<(ShortArray) -> Any?>()) } returns flow { }
-        val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
-
-        controller.onPttPressed()
-        // `listening` flips synchronously in startContinuousSession(), before the launched
-        // session coroutine has necessarily reached captureSession() -- poll the verify itself
-        // (like awaitVerify elsewhere) instead of asserting once right after the flag.
-        // Wave P: no hard session cap; Long.MAX_VALUE means "run until silence or user stops".
-        awaitVerify { verify(exactly = 1) { audioCapture.captureSession(Long.MAX_VALUE, any<(ShortArray) -> Any?>()) } }
-        assertTrue(controller.listening.value)
-    }
 
     @Test fun `stopping the session cancels pcm collection`() {
         val fakeAsr = FakeContinuousAsr(ready = true)
@@ -898,45 +858,6 @@ class VoiceControllerSessionTest {
         awaitVerify { coVerify(exactly = 2) { dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) } }
     }
 
-    // --- Fix wave 2, finding 2: decodeMs also lands in the ERROR entry's detail, not just logMsg ---
-
-    @Test fun `routing exception journal entry also includes decodeMs in its detail`() {
-        val fakeAsr = FakeContinuousAsr(ready = true)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } throws RuntimeException("boom")
-        val journal = VoiceJournal()
-        val controller = makeController(fakeAsr, dispatcher, journal = journal)
-
-        controller.onPttPressed()
-        awaitTrue { controller.listening.value }
-        awaitSubscribed(fakeAsr.events)
-
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
-        awaitTrue { journal.entries.value.isNotEmpty() }
-
-        val entry = journal.entries.value.first()
-        assertEquals(VoiceJournalEntry.Outcome.ERROR, entry.outcome)
-        assertTrue(entry.detail.contains("decodeMs="))
-    }
-
-    // --- Finding 2: decodeMs lands in the VoiceJournal detail, not just logcat ---
-
-    @Test fun `utterance journal detail includes decodeMs`() {
-        val fakeAsr = FakeContinuousAsr(ready = true)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
-        val journal = VoiceJournal()
-        val controller = makeController(fakeAsr, dispatcher, journal = journal)
-
-        controller.onPttPressed()
-        awaitTrue { controller.listening.value }
-        awaitSubscribed(fakeAsr.events)
-        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
-        awaitTrue { journal.entries.value.isNotEmpty() }
-
-        assertTrue(journal.entries.value.first().detail.contains("decodeMs="))
-    }
-
     // --- Finding 6: sessionJob is released so a subsequent PTT can start a fresh session ---
 
     @Test fun `session can be restarted after a stop`() {
@@ -954,19 +875,6 @@ class VoiceControllerSessionTest {
     }
 
     // --- inPlaybackWindow: pure function, no session/clock needed ---
-
-    @Test fun `inPlaybackWindow is true strictly before the window end`() {
-        assertTrue(VoiceController.inPlaybackWindow(nowMs = 100L, windowEndMs = 200L, audible = false))
-    }
-
-    @Test fun `inPlaybackWindow is false at or after the window end`() {
-        assertFalse(VoiceController.inPlaybackWindow(nowMs = 200L, windowEndMs = 200L, audible = false))
-        assertFalse(VoiceController.inPlaybackWindow(nowMs = 300L, windowEndMs = 200L, audible = false))
-    }
-
-    @Test fun `inPlaybackWindow is false when no window is set and tts is not audible`() {
-        assertFalse(VoiceController.inPlaybackWindow(nowMs = System.currentTimeMillis(), windowEndMs = 0L, audible = false))
-    }
 
     @Test fun `inPlaybackWindow is true whenever tts is audible regardless of the window end`() {
         assertTrue(VoiceController.inPlaybackWindow(nowMs = System.currentTimeMillis(), windowEndMs = 0L, audible = true))

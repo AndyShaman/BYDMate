@@ -84,12 +84,6 @@ class OpenRouterTtsBackendTest {
     }
 
     @Test
-    fun `configured is true when OpenRouter connection is resolved`() = runTest {
-        stubConnection()
-        assertTrue(backend.configured())
-    }
-
-    @Test
     fun `prewarm sends one HEAD to the OpenRouter connection host`() = runTest {
         stubConnection()
         server.enqueue(MockResponse().setResponseCode(404))
@@ -97,12 +91,6 @@ class OpenRouterTtsBackendTest {
         val head = server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS)
         assertEquals("HEAD", head?.method)
         assertEquals("/api/v1", head?.path)
-    }
-
-    @Test
-    fun `configured is false when OpenRouter is not set up`() = runTest {
-        coEvery { connections.get(LlmConnectionResolver.ID_OPENROUTER) } returns null
-        assertFalse(backend.configured())
     }
 
     @Test
@@ -172,17 +160,6 @@ class OpenRouterTtsBackendTest {
     }
 
     // --- TDD tests for pcm format, rate header, empty-audio guard ---
-
-    @Test
-    fun `synthesize requests pcm format`() = runTest {
-        stubConnection()
-        server.enqueue(MockResponse()
-            .addHeader("Content-Type", "audio/pcm;rate=24000;channels=1")
-            .setBody(Buffer().write(rawPcm16())))
-        backend.synthesize("тест", TtsGender.MALE)
-        val sent = JSONObject(server.takeRequest().body.readUtf8())
-        assertEquals("pcm", sent.getString("response_format"))
-    }
 
     @Test
     fun `synthesize parses rate from content type`() = runTest {

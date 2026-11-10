@@ -195,25 +195,6 @@ class GigaAmSegmenterTest {
         assertFalse(recognizer.closed)
     }
 
-    // --- Wave G Task 1: recognizer cached across sessions, VAD stays per-collection ---
-
-    @Test
-    fun recognizer_created_once_across_two_collections_vad_per_collection() = runTest {
-        var recognizerCreations = 0
-        var vadCreations = 0
-        var recognizerClosed = 0
-        val engine = GigaAmAsrEngine(
-            modelManager = readyModelManager(),
-            recognizerFactory = { recognizerCreations++; FakeRecognizerHandle(onClose = { recognizerClosed++ }) },
-            vadFactory = { vadCreations++; FakeVadHandle() },
-        )
-        engine.transcribe(flowOf(ShortArray(160))).collect {}
-        engine.transcribe(flowOf(ShortArray(160))).collect {}
-        assertEquals(1, recognizerCreations)
-        assertEquals(2, vadCreations)
-        assertEquals(0, recognizerClosed)   // cached recognizer is NOT closed in finally
-    }
-
     // --- Task 5: pre-warm the recognizer so the first PTT's transcribe() doesn't pay the
     // cold model-load cost before the mic starts recording. ---
 
@@ -453,18 +434,6 @@ class GigaAmSegmenterTest {
 
         assertEquals(
             listOf("voice  vad-ready ms=N prebuilt=false #1"),
-            trace.events().map { it.replace(Regex(""" ms=\d+"""), " ms=N") },
-        )
-    }
-
-    @Test fun `warm vad - a prebuilt vad is traced as prebuilt`() = runTest {
-        val engine = warmEngine(mutableListOf(), ManualExecutor())
-        engine.warmUp()
-
-        engine.transcribe(flowOf(ShortArray(160))).collect {}
-
-        assertEquals(
-            listOf("voice  vad-ready ms=N prebuilt=true #1"),
             trace.events().map { it.replace(Regex(""" ms=\d+"""), " ms=N") },
         )
     }

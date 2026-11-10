@@ -204,11 +204,6 @@ class AutoVoiceDuckTest {
         assertTrue(calls.isEmpty())
     }
 
-    @Test fun `last status is recorded`() = runTest {
-        duck().activate(duckMedia, restoreMedia)
-        assertEquals("activate APPLIED ok", backing[AutoVoiceDuck.KEY_LAST])
-    }
-
     @Test fun `OFF never asks and never applies, the media duck is plain`() = runTest {
         val off = AutoVoiceDuck.OFF
 

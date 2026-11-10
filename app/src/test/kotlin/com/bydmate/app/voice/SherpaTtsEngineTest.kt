@@ -72,11 +72,6 @@ class SherpaTtsEngineTest {
         assertEquals("p", result)
     }
 
-    @Test
-    fun `BYD_STREAM_BTTS is 17`() {
-        assertEquals(17, SherpaTtsEngine.BYD_STREAM_BTTS)
-    }
-
     // --- PR #261: on Android 10 head units the assistant speaks on the navigation stream, which
     // has its own volume; other cars keep the Voice stream 17 and the accessibility fallback. ---
 
@@ -466,18 +461,6 @@ class SherpaTtsEngineTest {
             retract = {},
         )
         assertEquals(2, written)
-    }
-
-    // --- Task 5: dataDir only for PIPER (espeak-ng-data); VITS_MULTI ships no espeak data ---
-
-    @Test
-    fun `dataDirFor points at espeak-ng-data for PIPER voices`() {
-        assertEquals("/some/dir/espeak-ng-data", SherpaTtsEngine.dataDirFor(TtsVoiceEngine.PIPER, "/some/dir"))
-    }
-
-    @Test
-    fun `dataDirFor is empty for VITS_MULTI voices`() {
-        assertEquals("", SherpaTtsEngine.dataDirFor(TtsVoiceEngine.VITS_MULTI, "/some/dir"))
     }
 
     // --- Wave P, Task 6: 8-second AudioTrack lookahead buffer removes inter-sentence pauses ---

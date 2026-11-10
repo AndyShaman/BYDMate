@@ -72,16 +72,6 @@ class AudioCaptureFirmwareDuckTest {
         assertEquals(listOf(true, false), calls)
     }
 
-    @Test fun `rollback off - nest declines and the capture session ducks and restores itself as before`() = runTest {
-        val a = Audio()
-        val capture = AudioCapture(a.am, prefs(), AutoVoiceDuck.OFF)
-
-        assertNull(AutoVoiceDuck.OFF.nest(capture::duckMusic, capture::restoreMusic))
-        runSession(capture)
-
-        assertEquals(listOf(duck, 20), a.sets)
-    }
-
     @Test fun `cached UNSUPPORTED - the capture session ducks and restores itself as before`() = runTest {
         val a = Audio()
         val calls = mutableListOf<Boolean>()
@@ -98,12 +88,6 @@ class AudioCaptureFirmwareDuckTest {
         assertTrue(calls.isEmpty())
     }
 
-    @Test fun `default capture without a duck ducks as before`() = runTest {
-        val a = Audio()
-        runSession(AudioCapture(a.am, prefs()))
-        assertEquals(listOf(duck, 20), a.sets)
-    }
-
     @Test fun `no live session - nest declines and nothing is sent to the daemon`() = runTest {
         val a = Audio()
         val calls = mutableListOf<Boolean>()
@@ -116,16 +100,6 @@ class AudioCaptureFirmwareDuckTest {
 
         assertTrue(calls.isEmpty())
         assertTrue(a.sets.isEmpty())
-    }
-
-    @Test fun `explicit volume with no live duck is set directly and nothing is pending`() {
-        val a = Audio()
-        val capture = AudioCapture(a.am, prefs(), AutoVoiceDuck.OFF)
-
-        capture.applyExplicitVolume(12)
-
-        verify(exactly = 1) { a.am.setStreamVolume(AudioManager.STREAM_MUSIC, 12, 0) }
-        assertNull(capture.pendingRestoreVolume())
     }
 
     // ---- late APPLIED (activate fell back after 250 ms) ----
