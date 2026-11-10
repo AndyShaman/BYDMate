@@ -52,8 +52,8 @@ fun readSteeringKeyOwners(context: Context): SteeringKeyOwners {
     return SteeringKeyOwners(
         projectionEnabled = clusterPrefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false),
         projectionKey = clusterPrefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE),
-        voiceEnabled = voicePrefs.getBoolean("voice_enabled", false),
-        voiceKey = voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE),
+        voiceEnabled = voicePrefs.getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false),
+        voiceKey = voicePrefs.getInt(SettingsRepository.KEY_VOICE_KEYCODE, DEFAULT_VOICE_KEYCODE),
         voiceCompanions = voiceCompanionsFromCsv(voicePrefs.getString(SettingsRepository.KEY_VOICE_COMPANIONS, null)),
         knobEnabled = clusterPrefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false),
         splitEnabled = split.isFeatureEnabled(),
