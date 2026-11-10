@@ -226,6 +226,20 @@ class HelperClientBinderTest {
             }
         }
 
+    /** TC-12: getTaskState returns SplitTaskState for a running task (status 0, taskId > 0). */
+    @Test
+    fun `getTaskState returns SplitTaskState when task is running`() = runBlocking {
+        val client = clientWith(taskStateFake(0, 42, 1, 0, 0, 960, 600))
+        val result = client.getTaskState("com.example.app")
+        assertNotNull(result)
+        assertEquals(42, result!!.taskId)
+        assertEquals(1, result.windowingMode)
+        assertEquals(0, result.left)
+        assertEquals(0, result.top)
+        assertEquals(960, result.right)
+        assertEquals(600, result.bottom)
+    }
+
     /** TC-13: getTaskState returns SplitTaskState with taskId -1 when no task is running (status 0). */
     @Test
     fun `getTaskState returns SplitTaskState with taskId -1 when no task running`() = runBlocking {
@@ -271,6 +285,12 @@ class HelperClientBinderTest {
         assertNull(clientWith(splitSupportedFake(-1, 0)).isAppSplitSupported("com.example.nav"))
     }
 
+    /** TC-19: isAppSplitSupported returns null when binder is null (daemon unreachable). */
+    @Test
+    fun `isAppSplitSupported returns null when binder is null`() = runBlocking {
+        assertNull(clientWith(null).isAppSplitSupported("com.example.nav"))
+    }
+
     /** TC-20: isAppSplitSupported returns null when transact returns false (BYD extension absent on this ROM). */
     @Test
     fun `isAppSplitSupported returns null when transact is rejected`() = runBlocking {
@@ -307,6 +327,12 @@ class HelperClientBinderTest {
     @Test
     fun `daemonVersion returns null when transact is rejected`() = runBlocking {
         assertNull(clientWith(rejectingFake).daemonVersion())
+    }
+
+    /** TC-24: daemonVersion() returns null when binder is null (daemon not running). */
+    @Test
+    fun `daemonVersion returns null when binder is null`() = runBlocking {
+        assertNull(clientWith(null).daemonVersion())
     }
 
     // ---------------------------------------------------------------------------

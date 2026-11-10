@@ -87,6 +87,11 @@ class HelperClientSplit37Test {
         assertNull(clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK)).split37Enter())
     }
 
+    @Test
+    fun `split37Enter returns null when the daemon rejects the verb`() = runBlocking {
+        assertNull(clientWith(rejectingFake).split37Enter())
+    }
+
     // --- split37AreaInfo ---
 
     @Test
@@ -126,6 +131,11 @@ class HelperClientSplit37Test {
         val short = areaInfoReply().copyOf(12)
         assertNull(clientWith(replyFake(*short)).split37AreaInfo())
         assertNull(clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK)).split37AreaInfo())
+    }
+
+    @Test
+    fun `split37AreaInfo returns null when the daemon rejects the verb`() = runBlocking {
+        assertNull(clientWith(rejectingFake).split37AreaInfo())
     }
 
     // --- split37MoveTask ---
