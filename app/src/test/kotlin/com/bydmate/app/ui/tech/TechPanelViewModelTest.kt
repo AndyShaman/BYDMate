@@ -464,6 +464,23 @@ class TechPanelViewModelTest {
         assertFalse("the hint is retired once a drag has happened", vm.uiState.value.showOrderHint)
     }
 
+    /** A version that adds a card must not drop it just because the stored order predates it;
+     *  an id that no longer exists must not crash the screen either. */
+    @Test
+    fun `cards missing from the saved order are appended, unknown ids ignored`() = runTest {
+        savedOrder = "tyres,ghost_card,motors"
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                TechCard.CAR_STATE, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.DIAGNOSTICS,
+            ),
+            vm.uiState.value.cardOrder,
+        )
+    }
+
     @Test
     fun `a drag persists the new order and retires the hint`() = runTest {
         val vm = buildViewModel()
