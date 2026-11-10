@@ -5,6 +5,7 @@ import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.autoservice.ChargingReading
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.ChargeSummary
+import com.bydmate.app.data.local.dao.FakeSettingsDao
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.nativestack.ParsReader
@@ -94,23 +95,6 @@ class AutoserviceChargingDetectorTest {
         override suspend fun getByChargeId(chargeId: Long): List<ChargePointEntity> = emptyList()
         override suspend fun getCount(): Int = 0
         override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
-    }
-
-    private class FakeSettingsDao(initial: Map<String, String> = emptyMap()) :
-        com.bydmate.app.data.local.dao.SettingsDao {
-        private val map = mutableMapOf<String, String>().also { it.putAll(initial) }
-        override suspend fun get(key: String): String? = map[key]
-        override suspend fun getMany(keys: List<String>): List<com.bydmate.app.data.local.entity.SettingEntity> =
-            keys.mapNotNull { k -> map[k]?.let { com.bydmate.app.data.local.entity.SettingEntity(k, it) } }
-        override fun observe(key: String): Flow<String?> = flowOf(map[key])
-        override suspend fun set(entity: com.bydmate.app.data.local.entity.SettingEntity) {
-            map[entity.key] = entity.value ?: ""
-        }
-        override suspend fun setAll(settings: List<com.bydmate.app.data.local.entity.SettingEntity>) {
-            settings.forEach { set(it) }
-        }
-        override fun getAll(): Flow<List<com.bydmate.app.data.local.entity.SettingEntity>> =
-            flowOf(emptyList())
     }
 
     private class FakeParsReader(

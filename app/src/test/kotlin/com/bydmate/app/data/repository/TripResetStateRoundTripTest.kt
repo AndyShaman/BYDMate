@@ -1,12 +1,9 @@
 package com.bydmate.app.data.repository
 
-import com.bydmate.app.data.local.entity.SettingEntity
-import com.bydmate.app.data.local.dao.SettingsDao
+import com.bydmate.app.data.local.dao.FakeSettingsDao
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.trips.TripResetState
 import io.mockk.mockk
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -15,17 +12,6 @@ import org.junit.Test
 // Verifies that all 5 keys of TripResetState survive a get/set round-trip through
 // SettingsRepository (including the new excludeStraddling / trip${n}_corr_excl key).
 class TripResetStateRoundTripTest {
-
-    private class FakeSettingsDao : SettingsDao {
-        val map = mutableMapOf<String, String>()
-        override suspend fun get(key: String): String? = map[key]
-        override suspend fun getMany(keys: List<String>): List<SettingEntity> =
-            keys.mapNotNull { k -> map[k]?.let { SettingEntity(k, it) } }
-        override fun observe(key: String): Flow<String?> = flowOf(map[key])
-        override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
-        override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
-    }
 
     private fun repo() = SettingsRepository(FakeSettingsDao(), mockk<LocalePreferences>(relaxed = true))
 
