@@ -2,7 +2,6 @@ package com.bydmate.app.camera
 
 import android.content.Context
 import android.graphics.SurfaceTexture
-import android.os.Looper
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
@@ -30,7 +29,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.time.Duration
 
@@ -90,11 +88,7 @@ class BlindSpotControllerOnDemandTest {
 
     private fun cameraEvents() = events().filter { it.startsWith("camera open ") || it.startsWith("camera close") }
 
-    private fun idle(step: Duration) {
-        shadowOf(Looper.getMainLooper()).idleFor(step)
-        Thread.sleep(2)
-        shadowOf(Looper.getMainLooper()).idle()
-    }
+    private fun idle(step: Duration) = controller.idleWithCameraThread(step)
 
     /** Ticks the loop, handing every attached window the surface and the frames Robolectric never
      *  draws; frames go only to the windows whose attach index [framesTo] accepts. */

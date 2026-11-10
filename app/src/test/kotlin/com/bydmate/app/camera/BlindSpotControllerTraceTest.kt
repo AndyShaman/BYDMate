@@ -1,7 +1,6 @@
 package com.bydmate.app.camera
 
 import android.content.Context
-import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.cluster.ClusterJournal
 import com.bydmate.app.data.camera.CameraStateMonitor
@@ -26,7 +25,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.time.Duration
 
@@ -75,12 +73,8 @@ class BlindSpotControllerTraceTest {
         }
     )
 
-    private fun idle(step: Duration) {
-        shadowOf(Looper.getMainLooper()).idleFor(step)
-        // The vendor calls run on the camera thread; give it a moment to post back to Main.
-        Thread.sleep(2)
-        shadowOf(Looper.getMainLooper()).idle()
-    }
+    // The vendor calls run on the camera thread; wait for them to post back to Main.
+    private fun idle(step: Duration) = controller.idleWithCameraThread(step)
 
     // --- main switch ---
 
