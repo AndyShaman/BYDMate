@@ -7,7 +7,6 @@ import java.io.File
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
-import java.security.MessageDigest
 import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
@@ -100,18 +99,6 @@ class AdbKeyStore @Inject constructor(
         certFile.writeBytes(cert.encoded)
         cachedCert = cert
         return cert
-    }
-
-    /**
-     * SHA-1 hex (uppercase) of the encoded public key bytes. For diagnostic
-     * logs only — NOT the same fingerprint format the ADB daemon shows in the
-     * "Allow USB debugging?" dialog (that one is computed from the 524-byte
-     * ADB pubkey blob, not X.509).
-     */
-    fun getFingerprint(): String {
-        val pair = loadOrGenerate()
-        val digest = MessageDigest.getInstance("SHA-1").digest(pair.public.encoded)
-        return digest.joinToString("") { "%02X".format(it) }
     }
 
     private companion object {

@@ -76,17 +76,4 @@ class AdbKeyStoreTest {
         // The new key is different from the original (regeneration, not recovery).
         assertTrue(!first.public.encoded.contentEquals(second.public.encoded))
     }
-
-    @Test
-    fun `getFingerprint isStable across instances`() {
-        val store1 = AdbKeyStore(context)
-        val fp1 = store1.getFingerprint()
-
-        val store2 = AdbKeyStore(context)
-        val fp2 = store2.getFingerprint()
-
-        assertEquals(fp1, fp2)
-        // SHA-1 is 20 bytes → 40 hex chars
-        assertEquals(40, fp1.length)
-    }
 }
