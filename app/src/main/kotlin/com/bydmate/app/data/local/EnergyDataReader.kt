@@ -62,17 +62,17 @@ open class EnergyDataReader @Inject constructor(
         val dir = energyDataDir()
         if (!dir.exists()) return false
 
-        val sourceDb = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return false
+        val sourceDb = findSourceDb(dir) ?: return false
         // WAL-aware (AC-04): a live DB may keep new trips wal-only for a long time —
         // the main file alone can read as "unchanged". Same formula as sourceFingerprint().
-        val wal = File(dir, sourceDb.name + "-wal")
+        val (modified, size) = fingerprintOf(dir, sourceDb)
 
         val storedModified = prefs.getLong("lastModified", 0L)
         val storedSize = prefs.getLong("fileSize", 0L)
         val storedPath = prefs.getString("filePath", "") ?: ""
 
-        return (sourceDb.lastModified() + wal.lastModified()) != storedModified ||
-            (sourceDb.length() + wal.length()) != storedSize ||
+        return modified != storedModified ||
+            size != storedSize ||
             sourceDb.absolutePath != storedPath
     }
 
@@ -80,11 +80,11 @@ open class EnergyDataReader @Inject constructor(
     fun markSourceProcessed(context: Context) {
         val dir = energyDataDir()
         if (!dir.exists()) return
-        val sourceDb = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return
-        val wal = File(dir, sourceDb.name + "-wal")
+        val sourceDb = findSourceDb(dir) ?: return
+        val (modified, size) = fingerprintOf(dir, sourceDb)
         context.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE).edit()
-            .putLong("lastModified", sourceDb.lastModified() + wal.lastModified())
-            .putLong("fileSize", sourceDb.length() + wal.length())
+            .putLong("lastModified", modified)
+            .putLong("fileSize", size)
             .putString("filePath", sourceDb.absolutePath)
             .apply()
     }
@@ -105,8 +105,7 @@ open class EnergyDataReader @Inject constructor(
             return@withContext emptyList()
         }
 
-        val sourceDb = findDbViaListFiles(energyDir)
-            ?: findDbViaKnownNames(energyDir)
+        val sourceDb = findSourceDb(energyDir)
             ?: run {
                 Log.i(TAG, "readTripsSince: no .db files in ${energyDir.path} (Song / non-Leopard?) — empty")
                 return@withContext emptyList()
@@ -150,8 +149,7 @@ open class EnergyDataReader @Inject constructor(
             throw EnergyDataException("Директория energydata не найдена: ${energyDir.path}")
         }
 
-        val sourceDb = findDbViaListFiles(energyDir)
-            ?: findDbViaKnownNames(energyDir)
+        val sourceDb = findSourceDb(energyDir)
             ?: run {
                 Log.w(TAG, "readTrips: no .db files in ${energyDir.path} — throwing")
                 throw EnergyDataException("Не найдены файлы БД в ${energyDir.path}")
@@ -175,7 +173,7 @@ open class EnergyDataReader @Inject constructor(
     fun isAvailable(): Boolean {
         val dir = energyDataDir()
         if (!dir.exists() || !dir.isDirectory) return false
-        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return false
+        val db = findSourceDb(dir) ?: return false
         return db.canRead() && db.length() >= 16
     }
 
@@ -190,9 +188,8 @@ open class EnergyDataReader @Inject constructor(
     fun sourceFingerprint(): Pair<Long, Long>? {
         val dir = energyDataDir()
         if (!dir.exists() || !dir.isDirectory) return null
-        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return null
-        val wal = File(dir, db.name + "-wal")
-        return (db.lastModified() + wal.lastModified()) to (db.length() + wal.length())
+        val db = findSourceDb(dir) ?: return null
+        return fingerprintOf(dir, db)
     }
 
     /**
@@ -210,9 +207,17 @@ open class EnergyDataReader @Inject constructor(
     fun sourceLastModifiedMs(): Long? {
         val dir = energyDataDir()
         if (!dir.exists() || !dir.isDirectory) return null
-        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return null
+        val db = findSourceDb(dir) ?: return null
         val wal = File(dir, db.name + "-wal")
         return maxOf(db.lastModified(), wal.lastModified()).takeIf { it > 0L }
+    }
+
+    private fun findSourceDb(dir: File): File? = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir)
+
+    /** (mtime sum, length sum) of [db] and its -wal sidecar; an absent -wal adds zeros. */
+    private fun fingerprintOf(dir: File, db: File): Pair<Long, Long> {
+        val wal = File(dir, db.name + "-wal")
+        return (db.lastModified() + wal.lastModified()) to (db.length() + wal.length())
     }
 
     private fun findDbViaListFiles(dir: File): File? {
