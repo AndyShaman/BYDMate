@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.settings
 
 import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
+import com.bydmate.app.data.nativestack.VehicleKindDetector
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.BatteryPreheatChannel
 import com.bydmate.app.data.vehicle.WriteAllowlist
@@ -15,7 +16,7 @@ import com.bydmate.app.split.readSystemProperty
 internal object BatteryPreheatDiagnostics {
 
     private const val DEV = WriteAllowlist.BATTERY_PREHEAT_DEV
-    private const val CAR_DEV = WriteAllowlist.HEV_MILEAGE_DEV
+    private const val CAR_DEV = VehicleKindDetector.DEV
 
     /** Printed label to (dev, fid), all tx=5, in print order. */
     private val FIDS: List<Pair<String, Pair<Int, Int>>> = listOf(
@@ -24,8 +25,8 @@ internal object BatteryPreheatDiagnostics {
         "status" to (DEV to WriteAllowlist.BATTERY_PREHEAT_STATUS_FID),     // 1 = heating, 2 = finished
         "gun" to (DEV to WriteAllowlist.CHARGE_GUN_STATE_FID),              // 2, 3, 4 = connected
         "heat_power" to (DEV to WriteAllowlist.BATTERY_HEATING_POWER_FID),  // raw
-        "hev" to (CAR_DEV to WriteAllowlist.HEV_MILEAGE_FID),               // 1048575 = a pure EV
-        "fuel" to (CAR_DEV to WriteAllowlist.FUEL_PERCENT_FID),             // raw
+        "hev" to (CAR_DEV to VehicleKindDetector.MILEAGE_HEV_FID),          // 1048575 = a pure EV
+        "fuel" to (CAR_DEV to VehicleKindDetector.FUEL_PERCENT_FID),        // raw
     )
 
     fun batchItems(): List<BatchReadItem> = FIDS.map { (_, address) -> BatchReadItem(TX_GET_INT, address.first, address.second) }

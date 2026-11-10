@@ -3,6 +3,7 @@ package com.bydmate.app.data.vehicle
 import android.util.Log
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.nativestack.FidAddresses
+import com.bydmate.app.data.nativestack.VehicleKindDetector
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.split.readSystemProperty
@@ -171,8 +172,8 @@ class BatteryPreheatChannel(
      * "0" fuel) are logged only.
      */
     private suspend fun notAnEv(line: StringBuilder): Outcome? {
-        val hev = read(WriteAllowlist.HEV_MILEAGE_DEV, WriteAllowlist.HEV_MILEAGE_FID)
-        val fuel = read(WriteAllowlist.HEV_MILEAGE_DEV, WriteAllowlist.FUEL_PERCENT_FID)
+        val hev = read(VehicleKindDetector.DEV, VehicleKindDetector.MILEAGE_HEV_FID)
+        val fuel = read(VehicleKindDetector.DEV, VehicleKindDetector.FUEL_PERCENT_FID)
         line.append(" hev=${render(hev)} fuel=${render(fuel)} type=${systemProperty(ENERGY_TYPE_PROP) ?: "err"}")
         return when {
             hev == HEV_MILEAGE_ABSENT -> null
