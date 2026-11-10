@@ -412,7 +412,7 @@ class HudWayChannels(
         private const val MAX_REST_MILEAGE_M = 4_294_967_294L
         /** [sdkOff]: the daemon answers no SDK call at all. */
         private const val SDK_ALL = 0
-        /** rc slot of a gateway call that threw instead of answering. */
+        /** rc of a gateway that is not bound. */
         private const val UNBOUND = -1
 
         /** OpenBYD writes its icon id into TURN_KIND as is; ours is the same numbering (1 = left)
