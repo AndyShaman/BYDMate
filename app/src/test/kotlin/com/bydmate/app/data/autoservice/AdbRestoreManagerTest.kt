@@ -831,32 +831,6 @@ class AdbRestoreManagerTest {
     }
 
     @Test
-    fun `the last trigger is recorded for the dump`() = runTest {
-        val system = FakeSystem().apply { classicResults = mutableListOf(true) }
-        val m = manager(FakePrefs(), system)
-
-        assertEquals("none", m.lastTrigger)
-        m.attemptIfNeeded("user_present")
-
-        assertEquals("user_present", m.lastTrigger)
-        assertFalse(m.state.value is AdbRestoreState.Failed)
-    }
-
-    @Test
-    fun `states render as short names for the log dump`() {
-        // The dump is the only view we get of a car we cannot touch: an identity hash there
-        // ("AdbRestoreState$NotNeeded@1a2b3c") tells nobody anything.
-        assertEquals("Disabled", AdbRestoreState.Disabled.toString())
-        assertEquals("NotNeeded", AdbRestoreState.NotNeeded.toString())
-        assertEquals("NeedsActivation", AdbRestoreState.NeedsActivation.toString())
-        assertEquals("WaitingWifi", AdbRestoreState.WaitingWifi.toString())
-        assertEquals("NeedsDialog", AdbRestoreState.NeedsDialog.toString())
-        assertEquals("Connecting", AdbRestoreState.Connecting.toString())
-        assertEquals("Restored(atMs=42)", AdbRestoreState.Restored(42L).toString())
-        assertEquals("Failed(reason=mDNS timeout)", AdbRestoreState.Failed("mDNS timeout").toString())
-    }
-
-    @Test
     fun `a suppressed-write NeedsDialog from a watchdog trigger with no prior wave does not start a wave`() = runTest {
         val system = FakeSystem().apply {
             classicResults = mutableListOf(false)

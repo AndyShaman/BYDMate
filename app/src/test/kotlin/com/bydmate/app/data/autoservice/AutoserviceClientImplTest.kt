@@ -105,7 +105,7 @@ class AutoserviceClientImplTest {
         // SoH (1145045032) is an INT fid (tx=5) — int 100 = 0x64.
         // LIFETIME_MILEAGE (1246765072) is an INT fid (tx=5) returned ×10 — 21165 raw → 2116.5 km.
         // SOC, LIFETIME_KWH, OTA_12V are FLOAT fids (tx=7).
-        // dev=1001 for bodywork (12V), dev=1014 for statistic.
+        // dev=1001 for bodywork (12V; the earlier 1003 does not exist), dev=1014 for statistic.
         val adb = FakeAdb(responses = mapOf(
             "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}" to parcelInt(100),
             "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_SOC}" to parcelFloat(0x42B60000.toInt()),  // 91f
@@ -151,6 +151,7 @@ class AutoserviceClientImplTest {
 
     @Test
     fun `readChargingSnapshot aggregates gun_state and type at dev 1009`() = runTest {
+        // 1009 = charging (catalog 2026-04-25); the earlier 1005 is the power MCU and answered sentinels.
         val adb = FakeAdb(responses = mapOf(
             "service call autoservice 5 i32 1009 i32 ${FidRegistry.FID_GUN_CONNECT_STATE}" to parcelInt(2),
             "service call autoservice 5 i32 1009 i32 ${FidRegistry.FID_CHARGING_TYPE}" to parcelInt(2),

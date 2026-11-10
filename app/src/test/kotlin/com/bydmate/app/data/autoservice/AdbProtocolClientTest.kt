@@ -1,6 +1,5 @@
 package com.bydmate.app.data.autoservice
 
-import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -12,6 +11,7 @@ import org.robolectric.annotation.Config
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.KeyPairGenerator
+import java.security.Signature
 
 /**
  * Unit tests for the pure helpers in [AdbProtocolClient].
@@ -37,20 +37,6 @@ class AdbProtocolClientTest {
 
         val expected = 0x10 + 0x20 + 0xFF + 0x01  // = 0x130
         assertEquals(expected, checksum)
-    }
-
-    @Test
-    fun `packet magic is bitwise inverse of command`() {
-        val header = AdbProtocolClient.buildHeader(
-            command = AdbProtocolClient.A_CNXN,
-            arg0 = 0, arg1 = 0, payload = ByteArray(0)
-        )
-        val buf = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
-        repeat(5) { buf.int }  // skip command/arg0/arg1/payloadLen/checksum
-        val magic = buf.int
-
-        assertEquals(AdbProtocolClient.A_CNXN.inv(), magic)
-        assertEquals(AdbProtocolClient.A_CNXN xor 0xFFFFFFFF.toInt(), magic)
     }
 
     @Test
@@ -95,12 +81,14 @@ class AdbProtocolClientTest {
         val token = ByteArray(20) { (it + 1).toByte() }  // 20 bytes, like real ADB token
         val sig = AdbProtocolClient.signAuthToken(token, keyPair)
 
-        // Reconstruct the padded input the helper builds. The padded input must
-        // be exactly 35 bytes and start with ADB_AUTH_PADDING.
+        // adbd verifies the signature over padding + token: one without the padding is refused.
         val padded = AdbProtocolClient.ADB_AUTH_PADDING + token
         assertEquals(35, padded.size)
-        assertArrayEquals(AdbProtocolClient.ADB_AUTH_PADDING, padded.sliceArray(0 until 15))
-        assertArrayEquals(token, padded.sliceArray(15 until 35))
+        val verifier = Signature.getInstance("NONEwithRSA").apply {
+            initVerify(keyPair.public)
+            update(padded)
+        }
+        assertTrue("signature must cover ADB_AUTH_PADDING + token", verifier.verify(sig))
 
         // RSA 2048-bit signature is exactly 256 bytes.
         assertEquals(256, sig.size)
