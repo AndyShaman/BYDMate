@@ -1,5 +1,6 @@
 package com.bydmate.app.hud
 
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.navdata.NavGuidance
 import com.bydmate.app.navdata.NavGuidanceHub
 import org.junit.Assert.assertArrayEquals
@@ -8,6 +9,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -26,6 +28,8 @@ class HudPushLoopTest {
             return nextRc
         }
     }
+
+    @get:Rule val trace = TraceRecorder()
 
     @Before fun reset() = NavGuidanceHub.reset()
 
@@ -206,4 +210,22 @@ class HudPushLoopTest {
         assertEquals("ул. Ленина", loop.runningLine(NavGuidanceHub.snapshot(1000L)))
     }
 
+    // Users post these logs in public: the trace gets the street's script class and length,
+    // one line per change of class, and never the street itself.
+    @Test fun `the frame street's script class is traced when it changes, never the street`() {
+        val loop = HudPushLoop(FakeSink(), nowMsProvider = { 1000L })
+        val streets = listOf("ул. Ленина", "ул. Ленина", "пр. Победителей", "长安街")
+        for (road in streets) {
+            NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = road), NavGuidanceHub.Source.A11Y, nowMs = 1000L)
+            loop.tick(wasActive = true)
+        }
+        val events = trace.events()
+        val roads = events.filter { it.contains(" road ") }
+        assertEquals(roads.toString(), 2, roads.size)       // the same class again adds no line
+        assertTrue(roads[0], roads[0].contains("script=cyrillic len=10"))
+        assertTrue(roads[1], roads[1].contains("script=other len=3"))
+        for (word in listOf("Ленина", "Победителей", "长安街")) {
+            assertTrue("street \"$word\" leaked into the trace: $events", events.none { it.contains(word) })
+        }
+    }
 }
