@@ -196,9 +196,6 @@ class TrackingService : Service(), LocationListener {
     private val powerLock = Any()
     private var observedChargingPowerKwAbs: Double = 0.0
     private var pollTickCount: Long = 0
-    // Gates the settingsRepository.saveLastKnownSoc() write below to actual SOC
-    // changes instead of firing on every poll tick.
-    private var lastSavedSoc: Int? = null
     // Gates buildNotification()/nm.notify() below to actual rendered-text
     // changes instead of firing on every poll tick (buildNotification()
     // allocates a fresh PendingIntent + Builder each call).
@@ -1652,13 +1649,6 @@ class TrackingService : Service(), LocationListener {
                         serviceScope.launch {
                             runCatching { catchUpJournal.append("REARM soc=${data.soc} above anchor") }
                             retryUnresolvedCatchUp()
-                        }
-                    }
-
-                    data.soc?.let { soc ->
-                        if (soc != lastSavedSoc) {
-                            lastSavedSoc = soc
-                            settingsRepository.saveLastKnownSoc(soc)
                         }
                     }
 

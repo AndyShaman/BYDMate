@@ -43,8 +43,6 @@ open class SettingsRepository @Inject constructor(
         /** "auto" (historical/live blend, default) or "manual" (user temperature table). */
         const val KEY_RANGE_CALC_METHOD = "range_calc_method"
         const val KEY_MANUAL_RANGE_TABLE = "manual_range_table_json"
-        const val KEY_LAST_KNOWN_SOC = "last_known_soc"
-        const val KEY_LAST_SOC_TIMESTAMP = "last_soc_timestamp"
         const val KEY_LAST_ENERGYDATA_IMPORT_TS = "last_energydata_import_ts"
         const val KEY_SETUP_COMPLETED = "setup_completed"
         const val KEY_DEDUP_CLEANUP_DONE = "dedup_cleanup_done"
@@ -129,7 +127,6 @@ open class SettingsRepository @Inject constructor(
         const val KEY_TG_LOG_AUTO_SEND = "tg_log_auto_send"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"
-        const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
         /** "true" hides the native BYD voice assistant (pm disable-user); default "false". */
         const val KEY_DISABLE_NATIVE_ASSISTANT = "disable_native_assistant"
         /** Confirmed car type (VehicleKindMonitor): "EV" or "HYBRID"; absent until confirmed. */
@@ -141,8 +138,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
         const val KEY_LAST_STATE_TS = "last_state_ts"
-        // ChargingStateStore baseline. Kept separate from KEY_LAST_KNOWN_SOC
-        // (which TrackingService overwrites on every DiPars poll) so the
+        // ChargingStateStore baseline. Kept separate from the old live-SOC key
+        // "last_known_soc" (once overwritten on every DiPars poll) so the
         // cascade detector's pre-charging baseline survives polling and
         // runCatchUp can compute a real SOC delta on cold start.
         const val KEY_CHARGING_BASELINE_SOC = "charging_baseline_soc"
@@ -181,8 +178,6 @@ open class SettingsRepository @Inject constructor(
         const val KEY_MINIMAX_TTS_KEY = "minimax_tts_key"
 
         const val KEY_AGENT_ENABLED = "agent_enabled"
-        // legacy, unused since field-fix wave (agent uses KEY_OPENROUTER_MODEL)
-        const val KEY_AGENT_MODEL = "agent_model"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.20"
@@ -284,12 +279,6 @@ open class SettingsRepository @Inject constructor(
             KEY_TRIP_COST_TARIFF to tripRule,
         ))
 
-    suspend fun getConsumptionGoodThreshold(): Double =
-        getString(KEY_CONSUMPTION_GOOD, DEFAULT_CONSUMPTION_GOOD).parseNumericSetting() ?: 20.0
-
-    suspend fun getConsumptionBadThreshold(): Double =
-        getString(KEY_CONSUMPTION_BAD, DEFAULT_CONSUMPTION_BAD).parseNumericSetting() ?: 30.0
-
     /** Live (good, bad) pair for UI coloring. Emits on every Settings edit. */
     fun observeConsumptionThresholds(): Flow<Pair<Double, Double>> = combine(
         observeString(KEY_CONSUMPTION_GOOD).map {
@@ -305,9 +294,6 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setRangeCalcMethod(value: String) =
         setString(KEY_RANGE_CALC_METHOD, value)
-
-    fun observeRangeCalcMethod(): Flow<String> =
-        observeString(KEY_RANGE_CALC_METHOD).map { it ?: DEFAULT_RANGE_CALC_METHOD }
 
     private fun manualRangePointToJson(p: ManualRangePoint): JSONObject = JSONObject().apply {
         put("temperatureC", p.temperatureC)
@@ -340,17 +326,6 @@ open class SettingsRepository @Inject constructor(
     }
 
     suspend fun resetManualRangeTable() = setManualRangeTable(defaultManualRangeTable())
-
-    suspend fun saveLastKnownSoc(soc: Int) {
-        setString(KEY_LAST_KNOWN_SOC, soc.toString())
-        setString(KEY_LAST_SOC_TIMESTAMP, System.currentTimeMillis().toString())
-    }
-
-    suspend fun getLastKnownSoc(): Int? =
-        getString(KEY_LAST_KNOWN_SOC, "").toIntOrNull()
-
-    suspend fun getLastSocTimestamp(): Long =
-        getString(KEY_LAST_SOC_TIMESTAMP, "0").toLongOrNull() ?: 0L
 
     suspend fun getLastEnergyImportTs(): Long =
         getString(KEY_LAST_ENERGYDATA_IMPORT_TS, "0").toLongOrNull() ?: 0L
@@ -428,13 +403,8 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun getDataSource(): DataSource = DataSource.ENERGYDATA
 
-    fun observeDataSource(): Flow<String?> = observeString(KEY_DATA_SOURCE)
-
     suspend fun getChargingBaselineSoc(): Int? =
         getString(KEY_CHARGING_BASELINE_SOC, "").toIntOrNull()
-
-    suspend fun setChargingBaselineSoc(soc: Int) =
-        setString(KEY_CHARGING_BASELINE_SOC, soc.toString())
 
     suspend fun getChargePending(): Boolean =
         getString(KEY_CHARGE_PENDING, "") == "true"
@@ -445,20 +415,11 @@ open class SettingsRepository @Inject constructor(
     suspend fun getLastMileageKm(): Float? =
         getString(KEY_LAST_MILEAGE_KM, "").toFloatOrNull()
 
-    suspend fun setLastMileageKm(km: Float?) =
-        setString(KEY_LAST_MILEAGE_KM, km?.toString() ?: "")
-
     suspend fun getLastCapacityKwh(): Float? =
         getString(KEY_LAST_CAPACITY_KWH, "").toFloatOrNull()
 
-    suspend fun setLastCapacityKwh(kwh: Float?) =
-        setString(KEY_LAST_CAPACITY_KWH, kwh?.toString() ?: "")
-
     suspend fun getLastStateTs(): Long =
         getString(KEY_LAST_STATE_TS, "0").toLongOrNull() ?: 0L
-
-    suspend fun setLastStateTs(ts: Long) =
-        setString(KEY_LAST_STATE_TS, ts.toString())
 
     /** Trip 1/2 dashboard counter anchors (n = 1 or 2). Generic settings rows, no migration. */
     suspend fun getTripResetState(n: Int): TripResetState = TripResetState(
