@@ -3,7 +3,6 @@ package com.bydmate.app.data.vehicle
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
-import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceRecorder
 import io.mockk.coEvery
@@ -51,7 +50,7 @@ class VehicleApiBatteryPreheatTest {
     private val dao = mockk<VehicleWriteLogDao> { coEvery { insert(capture(audit)) } returns Unit }
 
     private fun TestScope.api() = VehicleApiImpl(
-        mockk<ParsReader>(relaxed = true), mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
+        mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
         dao, seatStore, windowStore,
     ).also { it.readbackScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)) }
 

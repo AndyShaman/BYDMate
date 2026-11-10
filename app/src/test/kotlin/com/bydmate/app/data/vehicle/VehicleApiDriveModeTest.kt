@@ -3,7 +3,6 @@ package com.bydmate.app.data.vehicle
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -37,7 +36,7 @@ class VehicleApiDriveModeTest {
         coEvery { it.getFloat(1013, any()) } answers { kmh }
     }
     private val impl = VehicleApiImpl(
-        mockk<ParsReader>(relaxed = true), autoservice, helper, allowlist,
+        autoservice, helper, allowlist,
         dao, seatStore, windowStore,
     )
     private val target = WriteAllowlist.DRIVE_MODE_TARGET_FID

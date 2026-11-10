@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -36,7 +35,6 @@ class WindowPercentNudgeTest {
         const val PASSENGER_READ_FID = 1267728400
     }
 
-    private val parsReader: ParsReader = mockk(relaxed = true)
     private val autoservice: AutoserviceClient = mockk(relaxed = true)
     private val writeLogDao: VehicleWriteLogDao = mockk(relaxed = true)
 
@@ -69,8 +67,8 @@ class WindowPercentNudgeTest {
     }
 
     /** Unconfined readback scope so every "before" sample is taken before its write. */
-    private fun api(channel: WindowChannel = WindowChannel.PERCENT): VehicleApi = VehicleApiImpl(
-        parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, fixedStore(channel),
+    private fun api(channel: WindowChannel = WindowChannel.PERCENT): VehicleApiImpl = VehicleApiImpl(
+        autoservice, helper, allowlist, writeLogDao, seatStore, fixedStore(channel),
     ).also { it.readbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined) }
 
     /** Window positions the readback sees, in order; the last one repeats once used up. */
@@ -85,7 +83,7 @@ class WindowPercentNudgeTest {
         // before=0, two verification reads still 0 -> stuck; the nudged write then moves it.
         positions(0, 0, 0, 0, 11)
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isSuccess)
         assertEquals(listOf(10, 11), posWrites)
@@ -94,14 +92,14 @@ class WindowPercentNudgeTest {
     @Test fun `a percent write that moves the pane is never nudged`() = runTest {
         positions(0, 4)
 
-        assertTrue(api().writeWindowDriver(10).isSuccess)
+        assertTrue(api().doWrite("window_driver_pos", 10).isSuccess)
         assertEquals(listOf(10), posWrites)
     }
 
     @Test fun `a stuck write of 100 is nudged down to 99`() = runTest {
         positions(0, 0, 0, 0, 30)
 
-        assertTrue(api().writeWindowDriver(100).isSuccess)
+        assertTrue(api().doWrite("window_driver_pos", 100).isSuccess)
         assertEquals(listOf(100, 99), posWrites)
     }
 
@@ -110,7 +108,7 @@ class WindowPercentNudgeTest {
     @Test fun `a nudge that also does not move is reported with the existing error`() = runTest {
         positions(0)
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         val err = result.exceptionOrNull() as VehicleWriteError.ReadbackMismatch
@@ -137,7 +135,7 @@ class WindowPercentNudgeTest {
             true
         }
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isSuccess)
         assertEquals(listOf(10, 11, 0, 10), posWrites)
@@ -148,7 +146,7 @@ class WindowPercentNudgeTest {
     @Test fun `a nudge that moves the pane costs no extra read or write`() = runTest {
         positions(0, 0, 0, 0, 11)
 
-        assertTrue(api().writeWindowDriver(10).isSuccess)
+        assertTrue(api().doWrite("window_driver_pos", 10).isSuccess)
         assertEquals(listOf(10, 11), posWrites)
         coVerify(exactly = 5) { autoservice.getIntRaw(any(), any()) }
     }
@@ -158,7 +156,7 @@ class WindowPercentNudgeTest {
             if (posWrites.takeLast(2) == listOf(0, 100)) 30 else 0
         }
 
-        assertTrue(api().writeWindowDriver(100).isSuccess)
+        assertTrue(api().doWrite("window_driver_pos", 100).isSuccess)
         assertEquals(listOf(100, 99, 0, 100), posWrites)
     }
 
@@ -166,7 +164,7 @@ class WindowPercentNudgeTest {
     @Test fun `a sentinel position at the anchor step writes nothing more`() = runTest {
         positions(0, 0, 0, 0, 0, 0, 255)
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
@@ -176,7 +174,7 @@ class WindowPercentNudgeTest {
     @Test fun `a failed position read at the anchor step writes nothing more`() = runTest {
         positions(0, 0, 0, 0, 0, 0, null)
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
@@ -188,7 +186,7 @@ class WindowPercentNudgeTest {
     @Test fun `a position that changed since the stuck verdict is not anchored`() = runTest {
         positions(0, 0, 0, 0, 0, 0, 5)
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
@@ -231,7 +229,7 @@ class WindowPercentNudgeTest {
             posWrites.size != 3
         }
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
@@ -245,7 +243,7 @@ class WindowPercentNudgeTest {
             posWrites.size != 4
         }
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
@@ -255,7 +253,7 @@ class WindowPercentNudgeTest {
     @Test fun `a position equal to the requested value is not anchored`() = runTest {
         positions(0, 0, 0, 0, 0, 0, 10)
 
-        val result = api().writeWindowDriver(10)
+        val result = api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         assertEquals(listOf(10, 11), posWrites)
@@ -265,7 +263,7 @@ class WindowPercentNudgeTest {
     @Test fun `a stuck percent close of 0 is not nudged`() = runTest {
         positions(100)
 
-        val result = api().writeWindowDriver(0)
+        val result = api().doWrite("window_driver_pos", 0)
 
         assertTrue(result.isFailure)
         val err = result.exceptionOrNull() as VehicleWriteError.ReadbackMismatch
@@ -296,7 +294,7 @@ class WindowPercentNudgeTest {
     @Test fun `a blind percent write is not nudged`() = runTest {
         positions(null)
 
-        assertTrue(api().writeWindowDriver(10).isSuccess)
+        assertTrue(api().doWrite("window_driver_pos", 10).isSuccess)
         assertEquals(listOf(10), posWrites)
     }
 }

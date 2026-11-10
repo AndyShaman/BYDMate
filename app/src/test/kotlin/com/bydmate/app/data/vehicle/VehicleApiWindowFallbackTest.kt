@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -41,7 +40,6 @@ class VehicleApiWindowFallbackTest {
         const val REAR_RIGHT_READ_FID = 947912752
     }
 
-    private val parsReader: ParsReader = mockk(relaxed = true)
     private val autoservice: AutoserviceClient = mockk(relaxed = true)
     private val writeLogDao: VehicleWriteLogDao = mockk(relaxed = true)
     private val helper: HelperClient = mockk<HelperClient>().also {
@@ -68,8 +66,8 @@ class VehicleApiWindowFallbackTest {
     }
 
     /** Unconfined readback scope so every "before" sample is taken before its write. */
-    private fun api(channel: WindowChannel): VehicleApi = VehicleApiImpl(
-        parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, fixedStore(channel),
+    private fun api(channel: WindowChannel): VehicleApiImpl = VehicleApiImpl(
+        autoservice, helper, allowlist, writeLogDao, seatStore, fixedStore(channel),
     ).also { it.readbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined) }
 
     /** Window positions the readback sees, in order; the last one repeats once used up. */
@@ -154,7 +152,7 @@ class VehicleApiWindowFallbackTest {
     @Test fun `raw 255 readback is blind, not a real position stuck at 255`() = runTest {
         coEvery { autoservice.getIntRaw(DEV, DRIVER_READ_FID) } returns 255
 
-        val result = api(WindowChannel.PERCENT).writeWindowDriver(50)
+        val result = api(WindowChannel.PERCENT).doWrite("window_driver_pos", 50)
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { helper.write(DEV, DRIVER_POS_FID, 50) }
@@ -166,7 +164,7 @@ class VehicleApiWindowFallbackTest {
     @Test fun `out of range verification read is blind, no nudge`() = runTest {
         positions(100, 101)
 
-        val result = api(WindowChannel.PERCENT).writeWindowDriver(50)
+        val result = api(WindowChannel.PERCENT).doWrite("window_driver_pos", 50)
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { helper.write(DEV, DRIVER_POS_FID, 50) }

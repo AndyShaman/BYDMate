@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
@@ -24,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class VehicleApiNonCancellableTest {
 
-    private val parsReader: ParsReader = mockk(relaxed = true)
     private val autoservice: AutoserviceClient = mockk(relaxed = true)
     private val helper: HelperClient = mockk()
     private val writeLogDao: VehicleWriteLogDao = mockk(relaxed = true)
@@ -48,7 +46,7 @@ class VehicleApiNonCancellableTest {
         override fun setCtrlCandidateAtMs(ts: Long) {}
     }
 
-    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
+    private val api: VehicleApi = VehicleApiImpl(autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
 
     /**
      * Composite window command (后排车窗全开 = rear windows fully open) fans out to two

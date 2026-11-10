@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -17,7 +16,6 @@ import org.junit.Test
  */
 class VehicleApiFailSoftTest {
 
-    private val parsReader: ParsReader = mockk(relaxed = true)
     private val autoservice: AutoserviceClient = mockk(relaxed = true)
     private val helper: HelperClient = mockk()
     private val dao: VehicleWriteLogDao = mockk(relaxed = true)
@@ -40,7 +38,7 @@ class VehicleApiFailSoftTest {
         override fun setCtrlCandidateAtMs(ts: Long) {}
     }
 
-    private val api: VehicleApiImpl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, dao, seatStore, windowStore)
+    private val api: VehicleApiImpl = VehicleApiImpl(autoservice, helper, allowlist, dao, seatStore, windowStore)
 
     // ── Test 1: allowlist miss returns Result failure AllowlistMiss ───────────
 
@@ -57,7 +55,7 @@ class VehicleApiFailSoftTest {
     @Test fun `helper IOException wraps into HelperUnreachable`() = runTest {
         coEvery { helper.write(any(), any(), any()) } throws java.io.IOException("daemon dead")
 
-        val result = api.writeAcOn()
+        val result = api.doWrite("ac_on", 1)
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.HelperUnreachable)
     }
@@ -81,7 +79,7 @@ class VehicleApiFailSoftTest {
                 source = "test",
             )
         ))
-        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore, windowStore)
+        val customApi = VehicleApiImpl(autoservice, helper, customAllowlist, dao, seatStore, windowStore)
         coEvery { helper.write(1001, 999000003, 2) } returns true
         coEvery { helper.read(1001, 999000004) } returns -10011L
 
@@ -110,7 +108,7 @@ class VehicleApiFailSoftTest {
                 source = "competitor-v80",
             )
         ))
-        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore, windowStore)
+        val customApi = VehicleApiImpl(autoservice, helper, customAllowlist, dao, seatStore, windowStore)
 
         coEvery { helper.write(1001, 999999999, 1) } returns false
 
@@ -124,7 +122,7 @@ class VehicleApiFailSoftTest {
     @Test fun `helper RuntimeException wraps into HelperUnreachable`() = runTest {
         coEvery { helper.write(any(), any(), any()) } throws RuntimeException("unexpected")
 
-        val result = api.writeAcOff()
+        val result = api.doWrite("ac_off", 0)
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.HelperUnreachable)
     }
@@ -145,7 +143,7 @@ class VehicleApiFailSoftTest {
                 source = "competitor-v80",
             )
         ))
-        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore, windowStore)
+        val customApi = VehicleApiImpl(autoservice, helper, customAllowlist, dao, seatStore, windowStore)
         coEvery { helper.write(any(), any(), any()) } returns true
         coEvery { helper.read(any(), any()) } returns -10011L
 
@@ -163,7 +161,7 @@ class VehicleApiFailSoftTest {
 
     @Test fun `attempt row inserted before helper write for durability`() = runTest {
         coEvery { helper.write(any(), any(), any()) } returns true
-        api.writeAcOn()
+        api.doWrite("ac_on", 1)
         // Pending attempt row (status=-2) must exist
         coVerify { dao.insert(match { it.status == -2 && it.error == "attempt" }) }
         // Outcome row (status=0) must also exist

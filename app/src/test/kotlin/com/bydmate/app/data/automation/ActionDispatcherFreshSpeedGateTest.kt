@@ -84,7 +84,6 @@ class ActionDispatcherFreshSpeedGateTest {
         assertTrue(dispatcher.dispatch(param(WINDOW_OPEN), diParsData(speed = 60)).success)
         val speed = FidAddresses.of("speed")
         coVerify(exactly = 1) { helper.readBatch(listOf(BatchReadItem(tx = 7, dev = speed.device, fid = speed.fid))) }
-        coVerify(exactly = 0) { vehicleApi.readSpeed() }
     }
 
     @Test fun `the daemon read is rounded up`() = runBlocking {
@@ -116,7 +115,6 @@ class ActionDispatcherFreshSpeedGateTest {
         coEvery { helper.readBatch(any()) } returns listOf(0 to java.lang.Float.floatToRawIntBits(-1.0f))
         assertFalse(dispatcher.dispatch(param("前备箱打开"), diParsData(speed = 0)).success)
         coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
-        coVerify(exactly = 0) { vehicleApi.readSpeed() }
     }
 
     // Frunk is a powered external panel: the open fails safe unless the speed read says 0.
