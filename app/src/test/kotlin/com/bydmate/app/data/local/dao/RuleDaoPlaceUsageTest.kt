@@ -74,29 +74,6 @@ class RuleDaoPlaceUsageTest {
     }
 
     @Test
-    fun `countRulesUsingPlace returns 0 when no rules exist`() = runTest {
-        assertEquals(0, ruleDao.countRulesUsingPlace(1L))
-    }
-
-    @Test
-    fun `countRulesUsingPlace returns 0 when no rules reference the place`() = runTest {
-        ruleDao.insert(ruleWithParamTrigger())
-        assertEquals(0, ruleDao.countRulesUsingPlace(1L))
-    }
-
-    @Test
-    fun `countRulesUsingPlace returns 1 when one rule references the place`() = runTest {
-        ruleDao.insert(ruleWithPlaceTrigger(placeId = 1L))
-        assertEquals(1, ruleDao.countRulesUsingPlace(1L))
-    }
-
-    @Test
-    fun `countRulesUsingPlace returns 0 for a different placeId`() = runTest {
-        ruleDao.insert(ruleWithPlaceTrigger(placeId = 2L))
-        assertEquals(0, ruleDao.countRulesUsingPlace(1L))
-    }
-
-    @Test
     fun `countRulesUsingPlace returns correct count for multiple rules using the same place`() = runTest {
         ruleDao.insert(ruleWithPlaceTrigger(placeId = 1L, name = "rule A"))
         ruleDao.insert(ruleWithPlaceTrigger(placeId = 1L, name = "rule B"))

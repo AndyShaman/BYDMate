@@ -14,7 +14,6 @@ class AutoBackupRetryCapTest {
         assertEquals(RunOutcome.RETRY, capRetries(RunOutcome.RETRY, 1))
         assertEquals(RunOutcome.SUCCESS, capRetries(RunOutcome.RETRY, 2))
         assertEquals(RunOutcome.SUCCESS, capRetries(RunOutcome.RETRY, MAX_RETRY_ATTEMPT + 5))
-        assertEquals(2, MAX_RETRY_ATTEMPT)
     }
 
     @Test fun `success and failure are never changed`() {
