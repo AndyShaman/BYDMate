@@ -13,11 +13,7 @@ class DtcParserTest {
 
     private fun count(addr: Int) = DtcParser.parseCount(DtcFixtures.uds("count-${DtcFixtures.hexAddr(addr)}.txt"))
 
-    /** The list of [path] read with the format its block reported in the count answer. */
-    private fun list(path: String, addr: Int): DtcList {
-        val format = count(addr)?.format
-        return DtcParser.parseList(DtcFixtures.uds(path), format)
-    }
+    private fun list(path: String): DtcList = DtcParser.parseList(DtcFixtures.uds(path))
 
     private fun codes(l: DtcList) = l.rows.map { it.code }
 
@@ -35,41 +31,40 @@ class DtcParserTest {
     }
 
     @Test fun `the 0x712 list is one now row and the tail is not parsed`() {
-        val l = list("list-712.txt", 0x712)
+        val l = list("list-712.txt")
         assertEquals(1, l.records)
-        assertEquals(listOf(DtcRow("U1166-87", 0x09, DtcKind.NOW, 0x87)), l.rows)
+        assertEquals(listOf(DtcRow("U1166-87", 0x09, DtcKind.NOW)), l.rows)
     }
 
     @Test fun `Andy's 0x712 answer in format 01 reads as the manual code U1166-87`() {
         assertEquals(1, count(0x712)!!.format)
-        assertEquals(listOf("U1166-87"), codes(list("list-712.txt", 0x712)))
+        assertEquals(listOf("U1166-87"), codes(list("list-712.txt")))
     }
 
     @Test fun `the 0x782 list keeps one visible record out of thirty-six`() {
-        val l = list("list-782.txt", 0x782)
+        val l = list("list-782.txt")
         assertEquals(36, l.records)
-        assertEquals(listOf(DtcRow("U0397-87", 0x28, DtcKind.OLD, 0x87)), l.rows)
+        assertEquals(listOf(DtcRow("U0397-87", 0x28, DtcKind.OLD)), l.rows)
     }
 
     @Test fun `the old codes of the other blocks read as old rows in order`() {
         val five = listOf("U0164-87", "U0334-87", "U1711-87", "U042F-87", "U10FF-CE")
-        assertEquals(five, codes(list("list-7E0.txt", 0x7E0)))
-        assertEquals(five, codes(list("list-7E2.txt", 0x7E2)))
-        assertEquals(listOf("B2249-13"), codes(list("list-747.txt", 0x747)))
-        assertEquals(listOf("U1113-87"), codes(list("list-783.txt", 0x783)))
-        assertEquals(listOf("U0164-00"), codes(list("list-7E7.txt", 0x7E7)))
+        assertEquals(five, codes(list("list-7E0.txt")))
+        assertEquals(five, codes(list("list-7E2.txt")))
+        assertEquals(listOf("B2249-13"), codes(list("list-747.txt")))
+        assertEquals(listOf("U1113-87"), codes(list("list-783.txt")))
+        assertEquals(listOf("U0164-00"), codes(list("list-7E7.txt")))
         for (path in listOf("list-7E0.txt", "list-747.txt", "list-783.txt", "list-7E7.txt")) {
-            val addr = path.substringAfter("list-").substringBefore(".").toInt(16)
-            assertTrue(path, list(path, addr).rows.all { it.kind == DtcKind.OLD })
+            assertTrue(path, list(path).rows.all { it.kind == DtcKind.OLD })
         }
     }
 
     @Test fun `the lists after the codes were cleared have no visible rows except 0x712`() {
-        assertEquals(0, DtcParser.parseList(DtcFixtures.uds("after2/list-747.txt"), 0).rows.size)
-        val l782 = DtcParser.parseList(DtcFixtures.uds("after2/list-782.txt"), 0)
+        assertEquals(0, DtcParser.parseList(DtcFixtures.uds("after2/list-747.txt")).rows.size)
+        val l782 = DtcParser.parseList(DtcFixtures.uds("after2/list-782.txt"))
         assertEquals(51, l782.records)
         assertEquals(0, l782.rows.size)
-        val l712 = DtcParser.parseList(DtcFixtures.uds("after2/list-712.txt"), 1)
+        val l712 = DtcParser.parseList(DtcFixtures.uds("after2/list-712.txt"))
         assertEquals(1, l712.rows.size)
         assertEquals(DtcKind.NOW, l712.rows[0].kind)
     }
@@ -82,32 +77,21 @@ class DtcParserTest {
     }
 
     @Test fun `the code text follows the format byte`() {
-        assertEquals("U0164-87", DtcParser.codeText(hex("C16487"), 0))
-        assertEquals("P0562-FC", DtcParser.codeText(hex("0562FC"), 0))
-        assertEquals("U1166-87", DtcParser.codeText(hex("D16687"), 0))
-        assertEquals("U1166-87", DtcParser.codeText(hex("D16687"), 1))
-        assertEquals("U1166-87", DtcParser.codeText(hex("D16687"), null))
-        assertEquals("D166", DtcParser.codeText(hex("D166"), 1))
-        assertEquals("D1668701", DtcParser.codeText(hex("D1668701"), 0))
+        assertEquals("U0164-87", DtcParser.codeText(hex("C16487")))
+        assertEquals("P0562-FC", DtcParser.codeText(hex("0562FC")))
+        assertEquals("U1166-87", DtcParser.codeText(hex("D16687")))
+        assertEquals("D166", DtcParser.codeText(hex("D166")))
+        assertEquals("D1668701", DtcParser.codeText(hex("D1668701")))
     }
 
     @Test fun `a partial record is ignored and a negative list has no rows`() {
-        val l = DtcParser.parseList(hex("5902FF C16487 08 C33487"), 0)
+        val l = DtcParser.parseList(hex("5902FF C16487 08 C33487"))
         assertEquals(1, l.records)
         assertEquals(listOf("U0164-87"), codes(l))
-        val neg = DtcParser.parseList(hex("7F1931"), 0)
+        val neg = DtcParser.parseList(hex("7F1931"))
         assertTrue(neg.negative)
         assertEquals(0, neg.rows.size)
         assertFalse(l.negative)
-    }
-
-    @Test fun `fault types have a text only for the five known values`() {
-        assertEquals(DtcFault.NO_SIGNAL, DtcParser.faultType(0x87))
-        assertEquals(DtcFault.OPEN_CIRCUIT, DtcParser.faultType(0x13))
-        assertEquals(DtcFault.SHORT_TO_GROUND, DtcParser.faultType(0x11))
-        assertEquals(DtcFault.SHORT_TO_PLUS, DtcParser.faultType(0x12))
-        assertEquals(DtcFault.COMPONENT, DtcParser.faultType(0x09))
-        for (ftb in intArrayOf(0x00, 0xCE, 0x28, 0xFF)) assertNull("0x%02X".format(ftb), DtcParser.faultType(ftb))
     }
 
     @Test fun `the whole pre-clear scan reads as 14 answered, one now and nine old (duplicate URE list counted once)`() {

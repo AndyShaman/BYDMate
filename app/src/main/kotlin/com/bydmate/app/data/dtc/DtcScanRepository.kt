@@ -477,7 +477,7 @@ class DtcScanRepository(
             .filter { it.outcome == DtcWire.OUTCOME_OK }
             .sumOf { r ->
                 val list = r.listUds ?: return@sumOf 0
-                val parsed = DtcParser.parseList(list, r.countUds?.let { DtcParser.parseCount(it) }?.format)
+                val parsed = DtcParser.parseList(list)
                 parsed.records - parsed.rows.size
             }
 

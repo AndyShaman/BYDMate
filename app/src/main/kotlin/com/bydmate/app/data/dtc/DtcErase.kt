@@ -81,7 +81,7 @@ fun rereadRows(r: DtcEraseResult): List<DtcRow>? {
     // `59 02 <availability mask>` then whole 4-byte records; a cut list is not a read.
     if (list.size < LIST_HEADER_BYTES || (list.size - LIST_HEADER_BYTES) % LIST_RECORD_BYTES != 0) return null
     if (list[0].toInt() and 0xFF != POSITIVE_LIST_HEAD || list[1].toInt() != DtcWire.SUB_LIST) return null
-    return DtcParser.parseList(list, count?.format).rows
+    return DtcParser.parseList(list).rows
 }
 
 /**
