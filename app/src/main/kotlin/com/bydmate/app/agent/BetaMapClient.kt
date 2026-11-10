@@ -117,7 +117,6 @@ internal object BetaMapParser {
     private const val HEX_DIGITS = 4
     private const val HEX_RADIX = 16
     private const val FORM_FEED = 0x0C
-    private const val DEFAULT_NAME = "Зарядная станция"
     // Tariff units read as a price per kWh. BETA labels one operator's tariffs PER_KW with the
     // same amounts others label PER_KWH (0.55 AC, 0.73 DC): nobody sells charging per kW.
     private val PER_KWH_UNITS = setOf("PER_KWH", "PER_KW")
@@ -209,7 +208,7 @@ internal object BetaMapParser {
         if (lat.isNaN() || lon.isNaN()) return null
         val list = o.optJSONArray("connectors")
         return ChargerStation(
-            name = o.text("name") ?: o.text("address") ?: DEFAULT_NAME,
+            name = o.text("name") ?: o.text("address") ?: DEFAULT_STATION_NAME,
             address = o.text("address"),
             operator = o.optJSONObject("operator")?.text("name"),
             lat = lat,
@@ -232,9 +231,6 @@ internal object BetaMapParser {
     }
 
     /** Android's org.json turns a JSON null into the string "null" in optString: keep it null. */
-    private fun JSONObject.text(key: String): String? =
-        if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
-
     private interface CharSource {
         /** The next char, or -1 at the end of the stream. */
         fun next(): Int
