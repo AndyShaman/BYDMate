@@ -105,6 +105,7 @@ class IternioTelemetryClientTest {
     )
 
     /** The way TrackingService sends: buildTelemetry, then sendTelemetry; no payload without SOC. */
+    @Suppress("LongParameterList") // mirrors the parameters of buildTelemetry
     private suspend fun IternioTelemetryClient.sendSnapshot(
         apiKey: String,
         userToken: String,
