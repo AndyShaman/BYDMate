@@ -4,69 +4,11 @@ package com.bydmate.app.data.autoservice
  * autoservice Binder addresses validated against on-device service.
  *
  * IMPORTANT: read-only constants. NEVER add a setInt fid here — the
- * regex barrier in AutoserviceClientImpl will reject any tx=6 attempt.
- *
- * The FID_* values below are Leopard 3 constants and are no longer read directly:
- * each one is mirrored by a FidMap entry (polling set or FidMap.extra) carrying the
- * same address plus its catalog symbol, and the readers take the address from
- * FidAddresses so it follows the firmware catalog. FidMapTest keeps the two in step.
+ * regex barrier in AdbOnDeviceClient will reject any tx=6 attempt.
  */
 object FidRegistry {
 
     // transact codes — only read-side codes are listed
     const val TX_GET_INT = 5
     const val TX_GET_FLOAT = 7
-
-    // device types — verified by on-device probe
-    const val DEV_STATISTIC = 1014   // BMS lifetime statistics
-    const val DEV_CHARGING = 1009    // Charging gun + charger state
-    const val DEV_BODYWORK = 1001    // 12V battery voltage on bodywork
-    const val DEV_ENGINE = 1012      // Engine controller (live battery power)
-
-    // === Statistic fids (dev=1014) ===
-    /** BMS State of Health, percent (transact 5=int, raw 0..100). */
-    const val FID_SOH = 1145045032
-    /** Lifetime energy throughput, kWh (transact 7=float). */
-    const val FID_LIFETIME_KWH = 1032871984
-    /** Lifetime average consumption, kWh/100km (transact 7=float). */
-    const val FID_LIFETIME_AVG_PHM = 1246761008
-    /** Lifetime mileage, km ×10 (transact 5=int, divide by 10). */
-    const val FID_LIFETIME_MILEAGE = 1246765072
-    /** Current SOC, percent (transact 7=float). */
-    const val FID_SOC = 1246777400
-
-    // === Charging fids (dev=1009) ===
-    // Validated against live AC-charging probe. The legacy `-1442840xxx` group
-    // (gun/type/battery_type) returned sentinel 0xffffd8e5 on every call —
-    // phantom values the SentinelDecoder collapsed to null. The fids below
-    // return real codes during charging.
-    /** Charging gun connect state: 1=NONE, 2=AC, 3=DC, 4=AC_DC, 5=VTOL. */
-    const val FID_GUN_CONNECT_STATE = 876609586
-    /** Charging type after handshake: 1=DEFAULT, 2=AC, 3=VTOG, 4=GB_DC, 5=GB_NON_DC. */
-    const val FID_CHARGING_TYPE = 876609592
-    /** Charger HV voltage, V (int). Catalog mapping not yet confirmed — kept stale.
-     *  TODO 2026-04-30: locate canonical fid via catalog before relying on it. */
-    const val FID_CHARGE_BATTERY_VOLT = -1442840491
-    /** Battery type: 0=LEAD_ACID, 1=IRON/LFP, 65535=INVALID. */
-    const val FID_BATTERY_TYPE = -1728053169
-    /** Per-session charged energy, kWh (transact 7=float). Persists across DiLink
-     *  power-cycle; resets on new charging session (gun reconnect or BMS reset). */
-    const val FID_CHARGING_CAPACITY = 666894360
-    /** BMS charging state: 1=CHARGING, 2=FINISH, 13=PAUSE (other values observed
-     *  but not used). transact 5 (int). */
-    const val FID_CHARGING_BMS_STATE = 876609560
-
-    // === Bodywork fids (dev=1001) ===
-    /** 12V auxiliary battery voltage, V (transact 7=float). */
-    const val FID_OTA_BATTERY_POWER_VOLTAGE = 1128267816
-
-    // === Engine fids (dev=1012) ===
-    /**
-     * Live battery power, signed int kW (transact 5). Positive = consumption,
-     * negative = regen/charging. Raw int = kW directly (no scaling).
-     * Validated on Leopard 3 2026-05-11: ENG_POW=1→1kW, ENG_POW=3→3kW.
-     * Drive probe range -26..+101 matched dashboard observations.
-     * See memory `reference_eng_pow_fid.md`.
-     */
-    const val FID_ENGINE_POWER = 339738656
 }

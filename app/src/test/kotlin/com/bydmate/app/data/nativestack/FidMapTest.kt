@@ -119,35 +119,22 @@ class FidMapTest {
         assertEquals(0.1, FidMap.entries.single { it.field == "bmsMaxDischargeAllowKw" }.scale, 0.0001)
     }
 
-    /** The addresses moved out of FidRegistry must still be the ones it documents. */
+    /** The addresses moved out of FidRegistry must still be the Leopard 3 constants it carried. */
     @Test fun `extra entries carry the constants they took over`() {
         val registry = mapOf(
-            "soh" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_SOH),
-            "lifetimeAvgPhm" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_AVG_PHM),
-            "chargingType" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_TYPE),
-            "chargeBatteryVolt" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGE_BATTERY_VOLT),
-            "batteryType" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_BATTERY_TYPE),
-            "chargingCapacity" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_CAPACITY),
-            "soc" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_SOC),
-            "mileage" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_MILEAGE),
-            "totalElecConsumption" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_KWH),
-            "voltage12v" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_BODYWORK
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_OTA_BATTERY_POWER_VOLTAGE),
-            "power" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_ENGINE
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_ENGINE_POWER),
-            "chargeGunState" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_GUN_CONNECT_STATE),
-            "bmsState" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_BMS_STATE),
+            "soh" to (1014 to 1145045032),
+            "lifetimeAvgPhm" to (1014 to 1246761008),
+            "chargingType" to (1009 to 876609592),
+            "chargeBatteryVolt" to (1009 to -1442840491),
+            "batteryType" to (1009 to -1728053169),
+            "chargingCapacity" to (1009 to 666894360),
+            "soc" to (1014 to 1246777400),
+            "mileage" to (1014 to 1246765072),
+            "totalElecConsumption" to (1014 to 1032871984),
+            "voltage12v" to (1001 to 1128267816),
+            "power" to (1012 to 339738656),
+            "chargeGunState" to (1009 to 876609586),
+            "bmsState" to (1009 to 876609560),
         )
         registry.forEach { (field, address) ->
             val entry = FidMap.byField.getValue(field)
