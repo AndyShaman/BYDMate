@@ -26,6 +26,7 @@ class VoiceJournalDumpTest {
         // People search posted dumps by these field names.
         val line = VoiceJournalDump.lines(listOf(e), 20, 200)[1]
         listOf("route=nlu", "heard=\"закрой окна\"", "cmd=windows_close_all", "reason=-").forEach { assertTrue(line, it in line) }
+        assertTrue(line, line.endsWith(" result=ok asr=320 dispatch=45"))
     }
 
     @Test fun `refused line shows the code, missing values as dashes, quotes and newlines flattened`() {
@@ -36,6 +37,7 @@ class VoiceJournalDumpTest {
         )
         val line = VoiceJournalDump.lines(listOf(e), 20, 200)[1]
         assertTrue(line, "heard=\"скажи 'привет' ещё\"" in line && "reason=unrecognized" in line)
+        assertTrue(line, line.endsWith(" result=not_understood:\"Не понял\" asr=- dispatch=-"))
     }
 
     @Test fun `agent entry clips its answer line`() {
@@ -44,6 +46,7 @@ class VoiceJournalDumpTest {
             answer = "Окна закрыты, всё хорошо",
         )
         val lines = VoiceJournalDump.lines(listOf(e), 20, 10)
+        assertEquals("  tools: vehicle_control:ok, read_state:err", lines[2])
         assertTrue(lines[3], lines[3].startsWith("  answer: Окна закр"))
         assertTrue(lines[3], lines[3].length < "  answer: Окна закрыты, всё хорошо".length)
     }

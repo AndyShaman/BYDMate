@@ -597,6 +597,22 @@ class VoiceControllerSessionTest {
 
     // --- Finding 4: captureSession contract + cancellation + mute filter ---
 
+    @Test fun `captureSession is invoked exactly once with no session cap (Long MAX_VALUE)`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val audioCapture = mockk<AudioCapture>(relaxed = true)
+        every { audioCapture.captureSession(any(), any<(ShortArray) -> Any?>()) } returns flow { }
+        val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
+
+        controller.onPttPressed()
+        // `listening` flips synchronously in startContinuousSession(), before the launched
+        // session coroutine has necessarily reached captureSession() -- poll the verify itself
+        // (like awaitVerify elsewhere) instead of asserting once right after the flag.
+        // Wave P: no hard session cap; Long.MAX_VALUE means "run until silence or user stops".
+        awaitVerify { verify(exactly = 1) { audioCapture.captureSession(Long.MAX_VALUE, any<(ShortArray) -> Any?>()) } }
+        assertTrue(controller.listening.value)
+    }
+
     @Test fun `stopping the session cancels pcm collection`() {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
@@ -873,6 +889,45 @@ class VoiceControllerSessionTest {
 
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitVerify { coVerify(exactly = 2) { dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) } }
+    }
+
+    // --- Fix wave 2, finding 2: decodeMs also lands in the ERROR entry's detail, not just logMsg ---
+
+    @Test fun `routing exception journal entry also includes decodeMs in its detail`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } throws RuntimeException("boom")
+        val journal = VoiceJournal()
+        val controller = makeController(fakeAsr, dispatcher, journal = journal)
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { journal.entries.value.isNotEmpty() }
+
+        val entry = journal.entries.value.first()
+        assertEquals(VoiceJournalEntry.Outcome.ERROR, entry.outcome)
+        assertTrue(entry.detail.contains("decodeMs="))
+    }
+
+    // --- Finding 2: decodeMs lands in the VoiceJournal detail, not just logcat ---
+
+    @Test fun `utterance journal detail includes decodeMs`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
+        val journal = VoiceJournal()
+        val controller = makeController(fakeAsr, dispatcher, journal = journal)
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
+        awaitTrue { journal.entries.value.isNotEmpty() }
+
+        assertTrue(journal.entries.value.first().detail.contains("decodeMs="))
     }
 
     // --- Finding 6: sessionJob is released so a subsequent PTT can start a fresh session ---
