@@ -2,7 +2,6 @@ package com.bydmate.app.data.repository
 
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
-import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -10,9 +9,6 @@ import javax.inject.Singleton
 class BatteryHealthRepository @Inject constructor(
     private val batterySnapshotDao: BatterySnapshotDao
 ) {
-    fun getRecent(limit: Int = 50): Flow<List<BatterySnapshotEntity>> =
-        batterySnapshotDao.getRecent(limit)
-
     suspend fun insert(snapshot: BatterySnapshotEntity): Long =
         batterySnapshotDao.insert(snapshot)
 

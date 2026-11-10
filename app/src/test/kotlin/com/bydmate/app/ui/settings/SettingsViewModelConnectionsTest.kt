@@ -142,7 +142,6 @@ class SettingsViewModelConnectionsTest {
         override suspend fun getById(id: Long): ChargeEntity? = null
         override fun getByDateRange(from: Long, to: Long): Flow<List<ChargeEntity>> = flowOf(emptyList())
         override suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary = ChargeSummary(0, 0.0, 0.0)
-        override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = emptyList()
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0

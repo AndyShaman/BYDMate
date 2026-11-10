@@ -54,7 +54,6 @@ class BatteryStateRepositoryTest {
         private val lastValue: BatterySnapshotEntity?
     ) : com.bydmate.app.data.local.dao.BatterySnapshotDao {
         override fun getAll(): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
-        override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0
         override suspend fun getLast(): BatterySnapshotEntity? = lastValue
     }

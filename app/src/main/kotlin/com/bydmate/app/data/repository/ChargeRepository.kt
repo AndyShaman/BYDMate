@@ -64,9 +64,6 @@ class ChargeRepository @Inject constructor(
     fun getChargesByDateRange(from: Long, to: Long): Flow<List<ChargeEntity>> =
         chargeDao.getByDateRange(from, to)
 
-    suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> =
-        chargeDao.getRecentChargesWithBatteryData()
-
     suspend fun getCompletedSince(since: Long): List<ChargeEntity> =
         chargeDao.getCompletedSince(since)
 

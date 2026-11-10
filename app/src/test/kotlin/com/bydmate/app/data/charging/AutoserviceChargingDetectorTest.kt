@@ -55,7 +55,6 @@ class AutoserviceChargingDetectorTest {
         override suspend fun getById(id: Long): ChargeEntity? = inserted.find { it.id == id }
         override fun getByDateRange(from: Long, to: Long): Flow<List<ChargeEntity>> = flowOf(emptyList())
         override suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary = ChargeSummary(0, 0.0, 0.0)
-        override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> =
             inserted.filter { it.detectionSource?.startsWith("autoservice_") == true }
         override suspend fun hasLegacyCharges(): Boolean =
@@ -97,8 +96,6 @@ class AutoserviceChargingDetectorTest {
             return inserted.size.toLong()
         }
         override fun getAll(): Flow<List<com.bydmate.app.data.local.entity.BatterySnapshotEntity>> =
-            flowOf(emptyList())
-        override fun getRecent(limit: Int): Flow<List<com.bydmate.app.data.local.entity.BatterySnapshotEntity>> =
             flowOf(emptyList())
         override suspend fun getLast(): com.bydmate.app.data.local.entity.BatterySnapshotEntity? = null
     }

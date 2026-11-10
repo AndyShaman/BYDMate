@@ -96,7 +96,6 @@ class ChargesViewModelTest {
             flowOf(chargesFlow.value.filter { it.startTs in from..to })
         override suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary =
             ChargeSummary(0, 0.0, 0.0)
-        override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = autoserviceCharges
         override suspend fun hasLegacyCharges(): Boolean = legacyExists
         override suspend fun deleteEmpty(): Int {
@@ -123,7 +122,6 @@ class ChargesViewModelTest {
         private val snapshots: List<BatterySnapshotEntity> = emptyList()
     ) : BatterySnapshotDao {
         override fun getAll(): Flow<List<BatterySnapshotEntity>> = flowOf(snapshots)
-        override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(snapshots.take(limit))
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0L
         override suspend fun getLast(): BatterySnapshotEntity? = snapshots.firstOrNull()
     }
