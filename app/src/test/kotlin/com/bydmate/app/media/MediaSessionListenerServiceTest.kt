@@ -184,6 +184,13 @@ class MediaSessionListenerServiceTest {
     }
 
     @Test
+    fun `extras post without a recognised maneuver logs the icon name once and no street`() {
+        val first = postAndRun("ru.yandex.yandexnavi", "500 м", "Тверская")
+        assertEquals(listOf("nav maneuver unknown [notification extras]: icon=\"\""), first)
+        assertTrue(postAndRun("ru.yandex.yandexnavi", "450 м", "Тверская").isEmpty())
+    }
+
+    @Test
     fun `a notification without guidance logs its shape under its package (301)`() {
         val shapes = mutableListOf<String>()
         service.emptyShapeSink = { shapes.add(it) }
