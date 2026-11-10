@@ -110,10 +110,11 @@ object RuleDraftValidator {
                     if (mode.isBlank()) return ActionValidationError.YandexMusicModeMissing(n)
                 }
                 "media_volume" -> {
-                    // Mirrors ActionDispatcher.resolveVolumeOp exactly: "mute"/"unmute", or any
-                    // parseable int (unsigned = absolute level, signed "+N"/"-N" = relative step).
+                    // Valid exactly when the dispatcher can run it: "mute"/"unmute", or any parseable
+                    // int (unsigned = absolute level, signed "+N"/"-N" = relative step).
                     val payload = a.payload
-                    val valid = payload == "mute" || payload == "unmute" || payload?.toIntOrNull() != null
+                    val valid = payload != null &&
+                        ActionDispatcher.resolveVolumeOp(payload, 0, 100) != ActionDispatcher.VolumeOp.Invalid
                     if (!valid) return ActionValidationError.MediaVolumeMissing(n)
                 }
                 "sentry" -> {
