@@ -9,7 +9,6 @@ import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.data.autoservice.AdbConnectFailure
-import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.local.EnergyDataDeadDetector
@@ -18,7 +17,6 @@ import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
-import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.SettingsDao
@@ -31,7 +29,6 @@ import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
-import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity
@@ -41,7 +38,6 @@ import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.util.appLocalizedContext
 import java.io.File
-import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.UpdateChecker
@@ -194,13 +190,6 @@ class SettingsViewModelTest {
         override suspend fun delete(charge: ChargeEntity) {}
     }
 
-    private class StubChargePointDao : ChargePointDao {
-        override suspend fun insertAll(points: List<ChargePointEntity>) {}
-        override suspend fun getByChargeId(chargeId: Long): List<ChargePointEntity> = emptyList()
-        override suspend fun getCount(): Int = 0
-        override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
-    }
-
     private class StubIdleDrainDao : IdleDrainDao {
         override suspend fun insert(drain: IdleDrainEntity): Long = 0L
         override suspend fun update(drain: IdleDrainEntity) {}
@@ -223,20 +212,6 @@ class SettingsViewModelTest {
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0L
         override suspend fun getLast(): BatterySnapshotEntity? = null
         override suspend fun getCount(): Int = 0
-    }
-
-    private class FakeAdbClient : AdbOnDeviceClient {
-        override suspend fun connect(): Result<Unit> = Result.success(Unit)
-        override suspend fun isConnected(): Boolean = false
-        override fun lastConnectFailure(): AdbConnectFailure? = null
-        override suspend fun exec(cmd: String): String? = null
-        override suspend fun grantUsageStatsAppop(packageName: String): Boolean = false
-        override suspend fun grantWriteSecureSettings(packageName: String): Boolean = false
-        override suspend fun spawnHelper(token: String): Boolean = false
-        override suspend fun killHelper(): Boolean = false
-        override suspend fun readHelperLog(): String? = null
-        override suspend fun helperHeartbeat(): Boolean = false
-        override suspend fun shutdown() {}
     }
 
     // --- Factory ---
@@ -305,7 +280,6 @@ class SettingsViewModelTest {
         val chargeDao = object : StubChargeDao() {
             override fun getAll(): Flow<List<ChargeEntity>> = flowOf(emptyList())
         }
-        val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
         val idleDrainDao = StubIdleDrainDao()
 
         val httpClient = OkHttpClient()
@@ -329,7 +303,6 @@ class SettingsViewModelTest {
         val resolvedTtsEngine = ttsEngine ?: mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
         val resolvedGigaAmModelManager = gigaAmModelManager ?: mockk(relaxed = true)
         val continuousAsr = mockk<com.bydmate.app.voice.ContinuousAsr>(relaxed = true)
-        val voiceController = mockk<com.bydmate.app.voice.VoiceController>(relaxed = true)
 
         // Real recorder with an exec seam that would blow up: these tests never record.
         val logRecorder = logRecorderState?.let { flow ->
