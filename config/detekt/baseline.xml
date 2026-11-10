@@ -88,6 +88,7 @@
     <ID>CyclomaticComplexMethod:LaunchFreeform.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
     <ID>CyclomaticComplexMethod:LaunchFreeform.kt$internal fun launchFreeformCore( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, ): Int</ID>
     <ID>CyclomaticComplexMethod:LaunchFreeform.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
+    <ID>CyclomaticComplexMethod:LiveTelemetrySender.kt$LiveTelemetrySender$fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long)</ID>
     <ID>CyclomaticComplexMethod:LlmAgentBackend.kt$LlmAgentBackend$override suspend fun chat( messages: List&lt;AgentMessage&gt;, tools: JSONArray?, onDelta: ((String) -&gt; Unit)?, ): Result&lt;AgentReply&gt;</ID>
     <ID>CyclomaticComplexMethod:LocalInsightEngine.kt$LocalInsightEngine$fun generate(stats: InsightStats, res: Resources, periodDays: Int): TextResult</ID>
     <ID>CyclomaticComplexMethod:NativeParsReader.kt$NativeParsReader$private suspend fun assembleSnapshot( decoded: Map&lt;String, Any?&gt;, windowRrPrimaryRaw: Int?, rememberSticky: Boolean = true, ): DiParsData?</ID>
@@ -121,7 +122,6 @@
     <ID>CyclomaticComplexMethod:SplitSessionManager.kt$SplitSessionManager$suspend fun start(pair: SplitPair): SplitStartResult</ID>
     <ID>CyclomaticComplexMethod:SteeringWheelKeyService.kt$SteeringWheelKeyService$override fun onKeyEvent(event: KeyEvent): Boolean</ID>
     <ID>CyclomaticComplexMethod:TrackingService.kt$TrackingService$override fun onCreate()</ID>
-    <ID>CyclomaticComplexMethod:TrackingService.kt$TrackingService$private fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long)</ID>
     <ID>CyclomaticComplexMethod:TrackingService.kt$TrackingService$private fun startPolling()</ID>
     <ID>CyclomaticComplexMethod:TripCounterMath.kt$TripCounterMath$fun compute( stats: TripCounterStats, reset: TripResetState, liveKm: Double?, liveKwh: Double?, sessionStartedAt: Long?, liveWholeSession: Boolean, nowMs: Long, tariff: Double, ): TripCounterUi</ID>
     <ID>CyclomaticComplexMethod:TripsViewModel.kt$TripsViewModel$private fun buildChartBars( trips: List&lt;TripEntity&gt;, period: TripPeriod, metric: ChartMetric, filter: TripFilter ): List&lt;ChartBar&gt;</ID>
@@ -245,6 +245,7 @@
     <ID>LongMethod:LaunchFreeform.kt$internal fun launchFreeformCore( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, ): Int</ID>
     <ID>LongMethod:LaunchFreeform.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
     <ID>LongMethod:ListeningOverlay.kt$ListeningOverlay$private fun realAttach(context: Context, initial: String): OverlayHandle</ID>
+    <ID>LongMethod:LiveTelemetrySender.kt$LiveTelemetrySender$fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long)</ID>
     <ID>LongMethod:LocalInsightEngine.kt$LocalInsightEngine$fun generate(stats: InsightStats, res: Resources, periodDays: Int): TextResult</ID>
     <ID>LongMethod:NativeParsReader.kt$NativeParsReader$private suspend fun assembleSnapshot( decoded: Map&lt;String, Any?&gt;, windowRrPrimaryRaw: Int?, rememberSticky: Boolean = true, ): DiParsData?</ID>
     <ID>LongMethod:NativeParsReaderTest.kt$NativeParsReaderTest$@Test fun `s2 fixture decodes to values that match D+ side after equivalent unit transform`()</ID>
@@ -264,7 +265,6 @@
     <ID>LongMethod:SplitSessionManager.kt$SplitSessionManager$suspend fun changeApp(pane: Pane, newPkg: String): SplitStartResult</ID>
     <ID>LongMethod:SplitSessionManager.kt$SplitSessionManager$suspend fun start(pair: SplitPair): SplitStartResult</ID>
     <ID>LongMethod:TrackingService.kt$TrackingService$override fun onCreate()</ID>
-    <ID>LongMethod:TrackingService.kt$TrackingService$private fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long)</ID>
     <ID>LongMethod:TrackingService.kt$TrackingService$private fun startPolling()</ID>
     <ID>LongMethod:UpdateChecker.kt$UpdateChecker$suspend fun downloadAndInstall( context: Context, update: UpdateInfo, onProgress: (String) -&gt; Unit = {} )</ID>
     <ID>LongMethod:VehicleApiImpl.kt$VehicleApiImpl$internal suspend fun doWrite( requestedAction: String, requestedValue: Int, verifyInto: MutableList&lt;WindowVerify&gt;? = null, ): Result&lt;Unit&gt;</ID>
@@ -490,6 +490,7 @@
     <ID>TooGenericExceptionCaught:LaunchFreeform.kt$t: Throwable</ID>
     <ID>TooGenericExceptionCaught:ListeningOverlay.kt$ListeningOverlay$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ListeningOverlay.kt$ListeningOverlay.RealOverlayHandle$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:LiveTelemetrySender.kt$LiveTelemetrySender$e: Exception</ID>
     <ID>TooGenericExceptionCaught:LogRecorder.kt$LogRecorder$e: Exception</ID>
     <ID>TooGenericExceptionCaught:NativeSplitLauncher.kt$NativeSplitLauncher$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:NetworkAvailableMonitor.kt$NetworkAvailableMonitor$e: Exception</ID>
