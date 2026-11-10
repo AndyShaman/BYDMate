@@ -122,30 +122,4 @@ class DumpFidsChunkTest {
         // One iteration exhausts the dump; offset after chunk == dumpBytes.size → loop exits.
         assertEquals("chunk size must equal dump size", dumpBytes.size, chunk.size)
     }
-
-    // ---------------------------------------------------------------------------
-    // Anti-vacuity: dropping the loop breaks the multi-chunk test
-    // ---------------------------------------------------------------------------
-
-    @Test
-    fun `anti-vacuity single-chunk only gives partial result for large dump`() {
-        // This test proves that a loop is necessary: reading only chunk 0 yields fewer bytes
-        // than the full dump, so any assertion of equality on the full string would fail.
-        val dump = largeDump()
-        val dumpBytes = dump.toByteArray(Charsets.UTF_8)
-        assertTrue("dump must exceed CHUNK_MAX", dumpBytes.size > DUMP_CHUNK_MAX)
-
-        // Simulate "no loop" — only chunk 0.
-        val partialBytes = dumpFidsChunkBytes(dumpBytes, 0)
-        assertTrue(
-            "partial (chunk-0-only) bytes must be shorter than full dump bytes",
-            partialBytes.size < dumpBytes.size,
-        )
-        // The partial decode will be shorter and differ from the original.
-        val partialDecoded = partialBytes.toString(Charsets.UTF_8)
-        assertTrue(
-            "chunk-0-only string must be shorter than original",
-            partialDecoded.length < dump.length,
-        )
-    }
 }

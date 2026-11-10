@@ -46,6 +46,7 @@ class RaiseFreeformTaskCoreTest {
         assertTrue(ok)
         val cmd = shellCmds.single()
         assertTrue("must contain --windowingMode 5", cmd.contains("--windowingMode 5"))
+        // Without --activityType 3 recents-typed tasks get another activity type and the pane caption reappears.
         assertTrue("must contain --activityType 3", cmd.contains("--activityType 3"))
         assertTrue("must contain --display 0", cmd.contains("--display 0"))
         assertTrue("must contain -n <component>", cmd.contains("-n com.example.navi/"))
@@ -88,17 +89,6 @@ class RaiseFreeformTaskCoreTest {
     fun `shell command returning brought to the front - returns true`() {
         val ok = run(shell = { script, args -> shellCmds += effectiveCmd(script, args); "its current task has been brought to the front" })
         assertTrue(ok)
-    }
-
-    // --- mutation anti-vacuity: drop --activityType 3 flag ---
-
-    @Test
-    fun `raise command - activityType 3 flag is present (mutation guard)`() {
-        run()
-        val cmd = shellCmds.single()
-        // If someone removes --activityType 3, recents-typed tasks use a different activity type
-        // and the pane caption reappears. Assert the exact flag to catch such regressions.
-        assertTrue("--activityType 3 must be present (Task N requirement)", cmd.contains("--activityType 3"))
     }
 
     // --- F1: merged Error output makes raiseFreeformTaskCore return false ---

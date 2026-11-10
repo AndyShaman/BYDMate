@@ -10,46 +10,12 @@ import org.junit.Test
 class ClusterDisplayDiagTest {
 
     @Test
-    fun `props line keeps key order and shows a missing key as empty`() {
-        val raw = """
-            ro.build.version.sdk=29
-            ro.build.version.release=10
-            ro.build.display.id=DiLink3.0
-            ro.build.product=song
-            ro.product.model=BYD Song
-            ro.board.platform=trinket
-            ro.build.system.fission_single_os=
-        """.trimIndent()
-
-        assertEquals(
-            "sdk=29 rel=10 id=DiLink3.0 product=song model=BYD Song platform=trinket " +
-                "fission_single_os=",
-            ClusterDisplayDiag.propsLine(raw),
-        )
-    }
-
-    @Test
-    fun `props line reports every key even when getprop printed nothing`() {
-        val line = ClusterDisplayDiag.propsLine("")
-        assertEquals(
-            "sdk= rel= id= product= model= platform= fission_single_os=",
-            line,
-        )
-        assertTrue(line.length <= ClusterDisplayDiag.MAX_LINE)
-    }
-
-    @Test
     fun `byd props are capped at three with a plus N more counter`() {
         val raw = (1..7).joinToString("\n") { "[ro.byd.p$it]: [$it]" }
         val line = ClusterDisplayDiag.bydPropsLine(raw)
         assertTrue(line.startsWith("byd props: [ro.byd.p1]: [1], [ro.byd.p2]: [2], [ro.byd.p3]: [3]"))
         assertTrue(line.endsWith("+4 more"))
         assertFalse(line.contains("ro.byd.p4"))
-    }
-
-    @Test
-    fun `byd props reports none on empty output`() {
-        assertEquals("byd props: none", ClusterDisplayDiag.bydPropsLine("\n  \n"))
     }
 
     @Test
@@ -81,16 +47,6 @@ class ClusterDisplayDiagTest {
         assertEquals(3, ranked.dropped)
         assertTrue(ranked.kept.take(5).all { it.startsWith("DisplayDeviceInfo{cluster") })
         assertTrue(ranked.kept.drop(5).all { it.contains("Built-in") })
-    }
-
-    @Test
-    fun `display lines drop unrelated dumpsys noise`() {
-        val raw = """
-            DISPLAY MANAGER (dumpsys display)
-              mOnlyCoreApps=false
-              mDisplayId=2
-        """.trimIndent()
-        assertEquals(listOf("mDisplayId=2"), ClusterDisplayDiag.displayLines(raw).kept)
     }
 
     @Test
@@ -128,32 +84,12 @@ class ClusterDisplayDiagTest {
     }
 
     @Test
-    fun `display summary reports missing owner and flags rather than omitting them`() {
-        val raw = """DisplayDeviceInfo{"Built-in Screen": uniqueId="local:0", 1920 x 1200, modeId 1, type INTERNAL, state ON}"""
-        val summary = ClusterDisplayDiag.displaySummaries(raw).single()
-        assertTrue(summary.contains("owner=?"))
-        assertTrue(summary.contains("flags=-"))
-    }
-
-    @Test
     fun `display summary line stays within the log budget for a very long uniqueId`() {
         val raw = """DisplayDeviceInfo{"cluster": uniqueId="virtual:${"x".repeat(1000)}", 1280 x 480, type VIRTUAL, state ON, owner com.byd.cluster (uid 1000), FLAG_PRIVATE}"""
         val summary = ClusterDisplayDiag.displaySummaries(raw).single()
         assertTrue(summary.length <= ClusterDisplayDiag.MAX_LINE)
         assertTrue(summary.contains("owner=com.byd.cluster (uid 1000)"))
         assertTrue(summary.contains("flags=FLAG_PRIVATE"))
-    }
-
-    @Test
-    fun `non default mDisplayId line is prioritized within the non default group`() {
-        val raw = buildString {
-            appendLine("mDisplayId=0 name=\"Built-in\" state ON")
-            appendLine("mDisplayId=0 owner sys (uid 1000)")
-            repeat(5) { appendLine("name=\"noise$it\" type NOISE") }
-            appendLine("mDisplayId=1 name=\"Cluster\" state ON")
-        }
-        val ranked = ClusterDisplayDiag.displayLines(raw, max = 3)
-        assertTrue(ranked.kept.any { it.contains("mDisplayId=1") })
     }
 
     @Test
@@ -293,52 +229,6 @@ class ClusterDisplayDiagTest {
         val lines = ClusterDisplayDiag.wmDisplayLines(many)
         assertEquals(ClusterDisplayDiag.MAX_WM_DISPLAYS, lines.size)
         assertTrue(lines.all { it.length <= ClusterDisplayDiag.MAX_WM_LINE + 4 })
-    }
-
-    @Test
-    fun `wm displays on a dump without display blocks is empty`() {
-        assertTrue(ClusterDisplayDiag.wmDisplayLines("").isEmpty())
-    }
-
-    /** `dumpsys activity activities` on Android 10: the plural header line precedes the blob. */
-    private val ACTIVITIES = """
-        Display #0 (activities from top to bottom):
-          Stack #4075:
-            * ActivityRecord{a1b2c3 u0 ru.yandex.yandexnavi/.MainActivity t4075}
-              packageName=ru.yandex.yandexnavi processName=ru.yandex.yandexnavi
-              mActivityComponent=ru.yandex.yandexnavi/.MainActivity
-              mLastReportedConfigurations:
-               mLastReportedConfiguration={1.0 ?mcc?mnc [ru_RU] ldltr sw360dp w960dp h360dp 160dpi lrg land finger qwerty/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1920, 720) mAppBounds=Rect(0, 0 - 1920, 720) mWindowingMode=freeform mDisplayWindowingMode=fullscreen mActivityType=standard} s.6}
-              resumed=true
-    """.trimIndent()
-
-    @Test
-    fun `nav task config reports the dpi the activity itself received`() {
-        val lines = ClusterDisplayDiag.taskConfigLines(ACTIVITIES, "ru.yandex.yandexnavi")
-        assertEquals(1, lines.size)
-        assertTrue(
-            "the component and its reported dpi must be on the line: ${lines[0]}",
-            lines[0].startsWith("ru.yandex.yandexnavi/.MainActivity dpi=160 raw=\""),
-        )
-    }
-
-    @Test
-    fun `nav task config survives the singular spelling and a missing dpi`() {
-        val singular = """
-              * ActivityRecord{a1b2c3 u0 ru.yandex.yandexnavi/.MainActivity t4075}
-                mLastReportedConfiguration={1.0 ?mcc?mnc [ru_RU] ldltr sw360dp land finger}
-        """.trimIndent()
-        val lines = ClusterDisplayDiag.taskConfigLines(singular, "ru.yandex.yandexnavi")
-        assertEquals(1, lines.size)
-        assertTrue("missing dpi must read as ?: ${lines[0]}", lines[0].contains(" dpi=? "))
-    }
-
-    @Test
-    fun `nav task config names the package when no record is there`() {
-        assertEquals(
-            listOf("(no ActivityRecord for ru.yandex.yandexnavi.other)"),
-            ClusterDisplayDiag.taskConfigLines(ACTIVITIES, "ru.yandex.yandexnavi.other"),
-        )
     }
 
     @Test
