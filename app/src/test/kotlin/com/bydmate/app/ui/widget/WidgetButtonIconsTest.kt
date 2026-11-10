@@ -13,6 +13,13 @@ class WidgetButtonIconsTest {
     }
 
     @Test
+    fun `find resolves every catalog id`() {
+        WidgetButtonIcons.CATALOG.forEach { entry ->
+            assertEquals(entry, WidgetButtonIcons.find(entry.id))
+        }
+    }
+
+    @Test
     fun `find returns null for unknown and absent ids`() {
         assertNull(WidgetButtonIcons.find(null))
         assertNull(WidgetButtonIcons.find(""))

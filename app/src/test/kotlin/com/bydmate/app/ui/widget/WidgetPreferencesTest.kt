@@ -3,6 +3,7 @@ package com.bydmate.app.ui.widget
 import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -20,6 +21,29 @@ class WidgetPreferencesTest {
         prefs = WidgetPreferences(fakeSharedPrefs(store))
     }
 
+    @Test
+    fun `savePosition stores both coordinates`() {
+        prefs.savePosition(100, 250)
+        assertEquals(100, prefs.getX())
+        assertEquals(250, prefs.getY())
+    }
+
+    @Test
+    fun `savePosition overwrites previous values`() {
+        prefs.savePosition(10, 20)
+        prefs.savePosition(300, 400)
+        assertEquals(300, prefs.getX())
+        assertEquals(400, prefs.getY())
+    }
+
+    @Test
+    fun `resetPosition clears to zero`() {
+        prefs.savePosition(100, 200)
+        prefs.resetPosition()
+        assertEquals(0, prefs.getX())
+        assertEquals(0, prefs.getY())
+    }
+
     @Test fun `setAlpha clamps to 0 3 minimum`() {
         prefs.setAlpha(0.1f)
         assertEquals(0.3f, prefs.getAlpha(), 0.001f)
@@ -28,6 +52,17 @@ class WidgetPreferencesTest {
     @Test fun `setAlpha clamps to 1 0 maximum`() {
         prefs.setAlpha(1.5f)
         assertEquals(1.0f, prefs.getAlpha(), 0.001f)
+    }
+
+    @Test fun `setAlpha stores mid-range value as-is`() {
+        prefs.setAlpha(0.65f)
+        assertEquals(0.65f, prefs.getAlpha(), 0.001f)
+    }
+
+    @Test fun `setLeftTapApp stores both package and label`() {
+        prefs.setLeftTapApp("com.spotify.music", "Spotify")
+        assertEquals("com.spotify.music", prefs.getLeftTapAppPackage())
+        assertEquals("Spotify", prefs.getLeftTapAppLabel())
     }
 
     @Test fun `migration copies legacy true to new key and removes legacy`() {
@@ -70,6 +105,12 @@ class WidgetPreferencesTest {
 
     // --- hide-in-apps tests ---
 
+    @Test fun `setHideInApps empty clears the selection`() {
+        prefs.setHideInApps(setOf("com.android.chrome"))
+        prefs.setHideInApps(emptySet())
+        assertTrue(prefs.getHideInApps().isEmpty())
+    }
+
     @Test fun `setHideInApps copies so later caller mutation does not leak in`() {
         val picked = mutableSetOf("com.android.chrome")
         prefs.setHideInApps(picked)
@@ -80,6 +121,27 @@ class WidgetPreferencesTest {
     @Test fun `getHideInApps does not hand out the stored instance`() {
         prefs.setHideInApps(setOf("com.android.chrome"))
         assertFalse(prefs.getHideInApps() === store[WidgetPreferences.KEY_HIDE_IN_APPS])
+    }
+
+    @Test fun `setButtonIconId stores per button`() {
+        prefs.setButtonIconId(1, "window")
+        prefs.setButtonIconId(3, "trunk")
+        assertEquals("window", prefs.buttonIconId(1))
+        assertNull(prefs.buttonIconId(2))
+        assertEquals("trunk", prefs.buttonIconId(3))
+    }
+
+    @Test fun `setButtonIconId null clears the stored icon`() {
+        prefs.setButtonIconId(2, "ac")
+        prefs.setButtonIconId(2, null)
+        assertNull(prefs.buttonIconId(2))
+        assertFalse(store.containsKey(WidgetPreferences.buttonIconKey(2)))
+    }
+
+    @Test fun `setButtonIconId overwrites the previous choice`() {
+        prefs.setButtonIconId(4, "lock")
+        prefs.setButtonIconId(4, "unlock")
+        assertEquals("unlock", prefs.buttonIconId(4))
     }
 
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---
