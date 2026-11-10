@@ -122,6 +122,19 @@ class OpenRouterClient @Inject constructor(
         extras?.keys()?.forEach { put(it, extras.get(it)) }
     }
 
+    /** POST [payload] to [baseUrl]/chat/completions with the OpenRouter headers; shared by
+     *  [chatRaw] and [chatStream]. */
+    private fun buildRequest(baseUrl: String, apiKey: String, payload: JSONObject): Request {
+        val base = baseUrlForTest ?: baseUrl
+        return Request.Builder()
+            .url("$base/chat/completions")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("HTTP-Referer", "https://github.com/AndyShaman/BYDMate")
+            .addHeader("X-Title", "BYDMate")
+            .post(payload.toString().toRequestBody(JSON_MEDIA))
+            .build()
+    }
+
     /**
      * Raw chat-completions call for the voice agent: full message history plus optional
      * tool schemas, against any OpenAI-compatible [baseUrl] (OpenRouter, z.ai, or a custom
@@ -138,14 +151,7 @@ class OpenRouterClient @Inject constructor(
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
             val payload = buildPayload(modelId, messages, tools, stream = false, extras = extras)
-            val base = baseUrlForTest ?: baseUrl
-            val request = Request.Builder()
-                .url("$base/chat/completions")
-                .addHeader("Authorization", "Bearer $apiKey")
-                .addHeader("HTTP-Referer", "https://github.com/AndyShaman/BYDMate")
-                .addHeader("X-Title", "BYDMate")
-                .post(payload.toString().toRequestBody(JSON_MEDIA))
-                .build()
+            val request = buildRequest(baseUrl, apiKey, payload)
             httpClient.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) throw LlmHttpException(resp.code)
                 val bodyStr = resp.body?.string().takeUnless { it.isNullOrBlank() }
@@ -183,14 +189,7 @@ class OpenRouterClient @Inject constructor(
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
             val payload = buildPayload(modelId, messages, tools, stream = true, extras = extras)
-            val base = baseUrlForTest ?: baseUrl
-            val request = Request.Builder()
-                .url("$base/chat/completions")
-                .addHeader("Authorization", "Bearer $apiKey")
-                .addHeader("HTTP-Referer", "https://github.com/AndyShaman/BYDMate")
-                .addHeader("X-Title", "BYDMate")
-                .post(payload.toString().toRequestBody(JSON_MEDIA))
-                .build()
+            val request = buildRequest(baseUrl, apiKey, payload)
             val call = streamClient.newCall(request)
             // A blocked call.execute()/readUtf8Line() never observes coroutine cancellation by itself.
             // A sibling watcher resumes on cancellation (on another thread) and cancels the OkHttp call,
