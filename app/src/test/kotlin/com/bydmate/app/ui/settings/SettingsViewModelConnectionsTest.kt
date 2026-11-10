@@ -158,7 +158,6 @@ class SettingsViewModelConnectionsTest {
         override suspend fun update(drain: IdleDrainEntity) {}
         override suspend fun getCount(): Int = 0
         override suspend fun getAll(): List<IdleDrainEntity> = emptyList()
-        override suspend fun getTotalKwh(): Double = 0.0
         override suspend fun deleteAll() {}
         override suspend fun getKwhSince(since: Long): Double = 0.0
         override suspend fun getHoursSince(since: Long): Double = 0.0
