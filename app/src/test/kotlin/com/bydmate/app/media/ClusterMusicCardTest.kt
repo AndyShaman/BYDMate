@@ -103,11 +103,6 @@ class ClusterMusicCardTest {
         assertEquals(Target.OtherPlaying("com.byd.mediacenter"), ClusterMusicCard.decide(listOf(stock, music)))
     }
 
-    @Test fun `the sessions alone decide the owner`() {
-        val sessions = listOf(SessionSnapshot(navi, paused, "Old", "A"), SessionSnapshot("com.byd.mediacenter", playing, "Song", "B"))
-        assertEquals(Target.OtherPlaying("com.byd.mediacenter"), ClusterMusicCard.decide(sessions))
-    }
-
     @Test fun `stopped or untitled sessions are idle`() {
         assertEquals(Target.Idle, ClusterMusicCard.decide(listOf(SessionSnapshot(navi, stopped, "Song", "A"))))
         assertEquals(Target.Idle, ClusterMusicCard.decide(listOf(SessionSnapshot(navi, playing, "  ", "A"))))

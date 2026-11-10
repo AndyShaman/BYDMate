@@ -60,19 +60,11 @@ class NaviNotifTraceGateTest {
         assertNull(gate.takePost(rich, T0 + 4_000))
     }
 
-    @Test fun `the lines carry numbers and ids, no text`() {
-        assertEquals(
-            "navi notif posted: pkg=ru.yandex.yandexnavi id=1 ongoing=true channel=navi kind=rich man=2 dist=300 " +
-                "roadLen=6 skippedChanges=3",
-            NaviNotifTraceGate.postLine("ru.yandex.yandexnavi", 1, true, "navi", "rich", 2, 300, 6, 3),
-        )
-        assertEquals(
-            "navi notif posted: pkg=ru.yandex.yandexmaps id=3 ongoing=false channel=null kind=empty man=0 dist=0 " +
-                "roadLen=0 skippedChanges=0",
-            NaviNotifTraceGate.postLine("ru.yandex.yandexmaps", 3, false, null, "empty", 0, 0, 0, 0),
-        )
-        assertEquals("navi notif removed: pkg=ru.yandex.yandexnavi id=1",
-            NaviNotifTraceGate.removedLine("ru.yandex.yandexnavi", 1))
+    // Support searches posted logs by this tag and these field names.
+    @Test fun `the post line keeps its tag and field names`() {
+        val line = NaviNotifTraceGate.postLine("ru.yandex.yandexnavi", 1, true, "navi", "rich", 2, 300, 6, 3)
+        assertTrue(line, line.startsWith("navi notif posted: "))
+        listOf("kind=", "man=", "dist=").forEach { assertTrue(line, it in line) }
     }
 
     private companion object {

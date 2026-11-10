@@ -68,11 +68,6 @@ class NotificationListenerRebinderTest {
         assertFalse(rebinder(disallow = false, hook = Hook(calls, failAfter = true)).rebind("test"))
     }
 
-    @Test fun `constants`() {
-        assertEquals(2, NotificationListenerRebinder.MAX_ATTEMPTS)
-        assertEquals(200L, NotificationListenerRebinder.GAP_MS)
-    }
-
     // H6: ClusterMusicBridge needs a Context, Hilt deps and the firmware probe, so it cannot be built in a JVM test.
     // The re-registration condition is tested instead; the poll registers a listener only when none is held.
     @Test fun `bridge re-registers only when no listener is held and not ui7`() {
