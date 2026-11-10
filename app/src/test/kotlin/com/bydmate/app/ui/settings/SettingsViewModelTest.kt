@@ -1474,6 +1474,16 @@ class SettingsViewModelTest {
      */
     @Test fun `the diagnostic header text is pinned as a whole`() = runTest {
         val ctx: Context = ApplicationProvider.getApplicationContext()
+        // The header prints process-wide state that another test class in the same JVM may have left behind:
+        // the self-heal history and the live state of the cluster projection object. Both start as on a cold start.
+        com.bydmate.app.service.GrantSelfHeal.clearHistory()
+        io.mockk.mockkObject(com.bydmate.app.cluster.ClusterProjectionManager)
+        io.mockk.every { com.bydmate.app.cluster.ClusterProjectionManager.diag() } returns
+            com.bydmate.app.cluster.ClusterProjectionManager.Diag(
+                mode = com.bydmate.app.cluster.ClusterMode.OFF, projectedPackage = null, vdDisplayId = -1,
+                directDisplayId = -1, overlayAttached = false, attemptInProgress = false, lastFailure = null,
+                directDensityDpi = -1,
+            )
         // Every time in the header is printed in the default zone: pin it so the test is the same on any machine.
         val zone = java.util.TimeZone.getDefault()
         java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
@@ -1520,6 +1530,7 @@ class SettingsViewModelTest {
             assertEquals(reference, normalized)
         } finally {
             java.util.TimeZone.setDefault(zone)
+            io.mockk.unmockkObject(com.bydmate.app.cluster.ClusterProjectionManager)
         }
     }
 
