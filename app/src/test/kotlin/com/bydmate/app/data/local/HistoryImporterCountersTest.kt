@@ -14,7 +14,6 @@ import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.nativestack.kindMonitor
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.cost.CostCalculator
-import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -56,18 +55,11 @@ class HistoryImporterCountersTest {
         db.close()
     }
 
-    private fun importer(kind: VehicleKind) = HistoryImporter(
+    private fun importer(kind: VehicleKind) = historyImporter(
         context = ApplicationProvider.getApplicationContext(),
-        energyDataReader = mockk(relaxed = true),
-        tripRepository = mockk(relaxed = true),
         tripDao = db.tripDao(),
-        tripPointDao = mockk(relaxed = true),
-        idleDrainDao = mockk(relaxed = true),
         settingsRepository = settings,
-        lastSessionRepository = mockk(relaxed = true),
-        tripTombstoneDao = mockk(relaxed = true),
         costCalculator = CostCalculator(db.tariffPeriodDao(), db.chargeDao(), db.tripDao(), settings),
-        odometerMarks = mockk(relaxed = true),
         vehicleKind = kindMonitor(kind),
         counterSnapshotDao = db.counterSnapshotDao(),
         counterSnapshotWriter = com.bydmate.app.data.trips.CounterSnapshotWriter(db.counterSnapshotDao()),

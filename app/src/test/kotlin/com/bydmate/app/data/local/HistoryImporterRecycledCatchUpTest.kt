@@ -1,13 +1,9 @@
 package com.bydmate.app.data.local
 
-import android.content.Context
-import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripTombstoneEntity
-import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import io.mockk.coEvery
@@ -45,22 +41,12 @@ class HistoryImporterRecycledCatchUpTest {
     private val nowSec = System.currentTimeMillis() / 1000L
     private val t0 = nowSec - 300L * 86_400L // the reset of the car's DB
 
-    private fun importer() = HistoryImporter(
-        context = mockk<Context>(relaxed = true),
+    private fun importer() = historyImporter(
         energyDataReader = energyDataReader,
         tripRepository = tripRepository,
         tripDao = tripDao,
-        tripPointDao = mockk<TripPointDao>(relaxed = true),
-        idleDrainDao = mockk<IdleDrainDao>(relaxed = true),
         settingsRepository = settings,
-        lastSessionRepository = mockk<LastSessionRepository>(relaxed = true),
         tripTombstoneDao = tombstoneDao,
-        costCalculator = mockk(relaxed = true),
-        odometerMarks = mockk(relaxed = true),
-        vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(),
-        counterSnapshotDao = mockk(relaxed = true),
-        counterSnapshotWriter = mockk(relaxed = true),
-        lastStateDao = mockk(relaxed = true),
     )
 
     private fun wire() {
