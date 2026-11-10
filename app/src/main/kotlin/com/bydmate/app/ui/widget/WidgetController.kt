@@ -146,8 +146,8 @@ object WidgetController {
     private const val TAG = "WidgetController"
 
     // Widget dimensions in dp — matches FloatingWidgetView layout
-    private const val WIDGET_WIDTH_DP = 260
-    private const val WIDGET_HEIGHT_DP = 108
+    private const val WIDGET_WIDTH_DP = WidgetButtonLayout.PANEL_WIDTH_DP
+    private const val WIDGET_HEIGHT_DP = WidgetButtonLayout.PANEL_HEIGHT_DP
     private const val DRAG_THRESHOLD_DP = 8
     private const val TRASH_RADIUS_DP = 48
     private const val LONG_PRESS_MS = 1500L

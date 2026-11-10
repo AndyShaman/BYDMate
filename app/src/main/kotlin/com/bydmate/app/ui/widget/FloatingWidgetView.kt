@@ -133,7 +133,7 @@ fun FloatingWidgetView(
         Column(
             modifier = Modifier
                 .alpha(alpha.coerceIn(0.3f, 1.0f))
-                .size(width = 260.dp, height = 108.dp)
+                .size(width = WidgetButtonLayout.PANEL_WIDTH_DP.dp, height = WidgetButtonLayout.PANEL_HEIGHT_DP.dp)
                 .shadow(elevation = 8.dp, shape = RoundedCornerShape(14.dp))
                 .background(CardSurface, RoundedCornerShape(14.dp))
                 .then(borderModifier)
