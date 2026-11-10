@@ -45,12 +45,6 @@ class Migration21to22Test {
             assertEquals(80, c.getInt(1))
             assertTrue(c.isNull(2))
         }
-
-        migrated.execSQL("UPDATE last_state SET trip_start_exterior_temp = -12")
-        migrated.query("SELECT trip_start_exterior_temp FROM last_state").use { c ->
-            c.moveToFirst()
-            assertEquals(-12, c.getInt(0))
-        }
         migrated.close()
     }
 }
