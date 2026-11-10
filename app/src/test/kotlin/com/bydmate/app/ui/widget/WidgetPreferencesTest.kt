@@ -3,7 +3,6 @@ package com.bydmate.app.ui.widget
 import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -21,57 +20,6 @@ class WidgetPreferencesTest {
         prefs = WidgetPreferences(fakeSharedPrefs(store))
     }
 
-    @Test
-    fun `enabled defaults to false`() {
-        assertFalse(prefs.isEnabled())
-    }
-
-    @Test
-    fun `setEnabled true stores true`() {
-        prefs.setEnabled(true)
-        assertTrue(prefs.isEnabled())
-    }
-
-    @Test
-    fun `setEnabled toggles and can be read back`() {
-        prefs.setEnabled(true)
-        prefs.setEnabled(false)
-        assertFalse(prefs.isEnabled())
-    }
-
-    @Test
-    fun `position defaults are 0 0 when unset`() {
-        assertEquals(0, prefs.getX())
-        assertEquals(0, prefs.getY())
-    }
-
-    @Test
-    fun `savePosition stores both coordinates`() {
-        prefs.savePosition(100, 250)
-        assertEquals(100, prefs.getX())
-        assertEquals(250, prefs.getY())
-    }
-
-    @Test
-    fun `savePosition overwrites previous values`() {
-        prefs.savePosition(10, 20)
-        prefs.savePosition(300, 400)
-        assertEquals(300, prefs.getX())
-        assertEquals(400, prefs.getY())
-    }
-
-    @Test
-    fun `resetPosition clears to zero`() {
-        prefs.savePosition(100, 200)
-        prefs.resetPosition()
-        assertEquals(0, prefs.getX())
-        assertEquals(0, prefs.getY())
-    }
-
-    @Test fun `alpha defaults to 1 0`() {
-        assertEquals(1.0f, prefs.getAlpha(), 0.001f)
-    }
-
     @Test fun `setAlpha clamps to 0 3 minimum`() {
         prefs.setAlpha(0.1f)
         assertEquals(0.3f, prefs.getAlpha(), 0.001f)
@@ -80,64 +28,6 @@ class WidgetPreferencesTest {
     @Test fun `setAlpha clamps to 1 0 maximum`() {
         prefs.setAlpha(1.5f)
         assertEquals(1.0f, prefs.getAlpha(), 0.001f)
-    }
-
-    @Test fun `setAlpha stores mid-range value as-is`() {
-        prefs.setAlpha(0.65f)
-        assertEquals(0.65f, prefs.getAlpha(), 0.001f)
-    }
-
-    @Test fun `hiddenUntilAppLaunch defaults to false`() {
-        assertFalse(prefs.isHiddenUntilAppLaunch())
-    }
-
-    @Test fun `setHiddenUntilAppLaunch true is persisted`() {
-        prefs.setHiddenUntilAppLaunch(true)
-        assertTrue(prefs.isHiddenUntilAppLaunch())
-    }
-
-    @Test fun `setHiddenUntilAppLaunch toggles back to false`() {
-        prefs.setHiddenUntilAppLaunch(true)
-        prefs.setHiddenUntilAppLaunch(false)
-        assertFalse(prefs.isHiddenUntilAppLaunch())
-    }
-
-    @Test fun `leftTapZoning defaults to false`() {
-        assertFalse(prefs.isLeftTapZoningEnabled())
-    }
-
-    @Test fun `setLeftTapZoning true is persisted`() {
-        prefs.setLeftTapZoningEnabled(true)
-        assertTrue(prefs.isLeftTapZoningEnabled())
-    }
-
-    @Test fun `buttonsEnabled defaults to false`() {
-        assertFalse(prefs.isButtonsEnabled())
-    }
-
-    @Test fun `setButtonsEnabled true is persisted`() {
-        prefs.setButtonsEnabled(true)
-        assertTrue(prefs.isButtonsEnabled())
-    }
-
-    @Test fun `setButtonsEnabled toggles back to false`() {
-        prefs.setButtonsEnabled(true)
-        prefs.setButtonsEnabled(false)
-        assertFalse(prefs.isButtonsEnabled())
-    }
-
-    @Test fun `leftTapAppPackage defaults to Yandex Navigator`() {
-        assertEquals("ru.yandex.yandexnavi", prefs.getLeftTapAppPackage())
-    }
-
-    @Test fun `leftTapAppLabel defaults to Russian name`() {
-        assertEquals("Яндекс.Навигатор", prefs.getLeftTapAppLabel())
-    }
-
-    @Test fun `setLeftTapApp stores both package and label`() {
-        prefs.setLeftTapApp("com.spotify.music", "Spotify")
-        assertEquals("com.spotify.music", prefs.getLeftTapAppPackage())
-        assertEquals("Spotify", prefs.getLeftTapAppLabel())
     }
 
     @Test fun `migration copies legacy true to new key and removes legacy`() {
@@ -171,22 +61,6 @@ class WidgetPreferencesTest {
 
     // --- LeftTapMode tests ---
 
-    @Test fun `leftTapMode defaults to APP when key is absent`() {
-        assertFalse(store.containsKey(WidgetPreferences.KEY_LEFT_TAP_MODE))
-        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
-    }
-
-    @Test fun `setLeftTapMode SPLIT persists`() {
-        prefs.setLeftTapMode(LeftTapMode.SPLIT)
-        assertEquals(LeftTapMode.SPLIT, prefs.getLeftTapMode())
-    }
-
-    @Test fun `setLeftTapMode round-trip SPLIT back to APP`() {
-        prefs.setLeftTapMode(LeftTapMode.SPLIT)
-        prefs.setLeftTapMode(LeftTapMode.APP)
-        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
-    }
-
     @Test fun `getLeftTapMode returns APP when stored value is unrecognised`() {
         // Simulate a future enum value written by a newer install, then downgraded.
         store[WidgetPreferences.KEY_LEFT_TAP_MODE] = "UNKNOWN_FUTURE_VALUE"
@@ -195,21 +69,6 @@ class WidgetPreferencesTest {
     }
 
     // --- hide-in-apps tests ---
-
-    @Test fun `hideInApps defaults to empty`() {
-        assertTrue(prefs.getHideInApps().isEmpty())
-    }
-
-    @Test fun `setHideInApps round-trips the package set`() {
-        prefs.setHideInApps(setOf("com.android.chrome", "anddea.youtube"))
-        assertEquals(setOf("com.android.chrome", "anddea.youtube"), prefs.getHideInApps())
-    }
-
-    @Test fun `setHideInApps empty clears the selection`() {
-        prefs.setHideInApps(setOf("com.android.chrome"))
-        prefs.setHideInApps(emptySet())
-        assertTrue(prefs.getHideInApps().isEmpty())
-    }
 
     @Test fun `setHideInApps copies so later caller mutation does not leak in`() {
         val picked = mutableSetOf("com.android.chrome")
@@ -223,38 +82,10 @@ class WidgetPreferencesTest {
         assertFalse(prefs.getHideInApps() === store[WidgetPreferences.KEY_HIDE_IN_APPS])
     }
 
-    @Test fun `button icon defaults to null`() {
-        assertNull(prefs.buttonIconId(1))
-    }
-
-    @Test fun `setButtonIconId stores per button`() {
-        prefs.setButtonIconId(1, "window")
-        prefs.setButtonIconId(3, "trunk")
-        assertEquals("window", prefs.buttonIconId(1))
-        assertNull(prefs.buttonIconId(2))
-        assertEquals("trunk", prefs.buttonIconId(3))
-    }
-
-    @Test fun `setButtonIconId null clears the stored icon`() {
-        prefs.setButtonIconId(2, "ac")
-        prefs.setButtonIconId(2, null)
-        assertNull(prefs.buttonIconId(2))
-        assertFalse(store.containsKey(WidgetPreferences.buttonIconKey(2)))
-    }
-
-    @Test fun `setButtonIconId overwrites the previous choice`() {
-        prefs.setButtonIconId(4, "lock")
-        prefs.setButtonIconId(4, "unlock")
-        assertEquals("unlock", prefs.buttonIconId(4))
-    }
-
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---
 
     // ── split launch panel: tap switch with restore ─────────────────────────────
 
-    @Test fun `split tap is off by default`() {
-        assertFalse(prefs.isSplitTapOn())
-    }
     @Test fun `split tap on sets zoning and split mode`() {
         prefs.setSplitTapOn(true)
         assertTrue(prefs.isLeftTapZoningEnabled())

@@ -1,44 +1,41 @@
 package com.bydmate.app.ui.widget
 
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class WidgetGestureLogicTest {
 
-    // --- isLeftZone ---
-
-    @Test fun `touch left of the one-third boundary is left zone`() {
-        assertTrue(WidgetGestureLogic.isLeftZone(eventX = 50f, viewWidth = 300, fraction = 1f / 3f))
+    @Test fun `left zone is strictly inside the first third and never for an unmeasured view`() {
+        class Case(val label: String, val eventX: Float, val viewWidth: Int, val expected: Boolean)
+        val cases = listOf(
+            Case("left of the one-third boundary", 50f, 300, true),
+            Case("past the one-third boundary", 150f, 300, false),
+            Case("exactly at boundary (strict less-than)", 100f, 300, false),
+            Case("unmeasured view width", 0f, 0, false),
+        )
+        for (c in cases) {
+            assertEquals(
+                "case: ${c.label}",
+                c.expected,
+                WidgetGestureLogic.isLeftZone(eventX = c.eventX, viewWidth = c.viewWidth, fraction = 1f / 3f),
+            )
+        }
     }
 
-    @Test fun `touch past the one-third boundary is not left zone`() {
-        assertFalse(WidgetGestureLogic.isLeftZone(eventX = 150f, viewWidth = 300, fraction = 1f / 3f))
-    }
-
-    @Test fun `exactly at boundary is not left zone (strict less-than)`() {
-        assertFalse(WidgetGestureLogic.isLeftZone(eventX = 100f, viewWidth = 300, fraction = 1f / 3f))
-    }
-
-    @Test fun `unmeasured view width is never left zone`() {
-        assertFalse(WidgetGestureLogic.isLeftZone(eventX = 0f, viewWidth = 0, fraction = 1f / 3f))
-    }
-
-    // --- isWithinDoubleTapWindow ---
-
-    @Test fun `second tap inside the window is a double tap`() {
-        assertTrue(WidgetGestureLogic.isWithinDoubleTapWindow(prevUpMs = 1000L, nowMs = 1200L, windowMs = 250L))
-    }
-
-    @Test fun `second tap at exactly the window edge counts (inclusive)`() {
-        assertTrue(WidgetGestureLogic.isWithinDoubleTapWindow(prevUpMs = 1000L, nowMs = 1250L, windowMs = 250L))
-    }
-
-    @Test fun `second tap past the window is not a double tap`() {
-        assertFalse(WidgetGestureLogic.isWithinDoubleTapWindow(prevUpMs = 1000L, nowMs = 1400L, windowMs = 250L))
-    }
-
-    @Test fun `no previous tap is not a double tap`() {
-        assertFalse(WidgetGestureLogic.isWithinDoubleTapWindow(prevUpMs = 0L, nowMs = 200L, windowMs = 250L))
+    @Test fun `double tap is a second tap within the window, edge included`() {
+        class Case(val label: String, val prevUpMs: Long, val nowMs: Long, val expected: Boolean)
+        val cases = listOf(
+            Case("inside the window", 1000L, 1200L, true),
+            Case("exactly the window edge (inclusive)", 1000L, 1250L, true),
+            Case("past the window", 1000L, 1400L, false),
+            Case("no previous tap", 0L, 200L, false),
+        )
+        for (c in cases) {
+            assertEquals(
+                "case: ${c.label}",
+                c.expected,
+                WidgetGestureLogic.isWithinDoubleTapWindow(prevUpMs = c.prevUpMs, nowMs = c.nowMs, windowMs = 250L),
+            )
+        }
     }
 }

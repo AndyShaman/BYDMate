@@ -13,29 +13,19 @@ class WidgetKmPerPercentTest {
     }
 
     @Test
-    fun `null range yields null`() {
-        assertNull(widgetKmPerPercent(rangeKm = null, soc = 80))
-    }
-
-    @Test
-    fun `null soc yields null`() {
-        assertNull(widgetKmPerPercent(rangeKm = 240.0, soc = null))
-    }
-
-    @Test
-    fun `zero soc yields null to avoid divide by zero`() {
-        assertNull(widgetKmPerPercent(rangeKm = 240.0, soc = 0))
-    }
-
-    @Test
-    fun `negative soc yields null`() {
-        assertNull(widgetKmPerPercent(rangeKm = 240.0, soc = -3))
-    }
-
-    @Test
-    fun `non finite or negative range yields null`() {
-        assertNull(widgetKmPerPercent(rangeKm = -5.0, soc = 80))
-        assertNull(widgetKmPerPercent(rangeKm = Double.NaN, soc = 80))
-        assertNull(widgetKmPerPercent(rangeKm = Double.POSITIVE_INFINITY, soc = 80))
+    fun `missing, zero, negative or non finite inputs yield null`() {
+        class Case(val label: String, val rangeKm: Double?, val soc: Int?)
+        val cases = listOf(
+            Case("null range", null, 80),
+            Case("null soc", 240.0, null),
+            Case("zero soc (divide by zero)", 240.0, 0),
+            Case("negative soc", 240.0, -3),
+            Case("negative range", -5.0, 80),
+            Case("NaN range", Double.NaN, 80),
+            Case("infinite range", Double.POSITIVE_INFINITY, 80),
+        )
+        for (c in cases) {
+            assertNull("case: ${c.label}", widgetKmPerPercent(rangeKm = c.rangeKm, soc = c.soc))
+        }
     }
 }
