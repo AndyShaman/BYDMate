@@ -1557,9 +1557,8 @@ class AgentTools @Inject constructor(
         val rule = ruleDao.getEnabled()
             .firstOrNull { it.name.trim().equals(name, ignoreCase = true) }
             ?: return """{"error":"автоматизация не найдена"}"""
-        return when (val r = automationEngine.fireVoiceRule(rule.id, gate.vehicleSnapshot())) {
-            is VoiceFireResult.Fired ->
-                if (r.success) OK else """{"error":"часть действий не выполнилась"}"""
+        return when (automationEngine.fireVoiceRule(rule.id, gate.vehicleSnapshot())) {
+            VoiceFireResult.Fired -> OK
             VoiceFireResult.Confirming -> """{"ok":true,"status":"ожидает подтверждения на экране"}"""
             VoiceFireResult.ParkRequired -> """{"error":"выполняется только на паркинге"}"""
             VoiceFireResult.SpeedUnknown -> """{"error":"скорость неизвестна"}"""

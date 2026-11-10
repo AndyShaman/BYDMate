@@ -114,7 +114,7 @@ class AgentToolsControlTest {
         every { gate.vehicleSnapshot() } returns null
         coEvery { ruleDao.getEnabled() } returns listOf(
             RuleEntity(id = 7, name = "Проветрить", triggers = "[]", actions = "[]"))
-        coEvery { engine.fireVoiceRule(7, null) } returns VoiceFireResult.Fired(true)
+        coEvery { engine.fireVoiceRule(7, null) } returns VoiceFireResult.Fired
         val out = JSONObject(tools().execute(
             call("run_automation", """{"name":"проветрить"}""")))
         assertTrue(out.getBoolean("ok"))

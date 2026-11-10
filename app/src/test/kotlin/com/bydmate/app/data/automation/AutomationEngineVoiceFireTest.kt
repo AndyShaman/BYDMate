@@ -93,7 +93,7 @@ class AutomationEngineVoiceFireTest {
         // fireVoiceRule now hands the actions off to the engine's own scope and returns
         // as soon as they're launched, not once dispatch() has actually run.
         val res = engine(ruleDao, dispatcher).fireVoiceRule(7, diParsData())
-        assertEquals(VoiceFireResult.Fired(true), res)
+        assertEquals(VoiceFireResult.Fired, res)
         coVerify(timeout = 2000) { dispatcher.dispatch(match { it.kind == "app_launch" }, any()) }
     }
 

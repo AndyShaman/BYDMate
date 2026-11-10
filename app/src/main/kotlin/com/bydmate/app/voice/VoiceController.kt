@@ -891,23 +891,17 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             VoiceJournalEntry(transcript = transcript, route = VoiceJournalEntry.Route.AUTOMATION,
                 detail = withDecodeMs(transcript, decodeMs), outcome = outcome, reason = reason,
                 command = match.ruleName, refusal = refusal, asrMs = decodeMs)
-        when (val r = automationEngine.fireVoiceRule(ruleId, gate.vehicleSnapshot())) {
-            is VoiceFireResult.Fired ->
-                if (r.success) {
-                    // Fired(true) means the rule's actions were handed off to the engine's own
-                    // scope, not that they already finished (they may still contain a delay);
-                    // say "Выполняю", not "Выполнено".
-                    earcon.ok(); _state.value = VoiceUiState.Done(transcript)
-                    record(entry(VoiceJournalEntry.Outcome.OK),
-                        "NLU automation fired: ruleId=$ruleId transcript=\"$transcript\"")
-                    announce("Голос", "Услышал: «$transcript». Выполняю", "Выполняю", done = true)
-                    scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
-                } else {
-                    earcon.fail(); _state.value = VoiceUiState.Blocked(transcript)
-                    record(entry(VoiceJournalEntry.Outcome.BLOCKED, transcript, VoiceRefusal.DISPATCH_FAILED),
-                        "NLU automation fire failed: ruleId=$ruleId transcript=\"$transcript\"")
-                    announce("Голос", "Услышал: «$transcript». Отказ: $transcript", "Не получилось")
-                }
+        when (automationEngine.fireVoiceRule(ruleId, gate.vehicleSnapshot())) {
+            VoiceFireResult.Fired -> {
+                // Fired means the rule's actions were handed off to the engine's own
+                // scope, not that they already finished (they may still contain a delay);
+                // say "Выполняю", not "Выполнено".
+                earcon.ok(); _state.value = VoiceUiState.Done(transcript)
+                record(entry(VoiceJournalEntry.Outcome.OK),
+                    "NLU automation fired: ruleId=$ruleId transcript=\"$transcript\"")
+                announce("Голос", "Услышал: «$transcript». Выполняю", "Выполняю", done = true)
+                scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
+            }
             VoiceFireResult.Confirming -> {
                 earcon.ok(); _state.value = VoiceUiState.Done(transcript)
                 record(entry(VoiceJournalEntry.Outcome.OK),

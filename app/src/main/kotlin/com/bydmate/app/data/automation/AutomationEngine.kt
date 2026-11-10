@@ -822,7 +822,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         Log.i(TAG, "voice fire: rule=${rule.id} actions=${actions.size} launched in engine scope")
         val edgeId = AutoTrace.edge(rule.id, EdgeOutcome.FIRE, SRC_VOICE)
         scope.launch { executeAndLog(rule, actions, snapshot, data, edgeId) }
-        return VoiceFireResult.Fired(true)
+        return VoiceFireResult.Fired
     }
 
     private fun buildSnapshot(triggers: List<TriggerDef>, data: DiParsData): String {

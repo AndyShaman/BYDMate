@@ -558,7 +558,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
-        coEvery { automationEngine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired(true)
+        coEvery { automationEngine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired
 
         val gate = mockk<VoiceGate>()
         every { gate.isEnabled() } returns true

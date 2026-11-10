@@ -176,7 +176,7 @@ class VoiceControllerSafetyTest {
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
-        coEvery { automationEngine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired(true)
+        coEvery { automationEngine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired
 
         val automationResolver = mockk<VoiceAutomationResolver>()
         coEvery { automationResolver.match(any()) } returns VoiceAutomationMatch(matchedRuleId, "rule$matchedRuleId")
@@ -628,13 +628,13 @@ class VoiceControllerSafetyTest {
 
     /**
      * Mirror of the NLU-dispatch noteAction test above, for the automation-fire success terminal
-     * (fireAutomation's VoiceFireResult.Fired(true) branch) — a different noteAction call site than
+     * (fireAutomation's VoiceFireResult.Fired branch) — a different noteAction call site than
      * the param-dispatch one, so it needs its own coverage.
      */
     @Test fun `automation success calls agent noteAction with the transcript`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
-        coEvery { automationEngine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired(true)
+        coEvery { automationEngine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired
         val recognizedPhrase = "навигатор"
 
         val gate = mockk<VoiceGate>()

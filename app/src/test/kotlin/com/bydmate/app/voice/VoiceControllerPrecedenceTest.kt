@@ -70,7 +70,7 @@ class VoiceControllerPrecedenceTest {
         val rules = listOfNotNull(automationPhrase?.let { voiceRule(it) })
         val resolver = VoiceAutomationResolver(mockk<RuleDao> { coEvery { getEnabled() } returns rules })
         val engine = mockk<AutomationEngine>(relaxed = true)
-        coEvery { engine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired(true)
+        coEvery { engine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired
         val agent = mockk<AgentOrchestrator>(relaxed = true)
         coEvery { agent.ask(any(), any(), any()) } returns AgentResult.Disabled
         coEvery { agent.expectsFollowUp() } returns false
