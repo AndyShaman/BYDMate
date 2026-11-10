@@ -633,10 +633,6 @@ class SplitOverlayController @Inject constructor(
     }
 
     companion object {
-        // Mirror of SplitSessionManager constants (on-car-adjust).
-        private const val X_JUNCTION_NARROW_RIGHT = 1280
-        private const val X_JUNCTION_NARROW_LEFT = 640
-
         internal fun junctionXForSide(side: SplitSide): Int = when (side) {
             SplitSide.RIGHT -> X_JUNCTION_NARROW_RIGHT
             SplitSide.LEFT -> X_JUNCTION_NARROW_LEFT
