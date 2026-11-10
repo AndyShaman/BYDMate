@@ -309,8 +309,8 @@ class AgentToolsAutomationTest {
     private val voiceTrigger = TriggerDef(param = "Voice", chineseName = "语音", operator = "==",
         value = "тёплый приём", displayName = "тёплый приём", kind = "voice")
 
-    @Test fun `create_automation refuses invalid input with an error and no insert`() = runTest {
-        val cases = listOf(
+    private val refusedCases by lazy {
+        listOf(
             RefusedCase("youtube without a query",
                 createArgs(actions = """[{"kind":"youtube"}]"""), errorContains = "YouTube"),
             RefusedCase("place trigger not found",
@@ -371,8 +371,11 @@ class AgentToolsAutomationTest {
                 createArgs(actions = """[{"kind":"speak","text":""}]""")),
             RefusedCase("agent_query with empty prompt",
                 createArgs(actions = """[{"kind":"agent_query","prompt":""}]""")),
-        )
-        for (c in cases) {
+    )
+    }
+
+    @Test fun `create_automation refuses invalid input with an error and no insert`() = runTest {
+        for (c in refusedCases) {
             coEvery { ruleDao.getAllList() } returns c.existing
             coEvery { places.getAllSnapshot() } returns emptyList()
             val t = tools()

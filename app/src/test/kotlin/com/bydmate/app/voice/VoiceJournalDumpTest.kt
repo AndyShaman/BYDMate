@@ -4,12 +4,9 @@ import com.bydmate.app.agent.AgentToolOutcome
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class VoiceJournalDumpTest {
     private val t = 1_700_000_000_000L
-    private val stamp = SimpleDateFormat("MM-dd HH:mm:ss", Locale.US).format(t)
 
     private fun entry(
         route: VoiceJournalEntry.Route,

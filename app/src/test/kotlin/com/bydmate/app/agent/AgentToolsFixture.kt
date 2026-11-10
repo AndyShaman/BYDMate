@@ -19,7 +19,9 @@ import io.mockk.mockk
 /**
  * Builds [AgentTools] for tests: every dependency defaults to a relaxed mock,
  * a test passes by name only the mocks it configures (or wants strict).
+ * One parameter per constructor argument of [AgentTools], hence the long list.
  */
+@Suppress("LongParameterList")
 fun agentTools(
     gate: VoiceGate = mockk(relaxed = true),
     batteryStateRepository: BatteryStateRepository = mockk(relaxed = true),
