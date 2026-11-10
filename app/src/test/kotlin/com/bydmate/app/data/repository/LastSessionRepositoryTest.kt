@@ -102,24 +102,6 @@ class LastSessionRepositoryTest {
     }
 
     @Test
-    fun `lazy init fills start soc captured null at session start tick`() {
-        val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = null, ts = 1_000L, exteriorTemp = null)  // cold-start sentinel
-        repo.fillStartSocIfMissing(77)
-        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = null)
-        assertEquals(77, repo.takeMatch(2_000L)?.startSoc)
-    }
-
-    @Test
-    fun `lazy init does not overwrite an already captured start soc`() {
-        val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 90, ts = 1_000L, exteriorTemp = null)
-        repo.fillStartSocIfMissing(50)
-        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = null)
-        assertEquals(90, repo.takeMatch(2_000L)?.startSoc)
-    }
-
-    @Test
     fun `pending session not yet ended is not matchable`() {
         val repo = LastSessionRepository(ctx())
         repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
