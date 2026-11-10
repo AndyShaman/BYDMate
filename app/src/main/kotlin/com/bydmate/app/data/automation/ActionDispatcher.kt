@@ -4,13 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.SearchManager
 import android.content.ActivityNotFoundException
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
-import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Bundle
@@ -629,10 +627,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     internal var clusterPollAttempts = 30
 
     internal var activeMediaControllers: () -> List<MediaController> = {
-        runCatching {
-            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-            msm.getActiveSessions(ComponentName(context, MediaSessionListenerService::class.java))
-        }.getOrDefault(emptyList())
+        MediaSessionListenerService.activeControllers(context)
     }
 
     /**
