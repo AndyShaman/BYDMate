@@ -19,6 +19,16 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+/** Every release latch a test holds a sender task on; [OffReportTest.tearDown] opens them all. */
+private val held = CopyOnWriteArrayList<CountDownLatch>()
+
+private fun heldLatch() = CountDownLatch(1).also { held += it }
+
+private fun releaseHeldLatches() {
+    held.forEach { it.countDown() }
+    held.clear()
+}
+
 /**
  * The daemon's power-off report end to end, without the firmware: a fake listener registration
  * hands over the sink, a fake sender plays Telegram, pending reports go to a temp folder, the sender
@@ -63,11 +73,6 @@ class OffReportTest {
     private val realSchedule = OffReport.schedule
     private val realPending = OffReport.pending
 
-    /** Every release latch a test holds a sender task on; [tearDown] opens them all. */
-    private val held = CopyOnWriteArrayList<CountDownLatch>()
-
-    private fun heldLatch() = CountDownLatch(1).also { held += it }
-
     @Before fun setUp() {
         OffReport.resetForTest()
         dir = tmp.newFolder("offreport")
@@ -91,7 +96,7 @@ class OffReportTest {
     @After fun tearDown() {
         // A failed test leaves its sender task parked on a release latch: free it first, so the
         // real sender thread is not held for up to 5 s into the next test.
-        held.forEach { it.countDown() }
+        releaseHeldLatches()
         OffReport.resetForTest()
         OffReport.registrar = realRegistrar
         OffReport.sender = realSender
