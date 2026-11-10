@@ -49,7 +49,6 @@ class ServiceStartWorker(
         }
         return try {
             val intent = Intent(applicationContext, TrackingService::class.java).apply {
-                putExtra("onBoot", true)
                 putExtra(AutostartTrace.EXTRA_TRIGGER, trigger)
             }
             ContextCompat.startForegroundService(applicationContext, intent)
