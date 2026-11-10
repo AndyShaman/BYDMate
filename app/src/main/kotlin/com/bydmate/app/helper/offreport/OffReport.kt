@@ -3,6 +3,7 @@ package com.bydmate.app.helper.offreport
 import android.os.SystemClock
 import android.util.Log
 import com.bydmate.app.data.telegram.TelegramReportBuilder
+import com.bydmate.app.helper.describeRootCause
 import com.bydmate.app.helper.push.FID_PUSH_DEVICE_CLASSES
 import com.bydmate.app.helper.push.FID_PUSH_OK
 import com.bydmate.app.helper.push.FID_PUSH_SENT
@@ -569,7 +570,7 @@ internal object OffReport {
     private fun registerPending() {
         val missing = synchronized(lock) { registrations.filterValues { !isLive(it) }.keys.toList() }
         for ((dev, fid) in POWER_FIDS.filter { it.second in missing }) {
-            val outcome = runCatching { registrar(dev, fid, sink) }.getOrElse { describe(it) }
+            val outcome = runCatching { registrar(dev, fid, sink) }.getOrElse { describeRootCause(it) }
             val before = synchronized(lock) { registrations.put(fid, outcome) }
             // One line per change: a fid this firmware lacks is retried for the daemon's life.
             if (before != outcome) Log.i(TAG, "offreport: listen dev=$dev fid=$fid -> $outcome")
@@ -658,11 +659,6 @@ internal object OffReport {
         }
         handle.register.invoke(handle.device, handle.listener, intArrayOf(fid))
         return confirmRegistration(handle.device, fid)
-    }
-
-    private fun describe(t: Throwable): String {
-        val root = generateSequence(t) { it.cause }.last()
-        return "${root.javaClass.simpleName}: ${root.message ?: "(no message)"}"
     }
 
     /**

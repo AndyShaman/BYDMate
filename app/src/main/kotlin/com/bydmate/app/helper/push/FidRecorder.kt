@@ -5,6 +5,7 @@ import android.hardware.bydauto.BYDAutoEventValue
 import android.os.SystemClock
 import android.util.Log
 import com.bydmate.app.BuildConfig
+import com.bydmate.app.helper.describeRootCause
 import com.bydmate.app.helper.dumpFidsCore
 import java.io.File
 import java.lang.reflect.Method
@@ -103,7 +104,7 @@ internal object FidRecorder {
         }
         log = file
         val catalog = runCatching { groupCatalogByDevice(catalogSource()) }.getOrElse { t ->
-            Log.w(TAG, "rec catalog unavailable: ${describe(t)}")
+            Log.w(TAG, "rec catalog unavailable: ${describeRootCause(t)}")
             emptyMap()
         }
         val targets = (if (devs.isEmpty()) FID_PUSH_DEVICE_CLASSES.keys.toList() else devs.toList())
@@ -204,7 +205,7 @@ internal object FidRecorder {
         }
         for (reg in taken) {
             runCatching { reg.unregister.invoke(reg.device, reg.listener) }
-                .onFailure { Log.w(TAG, "rec unregister dev=${reg.dev} failed: ${describe(it)}") }
+                .onFailure { Log.w(TAG, "rec unregister dev=${reg.dev} failed: ${describeRootCause(it)}") }
         }
         val sink = log
         if (sink != null) {
@@ -239,7 +240,7 @@ internal object FidRecorder {
         val built = runCatching { className?.let { listenerFactory(dev, sink) } }
         val listener = built.getOrNull()
         if (className == null || listener == null) {
-            val text = built.exceptionOrNull()?.let { describe(it) } ?: "no listener class"
+            val text = built.exceptionOrNull()?.let { describeRootCause(it) } ?: "no listener class"
             out[dev] = FidRecDeviceRow(dev, 0, symbols.size, 0, 0, text)
             reportRegistration(file, "rec dev=$dev: $text")
             return
@@ -260,7 +261,7 @@ internal object FidRecorder {
                 findRecorderMethod(device, listener, "unregisterListener", withFeatureIds = false),
             )
         }.getOrElse { t ->
-            val text = describe(t)
+            val text = describeRootCause(t)
             out[dev] = FidRecDeviceRow(dev, 0, symbols.size, filtered, 0, text)
             reportRegistration(file, "rec dev=$dev $className: registered=0/${symbols.size} filtered=$filtered err=$text")
             return
@@ -296,12 +297,12 @@ internal object FidRecorder {
         val batch = runCatching {
             register.invoke(device, listener, wanted.map { it.fid }.toIntArray())
         }
-        if (batch.isFailure) return describe(batch.exceptionOrNull()!!)
+        if (batch.isFailure) return describeRootCause(batch.exceptionOrNull()!!)
         if (confirmed(device, wanted) > 0) return FID_REC_NO_ERROR
         var lastError: String? = null
         for (symbol in wanted) {
             runCatching { register.invoke(device, listener, intArrayOf(symbol.fid)) }
-                .onFailure { lastError = describe(it) }
+                .onFailure { lastError = describeRootCause(it) }
         }
         return lastError ?: FID_REC_NO_ERROR
     }
@@ -433,12 +434,6 @@ private fun findRecorderMethod(
             method.parameterTypes[0].isAssignableFrom(listener.javaClass) &&
             (!withFeatureIds || method.parameterTypes[1] == IntArray::class.java)
     } ?: throw NoSuchMethodException(name)
-
-/** Reflection hides the real error inside InvocationTargetException — report the root. */
-private fun describe(t: Throwable): String {
-    val root = generateSequence(t) { it.cause }.last()
-    return "${root.javaClass.simpleName}: ${root.message ?: "(no message)"}"
-}
 
 /** One recorded change, from the vendor thread or the throttle's deferred queue to the file. */
 internal class RecEvent(
