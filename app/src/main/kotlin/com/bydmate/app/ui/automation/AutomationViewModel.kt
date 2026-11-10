@@ -108,10 +108,6 @@ fun TriggerParamOption.localizedEnumLabel(value: String, context: Context): Stri
     enumValues?.firstOrNull { it.first == value }
         ?.let { context.appLocalizedContext().getString(it.second) } ?: value
 
-/** A trigger value as the rule card shows it: an enum code by its localized name, anything else as stored. */
-fun triggerValueLabel(trigger: TriggerDef, context: Context): String =
-    TRIGGER_PARAMS.firstOrNull { it.param == trigger.param }?.localizedEnumLabel(trigger.value, context) ?: trigger.value
-
 fun ActionOption.localizedName(context: Context): String {
     val lc = context.appLocalizedContext()
     // A toggle entry reuses the target's own name and reads as «Багажник: переключить».
@@ -1728,18 +1724,6 @@ fun toggleRowSpecFor(action: ActionDef): ToggleRowSpec? = listOf(SENTRY_ROW, CLU
 /** What the «Вкл» / «Выкл» chips store: the row's own kind again, even after a «Переключить». */
 fun rowStateAction(spec: ToggleRowSpec, payload: String, displayName: String): ActionDef =
     ActionDef(command = spec.command, displayName = displayName, kind = spec.kind, payload = payload)
-
-/**
- * "toggle": one action that flips a panel (rear/front trunk, sunroof), the door
- * locks or the cluster projection from whatever state the car reports. Default
- * target is the rear trunk — the case the action was asked for.
- */
-fun newToggleAction(context: Context): ActionDef = ActionDef(
-    command = "",
-    displayName = toggleDisplayName(context, ActionDispatcher.TOGGLE_TRUNK),
-    kind = "toggle",
-    payload = ActionDispatcher.TOGGLE_TRUNK
-)
 
 /** "Переключить: <цель>" — the saved display name for a toggle action. */
 /** [trigger] with the catalog's name of its param and value; anything off the catalog as it is. */
