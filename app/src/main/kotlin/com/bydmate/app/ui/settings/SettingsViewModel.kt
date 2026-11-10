@@ -1976,7 +1976,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 val preDuck = voicePrefs.getInt("pre_duck_volume", -1)
                 appendLine("pre_duck_volume: " + if (preDuck >= 0) "$preDuck" else "(none)")
                 // #353: the firmware voice duck state; the amp type tells which cars needed it.
-                val ampType = com.bydmate.app.split.readSystemProperty("sys.ext.amp.type") ?: "(none)"
+                val ampType = com.bydmate.app.util.readSystemProperty("sys.ext.amp.type") ?: "(none)"
                 val autoVoiceMarker = voicePrefs.getBoolean(com.bydmate.app.voice.AutoVoiceDuck.KEY_MARKER, false)
                 val autoVoiceLast = voicePrefs.getString(com.bydmate.app.voice.AutoVoiceDuck.KEY_LAST, null) ?: "(none)"
                 appendLine("auto_voice: ext_amp_type=$ampType marker=${if (autoVoiceMarker) "set" else "none"} last=$autoVoiceLast")

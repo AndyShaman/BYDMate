@@ -5,7 +5,7 @@ import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
-import com.bydmate.app.split.readSystemProperty
+import com.bydmate.app.util.readSystemProperty
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

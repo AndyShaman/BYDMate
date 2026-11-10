@@ -8,7 +8,7 @@ import com.bydmate.app.helper.push.FID_PUSH_NOT_IN_FEATURE_MAP
 import com.bydmate.app.helper.push.confirmRegistration
 import com.bydmate.app.helper.push.deviceInstance
 import com.bydmate.app.helper.push.findListenerMethod
-import com.bydmate.app.split.readSystemProperty
+import com.bydmate.app.util.readSystemProperty
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 

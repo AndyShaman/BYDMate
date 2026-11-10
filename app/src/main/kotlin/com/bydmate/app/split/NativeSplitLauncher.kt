@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.bydmate.app.util.readSystemProperty
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -149,10 +150,3 @@ class NativeSplitLauncher(
         const val TOGGLE_GAP_MS = 600L
     }
 }
-
-/** Default [NativeSplitLauncher.systemProperty]: android.os.SystemProperties by reflection. */
-internal fun readSystemProperty(name: String): String? = runCatching {
-    Class.forName("android.os.SystemProperties")
-        .getMethod("get", String::class.java)
-        .invoke(null, name) as? String
-}.getOrNull()?.takeIf { it.isNotEmpty() }

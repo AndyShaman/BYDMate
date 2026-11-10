@@ -19,7 +19,7 @@ import com.bydmate.app.helper.push.readSubscribeRequest
 import com.bydmate.app.helper.push.writeRecStatus
 import com.bydmate.app.helper.push.writeResultTable
 import com.bydmate.app.helper.push.writeStatusTable
-import com.bydmate.app.split.readSystemProperty
+import com.bydmate.app.util.readSystemProperty
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent

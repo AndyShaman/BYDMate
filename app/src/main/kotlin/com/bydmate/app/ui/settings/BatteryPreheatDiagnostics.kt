@@ -5,7 +5,7 @@ import com.bydmate.app.data.nativestack.VehicleKindDetector
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.BatteryPreheatChannel
 import com.bydmate.app.data.vehicle.WriteAllowlist
-import com.bydmate.app.split.readSystemProperty
+import com.bydmate.app.util.readSystemProperty
 
 /**
  * READ-side state of the battery warm-up (#311) for the diagnostic dump, from the Charging

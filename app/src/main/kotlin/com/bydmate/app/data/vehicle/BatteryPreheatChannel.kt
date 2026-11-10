@@ -6,7 +6,7 @@ import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.nativestack.VehicleKindDetector
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
-import com.bydmate.app.split.readSystemProperty
+import com.bydmate.app.util.readSystemProperty
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
