@@ -185,7 +185,7 @@ class GigaAmModelManager(
     }
 
     /** Archive has a single top-level folder; flatten it into [target].
-     *  Tar Slip guard mirrors TtsModelManager.untarFlatten. Suspend: the model is a
+     *  Tar Slip guard: [tarEntryFile], shared with TtsModelManager. Suspend: the model is a
      *  single ~226 MiB entry and diskMutex is held for the whole unpack, so the
      *  per-entry copy loop must stay cancellable (chunked copy + ensureActive).
      *
@@ -225,12 +225,7 @@ class GigaAmModelManager(
         target: File,
         canonicalTarget: File,
     ) {
-        val rel = name.substringAfter('/')
-        if (rel.isBlank()) return
-        val outFile = File(target, rel)
-        val canonicalOut = outFile.canonicalFile
-        if (canonicalOut.path != canonicalTarget.path &&
-            !canonicalOut.path.startsWith(canonicalTarget.path + File.separator)) return
+        val outFile = tarEntryFile(name.substringAfter('/'), target, canonicalTarget) ?: return
         if (isDirectory) outFile.mkdirs() else copyEntry(tar, outFile)
     }
 

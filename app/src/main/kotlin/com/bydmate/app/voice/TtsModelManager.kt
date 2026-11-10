@@ -183,7 +183,7 @@ class TtsModelManager(
         }
 
     /** Archive has a single top-level folder; flatten it into [target].
-     *  Tar Slip guard mirrors VoiceModelManager.unzipFlatten's Zip Slip guard. */
+     *  Tar Slip guard: [tarEntryFile], shared with GigaAmModelManager. */
     internal fun untarFlatten(archive: File, target: File) {
         val canonicalTarget = target.canonicalFile
         BZip2CompressorInputStream(BufferedInputStream(archive.inputStream())).use { bz ->
@@ -192,13 +192,8 @@ class TtsModelManager(
                 while (entry != null) {
                     val rel = entry.name.substringAfter('/')
                     if (isJunkPath(rel)) { entry = tar.nextEntry; continue }
-                    if (rel.isNotBlank()) {
-                        val outFile = File(target, rel)
-                        val canonicalOut = outFile.canonicalFile
-                        if (canonicalOut.path != canonicalTarget.path &&
-                            !canonicalOut.path.startsWith(canonicalTarget.path + File.separator)) {
-                            entry = tar.nextEntry; continue
-                        }
+                    val outFile = tarEntryFile(rel, target, canonicalTarget)
+                    if (outFile != null) {
                         if (entry.isDirectory) outFile.mkdirs()
                         else { outFile.parentFile?.mkdirs(); outFile.outputStream().use { tar.copyTo(it) } }
                     }
