@@ -1248,7 +1248,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
     // --- Starter templates ---
 
     private suspend fun insertStarterTemplatesIfNeeded() {
-        val prefs = context.getSharedPreferences("automation", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(AutomationEngine.PREFS_NAME, Context.MODE_PRIVATE)
         if (!prefs.getBoolean("templates_inserted", false)) {
             if (RuleInserts.insertAllWithinLimit(ruleDao, starterTemplates(currentLang(context)), MAX_RULES) == null) {
                 Log.i("AutomationViewModel", "starter templates refused: limit of $MAX_RULES rules reached")
