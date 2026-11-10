@@ -17,10 +17,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,6 +36,7 @@ class HudControllerLeftoverSpecTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val helperClient = mockk<HelperClient>(relaxed = true)
     private val helperBootstrap = mockk<HelperBootstrap>(relaxed = true)
+    private val time = HudVirtualTime()
 
     @Before fun reset() {
         NavGuidanceHub.reset()
@@ -45,10 +44,17 @@ class HudControllerLeftoverSpecTest {
         prefs().edit().clear().commit()
     }
 
+    @After fun stopLoops() {
+        time.close()
+        NavGuidanceHub.reset()
+        NavGuidanceHub.hudWay = 0
+        NavA11yFeed.enabled = false
+    }
+
     private fun prefs() = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
 
     private fun controller(): HudController = HudController(context, helperClient, helperBootstrap).apply {
-        scope = CoroutineScope(Dispatchers.Unconfined)
+        scope = time.scope
         bridgeFactory = { _, _ ->
             mockk<HudSomeIpBridge>(relaxed = true).also {
                 coEvery { it.bind() } returns true
@@ -92,7 +98,7 @@ class HudControllerLeftoverSpecTest {
     }
 
     private fun assertLeftAlone(state: Map<Pair<Int, Int>, Int>) {
-        Thread.sleep(1_000)
+        time.advance(1_000)
         coVerify(exactly = 0) { helperClient.writeStatus(any(), any(), any(), any()) }
         coVerify(exactly = 0) { helperClient.hudNaviStatus(any()) }
         assertEquals(3, state[HudArming.SCREEN])
@@ -187,19 +193,13 @@ class HudControllerLeftoverSpecTest {
             if (gateway) installSomeIp()
             val c = controller()
             c.startIfEnabled()
-            Thread.sleep(1_000)
+            time.advance(1_000)
             assertEquals("case: $label", status, c.status.value)
             verify { helperClient wasNot Called }
             verify { helperBootstrap wasNot Called }
         }
     }
 
-    private fun awaitTrue(message: String? = null, timeoutMs: Long = 5_000, cond: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (cond()) return
-            Thread.sleep(50)
-        }
-        assertTrue(message, cond())
-    }
+    private fun awaitTrue(message: String? = null, cond: () -> Boolean) =
+        time.awaitTrue(message = { message }, cond = cond)
 }

@@ -17,11 +17,10 @@ import io.mockk.mockk
 import io.mockk.verify
 import java.util.Collections
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,6 +42,7 @@ class HudControllerWayTest {
     private lateinit var bridge: HudSomeIpBridge
     /** The car's and the gateway's calls on one timeline. */
     private val calls: MutableList<String> = Collections.synchronizedList(mutableListOf())
+    private val time = HudVirtualTime()
 
     @Before fun reset() {
         NavGuidanceHub.reset()
@@ -61,10 +61,17 @@ class HudControllerWayTest {
         }
     }
 
+    @After fun stopLoops() {
+        time.close()
+        NavGuidanceHub.reset()
+        NavGuidanceHub.hudWay = 0
+        NavA11yFeed.enabled = false
+    }
+
     private fun prefs() = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
 
     private fun controller(): HudController = HudController(context, helperClient, helperBootstrap).apply {
-        scope = CoroutineScope(Dispatchers.Unconfined)
+        scope = time.scope
         bridgeFactory = { _, _ -> bridge }
     }
 
@@ -206,7 +213,7 @@ class HudControllerWayTest {
         assertTrue(prefs().getBoolean(HudWayChannels.KEY_CAN_LEFT, false))
         NavGuidanceHub.reset()   // the route ends
         awaitTrue { snapshot().contains("sdk 4") }
-        Thread.sleep(500)
+        time.advance(500)
         assertClearedBeforeDisarm(snapshot())
         assertFalse(prefs().contains(HudWayChannels.KEY_CAN_LEFT))
         assertTrue(snapshot().none { it.startsWith("start 0x") && it != "start 0x${HudSomeIpBridge.SERVICE_ID_NAVI.toString(16)}" })
@@ -224,7 +231,7 @@ class HudControllerWayTest {
         awaitTrue { !c.armingLive && snapshot().contains("sdk 4") }
         assertClearedBeforeDisarm(snapshot())
         val after = snapshot().size
-        Thread.sleep(1_500)
+        time.advance(1_500)
         assertEquals(after, snapshot().size)
         assertEquals(4, state[HudArming.NAVI])
         assertFalse(prefs().contains(HudWayChannels.KEY_CAN_LEFT))
@@ -262,7 +269,7 @@ class HudControllerWayTest {
         NavGuidanceHub.reset()   // the route ends...
         awaitTrue { snapshot().contains("sdk 4 wait") }
         guideRoute()             // ...and is back while the status is going down
-        Thread.sleep(1_000)
+        time.advance(1_000)
         val waiting = snapshot()
         val clearAt = Collections.lastIndexOfSubList(waiting, canClear)
         assertTrue("cleared before the disarm: $waiting", clearAt in 0 until waiting.indexOf("sdk 4 wait"))
@@ -295,7 +302,7 @@ class HudControllerWayTest {
         awaitTrue { snapshot().contains("sdk 4 wait") }
         guideRoute()
         c.setMode(HudController.MODE_LMCN)
-        Thread.sleep(1_000)
+        time.advance(1_000)
         val waiting = snapshot()
         val clearAt = Collections.lastIndexOfSubList(waiting, canClear)
         assertTrue("nothing written or started while the disarm waits: $waiting",
@@ -412,7 +419,7 @@ class HudControllerWayTest {
         val c = controller()
         c.startIfEnabled()
         awaitTrue { !prefs().contains(HudWayChannels.KEY_CAN_LEFT) }
-        Thread.sleep(500)
+        time.advance(500)
         assertEquals(canClear, snapshot().filterNot { it.startsWith("start") })
         c.setEnabled(false)
     }
@@ -487,7 +494,7 @@ class HudControllerWayTest {
         val routeKey = prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L)
         assertTrue(routeKey != 1_234_567_890L)
         gate.complete(Unit)
-        Thread.sleep(500)
+        time.advance(500)
         assertTrue(snapshot().toString(), snapshot().none { it.startsWith("one-off") })
         assertEquals(routeKey, prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L))
         c.setEnabled(false)
@@ -515,7 +522,7 @@ class HudControllerWayTest {
         assertTrue(routeKey != 1_234_567_890L)
         val routeAt = snapshot().indexOf(lmcnStarts.last())
         gate.complete(Unit)
-        Thread.sleep(1_000)
+        time.advance(1_000)
         val after = snapshot().drop(routeAt + 1)
         // The off events share their topics with the route's update set: the stops and the CAN
         // clear tell the old put-back apart.
@@ -553,7 +560,7 @@ class HudControllerWayTest {
         coEvery { bridge.bind() } coAnswers { gate.await(); true }
         val c = controller()
         c.startIfEnabled()
-        Thread.sleep(200)
+        time.advance(200)
         // The HUD check's step 4, say, keeps its own family meanwhile.
         prefs().edit().putLong(HudWayChannels.KEY_LMCN_LEFT, 42L).commit()
         gate.complete(Unit)
@@ -573,12 +580,6 @@ class HudControllerWayTest {
         c.setEnabled(false)
     }
 
-    private fun awaitTrue(timeoutMs: Long = 5_000, cond: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (cond()) return
-            Thread.sleep(50)
-        }
-        assertTrue("timeout: ${snapshot()} prefs=${prefs().all}", cond())
-    }
+    private fun awaitTrue(timeoutMs: Long = 5_000, cond: () -> Boolean) =
+        time.awaitTrue(timeoutMs, { "timeout: ${snapshot()} prefs=${prefs().all}" }, cond)
 }

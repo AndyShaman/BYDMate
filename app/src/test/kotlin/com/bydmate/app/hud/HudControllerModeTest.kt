@@ -16,11 +16,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,6 +37,7 @@ class HudControllerModeTest {
     private val helperClient = mockk<HelperClient>(relaxed = true)
     private val helperBootstrap = mockk<HelperBootstrap>(relaxed = true)
     private lateinit var bridge: HudSomeIpBridge
+    private val time = HudVirtualTime()
 
     @Before fun reset() {
         NavGuidanceHub.reset()
@@ -51,10 +51,17 @@ class HudControllerModeTest {
         every { bridge.startService(any()) } returns 0
     }
 
+    @After fun stopLoops() {
+        time.close()
+        NavGuidanceHub.reset()
+        NavGuidanceHub.hudWay = 0
+        NavA11yFeed.enabled = false
+    }
+
     private fun prefs() = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
 
     private fun controller(): HudController = HudController(context, helperClient, helperBootstrap).apply {
-        scope = CoroutineScope(Dispatchers.Unconfined)
+        scope = time.scope
         bridgeFactory = { _, _ -> bridge }
     }
 
@@ -99,7 +106,7 @@ class HudControllerModeTest {
         assertEquals(HudController.Status.ON, c.status.value)
         assertFalse(c.armingLive)
         awaitTrue { runCatching { verify(atLeast = 2) { bridge.fireEvent(HudSomeIpBridge.TOPIC_NAVI, any()) } }.isSuccess }
-        Thread.sleep(2_500)   // an arming loop would have armed on its first look
+        time.advance(2_500)   // an arming loop would have armed on its first look
         assertNothingWritten()
         assertEquals(1, state[HudArming.SCREEN])
         c.setEnabled(false)
@@ -112,7 +119,7 @@ class HudControllerModeTest {
         val c = controller()
         c.setMode(HudController.MODE_GLASS_ONLY)
         c.setEnabled(true)
-        Thread.sleep(1_500)
+        time.advance(1_500)
         assertFalse(c.armingLive)
         assertNothingWritten()
         c.setEnabled(false)
@@ -191,12 +198,5 @@ class HudControllerModeTest {
         c.setEnabled(false)
     }
 
-    private fun awaitTrue(timeoutMs: Long = 5_000, cond: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (cond()) return
-            Thread.sleep(50)
-        }
-        assertTrue(cond())
-    }
+    private fun awaitTrue(cond: () -> Boolean) = time.awaitTrue(cond = cond)
 }
