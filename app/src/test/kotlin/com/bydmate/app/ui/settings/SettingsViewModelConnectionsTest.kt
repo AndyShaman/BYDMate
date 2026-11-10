@@ -5,7 +5,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.agent.AgentOrchestrator
 import com.bydmate.app.agent.LlmConnection
 import com.bydmate.app.agent.LlmConnectionResolver
-import com.bydmate.app.data.autoservice.AdbConnectFailure
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter

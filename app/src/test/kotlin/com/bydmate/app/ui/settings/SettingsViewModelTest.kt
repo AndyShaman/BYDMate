@@ -8,7 +8,6 @@ import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.diagnostics.TraceRecorder
-import com.bydmate.app.data.autoservice.AdbConnectFailure
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.local.EnergyDataDeadDetector
@@ -620,11 +619,9 @@ class SettingsViewModelTest {
                 engineReloads = 1,
             ),
             VoiceSettingCase(
-                "agent identity state flows initialize from voice prefs",
+                "agent identity initializes from voice prefs",
                 prefsBefore = { it.putString("agent_name", "Лео").putString("agent_persona", "snarky") },
                 check = { vm, _ ->
-                    assertEquals("Лео", vm.uiState.value.agentName)
-                    assertEquals("snarky", vm.uiState.value.agentPersona)
                     assertEquals("Лео", vm.uiState.value.agentName)
                     assertEquals("snarky", vm.uiState.value.agentPersona)
                 },
@@ -769,8 +766,6 @@ class SettingsViewModelTest {
         vm.setAgentPersona("engineer")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals("Майк", vm.uiState.value.agentName)
-        assertEquals("engineer", vm.uiState.value.agentPersona)
         assertEquals("Майк", vm.uiState.value.agentName)
         assertEquals("engineer", vm.uiState.value.agentPersona)
         val ctx: Context = ApplicationProvider.getApplicationContext()
