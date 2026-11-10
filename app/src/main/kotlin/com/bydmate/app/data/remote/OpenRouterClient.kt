@@ -100,53 +100,6 @@ class OpenRouterClient @Inject constructor(
         }
     }
 
-    suspend fun chat(
-        apiKey: String,
-        modelId: String,
-        systemPrompt: String,
-        userMessage: String
-    ): String? = withContext(Dispatchers.IO) {
-        try {
-            val messages = JSONArray().apply {
-                put(JSONObject().put("role", "system").put("content", systemPrompt))
-                put(JSONObject().put("role", "user").put("content", userMessage))
-            }
-            val payload = JSONObject().apply {
-                put("model", modelId)
-                put("messages", messages)
-                put("temperature", 0.7)
-                put("max_tokens", 1024)
-            }
-
-            val request = Request.Builder()
-                .url("$BASE_URL/chat/completions")
-                .addHeader("Authorization", "Bearer $apiKey")
-                .addHeader("HTTP-Referer", "https://github.com/AndyShaman/BYDMate")
-                .addHeader("X-Title", "BYDMate")
-                .post(payload.toString().toRequestBody(JSON_MEDIA))
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            val body = response.body?.string()
-
-            if (!response.isSuccessful) {
-                Log.w(TAG, "chat HTTP ${response.code}: $body")
-                return@withContext null
-            }
-
-            val json = JSONObject(body ?: return@withContext null)
-            val choices = json.optJSONArray("choices") ?: return@withContext null
-            if (choices.length() == 0) return@withContext null
-
-            choices.getJSONObject(0)
-                .optJSONObject("message")
-                ?.optString("content")
-        } catch (e: Exception) {
-            Log.e(TAG, "chat failed: ${e.message}")
-            null
-        }
-    }
-
     /** Test seam: overrides the OpenRouter base URL. Production leaves it null. */
     internal var baseUrlForTest: String? = null
 
