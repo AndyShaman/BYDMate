@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.R
 import com.bydmate.app.data.automation.ActionDispatcher
+import com.bydmate.app.data.automation.OneShotTrigger
 import com.bydmate.app.data.automation.testDispatcher
 import com.bydmate.app.data.automation.SharedRule
 import com.bydmate.app.data.local.LocalePreferences
@@ -19,6 +20,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /** What the import preview says an action does, checked against the real dispatcher. */
 @RunWith(RobolectricTestRunner::class)
@@ -111,6 +114,31 @@ class RuleImportSummaryTest {
         val preview = RuleImportSummary.preview(rule, ctx, realDispatcher()::autoGoWillRun)
         assertEquals(listOf("Пауза: 5 мин", "Пауза: 5 с"), preview.actions)
     }
+
+    // A shared one-shot rule was shown as the raw «OnceAt == 2026-11-11T08:00».
+    @Test fun `import preview words a one-shot trigger the way the rule card does`() {
+        val lc = ctx.appLocalizedContext()
+        val zone = ZoneId.of("Europe/Minsk")
+        val now = LocalDateTime.of(2026, 11, 10, 12, 0).atZone(zone).toInstant().toEpochMilli()
+        val trigger = oneShot("2026-11-11T08:00")
+
+        val line = RuleImportSummary.trigger(trigger, ctx, now, zone)
+
+        val at = OneShotTrigger.momentMs("2026-11-11T08:00", zone)!!
+        assertEquals(lc.getString(R.string.auto_ui_phrase_once, whenText(at, lc, now, zone)), line)
+        assertEquals(conditionText(trigger, lc, now, zone), line)
+        assertFalse(line, line.contains("2026-11-11T08:00"))
+    }
+
+    // The label in the file is never shown (a file can call anything anything): an unreadable
+    // moment appears as it is written.
+    @Test fun `import preview shows an unreadable one-shot moment as written`() {
+        val line = RuleImportSummary.trigger(oneShot("2026-02-30 8:30"), ctx, 0L, ZoneId.of("Europe/Minsk"))
+        assertEquals("2026-02-30 8:30", line)
+    }
+
+    private fun oneShot(moment: String) =
+        TriggerDef(OneShotTrigger.PARAM, "单次", "==", moment, "label from the file", kind = OneShotTrigger.KIND)
 
     private fun realDispatcher() = testDispatcher(context = ctx, appStrings = com.bydmate.app.util.AppStrings(ctx))
 
