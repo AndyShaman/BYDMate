@@ -315,7 +315,7 @@ fun AppNavigation(
                 TripsScreen(onOpenTemperature = { navController.navigate("trip_temperature") })
             }
             composable(Screen.Charges.route) {
-                ChargesScreen(onNavigateSettings = { navController.navigate(Screen.Settings.route) })
+                ChargesScreen()
             }
             composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) {
