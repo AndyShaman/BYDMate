@@ -40,6 +40,20 @@ class AdbProtocolClientTest {
     }
 
     @Test
+    fun `packet magic is bitwise inverse of command`() {
+        val header = AdbProtocolClient.buildHeader(
+            command = AdbProtocolClient.A_CNXN,
+            arg0 = 0, arg1 = 0, payload = ByteArray(0)
+        )
+        val buf = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(5) { buf.int }  // skip command/arg0/arg1/payloadLen/checksum
+        val magic = buf.int
+
+        assertEquals(AdbProtocolClient.A_CNXN.inv(), magic)
+        assertEquals(AdbProtocolClient.A_CNXN xor 0xFFFFFFFF.toInt(), magic)
+    }
+
+    @Test
     fun `packet header is little-endian 24 bytes with correct fields`() {
         val payload = "shell:echo hi ".toByteArray()
         val header = AdbProtocolClient.buildHeader(
