@@ -175,7 +175,11 @@ class AutomationEngineOneShotTest {
 
         assertFalse(stored(id).enabled)
         var reasons = journalReasons()
-        repeat(20) { if (reasons.isEmpty()) { Thread.sleep(50); reasons = journalReasons() } }
+        val deadline = System.currentTimeMillis() + 10_000
+        while (reasons.isEmpty() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50)
+            reasons = journalReasons()
+        }
         assertEquals(listOf("Отменено в окне подтверждения"), reasons)
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }

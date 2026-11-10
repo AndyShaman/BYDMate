@@ -14,9 +14,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -68,13 +69,9 @@ class AutomationEngineSteeringKeyTest {
     }
 
     // The keycode cache is filled from the DAO flow on the engine's own IO scope.
-    private suspend fun awaitKeyCodes(engine: AutomationEngine, expected: Set<Int>): Set<Int> {
-        repeat(50) {
-            if (engine.steeringKeyCodes.value == expected) return expected
-            delay(20)
-        }
-        return engine.steeringKeyCodes.value
-    }
+    private suspend fun awaitKeyCodes(engine: AutomationEngine, expected: Set<Int>): Set<Int> =
+        withTimeoutOrNull(10_000) { engine.steeringKeyCodes.first { it == expected } }
+            ?: throw AssertionError("keycode cache never became $expected, last ${engine.steeringKeyCodes.value}")
 
     @Test fun `fires enabled rule bound to the pressed keycode`() = runBlocking {
         val (engine, ruleDao, dispatcher) = setup(listOf(rule(1, steeringKeyTrigger(305))))

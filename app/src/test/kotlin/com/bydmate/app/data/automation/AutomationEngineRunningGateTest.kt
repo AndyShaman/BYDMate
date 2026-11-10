@@ -19,6 +19,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -89,6 +90,26 @@ class AutomationEngineRunningGateTest {
         evaluate(diParsData(exteriorTemp = 10), null)
     }
 
+    /** Fire edges recorded so far; the journal folds a repeated line into one with "(xN)". */
+    private fun fireEdges() = edgeLines().filter { it.contains("edge=fire") }
+        .sumOf { Regex("\\(x(\\d+)\\)").find(it)?.groupValues?.get(1)?.toInt() ?: 1 }
+
+    /**
+     * Sends cold fronts until one is fired rather than consumed as skip:running (the previous run
+     * releases its mark asynchronously). The edge is recorded synchronously by evaluate, so exactly
+     * one front fires and no extra run is started. Real-time deadline 10 s.
+     */
+    private suspend fun AutomationEngine.frontUntilFires(): Boolean {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
+            val fired = fireEdges()
+            coldFront()
+            if (fireEdges() > fired) return true
+            Thread.sleep(50)
+        }
+        return false
+    }
+
     @Test fun `automatic fire is skipped while the same rule still waits in a pause`() = runBlocking {
         val gate = CompletableDeferred<Unit>()
         val dispatcher = gatedDispatcher(gate)
@@ -105,14 +126,8 @@ class AutomationEngineRunningGateTest {
         coVerify(timeout = 3000, exactly = 1) { dispatcher.dispatch(stepB, any()) }
         // The last step is dispatched, but the run still writes its journal and releases its mark;
         // a front that lands before that is consumed as skip:running. Retry until one fires.
-        var firedAgain = false
-        repeat(60) {
-            if (firedAgain) return@repeat
-            engine.coldFront()
-            firedAgain = runCatching { coVerify(atLeast = 2) { dispatcher.dispatch(stepA, any()) } }.isSuccess
-            if (!firedAgain) Thread.sleep(50)
-        }
-        assertEquals(true, firedAgain)
+        assertEquals(true, engine.frontUntilFires())
+        coVerify(timeout = 3000, atLeast = 2) { dispatcher.dispatch(stepA, any()) }
     }
 
     @Test fun `manual start is not gated by a running run`() = runBlocking {
@@ -120,15 +135,18 @@ class AutomationEngineRunningGateTest {
         val dispatcher = gatedDispatcher(gate)
         val engine = engineWith(rule(listOf(newButtonPressTrigger(1))), dispatcher)
         val scope = CoroutineScope(Dispatchers.Default)
+        try {
+            val first: Job = scope.launch { engine.onButtonPress(1) }
+            coVerify(timeout = 3000, exactly = 1) { dispatcher.dispatch(stepA, any()) }
+            val second: Job = scope.launch { engine.onButtonPress(1) }
+            coVerify(timeout = 3000, exactly = 2) { dispatcher.dispatch(stepA, any()) }
 
-        val first: Job = scope.launch { engine.onButtonPress(1) }
-        coVerify(timeout = 3000, exactly = 1) { dispatcher.dispatch(stepA, any()) }
-        val second: Job = scope.launch { engine.onButtonPress(1) }
-        coVerify(timeout = 3000, exactly = 2) { dispatcher.dispatch(stepA, any()) }
-
-        gate.complete(Unit)
-        first.join()
-        second.join()
+            gate.complete(Unit)
+            first.join()
+            second.join()
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test fun `a manual run also blocks the automatic path`() = runBlocking {
@@ -136,17 +154,20 @@ class AutomationEngineRunningGateTest {
         val dispatcher = gatedDispatcher(gate)
         val engine = engineWith(rule(listOf(newButtonPressTrigger(1), coldTrigger), logic = "OR"), dispatcher)
         val scope = CoroutineScope(Dispatchers.Default)
+        try {
+            engine.evaluate(diParsData(exteriorTemp = 25), null)  // seed
+            val manual: Job = scope.launch { engine.onButtonPress(1) }
+            coVerify(timeout = 3000, exactly = 1) { dispatcher.dispatch(stepA, any()) }
 
-        engine.evaluate(diParsData(exteriorTemp = 25), null)  // seed
-        val manual: Job = scope.launch { engine.onButtonPress(1) }
-        coVerify(timeout = 3000, exactly = 1) { dispatcher.dispatch(stepA, any()) }
+            engine.evaluate(diParsData(exteriorTemp = 10), null)  // front: skipped
+            coVerify(exactly = 1) { dispatcher.dispatch(stepA, any()) }
+            assertEquals(true, edgeLines().contains("auto rule id=1 edge=skip:running src=poll"))
 
-        engine.evaluate(diParsData(exteriorTemp = 10), null)  // front: skipped
-        coVerify(exactly = 1) { dispatcher.dispatch(stepA, any()) }
-        assertEquals(true, edgeLines().contains("auto rule id=1 edge=skip:running src=poll"))
-
-        gate.complete(Unit)
-        manual.join()
+            gate.complete(Unit)
+            manual.join()
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test fun `the running mark is released when a step throws`() = runBlocking {
@@ -164,9 +185,9 @@ class AutomationEngineRunningGateTest {
 
         engine.coldFront()
         coVerify(timeout = 3000, exactly = 1) { dispatcher.dispatch(stepA, any()) }
-        Thread.sleep(300)  // let the failed run unwind
 
-        engine.coldFront()
+        // A front that lands before the failed run unwinds is consumed as skip:running.
+        assertEquals(true, engine.frontUntilFires())
         coVerify(timeout = 3000, exactly = 2) { dispatcher.dispatch(stepA, any()) }
     }
 }
