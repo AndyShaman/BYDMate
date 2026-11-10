@@ -52,6 +52,20 @@ class AudioCaptureDuckTest {
     }
 
     @Test
+    fun `duckMusic is a no-op when volume is already zero`() {
+        val audioManager = mockk<AudioManager>()
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 0
+        every { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) } returns 39
+        val capture = AudioCapture(audioManager, prefsMock().first)
+
+        val result = capture.duckMusic()
+
+        assertNull(result)
+        verify(exactly = 0) { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, any(), any()) }
+    }
+
+    @Test
     fun `restoreMusic restores the saved volume`() {
         val audioManager = mockk<AudioManager>()
         every { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 20, 0) } returns Unit
@@ -70,6 +84,23 @@ class AudioCaptureDuckTest {
         capture.restoreMusic(null)
 
         verify(exactly = 0) { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, any(), any()) }
+    }
+
+    @Test
+    fun duckMusic_second_call_returns_null_when_already_ducked() {
+        val audioManager = mockk<AudioManager>()
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 20 andThen 1
+        every { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) } returns 39
+        every { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, AudioCapture.DUCK_VOLUME_INDEX, 0) } returns Unit
+        val capture = AudioCapture(audioManager, prefsMock().first)
+
+        val first = capture.duckMusic()   // 20 -> 1, returns 20
+        val second = capture.duckMusic()  // already at 1 -> null, no setStreamVolume
+
+        assertEquals(20, first)
+        assertNull(second)
+        verify(exactly = 1) { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, AudioCapture.DUCK_VOLUME_INDEX, 0) }
     }
 
     @Test

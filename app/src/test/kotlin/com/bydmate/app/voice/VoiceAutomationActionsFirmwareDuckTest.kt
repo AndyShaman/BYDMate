@@ -132,6 +132,29 @@ class VoiceAutomationActionsFirmwareDuckTest {
         assertEquals(listOf(true), calls)
     }
 
+    @Test fun `helper down - media duck and restore as today, deactivate still sent`() = runTest {
+        val capture = capture()
+        makeActions(duck(null), capture).speak("тест")
+        advanceUntilIdle()
+
+        io.mockk.verifyOrder {
+            capture.duckMusic()
+            capture.restoreMusic(20)
+        }
+        assertEquals(listOf(true, false), calls)
+    }
+
+    @Test fun `no firmware duck configured - today's behaviour, no daemon calls`() = runTest {
+        val capture = capture()
+        makeActions(AutoVoiceDuck.OFF, capture).speak("тест")
+
+        io.mockk.verifyOrder {
+            capture.duckMusic()
+            capture.restoreMusic(20)
+        }
+        assertTrue(calls.isEmpty())
+    }
+
     @Test fun `cancelled speak does not drop a session lease held at the same time`() = runTest {
         val gate = CompletableDeferred<AutoVoiceReply?>()
         val d = duck { gate.await() }
