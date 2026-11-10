@@ -14,7 +14,6 @@ import com.bydmate.app.data.autoservice.AdbVerdict
 import com.bydmate.app.data.autoservice.CloudOverWifiState
 import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.BackupPart
-import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
@@ -45,7 +44,6 @@ import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -122,7 +120,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.horizontalScroll
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -151,7 +148,6 @@ import com.bydmate.app.ui.automation.steeringKeyOwnerText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import com.bydmate.app.R
-import com.bydmate.app.agent.LlmAgentBackend
 import com.bydmate.app.agent.SHOW_CONTACTS_PERMISSION_REQUEST
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
@@ -160,7 +156,6 @@ import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.adbVerdictColor
 import com.bydmate.app.ui.components.adbVerdictText
 import com.bydmate.app.ui.components.MultiAppPickerDialog
-import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.util.APP_LANGUAGES
 import android.Manifest
@@ -180,7 +175,6 @@ import com.bydmate.app.split.SplitKeyRuleVerdict
 import com.bydmate.app.split.SplitRole
 import com.bydmate.app.split.splitKeyRuleVerdict
 import com.bydmate.app.split.applyPick
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -412,405 +406,6 @@ private fun RailItem(
             color = fg,
             fontSize = 14.sp,
             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-        )
-    }
-}
-
-/**
- * One-line description of the period in force today, shown under the «Тарифы и периоды»
- * button so the section stays compact but still tells the driver what is being charged.
- */
-@Composable
-private fun currentTariffPeriodSummary(state: SettingsUiState, hybrid: Boolean): String {
-    val current = state.tariffPeriods.firstOrNull { it.startTs <= System.currentTimeMillis() }
-        ?: state.tariffPeriods.lastOrNull()
-        ?: return stringResource(R.string.settings_tariff_periods_empty)
-    val date = remember(current.startTs) {
-        if (current.startTs <= 0L) null
-        else SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(current.startTs))
-    }
-    val rates = stringResource(
-        R.string.settings_tariff_periods_summary,
-        "%.2f".format(current.homeRate), "%.2f".format(current.dcRate), state.currencySymbol,
-        "%.0f".format(current.acLossPct), "%.0f".format(current.dcLossPct),
-    ) + fuelPriceSuffix(current.fuelPricePerLiter, hybrid, stringResource(R.string.dashboard_unit_liters))
-    return if (date == null) rates
-    else stringResource(R.string.settings_tariff_periods_summary_since, date, rates)
-}
-
-@Composable
-private fun BatterySection(
-    state: SettingsUiState,
-    viewModel: SettingsViewModel,
-    onOpenTariffPeriods: () -> Unit,
-) {
-    SectionHeader(text = stringResource(R.string.settings_battery_section_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SettingsTextField(
-                label = stringResource(R.string.settings_battery_capacity_label),
-                value = state.batteryCapacity,
-                onValueChange = { viewModel.saveBatteryCapacity(it) },
-                keyboardType = KeyboardType.Decimal
-            )
-            SettingHint(stringResource(R.string.settings_battery_capacity_desc))
-            SettingDivider()
-            SettingChipRow(
-                title = stringResource(R.string.settings_charge_connector_label),
-                description = stringResource(R.string.settings_charge_connector_desc),
-                options = ChargeConnector.entries.map { it.label },
-                selectedIndex = state.chargeConnector.ordinal,
-                onSelect = { idx -> viewModel.saveChargeConnector(ChargeConnector.entries[idx]) },
-            )
-            SettingDivider()
-            val vehicleKind by viewModel.vehicleKind.collectAsStateWithLifecycle()
-            SettingActionRow(
-                title = stringResource(R.string.settings_tariff_periods_title),
-                description = currentTariffPeriodSummary(
-                    state, hybrid = vehicleKind == com.bydmate.app.data.nativestack.VehicleKind.HYBRID,
-                ),
-                buttonLabel = stringResource(R.string.settings_tariff_periods_button),
-                onClick = { viewModel.showTariffPeriods(); onOpenTariffPeriods() },
-                style = SettingButtonStyle.Primary
-            )
-            SettingHint(stringResource(R.string.settings_tariff_periods_hint))
-            state.tariffRecalcStatus?.let {
-                Text(it, color = AccentGreen, fontSize = 12.sp)
-            }
-        }
-    }
-
-    SectionHeader(text = stringResource(R.string.settings_consumption_section_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SettingsTextField(
-                label = stringResource(R.string.settings_consumption_good_label),
-                value = state.consumptionGood,
-                onValueChange = { viewModel.saveConsumptionGood(it) },
-                keyboardType = KeyboardType.Decimal
-            )
-            SettingHint(stringResource(R.string.settings_consumption_good_desc))
-            SettingDivider()
-            SettingsTextField(
-                label = stringResource(R.string.settings_consumption_bad_label),
-                value = state.consumptionBad,
-                onValueChange = { viewModel.saveConsumptionBad(it) },
-                keyboardType = KeyboardType.Decimal
-            )
-            SettingHint(stringResource(R.string.settings_consumption_bad_desc))
-        }
-    }
-
-    SectionHeader(text = stringResource(R.string.settings_range_calc_section_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SettingChipRow(
-                title = stringResource(R.string.settings_range_calc_method_label),
-                description = stringResource(R.string.settings_range_calc_method_desc),
-                options = listOf(
-                    stringResource(R.string.settings_range_calc_auto),
-                    stringResource(R.string.settings_range_calc_manual),
-                ),
-                selectedIndex = if (state.rangeCalcMethod == SettingsRepository.RANGE_CALC_MANUAL) 1 else 0,
-                onSelect = { idx ->
-                    viewModel.saveRangeCalcMethod(
-                        if (idx == 1) SettingsRepository.RANGE_CALC_MANUAL else SettingsRepository.RANGE_CALC_AUTO
-                    )
-                },
-            )
-            if (state.rangeCalcMethod == SettingsRepository.RANGE_CALC_MANUAL) {
-                SettingDivider()
-                SettingActionRow(
-                    title = stringResource(R.string.settings_range_calc_edit_table_button),
-                    description = stringResource(R.string.settings_range_calc_edit_table_desc),
-                    buttonLabel = stringResource(R.string.settings_range_calc_edit_table_button),
-                    onClick = { viewModel.showManualRangeTableDialog() },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
-    SectionHeader(text = stringResource(R.string.settings_abrp_section_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SettingToggleRow(
-                title = stringResource(R.string.settings_abrp_telemetry_label),
-                traceId = "abrp_telemetry",
-                description = stringResource(R.string.settings_abrp_telemetry_description),
-                checked = state.abrpTelemetryEnabled,
-                onCheckedChange = { viewModel.toggleAbrpTelemetry(it) },
-            )
-            SettingsTextField(
-                label = stringResource(R.string.settings_abrp_token_label),
-                value = state.abrpUserToken,
-                onValueChange = { viewModel.updateAbrpUserToken(it) },
-                keyboardType = KeyboardType.Password,
-                secret = true
-            )
-            SettingToggleRow(
-                title = stringResource(R.string.settings_abrp_location_label),
-                traceId = "abrp_location",
-                description = stringResource(R.string.settings_abrp_location_description),
-                checked = state.abrpSendLocation,
-                onCheckedChange = { viewModel.toggleAbrpSendLocation(it) },
-            )
-            SettingActionRow(
-                title = stringResource(R.string.settings_abrp_save_button),
-                buttonLabel = stringResource(R.string.settings_abrp_save_button),
-                onClick = { viewModel.saveAbrpSettings() },
-                style = SettingButtonStyle.Primary,
-            )
-            state.abrpSaveStatus?.let {
-                Text(it, color = AccentGreen, fontSize = 12.sp)
-            }
-        }
-    }
-
-    SectionHeader(text = stringResource(R.string.settings_webhook_section_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SettingToggleRow(
-                title = stringResource(R.string.settings_webhook_label),
-                traceId = "webhook",
-                description = stringResource(R.string.settings_webhook_description),
-                checked = state.webhookEnabled,
-                onCheckedChange = { viewModel.toggleWebhook(it) },
-            )
-            SettingsTextField(
-                label = stringResource(R.string.settings_webhook_url_label),
-                value = state.webhookUrl,
-                onValueChange = { viewModel.updateWebhookUrl(it) },
-                keyboardType = KeyboardType.Uri,
-            )
-            SettingsTextField(
-                label = stringResource(R.string.settings_webhook_secret_label),
-                value = state.webhookSecret,
-                onValueChange = { viewModel.updateWebhookSecret(it) },
-                keyboardType = KeyboardType.Password,
-                secret = true
-            )
-            SettingToggleRow(
-                title = stringResource(R.string.settings_webhook_location_label),
-                traceId = "webhook_location",
-                description = stringResource(R.string.settings_webhook_location_description),
-                checked = state.webhookSendLocation,
-                onCheckedChange = { viewModel.toggleWebhookSendLocation(it) },
-            )
-            SettingActionRow(
-                title = stringResource(R.string.settings_webhook_save_button),
-                buttonLabel = stringResource(R.string.settings_webhook_save_button),
-                onClick = { viewModel.saveWebhookSettings() },
-                style = SettingButtonStyle.Primary,
-            )
-            state.webhookSaveStatus?.let {
-                Text(it, color = AccentGreen, fontSize = 12.sp)
-            }
-        }
-    }
-
-    SectionHeader(text = stringResource(R.string.settings_ai_connections_header))
-
-    ConnectionCard(
-        title = "OpenRouter",
-        configured = state.openRouterConfigured,
-        testResult = state.connTestResults["openrouter"],
-        testRunning = state.connTestRunning == "openrouter",
-        onTest = { viewModel.testConnection("openrouter") },
-    ) {
-        SettingsTextField(
-            label = stringResource(R.string.settings_conn_api_key_label),
-            value = state.openRouterApiKey,
-            onValueChange = { viewModel.saveOpenRouterApiKey(it) },
-            keyboardType = KeyboardType.Password,
-            secret = true
-        )
-        SettingActionRow(
-            title = stringResource(R.string.settings_openrouter_model_pick),
-            buttonLabel = if (state.openRouterModelName.isNotBlank())
-                stringResource(R.string.settings_openrouter_model_selected, state.openRouterModelName)
-            else stringResource(R.string.settings_openrouter_model_pick),
-            onClick = { viewModel.showModelPicker() },
-            enabled = state.openRouterApiKey.isNotBlank(),
-        )
-    }
-
-    ConnectionCard(
-        title = "z.ai",
-        configured = state.zaiConfigured,
-        testResult = state.connTestResults["zai"],
-        testRunning = state.connTestRunning == "zai",
-        onTest = { viewModel.testConnection("zai") },
-    ) {
-        SettingsTextField(
-            label = stringResource(R.string.settings_conn_api_key_label),
-            value = state.zaiApiKey,
-            onValueChange = { viewModel.saveZaiApiKey(it) },
-            keyboardType = KeyboardType.Password,
-            secret = true
-        )
-        SettingHint(stringResource(R.string.settings_zai_hint))
-    }
-
-    ConnectionCard(
-        title = stringResource(R.string.settings_conn_custom_title),
-        configured = state.customConfigured,
-        testResult = state.connTestResults["custom"],
-        testRunning = state.connTestRunning == "custom",
-        onTest = { viewModel.testConnection("custom") },
-    ) {
-        var presetHint by remember { mutableStateOf<Int?>(null) }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.horizontalScroll(rememberScrollState())
-        ) {
-            CUSTOM_PRESETS.forEach { preset ->
-                UnitChip(
-                    label = preset.name,
-                    selected = state.customName == preset.name,
-                    onClick = {
-                        viewModel.applyCustomPreset(preset.name, preset.baseUrl, preset.model)
-                        presetHint = preset.hintRes
-                    }
-                )
-            }
-        }
-        SettingHint(stringResource(presetHint ?: R.string.settings_custom_hint))
-        SettingsTextField(
-            label = stringResource(R.string.settings_conn_name_label),
-            value = state.customName,
-            onValueChange = { viewModel.saveCustomName(it) },
-            keyboardType = KeyboardType.Text
-        )
-        SettingsTextField(
-            label = stringResource(R.string.settings_conn_base_url_label),
-            value = state.customBaseUrl,
-            onValueChange = { viewModel.saveCustomBaseUrl(it) },
-            keyboardType = KeyboardType.Uri
-        )
-        SettingsTextField(
-            label = stringResource(R.string.settings_conn_api_key_label),
-            value = state.customApiKey,
-            onValueChange = { viewModel.saveCustomApiKey(it) },
-            keyboardType = KeyboardType.Password,
-            secret = true
-        )
-        SettingsTextField(
-            label = stringResource(R.string.settings_conn_model_label),
-            value = state.customModel,
-            onValueChange = { viewModel.saveCustomModel(it) },
-            keyboardType = KeyboardType.Text
-        )
-        SettingActionRow(
-            title = stringResource(R.string.settings_custom_list_models),
-            buttonLabel = stringResource(R.string.settings_custom_list_models),
-            onClick = { viewModel.loadCustomModels() },
-            enabled = state.customBaseUrl.isNotBlank() && state.customApiKey.isNotBlank(),
-        )
-        state.customModelsError?.let {
-            Text(it, color = SocRed, fontSize = 12.sp, lineHeight = 16.sp)
-        }
-        SettingsTextField(
-            label = stringResource(R.string.settings_custom_extra_json_label),
-            value = state.customExtraJson,
-            onValueChange = { viewModel.saveCustomExtraJson(it) },
-            keyboardType = KeyboardType.Text,
-            singleLine = false
-        )
-        SettingHint(stringResource(R.string.settings_custom_extra_json_hint))
-        if (state.customExtraJson.isNotBlank() &&
-            LlmAgentBackend.parseExtraJson(state.customExtraJson) == null
-        ) {
-            Text(
-                stringResource(R.string.settings_custom_extra_json_invalid),
-                color = SocRed, fontSize = 12.sp, lineHeight = 16.sp
-            )
-        }
-    }
-
-    // Custom model picker dialog
-    if (state.showCustomModelPicker) {
-        CustomModelPickerDialog(
-            models = state.customModelList,
-            loading = state.customModelsLoading,
-            selectedId = state.customModel,
-            onSelect = { id ->
-                viewModel.saveCustomModel(id)
-                viewModel.hideCustomModelPickerDialog()
-            },
-            onDismiss = { viewModel.hideCustomModelPickerDialog() }
-        )
-    }
-
-    ModelSelectionCard(state, viewModel)
-    SearchStatusCard(state)
-
-    SectionHeader(text = stringResource(R.string.settings_exa_section_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SettingsTextField(
-                label = stringResource(R.string.agent_exa_api_key_label),
-                value = state.exaApiKey,
-                onValueChange = { viewModel.saveExaApiKey(it) },
-                keyboardType = KeyboardType.Password,
-                secret = true
-            )
-            SettingHint(stringResource(R.string.settings_exa_search_hint))
-        }
-    }
-
-    // Model picker dialog
-    if (state.showModelPicker) {
-        ModelPickerDialog(
-            models = state.availableModels,
-            loading = state.modelsLoading,
-            selectedId = state.openRouterModel,
-            onSelect = { viewModel.selectModel(it) },
-            onDismiss = { viewModel.hideModelPicker() }
         )
     }
 }
@@ -4386,9 +3981,9 @@ private fun FontScaleBlock(
 }
 
 /** Preset for the custom connection card: fills URL and model, key stays the user's. */
-private data class CustomPreset(val name: String, val baseUrl: String, val model: String, val hintRes: Int)
+internal data class CustomPreset(val name: String, val baseUrl: String, val model: String, val hintRes: Int)
 
-private val CUSTOM_PRESETS = listOf(
+internal val CUSTOM_PRESETS = listOf(
     CustomPreset("Cloudflare", "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1",
         "@cf/zai-org/glm-4.7-flash", R.string.settings_preset_hint_cloudflare),
     CustomPreset("Vercel", "https://ai-gateway.vercel.sh/v1",
@@ -4400,7 +3995,7 @@ private val CUSTOM_PRESETS = listOf(
 )
 
 @Composable
-private fun ConnectionCard(
+internal fun ConnectionCard(
     title: String,
     configured: Boolean,
     testResult: String?,
@@ -4452,7 +4047,7 @@ private fun ConnectionCard(
 }
 
 @Composable
-private fun ModelSelectionCard(state: SettingsUiState, viewModel: SettingsViewModel) {
+internal fun ModelSelectionCard(state: SettingsUiState, viewModel: SettingsViewModel) {
     // Options: configured connections as id -> "label · model" pairs.
     // stringResource is resolved OUTSIDE buildList (its lambda is not composable).
     val customTitle = stringResource(R.string.settings_conn_custom_title)
@@ -4527,7 +4122,7 @@ private fun ConnDropdown(
 }
 
 @Composable
-private fun SearchStatusCard(state: SettingsUiState) {
+internal fun SearchStatusCard(state: SettingsUiState) {
     val searchOk = state.exaApiKey.isNotBlank() ||
         (state.primaryConn.ifBlank { "openrouter" } != "custom" && state.agentConnConfigured)
     val source = when {
@@ -4553,7 +4148,7 @@ private fun SearchStatusCard(state: SettingsUiState) {
 }
 
 @Composable
-private fun SectionHeader(text: String, onHelp: (() -> Unit)? = null) {
+internal fun SectionHeader(text: String, onHelp: (() -> Unit)? = null) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -4571,7 +4166,7 @@ private fun SectionHeader(text: String, onHelp: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun SettingsTextField(
+internal fun SettingsTextField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
@@ -4649,7 +4244,7 @@ private fun MiniMaxKeyField(keySet: Boolean, onSave: (String) -> Unit) {
 }
 
 @Composable
-private fun CustomModelPickerDialog(
+internal fun CustomModelPickerDialog(
     models: List<String>,
     loading: Boolean,
     selectedId: String,
@@ -4714,7 +4309,7 @@ private fun CustomModelPickerDialog(
 }
 
 @Composable
-private fun ModelPickerDialog(
+internal fun ModelPickerDialog(
     models: List<OpenRouterModel>,
     loading: Boolean,
     selectedId: String,
