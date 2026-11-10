@@ -407,9 +407,7 @@ object ClusterProjectionManager {
     private suspend fun moveContext(context: Context, mode: ClusterMode, helper: HelperClient): String {
         if (mode != ClusterMode.FULLSCREEN) return ""
         val split = if (splitPreferences.isFeatureEnabled()) "on" else "off"
-        val state = runCatching { helper.getTaskState(targetPackage(context)) }
-            .onFailure { if (it is CancellationException) throw it }
-            .getOrNull()
+        val state = readTaskState(helper, targetPackage(context))
         val task = if (state == null || state.taskId <= 0) "navi_wm=none"
                    else "navi_wm=${state.windowingMode} navi_display=${state.displayId}"
         return " split=$split $task"
@@ -431,9 +429,7 @@ object ClusterProjectionManager {
         scope.launch {
             delay(VERIFY_AFTER_MS)
             if (currentMode != ClusterMode.FULLSCREEN || projectedPackage != target) return@launch
-            val state = runCatching { helper.getTaskState(target) }
-                .onFailure { if (it is CancellationException) throw it }
-                .getOrNull()
+            val state = readTaskState(helper, target)
             log(verifyLine(VERIFY_AFTER_MS, "vd=$vdId", state))
             val splitMiss = splitPlacementFailure(before, state, vdId) ?: return@launch
             mutex.withLock {
