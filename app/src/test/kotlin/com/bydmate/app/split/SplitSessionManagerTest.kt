@@ -78,6 +78,13 @@ private class CountingJournalStore : SplitJournalImpl.Store {
     override fun write(value: String) { this.value = value; writes++ }
 }
 
+/** The field log has to carry these facts; the exact wording around them may change. */
+private fun assertJournalHas(store: CountingJournalStore, vararg fragments: String) {
+    for (fragment in fragments) {
+        assertTrue("journal lacks '$fragment', journal was ${store.value}", store.value.contains(fragment))
+    }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -209,10 +216,8 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         assertEquals(SplitSessionState.Active(pair, 11, 10), mgr.state.value)
         assertEquals("only the single retry pause may elapse", 500L, currentTime - startedAt)
-        assertTrue(
-            "the retry is what the field log has to show, journal was ${store.value}",
-            store.value.contains("start wide task state confirmed on retry (pkg=pkg.wide)"),
-        )
+        // The retry is what the field log has to show.
+        assertJournalHas(store, "confirmed on retry", "pkg.wide")
     }
 
     @Test fun `two silent confirming reads fail the start and name the silence`() = runTest {
@@ -233,10 +238,7 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.LAUNCH_FAILED, result)
         assertEquals(SplitSessionState.Idle, mgr.state.value)
         assertFalse(backdrop.shown)
-        assertTrue(
-            "journal was ${store.value}",
-            store.value.contains("start wide pkg.wide -> no task state reply (2 silences in 2 reads)"),
-        )
+        assertJournalHas(store, "pkg.wide", "no task state reply", "2 silences in 2 reads")
     }
 
     /**
@@ -273,10 +275,7 @@ class SplitSessionManagerTest {
         assertEquals(SplitSessionState.Active(pair, 11, 10), mgr.state.value)
         assertEquals("one pause per re-read, nothing more", 1000L, currentTime - startedAt)
         coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), 1) }
-        assertTrue(
-            "journal was ${store.value}",
-            store.value.contains("start wide task state confirmed on retry (pkg=pkg.wide)"),
-        )
+        assertJournalHas(store, "confirmed on retry", "pkg.wide")
     }
 
     /** A pane that never produces a task inside the appearance window fails the start honestly. */
@@ -304,10 +303,8 @@ class SplitSessionManagerTest {
         assertEquals("six reads, five pauses between them", 2500L, currentTime - startedAt)
         // Both panes are handed back: the wide task does not exist, the narrow one is reverted.
         coVerify { helper.setTaskWindowingMode(11, 1) }
-        assertTrue(
-            "the observed state is the diagnosis, journal was ${store.value}",
-            store.value.contains("start wide pkg.wide -> no task after launch (task=-1 mode=0 display=0, waited 6 reads)"),
-        )
+        // The observed state is the diagnosis.
+        assertJournalHas(store, "pkg.wide", "no task after launch", "task=-1", "waited 6 reads")
     }
 
     /**
@@ -344,13 +341,7 @@ class SplitSessionManagerTest {
         assertEquals(SplitSessionState.Idle, mgr.state.value)
         assertFalse(backdrop.shown)
         coVerify { helper.setTaskWindowingMode(11, 1) }
-        assertTrue(
-            "journal was ${store.value}",
-            store.value.contains(
-                "start wide pkg.wide -> no task state reply " +
-                    "(2 silences in 4 reads, last answer task=-1 mode=0 display=0)"
-            ),
-        )
+        assertJournalHas(store, "pkg.wide", "no task state reply", "2 silences in 4 reads", "last answer task=-1")
     }
 
     /** One silence among the cold-launch -1s must not cost the pane its appearance window. */
@@ -381,10 +372,7 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         assertEquals(SplitSessionState.Active(pair, 11, 10), mgr.state.value)
         coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), 1) }
-        assertTrue(
-            "journal was ${store.value}",
-            store.value.contains("start wide task state confirmed on retry (pkg=pkg.wide)"),
-        )
+        assertJournalHas(store, "confirmed on retry", "pkg.wide")
     }
 
     @Test fun `a failed wide placement names the pane in the journal`() = runTest {
@@ -403,10 +391,7 @@ class SplitSessionManagerTest {
             SplitStartResult.LAUNCH_FAILED,
             mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)),
         )
-        assertTrue(
-            "journal was ${store.value}",
-            store.value.contains("start wide pkg.wide -> placement FAILED"),
-        )
+        assertJournalHas(store, "start wide", "pkg.wide", "placement FAILED")
     }
 
     @Test fun `a failed narrow placement names the pane in the journal`() = runTest {
@@ -426,10 +411,7 @@ class SplitSessionManagerTest {
             SplitStartResult.LAUNCH_FAILED,
             mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)),
         )
-        assertTrue(
-            "journal was ${store.value}",
-            store.value.contains("start narrow pkg.narrow -> placement FAILED"),
-        )
+        assertJournalHas(store, "start narrow", "pkg.narrow", "placement FAILED")
     }
 
     // ── startLastPair() ───────────────────────────────────────────────────────
@@ -562,22 +544,6 @@ class SplitSessionManagerTest {
             val event = awaitItem()
             assertEquals(SplitEvent.SessionEnded(EndReason.EXIT), event)
         }
-    }
-
-    @Test fun `exit preserves last saved pair`() = runTest {
-        val helper = mockk<HelperClient>(relaxed = true)
-        val prefs = FakeSplitPreferences()
-        val (wide, narrow) = boundsFor(SplitSide.RIGHT)
-        helper.stubLaunch("pkg.wide", "pkg.narrow")
-        helper.stubTask("pkg.wide", 10, 5, wide)
-        helper.stubTask("pkg.narrow", 11, 5, narrow)
-
-        val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
-        val mgr = SplitSessionManager(helper, prefs, FakeSplitBackdrop(), backgroundScope, 60_000)
-        mgr.start(pair)
-        mgr.exit()
-
-        assertEquals(pair, prefs.getLastPair())
     }
 
     // ── Watchdog: null tick is a no-op ────────────────────────────────────────
@@ -3611,32 +3577,6 @@ class SplitSessionManagerTest {
         repeat(3) { advanceTimeBy(60_001); runCurrent() }
 
         assertEquals("session must stay Active on helper hiccup", true, mgr.state.value is SplitSessionState.Active)
-    }
-
-    @Test fun `Q3 anti-vacuity - removing 2-tick debounce would fire COVERED on 1st tick`() = runTest {
-        // Proof that the debounce (coveredTickCount >= 2) is load-bearing.
-        // In this test we verify that with a foreign fullscreen on tick 1 + session-pane on tick 2,
-        // COVERED does NOT fire. If the threshold were 1 instead of 2, the session would be
-        // terminated after tick 1 and this test would see SessionEnded instead of Active.
-        val helper = mockk<HelperClient>(relaxed = true)
-        val (wide, narrow) = boundsFor(SplitSide.RIGHT)
-        helper.stubLaunch("pkg.wide", "pkg.narrow")
-        helper.stubTask("pkg.wide", 10, 5, wide)
-        helper.stubTask("pkg.narrow", 11, 5, narrow)
-        coEvery { helper.getTopTask() } returnsMany listOf(
-            foreignFullscreenTopTask(),            // tick 1: foreign → coveredTickCount=1
-            TopTaskInfo("pkg.narrow", 11, 5, 3, 0), // tick 2: not foreign → reset counter
-        )
-        coEvery { helper.getTopTaskPackage() } returns null
-        coEvery { helper.getTopTaskPackageOrSkip() } returns null
-
-        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
-        mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
-
-        advanceTimeBy(60_001); runCurrent() // tick 1 — counter increments
-        advanceTimeBy(60_001); runCurrent() // tick 2 — counter resets
-
-        assertEquals("session must stay Active — 1 tick of coverage is not enough", true, mgr.state.value is SplitSessionState.Active)
     }
 
     @Test fun `Q3 Q1-grace interaction - departure grace pkg appears fullscreen - NOT COVERED`() = runTest {

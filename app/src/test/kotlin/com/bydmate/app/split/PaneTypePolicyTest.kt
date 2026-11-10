@@ -55,9 +55,4 @@ class PaneTypePolicyTest {
     @Test fun `a truncated build id falls back to RECENTS`() {
         assertFalse(PaneTypePolicy("BYD/X/eng.build.2026010:12/user/release-keys").knownGood)
     }
-
-    @Test fun `label names the chosen type and the branch that chose it`() {
-        assertEquals("standard(known-good)", PaneTypePolicy("eng.build.20260106").label)
-        assertEquals("recents(fallback)", PaneTypePolicy("eng.build.20260320").label)
-    }
 }

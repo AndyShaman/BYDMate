@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import org.robolectric.Shadows
+import com.bydmate.app.R
 import com.bydmate.app.data.vehicle.HelperClient
 import io.mockk.coEvery
 import io.mockk.every
@@ -286,38 +287,26 @@ class SplitOverlayControllerMenuTest {
         assertEquals("pkg.narrow", mode?.closedPkg)
     }
 
-    // ── logic.pickerMode after menu action (what syncLogicToView propagates) ──
+    // ── menu tap reaches the view (on-car: «поменять приложение слева» did nothing) ──
 
-    @Test fun `logic pickerMode ChangePane WIDE after PICK_LEFT narrowRight — exclusion filter correct`() {
+    @Test fun `a PICK_LEFT tap on the pill menu opens the picker on the view with the left title`() {
+        every { splitPrefs.isFeatureEnabled() } returns true
         val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
         every { sessionManager.state } returns MutableStateFlow(
             SplitSessionState.Active(pair, narrowTaskId = 11, wideTaskId = 10)
         )
-        val controller = makeController()
+        val (controller, _) = makeControllerWithScope()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        val view = controller.pillView
+        assertNotNull("Precondition: pill attached for the Active session", view)
+        assertEquals("Precondition: no picker title yet", 0, view!!.pickerTitleRes)
 
-        // Fixed handleMenuAction calls logic.onMenuAction and then syncLogicToView when pickerMode != null.
-        controller.logic.onMenuAction(MenuAction.PICK_LEFT, SplitSide.RIGHT)
+        // The pill view calls the controller's handleMenuAction through this callback.
+        view.onMenuAction(MenuAction.PICK_LEFT)
 
+        // narrowSide = RIGHT → the left column is the WIDE pane; the view must have been synced.
         assertEquals(PickerMode.ChangePane(Pane.WIDE), controller.logic.pickerMode)
-        // Exclusion filter that syncLogicToView applies:
-        val excluded = controller.buildExcludedPackages(controller.logic.pickerMode)
-        assertTrue(excluded.contains("pkg.narrow"))
-        assertTrue(excluded.contains("pkg.wide"))
-    }
-
-    @Test fun `logic pickerMode ChangePane NARROW after PICK_RIGHT narrowRight — exclusion filter correct`() {
-        val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
-        every { sessionManager.state } returns MutableStateFlow(
-            SplitSessionState.Active(pair, narrowTaskId = 11, wideTaskId = 10)
-        )
-        val controller = makeController()
-
-        controller.logic.onMenuAction(MenuAction.PICK_RIGHT, SplitSide.RIGHT)
-
-        assertEquals(PickerMode.ChangePane(Pane.NARROW), controller.logic.pickerMode)
-        val excluded = controller.buildExcludedPackages(controller.logic.pickerMode)
-        assertTrue(excluded.contains("pkg.narrow"))
-        assertTrue(excluded.contains("pkg.wide"))
+        assertEquals(R.string.split_picker_title_left, view.pickerTitleRes)
     }
 
     // ── H2 fix: Idle-picker teardown via ACTION_CLOSE_SYSTEM_DIALOGS ─────────

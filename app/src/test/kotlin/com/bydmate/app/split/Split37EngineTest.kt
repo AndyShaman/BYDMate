@@ -75,6 +75,10 @@ class Split37EngineTest {
 
     private fun absent() = SplitTaskState(-1, 0, 0, 0, 0, 0)
     private fun task(id: Int) = SplitTaskState(id, 1, 0, 0, 0, 0)
+
+    /** Index of the first journal line that carries every fragment; -1 when none does. */
+    private fun lineWith(vararg fragments: String) =
+        journal.lines.indexOfFirst { line -> fragments.all { line.contains(it) } }
     /** Same package, but its task stands on the cluster projection display. */
     private fun clusterTask(id: Int) = SplitTaskState(id, 1, 0, 0, 0, 0, displayId = 2)
     private fun fullscreenInfo() = Split37AreaInfo(4, narrowLeft, wideRight, fullRoot)
@@ -219,9 +223,7 @@ class Split37EngineTest {
         coVerify(exactly = 0) { helper.split37MoveTask(21, 100, null, false) }
         assertTrue(
             journal.lines.toString(),
-            journal.lines.any {
-                it.contains("split37 place wide pkg.wide task=20 already in root 102 - bounced")
-            },
+            lineWith("task=20", "root 102", "bounced") >= 0,
         )
     }
 
@@ -249,13 +251,11 @@ class Split37EngineTest {
             helper.split37RootState(102, 20)
             helper.split37MoveTask(20, 100, null, false)
         }
-        val state = journal.lines.indexOf(
-            "split37 place wide pkg.wide task=20 already in root 102 - state: " +
-                "top=com.byd.sr/.SrActivity rootVisible=1 " +
-                "children=[20 pkg.wide/.Main, 31 com.byd.sr/.SrActivity] " +
-                "taskVisible=0 taskTop=pkg.wide/.Main"
+        val state = lineWith(
+            "task=20", "root 102", "state:", "top=com.byd.sr/.SrActivity", "rootVisible=1",
+            "31 com.byd.sr/.SrActivity", "taskVisible=0", "taskTop=pkg.wide/.Main",
         )
-        val bounced = journal.lines.indexOf("split37 place wide pkg.wide task=20 already in root 102 - bounced")
+        val bounced = lineWith("task=20", "root 102", "bounced")
         assertTrue(journal.lines.toString(), state >= 0 && bounced > state)
         // Only the pane that was already home is read; the narrow task was out in fullscreen.
         coVerify(exactly = 0) { helper.split37RootState(101, 21) }
@@ -278,11 +278,10 @@ class Split37EngineTest {
             helper.split37MoveTask(20, 100, null, false)
             helper.split37MoveTask(20, 102, rectOf(wideRight))
         }
-        val state = journal.lines.indexOf(
-            "split37 place wide pkg.wide task=20 already in root 102 - state: " +
-                "top=? rootVisible=? children=? taskVisible=? taskTop=?"
+        val state = lineWith(
+            "task=20", "root 102", "state:", "top=?", "rootVisible=?", "children=?", "taskVisible=?", "taskTop=?",
         )
-        val bounced = journal.lines.indexOf("split37 place wide pkg.wide task=20 already in root 102 - bounced")
+        val bounced = lineWith("task=20", "root 102", "bounced")
         assertTrue(journal.lines.toString(), state >= 0 && bounced > state)
     }
 

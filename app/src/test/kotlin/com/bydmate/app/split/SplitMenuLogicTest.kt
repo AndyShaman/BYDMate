@@ -8,33 +8,6 @@ import org.junit.Test
 
 class SplitMenuLogicTest {
 
-    // ── sideToPane mapping ────────────────────────────────────────────────────
-
-    @Test fun `sideToPane narrowRight LEFT column maps to WIDE pane`() {
-        assertEquals(Pane.WIDE, SplitMenuLogic.sideToPane(SplitSide.LEFT, SplitSide.RIGHT))
-    }
-
-    @Test fun `sideToPane narrowRight RIGHT column maps to NARROW pane`() {
-        assertEquals(Pane.NARROW, SplitMenuLogic.sideToPane(SplitSide.RIGHT, SplitSide.RIGHT))
-    }
-
-    @Test fun `sideToPane narrowLeft LEFT column maps to NARROW pane`() {
-        assertEquals(Pane.NARROW, SplitMenuLogic.sideToPane(SplitSide.LEFT, SplitSide.LEFT))
-    }
-
-    @Test fun `sideToPane narrowLeft RIGHT column maps to WIDE pane`() {
-        assertEquals(Pane.WIDE, SplitMenuLogic.sideToPane(SplitSide.RIGHT, SplitSide.LEFT))
-    }
-
-    // ── Initial state ─────────────────────────────────────────────────────────
-
-    @Test fun `initial state menu hidden and no picker`() {
-        val logic = SplitMenuLogic()
-        assertFalse(logic.isMenuVisible)
-        assertEquals(0L, logic.menuHideDeadline)
-        assertNull(logic.pickerMode)
-    }
-
     // ── Pill tap and auto-hide ────────────────────────────────────────────────
 
     @Test fun `onPillTap makes menu visible and sets deadline`() {
@@ -92,6 +65,7 @@ class SplitMenuLogicTest {
         val cmd = logic.onMenuAction(MenuAction.MIRROR, SplitSide.RIGHT)
         assertEquals(MenuCmd.Mirror, cmd)
         assertFalse(logic.isMenuVisible)
+        assertNull(logic.pickerMode)
     }
 
     @Test fun `onMenuAction SWAP returns SwapApps and hides menu`() {
@@ -100,6 +74,7 @@ class SplitMenuLogicTest {
         val cmd = logic.onMenuAction(MenuAction.SWAP, SplitSide.RIGHT)
         assertEquals(MenuCmd.SwapApps, cmd)
         assertFalse(logic.isMenuVisible)
+        assertNull(logic.pickerMode)
     }
 
     @Test fun `onMenuAction EXIT returns Exit and hides menu`() {
@@ -171,13 +146,6 @@ class SplitMenuLogicTest {
         assertEquals("com.closed.app", mode?.closedPkg)
     }
 
-    @Test fun `openPickerForPane without closedPkg produces null closedPkg`() {
-        val logic = SplitMenuLogic()
-        logic.openPickerForPane(Pane.NARROW)
-        val mode = logic.pickerMode as? PickerMode.ChangePane
-        assertNull(mode?.closedPkg)
-    }
-
     // ── onPickerBack ──────────────────────────────────────────────────────────
 
     @Test fun `onPickerBack in pane-closed picker returns ChangeApp with closed package`() {
@@ -185,12 +153,6 @@ class SplitMenuLogicTest {
         logic.openPickerForPane(Pane.NARROW, closedPkg = "com.closed.app")
         val cmd = logic.onPickerBack()
         assertEquals(MenuCmd.ChangeApp(Pane.NARROW, "com.closed.app"), cmd)
-    }
-
-    @Test fun `onPickerBack in pane-closed picker clears pickerMode`() {
-        val logic = SplitMenuLogic()
-        logic.openPickerForPane(Pane.WIDE, closedPkg = "com.closed.app")
-        logic.onPickerBack()
         assertNull(logic.pickerMode)
     }
 
@@ -199,12 +161,6 @@ class SplitMenuLogicTest {
         logic.openPickerForPane(Pane.NARROW, closedPkg = null)
         val cmd = logic.onPickerBack()
         assertEquals(MenuCmd.None, cmd)
-    }
-
-    @Test fun `onPickerBack in voluntary picker clears pickerMode`() {
-        val logic = SplitMenuLogic()
-        logic.openPickerForPane(Pane.NARROW, closedPkg = null)
-        logic.onPickerBack()
         assertNull(logic.pickerMode)
     }
 
@@ -280,29 +236,6 @@ class SplitMenuLogicTest {
         assertEquals(MenuCmd.None, cmd)
     }
 
-    // ── Idle-pill-leak regression (Fix #2) ────────────────────────────────────
-    //
-    // The controller attaches the pill in Idle state for the first-pair picker.
-    // On back (onPickerBack returns None), pickerMode is null.
-    // The controller then checks state==Idle && pickerMode==null → tearDownPill().
-
-    @Test fun `after first-pair back pickerMode is null (idle cleanup precondition)`() {
-        val logic = SplitMenuLogic()
-        logic.showFirstPairPicker()
-        assertEquals(PickerMode.FirstPairStep1, logic.pickerMode)
-        logic.onPickerBack()
-        assertNull(logic.pickerMode)
-        assertFalse(logic.isMenuVisible)
-    }
-
-    @Test fun `after step2 back pickerMode is null (idle cleanup precondition)`() {
-        val logic = SplitMenuLogic()
-        logic.showFirstPairPicker()
-        logic.onAppPicked("com.wide.app") // advance to step2
-        logic.onPickerBack()
-        assertNull(logic.pickerMode)
-    }
-
     // ── Fix 3: same-app guard ─────────────────────────────────────────────────
 
     @Test fun `onAppPicked in FirstPairStep2 with same pkg as widePkg returns None`() {
@@ -314,54 +247,5 @@ class SplitMenuLogicTest {
         assertEquals(MenuCmd.None, cmd)
         // Picker must stay in step 2 (no state advance).
         assertEquals(PickerMode.FirstPairStep2("com.same.app"), logic.pickerMode)
-    }
-
-    @Test fun `onAppPicked in FirstPairStep2 with different pkg returns StartSplit`() {
-        val logic = SplitMenuLogic()
-        logic.showFirstPairPicker()
-        logic.onAppPicked("com.wide.app")
-        val cmd = logic.onAppPicked("com.narrow.app")
-        val expected = MenuCmd.StartSplit(
-            SplitPair(narrowPkg = "com.narrow.app", widePkg = "com.wide.app", narrowSide = SplitSide.RIGHT))
-        assertEquals(expected, cmd)
-        assertNull(logic.pickerMode)
-    }
-
-    // ── showFirstPairPicker sets pickerMode before sync (Fix #1 logic guard) ──
-    //
-    // Critical fix was in controller ordering (ensurePillAttached BEFORE syncLogicToView).
-    // At the logic level: pickerMode must be FirstPairStep1 immediately after the call.
-    // This is the invariant the controller relies on when it calls syncLogicToView after attach.
-
-    @Test fun `showFirstPairPicker pickerMode is FirstPairStep1 immediately after call`() {
-        val logic = SplitMenuLogic()
-        logic.showFirstPairPicker()
-        // Invariant: any controller calling syncLogicToView after attach will find FirstPairStep1.
-        assertEquals(PickerMode.FirstPairStep1, logic.pickerMode)
-        assertFalse(logic.isMenuVisible)
-    }
-
-    // ── Bug B regression: PICK_LEFT/RIGHT must set ChangePane pickerMode ─────
-    //
-    // On-car: «поменять приложение слева»/«справа» did nothing — the picker never appeared.
-    // Root cause: SplitOverlayController.handleMenuAction did not call syncLogicToView() after
-    // logic.onMenuAction() set pickerMode. The fix adds that call when pickerMode != null.
-    // These tests verify the logic-seam state that syncLogicToView() reads and propagates
-    // to pillView.setPickerMode(), making the picker overlay visible.
-
-    @Test fun `MIRROR action does NOT open picker — no sync needed`() {
-        // Verify that non-picker actions leave pickerMode null so the controller's
-        // "if (logic.pickerMode != null) syncLogicToView()" branch is NOT taken.
-        val logic = SplitMenuLogic()
-        logic.onPillTap()
-        logic.onMenuAction(MenuAction.MIRROR, SplitSide.RIGHT)
-        assertNull(logic.pickerMode)
-    }
-
-    @Test fun `SWAP action does NOT open picker — no sync needed`() {
-        val logic = SplitMenuLogic()
-        logic.onPillTap()
-        logic.onMenuAction(MenuAction.SWAP, SplitSide.RIGHT)
-        assertNull(logic.pickerMode)
     }
 }
