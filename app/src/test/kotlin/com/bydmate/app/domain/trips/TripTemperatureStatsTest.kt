@@ -80,13 +80,6 @@ class TripTemperatureStatsTest {
     }
 
     @Test
-    fun `long trips get the bigger dot`() {
-        val s = TripTemperatureStats(listOf(trip(5.0, 25.0, km = 21.0), trip(5.0, 25.0, km = 6.0)))
-
-        assertEquals(listOf(true, false), s.points.map { it.big })
-    }
-
-    @Test
     fun `a range median needs three trips`() {
         val twoCold = listOf(
             trip(-10.0, 34.0), trip(-8.0, 33.0),

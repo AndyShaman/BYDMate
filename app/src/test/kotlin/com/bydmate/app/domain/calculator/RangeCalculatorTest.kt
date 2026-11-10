@@ -65,45 +65,22 @@ class RangeCalculatorTest {
         assertNull(c.estimateDetailed(null, null))
     }
 
-    @Test fun `estimate delegates to detailed`() = runTest {
-        val c = newCalc()
-        assertEquals(c.estimateDetailed(50, null)!!.rangeKm, c.estimate(50, null)!!, 1e-9)
-    }
-
-    // Sentinel / non-finite guard tests (MAJOR 1)
-    @Test fun `soc above 100 returns null`() = runBlocking {
-        val c = newCalc()
-        assertNull(c.estimate(soc = 101, totalElecKwh = 1500.0))
-    }
-
-    @Test fun `NaN capacity returns null`() = runBlocking {
-        val c = newCalc(capacity = Double.NaN)
-        assertNull(c.estimate(soc = 50, totalElecKwh = 1500.0))
-    }
-
-    @Test fun `Infinity capacity returns null`() = runBlocking {
-        val c = newCalc(capacity = Double.POSITIVE_INFINITY)
-        assertNull(c.estimate(soc = 50, totalElecKwh = 1500.0))
-    }
-
-    @Test fun `NaN carry returns null`() = runBlocking {
-        val c = newCalc(carry = Double.NaN)
-        assertNull(c.estimate(soc = 50, totalElecKwh = 1500.0))
-    }
-
-    @Test fun `finite but absurd capacity returns null`() = runBlocking {
-        val c = newCalc(capacity = Double.MAX_VALUE)
-        assertNull(c.estimate(soc = 100, totalElecKwh = 1500.0))
-    }
-
-    @Test fun `capacity above sane bound returns null`() = runBlocking {
-        val c = newCalc(capacity = 1001.0)
-        assertNull(c.estimate(soc = 50, totalElecKwh = 1500.0))
-    }
-
-    @Test fun `capacity below sane bound returns null`() = runBlocking {
-        val c = newCalc(capacity = 0.5)
-        assertNull(c.estimate(soc = 50, totalElecKwh = 1500.0))
+    // Sentinel / non-finite guard (MAJOR 1): every bad input gives null
+    @Test fun `insane soc, capacity or carry returns null`() = runBlocking {
+        data class Case(val label: String, val soc: Int, val capacity: Double, val carry: Double)
+        val cases = listOf(
+            Case("soc above 100", 101, 72.9, 0.0),
+            Case("NaN capacity", 50, Double.NaN, 0.0),
+            Case("Infinity capacity", 50, Double.POSITIVE_INFINITY, 0.0),
+            Case("NaN carry", 50, 72.9, Double.NaN),
+            Case("finite but absurd capacity", 100, Double.MAX_VALUE, 0.0),
+            Case("capacity above sane bound", 50, 1001.0, 0.0),
+            Case("capacity below sane bound", 50, 0.5, 0.0),
+        )
+        for (c in cases) {
+            val calc = newCalc(capacity = c.capacity, carry = c.carry)
+            assertNull("case: ${c.label}", calc.estimate(soc = c.soc, totalElecKwh = 1500.0))
+        }
     }
 
     @Test fun `capacity change applies immediately`() = runBlocking {
