@@ -6,8 +6,8 @@
 #   OPENROUTER_API_KEY=sk-or-... ./scripts/agent-eval.sh
 #   OPENROUTER_API_KEY=sk-or-... AGENT_EVAL_MODEL=openai/gpt-5-mini ./scripts/agent-eval.sh
 #
-# Without OPENROUTER_API_KEY the test skips itself, which is exactly what happens on CI and in
-# a normal ./gradlew test run. AGENT_EVAL_MODEL defaults to the model new installs get.
+# The test runs only when this script starts it (AGENT_EVAL=1 below): a normal ./gradlew test
+# run skips it even with the key exported. AGENT_EVAL_MODEL defaults to the model new installs get.
 # The offline half (set validity, schema and catalog coverage) runs in the normal suite as
 # AgentEvalOfflineTest and needs no key.
 set -euo pipefail
@@ -21,5 +21,5 @@ cd "$(dirname "$0")/.."
 export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
 
 # --rerun: results are model-dependent, so a cached "up-to-date" run would be a lie.
-./gradlew :app:testDebugUnitTest --tests '*AgentEvalLiveTest*' --rerun -i \
+AGENT_EVAL=1 ./gradlew :app:testDebugUnitTest --tests '*AgentEvalLiveTest*' --rerun -i \
   | grep -E '^\s*(agent eval:|ok |FAIL )' || true
