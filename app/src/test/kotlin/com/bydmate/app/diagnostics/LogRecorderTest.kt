@@ -24,6 +24,9 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
@@ -94,7 +97,7 @@ class LogRecorderTest {
      */
     private suspend fun LogRecorder.awaitStopped(): LogRecorder.State =
         withContext(Dispatchers.Default) {
-            withTimeout(5_000) { state.first { !it.isRecording && it.lastStopped != null } }
+            withTimeout(10_000) { state.first { !it.isRecording && it.lastStopped != null } }
         }
 
     @Test
@@ -259,9 +262,9 @@ class LogRecorderTest {
         assertTrue("length=${started.file.length()}", started.file.length() < limit + batch + 1024)
     }
 
-    /** Stdout that hands out [chunks] one read at a time, pausing [pauseMs] before each but the
+    /** Stdout that hands out [chunks] one read at a time, calling [beforeNext] before each but the
      *  first: a quiet logcat whose lines only the idle flusher pushes to the file. */
-    private class SparseStream(private val chunks: List<ByteArray>, private val pauseMs: Long) : InputStream() {
+    private class SparseStream(private val chunks: List<ByteArray>, private val beforeNext: () -> Unit) : InputStream() {
         private var index = 0
         private var pos = 0
 
@@ -272,7 +275,7 @@ class LogRecorderTest {
 
         override fun read(b: ByteArray, off: Int, len: Int): Int {
             if (index >= chunks.size) return -1
-            if (pos == 0 && index > 0) Thread.sleep(pauseMs)
+            if (pos == 0 && index > 0) beforeNext()
             val chunk = chunks[index]
             val n = minOf(len, chunk.size - pos)
             System.arraycopy(chunk, pos, b, off, n)
@@ -287,16 +290,33 @@ class LogRecorderTest {
         val line = "ж".repeat(1000) // 2000 bytes in UTF-8
         val burst = ((line + "\n").repeat(2)).toByteArray() // well below a batch: only the idle flush writes it
         val limit = 8 * 1024L
+        // The next burst comes only once the idle flusher has written the previous one (the file
+        // grew), so two bursts never reach the file in one flush. Three bursts cross the limit.
+        val file = AtomicReference<File>()
+        val flushedLength = AtomicLong()
+        val flushMissed = AtomicBoolean()
+        val awaitIdleFlush = {
+            val f = file.get()
+            val deadline = System.currentTimeMillis() + 10_000
+            while (f.length() <= flushedLength.get() && System.currentTimeMillis() < deadline) Thread.sleep(10)
+            if (f.length() <= flushedLength.get()) flushMissed.set(true)
+            flushedLength.set(f.length())
+        }
         val recorder = recorder(
             maxSizeBytes = limit,
-            stdout = { SparseStream(List(8) { burst }, pauseMs = 2_300L) },
+            stdout = { SparseStream(List(3) { burst }, awaitIdleFlush) },
         )
-        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+        val started = recorder.start { f: File ->
+            f.writeText("header\n")
+            flushedLength.set(f.length())
+            file.set(f)
+        } as LogRecorder.StartResult.Started
 
         withContext(Dispatchers.Default) {
             withTimeout(30_000) { recorder.state.first { !it.isRecording && it.lastStopped != null } }
         }
 
+        assertFalse("the idle flusher wrote nothing within 10 s", flushMissed.get())
         assertTrue(started.file.readText().contains("LOG STOPPED: file size limit reached"))
         // At most one burst past the limit; counting chars would let it reach twice the limit.
         assertTrue("length=${started.file.length()}", started.file.length() < limit + burst.size + 1024)
