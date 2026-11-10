@@ -6,6 +6,7 @@ import com.bydmate.app.data.trips.TripResetState
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,5 +33,21 @@ class TripResetStateRoundTripTest {
         assertEquals(state.corrKwh, loaded.corrKwh, 0.0001)
         assertEquals(state.corrMs, loaded.corrMs)
         assertTrue(loaded.excludeStraddling)
+    }
+
+    @Test fun `round-trip with excludeStraddling false persists false`() = runTest {
+        val r = repo()
+        val state = TripResetState(resetTs = 2_000L, corrKm = 5.0, corrKwh = 1.0, corrMs = 1_000L)
+        r.setTripResetState(2, state)
+        val loaded = r.getTripResetState(2)
+        assertFalse(loaded.excludeStraddling)
+    }
+
+    @Test fun `absent keys default to excludeStraddling false`() = runTest {
+        val r = repo()
+        // No setTripResetState call -- all keys are absent from the DAO.
+        val loaded = r.getTripResetState(1)
+        assertFalse(loaded.excludeStraddling)
+        assertEquals(0L, loaded.resetTs)
     }
 }
