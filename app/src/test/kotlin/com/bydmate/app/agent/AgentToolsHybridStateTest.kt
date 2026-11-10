@@ -1,8 +1,6 @@
 package com.bydmate.app.agent
 
 import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
-import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
@@ -10,7 +8,6 @@ import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.nativestack.VehicleKind
 import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.remote.DiParsData
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -36,16 +33,21 @@ class AgentToolsHybridStateTest {
     private val range = mockk<RangeCalculator>()
     private val context = mockk<Context>(relaxed = true)
 
-    private fun tools(kind: VehicleKind?) = AgentTools(
-        gate, battery, range, mockk<TripDao>(), mockk<ChargeDao>(),
-        mockk<ActionDispatcher>(relaxed = true), mockk<RuleDao>(), mockk<AutomationEngine>(),
-        mockk<PlaceRepository>(), mockk<WeatherClient>(), mockk<ExaSearchClient>(),
-        mockk<OpenRouterClient>(), mockk<SettingsRepository>(), mockk<ContactLookup>(), context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools(kind: VehicleKind?) = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = mockk<TripDao>(),
+        chargeDao = mockk<ChargeDao>(),
+        ruleDao = mockk<RuleDao>(),
+        automationEngine = mockk<AutomationEngine>(),
+        placeRepository = mockk<PlaceRepository>(),
+        weatherClient = mockk<WeatherClient>(),
+        exaSearchClient = mockk<ExaSearchClient>(),
+        openRouterClient = mockk<OpenRouterClient>(),
+        settingsRepository = mockk<SettingsRepository>(),
+        contactLookup = mockk<ContactLookup>(),
+        context = context,
     ).also { t ->
         if (kind != null) {
             t.injectVehicleKind(mockk { every { this@mockk.kind } returns MutableStateFlow(kind) })

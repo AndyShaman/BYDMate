@@ -1,19 +1,7 @@
 package com.bydmate.app.agent
 
-import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
-import com.bydmate.app.data.automation.ActionDispatcher
-import com.bydmate.app.data.automation.AutomationEngine
-import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
-import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.remote.InsightsManager
-import com.bydmate.app.data.remote.OpenRouterClient
-import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
-import com.bydmate.app.domain.battery.BatteryStateRepository
-import com.bydmate.app.domain.calculator.RangeCalculator
-import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -31,24 +19,14 @@ import org.junit.Test
  */
 class AgentEvalOfflineTest {
 
-    private fun realTools() = AgentTools(
-        mockk<VoiceGate>(relaxed = true), mockk<BatteryStateRepository>(relaxed = true),
-        mockk<RangeCalculator>(relaxed = true), mockk<TripDao>(relaxed = true),
-        mockk<ChargeDao>(relaxed = true), mockk<ActionDispatcher>(relaxed = true),
-        mockk<RuleDao>().also {
+    private fun realTools() = agentTools(
+        ruleDao = mockk<RuleDao>().also {
             coEvery { it.getEnabled() } returns emptyList()
             every { it.getAll() } returns MutableStateFlow(emptyList())
         },
-        mockk<AutomationEngine>(relaxed = true), mockk<PlaceRepository>(relaxed = true),
-        mockk<WeatherClient>(relaxed = true), mockk<ExaSearchClient>(relaxed = true),
-        mockk<OpenRouterClient>(relaxed = true),
-        mockk<SettingsRepository>().also {
+        settingsRepository = mockk<SettingsRepository>().also {
             coEvery { it.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
         },
-        mockk<ContactLookup>(relaxed = true), mockk<Context>(relaxed = true),
-        mockk<ClusterVoiceControl>(relaxed = true), mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true), mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
     ).also { it.ruleWatchScope = CoroutineScope(Dispatchers.Unconfined) }
 
     @Test fun the_set_has_no_duplicate_utterances_and_keeps_its_traps() {
