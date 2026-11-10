@@ -10,7 +10,6 @@ import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.telegram.ReportField
 import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
-import org.json.JSONObject
 
 // --- Action kind helpers (v2.3.0) ---
 
