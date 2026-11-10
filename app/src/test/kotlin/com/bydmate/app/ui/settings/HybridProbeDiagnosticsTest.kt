@@ -21,6 +21,33 @@ class HybridProbeDiagnosticsTest {
         }
     }
 
+    @Test fun `the table holds the fourteen probed addresses`() {
+        assertEquals(
+            listOf(
+                "engine_rpm" to 339738642,
+                "engine_power" to 339738656,
+                "coolant_temp" to 1320181824,
+                "oil_level" to 89129016,
+                "fuel_percent" to 1246785600,
+                "fuel_range_km" to 1246773304,
+                "fuel_instant" to 1246760996,
+                "fuel_total" to 1246760976,
+                "fuel_avg_phm" to 1246785552,
+                "mileage_hev" to 1246773264,
+                "mileage_ev" to 1246773284,
+                "fuel_tank_cap" to 1336934422,
+                "ev_range_km" to 1246765118,
+                "elec_phm" to 1032863794,
+            ),
+            HybridProbeDiagnostics.FIDS.map { it.name to it.fid },
+        )
+        assertEquals(
+            "the four consumption fids are float reads",
+            listOf("fuel_instant", "fuel_total", "fuel_avg_phm", "elec_phm"),
+            HybridProbeDiagnostics.FIDS.filter { it.tx == 7 }.map { it.name },
+        )
+    }
+
     @Test fun `values are printed with their fid coordinates and transact`() {
         val lines = HybridProbeDiagnostics.format(
             HybridProbeDiagnostics.FIDS.mapIndexed { i, _ -> 0 to i }

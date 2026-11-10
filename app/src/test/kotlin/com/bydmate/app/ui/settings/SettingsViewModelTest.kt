@@ -481,6 +481,12 @@ class SettingsViewModelTest {
         assertEquals(UpdateState.Idle, vm.uiState.value.updateDialogState)
     }
 
+    @Test fun `resetSeatChannel sets winner to UNKNOWN`() = runTest {
+        val vm = buildViewModel()
+        vm.resetSeatChannel()
+        verify { seatChannelStore.setWinner(SeatChannel.UNKNOWN) }
+    }
+
     @Test fun `setDisableNativeAssistant updates state and applies via helper`() = runTest {
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
@@ -1039,6 +1045,21 @@ class SettingsViewModelTest {
 
     // --- Wave N: online TTS source (Gemini/OpenAI via OpenRouter, MiniMax) ---
 
+    @Test fun `setTtsSource persists an online id to voice prefs`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setTtsSource("gemini")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("gemini", vm.uiState.value.ttsSource)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "gemini",
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
+        )
+    }
+
     @Test fun `setTtsSource minimax is rejected while no key is saved`() = runTest {
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
@@ -1069,6 +1090,29 @@ class SettingsViewModelTest {
             "minimax",
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
         )
+    }
+
+    @Test fun `setMinimaxProvider persists via SettingsRepository`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setMinimaxProvider("fal")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("fal", vm.uiState.value.minimaxProvider)
+        assertEquals("fal", settingsDao.map[SettingsRepository.KEY_MINIMAX_TTS_PROVIDER])
+    }
+
+    @Test fun `setMinimaxKey persists via SettingsRepository and flips minimaxKeySet`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(!vm.uiState.value.minimaxKeySet)
+
+        vm.setMinimaxKey("mm-key")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.minimaxKeySet)
+        assertEquals("mm-key", settingsDao.map[SettingsRepository.KEY_MINIMAX_TTS_KEY])
     }
 
     @Test fun `setMinimaxKey with a blank value clears minimaxKeySet`() = runTest {

@@ -23,6 +23,22 @@ class SeatsDiagnosticsTest {
         }
     }
 
+    @Test fun `the table covers the diagnostic fids and the candidate families`() {
+        assertEquals(24, SeatsDiagnostics.FIDS.size)
+        val devs = SeatsDiagnostics.FIDS.map { it.dev }.toSet()
+        assertEquals(setOf(1000, 1023), devs)
+        assertEquals(
+            "config flags must be present",
+            listOf(715132952, 715132955),
+            SeatsDiagnostics.FIDS.filter { it.name.startsWith("config_") }.map { it.fid },
+        )
+        assertEquals(
+            "dev=1023 trim flags must be present",
+            listOf(-811597816, -811597813),
+            SeatsDiagnostics.FIDS.filter { it.dev == 1023 }.map { it.fid },
+        )
+    }
+
     /** The candidate families are the whole point of the next field dump: 3CE for the front
      *  seats, LRSE for the rear ones. They must be read-only additions to the same batch. */
     @Test fun `candidate status families are sampled read-only`() {
