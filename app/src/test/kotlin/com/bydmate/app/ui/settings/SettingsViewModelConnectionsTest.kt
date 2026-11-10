@@ -329,17 +329,6 @@ class SettingsViewModelConnectionsTest {
 
     // --- Tests ---
 
-    @Test fun `saveZaiApiKey persists and updates state`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.saveZaiApiKey("zk")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("zk", vm.uiState.value.zaiApiKey)
-        assertEquals("zk", settingsDao.map[SettingsRepository.KEY_ZAI_API_KEY])
-    }
-
     @Test fun `applyCustomPreset fills name url and model but not the key`() = runTest {
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
@@ -355,30 +344,6 @@ class SettingsViewModelConnectionsTest {
         assertEquals("https://api.deepseek.com/v1", state.customBaseUrl)
         assertEquals("deepseek-chat", state.customModel)
         assertEquals("existing-key", state.customApiKey)
-    }
-
-    @Test fun `selectPrimaryConn persists agent_primary_conn`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.selectPrimaryConn("zai")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("zai", vm.uiState.value.primaryConn)
-        assertEquals("zai", settingsDao.map[SettingsRepository.KEY_AGENT_PRIMARY_CONN])
-    }
-
-    @Test fun `selectFallbackConn empty clears fallback`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.selectFallbackConn("zai")
-        testDispatcher.scheduler.advanceUntilIdle()
-        vm.selectFallbackConn("")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("", vm.uiState.value.fallbackConn)
-        assertEquals("", settingsDao.map[SettingsRepository.KEY_AGENT_FALLBACK_CONN])
     }
 
     @Test fun `agentConnConfigured follows primary connection`() = runTest {

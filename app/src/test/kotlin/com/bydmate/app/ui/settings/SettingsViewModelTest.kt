@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.settings
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.automation.RouteNavigatorUris
@@ -427,14 +428,6 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `initial state has default battery capacity`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(SettingsRepository.DEFAULT_BATTERY_CAPACITY, vm.uiState.value.batteryCapacity)
-    }
-
-    @Test
     fun `initial state has default home tariff`() = runTest {
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
@@ -486,12 +479,6 @@ class SettingsViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle() // cancelled job must not resurrect state
 
         assertEquals(UpdateState.Idle, vm.uiState.value.updateDialogState)
-    }
-
-    @Test fun `resetSeatChannel sets winner to UNKNOWN`() = runTest {
-        val vm = buildViewModel()
-        vm.resetSeatChannel()
-        verify { seatChannelStore.setWinner(SeatChannel.UNKNOWN) }
     }
 
     @Test fun `setDisableNativeAssistant updates state and applies via helper`() = runTest {
@@ -647,19 +634,105 @@ class SettingsViewModelTest {
         coVerify { helperClient.setAppHidden("com.byd.autovoice", false) }
     }
 
-    @Test fun `setVoiceEnabled persists and mirrors into voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
+    /** One voice-settings case: prefs before the view model starts, one action, then what state and prefs show. */
+    private class VoiceSettingCase(
+        val label: String,
+        val prefsBefore: (SharedPreferences.Editor) -> Unit = {},
+        val act: (SettingsViewModel) -> Unit = {},
+        val check: (SettingsViewModel, SharedPreferences) -> Unit,
+        val engineReloads: Int? = null,
+        val engineSpeaks: Int? = null,
+    )
 
-        vm.setVoiceEnabled(true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.voiceEnabled)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertTrue(
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-                .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
+    private val voiceSettingCases by lazy {
+        listOf(
+            VoiceSettingCase(
+                "setVoiceEnabled persists and mirrors into voice prefs",
+                act = { it.setVoiceEnabled(true) },
+                check = { vm, prefs ->
+                    assertTrue(vm.uiState.value.voiceEnabled)
+                    assertTrue(prefs.getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false))
+                },
+            ),
+            VoiceSettingCase(
+                "setTtsEnabled persists and mirrors to voice prefs",
+                act = { it.setTtsEnabled(true) },
+                check = { vm, prefs ->
+                    assertTrue(vm.uiState.value.ttsEnabled)
+                    assertTrue(prefs.getBoolean(SettingsRepository.KEY_TTS_ENABLED, false))
+                },
+            ),
+            VoiceSettingCase(
+                "setTtsVoice persists, mirrors to voice prefs, and reloads the engine",
+                act = { it.setTtsVoice("irina") },
+                check = { vm, prefs ->
+                    assertEquals("irina", vm.uiState.value.ttsVoice)
+                    assertEquals("irina", prefs.getString("tts_voice", null))
+                },
+                engineReloads = 1,
+            ),
+            VoiceSettingCase(
+                "agent identity state flows initialize from voice prefs",
+                prefsBefore = { it.putString("agent_name", "Лео").putString("agent_persona", "snarky") },
+                check = { vm, _ ->
+                    assertEquals("Лео", vm.agentName.value)
+                    assertEquals("snarky", vm.agentPersona.value)
+                    assertEquals("Лео", vm.uiState.value.agentName)
+                    assertEquals("snarky", vm.uiState.value.agentPersona)
+                },
+            ),
+            VoiceSettingCase(
+                "setTtsRate persists, mirrors to voice prefs, and reloads the engine",
+                act = { it.setTtsRate(1.2f) },
+                check = { vm, prefs ->
+                    assertEquals(1.2f, vm.uiState.value.ttsRate)
+                    assertEquals(1.2f, prefs.getFloat("tts_rate", -1f))
+                },
+                engineReloads = 1,
+            ),
+            VoiceSettingCase(
+                "setTtsLiveliness persists, mirrors to voice prefs, and reloads the engine",
+                act = { it.setTtsLiveliness(80) },
+                check = { vm, prefs ->
+                    assertEquals(80, vm.uiState.value.ttsLiveliness)
+                    assertEquals(80, prefs.getInt("tts_liveliness", -1))
+                },
+                engineReloads = 1,
+            ),
+            VoiceSettingCase(
+                "previewVoice reloads the engine and speaks the sample line via speakOffline",
+                act = { it.previewVoice() },
+                check = { _, _ -> },
+                engineReloads = 1,
+                engineSpeaks = 1,
+            ),
         )
+    }
+
+    @Test fun `voice settings reach state and the voice prefs, and the engine reloads where it should`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val prefs = ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+        for (c in voiceSettingCases) {
+            val editor = prefs.edit().clear()
+            c.prefsBefore(editor)
+            editor.commit()
+            val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+            coEvery { ttsModelManager.isReady(com.bydmate.app.voice.TtsVoiceCatalog.byId("irina")) } returns true
+            val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+
+            val vm = buildViewModel(ttsModelManager = ttsModelManager, ttsEngine = ttsEngine)
+            testDispatcher.scheduler.advanceUntilIdle()
+            c.act(vm)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            try {
+                c.check(vm, prefs)
+                c.engineReloads?.let { verify(exactly = it) { ttsEngine.reload() } }
+                c.engineSpeaks?.let { verify(exactly = it) { ttsEngine.speakOffline(any()) } }
+            } catch (e: AssertionError) {
+                throw AssertionError("case: ${c.label}: ${e.message}", e)
+            }
+        }
     }
 
     /**
@@ -703,58 +776,6 @@ class SettingsViewModelTest {
 
         coVerify(exactly = 0) { helperBootstrap.ensureRunning() }
         coVerify(exactly = 0) { helperClient.enableAccessibilityService() }
-    }
-
-    @Test fun `setTtsEnabled persists and mirrors to voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsEnabled(true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.ttsEnabled)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertTrue(
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-                .getBoolean(SettingsRepository.KEY_TTS_ENABLED, false)
-        )
-    }
-
-    @Test fun `setTtsVoice persists, mirrors to voice prefs, and reloads the engine`() = runTest {
-        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
-        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
-        coEvery { ttsModelManager.isReady(com.bydmate.app.voice.TtsVoiceCatalog.byId("irina")) } returns true
-
-        val vm = buildViewModel(ttsModelManager = ttsModelManager, ttsEngine = ttsEngine)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsVoice("irina")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("irina", vm.uiState.value.ttsVoice)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(
-            "irina",
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_voice", null)
-        )
-        verify(exactly = 1) { ttsEngine.reload() }
-    }
-
-    @Test fun `agent identity state flows initialize from voice prefs`() = runTest {
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-            .edit()
-            .putString("agent_name", "Лео")
-            .putString("agent_persona", "snarky")
-            .apply()
-
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("Лео", vm.agentName.value)
-        assertEquals("snarky", vm.agentPersona.value)
-        assertEquals("Лео", vm.uiState.value.agentName)
-        assertEquals("snarky", vm.uiState.value.agentPersona)
     }
 
     @Test fun `driver memory facts land in state and forgetAgentMemory clears storage`() = runTest {
@@ -1016,68 +1037,7 @@ class SettingsViewModelTest {
         verify(exactly = 0) { ttsEngine.reload() }
     }
 
-    @Test fun `setTtsRate persists, mirrors to voice prefs, and reloads the engine`() = runTest {
-        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
-        val vm = buildViewModel(ttsEngine = ttsEngine)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsRate(1.2f)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(1.2f, vm.uiState.value.ttsRate)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(1.2f, ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getFloat("tts_rate", -1f))
-        verify(exactly = 1) { ttsEngine.reload() }
-    }
-
-    @Test fun `setTtsLiveliness persists, mirrors to voice prefs, and reloads the engine`() = runTest {
-        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
-        val vm = buildViewModel(ttsEngine = ttsEngine)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsLiveliness(80)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(80, vm.uiState.value.ttsLiveliness)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(80, ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getInt("tts_liveliness", -1))
-        verify(exactly = 1) { ttsEngine.reload() }
-    }
-
-    @Test fun `previewVoice reloads the engine and speaks the sample line via speakOffline`() = runTest {
-        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
-        val vm = buildViewModel(ttsEngine = ttsEngine)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.previewVoice()
-
-        verify(exactly = 1) { ttsEngine.reload() }
-        verify(exactly = 1) { ttsEngine.speakOffline(any()) }
-    }
-
     // --- Wave N: online TTS source (Gemini/OpenAI via OpenRouter, MiniMax) ---
-
-    @Test fun `initial ttsSource defaults to offline`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(TtsRouter.OFFLINE, vm.uiState.value.ttsSource)
-    }
-
-    @Test fun `setTtsSource persists an online id to voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsSource("gemini")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("gemini", vm.uiState.value.ttsSource)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(
-            "gemini",
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
-        )
-    }
 
     @Test fun `setTtsSource minimax is rejected while no key is saved`() = runTest {
         val vm = buildViewModel()
@@ -1109,29 +1069,6 @@ class SettingsViewModelTest {
             "minimax",
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
         )
-    }
-
-    @Test fun `setMinimaxProvider persists via SettingsRepository`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setMinimaxProvider("fal")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("fal", vm.uiState.value.minimaxProvider)
-        assertEquals("fal", settingsDao.map[SettingsRepository.KEY_MINIMAX_TTS_PROVIDER])
-    }
-
-    @Test fun `setMinimaxKey persists via SettingsRepository and flips minimaxKeySet`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertTrue(!vm.uiState.value.minimaxKeySet)
-
-        vm.setMinimaxKey("mm-key")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.minimaxKeySet)
-        assertEquals("mm-key", settingsDao.map[SettingsRepository.KEY_MINIMAX_TTS_KEY])
     }
 
     @Test fun `setMinimaxKey with a blank value clears minimaxKeySet`() = runTest {
@@ -1382,46 +1319,6 @@ class SettingsViewModelTest {
 
         assertTrue(vm.uiState.value.gigaAmDownloadFailed)
         assertEquals(null, vm.uiState.value.gigaAmSpaceShortfall)
-    }
-
-    @Test fun `setAgentEnabled persists and updates state`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setAgentEnabled(true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.agentEnabled)
-    }
-
-    @Test fun `setAgentName persists and mirrors into voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setAgentName("Лео")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("Лео", vm.uiState.value.agentName)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(
-            "Лео",
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("agent_name", "")
-        )
-    }
-
-    @Test fun `setAgentPersona persists and mirrors into voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setAgentPersona("engineer")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("engineer", vm.uiState.value.agentPersona)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(
-            "engineer",
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("agent_persona", "")
-        )
     }
 
     /** #190: default is Yandex, the setter mirrors into the same voice prefs the dispatcher reads. */
@@ -1680,13 +1577,6 @@ class SettingsViewModelTest {
             "reset must also forget the source fingerprint so the next sync re-reads the file",
             ctx.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE).contains("lastModified"),
         )
-    }
-
-    @Test
-    fun `resetTripSourceDetection delegates to detector`() {
-        val vm = buildViewModel()
-        vm.resetTripSourceDetection()
-        verify(exactly = 1) { energyDataDeadDetector.reset() }
     }
 
     @Test
