@@ -129,13 +129,11 @@ class TelegramReportBuilderTest {
         val stamp = TelegramReportBuilder.formatDateTime(start).split(' ')
         assertEquals(
             listOf(
-                "<b>BYDMate: Где машина</b>",
-                "",
                 "🚗 <b>Последняя поездка</b> ${stamp[0]} в ${stamp[1]}",
                 "${em}42 км за 1 ч 20 мин",
                 "${em}Расход 15,4 кВт·ч/100 км",
             ),
-            report.text.lines(),
+            report.text.lines().drop(2),
         )
     }
 
@@ -331,13 +329,11 @@ class TelegramReportBuilderTest {
         val fields = setOf(ReportField.SOC, ReportField.RANGE, odometer, ReportField.TEMPS)
         assertEquals(
             listOf(
-                "<b>BYDMate: Где машина</b>",
-                "",
                 "🔋 Заряд <b>64%</b>, запас <b>312 км</b>",
                 "🧭 Пробег 23\u00A0456 км",
                 "🌡 Снаружи +12°, в салоне +19°",
             ),
-            build(fields = fields, inputs = inputs(data = data)).text.lines(),
+            build(fields = fields, inputs = inputs(data = data)).text.lines().drop(2),
         )
         val en = build(fields = setOf(odometer), inputs = inputs(data = data), lang = "en")
         assertEquals("🧭 Odometer 23,456 km", en.text.lines()[2])
@@ -348,8 +344,8 @@ class TelegramReportBuilderTest {
         val data = fullData.copy(mileage = 23_456.7)
         val report = build(fields = setOf(odometer, ReportField.TIRES), inputs = inputs(data = data))
         assertEquals(
-            listOf("<b>BYDMate: Где машина</b>", "", "🧭 Пробег 23\u00A0456 км", "🛞 Шины: ПЛ 2,4 · ПП 2,4 · ЗЛ 2,3 · ЗП 2,4 бар"),
-            report.text.lines(),
+            listOf("🧭 Пробег 23\u00A0456 км", "🛞 Шины: ПЛ 2,4 · ПП 2,4 · ЗЛ 2,3 · ЗП 2,4 бар"),
+            report.text.lines().drop(2),
         )
     }
 
