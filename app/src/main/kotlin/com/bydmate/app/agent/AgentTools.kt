@@ -3058,7 +3058,6 @@ class AgentTools @Inject constructor(
         private val AGENT_POWER_LABELS = PowerStateRuleMigration.Labels("Запуск приложения", "Gear == D")
         private const val MAX_PLACES = 50
         private const val BAD_ARGS_ERROR = """{"error":"некорректные аргументы"}"""
-        private const val CALL_CONTACT_FAILED = """{"error":"не удалось позвонить"}"""
         private const val INTERNAL_ERROR = """{"error":"внутренняя ошибка инструмента"}"""
         // Straight-line distance underestimates real road distance; this fudge factor
         // brings the estimate closer to typical highway/road routing.
