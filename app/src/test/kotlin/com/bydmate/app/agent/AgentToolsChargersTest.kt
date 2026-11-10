@@ -465,4 +465,17 @@ class AgentToolsChargersTest {
         assertTrue(chargers.getJSONObject(1).getBoolean("beyond_range"))
     }
 
+    @Test fun tool_schema_offers_connector_and_where() = runTest {
+        val schema = (0 until tools.schemas().length()).map { tools.schemas().getJSONObject(it) }
+            .single { it.getJSONObject("function").getString("name") == "find_chargers" }
+            .getJSONObject("function")
+        val props = schema.getJSONObject("parameters").getJSONObject("properties")
+        assertEquals(listOf("GB/T", "CCS2", "Type2", "CHAdeMO"),
+            props.getJSONObject("connector").getJSONArray("enum").let { a -> (0 until a.length()).map { a.getString(it) } })
+        assertEquals(listOf("around", "ahead"),
+            props.getJSONObject("where").getJSONArray("enum").let { a -> (0 until a.length()).map { a.getString(it) } })
+        val description = schema.getString("description")
+        assertTrue(description, description.contains("по пути"))
+        assertTrue(description, description.contains("navigate_to"))
+    }
 }

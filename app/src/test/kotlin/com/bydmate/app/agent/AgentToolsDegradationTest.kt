@@ -132,6 +132,14 @@ class AgentToolsDegradationTest {
 
     // --- (b) schemas() at fully empty state: valid, parseable, every entry recognizable ---
 
+    @Test fun schemas_empty_state_is_valid_and_every_entry_parseable() = runTest {
+        coEvery { ruleDao.getEnabled() } returns emptyList()
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns ""
+        val arr = tools().schemas()
+        assertTrue(arr.length() > 0)
+        assertToolNamesParseable(arr)
+    }
+
     /** Every schemas() entry is either {"type":"function","function":{...}} or a server-tool
      *  object whose "type" field names the tool (e.g. "openrouter:web_search"); asserting this
      *  for every entry is what proves the array end-to-end parseable, not just non-empty. */

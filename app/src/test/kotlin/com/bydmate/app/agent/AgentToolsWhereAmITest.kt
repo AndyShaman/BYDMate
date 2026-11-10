@@ -195,6 +195,15 @@ class AgentToolsWhereAmITest {
         assertTrue(fixNote, fixNote.contains("по последним данным"))
     }
 
+    @Test fun tool_is_declared_and_steers_away_from_web_search() = runTest {
+        val schemas = tools.schemas(includeAutomationTools = false)
+        val fn = (0 until schemas.length()).map { schemas.getJSONObject(it).getJSONObject("function") }
+            .single { it.getString("name") == "where_am_i" }
+        assertTrue(fn.getString("description").contains("где я"))
+        assertTrue(fn.getString("description").contains("не ищи координаты через web_search"))
+        assertTrue(fn.getString("description").contains("а не в каком месте она"))
+    }
+
     // Review: age used to be System.currentTimeMillis() - Location.time, so a wall-clock change
     // (manual or NTP) turned a stale fix fresh or a fresh one stale. gpsFixAgeMs must depend only
     // on the monotonic elapsedRealtimeNanos seam, never on nowMs (the wall clock).

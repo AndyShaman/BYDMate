@@ -362,6 +362,15 @@ class AgentToolsSplitScreenTest {
 
     // ─── Schema ──────────────────────────────────────────────────────────────────
 
+    // (x) split_screen appears in the tool schema list.
+    @Test fun split_screen_appears_in_schemas() = runTest {
+        val schemas = tools().schemas()
+        val names = (0 until schemas.length()).map {
+            schemas.getJSONObject(it).getJSONObject("function").getString("name")
+        }
+        assertTrue(names.contains("split_screen"))
+    }
+
     // ─── create_automation with split_screen action kind ─────────────────────────
 
     // Helper that builds a create_automation JSON with a split_screen action.
