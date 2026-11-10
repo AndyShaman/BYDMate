@@ -48,6 +48,23 @@ class LastSessionRepositoryTest {
     }
 
     @Test
+    fun `endTs exactly at session start still matches`() {
+        val repo = LastSessionRepository(ctx())
+        repo.onSessionStart(soc = 90, ts = 10_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 70, ts = 20_000L, exteriorTemp = null)
+        assertEquals(70, repo.takeMatch(10_000L)?.endSoc)
+    }
+
+    @Test
+    fun `endTs one ms past the tolerance after session end does not match`() {
+        val repo = LastSessionRepository(ctx())
+        repo.onSessionStart(soc = 90, ts = 10_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 70, ts = 20_000L, exteriorTemp = null)
+        // END_TOLERANCE_MS is 30 s: 20_000 + 30_000 + 1 is the first ms outside the window
+        assertNull(repo.takeMatch(50_001L))
+    }
+
+    @Test
     fun `bookmarks survive a process restart (persisted)`() {
         val context = ctx()
         val repo1 = LastSessionRepository(context)

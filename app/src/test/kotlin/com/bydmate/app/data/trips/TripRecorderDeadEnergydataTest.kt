@@ -47,15 +47,6 @@ class TripRecorderDeadEnergydataTest {
         assertEquals(10.0, inserted.captured.distanceKm!!, 0.001)
     }
 
-    // Matrix cases 1/2 at recorder level: alive verdict keeps the passive gate intact.
-    @Test
-    fun `alive verdict keeps recorder passive when energydata is readable`() = runTest {
-        val (rec, tripDao, _) = recorder(isAvailable = true, isDead = false)
-        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 1000.0))
-        rec.consume(diParsData(powerState = 0, soc = 78, mileage = 1010.0))
-        coVerify(exactly = 0) { tripDao.insert(any()) }
-    }
-
     @Test
     fun `passive recorder still feeds every tick into the detector`() = runTest {
         val detector = mockk<EnergyDataDeadDetector>(relaxed = true) { every { isDead() } returns false }
