@@ -145,16 +145,6 @@ class ClusterProjectionStateTest {
         assertEquals(false, shouldRecoverCompositor(markerSet = true, mode = ClusterMode.OFF, autoContainer = false))
     }
 
-    // --- shouldPowerDownCompositor (#85/#62: no ИПЦ write on cars we never powered up) ---
-
-    @Test fun `power-down is owed only when our write-ahead marker is set`() {
-        assertEquals(true, shouldPowerDownCompositor(markerSet = true))
-    }
-
-    @Test fun `no marker - compositor was never powered by us - no ИПЦ write`() {
-        assertEquals(false, shouldPowerDownCompositor(markerSet = false))
-    }
-
     // --- cameraNeedsCompositor (VV 2026-08-28: auto-container off = camera never sends 16/18/0) ---
 
     @Test fun `camera drives the compositor only with auto-container on and a real cluster window`() {

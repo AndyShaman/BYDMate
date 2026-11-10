@@ -1026,7 +1026,7 @@ object ClusterProjectionManager {
         // #85/#62: no marker = we never powered the compositor up (e.g. projection aborted
         // on a car with no cluster display) - sending the down sequence would be a fresh
         // ИПЦ write to a cluster we never touched.
-        if (!shouldPowerDownCompositor(prefs.getBoolean(KEY_COMPOSITOR_POWERED, false))) return
+        if (!prefs.getBoolean(KEY_COMPOSITOR_POWERED, false)) return
         val off = runCatching { helper.setClusterContainerMode(false) }.getOrDefault(false)
         if (off) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
