@@ -10,6 +10,7 @@ import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripSummary
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.repository.PlaceRepository
+import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.SettingsRepository
@@ -491,6 +492,33 @@ class AgentToolsReadTest {
         assertFalse(JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).getBoolean("light_drl_on"))
         every { gate.vehicleSnapshot() } returns snapshot(drl = 0)
         assertFalse(JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).has("light_drl_on"))
+    }
+
+    @Test fun `battery temp min max projected`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(maxBatTemp = 31, minBatTemp = 27)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertEquals(31, out.getInt("battery_temp_max_c"))
+        assertEquals(27, out.getInt("battery_temp_min_c"))
+    }
+
+    @Test fun `lifetime km and kwh from battery state`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(soc = 80)
+        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, 24513.5f, 4321.25f, autoserviceAvailable = true)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertEquals(24513.5, out.getDouble("lifetime_km"), 0.01)
+        assertEquals(4321.25, out.getDouble("lifetime_kwh"), 0.01)
+    }
+
+    @Test fun stats_summary_week_serializes_metrics() = runTest {
+        coEvery { insightsManager.dynamicsFor(7) } returns listOf(
+            DynamicMetric(label = "Расход", current = "18.2 кВтч/100", previous = "19.0",
+                changePct = -4.2, sentiment = "good", section = null, kind = "consumption"))
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_stats_summary", "{}")))
+        val arr = out.getJSONArray("metrics")
+        assertEquals(1, arr.length())
+        assertEquals("Расход", arr.getJSONObject(0).getString("label"))
+        assertEquals("18.2 кВтч/100", arr.getJSONObject(0).getString("current"))
+        assertEquals(-4.2, arr.getJSONObject(0).getDouble("change_pct"), 0.01)
     }
 
     @Test fun stats_summary_month_uses_30_days() = runTest {
