@@ -20,6 +20,12 @@ class PersistedSessionStalenessTest {
     }
 
     @Test
+    fun `session idle longer than threshold is stale`() {
+        val p = PersistedSession(sessionStartedAt = 1_000L, lastActiveTs = 5_000L)
+        assertTrue(p.isStale(now = 100_000L, idleCloseMs = 30_000L))
+    }
+
+    @Test
     fun `repro v2_4_5 ghost session — 11h43m trip-time on Song`() {
         // User report: machine drove 5 min, parked 20 min, process was killed
         // before 30-sec idle-close fired. Prefs hold the 25-min-old anchor.
