@@ -16,11 +16,15 @@ object NavA11yExtractor {
 
     /** The maneuver image; read by the parse and by [probeManeuver]. */
     private const val MANEUVER_ID = "image_maneuverballoon_maneuver"
-    private const val DISTANCE_ID = "text_maneuverballoon_distance"
-    private const val METRICS_ID = "text_maneuverballoon_metrics"
+    internal const val DISTANCE_ID = "text_maneuverballoon_distance"
+    internal const val METRICS_ID = "text_maneuverballoon_metrics"
     private const val NEXT_STREET_ID = "text_nextstreet"
-    private const val STATUS_ID = "status_panel_text"
-    private const val ETA_TIME_ID = "textview_eta_time"
+    internal const val STATUS_ID = "status_panel_text"
+    internal const val ETA_TIME_ID = "textview_eta_time"
+    /** Read here and by NaviScreenReader's on-demand read, like the four above. */
+    internal const val EXIT_NUMBER_ID = "exit_number_text"
+    internal const val ETA_DISTANCE_ID = "textview_eta_distance"
+    internal const val SPEED_LIMIT_ID = "text_speedlimit"
     /** The Navigator's second guidance layout (ids as Denza Lab reads them on a projected Navigator):
      *  issue #199, on the Han cluster the balloon leaves the window about a kilometre before a turn. */
     private const val NEXT_MANEUVER_ID = "next_maneuver_image"
@@ -53,14 +57,14 @@ object NavA11yExtractor {
         if (pkg !in NavPackages.GUIDANCE_SOURCES) return ReadResult.NotNavigator
         val raw = NavGuidanceParser.RawFields(
             maneuverDesc = descOf(root, "$pkg:id/$MANEUVER_ID"),
-            exitNumber = textOf(root, "$pkg:id/exit_number_text"),
+            exitNumber = textOf(root, "$pkg:id/$EXIT_NUMBER_ID"),
             distance = textOf(root, "$pkg:id/$DISTANCE_ID"),
             distanceUnit = textOf(root, "$pkg:id/$METRICS_ID"),
             nextStreet = textOf(root, "$pkg:id/$NEXT_STREET_ID"),
             statusPanel = textOf(root, "$pkg:id/$STATUS_ID"),
             etaTime = descOrTextOf(root, "$pkg:id/$ETA_TIME_ID"),
-            etaDistance = textOf(root, "$pkg:id/textview_eta_distance"),
-            speedLimit = textOf(root, "$pkg:id/text_speedlimit"),
+            etaDistance = textOf(root, "$pkg:id/$ETA_DISTANCE_ID"),
+            speedLimit = textOf(root, "$pkg:id/$SPEED_LIMIT_ID"),
         )
         // The second layout is read only when the balloon gave nothing: where the balloon is
         // on screen, the read is the same as before it.
