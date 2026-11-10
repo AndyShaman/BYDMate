@@ -1345,8 +1345,8 @@ class TrackingService : Service(), LocationListener {
                     runCatching { autoserviceClient.readChargingSnapshot() }.getOrNull()
                 } else null
                 // ENG_POW: reused from this tick's already-fetched snapshot instead of
-                // a dedicated ADB read per send (FidMap "power" = dev 1012 / fid 339738656,
-                // same fid as getEnginePowerKw). May be up to one poll tick stale, fine at
+                // a dedicated ADB read per send (FidMap "power" = dev 1012 / fid 339738656).
+                // May be up to one poll tick stale, fine at
                 // 1 Hz. Null → client falls back to DiPars power.
                 val enginePowerKw: Int? = data.power?.toInt()
 

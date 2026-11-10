@@ -619,9 +619,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         turn = turn.copy(heardId = id)
     }
 
-    /** Appends the continuous-session decode latency to a journal detail string; a no-op
-     *  (returns [text] unchanged) for the legacy one-shot path, which has no per-utterance
-     *  decode timing. */
+    /** Appends the continuous-session decode latency to a journal detail string. */
     private fun withDecodeMs(text: String, decodeMs: Long): String =
         "$text decodeMs=$decodeMs"
 

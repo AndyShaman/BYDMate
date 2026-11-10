@@ -295,7 +295,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         // NonCancellable here: the physical write has already landed, so the verdict (up to
         // ~1 s of reads) and the audit row that follows it must survive a caller cancelled in
         // that window — a command the car obeyed must never surface as an exception, whichever
-        // entry point (dispatch, writeWindowDriver, …) started the write.
+        // entry point started the write.
         if (windowCheck != null && verifyInto == null) {
             return withContext(NonCancellable) {
                 val failure = windowFailure(windowCheck)

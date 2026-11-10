@@ -76,7 +76,7 @@ class DtcParserTest {
         for (s in intArrayOf(0x40, 0x50, 0x00, 0x20, 0x80)) assertNull("0x%02X".format(s), DtcParser.classify(s))
     }
 
-    @Test fun `the code text follows the format byte`() {
+    @Test fun `the code text is the letter, four digits and the failure type byte`() {
         assertEquals("U0164-87", DtcParser.codeText(hex("C16487")))
         assertEquals("P0562-FC", DtcParser.codeText(hex("0562FC")))
         assertEquals("U1166-87", DtcParser.codeText(hex("D16687")))
