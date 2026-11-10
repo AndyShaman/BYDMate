@@ -211,16 +211,11 @@ class DriveModeChannel(
     }
 
     /** A throwing read is a failed read, not a verdict. */
-    private suspend fun read(fid: Int): Int? = runCatching { reader.read(fid) }
-        .onFailure {
-            if (it is CancellationException) throw it
-            Log.w(TAG, "DriveMode: read fid=$fid failed: ${it.message}")
-        }
-        .getOrNull()
+    private suspend fun read(fid: Int): Int? =
+        readGuarded({ Log.w(TAG, "DriveMode: read fid=$fid failed: ${it.message}") }) { reader.read(fid) }
 
     private companion object {
         const val TAG = "DriveModeChannel"
-        fun render(value: Int?) = value?.toString() ?: "err"
         /** 6 × 500 ms: the target followed within 2 s on the live test, 3 s leaves headroom. */
         const val READBACK_ATTEMPTS = 6
         const val READBACK_DELAY_MS = 500L

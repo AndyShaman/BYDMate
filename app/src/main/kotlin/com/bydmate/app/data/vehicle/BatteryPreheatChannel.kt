@@ -7,7 +7,6 @@ import com.bydmate.app.data.nativestack.VehicleKindDetector
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.split.readSystemProperty
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -228,12 +227,8 @@ class BatteryPreheatChannel(
     }
 
     /** A throwing read is a failed read, not a verdict. */
-    private suspend fun read(dev: Int, fid: Int): Int? = runCatching { reader.read(dev, fid) }
-        .onFailure {
-            if (it is CancellationException) throw it
-            Log.w(TAG, "Preheat: read dev=$dev fid=$fid failed: ${it.message}")
-        }
-        .getOrNull()
+    private suspend fun read(dev: Int, fid: Int): Int? =
+        readGuarded({ Log.w(TAG, "Preheat: read dev=$dev fid=$fid failed: ${it.message}") }) { reader.read(dev, fid) }
 
     companion object {
         private const val ACTION_ON = "battery_preheat_on"
@@ -263,5 +258,3 @@ class BatteryPreheatChannel(
         private val LATE_READS_MS = listOf(5_000L, 30_000L, 120_000L)
     }
 }
-
-private fun render(value: Int?) = value?.toString() ?: "err"

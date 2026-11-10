@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import android.util.Log
 import com.bydmate.app.data.autoservice.SentinelDecoder
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -83,14 +82,8 @@ class HudSwitchChannel(
     }
 
     /** A throwing read is a failed read, not a verdict. */
-    private suspend fun read(fid: Int): Int? = runCatching { reader.read(fid) }
-        .onFailure {
-            if (it is CancellationException) throw it
-            Log.w(TAG, "Hud: read fid=$fid failed: ${it.message}")
-        }
-        .getOrNull()
-
-    private fun render(value: Int?) = value?.toString() ?: "err"
+    private suspend fun read(fid: Int): Int? =
+        readGuarded({ Log.w(TAG, "Hud: read fid=$fid failed: ${it.message}") }) { reader.read(fid) }
 
     private companion object {
         const val TAG = "HudSwitchChannel"
