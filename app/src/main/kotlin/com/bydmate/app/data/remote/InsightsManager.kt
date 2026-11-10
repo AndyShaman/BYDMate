@@ -197,16 +197,7 @@ class InsightsManager @Inject constructor(
 
     private suspend fun buildDynamics(lang: String, periodDays: Int = 7): List<DynamicMetric> = withContext(Dispatchers.IO) {
         val res = localizedResources(lang)
-        val now = System.currentTimeMillis()
-        val cal = Calendar.getInstance()
-
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -periodDays)
-        val periodStart = cal.timeInMillis
-
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -2 * periodDays)
-        val prevStart = cal.timeInMillis
+        val (periodStart, prevStart) = periodBounds(periodDays)
 
         val allTrips = tripDao.getAllSnapshot()
         val recentTrips = allTrips.filter { it.startTs >= periodStart }
@@ -353,16 +344,7 @@ class InsightsManager @Inject constructor(
      *  30-day insight could carry a weekly night-idle row. */
     private suspend fun buildNightDrainMetric(lang: String, periodDays: Int): DynamicMetric {
         val res = localizedResources(lang)
-        val now = System.currentTimeMillis()
-        val cal = Calendar.getInstance()
-
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -periodDays)
-        val weekAgo = cal.timeInMillis
-
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -2 * periodDays)
-        val twoWeeksAgo = cal.timeInMillis
+        val (weekAgo, twoWeeksAgo) = periodBounds(periodDays)
 
         val weekDrains = idleDrainDao.getSince(weekAgo)
         val nightKwh = InsightStatsAggregator.nightDrainKwh(weekDrains)
@@ -391,6 +373,22 @@ class InsightsManager @Inject constructor(
         )
     }
 
+    /** Start of the current window (now - periodDays) and of the previous one
+     *  (now - 2 * periodDays), in calendar days. */
+    private fun periodBounds(periodDays: Int): Pair<Long, Long> {
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -periodDays)
+        val periodStart = cal.timeInMillis
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -2 * periodDays)
+        val prevStart = cal.timeInMillis
+        return periodStart to prevStart
+    }
+
     // Deterministic tone based on consumption only (12V/cell-delta evaluated at display time)
     private fun determineTone(dynamics: List<DynamicMetric>): String {
         val consumption = dynamics.firstOrNull { it.kind == "consumption" }
@@ -414,16 +412,7 @@ class InsightsManager @Inject constructor(
     }
 
     suspend fun collectStats(periodDays: Int = 7): InsightStats? = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
-        val cal = Calendar.getInstance()
-
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -periodDays)
-        val weekAgo = cal.timeInMillis
-
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -2 * periodDays)
-        val twoWeeksAgo = cal.timeInMillis
+        val (weekAgo, twoWeeksAgo) = periodBounds(periodDays)
 
         val allTrips = tripDao.getAllSnapshot()
         val recentTrips = allTrips.filter { it.startTs >= weekAgo }
