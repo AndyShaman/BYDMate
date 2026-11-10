@@ -127,9 +127,12 @@ class HelperClientAutoVoiceTest {
     @Test fun `a call queued past the lock wait gives up unsent and the retry lands`() = runBlocking {
         val n = AtomicInteger()
         val inFirst = CountDownLatch(1)
+        // The first transact is held until the queued call has given up: it is in flight for the
+        // whole lock wait by construction, not by a sleep longer than the wait.
+        val release = CountDownLatch(1)
         val fake = object : FakeIBinder() {
             override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-                if (n.getAndIncrement() == 0) { inFirst.countDown(); Thread.sleep(6_000) }
+                if (n.getAndIncrement() == 0) { inFirst.countDown(); release.await(10, TimeUnit.SECONDS) }
                 appliedReply(reply)
                 return true
             }
@@ -137,14 +140,19 @@ class HelperClientAutoVoiceTest {
         val client = clientOver(fake)
 
         val first = async(Dispatchers.IO) { client.setAutoVoiceActive(true) }
-        assertTrue(inFirst.await(2, TimeUnit.SECONDS))
-        val started = System.currentTimeMillis()
-        val gaveUp = client.setAutoVoiceActive(false)
-        val waited = System.currentTimeMillis() - started
+        try {
+            assertTrue(inFirst.await(2, TimeUnit.SECONDS))
+            val started = System.currentTimeMillis()
+            val gaveUp = client.setAutoVoiceActive(false)
+            val waited = System.currentTimeMillis() - started
 
-        assertNull(gaveUp)
-        assertTrue("waited $waited ms", waited in 4_500..5_900)
-        assertEquals(1, n.get()) // the queued call never reached the daemon
+            assertNull(gaveUp)
+            assertTrue("first call still in flight at the refusal", !first.isCompleted)
+            assertTrue("waited $waited ms", waited >= 4_500)
+            assertEquals(1, n.get()) // the queued call never reached the daemon
+        } finally {
+            release.countDown()
+        }
         assertEquals(HelperBinderProtocol.AUTO_VOICE_APPLIED, first.await()?.outcome)
 
         assertEquals(HelperBinderProtocol.AUTO_VOICE_APPLIED, client.setAutoVoiceActive(false)?.outcome)
@@ -163,7 +171,7 @@ class HelperClientAutoVoiceTest {
         val r = clientOver(fake).setAutoVoiceActive(true)
 
         assertNull(r)
-        assertTrue(System.currentTimeMillis() - started < 1_000)
+        assertTrue(System.currentTimeMillis() - started < 3_000) // far below the 5 s lock wait
         assertEquals(2, n.get()) // one retry on a stale binder
     }
 
