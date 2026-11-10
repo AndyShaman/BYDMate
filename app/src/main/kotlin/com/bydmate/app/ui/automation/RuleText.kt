@@ -114,12 +114,9 @@ internal fun conditionText(t: TriggerDef, lc: Context, now: Long, zone: ZoneId):
     "param" -> paramConditionText(t, lc)
     "place_enter" -> lc.getString(R.string.auto_trig_place_enter, t.placeName ?: "?")
     "place_exit" -> lc.getString(R.string.auto_ui_phrase_place_exit, t.placeName ?: "?")
-    "time_of_day" -> when (t.value.uppercase()) {
-        "DAY" -> lc.getString(R.string.automation_trigger_day)
-        "DAWN" -> lc.getString(R.string.automation_trigger_dawn)
-        "DUSK" -> lc.getString(R.string.automation_trigger_dusk)
-        else -> lc.getString(R.string.automation_trigger_night)
-    }
+    "time_of_day" -> lc.getString(
+        TIME_OF_DAY_NAMES.firstOrNull { it.first == t.value.uppercase() }?.second ?: R.string.automation_trigger_night
+    )
     "time_range" -> ScheduleSpec.fromJson(t.value)?.let { scheduleText(it, lc) } ?: t.displayName
     "service_start" -> lc.getString(R.string.automation_trigger_service_start)
     "network_available" -> lc.getString(R.string.automation_trigger_internet)
@@ -154,7 +151,16 @@ private fun paramConditionText(t: TriggerDef, lc: Context): String {
 
 private val WEEKDAYS = setOf(1, 2, 3, 4, 5)
 private val WEEKEND = setOf(6, 7)
-private val DAY_NAMES = listOf(
+/** Day-phase trigger values and their names, in the editor's order. */
+internal val TIME_OF_DAY_NAMES = listOf(
+    "DAY" to R.string.automation_trigger_day,
+    "NIGHT" to R.string.automation_trigger_night,
+    "DAWN" to R.string.automation_trigger_dawn,
+    "DUSK" to R.string.automation_trigger_dusk,
+)
+
+/** Day names, Monday first: the index is the ISO day of week (1 = Mon) minus one. */
+internal val DAY_NAMES = listOf(
     R.string.automation_day_mon, R.string.automation_day_tue, R.string.automation_day_wed,
     R.string.automation_day_thu, R.string.automation_day_fri, R.string.automation_day_sat,
     R.string.automation_day_sun,

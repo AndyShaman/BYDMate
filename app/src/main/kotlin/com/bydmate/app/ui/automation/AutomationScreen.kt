@@ -2135,12 +2135,7 @@ private fun TimeOfDayTriggerControls(
     trigger: TriggerDef,
     onUpdate: (TriggerDef) -> Unit
 ) {
-    val phases = listOf(
-        "DAY" to stringResource(R.string.automation_trigger_day),
-        "NIGHT" to stringResource(R.string.automation_trigger_night),
-        "DAWN" to stringResource(R.string.automation_trigger_dawn),
-        "DUSK" to stringResource(R.string.automation_trigger_dusk),
-    )
+    val phases = TIME_OF_DAY_NAMES.map { (value, name) -> value to stringResource(name) }
     val current = phases.find { it.first == trigger.value.uppercase() } ?: phases[1]
     DropdownField(
         text = current.second,
@@ -2173,15 +2168,7 @@ private fun ScheduleTriggerControls(
         ).show()
     }
 
-    val dayLabels = listOf(
-        1 to stringResource(R.string.automation_day_mon),
-        2 to stringResource(R.string.automation_day_tue),
-        3 to stringResource(R.string.automation_day_wed),
-        4 to stringResource(R.string.automation_day_thu),
-        5 to stringResource(R.string.automation_day_fri),
-        6 to stringResource(R.string.automation_day_sat),
-        7 to stringResource(R.string.automation_day_sun),
-    )
+    val dayLabels = DAY_NAMES.mapIndexed { i, name -> i + 1 to stringResource(name) }
 
     Column {
         // Mode (exact / range) and the time picker(s) on one line, wrapping when narrow.
@@ -2284,16 +2271,7 @@ internal fun scheduleDisplayName(context: android.content.Context, spec: Schedul
 
 private fun scheduleDaysShort(context: android.content.Context, days: Set<Int>): String {
     if (days.isEmpty() || days.size == 7) return ""
-    val labels = mapOf(
-        1 to R.string.automation_day_mon,
-        2 to R.string.automation_day_tue,
-        3 to R.string.automation_day_wed,
-        4 to R.string.automation_day_thu,
-        5 to R.string.automation_day_fri,
-        6 to R.string.automation_day_sat,
-        7 to R.string.automation_day_sun,
-    )
-    return days.sorted().joinToString(",") { context.getString(labels.getValue(it)) }
+    return days.sorted().joinToString(",") { context.getString(DAY_NAMES[it - 1]) }
 }
 
 @Composable

@@ -78,13 +78,6 @@ internal object RuleImportSummary {
         "voice" to R.string.automation_trigger_type_voice,
     )
 
-    private val TIME_OF_DAY_LABELS = mapOf(
-        "DAY" to R.string.automation_trigger_day,
-        "NIGHT" to R.string.automation_trigger_night,
-        "DAWN" to R.string.automation_trigger_dawn,
-        "DUSK" to R.string.automation_trigger_dusk,
-    )
-
     /**
      * Every line of [rule] in one pass. [autoGo] is the dispatcher's own answer to «will this
      * navigate press «Поехали» itself here» (ActionDispatcher.autoGoWillRun).
@@ -155,7 +148,7 @@ internal object RuleImportSummary {
 
     private fun triggerValue(trigger: TriggerDef, lc: Context): String? = when (trigger.kind) {
         "place_enter", "place_exit" -> placeValue(trigger, lc)
-        "time_of_day" -> TIME_OF_DAY_LABELS[trigger.value]?.let { lc.getString(it) } ?: trigger.value
+        "time_of_day" -> TIME_OF_DAY_NAMES.toMap()[trigger.value]?.let { lc.getString(it) } ?: trigger.value
         "time_range" -> ScheduleSpec.fromJson(trigger.value)?.let { scheduleDisplayName(lc, it) } ?: trigger.value
         "button_press" -> trigger.value
         "steering_key" -> steeringKeyValue(trigger, lc)
