@@ -57,6 +57,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
 
+/** Log tag shared by the blind-spot camera classes. */
+internal const val BLIND_SPOT_TAG = "BlindSpot"
+
+/** Glow frame around a camera window; the position overlay draws the same frame. */
+internal const val GLOW_STROKE_DP = 12f
+/** Orange: red draws the eye worse against the camera picture (field feedback). */
+internal const val GLOW_COLOR = 0xFFFF7A00.toInt()
+
 /** Transacts the fast loop reads its telemetry by (Leopard 3, on-car 2026-07-31). */
 internal const val BLIND_SPOT_TX_INT = 5
 internal const val BLIND_SPOT_TX_FLOAT = 7
@@ -1165,7 +1173,7 @@ class BlindSpotController @Inject constructor(
     }
 
     private companion object {
-        const val TAG = "BlindSpot"
+        const val TAG = BLIND_SPOT_TAG
         /** Suppression key handed to WidgetController while a window covers the main screen. */
         const val WIDGET_SUPPRESS_REASON = "blind-spot camera"
 
@@ -1196,9 +1204,6 @@ class BlindSpotController @Inject constructor(
         const val DUMP_LOG_LINES = 12
         const val GLOW_HALF_PERIOD_MS = 800L
         const val GLOW_MIN_ALPHA = 0.35f
-        const val GLOW_STROKE_DP = 12f
-        /** Orange: red draws the eye worse against the camera picture (field feedback). */
-        const val GLOW_COLOR = 0xFFFF7A00.toInt()
 
         /** Extra px past the edge so a hidden window cannot show a seam. */
         const val OFFSCREEN_MARGIN_PX = 100

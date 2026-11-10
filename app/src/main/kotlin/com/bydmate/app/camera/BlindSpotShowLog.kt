@@ -58,6 +58,6 @@ internal class BlindSpotShowLog {
     }
 
     private companion object {
-        const val TAG = "BlindSpot"
+        const val TAG = BLIND_SPOT_TAG
     }
 }
