@@ -429,7 +429,7 @@ object AppModule {
             Room.databaseBuilder(
                 context,
                 AppDatabase::class.java,
-                "bydmate.db"
+                AppDatabase.FILE_NAME
             )
         )
             .build()
