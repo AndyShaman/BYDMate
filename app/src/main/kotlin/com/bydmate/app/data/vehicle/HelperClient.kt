@@ -640,9 +640,6 @@ interface HelperClient {
      */
     suspend fun pushSubscribe(callback: IBinder, subs: List<FidPushSub>): List<FidPushResult>?
 
-    /** Drops the push subscription (TX_PUSH_UNSUBSCRIBE). False on any transport failure. */
-    suspend fun pushUnsubscribe(): Boolean
-
     /** Live push counters for the dump (TX_PUSH_STATUS); null when the daemon is unreachable. */
     suspend fun pushStatus(): FidPushStatus?
 
@@ -1291,9 +1288,6 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             if (reply.readInt() != 0) return@transactParsed null
             readResultTable(reply)
         }
-
-    override suspend fun pushUnsubscribe(): Boolean =
-        statusOk(HelperBinderProtocol.TX_PUSH_UNSUBSCRIBE) { }
 
     override suspend fun pushStatus(): FidPushStatus? =
         transactParsed(HelperBinderProtocol.TX_PUSH_STATUS, { }) { reply ->
