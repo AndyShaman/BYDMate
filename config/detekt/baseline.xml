@@ -372,6 +372,7 @@
     <ID>MatchingDeclarationName:ShellExec.kt$CmdResult</ID>
     <ID>MatchingDeclarationName:SplitPairPicker.kt$SplitRole</ID>
     <ID>MatchingDeclarationName:UpdateDialog.kt$UpdateState</ID>
+    <ID>MatchingDeclarationName:WidgetSplitTap.kt$SplitWidgetEntryPoint</ID>
     <ID>MayBeConst:DumpFidsCoreTest.kt$DumpFidsCoreTest.FakeConstants$@JvmField val ALPHA: Int = 1</ID>
     <ID>MayBeConst:DumpFidsCoreTest.kt$DumpFidsCoreTest.FakeConstants$@JvmField val BETA: Int = 2</ID>
     <ID>MayBeConst:DumpFidsCoreTest.kt$DumpFidsCoreTest.FakeFeatureIds.Companion$@JvmField val STATIC_INT: Int = 100</ID>
@@ -607,10 +608,12 @@
     <ID>TooManyFunctions:SplitOverlayController.kt$SplitOverlayController : SplitBackdrop</ID>
     <ID>TooManyFunctions:SplitPillView.kt$SplitPillView</ID>
     <ID>TooManyFunctions:SplitSessionManager.kt$SplitSessionManager</ID>
+    <ID>TooManyFunctions:TechPanelCards.kt$com.bydmate.app.ui.tech.TechPanelCards.kt</ID>
     <ID>TooManyFunctions:TechPanelScreen.kt$com.bydmate.app.ui.tech.TechPanelScreen.kt</ID>
     <ID>TooManyFunctions:TrackingService.kt$TrackingService : ServiceLocationListener</ID>
     <ID>TooManyFunctions:TripDao.kt$TripDao</ID>
     <ID>TooManyFunctions:TripRepository.kt$TripRepository</ID>
+    <ID>TooManyFunctions:TripScrubUi.kt$com.bydmate.app.ui.trips.TripScrubUi.kt</ID>
     <ID>TooManyFunctions:TripsScreen.kt$com.bydmate.app.ui.trips.TripsScreen.kt</ID>
     <ID>TooManyFunctions:TripsViewModel.kt$TripsViewModel : ViewModel</ID>
     <ID>TooManyFunctions:TtsModelManager.kt$TtsModelManager</ID>
@@ -625,7 +628,7 @@
     <ID>UnusedParameter:ChargesScreen.kt$currencySymbol: String</ID>
     <ID>UnusedParameter:ChargesScreen.kt$onNavigateSettings: () -&gt; Unit = {}</ID>
     <ID>UnusedParameter:Components.kt$currencySymbol: String = "BYN"</ID>
-    <ID>UnusedParameter:DashboardScreen.kt$bulletColor: Color</ID>
+    <ID>UnusedParameter:DashboardCards.kt$bulletColor: Color</ID>
     <ID>UnusedParameter:ListeningOverlay.kt$ListeningOverlay$initial: String</ID>
     <ID>UnusedParameter:OdometerConsumptionBuffer.kt$OdometerConsumptionBuffer$windowKm: Double</ID>
     <ID>UnusedParameter:SocEnrichmentContainmentTest.kt$SocEnrichmentContainmentTest$tripStartTsMs: Long</ID>
@@ -694,6 +697,8 @@
     <ID>WildcardImport:AutomationSplitControls.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:ChargesScreen.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:Components.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:DashboardCards.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:DashboardDialogs.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:DashboardScreen.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:OverlayNotificationManager.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:SettingsAppVoice.kt$import com.bydmate.app.ui.theme.*</ID>
@@ -703,6 +708,8 @@
     <ID>WildcardImport:SettingsSplit.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:SettingsWidgetDisplay.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:TripDetailDialog.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:TripRouteMap.kt$import com.bydmate.app.ui.theme.*</ID>
+    <ID>WildcardImport:TripScrubUi.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:TripsScreen.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:UpdateDialog.kt$import com.bydmate.app.ui.theme.*</ID>
     <ID>WildcardImport:VoiceCommandSpec.kt$import com.bydmate.app.voice.ActionSlot.*</ID>
