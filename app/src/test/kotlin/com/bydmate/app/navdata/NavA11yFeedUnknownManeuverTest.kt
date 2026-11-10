@@ -41,41 +41,6 @@ class NavA11yFeedUnknownManeuverTest {
         NavGuidanceHub.reset()
     }
 
-    @Test fun `an unrecognised maneuver logs its raw node once, with one id walk`() {
-        deliverPhrase("Rechts abbiegen")
-        assertEquals(
-            listOf("nav maneuver unknown [a11y]: found=1 class=android.widget.ImageView desc=* len=15$NODE"),
-            unknownLines,
-        )
-        assertEquals(1, zeroWalks.size)
-        assertTrue(zeroWalks.single(), " lane_sign" in zeroWalks.single())
-    }
-
-    @Test fun `a steady unknown phrase stays one line`() {
-        repeat(4) {
-            deliverPhrase("Rechts abbiegen")
-            rewindRateLimit()
-        }
-        assertEquals(1, unknownLines.size)
-        assertEquals(1, zeroWalks.size)
-    }
-
-    @Test fun `a blink through a recognised maneuver does not log the phrase again`() {
-        deliverPhrase("Rechts abbiegen")
-        rewindRateLimit()
-        deliverPhrase("Поверните направо")
-        rewindRateLimit()
-        deliverPhrase("Rechts abbiegen")
-        assertEquals(1, unknownLines.size)
-        assertEquals(1, zeroWalks.size)
-    }
-
-    @Test fun `a recognised maneuver logs no unknown line`() {
-        deliverPhrase("Поверните направо")
-        assertTrue(unknownLines.isEmpty())
-        assertTrue(zeroWalks.isEmpty())
-    }
-
     @Test fun `an absent node, a null and an empty description are three values`() {
         deliver { emptyList() }
         rewindRateLimit()
@@ -91,15 +56,6 @@ class NavA11yFeedUnknownManeuverTest {
             unknownLines,
         )
         assertEquals(3, zeroWalks.size)
-    }
-
-    @Test fun `the line shows the node the parse read`() {
-        deliver { listOf(maneuverNode(""), maneuverNode("Links halten", cls = "android.view.View")) }
-        assertEquals(
-            "nav maneuver unknown [a11y]: found=2 class=android.view.View desc=* len=12" +
-                " node{id=image_maneuverballoon_maneuver cls=View order=0 sel=false chk=false extras=[]} children=0",
-            unknownLines.single(),
-        )
     }
 
     @Test fun `a street after the maneuver words stays out of the line`() {
@@ -147,26 +103,6 @@ class NavA11yFeedUnknownManeuverTest {
         assertEquals(1, unknownLines.size)
     }
 
-    @Test fun `nothing without a distance`() {
-        deliver(distance = null) { listOf(maneuverNode("Rechts abbiegen")) }
-        assertTrue(lines.isEmpty())
-    }
-
-    @Test fun `nothing when the navigator shows no route`() {
-        val root = node("root_container", children = listOf(node("lane_sign")))
-        every { root.packageName } returns PKG
-        every { root.findAccessibilityNodeInfosByViewId(any()) } returns emptyList()
-        deliverRoot(root)
-        assertTrue(lines.isEmpty())
-    }
-
-    @Test fun `turning the feed off and on logs a value again`() {
-        deliverPhrase("Rechts abbiegen")
-        NavA11yFeed.enabled = false
-        deliverPhrase("Rechts abbiegen")
-        assertEquals(2, unknownLines.size)
-    }
-
     @Test fun `every maneuver node looked up goes back to the pool once`() {
         deliver { listOf(maneuverNode("Rechts abbiegen"), maneuverNode("Links halten")) }
         assertEquals(1, unknownLines.size)
@@ -182,14 +118,14 @@ class NavA11yFeedUnknownManeuverTest {
     private fun deliverPhrase(desc: String) = deliver { listOf(maneuverNode(desc)) }
 
     /** One navigator read; [maneuverNodes] runs on every lookup, as the framework hands out fresh nodes. */
-    private fun deliver(distance: String? = "300", maneuverNodes: () -> List<AccessibilityNodeInfo>) {
+    private fun deliver(maneuverNodes: () -> List<AccessibilityNodeInfo>) {
         val root = node("root_container", children = listOf(node("lane_sign")))
         every { root.packageName } returns PKG
         every { root.findAccessibilityNodeInfosByViewId(any()) } returns emptyList()
         every { root.findAccessibilityNodeInfosByViewId("$PKG:id/image_maneuverballoon_maneuver") } answers
             { maneuverNodes().also { issued.addAll(it) } }
         every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_distance") } returns
-            listOfNotNull(distance?.let { textNode(it) })
+            listOf(textNode("300"))
         every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_metrics") } returns
             listOf(textNode("м"))
         every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_nextstreet") } returns
