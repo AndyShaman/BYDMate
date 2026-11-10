@@ -37,23 +37,29 @@ class ExaSearchClient @Inject constructor(private val http: OkHttpClient) {
                 val body = resp.body?.string().takeUnless { it.isNullOrBlank() }
                     ?: throw IOException("empty body")
                 val results = JSONObject(body).optJSONArray("results") ?: JSONArray()
-                val out = JSONArray()
-                for (i in 0 until minOf(results.length(), MAX_RESULTS)) {
-                    val r = results.getJSONObject(i)
-                    out.put(JSONObject().apply {
-                        put("title", r.optString("title"))
-                        put("url", r.optString("url"))
-                        put("text", r.optString("text").take(TEXT_LIMIT))
-                    })
-                }
-                JSONObject().put("results", out).toString()
+                resultsJson(results, urlKey = "url", textKey = "text")
             }
         }
     }
 
     companion object {
         private const val SEARCH_URL = "https://api.exa.ai/search"
-        private const val MAX_RESULTS = 5
+        internal const val MAX_RESULTS = 5
         private const val TEXT_LIMIT = 1500
+
+        /** The web_search tool's JSON: up to [MAX_RESULTS] {title, url, text} entries, text cut to
+         *  [TEXT_LIMIT]; [urlKey] and [textKey] name the engine's own fields. Shared with ZaiSearchClient. */
+        internal fun resultsJson(results: JSONArray, urlKey: String, textKey: String): String {
+            val out = JSONArray()
+            for (i in 0 until minOf(results.length(), MAX_RESULTS)) {
+                val r = results.getJSONObject(i)
+                out.put(JSONObject().apply {
+                    put("title", r.optString("title"))
+                    put("url", r.optString(urlKey))
+                    put("text", r.optString(textKey).take(TEXT_LIMIT))
+                })
+            }
+            return JSONObject().put("results", out).toString()
+        }
     }
 }
