@@ -112,6 +112,12 @@ class ClusterMusicSyncTest {
         assertEquals(card(), sync.shown)
     }
 
+    @Test fun `helper down counts as a failure`() = runTest {
+        val sync = ClusterMusicSync(FakePort { null })
+        assertEquals(Outcome.WRITE_FAILED, sync.step(true, fids, Target.Show(card()), 0))
+        assertNull(sync.shown)
+    }
+
     // Review point 3: the switch goes off while the helper is down; the clear stays owed and is retried.
     @Test fun `a failed clear is retried until it lands`() = runTest {
         val port = FakePort()
@@ -321,6 +327,14 @@ class ClusterMusicSyncTest {
         assertTrue(port.writes.isEmpty())
         assertFalse(sync.dirty)
         assertNull(sync.shown)
+    }
+
+    @Test fun `stopping after another player took the card writes nothing`() = runTest {
+        val port = FakePort()
+        val sync = refusedAfterShown(port)
+        sync.step(true, fids, Target.OtherPlaying("com.byd.mediacenter"), 6_000)
+        assertEquals(Outcome.NONE, sync.release(fids))
+        assertTrue(port.writes.isEmpty())
     }
 
     @Test fun `stopping after a refusal clears the card that is still ours`() = runTest {
