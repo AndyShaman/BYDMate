@@ -114,6 +114,16 @@ class VoiceControllerSessionTest {
      *  busy. sessionActive() covers both, so a test presses again only once it reads false. */
     private fun awaitReleased(controller: VoiceController) = awaitTrue { !controller.sessionActive() }
 
+    /** End-of-routing barrier that covers the busy flag: the routing job's finally nulls
+     *  routingJob, then clears processingUtterance, then sets the overlay back to "listening"
+     *  (VoiceController.kt:479-481). routingJobForTest() == null alone fires one line before the
+     *  flag clears, and a phrase sent in that window is dropped as busy. The [n]-th "thinking" ->
+     *  "listening" pair in [updates] (a controller built over [stubbedContext]) means the [n]-th
+     *  routing has cleared the flag. */
+    private fun awaitRoutingDone(updates: List<String>, n: Int) = awaitTrue {
+        synchronized(updates) { updates.zipWithNext().count { (a, b) -> a == "Думаю" && b == "Слушаю" } } >= n
+    }
+
     /** A clock that returns [times] one call at a time, then keeps the last: the mic gate reads
      *  it once per captured frame, so the frames get these capture times in order. */
     private fun frameClock(vararg times: Long): () -> Long {
@@ -195,7 +205,9 @@ class VoiceControllerSessionTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
         val journal = VoiceJournal()
-        val controller = makeController(fakeAsr, dispatcher, journal = journal)
+        val controller = makeController(fakeAsr, dispatcher, journal = journal, context = stubbedContext())
+        val overlayUpdates = Collections.synchronizedList(mutableListOf<String>())
+        controller.updateListeningOverlay = { text -> overlayUpdates.add(text) }
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -204,6 +216,7 @@ class VoiceControllerSessionTest {
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitVerify { coVerify(exactly = 1) { dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) } }
         awaitTrue { journal.entries.value.size == 1 && controller.routingJobForTest() == null }
+        awaitRoutingDone(overlayUpdates, 1)
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitVerify { coVerify(exactly = 2) { dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) } }
 
@@ -265,7 +278,9 @@ class VoiceControllerSessionTest {
             DispatchResult(true)
         }
         val journal = VoiceJournal()
-        val controller = makeController(fakeAsr, dispatcher, journal = journal)
+        val controller = makeController(fakeAsr, dispatcher, journal = journal, context = stubbedContext())
+        val overlayUpdates = Collections.synchronizedList(mutableListOf<String>())
+        controller.updateListeningOverlay = { text -> overlayUpdates.add(text) }
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -278,6 +293,7 @@ class VoiceControllerSessionTest {
         releaseFirst.set(true)
         awaitTrue { journal.entries.value.size == 1 }
         awaitTrue { controller.routingJobForTest() == null }
+        awaitRoutingDone(overlayUpdates, 1)
 
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitTrue { journal.entries.value.size == 2 }
