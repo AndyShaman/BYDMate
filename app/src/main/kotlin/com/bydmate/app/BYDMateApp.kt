@@ -39,7 +39,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.osmdroid.config.Configuration as OsmdroidConfig
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.MapTileIndex
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -259,8 +258,6 @@ class BYDMateApp : Application(), Configuration.Provider {
                 )
             }
         }
-
-        val OsmTileSource = TileSourceFactory.MAPNIK
     }
 
     private fun scheduleDataThinning() {
