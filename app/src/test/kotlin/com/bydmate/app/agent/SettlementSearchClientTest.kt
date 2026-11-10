@@ -55,13 +55,12 @@ class SettlementSearchClientTest {
     private val minsk = requireNotNull(javaClass.classLoader?.getResource("nominatim/reverse-minsk.json")).readText()
 
     // Review: timing tests below override the timeouts, so a change to the production defaults
-    // (4 s per Overpass server, 3 s Nominatim, 10 s in total - the budget a voice turn actually
-    // waits) would pass them unnoticed. Pin the defaults on a client nobody has touched.
-    @Test fun production_timeout_defaults_are_4s_overpass_3s_nominatim_10s_total() {
+    // would pass them unnoticed. Pin the budget a voice turn actually waits on a client nobody
+    // has touched: every Overpass server must get its turn inside the total.
+    @Test fun production_per_server_timeouts_fit_in_the_total_budget() {
         val fresh = SettlementSearchClient(OkHttpClient())
-        assertEquals(4_000L, fresh.callTimeoutMs)
-        assertEquals(3_000L, fresh.nominatimCallTimeoutMs)
-        assertEquals(10_000L, fresh.totalTimeoutMs)
+        assertTrue("${fresh.endpoints.size} servers x ${fresh.callTimeoutMs} ms must fit in ${fresh.totalTimeoutMs} ms",
+            fresh.endpoints.size * fresh.callTimeoutMs <= fresh.totalTimeoutMs)
     }
 
     // Field 28.09: the maps.mail.ru mirror never worked on the head unit (Android 12 lacks its

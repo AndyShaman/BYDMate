@@ -18,6 +18,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.voice.VoiceGate
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -213,13 +214,6 @@ class AgentToolsControlTest {
 
     // --- set_sentry ---
 
-    @Test fun set_sentry_on_true_dispatches_sentry_payload_1() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_sentry", """{"on":true}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "sentry" && it.payload == "1" }, null) }
-    }
-
     @Test fun set_sentry_on_false_is_dangerous_and_confirms() = runTest {
         coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
         val t = tools()
@@ -240,55 +234,35 @@ class AgentToolsControlTest {
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
-    @Test fun set_sentry_without_on_reports_russian_error_and_does_not_dispatch() = runTest {
-        val out = JSONObject(tools().execute(call("set_sentry", """{}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
-    }
+    // --- set_sentry / set_hotspot / set_screen (#275): on=true/false dispatches the payload, a missing "on" never dispatches ---
 
-    // --- set_hotspot ---
+    private class OnOffCase(val label: String, val tool: String, val args: String, val payload: String?)
 
-    @Test fun set_hotspot_on_true_dispatches_hotspot_payload_1() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_hotspot", """{"on":true}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "hotspot" && it.payload == "1" }, null) }
-    }
-
-    @Test fun set_hotspot_on_false_dispatches_hotspot_payload_0() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_hotspot", """{"on":false}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "hotspot" && it.payload == "0" }, null) }
-    }
-
-    @Test fun set_hotspot_without_on_reports_russian_error_and_does_not_dispatch() = runTest {
-        val out = JSONObject(tools().execute(call("set_hotspot", """{}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
-    }
-
-    // --- set_screen (#275) ---
-
-    @Test fun set_screen_on_false_dispatches_screen_payload_0() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_screen", """{"on":false}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "screen" && it.payload == "0" }, null) }
-    }
-
-    @Test fun set_screen_on_true_dispatches_screen_payload_1() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_screen", """{"on":true}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "screen" && it.payload == "1" }, null) }
-    }
-
-    @Test fun set_screen_without_on_reports_error_and_does_not_dispatch() = runTest {
-        val out = JSONObject(tools().execute(call("set_screen", """{}""")))
-        assertTrue(out.has("error"))
-        assertFalse(out.getString("error"), out.getString("error").contains("неизвестный инструмент"))
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    @Test fun set_sentry_hotspot_screen_dispatch_payload_or_refuse_without_on() = runTest {
+        val cases = listOf(
+            OnOffCase("sentry on", "set_sentry", """{"on":true}""", "1"),
+            OnOffCase("sentry without on", "set_sentry", """{}""", null),
+            OnOffCase("hotspot on", "set_hotspot", """{"on":true}""", "1"),
+            OnOffCase("hotspot off", "set_hotspot", """{"on":false}""", "0"),
+            OnOffCase("hotspot without on", "set_hotspot", """{}""", null),
+            OnOffCase("screen off", "set_screen", """{"on":false}""", "0"),
+            OnOffCase("screen on", "set_screen", """{"on":true}""", "1"),
+            OnOffCase("screen without on", "set_screen", """{}""", null),
+        )
+        for (c in cases) {
+            clearMocks(dispatcher)
+            coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+            val out = JSONObject(tools().execute(call(c.tool, c.args)))
+            if (c.payload != null) {
+                val kind = c.tool.removePrefix("set_")
+                assertTrue("case: ${c.label}: $out", out.getBoolean("ok"))
+                coVerify { dispatcher.dispatch(match { it.kind == kind && it.payload == c.payload }, null) }
+            } else {
+                assertTrue("case: ${c.label}: $out", out.has("error"))
+                assertFalse("case: ${c.label}: $out", out.getString("error").contains("неизвестный инструмент"))
+                coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+            }
+        }
     }
 
     // Parity: every tool the model is shown must have an execute() branch, so a schema entry can

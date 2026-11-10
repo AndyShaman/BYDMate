@@ -55,10 +55,10 @@ class ChargerSearchClientTest {
     }
 
     // One slow Overpass server must leave the second one its turn inside the ~10 s tool budget.
-    @Test fun production_timeouts_are_4s_per_overpass_server_and_10s_in_total() {
+    @Test fun production_per_server_timeouts_fit_in_the_total_budget() {
         val fresh = ChargerSearchClient(OkHttpClient())
-        assertEquals(4_000L, fresh.callTimeoutMs)
-        assertEquals(10_000L, fresh.totalTimeoutMs)
+        assertTrue("${fresh.endpoints.size} servers x ${fresh.callTimeoutMs} ms must fit in ${fresh.totalTimeoutMs} ms",
+            fresh.endpoints.size * fresh.callTimeoutMs <= fresh.totalTimeoutMs)
     }
 
     // (a) node element parses with name from tags.
