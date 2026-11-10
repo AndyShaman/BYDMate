@@ -92,6 +92,19 @@ class AgentToolsLaunchTest {
         assertEquals(37.61, payload.getDouble("lon"), 0.0001)
     }
 
+    // (b) free-text address with no matching place -> search payload.
+    @Test fun navigate_to_free_text_opens_search() = runTest {
+        val captured = slot<ActionDef>()
+        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
+        coEvery { places.getAllSnapshot() } returns emptyList()
+        val out = JSONObject(tools().execute(
+            AgentToolCall("1", "navigate_to", """{"destination":"улица Ленина 5"}""")))
+        assertTrue(out.getBoolean("ok"))
+        assertEquals("search", out.getString("mode"))
+        val payload = JSONObject(captured.captured.payload!!)
+        assertEquals("улица Ленина 5", payload.getString("query"))
+    }
+
     // (c) placeRepository throwing must not surface as an exception; "Дом" resolves as a
     // home/work shortcut and falls through to Navigator's own saved Home -> mode=route.
     @Test fun navigate_to_survives_place_lookup_failure() = runTest {

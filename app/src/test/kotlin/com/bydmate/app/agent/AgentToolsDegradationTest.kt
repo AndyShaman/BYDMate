@@ -255,6 +255,14 @@ class AgentToolsDegradationTest {
         assertEquals("не выполнено", out.getString("error"))
     }
 
+    @Test fun vehicle_control_dispatch_failure_russian_reason_passes_through() = runTest {
+        every { gate.vehicleSnapshot() } returns null
+        coEvery { dispatcher.dispatch(any(), any()) } returns
+            DispatchResult(false, "Заблокировано скоростью")
+        val out = JSONObject(tools().execute(call("vehicle_control", """{"command":"关闭空调"}""")))
+        assertEquals("Заблокировано скоростью", out.getString("error"))
+    }
+
     private companion object {
         const val CREATE_ARGS = """{"name":"Ночной свет","trigger":{"kind":"param","param":"SOC",
             "operator":"<","value":"20"},"actions":[{"kind":"param","command_id":"windows_close_all"}]}"""
