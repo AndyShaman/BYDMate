@@ -10,7 +10,6 @@
     <string name="settings_title">Settings</string>
     <string name="settings_rail_sections_label">Sections</string>
     <string name="settings_section_auto_battery_title">Car and battery</string>
-    <string name="settings_section_trips_title">Trips</string>
     <string name="settings_section_integrations_title">Integrations</string>
     <string name="settings_section_widget_title">Widget</string>
     <string name="settings_section_display_title">Display</string>
@@ -25,9 +24,7 @@
     <string name="settings_display_card_blindspot_sub">Camera on turn signal. %1$s</string>
     <string name="settings_display_window_subhead">Cluster window</string>
     <string name="cluster_a11y_description">Intercepts steering-wheel buttons to project navigation onto the instrument cluster. Enabled manually, works only when the feature is on.</string>
-    <string name="settings_display_mirror_header">Projection to cluster</string>
     <string name="settings_display_mirror_title">Projection to cluster via wheel button</string>
-    <string name="settings_display_mirror_desc">A short press of the chosen steering-wheel button moves the selected app to the cluster and back.</string>
     <string name="settings_cluster_auto_container_title">Show on the cluster right away</string>
     <string name="settings_cluster_auto_container_desc">The app switches the cluster into projection mode and back by itself (navigator and blind-spot cameras). Turn it off if ADAS or the stock widget disappears from the cluster afterwards and does not come back on its own: then switch the cluster mode manually, the picture shows in the mini-map</string>
     <string name="settings_cluster_full_display_title">Full cluster screen</string>
@@ -43,7 +40,6 @@
     <string name="projection_extended_confirm_enable">Enable</string>
     <string name="projection_extended_confirm_cancel">Cancel</string>
     <string name="settings_display_app_title">App on cluster</string>
-    <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>
     <string name="settings_display_size_width_desc" formatted="false">Window width as % of the cluster width</string>
     <string name="settings_display_size_height">Height</string>
@@ -66,7 +62,6 @@
     <string name="steering_button_unknown">Button (code %1$d)</string>
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Trigger button</string>
-    <string name="settings_display_button_change">Change</string>
     <string name="learn_button_dialog_title">Assign button</string>
     <string name="learn_button_waiting">Press a steering-wheel button…</string>
     <string name="learn_button_rejected">This button can\'t be assigned. Press another.</string>
@@ -161,10 +156,6 @@
     <string name="settings_tariff_dc_label">DC tariff (%1$s/kWh)</string>
     <string name="settings_tariff_trip_label">Trip tariff</string>
     <string name="settings_tariff_custom_label">Custom tariff (%1$s/kWh)</string>
-    <string name="settings_save_tariffs_button">Save tariffs</string>
-    <string name="settings_tariff_future_note">The new tariff applies to future trips.\nTrips already calculated will not change.</string>
-    <string name="settings_recalc_all_button">Recalculate all trips</string>
-    <string name="settings_recalc_note">Recalculates the cost of all trips\nusing the current tariff.</string>
     <string name="settings_tariff_periods_title">Tariffs and periods</string>
     <string name="settings_tariff_card_period">Period</string>
     <string name="settings_tariff_periods_button">Open</string>
@@ -207,18 +198,8 @@
     <string name="range_table_dialog_save">Save</string>
 
     <!-- Settings: Trips section -->
-    <string name="settings_trips_datasource_header">Trip data source</string>
-    <string name="settings_trips_datasource_note">Titan 3 — BYD energydata.\nSong and other models without built-in DB — DiPlus TripInfo.</string>
-    <string name="settings_trips_datasource_hint">If the list stays empty after 2–3 drives — switch the mode.</string>
-    <string name="settings_trips_system_header">System data (beta)</string>
-    <string name="settings_trips_system_note">Extended vehicle data: battery SoH, BMS mileage, charge statistics. Read-only.</string>
-    <string name="settings_trips_system_enable_label">Enable</string>
-    <string name="settings_datasource_switching">Switching...</string>
     <string name="settings_datasource_done">Done</string>
 
-    <string name="settings_recalc_dialog_title">Recalculate cost?</string>
-    <string name="settings_recalc_dialog_text">All trips will be recalculated using tariff %1$s %2$s/kWh.\nExisting calculated values will be replaced.</string>
-    <string name="settings_recalc_confirm_button">Recalculate</string>
     <string name="settings_cancel_button">Cancel</string>
     <string name="settings_abrp_section_header">ABRP - telemetry</string>
     <string name="settings_abrp_telemetry_label">Live data -> A Better Route Planner</string>
@@ -237,8 +218,6 @@
     <string name="settings_webhook_save_button">Save webhook</string>
     <string name="settings_webhook_saved">Webhook saved</string>
     <string name="settings_webhook_invalid_url">Invalid URL</string>
-    <string name="settings_openrouter_section_header">OpenRouter</string>
-    <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Model: %1$s</string>
     <string name="settings_openrouter_model_pick">Choose model</string>
     <string name="settings_exa_section_header">Exa</string>
@@ -280,9 +259,6 @@
     <string name="settings_widget_left_tap_description">Default is Yandex Navigator. If the app is removed, the tap will not work.</string>
     <string name="settings_widget_buttons_label">Widget buttons</string>
     <string name="settings_widget_buttons_description">A single tap slides out 4 buttons, a double tap opens BYDMate. A button runs a rule with the "Button press" trigger.</string>
-    <string name="settings_places_section_header">Places</string>
-    <string name="settings_places_entry_title">Automation points</string>
-    <string name="settings_places_entry_description">Home, work, favorite places - Place enter / Place exit triggers</string>
     <string name="settings_app_units_header">Units and currency</string>
     <string name="settings_app_distance_label">Distance</string>
     <string name="settings_app_currency_label">Currency</string>
@@ -301,12 +277,6 @@
     <string name="settings_update_check_toggle_label">Check for updates</string>
     <string name="settings_update_check_toggle_description">Check GitHub 30 seconds after startup and suggest updating</string>
     <string name="settings_update_check_button">Check for updates now</string>
-    <string name="settings_autoservice_disconnected_title">not connected</string>
-    <string name="settings_autoservice_disconnected_detail">restart the app if ADB is already on</string>
-    <string name="settings_autoservice_sentinel_title">connected, but data is not readable</string>
-    <string name="settings_autoservice_sentinel_detail">the feature may work only on Leopard 3</string>
-    <string name="settings_autoservice_connected_title">connected</string>
-    <string name="settings_autoservice_connected_detail">SoH %1$s • lifetime %2$s / %3$s</string>
     <string name="settings_update_dialog_title">Updates</string>
     <string name="settings_update_current_version">Current version: v%1$s</string>
     <string name="settings_update_check_now_button">Check for updates</string>
@@ -405,11 +375,7 @@
     <string name="charges_delete_dialog_text">%1$s kWh - cannot be restored.</string>
     <string name="trips_delete_dialog_title">Delete trip?</string>
     <string name="trips_delete_dialog_text">%1$s km - the trip and its route will be deleted and cannot be restored.</string>
-    <string name="charges_onboarding_empty_text">Charging statistics are unavailable. To see kWh and cost for each charging session, enable \"System data\" in Settings.</string>
-    <string name="charges_go_to_settings_button">Go to Settings</string>
     <string name="charges_sentinel_empty_text">Charging statistics are unavailable for your car model - diagnostic data cannot be read. SoH is not shown either.</string>
-    <string name="charges_not_tracking_banner">New charging sessions are not being tracked right now.</string>
-    <string name="charges_enable_tracking_button">Enable -></string>
     <string name="charges_stats_period_label">For the selected period</string>
     <string name="charges_stats_sessions">Sessions</string>
     <string name="charges_stats_cost">Cost</string>
@@ -419,7 +385,6 @@
     <string name="charges_stats_bms_mileage">BMS mileage</string>
     <string name="charges_stats_per100km">/100km lifetime</string>
     <string name="charges_lifetime_waiting">Waiting for the first response from the car...</string>
-    <string name="charges_lifetime_enable_hint">Enable "System data" in Settings to see BMS mileage and lifetime pumped total.</string>
     <string name="charges_stats_dynamics_label">Trends</string>
     <string name="charges_chart_cell_delta_title">Cell delta (V)</string>
     <string name="charges_chart_cell_delta_placeholder">Cell delta: shown after 3 completed charging sessions (now: %1$d)</string>
@@ -588,8 +553,6 @@
     <string name="automation_music_minimize_label">Minimize after launch (after 3 s)</string>
     <string name="automation_journal_title">Trigger journal</string>
     <string name="automation_journal_empty">Journal is empty</string>
-    <string name="places_tab_title">Places</string>
-    <string name="places_back_content_description">Back</string>
     <string name="places_add_button">+ Add</string>
     <string name="places_empty">No places yet. Tap \"+ Add\" to create one.</string>
     <string name="places_row_coords">%1$.5f, %2$.5f · %3$d m</string>
@@ -651,7 +614,6 @@
     <string name="widget_trash_release">release - widget hidden</string>
     <string name="widget_trash_hint">drag here to hide</string>
     <string name="dashboard_vehicle_data_offline">No vehicle data</string>
-    <string name="dashboard_diplus_offline">DiPlus is not responding</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
     <string name="dashboard_unit_km">km</string>
@@ -716,7 +678,6 @@
     <string name="applauncher_close_button">Close</string>
     <string name="battery_health_charging_cd">Charging</string>
     <string name="battery_health_cell_delta_label">Cell delta</string>
-    <string name="battery_health_cell_delta_value">%1$.3f V</string>
     <string name="battery_health_cell_voltage_value">%1$.3f V</string>
     <string name="battery_health_bat_temp_label">battery temp.</string>
     <string name="battery_health_12v_label">12V system</string>
@@ -728,21 +689,12 @@
     <string name="battery_health_avg_since_charge_label">since last charge</string>
     <string name="battery_health_avg_all_time_label">all time</string>
     <string name="battery_health_avg_soc_hint" formatted="false">Time-weighted state of charge: the longer the battery sits charged, the higher the value. BYD LFP packs age slower when kept lower: storing at a high charge speeds up calendar aging. Guideline: below 65% is great, 65-85% is fine, above 85% consider charging later or less often. A 100% charge once every 1-2 weeks is still needed for cell balancing. Computed from BYDMate trip and charge history.</string>
-    <string name="summary_unit_km">km</string>
-    <string name="summary_label_mileage">Mileage</string>
-    <string name="summary_unit_kwh">kWh</string>
-    <string name="summary_label_energy">Energy</string>
-    <string name="summary_unit_kwh_per_100km">kWh/100km</string>
-    <string name="summary_label_consumption">Consumption</string>
-    <string name="summary_label_cost">Cost</string>
     <string name="settings_tariff_trip_custom_chip">Custom</string>
     <string name="settings_unit_km">km</string>
     <string name="settings_unit_miles">miles</string>
     <string name="settings_saved">Saved</string>
-    <string name="settings_recalc_done">Recalculated: %1$d trips</string>
     <string name="settings_export_in_progress">Exporting...</string>
     <string name="settings_error_with_message">Error: %1$s</string>
-    <string name="settings_error_prefix">Error</string>
     <string name="settings_log_recording_started">Recording (auto-stop after 2h)... - %1$s</string>
     <string name="settings_log_saved">Saved: %1$s (%2$d KB)</string>
     <string name="settings_log_error_no_fs_access">Error: no file system access</string>
@@ -754,8 +706,6 @@
     <string name="settings_log_tg_missing">File not found. It may have been deleted from the Download folder.</string>
     <string name="settings_tg_log_auto_title">Send the recorded log to Telegram</string>
     <string name="settings_tg_log_auto_hint">When a log recording ends, the file arrives in your bot by itself.</string>
-    <string name="settings_update_check_in_progress">Checking...</string>
-    <string name="settings_update_available_short">v%1$s available</string>
     <string name="update_downloading_progress">Downloading: %1$d%%</string>
     <string name="update_downloading_done">Downloaded. Installing...</string>
     <string name="update_downloading_paused">Paused...</string>
@@ -797,8 +747,6 @@
     <string name="insight_night_idle_prev">%1$.1f kWh</string>
 
     <!-- Local insight engine (offline rules) -->
-    <string name="local_insight_not_enough_data_title">Not enough data</string>
-    <string name="local_insight_not_enough_data_summary">Need at least 5 trips in the last 7 days</string>
     <string name="local_insight_consumption_up_title">Consumption up %1$.0f%%</string>
     <string name="local_insight_consumption_up_title_month">Consumption up %1$.0f%%</string>
     <string name="local_insight_consumption_up_summary_short">Many short trips — warmup uses extra energy</string>
@@ -1285,7 +1233,6 @@
     <!-- call_contact tool: contacts permission row -->
     <string name="settings_voice_contacts_label">Contacts access</string>
     <string name="settings_voice_contacts_description">Needed to call a contact by name using voice</string>
-    <string name="settings_voice_contacts_granted">Granted</string>
     <string name="settings_voice_contacts_grant">Grant</string>
 
     <!-- Voice journal: debug screen with the last voice sessions -->
@@ -1426,8 +1373,6 @@
     <string name="settings_search_status_hint">Without an Exa key the agent uses the current connection\'s built-in search. If that is unavailable too, the agent will honestly say search is not working.</string>
     <string name="settings_section_service_title">Service &amp; Data</string>
     <string name="settings_battery_capacity_desc">Used to estimate range and cost</string>
-    <string name="settings_tariff_home_desc">Cost of 1 kWh when charging at home (AC)</string>
-    <string name="settings_tariff_dc_desc">Cost of 1 kWh at DC fast chargers</string>
     <string name="settings_tariff_trip_desc">Which tariff to use for trip costs</string>
     <string name="settings_consumption_good_desc">Trips with lower consumption are highlighted green</string>
     <string name="settings_consumption_bad_desc">Trips with higher consumption are highlighted red</string>
@@ -1469,9 +1414,6 @@
     <string name="settings_donate_button">Support the project</string>
 
     <!-- HUD navigation -->
-    <string name="settings_hud_header">HUD (head-up display)</string>
-    <string name="settings_hud_title">Navigation on HUD</string>
-    <string name="settings_hud_desc">Yandex Navigator guidance on the head-up display: maneuver, distance, street, arrival</string>
     <string name="settings_hud_speed_sign_title">Speed sign under the arrow</string>
     <string name="settings_hud_speed_sign_desc">Red speed-limit sign in the lower HUD slot</string>
     <string name="settings_hud_status_unsupported">SOME/IP bus not found: HUD output is unavailable on this car</string>
@@ -1499,8 +1441,6 @@
     <string name="settings_hud_answer_done">Done</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Blind spots</string>
-    <string name="settings_blindspot_title">Camera on turn signal</string>
-    <string name="settings_blindspot_desc">Left turn signal - left camera on the cluster, right one - a small window on the main screen. Off by default.</string>
     <string name="settings_blindspot_threshold_title">Speed threshold</string>
     <string name="settings_blindspot_threshold_desc">Below this speed the camera stays hidden</string>
     <string name="settings_blindspot_pip_width_title">Window width</string>
@@ -1667,10 +1607,6 @@
     <string name="tech_label_inside_outside">cabin / outside</string>
     <string name="tech_on">on</string>
     <string name="tech_off">off</string>
-    <string name="tech_tyre_fl">FL</string>
-    <string name="tech_tyre_fr">FR</string>
-    <string name="tech_tyre_rl">RL</string>
-    <string name="tech_tyre_rr">RR</string>
     <string name="tech_value_mohm">%1$.1f MΩ</string>
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
@@ -1683,7 +1619,6 @@
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
     <string name="tech_value_percent">%1$d%%</string>
-    <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Battery health, as the car itself estimates it: how much capacity is left compared to new. 100% on a new car, slowly decreasing over the years. This is a separate figure, it is not linked to \"Remaining\" by any formula, there is no need to compare them.</string>

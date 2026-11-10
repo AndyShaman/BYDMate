@@ -15,7 +15,6 @@
 
     <!-- Settings: Section labels (left pane) -->
     <string name="settings_section_auto_battery_title">Авто и батарея</string>
-    <string name="settings_section_trips_title">Поездки</string>
     <string name="settings_section_integrations_title">Интеграции</string>
     <string name="settings_section_widget_title">Виджет</string>
     <string name="settings_section_display_title">Дисплей</string>
@@ -29,9 +28,7 @@
     <string name="settings_display_card_hud_sub">Подсказки навигатора на штатный HUD. %1$s</string>
     <string name="settings_display_card_blindspot_sub">Камера по поворотнику. %1$s</string>
     <string name="settings_display_window_subhead">Окно на приборке</string>
-    <string name="settings_display_mirror_header">Вывод на приборку</string>
     <string name="settings_display_mirror_title">Вывод на приборку кнопкой руля</string>
-    <string name="settings_display_mirror_desc">Короткое нажатие выбранной кнопки руля переносит выбранное приложение на приборку и обратно.</string>
     <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
     <string name="settings_cluster_auto_container_desc">Приложение само переключает приборку в режим проекции и обратно (навигатор и камеры слепых зон). Выключите, если после этого с приборки пропадает ADAS или штатный виджет и не возвращается сам: тогда режим приборки переключайте вручную, а картинка будет видна в мини-карте</string>
     <string name="settings_cluster_full_display_title">Полный экран приборки</string>
@@ -47,7 +44,6 @@
     <string name="projection_extended_confirm_enable">Включить</string>
     <string name="projection_extended_confirm_cancel">Отмена</string>
     <string name="settings_display_app_title">Приложение на приборку</string>
-    <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
     <string name="settings_display_size_width_desc" formatted="false">Ширина окна в % от ширины приборки</string>
     <string name="settings_display_size_height">Высота</string>
@@ -70,7 +66,6 @@
     <string name="steering_button_unknown">Кнопка (код %1$d)</string>
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Кнопка запуска</string>
-    <string name="settings_display_button_change">Изменить</string>
     <string name="learn_button_dialog_title">Назначить кнопку</string>
     <string name="learn_button_waiting">Нажмите кнопку на руле…</string>
     <string name="learn_button_rejected">Эту кнопку нельзя назначить. Нажмите другую.</string>
@@ -168,10 +163,6 @@
     <string name="settings_tariff_dc_label">Тариф DC (%1$s/кВт·ч)</string>
     <string name="settings_tariff_trip_label">Тариф поездок</string>
     <string name="settings_tariff_custom_label">Свой тариф (%1$s/кВт·ч)</string>
-    <string name="settings_save_tariffs_button">Сохранить тарифы</string>
-    <string name="settings_tariff_future_note">Новый тариф применяется к будущим поездкам.\nУже посчитанные поездки не изменятся.</string>
-    <string name="settings_recalc_all_button">Пересчитать все поездки</string>
-    <string name="settings_recalc_note">Пересчитает стоимость всех поездок\nпо текущему тарифу.</string>
     <string name="settings_tariff_periods_title">Тарифы и периоды</string>
     <string name="settings_tariff_card_period">Период</string>
     <string name="settings_tariff_periods_button">Открыть</string>
@@ -214,19 +205,9 @@
     <string name="range_table_dialog_save">Сохранить</string>
 
     <!-- Settings: Trips section -->
-    <string name="settings_trips_datasource_header">Источник данных поездок</string>
-    <string name="settings_trips_datasource_note">Titan 3 — BYD energydata.\nSong и другие модели без встроенной БД — DiPlus TripInfo.</string>
-    <string name="settings_trips_datasource_hint">Если список пуст после 2-3 поездок — переключите режим.</string>
-    <string name="settings_trips_system_header">Системные данные (бета)</string>
-    <string name="settings_trips_system_note">Расширенные данные авто: SoH батареи, пробег BMS, статистика зарядок. Только чтение.</string>
-    <string name="settings_trips_system_enable_label">Включить</string>
-    <string name="settings_datasource_switching">Переключение...</string>
     <string name="settings_datasource_done">Готово</string>
 
     <!-- Settings: Recalculate confirmation dialog -->
-    <string name="settings_recalc_dialog_title">Пересчитать стоимость?</string>
-    <string name="settings_recalc_dialog_text">Все поездки будут пересчитаны по тарифу %1$s %2$s/кВт·ч.\nУже посчитанные значения будут заменены.</string>
-    <string name="settings_recalc_confirm_button">Пересчитать</string>
     <string name="settings_cancel_button">Отмена</string>
 
     <!-- Settings: Integrations section -->
@@ -247,8 +228,6 @@
     <string name="settings_webhook_save_button">Сохранить вебхук</string>
     <string name="settings_webhook_saved">Вебхук сохранён</string>
     <string name="settings_webhook_invalid_url">Неверный URL</string>
-    <string name="settings_openrouter_section_header">OpenRouter</string>
-    <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Модель: %1$s</string>
     <string name="settings_openrouter_model_pick">Выбрать модель</string>
     <string name="settings_exa_section_header">Exa</string>
@@ -295,10 +274,6 @@
     <string name="settings_widget_buttons_label">Кнопки на виджете</string>
     <string name="settings_widget_buttons_description">Один тап по виджету выдвигает 4 кнопки, двойной тап открывает BYDMate. Кнопка запускает правило с триггером «Нажатие кнопки».</string>
 
-    <!-- Settings: Places section -->
-    <string name="settings_places_section_header">Места</string>
-    <string name="settings_places_entry_title">Точки для автоматизации</string>
-    <string name="settings_places_entry_description">Дом, работа, любимые места - триггеры «Въезд» / «Выезд»</string>
 
     <!-- Settings: Application section -->
     <string name="settings_app_units_header">Единицы и валюта</string>
@@ -320,13 +295,6 @@
     <string name="settings_update_check_toggle_description">Через 30 секунд после запуска проверять GitHub и предлагать обновиться</string>
     <string name="settings_update_check_button">Проверить обновления сейчас</string>
 
-    <!-- Settings: Autoservice status -->
-    <string name="settings_autoservice_disconnected_title">не подключено</string>
-    <string name="settings_autoservice_disconnected_detail">перезапустите приложение, если ADB уже включён</string>
-    <string name="settings_autoservice_sentinel_title">подключено, но данные не читаются</string>
-    <string name="settings_autoservice_sentinel_detail">возможно функция работает только на Leopard 3</string>
-    <string name="settings_autoservice_connected_title">подключено</string>
-    <string name="settings_autoservice_connected_detail">SoH %1$s • lifetime %2$s / %3$s</string>
 
     <!-- Settings: Update dialog -->
     <string name="settings_update_dialog_title">Обновления</string>
@@ -434,11 +402,7 @@
     <string name="charges_delete_dialog_text">%1$s кВт·ч - восстановить будет нельзя.</string>
     <string name="trips_delete_dialog_title">Удалить поездку?</string>
     <string name="trips_delete_dialog_text">%1$s км - поездка и её маршрут будут удалены, восстановить будет нельзя.</string>
-    <string name="charges_onboarding_empty_text">Статистика зарядок недоступна. Чтобы видеть кВт·ч и стоимость каждой зарядки - включи «Системные данные» в Настройках.</string>
-    <string name="charges_go_to_settings_button">Перейти в Настройки</string>
     <string name="charges_sentinel_empty_text">На вашей модели машины статистика зарядок недоступна - диагностические данные не читаются. SoH тоже не показывается.</string>
-    <string name="charges_not_tracking_banner">Новые зарядки сейчас не отслеживаются.</string>
-    <string name="charges_enable_tracking_button">Включить →</string>
     <string name="charges_stats_period_label">За выбранный период</string>
     <string name="charges_stats_sessions">Сессий</string>
     <string name="charges_stats_cost">Стоимость</string>
@@ -448,7 +412,6 @@
     <string name="charges_stats_bms_mileage">Пробег BMS</string>
     <string name="charges_stats_per100km">/100км lifetime</string>
     <string name="charges_lifetime_waiting">Жду первого ответа от машины…</string>
-    <string name="charges_lifetime_enable_hint">Включите «Системные данные» в Настройках, чтобы видеть пробег BMS и общий объём зарядок.</string>
     <string name="charges_stats_dynamics_label">Динамика</string>
     <string name="charges_chart_cell_delta_title">Δ ячеек (В)</string>
     <string name="charges_chart_cell_delta_placeholder">Δ ячеек: будет показано после 3 завершённых зарядок (сейчас: %1$d)</string>
@@ -665,8 +628,6 @@
     <!-- Journal relative time -->
 
     <!-- Places screen -->
-    <string name="places_tab_title">Места</string>
-    <string name="places_back_content_description">Назад</string>
     <string name="places_add_button">+ Добавить</string>
     <string name="places_empty">Мест пока нет. Нажмите \"+ Добавить\", чтобы создать.</string>
     <string name="places_row_coords">%1$.5f, %2$.5f · %3$d м</string>
@@ -750,7 +711,6 @@
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_vehicle_data_offline">Нет данных от автомобиля</string>
-    <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
 
@@ -845,8 +805,6 @@
 
     <!-- Battery readings shared by the compact card and the tech panel -->
     <string name="battery_health_cell_delta_label">Δ ячеек</string>
-    <!-- %1$.3f = delta volts -->
-    <string name="battery_health_cell_delta_value">%1$.3f В</string>
     <!-- %1$.3f = cell voltage volts -->
     <string name="battery_health_cell_voltage_value">%1$.3f В</string>
     <string name="battery_health_bat_temp_label">темп. батареи</string>
@@ -863,14 +821,6 @@
     <string name="battery_health_avg_all_time_label">за всё время</string>
     <string name="battery_health_avg_soc_hint" formatted="false">Средневзвешенный уровень заряда: чем дольше батарея стоит заряженной, тем выше значение. Для LFP-батареи BYD полезно держать его пониже: хранение на высоком заряде ускоряет старение. Ориентир: до 65% отлично, 65-85% нормально, выше 85% лучше заряжать позже или реже. Заряд до 100% раз в 1-2 недели всё равно нужен для балансировки ячеек. Считается по истории поездок и зарядок BYDMate.</string>
 
-    <!-- Shared summary row (Components.kt SummaryRow) -->
-    <string name="summary_unit_km">км</string>
-    <string name="summary_label_mileage">Пробег</string>
-    <string name="summary_unit_kwh">кВт·ч</string>
-    <string name="summary_label_energy">Энергия</string>
-    <string name="summary_unit_kwh_per_100km">кВт·ч/100км</string>
-    <string name="summary_label_consumption">Расход</string>
-    <string name="summary_label_cost">Стоимость</string>
 
     <!-- Settings: unit chips and language labels -->
     <string name="settings_tariff_trip_custom_chip">Свой</string>
@@ -880,14 +830,10 @@
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
     <string name="settings_saved">Сохранено</string>
-    <!-- %1$d = trip count -->
-    <string name="settings_recalc_done">Пересчитано: %1$d поездок</string>
     <string name="settings_export_in_progress">Экспорт...</string>
     <!-- %1$d = trip count, %2$d = charge count, %3$d = track point count, %4$d = idle drain count -->
     <!-- Generic error with message: %1$s = error text -->
     <string name="settings_error_with_message">Ошибка: %1$s</string>
-    <!-- Error prefix used for color detection in UI (must match start of settings_error_with_message) -->
-    <string name="settings_error_prefix">Ошибка</string>
     <!-- %1$s = file path -->
     <string name="settings_log_recording_started">Запись (авто-стоп через 2ч)... - %1$s</string>
     <!-- %1$s = file path, %2$d = size KB -->
@@ -901,9 +847,6 @@
     <string name="settings_log_tg_missing">Файл не найден. Возможно, его удалили из папки Download.</string>
     <string name="settings_tg_log_auto_title">Отправлять записанный лог в Telegram</string>
     <string name="settings_tg_log_auto_hint">Когда запись лога закончится, файл сам придёт в ваш бот.</string>
-    <string name="settings_update_check_in_progress">Проверка...</string>
-    <!-- %1$s = version string -->
-    <string name="settings_update_available_short">Доступна v%1$s</string>
 
     <!-- UpdateChecker: download progress strings (passed via callback) -->
     <string name="update_downloading_progress">Скачивание: %1$d%%</string>
@@ -952,8 +895,6 @@
     <string name="insight_night_idle_prev">%1$.1f кВт·ч</string>
 
     <!-- Local insight engine (offline rules) -->
-    <string name="local_insight_not_enough_data_title">Данных мало для анализа</string>
-    <string name="local_insight_not_enough_data_summary">Нужно минимум 5 поездок за неделю</string>
     <string name="local_insight_consumption_up_title">Расход ▲%1$.0f%% за неделю</string>
     <string name="local_insight_consumption_up_title_month">Расход ▲%1$.0f%% за месяц</string>
     <string name="local_insight_consumption_up_summary_short">Много коротких поездок — прогрев забирает энергию</string>
@@ -1441,7 +1382,6 @@
     <!-- call_contact tool: contacts permission row -->
     <string name="settings_voice_contacts_label">Доступ к контактам</string>
     <string name="settings_voice_contacts_description">Нужен для звонка контакту по имени голосом</string>
-    <string name="settings_voice_contacts_granted">Разрешено</string>
     <string name="settings_voice_contacts_grant">Разрешить</string>
 
     <!-- Voice journal: debug screen with the last voice sessions -->
@@ -1583,8 +1523,6 @@
     <string name="settings_search_status_hint">Без ключа Exa агент использует встроенный поиск текущего подключения. Если и он недоступен, агент честно скажет, что поиск не работает.</string>
     <string name="settings_section_service_title">Сервис и данные</string>
     <string name="settings_battery_capacity_desc">Используется для оценки запаса хода и стоимости</string>
-    <string name="settings_tariff_home_desc">Стоимость 1 кВт·ч при зарядке дома (AC)</string>
-    <string name="settings_tariff_dc_desc">Стоимость 1 кВт·ч на быстрых зарядках</string>
     <string name="settings_tariff_trip_desc">Каким тарифом считать стоимость поездок</string>
     <string name="settings_consumption_good_desc">Поездки с меньшим расходом подсвечиваются зелёным</string>
     <string name="settings_consumption_bad_desc">Поездки с большим расходом подсвечиваются красным</string>
@@ -1626,9 +1564,6 @@
     <string name="settings_donate_button">Поддержать проект</string>
 
     <!-- HUD navigation -->
-    <string name="settings_hud_header">HUD (проекционный дисплей)</string>
-    <string name="settings_hud_title">Навигация на HUD</string>
-    <string name="settings_hud_desc">Подсказки Яндекс Навигатора на проекционном дисплее: манёвр, дистанция, улица, прибытие</string>
     <string name="settings_hud_speed_sign_title">Знак скорости под стрелкой</string>
     <string name="settings_hud_speed_sign_desc">Красный знак ограничения скорости в нижнем слоте HUD</string>
     <string name="settings_hud_status_unsupported">Шина SOME/IP не найдена: на этой машине вывод на HUD недоступен</string>
@@ -1656,8 +1591,6 @@
     <string name="settings_hud_answer_done">Готово</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Слепые зоны</string>
-    <string name="settings_blindspot_title">Камера по поворотнику</string>
-    <string name="settings_blindspot_desc">Левый поворотник - левая камера на приборке, правый - окошко на главном экране. По умолчанию выключено.</string>
     <string name="settings_blindspot_threshold_title">Порог скорости</string>
     <string name="settings_blindspot_threshold_desc">Ниже этой скорости камера не показывается</string>
     <string name="settings_blindspot_pip_width_title">Ширина окошка</string>
@@ -1823,10 +1756,6 @@
     <string name="tech_label_inside_outside">в салоне / за бортом</string>
     <string name="tech_on">вкл</string>
     <string name="tech_off">выкл</string>
-    <string name="tech_tyre_fl">ПЛ</string>
-    <string name="tech_tyre_fr">ПП</string>
-    <string name="tech_tyre_rl">ЗЛ</string>
-    <string name="tech_tyre_rr">ЗП</string>
     <!-- %1$.1f = insulation megaohms -->
     <string name="tech_value_mohm">%1$.1f МОм</string>
     <!-- %1$d = cell delta millivolts -->
@@ -1848,8 +1777,6 @@
     <string name="tech_value_temp">%1$d°C</string>
     <!-- %1$d = percent -->
     <string name="tech_value_percent">%1$d%%</string>
-    <!-- %1$.2f = bar, %2$d = degrees celsius -->
-    <string name="tech_value_tyre">%1$.2f бар · %2$d°</string>
     <!-- %1$.2f = bar -->
     <string name="tech_value_tyre_pressure">%1$.2f бар</string>
     <string name="tech_value_cell_scale">%1$.2f В</string>

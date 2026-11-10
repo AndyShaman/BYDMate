@@ -15,7 +15,6 @@
 
     <!-- Settings: Section labels (left pane) -->
     <string name="settings_section_auto_battery_title">Аўто і батарэя</string>
-    <string name="settings_section_trips_title">Паездкі</string>
     <string name="settings_section_integrations_title">Інтэграцыі</string>
     <string name="settings_section_widget_title">Віджэт</string>
     <string name="settings_section_display_title">Дысплей</string>
@@ -29,9 +28,7 @@
     <string name="settings_display_card_hud_sub">Падказкі навігатара на штатны HUD. %1$s</string>
     <string name="settings_display_card_blindspot_sub">Камера па паваротніку. %1$s</string>
     <string name="settings_display_window_subhead">Акно на прыборцы</string>
-    <string name="settings_display_mirror_header">Вывад на прыборку</string>
     <string name="settings_display_mirror_title">Вывад на прыборку кнопкай руля</string>
-    <string name="settings_display_mirror_desc">Кароткае націсканне выбранай кнопкі руля пераносіць выбраную праграму на прыборку і назад.</string>
     <string name="settings_cluster_auto_container_title">Адразу паказваць на прыборцы</string>
     <string name="settings_cluster_auto_container_desc">Праграма сама пераключае прыборку ў рэжым праекцыі і назад (навігатар і камеры сляпых зон). Выключыце, калі пасля гэтага з прыборкі знікае ADAS або штатны віджэт і не вяртаецца сам: тады рэжым прыборкі пераключайце ўручную, а карцінка будзе бачная ў міні-карце</string>
     <string name="settings_cluster_full_display_title">Поўны экран прыборкі</string>
@@ -47,7 +44,6 @@
     <string name="projection_extended_confirm_enable">Уключыць</string>
     <string name="projection_extended_confirm_cancel">Скасаваць</string>
     <string name="settings_display_app_title">Праграма на прыборку</string>
-    <string name="settings_display_size_header">Памер акна на прыборцы</string>
     <string name="settings_display_size_width">Шырыня</string>
     <string name="settings_display_size_width_desc" formatted="false">Шырыня акна ў % ад шырыні прыборкі</string>
     <string name="settings_display_size_height">Вышыня</string>
@@ -70,7 +66,6 @@
     <string name="steering_button_unknown">Кнопка (код %1$d)</string>
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Кнопка запуску</string>
-    <string name="settings_display_button_change">Змяніць</string>
     <string name="learn_button_dialog_title">Прызначыць кнопку</string>
     <string name="learn_button_waiting">Націсніце кнопку на рулі…</string>
     <string name="learn_button_rejected">Гэту кнопку нельга прызначыць. Націсніце іншую.</string>
@@ -168,10 +163,6 @@
     <string name="settings_tariff_dc_label">Тарыф DC (%1$s/кВт·гадз)</string>
     <string name="settings_tariff_trip_label">Тарыф паездак</string>
     <string name="settings_tariff_custom_label">Свой тарыф (%1$s/кВт·гадз)</string>
-    <string name="settings_save_tariffs_button">Захаваць тарыфы</string>
-    <string name="settings_tariff_future_note">Новы тарыф ужываецца да будучых паездак.\nУжо палічаныя паездкі не зменяцца.</string>
-    <string name="settings_recalc_all_button">Пералічыць усе паездкі</string>
-    <string name="settings_recalc_note">Пералічыць кошт усіх паездак\nпа бягучым тарыфе.</string>
     <string name="settings_tariff_periods_title">Тарыфы і перыяды</string>
     <string name="settings_tariff_card_period">Перыяд</string>
     <string name="settings_tariff_periods_button">Адкрыць</string>
@@ -214,19 +205,9 @@
     <string name="range_table_dialog_save">Захаваць</string>
 
     <!-- Settings: Trips section -->
-    <string name="settings_trips_datasource_header">Крыніца даных паездак</string>
-    <string name="settings_trips_datasource_note">Titan 3 — BYD energydata.\nSong і іншыя мадэлі без убудаванай БД — DiPlus TripInfo.</string>
-    <string name="settings_trips_datasource_hint">Калі спіс пусты пасля 2-3 паездак — пераключыце рэжым.</string>
-    <string name="settings_trips_system_header">Сістэмныя даныя (бэта)</string>
-    <string name="settings_trips_system_note">Пашыраныя даныя аўто: SoH батарэі, прабег BMS, статыстыка зарадак. Толькі чытанне.</string>
-    <string name="settings_trips_system_enable_label">Уключыць</string>
-    <string name="settings_datasource_switching">Пераключэнне...</string>
     <string name="settings_datasource_done">Гатова</string>
 
     <!-- Settings: Recalculate confirmation dialog -->
-    <string name="settings_recalc_dialog_title">Пералічыць кошт?</string>
-    <string name="settings_recalc_dialog_text">Усе паездкі будуць пералічаны па тарыфе %1$s %2$s/кВт·гадз.\nУжо палічаныя значэнні будуць заменены.</string>
-    <string name="settings_recalc_confirm_button">Пералічыць</string>
     <string name="settings_cancel_button">Скасаваць</string>
 
     <!-- Settings: Integrations section -->
@@ -247,8 +228,6 @@
     <string name="settings_webhook_save_button">Захаваць вебхук</string>
     <string name="settings_webhook_saved">Вебхук захаваны</string>
     <string name="settings_webhook_invalid_url">Няправільны URL</string>
-    <string name="settings_openrouter_section_header">OpenRouter</string>
-    <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Мадэль: %1$s</string>
     <string name="settings_openrouter_model_pick">Выбраць мадэль</string>
     <string name="settings_exa_section_header">Exa</string>
@@ -295,10 +274,6 @@
     <string name="settings_widget_buttons_label">Кнопкі на віджэце</string>
     <string name="settings_widget_buttons_description">Адзін тап па віджэце высоўвае 4 кнопкі, двайны тап адкрывае BYDMate. Кнопка запускае правіла з трыгерам «Націсканне кнопкі».</string>
 
-    <!-- Settings: Places section -->
-    <string name="settings_places_section_header">Месцы</string>
-    <string name="settings_places_entry_title">Пункты для аўтаматызацыі</string>
-    <string name="settings_places_entry_description">Дом, праца, любімыя месцы - трыгеры «Уезд» / «Выезд»</string>
 
     <!-- Settings: Application section -->
     <string name="settings_app_units_header">Адзінкі і валюта</string>
@@ -320,13 +295,6 @@
     <string name="settings_update_check_toggle_description">Праз 30 секунд пасля запуску правяраць GitHub і прапаноўваць абнавіцца</string>
     <string name="settings_update_check_button">Праверыць абнаўленні зараз</string>
 
-    <!-- Settings: Autoservice status -->
-    <string name="settings_autoservice_disconnected_title">не падключана</string>
-    <string name="settings_autoservice_disconnected_detail">перазапусціце праграму, калі ADB ужо ўключаны</string>
-    <string name="settings_autoservice_sentinel_title">падключана, але даныя не чытаюцца</string>
-    <string name="settings_autoservice_sentinel_detail">магчыма функцыя працуе толькі на Leopard 3</string>
-    <string name="settings_autoservice_connected_title">падключана</string>
-    <string name="settings_autoservice_connected_detail">SoH %1$s • lifetime %2$s / %3$s</string>
 
     <!-- Settings: Update dialog -->
     <string name="settings_update_dialog_title">Абнаўленні</string>
@@ -434,11 +402,7 @@
     <string name="charges_delete_dialog_text">%1$s кВт·гадз - аднавіць будзе нельга.</string>
     <string name="trips_delete_dialog_title">Выдаліць паездку?</string>
     <string name="trips_delete_dialog_text">%1$s км - паездка і яе маршрут будуць выдалены, аднавіць будзе нельга.</string>
-    <string name="charges_onboarding_empty_text">Статыстыка зарадак недаступная. Каб бачыць кВт·гадз і кошт кожнай зарадкі - уключы «Сістэмныя даныя» ў Наладах.</string>
-    <string name="charges_go_to_settings_button">Перайсці ў Налады</string>
     <string name="charges_sentinel_empty_text">На вашай мадэлі машыны статыстыка зарадак недаступная - дыягнастычныя даныя не чытаюцца. SoH таксама не паказваецца.</string>
-    <string name="charges_not_tracking_banner">Новыя зарадкі зараз не адсочваюцца.</string>
-    <string name="charges_enable_tracking_button">Уключыць →</string>
     <string name="charges_stats_period_label">За выбраны перыяд</string>
     <string name="charges_stats_sessions">Сесій</string>
     <string name="charges_stats_cost">Кошт</string>
@@ -448,7 +412,6 @@
     <string name="charges_stats_bms_mileage">Прабег BMS</string>
     <string name="charges_stats_per100km">/100км lifetime</string>
     <string name="charges_lifetime_waiting">Чакаю першага адказу ад машыны…</string>
-    <string name="charges_lifetime_enable_hint">Уключыце «Сістэмныя даныя» ў Наладах, каб бачыць прабег BMS і агульны аб\'ём зарадак.</string>
     <string name="charges_stats_dynamics_label">Дынаміка</string>
     <string name="charges_chart_cell_delta_title">Δ ячэек (В)</string>
     <string name="charges_chart_cell_delta_placeholder">Δ ячэек: будзе паказана пасля 3 завершаных зарадак (зараз: %1$d)</string>
@@ -665,8 +628,6 @@
     <!-- Journal relative time -->
 
     <!-- Places screen -->
-    <string name="places_tab_title">Месцы</string>
-    <string name="places_back_content_description">Назад</string>
     <string name="places_add_button">+ Дадаць</string>
     <string name="places_empty">Месцаў пакуль няма. Націсніце \"+ Дадаць\", каб стварыць.</string>
     <string name="places_row_coords">%1$.5f, %2$.5f · %3$d м</string>
@@ -750,7 +711,6 @@
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_vehicle_data_offline">Няма даных ад аўтамабіля</string>
-    <string name="dashboard_diplus_offline">DiPlus не адказвае</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
 
@@ -841,8 +801,6 @@
 
     <!-- Battery readings shared by the compact card and the tech panel -->
     <string name="battery_health_cell_delta_label">Δ ячэек</string>
-    <!-- %1$.3f = delta volts -->
-    <string name="battery_health_cell_delta_value">%1$.3f В</string>
     <!-- %1$.3f = cell voltage volts -->
     <string name="battery_health_cell_voltage_value">%1$.3f В</string>
     <string name="battery_health_bat_temp_label">тэмп. батарэі</string>
@@ -859,14 +817,6 @@
     <string name="battery_health_avg_all_time_label">за ўвесь час</string>
     <string name="battery_health_avg_soc_hint" formatted="false">Сярэднеўзважаны ўзровень зараду: чым даўжэй батарэя стаіць зараджанай, тым вышэйшае значэнне. Для LFP-батарэі BYD карысна трымаць яго ніжэй: захоўванне на высокім зарадзе паскарае старэнне. Арыенцір: да 65% выдатна, 65-85% нармальна, вышэй 85% лепш зараджаць пазней ці радзей. Зарад да 100% раз у 1-2 тыдні ўсё роўна патрэбны для балансіроўкі ячэек. Лічыцца па гісторыі паездак і зарадак BYDMate.</string>
 
-    <!-- Shared summary row (Components.kt SummaryRow) -->
-    <string name="summary_unit_km">км</string>
-    <string name="summary_label_mileage">Прабег</string>
-    <string name="summary_unit_kwh">кВт·гадз</string>
-    <string name="summary_label_energy">Энергія</string>
-    <string name="summary_unit_kwh_per_100km">кВт·гадз/100км</string>
-    <string name="summary_label_consumption">Расход</string>
-    <string name="summary_label_cost">Кошт</string>
 
     <!-- Settings: unit chips and language labels -->
     <string name="settings_tariff_trip_custom_chip">Свой</string>
@@ -876,14 +826,10 @@
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
     <string name="settings_saved">Захавана</string>
-    <!-- %1$d = trip count -->
-    <string name="settings_recalc_done">Пералічана: %1$d паездак</string>
     <string name="settings_export_in_progress">Экспарт...</string>
     <!-- %1$d = trip count, %2$d = charge count, %3$d = track point count, %4$d = idle drain count -->
     <!-- Generic error with message: %1$s = error text -->
     <string name="settings_error_with_message">Памылка: %1$s</string>
-    <!-- Error prefix used for color detection in UI (must match start of settings_error_with_message) -->
-    <string name="settings_error_prefix">Памылка</string>
     <!-- %1$s = file path -->
     <string name="settings_log_recording_started">Запіс (аўта-стоп праз 2 гадз)... - %1$s</string>
     <!-- %1$s = file path, %2$d = size KB -->
@@ -897,9 +843,6 @@
     <string name="settings_log_tg_missing">Файл не знойдзены. Магчыма, яго выдалілі з папкі Download.</string>
     <string name="settings_tg_log_auto_title">Адпраўляць запісаны лог у Telegram</string>
     <string name="settings_tg_log_auto_hint">Калі запіс лога скончыцца, файл сам прыйдзе ў ваш бот.</string>
-    <string name="settings_update_check_in_progress">Праверка...</string>
-    <!-- %1$s = version string -->
-    <string name="settings_update_available_short">Даступна v%1$s</string>
 
     <!-- UpdateChecker: download progress strings (passed via callback) -->
     <string name="update_downloading_progress">Спампоўванне: %1$d%%</string>
@@ -948,8 +891,6 @@
     <string name="insight_night_idle_prev">%1$.1f кВт·гадз</string>
 
     <!-- Local insight engine (offline rules) -->
-    <string name="local_insight_not_enough_data_title">Даных мала для аналізу</string>
-    <string name="local_insight_not_enough_data_summary">Патрэбна мінімум 5 паездак за тыдзень</string>
     <string name="local_insight_consumption_up_title">Расход ▲%1$.0f%% за тыдзень</string>
     <string name="local_insight_consumption_up_title_month">Расход ▲%1$.0f%% за месяц</string>
     <string name="local_insight_consumption_up_summary_short">Шмат кароткіх паездак — прагрэў забірае энергію</string>
@@ -1437,7 +1378,6 @@
     <!-- call_contact tool: contacts permission row -->
     <string name="settings_voice_contacts_label">Доступ да кантактаў</string>
     <string name="settings_voice_contacts_description">Патрэбны для званка кантакту па імені голасам</string>
-    <string name="settings_voice_contacts_granted">Дазволена</string>
     <string name="settings_voice_contacts_grant">Дазволіць</string>
 
     <!-- Voice journal: debug screen with the last voice sessions -->
@@ -1579,8 +1519,6 @@
     <string name="settings_search_status_hint">Без ключа Exa агент выкарыстоўвае ўбудаваны пошук бягучага падключэння. Калі і ён недаступны, агент сумленна скажа, што пошук не працуе.</string>
     <string name="settings_section_service_title">Сэрвіс і даныя</string>
     <string name="settings_battery_capacity_desc">Выкарыстоўваецца для ацэнкі запасу ходу і кошту</string>
-    <string name="settings_tariff_home_desc">Кошт 1 кВт·гадз пры зарадцы дома (AC)</string>
-    <string name="settings_tariff_dc_desc">Кошт 1 кВт·гадз на хуткіх зарадках</string>
     <string name="settings_tariff_trip_desc">Якім тарыфам лічыць кошт паездак</string>
     <string name="settings_consumption_good_desc">Паездкі з меншым расходам падсвечваюцца зялёным</string>
     <string name="settings_consumption_bad_desc">Паездкі з большым расходам падсвечваюцца чырвоным</string>
@@ -1622,9 +1560,6 @@
     <string name="settings_donate_button">Падтрымаць праект</string>
 
     <!-- HUD navigation -->
-    <string name="settings_hud_header">HUD (праекцыйны дысплей)</string>
-    <string name="settings_hud_title">Навігацыя на HUD</string>
-    <string name="settings_hud_desc">Падказкі Яндэкс Навігатара на праекцыйным дысплеі: манеўр, дыстанцыя, вуліца, прыбыццё</string>
     <string name="settings_hud_speed_sign_title">Знак хуткасці пад стрэлкай</string>
     <string name="settings_hud_speed_sign_desc">Чырвоны знак абмежавання хуткасці ў ніжнім слоце HUD</string>
     <string name="settings_hud_status_unsupported">Шына SOME/IP не знойдзена: на гэтай машыне вывад на HUD недаступны</string>
@@ -1652,8 +1587,6 @@
     <string name="settings_hud_answer_done">Гатова</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Сляпыя зоны</string>
-    <string name="settings_blindspot_title">Камера па паваротніку</string>
-    <string name="settings_blindspot_desc">Левы паваротнік - левая камера на прыборцы, правы - акенца на галоўным экране. Па змаўчанні выключана.</string>
     <string name="settings_blindspot_threshold_title">Парог хуткасці</string>
     <string name="settings_blindspot_threshold_desc">Ніжэй за гэту хуткасць камера не паказваецца</string>
     <string name="settings_blindspot_pip_width_title">Шырыня акенца</string>
@@ -1819,10 +1752,6 @@
     <string name="tech_label_inside_outside">у салоне / за бортам</string>
     <string name="tech_on">укл</string>
     <string name="tech_off">выкл</string>
-    <string name="tech_tyre_fl">ПЛ</string>
-    <string name="tech_tyre_fr">ПП</string>
-    <string name="tech_tyre_rl">ЗЛ</string>
-    <string name="tech_tyre_rr">ЗП</string>
     <string name="tech_value_mohm">%1$.1f МОм</string>
     <string name="tech_value_mv">%1$d мВ</string>
     <string name="tech_value_volt">%1$d В</string>
@@ -1835,7 +1764,6 @@
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
     <string name="tech_value_percent">%1$d%%</string>
-    <string name="tech_value_tyre">%1$.2f бар · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f бар</string>
     <string name="tech_value_cell_scale">%1$.2f В</string>
     <string name="tech_hint_soh" formatted="false">Здароўе батарэі паводле ацэнкі самой машыны: колькі ёмістасці засталося ад новай. 100% у новай машыны, павольна зніжаецца з гадамі. Гэта асобная лічба, з «Астаткам» яна формулай не звязана, параўноўваць іх паміж сабой не трэба.</string>

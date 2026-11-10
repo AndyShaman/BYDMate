@@ -41,8 +41,6 @@ class TechPanelI18nTest {
         assertEquals("576 Вт", get("ru", R.string.tech_value_watt, 576))
         assertEquals("2,00 %/ч", get("ru", R.string.tech_value_percent_per_hour, 2.0))
         assertEquals("2.00 %/h", get("en", R.string.tech_value_percent_per_hour, 2.0))
-        assertEquals("2,52 бар · 15°", get("ru", R.string.tech_value_tyre, 2.52, 15))
-        assertEquals("2.52 bar · 15°", get("en", R.string.tech_value_tyre, 2.52, 15))
     }
 
     /** All ten hints must be present and non-Russian in en/zh. */
