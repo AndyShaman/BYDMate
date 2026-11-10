@@ -80,9 +80,9 @@
     <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
     <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun launchFreeformCore( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, ): Int</ID>
     <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
-    <ID>CyclomaticComplexMethod:HelperDaemon.kt$private fun findTaskState(packageName: String): TaskWindowState?</ID>
-    <ID>CyclomaticComplexMethod:HelperDaemon.kt$private fun taskModeState(taskId: Int): TaskModeState?</ID>
-    <ID>CyclomaticComplexMethod:HelperDaemon.kt$private fun topTaskInfo(): TopTaskInfo?</ID>
+    <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun findTaskState(packageName: String, atm: (Int) -&gt; List&lt;*&gt;? = ::atmTasks): TaskWindowState?</ID>
+    <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun taskModeState(taskId: Int, atm: (Int) -&gt; List&lt;*&gt;? = ::atmTasks): TaskModeState?</ID>
+    <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun topTaskInfo(atm: (Int) -&gt; List&lt;*&gt;? = ::atmTasks): TopTaskInfo?</ID>
     <ID>CyclomaticComplexMethod:HistoryImporter.kt$HistoryImporter$private suspend fun doSync(): ImportResult</ID>
     <ID>CyclomaticComplexMethod:HistoryImporter.kt$HistoryImporter$suspend fun cleanupDuplicates(): Int</ID>
     <ID>CyclomaticComplexMethod:HistoryImporter.kt$HistoryImporter$suspend fun repairImplausibleKwh(): Int</ID>

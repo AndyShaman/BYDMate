@@ -1426,15 +1426,17 @@ private fun atmGetTasks(iAtm: Any, maxNum: Int): List<*>? {
     return raw as? List<*>
 }
 
+/** The running task list. The task walks below take it as a parameter so a test can hand them one. */
+private fun atmTasks(maxNum: Int): List<*>? = atmGetTasks(activityTaskManager(), maxNum)
+
 /**
  * Finds the running task id of [packageName]. Reconstructed from CarControlImpl.getTopActivityPackage:
  * iAtm.getTasks(maxNum, false, false) -> List<RunningTaskInfo>; match topActivity/baseActivity package;
  * read int field "taskId" (fallback "id"). Returns -1 when not found.
  * NOTE: field names validated on-car in Phase 2.
  */
-private fun findTaskId(packageName: String): Int {
-    val iAtm = activityTaskManager()
-    val tasks = atmGetTasks(iAtm, 100) as? List<*> ?: return -1
+internal fun findTaskId(packageName: String, atm: (Int) -> List<*>? = ::atmTasks): Int {
+    val tasks = atm(100) ?: return -1
     for (task in tasks) {
         if (task == null) continue
         val pkg = listOf("topActivity", "baseActivity").firstNotNullOfOrNull { fieldName ->
@@ -1453,9 +1455,8 @@ private fun findTaskId(packageName: String): Int {
 }
 
 /** Inverse of [findTaskId]: the package owning [taskId], or null when the task is not listed. */
-private fun packageForTask(taskId: Int): String? = runCatching {
-    val iAtm = activityTaskManager()
-    val tasks = atmGetTasks(iAtm, 100) as? List<*> ?: return@runCatching null
+internal fun packageForTask(taskId: Int, atm: (Int) -> List<*>? = ::atmTasks): String? = runCatching {
+    val tasks = atm(100) ?: return@runCatching null
     for (task in tasks) {
         if (task == null) continue
         val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
@@ -1477,9 +1478,8 @@ private fun packageForTask(taskId: Int): String? = runCatching {
  * tasks[0] is the most-recently-used / currently focused task on Android recents ordering.
  * Mirrors TX_GET_VERSION pattern: caller writes "" on null so the client reads a defined value.
  */
-private fun topTaskPackage(): String? = runCatching {
-    val iAtm = activityTaskManager()
-    val tasks = atmGetTasks(iAtm, 1) as? List<*> ?: return@runCatching null
+internal fun topTaskPackage(atm: (Int) -> List<*>? = ::atmTasks): String? = runCatching {
+    val tasks = atm(1) ?: return@runCatching null
     val task = tasks.firstOrNull() ?: return@runCatching null
     listOf("topActivity", "baseActivity").firstNotNullOfOrNull { fieldName ->
         fieldByName(task, fieldName)?.let { f ->
@@ -1495,7 +1495,7 @@ private fun topTaskPackage(): String? = runCatching {
  * [visible] is RunningTaskInfo.isVisible as 1/0, or -1 when the ROM has no such field: the MRU
  * ordering of getTasks() lists tasks nobody can see, and the split adoption must tell them apart.
  */
-private data class TopTaskInfo(
+internal data class TopTaskInfo(
     val pkg: String,
     val taskId: Int,
     val windowingMode: Int,
@@ -1517,9 +1517,8 @@ private data class TopTaskInfo(
  * converted to WINDOWING_FULLSCREEN+displayId=0, which would falsely satisfy foreignFullscreen
  * and tear down the split session.
  */
-private fun topTaskInfo(): TopTaskInfo? = runCatching {
-    val iAtm = activityTaskManager()
-    val tasks = atmGetTasks(iAtm, 10) as? List<*> ?: return@runCatching null
+internal fun topTaskInfo(atm: (Int) -> List<*>? = ::atmTasks): TopTaskInfo? = runCatching {
+    val tasks = atm(10) ?: return@runCatching null
     // Pick the first task on the main display (displayId == 0).
     // C-4: if the displayId field is absent via reflection, skip the task rather than defaulting
     // to 0 (which would synthesise main-display presence and falsely trigger COVERED teardown).
@@ -1567,7 +1566,7 @@ private fun topTaskInfo(): TopTaskInfo? = runCatching {
  * so an old app reading only the first 6 ints sees the same behavior as before this field was
  * added (feature auto-disarms because displayId == 0 == main display).
  */
-private data class TaskWindowState(
+internal data class TaskWindowState(
     val taskId: Int, val windowingMode: Int,
     val left: Int, val top: Int, val right: Int, val bottom: Int,
     val displayId: Int,
@@ -1579,9 +1578,8 @@ private data class TaskWindowState(
  * Returns null when no matching task is running or reflection fails.
  * The caller interprets null as "no running task" (status 0, taskId -1).
  */
-private fun findTaskState(packageName: String): TaskWindowState? = runCatching {
-    val iAtm = activityTaskManager()
-    val tasks = atmGetTasks(iAtm, 100) as? List<*> ?: return@runCatching null
+internal fun findTaskState(packageName: String, atm: (Int) -> List<*>? = ::atmTasks): TaskWindowState? = runCatching {
+    val tasks = atm(100) ?: return@runCatching null
     for (task in tasks) {
         if (task == null) continue
         val pkg = listOf("topActivity", "baseActivity").firstNotNullOfOrNull { fieldName ->
@@ -1654,9 +1652,8 @@ private fun queryStatusBarSplitSupport(packageName: String): Int = runCatching {
  * Returns null when the task is not in the list (detached/dead) or reflection fails — callers
  * treat null as "state unknown" and fall back to call-outcome semantics.
  */
-private fun taskModeState(taskId: Int): TaskModeState? = runCatching {
-    val iAtm = activityTaskManager()
-    val tasks = atmGetTasks(iAtm, 100) as? List<*> ?: return@runCatching null
+internal fun taskModeState(taskId: Int, atm: (Int) -> List<*>? = ::atmTasks): TaskModeState? = runCatching {
+    val tasks = atm(100) ?: return@runCatching null
     for (task in tasks) {
         if (task == null) continue
         val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
@@ -1681,9 +1678,8 @@ private fun taskModeState(taskId: Int): TaskModeState? = runCatching {
  * surface as [taskModeState] — WindowConfiguration.getActivityType() (AOSP 12 / API 31+).
  * Callers that need a "safe" default should treat -1 as "type unknown, take the conservative path".
  */
-internal fun taskActivityType(taskId: Int): Int = runCatching {
-    val iAtm = activityTaskManager()
-    val tasks = atmGetTasks(iAtm, 100) as? List<*> ?: return@runCatching -1
+internal fun taskActivityType(taskId: Int, atm: (Int) -> List<*>? = ::atmTasks): Int = runCatching {
+    val tasks = atm(100) ?: return@runCatching -1
     for (task in tasks) {
         if (task == null) continue
         val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
