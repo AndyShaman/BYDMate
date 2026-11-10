@@ -37,6 +37,16 @@ class MediaRerouterLogicTest {
         )
     }
 
+    @Test fun `returns false when topPkg is empty string (no top task)`() {
+        assertFalse(
+            shouldReroute(
+                topPkg = "",
+                splitActive = true, panePkgs = panePkgs, sessionPkgs = sessionPkgs,
+                stoodDown = false,
+            )
+        )
+    }
+
     @Test fun `returns false when topPkg is some other app (not mediacenter)`() {
         assertFalse(
             shouldReroute(
@@ -77,6 +87,16 @@ class MediaRerouterLogicTest {
                 splitActive = true,
                 panePkgs = panePkgs,
                 sessionPkgs = setOf("com.spotify.music"), // neither pane
+                stoodDown = false,
+            )
+        )
+    }
+
+    @Test fun `returns false when session package set is empty`() {
+        assertFalse(
+            shouldReroute(
+                topPkg = MEDIACENTER_PKG,
+                splitActive = true, panePkgs = panePkgs, sessionPkgs = emptySet(),
                 stoodDown = false,
             )
         )

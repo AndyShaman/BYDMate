@@ -546,6 +546,22 @@ class SplitSessionManagerTest {
         }
     }
 
+    @Test fun `exit preserves last saved pair`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val prefs = FakeSplitPreferences()
+        val (wide, narrow) = boundsFor(SplitSide.RIGHT)
+        helper.stubLaunch("pkg.wide", "pkg.narrow")
+        helper.stubTask("pkg.wide", 10, 5, wide)
+        helper.stubTask("pkg.narrow", 11, 5, narrow)
+
+        val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
+        val mgr = SplitSessionManager(helper, prefs, FakeSplitBackdrop(), backgroundScope, 60_000)
+        mgr.start(pair)
+        mgr.exit()
+
+        assertEquals(pair, prefs.getLastPair())
+    }
+
     // ── Watchdog: null tick is a no-op ────────────────────────────────────────
 
     @Test fun `watchdog null getTaskState skips tick without any helper call`() = runTest {

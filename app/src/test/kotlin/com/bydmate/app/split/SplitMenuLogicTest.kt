@@ -156,6 +156,13 @@ class SplitMenuLogicTest {
         assertNull(logic.pickerMode)
     }
 
+    @Test fun `onPickerBack in pane-closed picker clears pickerMode`() {
+        val logic = SplitMenuLogic()
+        logic.openPickerForPane(Pane.WIDE, closedPkg = "com.closed.app")
+        logic.onPickerBack()
+        assertNull(logic.pickerMode)
+    }
+
     @Test fun `onPickerBack in voluntary picker returns None`() {
         val logic = SplitMenuLogic()
         logic.openPickerForPane(Pane.NARROW, closedPkg = null)
@@ -234,6 +241,21 @@ class SplitMenuLogicTest {
         val logic = SplitMenuLogic()
         val cmd = logic.onAppPicked("com.example.ignored")
         assertEquals(MenuCmd.None, cmd)
+    }
+
+    // ── Idle-pill-leak regression (Fix #2) ────────────────────────────────────
+    //
+    // The controller attaches the pill in Idle state for the first-pair picker.
+    // On back (onPickerBack returns None), pickerMode is null.
+    // The controller then checks state==Idle && pickerMode==null → tearDownPill().
+
+    @Test fun `after first-pair back pickerMode is null (idle cleanup precondition)`() {
+        val logic = SplitMenuLogic()
+        logic.showFirstPairPicker()
+        assertEquals(PickerMode.FirstPairStep1, logic.pickerMode)
+        logic.onPickerBack()
+        assertNull(logic.pickerMode)
+        assertFalse(logic.isMenuVisible)
     }
 
     // ── Fix 3: same-app guard ─────────────────────────────────────────────────
