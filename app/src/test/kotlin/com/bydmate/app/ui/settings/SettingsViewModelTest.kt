@@ -343,14 +343,9 @@ class SettingsViewModelTest {
         return SettingsViewModel(
             appContext = ctx,
             settingsRepository = settingsRepo,
-            tripRepository = tripRepo,
-            chargeRepository = chargeRepo,
             updateChecker = resolvedUpdateChecker,
             historyImporter = historyImporter,
-            energyDataReader = energyReader,
-            idleDrainDao = idleDrainDao,
             insightsManager = insightsManager,
-            adbOnDeviceClient = FakeAdbClient(),
             localePreferences = LocalePreferences(ctx),
             backupManager = backupManager,
             chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
@@ -360,7 +355,6 @@ class SettingsViewModelTest {
             gigaAmModelManager = resolvedGigaAmModelManager,
             continuousAsr = continuousAsr,
             ttsEngine = resolvedTtsEngine,
-            voiceController = voiceController,
             seatChannelStore = seatChannelStore,
             windowChannelStore = windowChannelStore,
             helperClient = helperClient,
@@ -368,7 +362,6 @@ class SettingsViewModelTest {
             agentOrchestrator = agentOrchestrator,
             llmConnectionResolver = llmConnectionResolver ?: mockk(relaxed = true),
             openRouterClient = openRouterClient,
-            placeRepository = mockk(relaxed = true),
             energyDataDeadDetector = energyDataDeadDetector,
             hudController = mockk(relaxed = true),
             logRecorder = logRecorder,
@@ -681,8 +674,8 @@ class SettingsViewModelTest {
                 "agent identity state flows initialize from voice prefs",
                 prefsBefore = { it.putString("agent_name", "Лео").putString("agent_persona", "snarky") },
                 check = { vm, _ ->
-                    assertEquals("Лео", vm.agentName.value)
-                    assertEquals("snarky", vm.agentPersona.value)
+                    assertEquals("Лео", vm.uiState.value.agentName)
+                    assertEquals("snarky", vm.uiState.value.agentPersona)
                     assertEquals("Лео", vm.uiState.value.agentName)
                     assertEquals("snarky", vm.uiState.value.agentPersona)
                 },
@@ -827,8 +820,8 @@ class SettingsViewModelTest {
         vm.setAgentPersona("engineer")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals("Майк", vm.agentName.value)
-        assertEquals("engineer", vm.agentPersona.value)
+        assertEquals("Майк", vm.uiState.value.agentName)
+        assertEquals("engineer", vm.uiState.value.agentPersona)
         assertEquals("Майк", vm.uiState.value.agentName)
         assertEquals("engineer", vm.uiState.value.agentPersona)
         val ctx: Context = ApplicationProvider.getApplicationContext()

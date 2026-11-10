@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.FileProvider
 import android.os.Environment
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.Intent
@@ -15,7 +14,6 @@ import android.os.SystemClock
 import com.bydmate.app.agent.AgentOrchestrator
 import com.bydmate.app.agent.AgentResult
 import com.bydmate.app.agent.LlmConnectionResolver
-import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.AutoBackupRunner
 import com.bydmate.app.data.backup.AutoBackupScheduler
@@ -27,10 +25,8 @@ import com.bydmate.app.data.backup.TelegramChat
 import com.bydmate.app.data.backup.TelegramError
 import com.bydmate.app.data.backup.TelegramSinkException
 import com.bydmate.app.data.telegram.ReportField
-import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
-import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.diagnostics.LogRecorder
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.BuildConfig
@@ -47,10 +43,7 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.domain.cost.MeasuredLosses
-import com.bydmate.app.data.repository.ChargeRepository
-import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
-import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.util.applyAppLanguage
@@ -92,7 +85,6 @@ import com.bydmate.app.cluster.voiceCompanionsFromCsv
 import com.bydmate.app.cluster.voiceCompanionsToCsv
 import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.TtsGender
-import com.bydmate.app.voice.VoiceController
 import com.bydmate.app.voice.VoiceJournal
 import com.bydmate.app.voice.VoiceJournalDump
 import com.bydmate.app.voice.RuStressMarker
@@ -146,12 +138,9 @@ data class SettingsUiState(
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
     val chargeConnector: ChargeConnector = ChargeConnector.GBT,
-    val importStatus: String? = null,
     val appVersion: String = "0.0.0",
-    val updateStatus: String? = null,
     val updateDialogState: UpdateState = UpdateState.Idle,
     val showUpdateDialog: Boolean = false,
-    val diagnosticLog: String? = null,
     val logSaveStatus: String? = null,
     val isRecordingLogs: Boolean = false,
     /** File of the last finished log recording; null = none since the app started. */
@@ -165,14 +154,12 @@ data class SettingsUiState(
     val fidRecorderFile: String? = null,
     /** Why the last start registered nothing (no file, daemon unreachable); null when it ran. */
     val fidRecorderError: String? = null,
-    val tripCostTariff: String = "home",
     val consumptionGood: String = SettingsRepository.DEFAULT_CONSUMPTION_GOOD,
     val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD,
     val rangeCalcMethod: String = SettingsRepository.DEFAULT_RANGE_CALC_METHOD,
     val manualRangeTable: List<SettingsRepository.ManualRangePoint> = SettingsRepository.defaultManualRangeTable(),
     val showManualRangeTableDialog: Boolean = false,
     val lastBootInfo: String? = null,
-    val chainLog: String? = null,
     val openRouterApiKey: String = "",
     val openRouterModel: String = "",
     /** Exa (api.exa.ai) BYOK for the web_search tool. Empty = openrouter:web_search fallback. */
@@ -183,7 +170,6 @@ data class SettingsUiState(
     val modelsLoading: Boolean = false,
     /** Newest period first — the order the «Тарифы и периоды» dialog lists them in. */
     val tariffPeriods: List<TariffPeriodEntity> = emptyList(),
-    val showTariffPeriodsDialog: Boolean = false,
     val tariffRecalcStatus: String? = null,
     /** Why the last period could not be saved; shown in the dialog, cleared on the next try. */
     val tariffPeriodError: String? = null,
@@ -332,14 +318,9 @@ data class SettingsUiState(
 class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     @ApplicationContext private val appContext: Context,
     private val settingsRepository: SettingsRepository,
-    private val tripRepository: TripRepository,
-    private val chargeRepository: ChargeRepository,
     private val updateChecker: UpdateChecker,
     private val historyImporter: HistoryImporter,
-    private val energyDataReader: EnergyDataReader,
-    private val idleDrainDao: IdleDrainDao,
     private val insightsManager: InsightsManager,
-    private val adbOnDeviceClient: AdbOnDeviceClient,
     private val localePreferences: LocalePreferences,
     private val backupManager: BackupManager,
     private val chargingStateStore: com.bydmate.app.data.charging.ChargingStateStore,
@@ -349,7 +330,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val gigaAmModelManager: GigaAmModelManager,
     private val continuousAsr: ContinuousAsr,
     private val ttsEngine: TtsEngine,
-    private val voiceController: VoiceController,
     private val seatChannelStore: SeatChannelStore,
     private val windowChannelStore: com.bydmate.app.data.vehicle.WindowChannelStore,
     private val helperClient: com.bydmate.app.data.vehicle.HelperClient,
@@ -357,7 +337,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val agentOrchestrator: AgentOrchestrator,
     private val llmConnectionResolver: LlmConnectionResolver,
     private val openRouterClient: OpenRouterClient,
-    private val placeRepository: PlaceRepository,
     private val energyDataDeadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector,
     private val hudController: com.bydmate.app.hud.HudController,
     private val logRecorder: LogRecorder,
@@ -415,18 +394,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
     private val _fontScale = MutableStateFlow(localePreferences.getFontScale())
     val fontScale: StateFlow<Float> = _fontScale.asStateFlow()
-
-    private val _agentName = MutableStateFlow(
-        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
-            .getString("agent_name", "") ?: ""
-    )
-    val agentName: StateFlow<String> = _agentName.asStateFlow()
-
-    private val _agentPersona = MutableStateFlow(
-        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
-            .getString("agent_persona", AgentPersona.NAVIGATOR.id) ?: AgentPersona.NAVIGATOR.id
-    )
-    val agentPersona: StateFlow<String> = _agentPersona.asStateFlow()
 
     /** MainActivity listens to the same prefs file and re-provides the density on change. */
     fun setFontScale(scale: Float) {
@@ -536,7 +503,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             )
             val currency = settingsRepository.getCurrency()
             val chargeConnector = settingsRepository.getChargeConnector()
-            val tripCostTariff = settingsRepository.getTripCostTariffKey()
             val consumptionGood = settingsRepository.getString(
                 SettingsRepository.KEY_CONSUMPTION_GOOD,
                 SettingsRepository.DEFAULT_CONSUMPTION_GOOD
@@ -550,7 +516,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
             // Read boot log from SharedPreferences
             val bootInfo = readBootInfo()
-            val chainLog = readChainLog()
 
             // AI settings
             val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
@@ -648,13 +613,11 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     currency = currency.code,
                     currencySymbol = currency.symbol,
                     chargeConnector = chargeConnector,
-                    tripCostTariff = tripCostTariff,
                     consumptionGood = consumptionGood,
                     consumptionBad = consumptionBad,
                     rangeCalcMethod = rangeCalcMethod,
                     manualRangeTable = manualRangeTable,
                     lastBootInfo = bootInfo,
-                    chainLog = chainLog,
                     openRouterApiKey = apiKey,
                     openRouterModel = modelId,
                     exaApiKey = exaApiKey,
@@ -782,12 +745,11 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
     fun showTariffPeriods() {
         loadTariffPeriods()
-        _uiState.update { it.copy(showTariffPeriodsDialog = true) }
     }
 
     fun hideTariffPeriods() {
         _uiState.update {
-            it.copy(showTariffPeriodsDialog = false, tariffRecalcStatus = null, tariffPeriodError = null)
+            it.copy(tariffRecalcStatus = null, tariffPeriodError = null)
         }
     }
 
@@ -882,86 +844,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         }
     }
 
-    /** Import trip history from BYD energydata database. */
-    fun importBydHistory() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(importStatus = "Импорт...") }
-            val result = historyImporter.runSync()
-            if (result.isError) {
-                _uiState.update {
-                    it.copy(importStatus = "Ошибка: ${result.error}")
-                }
-            } else {
-                val status = result.details
-                    ?: "Импортировано ${result.count} поездок из BYD"
-                _uiState.update { it.copy(importStatus = status) }
-            }
-        }
-    }
-
-    /** Run full diagnostics: BYD storage, our DB, permissions. */
-    fun runDiagnostics() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(diagnosticLog = "Диагностика...") }
-
-            val sb = StringBuilder()
-            val sdf = SimpleDateFormat("dd.MM.yy HH:mm:ss", Locale.US)
-
-            // 1. Permissions
-            sb.appendLine("=== Разрешения ===")
-            val perms = listOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_BACKGROUND_LOCATION
-            )
-            for (perm in perms) {
-                val granted = ContextCompat.checkSelfPermission(appContext, perm) ==
-                    PackageManager.PERMISSION_GRANTED
-                val name = perm.substringAfterLast(".")
-                sb.appendLine("$name: ${if (granted) "✓" else "✗"}")
-            }
-
-            // 2. BYD energydata
-            try {
-                val bydReport = energyDataReader.diagnose()
-                sb.appendLine()
-                sb.append(bydReport)
-            } catch (e: Exception) {
-                sb.appendLine("\nОШИБКА BYD: ${e.message}")
-            }
-
-            // 3. Our database
-            sb.appendLine("\n=== Наша база данных ===")
-            try {
-                val trips = tripRepository.getAllTrips().first()
-                val charges = chargeRepository.getAllCharges().first()
-                val drainCount = idleDrainDao.getCount()
-                val drainKwh = idleDrainDao.getTotalKwh()
-                sb.appendLine("Поездок: ${trips.size}")
-                sb.appendLine("Зарядок: ${charges.size}")
-                sb.appendLine("Стоянок (idle drain): $drainCount (%.2f кВт·ч)".format(drainKwh))
-
-                if (trips.isNotEmpty()) {
-                    sb.appendLine("\nПоследние 5 поездок:")
-                    trips.take(5).forEach { t ->
-                        val startFmt = sdf.format(Date(t.startTs))
-                        val endFmt = t.endTs?.let { sdf.format(Date(it)) } ?: "null"
-                        sb.appendLine("#${t.id}: $startFmt – $endFmt")
-                        sb.appendLine("  km=${t.distanceKm ?: "-"}, kwh=${t.kwhConsumed ?: "-"}, " +
-                            "soc=${t.socStart ?: "-"}→${t.socEnd ?: "-"}, " +
-                            "speed=${t.avgSpeedKmh?.let { "%.0f".format(it) } ?: "-"}")
-                        sb.appendLine("  raw: start=${t.startTs}, end=${t.endTs ?: "null"}")
-                    }
-                }
-            } catch (e: Exception) {
-                sb.appendLine("ОШИБКА: ${e.message}")
-            }
-
-            _uiState.update { it.copy(diagnosticLog = sb.toString()) }
-        }
-    }
-
     private fun readBootInfo(): String? {
         return try {
             val prefs = appContext.getSharedPreferences(BootReceiver.PREFS_NAME, Context.MODE_PRIVATE)
@@ -970,14 +852,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val method = prefs.getString(BootReceiver.KEY_LAST_BOOT_METHOD, "?") ?: "?"
             val sdf = SimpleDateFormat("dd.MM.yy HH:mm:ss", Locale.US)
             "${sdf.format(Date(ts))} ($method)"
-        } catch (_: Exception) { null }
-    }
-
-    private fun readChainLog(): String? {
-        return try {
-            val prefs = appContext.getSharedPreferences(BootReceiver.PREFS_NAME, Context.MODE_PRIVATE)
-            val log = prefs.getString(BootReceiver.KEY_CHAIN_LOG, null)
-            if (log.isNullOrBlank()) null else log
         } catch (_: Exception) { null }
     }
 
@@ -1215,16 +1089,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         }
     }
 
-    fun updateAbrpApiKey(value: String) {
-        _uiState.update { it.copy(abrpApiKey = value) }
-    }
-
     fun updateAbrpUserToken(value: String) {
         _uiState.update { it.copy(abrpUserToken = value) }
-    }
-
-    fun updateAbrpCarModel(value: String) {
-        _uiState.update { it.copy(abrpCarModel = value) }
     }
 
     fun saveAbrpSettings() {
@@ -1639,7 +1505,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
      * VoiceModule.provideAgentIdentity() can read it without querying Room.
      */
     fun setAgentName(name: String) {
-        _agentName.value = name
         _uiState.update { it.copy(agentName = name) }
         appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
             .edit().putString("agent_name", name).apply()
@@ -1651,7 +1516,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
      * setAgentName, so VoiceModule.provideAgentIdentity() can read it without querying Room.
      */
     fun setAgentPersona(id: String) {
-        _agentPersona.value = id
         _uiState.update { it.copy(agentPersona = id) }
         appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
             .edit().putString("agent_persona", id).apply()
@@ -2757,7 +2621,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     /** Check for app updates on GitHub. */
     fun checkForUpdate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(updateDialogState = UpdateState.Checking, updateStatus = appStrings.get(R.string.settings_update_check_in_progress)) }
+            _uiState.update { it.copy(updateDialogState = UpdateState.Checking) }
             try {
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
@@ -2766,23 +2630,20 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                             updateDialogState = UpdateState.Available(
                                 version = update.version,
                                 notes = update.releaseNotes ?: ""
-                            ),
-                            updateStatus = appStrings.get(R.string.settings_update_available_short, update.version)
+                            )
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
-                            updateDialogState = UpdateState.UpToDate,
-                            updateStatus = appStrings.get(R.string.settings_update_up_to_date)
+                            updateDialogState = UpdateState.UpToDate
                         )
                     }
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
-                        updateDialogState = UpdateState.Error(e.message ?: "Unknown error"),
-                        updateStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?")
+                        updateDialogState = UpdateState.Error(e.message ?: "Unknown error")
                     )
                 }
             }
@@ -2888,11 +2749,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 _uiState.update { it.copy(restoreInProgress = false) }
             }
         }
-    }
-
-    /** Dismiss the config backup/restore status message. */
-    fun clearConfigStatus() {
-        _uiState.update { it.copy(configStatus = null) }
     }
 
     /** «Поделиться» in the dialog after a manual export (#237). */
