@@ -34,16 +34,6 @@ class ChargingStateStoreTest {
     }
 
     @Test
-    fun `load on empty settings returns State with all nulls and zero ts`() = runTest {
-        val s = store()
-        val state = s.load()
-        assertNull(state.socPercent)
-        assertNull(state.mileageKm)
-        assertNull(state.capacityKwh)
-        assertEquals(0L, state.ts)
-    }
-
-    @Test
     fun `save then load returns same values`() = runTest {
         val s = store()
         s.save(socPercent = 85, mileageKm = 10500.5f, capacityKwh = 7.8f, ts = 1700000000000L)

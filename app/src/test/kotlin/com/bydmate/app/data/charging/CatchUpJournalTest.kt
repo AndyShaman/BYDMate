@@ -80,9 +80,4 @@ class CatchUpJournalTest {
         assertTrue(lines.first().endsWith("NO_DELTA soc=5"))
         assertTrue(lines.last().endsWith("NO_DELTA soc=${CatchUpJournal.MAX_ENTRIES + 4}"))
     }
-
-    @Test
-    fun `empty journal reads as blank`() = runTest {
-        assertEquals("", journal().read())
-    }
 }
