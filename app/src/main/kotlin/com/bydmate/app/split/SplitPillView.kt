@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
@@ -360,12 +359,8 @@ class SplitPillView(private val context: Context) {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    @Suppress("DEPRECATION")
     private fun overlayType(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            WindowManager.LayoutParams.TYPE_PHONE
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 }
 
 // ── Composables ────────────────────────────────────────────────────────────────

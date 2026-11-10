@@ -2,7 +2,6 @@ package com.bydmate.app.ui.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -224,11 +223,7 @@ object ListeningOverlay {
     }
 
     private fun overlayType(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
     private fun realAttach(context: Context, initial: String): OverlayHandle {
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
