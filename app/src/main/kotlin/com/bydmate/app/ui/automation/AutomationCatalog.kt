@@ -6,10 +6,7 @@ import androidx.annotation.StringRes
 import com.bydmate.app.R
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.local.entity.ActionDef
-import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.automation.ActionDispatcher
-import com.bydmate.app.data.remote.DiParsData
-import com.bydmate.app.service.TrackingService
 
 // --- Catalogs ---
 
