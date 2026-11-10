@@ -87,7 +87,6 @@ class HelperBootstrapTest {
         }
         override suspend fun readHelperLog(): String? = helperLog
         override suspend fun helperHeartbeat(): Boolean = processAlive
-        override suspend fun shutdown() {}
     }
 
     /** Fakes the two methods ensureRunning exercises: isAlive() and daemonVersion().

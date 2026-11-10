@@ -38,7 +38,6 @@ class AdbOnDeviceClientTest {
         override var lastConnectFailure: AdbConnectFailure? = null,
     ) : AdbProtocol {
         var connectCalls = 0
-        var disconnectCalls = 0
         var execCalls = mutableListOf<String>()
         private var connected = false
 
@@ -54,7 +53,6 @@ class AdbOnDeviceClientTest {
         }
         override fun isConnected(): Boolean = connected
         override fun disconnect() {
-            disconnectCalls++
             connected = false
         }
     }
@@ -167,26 +165,6 @@ class AdbOnDeviceClientTest {
 
         assertTrue(result.isFailure)
         assertEquals("kaboom", result.exceptionOrNull()?.message)
-    }
-
-    @Test
-    fun `shutdown idempotent does not crash when never connected`() = runTest {
-        val client = newClient(FakeProtocol())
-        // Never connected.
-        client.shutdown()
-        client.shutdown()
-        // No exception → ok.
-    }
-
-    @Test
-    fun `shutdown after connect disconnects protocol`() = runTest {
-        val fake = FakeProtocol(connectResult = true)
-        val client = newClient(fake)
-
-        client.connect()
-        client.shutdown()
-
-        assertEquals(1, fake.disconnectCalls)
     }
 
     @Test

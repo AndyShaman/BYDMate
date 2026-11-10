@@ -82,9 +82,6 @@ interface AdbOnDeviceClient {
 
     /** Read-only check: is a process named `bydmate_helper` running? */
     suspend fun helperHeartbeat(): Boolean
-
-    /** Closes any underlying socket. Idempotent. */
-    suspend fun shutdown()
 }
 
 @Singleton
@@ -278,15 +275,6 @@ class AdbOnDeviceClientImpl @Inject constructor(
         protocol?.let { return it }
         if (connect().isFailure) return null
         return protocol
-    }
-
-    override suspend fun shutdown() {
-        withContext(Dispatchers.IO) {
-            try {
-                protocol?.disconnect()
-            } catch (_: Exception) { /* idempotent */ }
-            protocol = null
-        }
     }
 
     companion object {

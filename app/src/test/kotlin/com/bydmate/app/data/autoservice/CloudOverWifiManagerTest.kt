@@ -97,7 +97,6 @@ class CloudOverWifiManagerTest {
         override suspend fun killHelper(): Boolean = true
         override suspend fun readHelperLog(): String? = null
         override suspend fun helperHeartbeat(): Boolean = true
-        override suspend fun shutdown() = Unit
 
         fun changing(): List<String> = execs.filter { it.startsWith("am broadcast") || it.startsWith("service call cloudmanager 1") }
     }
