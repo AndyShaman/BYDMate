@@ -910,9 +910,6 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
      * HelperUnreachable or ReadbackMismatch. These are the highest-signal
      * failures: the action was live-confirmed on Leopard 3, so a failure means
      * the helper daemon is down or the vehicle state machine rejected the command.
-     *
-     * TODO: route to Crashlytics when Firebase is integrated
-     *   (requires google-services.json + Firebase gradle plugin — out of scope for Phase 2).
      */
     private fun maybeReportValidatedFailure(actionName: String, err: VehicleWriteError, entry: WriteEntry) {
         if (entry.validated && (err is VehicleWriteError.HelperUnreachable || err is VehicleWriteError.ReadbackMismatch)) {
@@ -1020,6 +1017,5 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             "window_rear_right_close" to WINDOW_RR_FIELD,
             "window_rear_right_ctrl" to WINDOW_RR_FIELD,
         )
-        // TODO: route to Crashlytics when Firebase is integrated
     }
 }
