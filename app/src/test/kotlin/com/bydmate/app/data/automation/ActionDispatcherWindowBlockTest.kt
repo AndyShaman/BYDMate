@@ -25,7 +25,6 @@ class ActionDispatcherWindowBlockTest {
 
     private val window: (String) -> Boolean = { ActionDispatcher.isWindowOpenCommand(it) }
     private val sunroof: (String) -> Boolean = { ActionDispatcher.isSunroofOpenCommand(it) }
-    private val sunshade: (String) -> Boolean = { ActionDispatcher.isSunshadeOpenCommand(it) }
 
     private val openCases by lazy {
         listOf(
@@ -72,11 +71,6 @@ class ActionDispatcherWindowBlockTest {
             OpenCase("sunroof close is not a sunroof open", sunroof, "天窗关闭", false),
             OpenCase("sunshade is not a sunroof open", sunroof, "遮阳帘打开", false),
             OpenCase("side window full open is not a sunroof open", sunroof, "车窗全开", false),
-            // isSunshadeOpenCommand (early-fire guard only — never speed-gated)
-            OpenCase("sunshade open is a sunshade open", sunshade, "遮阳帘打开", true),
-            OpenCase("sunshade close is not a sunshade open", sunshade, "遮阳帘关闭", false),
-            OpenCase("sunroof open is not a sunshade open", sunshade, "天窗打开100", false),
-            OpenCase("side window open is not a sunshade open", sunshade, "车窗全开", false),
         )
     }
 

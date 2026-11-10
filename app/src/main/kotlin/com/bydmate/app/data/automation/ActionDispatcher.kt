@@ -152,22 +152,6 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
 
         /**
-         * True if [command] would OPEN the sunshade (遮阳帘). NEVER speed-gated
-         * (interior shade) -- used only by the voice early-fire guard, which must
-         * hold ALL aperture opens for the final because a bare-noun partial can
-         * still be qualified. Pure predicate -- unit-testable without Android deps.
-         */
-        internal fun isSunshadeOpenCommand(command: String): Boolean {
-            if (!command.contains("遮阳帘")) return false
-            if (command.contains("关")) return false
-            val opensViaPosition = POSITION_OPEN.find(command)
-                ?.let { (positionPercent(it.groupValues[1]) ?: 0) > 0 }
-                ?: command.contains("打开")        // bare "打开" (no %) -- treat as open
-            val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
-            return opensViaPosition || opensViaWord
-        }
-
-        /**
          * Returns a block reason if [command] is an aperture-open that is
          * forbidden at [speed], or null if the command is allowed. Sunshade (遮阳帘)
          * is interior and always returns null. Pure function -- unit-testable.
