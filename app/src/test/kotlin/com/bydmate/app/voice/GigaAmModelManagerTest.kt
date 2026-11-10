@@ -359,12 +359,25 @@ class GigaAmModelManagerTest {
     // --- Phased progress: the unpack of a ~226 MiB archive must not look like a hang ---
 
     @Test
-    fun `download reports download, unpack and vad phases with monotonic progress`() = runBlocking {
+    fun `download and untar report phased monotonic progress with real intermediate unpack ticks`() = runBlocking {
         val filesDir = tmp.newFolder("files16")
-        val archive = makeArchive(mapOf(
-            "top/model.int8.onnx" to "onnx-bytes",
-            "top/tokens.txt" to "tokens",
-        ))
+        // ~1 MiB of incompressible payload: the unpack must stream over many reads of the
+        // archive file, so progress has real intermediate points to report.
+        val onnxBytes = kotlin.random.Random(7).nextBytes(1_000_000)
+        val archive = tmp.newFile("gigaam-progress.tar.bz2")
+        BZip2CompressorOutputStream(archive.outputStream()).use { bz ->
+            TarArchiveOutputStream(bz).use { tar ->
+                fun put(name: String, bytes: ByteArray) {
+                    val e = TarArchiveEntry(name)
+                    e.size = bytes.size.toLong()
+                    tar.putArchiveEntry(e)
+                    tar.write(bytes)
+                    tar.closeArchiveEntry()
+                }
+                put("top/model.int8.onnx", onnxBytes)
+                put("top/tokens.txt", "t".toByteArray())
+            }
+        }
         val m = managerWith(filesDir, clientFor(archive, "vad-bytes".toByteArray()))
 
         val ticks = mutableListOf<Pair<GigaAmModelManager.Phase, Int>>()
@@ -391,61 +404,18 @@ class GigaAmModelManagerTest {
             }
             assertTrue("$phase reported $pct, outside $range", pct in range)
         }
-    }
-
-    @Test
-    fun `unpack phase reports intermediate progress, not just its end value`() = runBlocking {
-        val filesDir = tmp.newFolder("files17")
-        // ~1 MiB of incompressible payload: the unpack must stream over many reads of the
-        // archive file, so progress has real intermediate points to report.
-        val onnxBytes = kotlin.random.Random(7).nextBytes(1_000_000)
-        val archive = tmp.newFile("gigaam-progress.tar.bz2")
-        BZip2CompressorOutputStream(archive.outputStream()).use { bz ->
-            TarArchiveOutputStream(bz).use { tar ->
-                fun put(name: String, bytes: ByteArray) {
-                    val e = TarArchiveEntry(name)
-                    e.size = bytes.size.toLong()
-                    tar.putArchiveEntry(e)
-                    tar.write(bytes)
-                    tar.closeArchiveEntry()
-                }
-                put("top/model.int8.onnx", onnxBytes)
-                put("top/tokens.txt", "t".toByteArray())
-            }
-        }
-        val m = managerWith(filesDir, clientFor(archive, "vad-bytes".toByteArray()))
-
-        val unpackTicks = mutableListOf<Int>()
-        val result = m.download { phase, pct ->
-            if (phase == GigaAmModelManager.Phase.UNPACK) unpackTicks += pct
-        }
-
-        assertTrue(result.isSuccess)
+        val unpackTicks = ticks.filter { it.first == GigaAmModelManager.Phase.UNPACK }.map { it.second }
         assertTrue("unpack must tick more than once", unpackTicks.distinct().size > 1)
         assertEquals(98, unpackTicks.last())
-    }
 
-    @Test
-    fun `untarFlatten reports monotonic progress ending at 100`() = runBlocking {
-        val target = tmp.newFolder("target3")
-        val onnxBytes = kotlin.random.Random(11).nextBytes(1_000_000)
-        val archive = tmp.newFile("gigaam-untar.tar.bz2")
-        BZip2CompressorOutputStream(archive.outputStream()).use { bz ->
-            TarArchiveOutputStream(bz).use { tar ->
-                val e = TarArchiveEntry("top/model.int8.onnx")
-                e.size = onnxBytes.size.toLong()
-                tar.putArchiveEntry(e)
-                tar.write(onnxBytes)
-                tar.closeArchiveEntry()
-            }
-        }
-        val ticks = mutableListOf<Int>()
-        manager(tmp.newFolder("files18")).untarFlatten(archive, target) { ticks += it }
+        // untarFlatten on its own over the same archive.
+        val untarTicks = mutableListOf<Int>()
+        manager(tmp.newFolder("files18")).untarFlatten(archive, tmp.newFolder("target3")) { untarTicks += it }
 
-        assertTrue(ticks.isNotEmpty())
-        assertEquals(ticks, ticks.sorted())
-        assertTrue("progress must never exceed 100", ticks.all { it in 0..100 })
-        assertEquals(100, ticks.last())
+        assertTrue(untarTicks.isNotEmpty())
+        assertEquals(untarTicks, untarTicks.sorted())
+        assertTrue("progress must never exceed 100", untarTicks.all { it in 0..100 })
+        assertEquals(100, untarTicks.last())
     }
 
     // --- Storage precheck: fail early and explicitly, not mid-unpack ---

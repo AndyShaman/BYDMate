@@ -1,48 +1,37 @@
 package com.bydmate.app.voice
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
 
 /**
  * Every row of the Russian golden corpus: a row marked `danger` must never open any
  * window or the sunroof wider than its expectation (or at all when the expectation is
  * UNRECOGNIZED), and no row may open wider than the share its utterance names.
- * Accuracy over the whole corpus lives in [RuCommandGoldenAccuracyTest].
+ * Accuracy over the whole corpus: `overall_accuracy_does_not_regress` below.
  */
-@RunWith(Parameterized::class)
-class RuCommandGoldenTest(private val row: RuGoldenCorpus.Row) {
-
-    companion object {
-        @JvmStatic
-        @Parameterized.Parameters(name = "{index}: {0}")
-        fun rows(): List<RuGoldenCorpus.Row> = RuGoldenCorpus.load()
-    }
-
-    @Test fun never_opens_more_than_asked() {
-        val actual = RuGoldenCorpus.actual(row)
-        println("[golden] ${row.category} | ${row.utterance} => $actual (want ${row.expected})")
-        if (row.danger) {
-            assertFalse(
-                "\"${row.utterance}\" => $actual opens more than ${row.expected}",
-                RuGoldenCorpus.doesMoreThanExpected(row.expected, actual),
-            )
-        }
-        assertFalse(
-            "\"${row.utterance}\" => $actual opens wider than it says",
-            RuGoldenCorpus.opensWiderThanSpoken(row.utterance, actual),
-        )
-    }
-}
-
 class RuCommandGoldenAccuracyTest {
 
     /** Accuracy the parser reached when the corpus was pinned (baseline before the
      *  Russian wave: 55.7 %, 146/262). Raise it with the corpus, never lower it. */
     private val minOverallAccuracy = 1.0
+
+    @Test fun never_opens_more_than_asked() {
+        val rows = RuGoldenCorpus.load()
+        // The corpus has 681 rows today; a truncated data file must not pass silently.
+        assertTrue("corpus has only ${rows.size} rows", rows.size >= 681)
+        val failures = mutableListOf<String>()
+        rows.forEach { row ->
+            val actual = RuGoldenCorpus.actual(row)
+            if (row.danger && RuGoldenCorpus.doesMoreThanExpected(row.expected, actual)) {
+                failures += "\"${row.utterance}\" => $actual opens more than ${row.expected}"
+            }
+            if (RuGoldenCorpus.opensWiderThanSpoken(row.utterance, actual)) {
+                failures += "\"${row.utterance}\" => $actual opens wider than it says"
+            }
+        }
+        assertTrue("${failures.size} failing rows:\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
 
     @Test fun corpus_is_big_and_covers_every_category() {
         val rows = RuGoldenCorpus.load()
@@ -69,7 +58,7 @@ class RuCommandGoldenAccuracyTest {
 
     /** Every row naming a share must give [RuGoldenCorpus.spokenShare] a non-null answer, so a
      *  gap in the oracle (a filler in the way, an unhandled word) fails loudly here instead of
-     *  silently passing [RuCommandGoldenTest] by never checking the aperture at all. */
+     *  silently passing [never_opens_more_than_asked] by never checking the aperture at all. */
     @Test fun spoken_share_oracle_has_no_blind_spots() {
         // Words checked whole (not by substring), so "третье"/"третью" does not falsely
         // trigger on "треть"; "процент" alone stands for its three inflected forms.

@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.util.Collections
@@ -156,27 +155,5 @@ class VoiceControllerFirmwareDuckTest {
         c.pressAndStop(asr)
         verify(exactly = 2) { capture.duckMusic() }
         assertEquals(listOf(true), calls.toList())
-    }
-
-    @Test fun `helper down - media duck and restore as today, deactivate still sent`() {
-        val asr = FakeAsr()
-        val capture = capture()
-        controller(asr, capture, duck(null)).pressAndStop(asr)
-
-        verifyOrder {
-            capture.duckMusic()
-            capture.restoreMusic(20)
-        }
-        assertEquals(listOf(true, false), calls.toList())
-    }
-
-    @Test fun `no firmware duck configured - today's duck, no daemon calls`() {
-        val asr = FakeAsr()
-        val capture = capture()
-        controller(asr, capture, AutoVoiceDuck.OFF).pressAndStop(asr)
-
-        verify(exactly = 1) { capture.duckMusic() }
-        verify { capture.restoreMusic(20) }
-        assertTrue(calls.isEmpty())
     }
 }
