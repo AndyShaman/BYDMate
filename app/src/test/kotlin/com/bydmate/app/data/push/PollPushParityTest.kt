@@ -11,6 +11,7 @@ import com.bydmate.app.data.nativestack.kindMonitor
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.HelperClient
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -36,25 +37,30 @@ class PollPushParityTest {
     private fun anchorFor(field: String): Map<String, Number> =
         if (field == "mileage") mapOf("soc" to 50.0f) else mapOf("mileage" to 1000)
 
-    /** The poll snapshot when exactly [answers] (field to raw sample) answer, nothing else. */
-    private suspend fun poll(answers: Map<String, Number>): DiParsData {
-        val byAddress = mutableMapOf<Pair<Int, Int>, Number>()
-        for ((field, raw) in answers) {
-            val a = FidAddresses.of(field)
-            byAddress[a.device to a.fid] = raw
-        }
-        val auto = mockk<AutoserviceClient>()
+    // One set of mocks for the whole class, with the recorded calls dropped after every poll:
+    // thousands of polls on fresh mocks keep enough call history to run the suite out of heap.
+    private val byAddress = mutableMapOf<Pair<Int, Int>, Number>()
+    private val auto = mockk<AutoserviceClient>().also { auto ->
         coEvery { auto.isAvailable() } returns true
         coEvery { auto.getInt(any(), any()) } coAnswers { byAddress[firstArg<Int>() to secondArg<Int>()] as? Int }
         coEvery { auto.getIntRaw(any(), any()) } coAnswers { byAddress[firstArg<Int>() to secondArg<Int>()] as? Int }
         coEvery { auto.getFloat(any(), any()) } coAnswers { byAddress[firstArg<Int>() to secondArg<Int>()] as? Float }
-        val settings = mockk<SettingsRepository>()
-        coEvery { settings.getBatteryCapacity() } returns 72.9
-        val gate = mockk<BatchReadGate>()
-        coEvery { gate.mode() } returns BatchMode.OFF
+    }
+    private val settings = mockk<SettingsRepository>().also { coEvery { it.getBatteryCapacity() } returns 72.9 }
+    private val gate = mockk<BatchReadGate>().also { coEvery { it.mode() } returns BatchMode.OFF }
+    private val helper = mockk<HelperClient>()
+
+    /** The poll snapshot when exactly [answers] (field to raw sample) answer, nothing else. */
+    private suspend fun poll(answers: Map<String, Number>): DiParsData {
+        byAddress.clear()
+        for ((field, raw) in answers) {
+            val a = FidAddresses.of(field)
+            byAddress[a.device to a.fid] = raw
+        }
         // A fresh reader per poll: driveMode is held between polls, which would leak samples.
-        val reader = NativeParsReader(auto, settings, mockk<HelperClient>(), gate, kindMonitor())
+        val reader = NativeParsReader(auto, settings, helper, gate, kindMonitor())
         return checkNotNull(reader.fetch()) { "fetch() returned null for $answers" }
+            .also { clearMocks(auto, settings, gate, helper, answers = false) }
     }
 
     private fun samplesOf(entry: FidEntry): List<Number> =
