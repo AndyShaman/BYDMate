@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -18,6 +19,31 @@ class EnergyDataLivenessStoreTest {
         ApplicationProvider.getApplicationContext<Context>()
             .getSharedPreferences("energydata_liveness_test", Context.MODE_PRIVATE)
     )
+
+    @Test
+    fun `fresh store is alive with zero streak and no fingerprint`() {
+        val s = store()
+        assertFalse(s.isDead())
+        assertEquals(0, s.streak())
+        assertFalse(s.pendingDriving())
+        assertNull(s.fingerprint())
+        assertEquals(0L, s.lastIncrementTs())
+    }
+
+    @Test
+    fun `round-trips all fields`() {
+        val s = store()
+        s.setDead()
+        s.setStreak(2)
+        s.setPendingDriving(true)
+        s.setFingerprint(111L, 222L)
+        s.setLastIncrementTs(333L)
+        assertTrue(s.isDead())
+        assertEquals(2, s.streak())
+        assertTrue(s.pendingDriving())
+        assertEquals(111L to 222L, s.fingerprint())
+        assertEquals(333L, s.lastIncrementTs())
+    }
 
     @Test
     fun `schema version mismatch discards everything`() {
