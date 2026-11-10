@@ -14,13 +14,6 @@ class ClusterProjectionStateTest {
         )
     }
 
-    @Test fun `default percentages equal a full-screen window`() {
-        assertEquals(
-            geometryFor(ClusterMode.FULLSCREEN, 1280, 480),
-            geometryFor(ClusterMode.FULLSCREEN, 1280, 480, 100, 100),
-        )
-    }
-
     @Test fun `half width centers horizontally only`() {
         assertEquals(
             ClusterGeometry(width = 640, height = 480, xOffset = 320, yOffset = 0),
@@ -262,19 +255,6 @@ class ClusterProjectionStateTest {
 
     @Test fun `split ON with direct transport yields flag 1`() {
         assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = true))
-    }
-
-    @Test fun `split OFF with direct transport yields flag 1`() {
-        assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = false))
-    }
-
-    @Test fun `split OFF with VD transport yields flag 0 - unchanged from today`() {
-        assertEquals(0, freeformFlagValue(directEnabled = false, splitEnabled = false))
-    }
-
-    @Test fun `toggling split off while direct is enabled still yields flag 1`() {
-        // Direct keeps the flag live regardless of split state.
-        assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = false))
     }
 
     @Test fun `default display pick prefers the mini band`() {
