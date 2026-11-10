@@ -81,9 +81,6 @@ data class TripsUiState(
     val totalKwh: Double = 0.0,
     val avgConsumption: Double = 0.0,
     val totalCost: Double = 0.0,
-    val periodLabel: String = "",
-    val expandedTripId: Long? = null,
-    val expandedTripPoints: List<TripPointEntity> = emptyList(),
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
     val vehicleKind: VehicleKind = VehicleKind.UNKNOWN,
 )
@@ -115,15 +112,6 @@ class TripsViewModel @Inject constructor(
     fun setPeriod(period: TripPeriod) {
         _uiState.update { it.copy(period = period) }
         loadTrips()
-    }
-
-    @Suppress("UNUSED_PARAMETER")
-    fun setPeriod(period: Period) {
-        // Legacy compat
-        setPeriod(when (period) {
-            Period.WEEK -> TripPeriod.WEEK
-            Period.MONTH -> TripPeriod.MONTH
-        })
     }
 
     fun setFilter(filter: TripFilter) {
@@ -197,10 +185,6 @@ class TripsViewModel @Inject constructor(
 
     fun selectBar(index: Int?) {
         _uiState.update { it.copy(selectedBarIndex = index) }
-    }
-
-    fun toggleTripExpansion(tripId: Long) {
-        // Legacy compat
     }
 
     private fun loadTrips() {
@@ -401,6 +385,3 @@ fun emptyTripsStringRes(period: TripPeriod, hasTripsBeforeFilter: Boolean): Int 
         TripPeriod.MONTH, TripPeriod.YEAR, TripPeriod.ALL -> R.string.trips_empty
     }
 }
-
-// Legacy enum for backward compatibility
-enum class Period { WEEK, MONTH }
