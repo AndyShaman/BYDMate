@@ -1476,9 +1476,7 @@ class TrackingService : Service(), LocationListener {
         shutdownScope.launch {
             try {
                 withTimeout(4000L) {
-                    val lastData = _lastData.value
-                    val lastLoc = _lastLocation.value
-                    tripTracker.forceEnd(lastData, lastLoc)
+                    tripTracker.forceEnd()
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Graceful shutdown: ${e.message}")
