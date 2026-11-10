@@ -55,8 +55,6 @@ class BlindSpotPositionOverlay {
 
     private var removeAttempts = 0
 
-    val isShown: Boolean get() = view != null
-
     /**
      * True when the window is up; false when WindowManager refused it, or when the previous
      * window is still on screen — [hide] can leave one behind for its retry loop, and re-pointing
