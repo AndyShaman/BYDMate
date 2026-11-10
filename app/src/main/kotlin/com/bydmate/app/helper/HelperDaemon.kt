@@ -2007,6 +2007,10 @@ internal fun split37MoveTaskCore(
     return HelperBinderProtocol.SPLIT37_OK
 }
 
+private fun logPushContext(ctx: Context?) {
+    android.util.Log.i("FidPush", "system context for device classes: ${if (ctx != null) "ok" else "MISSING"}")
+}
+
 /**
  * Acquires a system Context via ActivityThread, exactly as OpenBYD's EntryPoint does.
  * Returns null on failure — read paths that need it degrade to an error status rather
@@ -2015,10 +2019,6 @@ internal fun split37MoveTaskCore(
  * Reflection (no HiddenApiBypass): the daemon runs under app_process, where hidden-API
  * enforcement is inactive.
  */
-private fun logPushContext(ctx: Context?) {
-    android.util.Log.i("FidPush", "system context for device classes: ${if (ctx != null) "ok" else "MISSING"}")
-}
-
 private fun acquireSystemContext(): Context? = try {
     val atCls = Class.forName("android.app.ActivityThread")
     val activityThread = atCls.getMethod("systemMain").invoke(null)
