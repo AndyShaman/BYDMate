@@ -143,7 +143,11 @@ internal object RuleImportSummary {
         zone: ZoneId = ZoneId.systemDefault(),
     ): String {
         val lc = context.appLocalizedContext()
-        if (trigger.kind == OneShotTrigger.KIND) return oneShotTrigger(trigger, lc, now, zone)
+        if (trigger.kind == OneShotTrigger.KIND) {
+            // «завтра в 08:00, один раз», as the rule card words it; an unreadable moment as written.
+            val at = OneShotTrigger.momentMs(trigger.value, zone) ?: return trigger.value
+            return lc.getString(R.string.auto_ui_phrase_once, whenText(at, lc, now, zone))
+        }
         val typeRes = TRIGGER_TYPE_LABELS[trigger.kind] ?: return paramTrigger(trigger, lc)
         val value = triggerValue(trigger, lc)
         return if (value.isNullOrBlank()) lc.getString(typeRes) else "${lc.getString(typeRes)}: $value"
@@ -171,12 +175,6 @@ internal object RuleImportSummary {
     private fun steeringKeyValue(trigger: TriggerDef, lc: Context): String =
         trigger.value.toIntOrNull()?.takeIf { it > 0 }?.let { steeringKeyLabel(lc, it) }
             ?: lc.getString(R.string.automation_trigger_steering_key_unassigned)
-
-    /** «завтра в 08:00, один раз», as the rule card words it; an unreadable moment as written. */
-    private fun oneShotTrigger(trigger: TriggerDef, lc: Context, now: Long, zone: ZoneId): String {
-        val at = OneShotTrigger.momentMs(trigger.value, zone) ?: return trigger.value
-        return lc.getString(R.string.auto_ui_phrase_once, whenText(at, lc, now, zone))
-    }
 
     private fun paramTrigger(trigger: TriggerDef, lc: Context): String {
         val option = TRIGGER_PARAMS.find { it.param == trigger.param }
