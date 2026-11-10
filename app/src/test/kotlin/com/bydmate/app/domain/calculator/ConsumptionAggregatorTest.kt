@@ -76,6 +76,11 @@ class ConsumptionAggregatorTest {
         assertEquals(Trend.DOWN, ConsumptionAggregator.state.value.trend)
     }
 
+    @Test fun `displayValue independent of recentAvg`() {
+        ConsumptionAggregator.onSample(now = 0, displayValue = 99.9, recentAvg = 18.0, shortAvg = 18.0)
+        assertEquals(99.9, ConsumptionAggregator.state.value.displayValue!!, 0.001)
+    }
+
     @Test fun `reset wipes everything`() {
         ConsumptionAggregator.onSample(now = 0, displayValue = 22.5, recentAvg = 20.0, shortAvg = 17.0)
         ConsumptionAggregator.onSample(now = 35_000, displayValue = 22.5, recentAvg = 20.0, shortAvg = 17.0)

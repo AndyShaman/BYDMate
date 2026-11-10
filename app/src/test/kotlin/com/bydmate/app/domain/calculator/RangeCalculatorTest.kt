@@ -65,6 +65,11 @@ class RangeCalculatorTest {
         assertNull(c.estimateDetailed(null, null))
     }
 
+    @Test fun `estimate delegates to detailed`() = runTest {
+        val c = newCalc()
+        assertEquals(c.estimateDetailed(50, null)!!.rangeKm, c.estimate(50, null)!!, 1e-9)
+    }
+
     // Sentinel / non-finite guard (MAJOR 1): every bad input gives null
     @Test fun `insane soc, capacity or carry returns null`() = runBlocking {
         data class Case(val label: String, val soc: Int, val capacity: Double, val carry: Double)
