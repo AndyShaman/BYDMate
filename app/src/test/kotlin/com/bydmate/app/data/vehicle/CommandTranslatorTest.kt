@@ -19,13 +19,6 @@ class CommandTranslatorTest {
     private fun pairs(cmd: String): Set<Pair<String, Int>> =
         CommandTranslator.resolve(cmd).map { it.actionName to it.value }.toSet()
 
-    // ── Test 1: prefix stripped before lookup ─────────────────────────────────
-    @Test fun `prefix stripped before lookup`() {
-        val r = one("迪加车门上锁")
-        assertEquals("doors_lock", r?.actionName)
-        assertEquals(2, r?.value)
-    }
-
     // ── Test 2: unknown command returns empty list ────────────────────────────
     @Test fun `unknown command returns empty list`() {
         assertTrue(CommandTranslator.resolve("不存在的命令").isEmpty())
@@ -69,19 +62,87 @@ class CommandTranslatorTest {
         )
     }
 
-    @Test fun `steering heat commands map to the dev 1023 pair`() {
-        assertEquals(CommandTranslator.Resolved("steering_heat_on", 2), one("方向盘加热"))
-        assertEquals(CommandTranslator.Resolved("steering_heat_off", 1), one("关闭方向盘加热"))
-    }
+    // ── Single commands: one row per string users' saved automations store ──
+    // (command, expected action, expected value; null = only the action is pinned).
+    // One command must resolve to exactly one write.
+    private val singleCommands: List<Triple<String, String, Int?>> = listOf(
+        Triple("迪加车门上锁", "doors_lock", 2), // prefix stripped before lookup
+        Triple("车门解锁", "doors_unlock", 1), // no prefix resolves directly
+        Triple("方向盘加热", "steering_heat_on", 2), // dev 1023 pair
+        Triple("关闭方向盘加热", "steering_heat_off", 1),
+        Triple("打开抬头显示", "hud_on", 1),
+        Triple("关闭抬头显示", "hud_off", 2),
+        Triple("打开电池预热", "battery_preheat_on", 1), // stock toggle values
+        Triple("关闭电池预热", "battery_preheat_off", 2),
+        Triple("ECO模式", "drive_mode_eco", 2), // the old D+ ECO string, with or without its prefix
+        Triple("迪加ECO模式", "drive_mode_eco", 2),
+        Triple("天窗打开50", "sunroof_tilt", 3),
+        Triple("内循环", "ac_cycle_inner", 1),
+        // Windows: open / close use the dedicated fids, not 100% / 0%
+        Triple("主驾打开100", "window_driver_open", 1),
+        Triple("主驾打开0", "window_driver_close", 2),
+        Triple("副驾打开100", "window_passenger_open", 1),
+        Triple("后左打开100", "window_rear_left_open", 1),
+        Triple("后右打开0", "window_rear_right_close", 2),
+        // Windows: an aperture that is not full open / full close stays on the % path
+        Triple("主驾通风", "window_driver_pos", 10),
+        Triple("主驾半开", "window_driver_pos", 50),
+        // Window position: any per-door percentage (level row, step 10); 0 and 100 stay
+        // on the dedicated close and open fids
+        Triple("主驾打开30", "window_driver_pos", 30),
+        Triple("后右打开70", "window_rear_right_pos", 70),
+        Triple("副驾打开10", "window_passenger_pos", 10),
+        Triple("后左打开90", "window_rear_left_pos", 90),
+        Triple("主驾打开0", "window_driver_close", 2),
+        Triple("主驾打开100", "window_driver_open", 1),
+        // Interior / ambient light (candidate, dev=1023 carve-out); ambient off must
+        // write raw 1 (level 0), not 0 (level -1, no effect)
+        Triple("打开车内灯", "interior_light_on", 2),
+        Triple("关闭车内灯", "interior_light_off", 1),
+        Triple("氛围灯打开", "ambient_light_on", null),
+        Triple("氛围灯关闭", "ambient_light_off", 1),
+        // DRL (ДХО), dev=1004 carve-out, validated 2026-05-29
+        Triple("打开日行灯", "drl_on", 1),
+        Triple("关闭日行灯", "drl_off", 2),
+        // Rear logo light, dev=1004 carve-out (#383)
+        Triple("后车标灯打开", "rear_logo_light_on", 1),
+        Triple("后车标灯关闭", "rear_logo_light_off", 2),
+        // Mirror heat = rear defrost (one button on Leopard 3), validated 2026-05-29
+        Triple("后视镜加热", "defrost_rear_on", 1),
+        Triple("关闭后视镜加热", "defrost_rear_off", 0),
+        // ac_power fid 501219364: 0=off, 1=on (live-validated 2026-07-03)
+        Triple("自动空调", "ac_on", 1),
+        // Temperature: dynamic parse over full 16..33 range
+        Triple("设置温度22", "ac_temp_main", 22),
+        Triple("设置温度24", "ac_temp_main", 24),
+        Triple("设置温度16", "ac_temp_main", 16),
+        Triple("设置温度33", "ac_temp_main", 33),
+        // Fan speed: dynamic 风量<N> → ac_wind_level (#201)
+        Triple("风量4", "ac_wind_level", 4),
+        // Blow direction: static 吹面/吹脚/除霜 family → ac_wind_mode values 1 to 5 (#201)
+        Triple("吹面", "ac_wind_mode", 1),
+        Triple("吹面吹脚", "ac_wind_mode", 2),
+        Triple("吹脚", "ac_wind_mode", 3),
+        Triple("吹脚除霜", "ac_wind_mode", 4),
+        Triple("除霜", "ac_wind_mode", 5),
+        // 吹前挡 drives defrost_front_on on a different fid: the 除霜 entry must not shadow it
+        Triple("吹前挡", "defrost_front_on", null),
+        // Trunk and front trunk: dev=1001, open=1 close=3
+        Triple("开后备箱", "open_trunk", 1),
+        Triple("关后备箱", "close_trunk", 3),
+        Triple("前备箱打开", "front_trunk_open", 1),
+        Triple("前备箱关闭", "front_trunk_close", 3),
+        // Fridge: dev=1023 carve-out; mode 1/2/3
+        Triple("冰箱制冷", "fridge_mode", 1),
+        Triple("冰箱关闭", "fridge_mode", 3),
+    )
 
-    @Test fun `hud commands map to the switch values`() {
-        assertEquals(CommandTranslator.Resolved("hud_on", 1), one("打开抬头显示"))
-        assertEquals(CommandTranslator.Resolved("hud_off", 2), one("关闭抬头显示"))
-    }
-
-    @Test fun `battery preheat commands map to the stock toggle values`() {
-        assertEquals(CommandTranslator.Resolved("battery_preheat_on", 1), one("打开电池预热"))
-        assertEquals(CommandTranslator.Resolved("battery_preheat_off", 2), one("关闭电池预热"))
+    @Test fun `single commands map to their action and value`() {
+        for ((cmd, action, value) in singleCommands) {
+            val r = one(cmd)
+            assertEquals("action for $cmd", action, r?.actionName)
+            if (value != null) assertEquals("value for $cmd", value, r?.value)
+        }
     }
 
     @Test fun `drive mode commands map to their dev 1023 values`() {
@@ -100,77 +161,6 @@ class CommandTranslatorTest {
             assertEquals(cmd, CommandTranslator.Resolved(pair.first, pair.second), one(cmd))
             assertEquals(cmd, pair.second, DriveMode.ofAction(pair.first)?.value)
         }
-    }
-
-    @Test fun `the old D+ ECO string still resolves, with or without its prefix`() {
-        assertEquals(CommandTranslator.Resolved("drive_mode_eco", 2), one("ECO模式"))
-        assertEquals(CommandTranslator.Resolved("drive_mode_eco", 2), one("迪加ECO模式"))
-    }
-
-    // ── Test 4: set temperature 22 maps to ac_temp_main val 22 ───────────────
-    @Test fun `set temperature 22 maps to ac_temp_main val 22`() {
-        val r = one("设置温度22")
-        assertEquals("ac_temp_main", r?.actionName)
-        assertEquals(22, r?.value)
-    }
-
-    // ── Test 5: command without prefix resolves directly ──────────────────────
-    @Test fun `command without prefix resolves directly`() {
-        val r = one("车门解锁")
-        assertEquals("doors_unlock", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    // ── Test 9: sunroof 50 maps to sunroof_tilt val=3 ────────────────────────
-    @Test fun `sunroof 50 maps to sunroof_tilt val 3`() {
-        val r = one("天窗打开50")
-        assertEquals("sunroof_tilt", r?.actionName)
-        assertEquals(3, r?.value)
-    }
-
-    // ── Test 10: inner circulation maps to ac_cycle_inner val=1 ──────────────
-    @Test fun `inner circulation maps to ac_cycle_inner val 1`() {
-        val r = one("内循环")
-        assertEquals("ac_cycle_inner", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    // ── Windows: open / close use the dedicated fids, not 100% / 0% ───────────
-    @Test fun `driver open maps to window_driver_open val 1`() {
-        val r = one("主驾打开100")
-        assertEquals("window_driver_open", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `driver close maps to window_driver_close val 2`() {
-        val r = one("主驾打开0")
-        assertEquals("window_driver_close", r?.actionName)
-        assertEquals(2, r?.value)
-    }
-
-    @Test fun `passenger open maps to window_passenger_open val 1`() {
-        val r = one("副驾打开100")
-        assertEquals("window_passenger_open", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `rear-left open maps to window_rear_left_open val 1`() {
-        val r = one("后左打开100")
-        assertEquals("window_rear_left_open", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `rear-right close maps to window_rear_right_close val 2`() {
-        val r = one("后右打开0")
-        assertEquals("window_rear_right_close", r?.actionName)
-        assertEquals(2, r?.value)
-    }
-
-    // ── Windows: an aperture that is not full open / full close stays on the % path ──
-    @Test fun `driver vent stays on window_driver_pos`() {
-        val r = one("主驾通风")
-        assertEquals("window_driver_pos", r?.actionName)
-        assertEquals(10, r?.value)
     }
 
     // ── Rear windows (aggregate) — fan-out to both open/close fids ────────────
@@ -254,13 +244,6 @@ class CommandTranslatorTest {
         )
     }
 
-    // ── Per-window half and the front/rear pair apertures — same % path ───────
-    @Test fun `driver window half maps to driver pos fid at 50`() {
-        val r = one("主驾半开")
-        assertEquals("window_driver_pos", r?.actionName)
-        assertEquals(50, r?.value)
-    }
-
     @Test fun `front pair half and vent fan out to the two front pos fids`() {
         assertEquals(
             setOf("window_driver_pos" to 50, "window_passenger_pos" to 50),
@@ -281,81 +264,6 @@ class CommandTranslatorTest {
             setOf("window_rear_left_pos" to 10, "window_rear_right_pos" to 10),
             pairs("后排车窗通风"),
         )
-    }
-
-    // ── Interior / ambient light (candidate, dev=1023 carve-out) ──────────────
-    @Test fun `open interior light maps to interior_light_on`() {
-        val r = one("打开车内灯")
-        assertEquals("interior_light_on", r?.actionName)
-        assertEquals(2, r?.value)
-    }
-
-    @Test fun `close interior light maps to interior_light_off`() {
-        val r = one("关闭车内灯")
-        assertEquals("interior_light_off", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `open ambient light maps to ambient_light_on`() {
-        val r = one("氛围灯打开")
-        assertEquals("ambient_light_on", r?.actionName)
-    }
-
-    @Test fun `close ambient light maps to ambient_light_off`() {
-        val r = one("氛围灯关闭")
-        assertEquals("ambient_light_off", r?.actionName)
-    }
-
-    // ── Ambient off must write raw 1 (level 0), not 0 (level -1, no effect) ───
-    @Test fun `close ambient light writes value 1 not 0`() {
-        val r = one("氛围灯关闭")
-        assertEquals(1, r?.value)
-    }
-
-    // ── DRL (ДХО) — dev=1004 carve-out, validated 2026-05-29 ──────────────────
-    @Test fun `open drl maps to drl_on val 1`() {
-        val r = one("打开日行灯")
-        assertEquals("drl_on", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `close drl maps to drl_off val 2`() {
-        val r = one("关闭日行灯")
-        assertEquals("drl_off", r?.actionName)
-        assertEquals(2, r?.value)
-    }
-
-    // ── Rear logo light, dev=1004 carve-out (#383) ────────────────────────────
-    @Test fun `rear logo light on maps to rear_logo_light_on val 1`() {
-        val r = one("后车标灯打开")
-        assertEquals("rear_logo_light_on", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `rear logo light off maps to rear_logo_light_off val 2`() {
-        val r = one("后车标灯关闭")
-        assertEquals("rear_logo_light_off", r?.actionName)
-        assertEquals(2, r?.value)
-    }
-
-    // ── Mirror heat = rear defrost (one button on Leopard 3), validated 2026-05-29 ──
-    @Test fun `mirror heat on maps to defrost_rear_on val 1`() {
-        val r = one("后视镜加热")
-        assertEquals("defrost_rear_on", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `mirror heat off maps to defrost_rear_off val 0`() {
-        val r = one("关闭后视镜加热")
-        assertEquals("defrost_rear_off", r?.actionName)
-        assertEquals(0, r?.value)
-    }
-
-    // ── ac_power fid 501219364: 0=off, 1=on (live-validated 2026-07-03) ────────
-    @Test fun `auto AC maps to ac_on val 1`() {
-        val r = one("自动空调")
-        assertEquals("ac_on", r?.actionName)
-        assertEquals(1, r?.value)
     }
 
     @Test fun `ac power semantics - off sends 0, on sends 1 on fid 501219364`() {
@@ -379,49 +287,11 @@ class CommandTranslatorTest {
         assertTrue(onEntry.validated)
     }
 
-    // ── Temperature: dynamic parse over full 16..33 range ────────────────────
-    @Test fun `set temperature 24 maps to ac_temp_main val 24`() {
-        val r = one("设置温度24")
-        assertEquals("ac_temp_main", r?.actionName)
-        assertEquals(24, r?.value)
-    }
-
-    @Test fun `set temperature 16 maps to ac_temp_main val 16`() {
-        val r = one("设置温度16")
-        assertEquals("ac_temp_main", r?.actionName)
-        assertEquals(16, r?.value)
-    }
-
-    @Test fun `set temperature 33 maps to ac_temp_main val 33`() {
-        val r = one("设置温度33")
-        assertEquals("ac_temp_main", r?.actionName)
-        assertEquals(33, r?.value)
-    }
-
     // Out-of-range request clamps into the validated 16..33 window.
     @Test fun `set temperature 35 clamps to ac_temp_main val 33`() {
         val r = one("设置温度35")
         assertEquals("ac_temp_main", r?.actionName)
         assertEquals(33, r?.value)
-    }
-
-    // ── Window position: any per-door percentage (level row, step 10) ─────────
-    @Test fun `driver open 30 maps to window_driver_pos 30`() {
-        assertEquals(setOf("window_driver_pos" to 30), pairs("主驾打开30"))
-    }
-
-    @Test fun `rear-right open 70 maps to window_rear_right_pos 70`() {
-        assertEquals(setOf("window_rear_right_pos" to 70), pairs("后右打开70"))
-    }
-
-    @Test fun `passenger and rear-left percentages map to their pos fids`() {
-        assertEquals(setOf("window_passenger_pos" to 10), pairs("副驾打开10"))
-        assertEquals(setOf("window_rear_left_pos" to 90), pairs("后左打开90"))
-    }
-
-    @Test fun `driver open 0 and 100 stay on the dedicated close and open fids`() {
-        assertEquals(setOf("window_driver_close" to 2), pairs("主驾打开0"))
-        assertEquals(setOf("window_driver_open" to 1), pairs("主驾打开100"))
     }
 
     // Only the canonical 1..99 forms resolve dynamically: anything else is an unknown command,
@@ -448,13 +318,6 @@ class CommandTranslatorTest {
         assertEquals(16, r?.value)
     }
 
-    // ── Fan speed ── dynamic 风量<N> → ac_wind_level, clamped to 1..7 (#201) ──
-    @Test fun `fan level 4 maps to ac_wind_level val 4`() {
-        val r = one("风量4")
-        assertEquals("ac_wind_level", r?.actionName)
-        assertEquals(4, r?.value)
-    }
-
     @Test fun `fan level 9 clamps to ac_wind_level val 7`() {
         val r = one("风量9")
         assertEquals("ac_wind_level", r?.actionName)
@@ -465,62 +328,6 @@ class CommandTranslatorTest {
         val r = one("风量0")
         assertEquals("ac_wind_level", r?.actionName)
         assertEquals(1, r?.value)
-    }
-
-    // ── Blow direction ── static 吹面/吹脚/除霜 family → ac_wind_mode (#201) ──
-    @Test fun `blow direction commands map to ac_wind_mode values 1 to 5`() {
-        val expected = listOf("吹面" to 1, "吹面吹脚" to 2, "吹脚" to 3, "吹脚除霜" to 4, "除霜" to 5)
-        expected.forEach { (command, value) ->
-            val r = one(command)
-            assertEquals("action for $command", "ac_wind_mode", r?.actionName)
-            assertEquals("value for $command", value, r?.value)
-        }
-    }
-
-    // 吹前挡 drives defrost_front_on on a different fid — the new 除霜 entry must not
-    // have shadowed it.
-    @Test fun `windshield defrost command still maps to defrost_front_on`() {
-        val r = one("吹前挡")
-        assertEquals("defrost_front_on", r?.actionName)
-    }
-
-    // ── Trunk ── competitor-actions.json (dev=1001, open=1 close=3) ──────────
-    @Test fun `open trunk maps to open_trunk val 1`() {
-        val r = one("开后备箱")
-        assertEquals("open_trunk", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `close trunk maps to close_trunk val 3`() {
-        val r = one("关后备箱")
-        assertEquals("close_trunk", r?.actionName)
-        assertEquals(3, r?.value)
-    }
-
-    // ── Front trunk (frunk) ── dev=1001, open=1 close=3 ──────────────────────
-    @Test fun `front trunk open maps to front_trunk_open val 1`() {
-        val r = one("前备箱打开")
-        assertEquals("front_trunk_open", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `front trunk close maps to front_trunk_close val 3`() {
-        val r = one("前备箱关闭")
-        assertEquals("front_trunk_close", r?.actionName)
-        assertEquals(3, r?.value)
-    }
-
-    // ── Fridge ── dev=1023 carve-out; mode 1/2/3, temp mode-dependent raw ────
-    @Test fun `fridge cool mode maps to fridge_mode val 1`() {
-        val r = one("冰箱制冷")
-        assertEquals("fridge_mode", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
-    @Test fun `fridge off maps to fridge_mode val 3`() {
-        val r = one("冰箱关闭")
-        assertEquals("fridge_mode", r?.actionName)
-        assertEquals(3, r?.value)
     }
 
     @Test fun `fridge cool 0C fans out to mode 1 plus temp raw 19`() {

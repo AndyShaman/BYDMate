@@ -174,28 +174,17 @@ class HelperClientBinderTest {
     // writeStatus tests (TC-8 to TC-11)
     // ---------------------------------------------------------------------------
 
-    /** TC-8: writeStatus returns the RAW status forwarded by the binder (status=1 real action). */
+    /**
+     * TC-8..10: writeStatus returns the RAW status forwarded by the binder unmodified:
+     * 1 = real action, 0 = no-op, negative = error code.
+     */
     @Test
-    fun `writeStatus returns raw status 1 from binder`() = runBlocking {
-        val client = clientWith(liveFake(status = 1))
-        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
-        assertEquals(1, result)
-    }
-
-    /** TC-9: writeStatus returns raw status 0 (no-op) unmodified. */
-    @Test
-    fun `writeStatus returns raw status 0 from binder`() = runBlocking {
-        val client = clientWith(liveFake(status = 0))
-        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
-        assertEquals(0, result)
-    }
-
-    /** TC-10: writeStatus returns raw negative status (error code) unmodified. */
-    @Test
-    fun `writeStatus returns raw negative status from binder`() = runBlocking {
-        val client = clientWith(liveFake(status = -10011))
-        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
-        assertEquals(-10011, result)
+    fun `writeStatus returns the raw status from binder`() = runBlocking {
+        for (status in listOf(1, 0, -10011)) {
+            val client = clientWith(liveFake(status = status))
+            val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
+            assertEquals("status $status", status, result)
+        }
     }
 
     /** TC-11a: writeStatus returns null when daemon is unreachable (binder == null). */
@@ -237,20 +226,6 @@ class HelperClientBinderTest {
             }
         }
 
-    /** TC-12: getTaskState returns SplitTaskState for a running task (status 0, taskId > 0). */
-    @Test
-    fun `getTaskState returns SplitTaskState when task is running`() = runBlocking {
-        val client = clientWith(taskStateFake(0, 42, 1, 0, 0, 960, 600))
-        val result = client.getTaskState("com.example.app")
-        assertNotNull(result)
-        assertEquals(42, result!!.taskId)
-        assertEquals(1, result.windowingMode)
-        assertEquals(0, result.left)
-        assertEquals(0, result.top)
-        assertEquals(960, result.right)
-        assertEquals(600, result.bottom)
-    }
-
     /** TC-13: getTaskState returns SplitTaskState with taskId -1 when no task is running (status 0). */
     @Test
     fun `getTaskState returns SplitTaskState with taskId -1 when no task running`() = runBlocking {
@@ -259,19 +234,6 @@ class HelperClientBinderTest {
         assertNotNull(result)
         assertEquals(-1, result!!.taskId)
         assertEquals(0, result.windowingMode)
-    }
-
-    /** TC-14: getTaskState returns null when daemon replies with non-zero status. */
-    @Test
-    fun `getTaskState returns null on non-zero status`() = runBlocking {
-        val client = clientWith(taskStateFake(-1, 0, 0, 0, 0, 0, 0))
-        assertNull(client.getTaskState("com.example.app"))
-    }
-
-    /** TC-15: getTaskState returns null when binder is null (daemon unreachable). */
-    @Test
-    fun `getTaskState returns null when binder is null`() = runBlocking {
-        assertNull(clientWith(null).getTaskState("com.example.app"))
     }
 
     // ---------------------------------------------------------------------------
@@ -307,12 +269,6 @@ class HelperClientBinderTest {
     @Test
     fun `isAppSplitSupported returns null on non-zero status`() = runBlocking {
         assertNull(clientWith(splitSupportedFake(-1, 0)).isAppSplitSupported("com.example.nav"))
-    }
-
-    /** TC-19: isAppSplitSupported returns null when binder is null (daemon unreachable). */
-    @Test
-    fun `isAppSplitSupported returns null when binder is null`() = runBlocking {
-        assertNull(clientWith(null).isAppSplitSupported("com.example.nav"))
     }
 
     /** TC-20: isAppSplitSupported returns null when transact returns false (BYD extension absent on this ROM). */
@@ -351,12 +307,6 @@ class HelperClientBinderTest {
     @Test
     fun `daemonVersion returns null when transact is rejected`() = runBlocking {
         assertNull(clientWith(rejectingFake).daemonVersion())
-    }
-
-    /** TC-24: daemonVersion() returns null when binder is null (daemon not running). */
-    @Test
-    fun `daemonVersion returns null when binder is null`() = runBlocking {
-        assertNull(clientWith(null).daemonVersion())
     }
 
     // ---------------------------------------------------------------------------

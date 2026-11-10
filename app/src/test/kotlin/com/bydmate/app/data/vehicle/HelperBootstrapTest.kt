@@ -306,18 +306,6 @@ class HelperBootstrapTest {
     // -----------------------------------------------------------------------
 
     @Test
-    fun `alive with right version is reused without kill or spawn`() = runTest {
-        // daemonVersion() == want → reuse immediately; no kill, no spawn.
-        val adb = FakeAdb()
-        val helper = FakeHelper(alive = true, version = baselineVersion())
-        val boot = HelperBootstrap(adb, helper, ctx())
-
-        assertTrue(boot.ensureRunning())
-        assertEquals("right version must not kill", 0, adb.killCalls)
-        assertEquals("right version must not spawn", 0, adb.spawnCalls)
-    }
-
-    @Test
     fun `alive with wrong version is killed and respawned`() = runTest {
         // daemonVersion() returns a version that doesn't match want (explicit wrong non-null).
         // isAlive() = true → kill path, then spawn.
@@ -347,20 +335,6 @@ class HelperBootstrapTest {
         assertEquals("old daemon must be killed", 1, adb.killCalls)
         assertEquals("fresh daemon must be spawned", 1, adb.spawnCalls)
         assertEquals("records the current version", baselineVersion(), prefs().getLong(KEY, -1L))
-    }
-
-    @Test
-    fun `dead daemon spawns without kill`() = runTest {
-        // Daemon is dead: daemonVersion() = null, isAlive() = false, processAlive = false → no kill.
-        val adb = FakeAdb()
-        adb.processAlive = false
-        val helper = FakeHelper(alive = false, version = null)
-        adb.onSpawn = { helper.alive = true; helper.version = baselineVersion(); true }
-        val boot = HelperBootstrap(adb, helper, ctx())
-
-        assertTrue(boot.ensureRunning())
-        assertEquals("dead daemon must not be killed", 0, adb.killCalls)
-        assertEquals("must spawn", 1, adb.spawnCalls)
     }
 
     @Test

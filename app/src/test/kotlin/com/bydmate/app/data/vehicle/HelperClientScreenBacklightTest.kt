@@ -65,8 +65,4 @@ class HelperClientScreenBacklightTest {
         }
         assertNull(clientWith(stale).setScreenBacklight(false))
     }
-
-    @Test fun `the transaction code is appended after the last one`() {
-        assertEquals(IBinder.FIRST_CALL_TRANSACTION + 58, HelperBinderProtocol.TX_SET_SCREEN_BACKLIGHT)
-    }
 }

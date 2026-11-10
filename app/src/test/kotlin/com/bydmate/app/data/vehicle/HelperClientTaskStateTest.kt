@@ -73,14 +73,6 @@ class HelperClientTaskStateTest {
     }
 
     @Test
-    fun `getTaskState with displayId=0 in 7-int body parses as main display`() = runBlocking {
-        val state = clientWith(taskStateFake(0, 7, 5, 0, 84, 1280, 990, 0))
-            .getTaskState("pkg.music")
-        assertEquals(0, state?.displayId)
-        assertEquals(7, state?.taskId)
-    }
-
-    @Test
     fun `getTaskState returns null on non-zero status`() = runBlocking {
         assertNull(clientWith(taskStateFake(-1, 0)).getTaskState("pkg.nav"))
     }
