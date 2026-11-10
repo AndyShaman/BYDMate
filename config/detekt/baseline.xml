@@ -5,14 +5,14 @@
     <ID>ComplexCondition:AgentTools.kt$AgentTools$!hasLat || !hasLon || !lat.isFinite() || !lon.isFinite()</ID>
     <ID>ComplexCondition:AgentTools.kt$AgentTools$!la.isFinite() || la !in -90.0..90.0 || !lo.isFinite() || lo !in -180.0..180.0</ID>
     <ID>ComplexCondition:AgentTools.kt$AgentTools$routeEst != null &amp;&amp; routeEst.capacityKwh &gt; 0 &amp;&amp; routeEst.avgKwhPer100 &gt; 0 &amp;&amp; remainingRouteKm != null &amp;&amp; remainingRouteKm &gt; 0</ID>
+    <ID>ComplexCondition:AtmTasks.kt$left == 0 &amp;&amp; top == 0 &amp;&amp; right == 0 &amp;&amp; bottom == 0</ID>
     <ID>ComplexCondition:AutoserviceChargingDetector.kt$AutoserviceChargingDetector$socDelta &lt; MIN_SOC_DELTA_FOR_CHARGE || (socDelta &lt; SOC_DELTA_TRUSTED_CHARGE &amp;&amp; odometerMoved &amp;&amp; !chargePending)</ID>
     <ID>ComplexCondition:EnergyDataDeadDetector.kt$EnergyDataDeadDetector$!sessionPendingMarked &amp;&amp; start != null &amp;&amp; mileage != null &amp;&amp; mileage - start &gt;= MIN_SESSION_KM</ID>
     <ID>ComplexCondition:FloatingWidgetView.kt$km == null || km.isNaN() || km.isInfinite() || km &lt; 0.0</ID>
-    <ID>ComplexCondition:HelperDaemon.kt$(reasserted == null || reasserted.windowingMode != WINDOWING_MODE_FREEFORM) &amp;&amp; reassertAttempt &lt; 6 &amp;&amp; now() + GRACE_POLL_MS &lt;= deadlineMs</ID>
-    <ID>ComplexCondition:HelperDaemon.kt$final != null &amp;&amp; final.displayId == displayId &amp;&amp; final.windowingMode != WINDOWING_MODE_FREEFORM &amp;&amp; now() + GRACE_POLL_MS &lt;= deadlineMs</ID>
-    <ID>ComplexCondition:HelperDaemon.kt$left &lt; 0 || top &lt; 0 || right &lt;= left || bottom &lt;= top</ID>
-    <ID>ComplexCondition:HelperDaemon.kt$left == 0 &amp;&amp; top == 0 &amp;&amp; right == 0 &amp;&amp; bottom == 0</ID>
     <ID>ComplexCondition:InsightsManager.kt$InsightsManager$liveData?.maxCellVoltage != null &amp;&amp; liveData.minCellVoltage != null &amp;&amp; liveSoc != null &amp;&amp; liveSoc in 20..80</ID>
+    <ID>ComplexCondition:LaunchFreeform.kt$(reasserted == null || reasserted.windowingMode != WINDOWING_MODE_FREEFORM) &amp;&amp; reassertAttempt &lt; 6 &amp;&amp; now() + GRACE_POLL_MS &lt;= deadlineMs</ID>
+    <ID>ComplexCondition:LaunchFreeform.kt$final != null &amp;&amp; final.displayId == displayId &amp;&amp; final.windowingMode != WINDOWING_MODE_FREEFORM &amp;&amp; now() + GRACE_POLL_MS &lt;= deadlineMs</ID>
+    <ID>ComplexCondition:LaunchFreeform.kt$left &lt; 0 || top &lt; 0 || right &lt;= left || bottom &lt;= top</ID>
     <ID>ComplexCondition:LocalInsightEngine.kt$LocalInsightEngine$stats.acKwhWeek &gt;= 3.0 * scale &amp;&amp; stats.dcKwhWeek &gt;= 3.0 * scale &amp;&amp; acCost != null &amp;&amp; dcCost != null &amp;&amp; dcCost &gt; acCost * 1.15</ID>
     <ID>ComplexCondition:LocalInsightEngine.kt$LocalInsightEngine$stats.avgExteriorTemp != null &amp;&amp; stats.avgExteriorTemp &lt;= 5 &amp;&amp; changePct != null &amp;&amp; changePct &gt; 3.0</ID>
     <ID>ComplexCondition:LocalInsightEngine.kt$LocalInsightEngine$stats.bestTripCons != null &amp;&amp; stats.bestTripKm != null &amp;&amp; stats.bestTripCons &lt;= 15.0 &amp;&amp; stats.bestTripKm &gt;= 15.0</ID>
@@ -78,9 +78,6 @@
     <ID>CyclomaticComplexMethod:FidResolver.kt$FidResolver$private fun judge(entry: FidEntry, word: Int): Verdict</ID>
     <ID>CyclomaticComplexMethod:FidResolver.kt$FidResolver$suspend fun resolve( entries: List&lt;FidEntry&gt;, catalog: FidCatalog, probe: FidProbe, source: String, ): Outcome</ID>
     <ID>CyclomaticComplexMethod:HelperBootstrap.kt$HelperBootstrap$private suspend fun ensureRunningLocked(): Boolean</ID>
-    <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
-    <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun launchFreeformCore( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, ): Int</ID>
-    <ID>CyclomaticComplexMethod:HelperDaemon.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
     <ID>CyclomaticComplexMethod:HistoryImporter.kt$HistoryImporter$private suspend fun doSync(): ImportResult</ID>
     <ID>CyclomaticComplexMethod:HistoryImporter.kt$HistoryImporter$suspend fun cleanupDuplicates(): Int</ID>
     <ID>CyclomaticComplexMethod:HistoryImporter.kt$HistoryImporter$suspend fun repairImplausibleKwh(): Int</ID>
@@ -88,6 +85,9 @@
     <ID>CyclomaticComplexMethod:InsightsManager.kt$InsightsManager$private suspend fun buildDynamics(lang: String, periodDays: Int = 7): List&lt;DynamicMetric&gt;</ID>
     <ID>CyclomaticComplexMethod:InsightsManager.kt$InsightsManager$suspend fun collectStats(periodDays: Int = 7): InsightStats?</ID>
     <ID>CyclomaticComplexMethod:IternioTelemetryClient.kt$IternioTelemetryClient$internal fun buildTelemetry( data: DiParsData, nominalCapacityKwh: Double, battery: BatteryReading?, charging: ChargingReading?, carModel: String?, enginePowerKw: Int? = null, sampleTimeMs: Long? = null, ): JSONObject?</ID>
+    <ID>CyclomaticComplexMethod:LaunchFreeform.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
+    <ID>CyclomaticComplexMethod:LaunchFreeform.kt$internal fun launchFreeformCore( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, ): Int</ID>
+    <ID>CyclomaticComplexMethod:LaunchFreeform.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
     <ID>CyclomaticComplexMethod:LlmAgentBackend.kt$LlmAgentBackend$override suspend fun chat( messages: List&lt;AgentMessage&gt;, tools: JSONArray?, onDelta: ((String) -&gt; Unit)?, ): Result&lt;AgentReply&gt;</ID>
     <ID>CyclomaticComplexMethod:LocalInsightEngine.kt$LocalInsightEngine$fun generate(stats: InsightStats, res: Resources, periodDays: Int): TextResult</ID>
     <ID>CyclomaticComplexMethod:NativeParsReader.kt$NativeParsReader$private suspend fun assembleSnapshot( decoded: Map&lt;String, Any?&gt;, windowRrPrimaryRaw: Int?, rememberSticky: Boolean = true, ): DiParsData?</ID>
@@ -239,11 +239,11 @@
     <ID>LongMethod:HelperBootstrap.kt$HelperBootstrap$private suspend fun ensureRunningLocked(): Boolean</ID>
     <ID>LongMethod:HelperDaemon.kt$&lt;no name provided&gt;$override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean</ID>
     <ID>LongMethod:HelperDaemon.kt$fun main(args: Array&lt;String&gt;)</ID>
-    <ID>LongMethod:HelperDaemon.kt$internal fun launchFreeformCore( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, ): Int</ID>
-    <ID>LongMethod:HelperDaemon.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
     <ID>LongMethod:HistoryImporter.kt$HistoryImporter$private suspend fun doSync(): ImportResult</ID>
     <ID>LongMethod:InsightsManager.kt$InsightsManager$private suspend fun buildDynamics(lang: String, periodDays: Int = 7): List&lt;DynamicMetric&gt;</ID>
     <ID>LongMethod:InsightsManager.kt$InsightsManager$suspend fun collectStats(periodDays: Int = 7): InsightStats?</ID>
+    <ID>LongMethod:LaunchFreeform.kt$internal fun launchFreeformCore( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, ): Int</ID>
+    <ID>LongMethod:LaunchFreeform.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
     <ID>LongMethod:ListeningOverlay.kt$ListeningOverlay$private fun realAttach(context: Context, initial: String): OverlayHandle</ID>
     <ID>LongMethod:LocalInsightEngine.kt$LocalInsightEngine$fun generate(stats: InsightStats, res: Resources, periodDays: Int): TextResult</ID>
     <ID>LongMethod:NativeParsReader.kt$NativeParsReader$private suspend fun assembleSnapshot( decoded: Map&lt;String, Any?&gt;, windowRrPrimaryRaw: Int?, rememberSticky: Boolean = true, ): DiParsData?</ID>
@@ -284,6 +284,7 @@
     <ID>LongParameterList:AutomationEngineEdgeTest.kt$AutomationEngineEdgeTest$( id: Long, triggers: List&lt;TriggerDef&gt;, logic: String = "AND", cooldown: Int = 0, requirePark: Boolean = false, lastTriggeredAt: Long? = null, )</ID>
     <ID>LongParameterList:AutoserviceChargingDetector.kt$AutoserviceChargingDetector$( private val client: AutoserviceClient, private val chargeRepo: ChargeRepository, private val batteryHealthRepo: BatteryHealthRepository, private val stateStore: ChargingStateStore, private val classifier: ChargingTypeClassifier, private val settings: SettingsRepository, private val costCalculator: CostCalculator, private val parsReader: ParsReader, private val journal: CatchUpJournal )</ID>
     <ID>LongParameterList:AutoserviceChargingDetectorTest.kt$AutoserviceChargingDetectorTest$( battery: BatteryReading?, charging: ChargingReading? = ChargingReading( gunConnectState = 1, chargingType = 1, chargeBatteryVoltV = 0, batteryType = 1, chargingCapacityKwh = null, bmsState = null, readAtMs = 0L ), prevSoc: Int? = null, prevCapacityKwh: Float? = null, prevMileageKm: Float? = null, prevTs: Long? = null, autoserviceAvailable: Boolean = true, homeTariff: Double = 0.20, dcTariff: Double = 0.73, diParsData: DiParsData? = null )</ID>
+    <ID>LongParameterList:AutoserviceTransact.kt$( svc: IBinder, autoIface: String, tx: Int, dev: Int, fid: Int, value: Int, writeValue: Boolean )</ID>
     <ID>LongParameterList:BlindSpotPreferences.kt$BlindSpotPreferences.Companion$( displayW: Int, displayH: Int, shape: PipShape, leftX: Int, leftY: Int, rightRect: Rect, )</ID>
     <ID>LongParameterList:ChargesViewModelTest.kt$ChargesViewModelTest$( chargesFlow: MutableStateFlow&lt;List&lt;ChargeEntity&gt;&gt; = MutableStateFlow(emptyList()), autoserviceCharges: List&lt;ChargeEntity&gt; = emptyList(), legacyExists: Boolean = false, batteryReading: BatteryReading? = null, autoserviceAvailable: Boolean = true, snapshots: List&lt;BatterySnapshotEntity&gt; = emptyList(), batteryCapacityKwh: String = "72.9" )</ID>
     <ID>LongParameterList:ChargesViewModelTest.kt$ChargesViewModelTest$( id: Long, startTs: Long, kwhCharged: Double? = 10.0, gunState: Int? = 2, type: String? = when (gunState) { 2 -&gt; "AC"; 3, 4 -&gt; "DC"; else -&gt; null }, cost: Double? = 2.0, detectionSource: String? = "autoservice_detector" )</ID>
@@ -300,15 +301,6 @@
     <ID>LongParameterList:HelperClient.kt$HelperClient$( packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, activityType: Int, )</ID>
     <ID>LongParameterList:HelperClientBinderTest.kt$HelperClientBinderTest$(status: Int, taskId: Int, windowingMode: Int, left: Int, top: Int, right: Int, bottom: Int)</ID>
     <ID>LongParameterList:HelperDaemon.kt$( ctx: Context, store: ConcurrentHashMap&lt;Int, VirtualDisplay&gt;, name: String, width: Int, height: Int, density: Int, surface: Surface, flags: Int, )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( packageName: String, displayId: Int, desiredActivityType: Int, resolveComponent: (String) -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, taskIdForPackage: (String) -&gt; Int = { _ -&gt; -1 }, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, sleep: (Long) -&gt; Unit = { _ -&gt; }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, activityType: Int, )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( packageName: String, windowingMode: Int?, displayId: Int, activityType: Int, resolveComponent: (String) -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( svc: IBinder, autoIface: String, tx: Int, dev: Int, fid: Int, value: Int, writeValue: Boolean )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( taskId: Int, mode: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( taskId: Int, rootTaskId: Int, left: Int, top: Int, right: Int, bottom: Int, toTop: Boolean, shell: (String, List&lt;String&gt;) -&gt; String, resize: (Int, Int, Int, Int, Int) -&gt; Unit, )</ID>
-    <ID>LongParameterList:HelperDaemon.kt$( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
     <ID>LongParameterList:HistoryImporter.kt$HistoryImporter$( @ApplicationContext private val context: Context, private val energyDataReader: EnergyDataReader, private val tripRepository: TripRepository, private val tripDao: TripDao, private val tripPointDao: TripPointDao, private val idleDrainDao: IdleDrainDao, private val settingsRepository: SettingsRepository, private val lastSessionRepository: LastSessionRepository, private val tripTombstoneDao: TripTombstoneDao, private val costCalculator: CostCalculator, )</ID>
     <ID>LongParameterList:HistoryImporter.kt$HistoryImporter$( bydId: Long?, raw: Double, km: Double?, socStart: Int?, socEnd: Int?, capacity: Double, )</ID>
     <ID>LongParameterList:HudManeuverJournal.kt$HudManeuverJournal$( maneuverGaode: Int, distanceMeters: Int, f28: Int, amapIcon: Int?, roundaboutNum: Int?, suppressArrow: Boolean, )</ID>
@@ -318,6 +310,13 @@
     <ID>LongParameterList:IternioTelemetryClient.kt$IternioTelemetryClient$( data: DiParsData, nominalCapacityKwh: Double, battery: BatteryReading?, charging: ChargingReading?, carModel: String?, enginePowerKw: Int? = null, sampleTimeMs: Long? = null, )</ID>
     <ID>LongParameterList:IternioTelemetryClientTest.kt$IternioTelemetryClientTest$( soc: Int? = 73, speed: Int? = 60, power: Double? = 12.5, chargeGunState: Int? = 1, chargingStatus: Int? = 0, gear: Int? = 4, acTemp: Int? = 22, hvVoltage: Int? = null, hvCurrent: Double? = null, )</ID>
     <ID>LongParameterList:LaunchAppCoreTest.kt$LaunchAppCoreTest$( packageName: String = "anddea.youtube", windowingMode: Int? = WINDOWING_MODE_FREEFORM, displayId: Int = 0, activityType: Int = ACTIVITY_TYPE_RECENTS, resolveComponent: (String) -&gt; String? = { "anddea.youtube/com.google.android.youtube.app.honeycomb.Shell\$HomeActivity" }, shell: (String, List&lt;String&gt;) -&gt; String = { script, args -&gt; shellCmds += effectiveCmd(script, args); "" }, )</ID>
+    <ID>LongParameterList:LaunchFreeform.kt$( packageName: String, displayId: Int, desiredActivityType: Int, resolveComponent: (String) -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, taskIdForPackage: (String) -&gt; Int = { _ -&gt; -1 }, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, sleep: (Long) -&gt; Unit = { _ -&gt; }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
+    <ID>LongParameterList:LaunchFreeform.kt$( packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, activityType: Int, )</ID>
+    <ID>LongParameterList:LaunchFreeform.kt$( packageName: String, windowingMode: Int?, displayId: Int, activityType: Int, resolveComponent: (String) -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, )</ID>
+    <ID>LongParameterList:LaunchFreeform.kt$( taskId: Int, displayId: Int, left: Int, top: Int, right: Int, bottom: Int, desiredActivityType: Int, setMode: (Int, Int) -&gt; Unit, move: (Int, Int) -&gt; Unit, bounds: (Int, Int, Int, Int, Int) -&gt; Unit, focus: (Int) -&gt; Unit, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { _, _ -&gt; }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { monotonicMs() }, sleep: (Long) -&gt; Unit, )</ID>
+    <ID>LongParameterList:LaunchFreeform.kt$( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
+    <ID>LongParameterList:LaunchFreeform.kt$( taskId: Int, mode: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
+    <ID>LongParameterList:LaunchFreeform.kt$( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
     <ID>LongParameterList:LaunchFreeformCoreTest.kt$LaunchFreeformCoreTest$( taskId: Int = 36, desiredActivityType: Int = ACTIVITY_TYPE_RECENTS, setMode: (Int, Int) -&gt; Unit = { t, m -&gt; ops += "mode:$t:$m" }, move: (Int, Int) -&gt; Unit = { t, d -&gt; ops += "move:$t:$d" }, bounds: (Int, Int, Int, Int, Int) -&gt; Unit = { t, l, tp, r, b -&gt; ops += "bounds:$t:$l,$tp,$r,$b" }, focus: (Int) -&gt; Unit = { ops += "focus:$it" }, state: (Int) -&gt; TaskModeState? = { null }, getActivityType: (Int) -&gt; Int = { -1 }, log: (String, Throwable?) -&gt; Unit = { m, t -&gt; logs += m; logThrowables += t }, resolveCurrentTaskId: () -&gt; Int = { taskId }, deadlineMs: Long = Long.MAX_VALUE, now: () -&gt; Long = { 0L }, sleep: (Long) -&gt; Unit = { ops += "sleep:$it" }, )</ID>
     <ID>LongParameterList:LocalInsightEngineTest.kt$LocalInsightEngineTest$( consumptionChangePct: Double? = null, shortTripCount: Int = 2, recentTripCount: Int = 10, recentKwh: Double = 18.0, drainKwh: Double = 0.0, drainHours: Double = 0.0, voltage12v: Double? = 12.6, )</ID>
     <ID>LongParameterList:NavGuidanceHubTest.kt$NavGuidanceHubTest$( gaode: Int = 0, dist: Int = 0, road: String = "", eta: Int = 0, total: Int = 0, limit: Int = 0, )</ID>
@@ -332,6 +331,7 @@
     <ID>LongParameterList:SettingsViewModelTest.kt$SettingsViewModelTest$( updateChecker: UpdateChecker? = null, ttsModelManager: com.bydmate.app.voice.TtsModelManager? = null, ttsEngine: com.bydmate.app.voice.TtsEngine? = null, gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager? = null, llmConnectionResolver: LlmConnectionResolver? = null, voiceJournal: com.bydmate.app.voice.VoiceJournal = com.bydmate.app.voice.VoiceJournal(), )</ID>
     <ID>LongParameterList:SherpaTtsEngine.kt$SherpaTtsEngine.Companion$( targetFrames: Long, timeoutMs: Long, pollMs: Long, currentFrames: () -&gt; Long, stillCurrent: () -&gt; Boolean, sleep: (Long) -&gt; Unit = Thread::sleep, now: () -&gt; Long = System::currentTimeMillis, )</ID>
     <ID>LongParameterList:SherpaTtsEngine.kt$SherpaTtsEngine.Companion$( voiceId: String, speakerId: Int, speed: Float, liveliness: Int, sampleRate: Int, synthesisText: String, )</ID>
+    <ID>LongParameterList:Split37Daemon.kt$( taskId: Int, rootTaskId: Int, left: Int, top: Int, right: Int, bottom: Int, toTop: Boolean, shell: (String, List&lt;String&gt;) -&gt; String, resize: (Int, Int, Int, Int, Int) -&gt; Unit, )</ID>
     <ID>LongParameterList:Split37Engine.kt$Split37Engine$( pane: String, pkg: String, taskId: Int, targetArea: Int, root: Split37Root, fullRootId: Int?, )</ID>
     <ID>LongParameterList:SplitSessionManager.kt$SplitSessionManager$( private val helper: HelperClient, private val prefs: SplitPreferences, private val backdrop: SplitBackdrop, private val scope: CoroutineScope, private val tickDelayMs: Long = 1000L, /** * Called when freeform windows are confirmed live (both launchFreeform calls OK and task ids * resolved). The production binding clears KEY_SPLIT_FREEFORM_REBOOT_PENDING so the settings * hint dismisses after the first successful start post-reboot. Default no-op keeps existing * tests unchanged. */ private val onFreeformLive: () -&gt; Unit = {}, private val nowMs: () -&gt; Long = System::currentTimeMillis, private val mediaSource: MediaSessionSource? = null, private val mediaPollDelayMs: Long = MEDIA_POLL_MS, private val applyCalibratedBounds: (suspend (taskId: Int, taskDisplayId: Int) -&gt; Boolean)? = null, /** * Optional hook called by [placePaneLocked] when a pane app's task is found on a non-main * display at session start (W6-F1 FIX-B). The production binding forwards to * ClusterProjectionManager.endProjectionForPkg, which ends OUR projection of that package * through the ordinary OFF sequence and returns true; false means the projection belongs to * another package (or none is running) and nothing was torn down. * * **Lock order:** invoked while holding [mutex], and the production implementation takes * ClusterProjectionManager.mutex — the sanctioned SSM → CPM direction, identical to * [applyCalibratedBounds]. Never wire a callback here that already holds CPM's mutex. * * Null (default) is a no-op — keeps existing tests and cluster-less builds unchanged. */ private val endClusterProjection: (suspend (pkg: String) -&gt; Boolean)? = null, /** * Persistent journal of session transitions (start/placement/watchdog/end), read back by the * diagnostic dump. Default [NoSplitJournal] keeps existing tests unchanged. */ private val journal: SplitJournal = NoSplitJournal, /** * Persistent "this firmware ignores the freeform flag" verdict (#139). Once latched, [start] * returns [SplitStartResult.FREEFORM_UNAVAILABLE] without touching a single task — except for * the one retry per boot [SplitFreeformVerdict.suppressStart] allows. Null (default) keeps * existing tests unchanged — every start is attempted. */ private val verdict: SplitFreeformVerdict? = null, /** * Firmware gate for the pane activityType (#130). Read once here and used for every pane * launch / raise / mode flip in this session; the cluster projection keeps its own RECENTS. */ paneTypePolicy: PaneTypePolicy = PaneTypePolicy(), /** * Firmware-native split launcher, consulted by [start] only while * [SplitPreferences.isNativeModeEnabled] is on (#139). Null (default) means no native launcher * is wired and every start takes the freeform path — the whole fleet behaves as before. */ private val nativeLauncher: NativeSplitLauncher? = null, /** * Engine of the vehicle's OWN 3:7 split, used on "platformized" firmware (OTA V1.6) where our * freeform panes cannot come up. Consulted first by [start]; on every other firmware * [Split37Engine.isApplicable] is false and not a single path below changes. Null (default) * means no engine is wired — the whole fleet takes the freeform path. */ private val split37: Split37Engine? = null, )</ID>
     <ID>LongParameterList:SplitSessionManager.kt$SplitSessionManager$( taskState: SplitTaskState, taskId: Int, pane: Pane, pkg: String, expectedBounds: SplitBounds, otherTaskId: Int, )</ID>
@@ -347,6 +347,7 @@
     <ID>LongParameterList:VoiceControllerSessionTest.kt$VoiceControllerSessionTest$( continuousAsr: ContinuousAsr, dispatcher: ActionDispatcher, agentOrchestrator: AgentOrchestrator = mockk&lt;AgentOrchestrator&gt;().also { coEvery { it.ask(any(), any()) } returns AgentResult.Disabled coEvery { it.noteAction(any()) } returns Unit // Default: no pending agent question (individual tests override AFTER construction). coEvery { it.expectsFollowUp() } returns false }, ttsEngine: TtsEngine = quietTtsEngine(), audioCapture: AudioCapture = mockk&lt;AudioCapture&gt;(relaxed = true).also { every { it.captureSession(any()) } returns flow { /* fake ignores pcm content */ } }, journal: VoiceJournal = VoiceJournal(), earcon: VoiceEarcon = mockk(relaxed = true), context: Context = mockk&lt;Context&gt;(relaxed = true), agentIdentity: () -&gt; AgentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) }, )</ID>
     <ID>LongParameterList:VoiceModule.kt$VoiceModule$( mm: TtsModelManager, marker: RuStressMarker, @ApplicationContext ctx: Context, http: OkHttpClient, connections: LlmConnectionResolver, settings: SettingsRepository, selectedTtsVoice: () -&gt; TtsVoice, @Named("ttsLoadGuard") ttsGuard: AsrLoadGuard, )</ID>
     <ID>LongParameterList:WidgetButtonPanel.kt$WidgetButtonLayout$( collapsedX: Int, collapsedY: Int, panelWpx: Int, panelHpx: Int, buttonPx: Int, gapPx: Int, screenW: Int, screenH: Int, )</ID>
+    <ID>LoopWithTooManyJumpStatements:AtmTasks.kt$for</ID>
     <ID>LoopWithTooManyJumpStatements:AutomationEngine.kt$AutomationEngine$for</ID>
     <ID>LoopWithTooManyJumpStatements:BackupManager.kt$BackupManager$for</ID>
     <ID>LoopWithTooManyJumpStatements:BackupManager.kt$BackupManager.Companion$for</ID>
@@ -355,10 +356,10 @@
     <ID>LoopWithTooManyJumpStatements:DriveModeRuleMigration.kt$DriveModeRuleMigration$for</ID>
     <ID>LoopWithTooManyJumpStatements:FidCatalog.kt$FidCatalog.Companion$for</ID>
     <ID>LoopWithTooManyJumpStatements:FidResolver.kt$FidResolver$for</ID>
-    <ID>LoopWithTooManyJumpStatements:HelperDaemon.kt$for</ID>
     <ID>LoopWithTooManyJumpStatements:HistoryImporter.kt$HistoryImporter$for</ID>
     <ID>LoopWithTooManyJumpStatements:OdometerConsumptionBuffer.kt$OdometerConsumptionBuffer$for</ID>
     <ID>LoopWithTooManyJumpStatements:OpenRouterClient.kt$OpenRouterClient$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Split37Daemon.kt$for</ID>
     <ID>LoopWithTooManyJumpStatements:TripRepository.kt$TripRepository$for</ID>
     <ID>LoopWithTooManyJumpStatements:TtsModelManager.kt$TtsModelManager$while</ID>
     <ID>LoopWithTooManyJumpStatements:TtsRouter.kt$TtsRouter.OnlineSpeechQueue$for</ID>
@@ -368,6 +369,7 @@
     <ID>MatchingDeclarationName:ScheduleTrigger.kt$ScheduleSpec</ID>
     <ID>MatchingDeclarationName:SettingRows.kt$SettingButtonStyle</ID>
     <ID>MatchingDeclarationName:SettingsScreen.kt$SettingsSection</ID>
+    <ID>MatchingDeclarationName:ShellExec.kt$CmdResult</ID>
     <ID>MatchingDeclarationName:SplitPairPicker.kt$SplitRole</ID>
     <ID>MatchingDeclarationName:UpdateDialog.kt$UpdateState</ID>
     <ID>MayBeConst:DumpFidsCoreTest.kt$DumpFidsCoreTest.FakeConstants$@JvmField val ALPHA: Int = 1</ID>
@@ -389,9 +391,9 @@
     <ID>NestedBlockDepth:BackupManager.kt$BackupManager.Companion$internal fun readBackupEntries( stream: InputStream, maxEntryBytes: Long = MAX_ENTRY_BYTES, maxTotalBytes: Long = MAX_TOTAL_BYTES, ): BackupEntries</ID>
     <ID>NestedBlockDepth:GigaAmModelManager.kt$GigaAmModelManager$internal suspend fun untarFlatten(archive: File, target: File)</ID>
     <ID>NestedBlockDepth:GigaAmModelManager.kt$GigaAmModelManager$private suspend fun downloadToFile(url: String, dest: File, onProgress: (Int) -&gt; Unit)</ID>
-    <ID>NestedBlockDepth:HelperDaemon.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
     <ID>NestedBlockDepth:HistoryImporter.kt$HistoryImporter$suspend fun cleanupDuplicates(): Int</ID>
     <ID>NestedBlockDepth:InsightsManager.kt$InsightsManager$private fun parseInsight(json: String): InsightData?</ID>
+    <ID>NestedBlockDepth:LaunchFreeform.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
     <ID>NestedBlockDepth:LogRecorder.kt$LogRecorder$private fun pipeToFile(proc: Process, target: File, current: Session)</ID>
     <ID>NestedBlockDepth:NaviRichNotificationParser.kt$NaviRichNotificationParser$fun buildFromActions(actions: List&lt;RichAction&gt;): RichNaviInfo</ID>
     <ID>NestedBlockDepth:NaviRichNotificationParser.kt$NaviRichNotificationParser$private fun readAction(action: Any, resolveName: (Int) -&gt; String?): RichAction?</ID>
@@ -408,19 +410,20 @@
     <ID>NestedBlockDepth:VoiceAutomationActions.kt$VoiceAutomationActions$private suspend fun speakGuarded(text: String): DispatchResult</ID>
     <ID>NestedBlockDepth:WidgetController.kt$WidgetController.WidgetTouchListener$override fun onTouch(v: android.view.View, event: MotionEvent): Boolean</ID>
     <ID>SpreadOperator:HelperDaemon.kt$(script, *args.toTypedArray())</ID>
+    <ID>SwallowedException:ActionDefBuilders.kt$e: Exception</ID>
     <ID>SwallowedException:ActionDispatcher.kt$ActionDispatcher$e: Exception</ID>
     <ID>SwallowedException:ActionDispatcherCancellationTest.kt$ActionDispatcherCancellationTest$e: CancellationException</ID>
     <ID>SwallowedException:AdaptiveSeatChannel.kt$AdaptiveSeatChannel$e: Exception</ID>
     <ID>SwallowedException:AgentTools.kt$AgentTools$e: Exception</ID>
-    <ID>SwallowedException:AutomationViewModel.kt$e: Exception</ID>
+    <ID>SwallowedException:AtmTasks.kt$e: NoSuchFieldException</ID>
+    <ID>SwallowedException:AtmTasks.kt$e: NoSuchMethodException</ID>
     <ID>SwallowedException:BackupManager.kt$BackupManager$e: SQLiteException</ID>
     <ID>SwallowedException:HelperDaemon.kt$e: Exception</ID>
-    <ID>SwallowedException:HelperDaemon.kt$e: IllegalStateException</ID>
-    <ID>SwallowedException:HelperDaemon.kt$e: NoSuchFieldException</ID>
-    <ID>SwallowedException:HelperDaemon.kt$e: NoSuchMethodException</ID>
     <ID>SwallowedException:HelperDaemon.kt$e: OverlappingFileLockException</ID>
-    <ID>SwallowedException:HelperDaemon.kt$t: Throwable</ID>
     <ID>SwallowedException:InsightsManager.kt$InsightsManager$e: Exception</ID>
+    <ID>SwallowedException:LaunchFreeform.kt$e: IllegalStateException</ID>
+    <ID>SwallowedException:LaunchFreeform.kt$e: NoSuchMethodException</ID>
+    <ID>SwallowedException:LaunchFreeform.kt$t: Throwable</ID>
     <ID>SwallowedException:LlmAgentBackend.kt$LlmAgentBackend.Companion$e: org.json.JSONException</ID>
     <ID>SwallowedException:OpenRouterTtsBackendTest.kt$OpenRouterTtsBackendTest$e: IOException</ID>
     <ID>SwallowedException:RuleDraftValidator.kt$RuleDraftValidator$e: Exception</ID>
@@ -433,13 +436,15 @@
     <ID>SwallowedException:VoiceController.kt$VoiceController$e: StopSession</ID>
     <ID>ThrowsCount:BackupManager.kt$BackupManager$fun restore(file: File)</ID>
     <ID>ThrowsCount:BackupManager.kt$BackupManager.Companion$internal fun readBackupEntries( stream: InputStream, maxEntryBytes: Long = MAX_ENTRY_BYTES, maxTotalBytes: Long = MAX_TOTAL_BYTES, ): BackupEntries</ID>
-    <ID>ThrowsCount:HelperDaemon.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
-    <ID>ThrowsCount:HelperDaemon.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
+    <ID>ThrowsCount:LaunchFreeform.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
+    <ID>ThrowsCount:LaunchFreeform.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>
     <ID>ThrowsCount:MiniMaxTtsBackend.kt$MiniMaxTtsBackend$private fun downloadWav(url: String): TtsPcm</ID>
     <ID>ThrowsCount:MiniMaxTtsBackend.kt$MiniMaxTtsBackend$private fun synthesizeOfficial(key: String, text: String, voice: String): TtsPcm</ID>
     <ID>ThrowsCount:SplitSessionManager.kt$SplitSessionManager$private suspend fun handlePaneLocked( taskState: SplitTaskState, taskId: Int, pane: Pane, pkg: String, expectedBounds: SplitBounds, otherTaskId: Int, ): Boolean</ID>
     <ID>ThrowsCount:SplitSessionManager.kt$SplitSessionManager$private suspend fun tearDownLocked(current: SplitSessionState.Active, emitExit: Boolean)</ID>
     <ID>ThrowsCount:VoiceController.kt$VoiceController$private fun startContinuousSession(cause: Long)</ID>
+    <ID>TooGenericExceptionCaught:A11yDaemon.kt$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:ActionDefBuilders.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ActionDispatcher.kt$ActionDispatcher$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AdaptiveSeatChannel.kt$AdaptiveSeatChannel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AdbKeyStore.kt$AdbKeyStore$e: Exception</ID>
@@ -453,7 +458,6 @@
     <ID>TooGenericExceptionCaught:AppNavigation.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AudioCapture.kt$AudioCapture$t: Throwable</ID>
     <ID>TooGenericExceptionCaught:AutomationEngine.kt$AutomationEngine$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:AutomationViewModel.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AutoserviceChargingDetector.kt$AutoserviceChargingDetector$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AvmCameraProbe.kt$AvmCameraProbe$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:BackupManager.kt$BackupManager$e: Exception</ID>
@@ -477,14 +481,12 @@
     <ID>TooGenericExceptionCaught:HelperDaemon.kt$be: Exception</ID>
     <ID>TooGenericExceptionCaught:HelperDaemon.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:HelperDaemon.kt$e: Throwable</ID>
-    <ID>TooGenericExceptionCaught:HelperDaemon.kt$legacy: Throwable</ID>
-    <ID>TooGenericExceptionCaught:HelperDaemon.kt$primary: Throwable</ID>
-    <ID>TooGenericExceptionCaught:HelperDaemon.kt$t: Throwable</ID>
     <ID>TooGenericExceptionCaught:HistoryImporter.kt$HistoryImporter$e: Exception</ID>
     <ID>TooGenericExceptionCaught:HudAmapBroadcaster.kt$HudAmapBroadcaster$e: Exception</ID>
     <ID>TooGenericExceptionCaught:HudSomeIpBridge.kt$HudSomeIpBridge$t: Throwable</ID>
     <ID>TooGenericExceptionCaught:InsightsManager.kt$InsightsManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:IternioTelemetryClient.kt$IternioTelemetryClient$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:LaunchFreeform.kt$t: Throwable</ID>
     <ID>TooGenericExceptionCaught:ListeningOverlay.kt$ListeningOverlay$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ListeningOverlay.kt$ListeningOverlay.RealOverlayHandle$e: Exception</ID>
     <ID>TooGenericExceptionCaught:LogRecorder.kt$LogRecorder$e: Exception</ID>
@@ -498,6 +500,8 @@
     <ID>TooGenericExceptionCaught:RuleEntity.kt$TriggerDef.Companion$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ScheduleTrigger.kt$ScheduleSpec.Companion$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ServiceStartWorker.kt$ServiceStartWorker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SettingsDaemon.kt$legacy: Throwable</ID>
+    <ID>TooGenericExceptionCaught:SettingsDaemon.kt$primary: Throwable</ID>
     <ID>TooGenericExceptionCaught:SettingsViewModel.kt$SettingsViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SettingsWidgetDisplay.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SplitOverlayController.kt$SplitOverlayController$e: Exception</ID>
@@ -536,8 +540,9 @@
     <ID>TooGenericExceptionThrown:UpdateChecker.kt$UpdateChecker$throw Exception(appStrings.get(R.string.update_download_error, reason))</ID>
     <ID>TooGenericExceptionThrown:VoiceControllerSafetyTest.kt$VoiceControllerSafetyTest.FailingContinuousAsr$throw RuntimeException("boom")</ID>
     <ID>TooGenericExceptionThrown:VoiceControllerSessionTest.kt$VoiceControllerSessionTest.FailingContinuousAsr$throw RuntimeException("gigaam decode failed")</ID>
-    <ID>TooManyFunctions:ActionDispatcher.kt$ActionDispatcher</ID>
+    <ID>TooManyFunctions:ActionDefBuilders.kt$com.bydmate.app.ui.automation.ActionDefBuilders.kt</ID>
     <ID>TooManyFunctions:ActionDispatcher.kt$ActionDispatcher$Companion</ID>
+    <ID>TooManyFunctions:ActionDispatcher.kt$ActionDispatcher</ID>
     <ID>TooManyFunctions:AdbOnDeviceClient.kt$AdbOnDeviceClient</ID>
     <ID>TooManyFunctions:AdbOnDeviceClient.kt$AdbOnDeviceClientImpl : AdbOnDeviceClient</ID>
     <ID>TooManyFunctions:AdbProtocolClient.kt$AdbProtocolClient : AdbProtocol</ID>
@@ -547,6 +552,7 @@
     <ID>TooManyFunctions:AgentTools.kt$AgentTools</ID>
     <ID>TooManyFunctions:AppDatabase.kt$AppDatabase : RoomDatabase</ID>
     <ID>TooManyFunctions:AppModule.kt$AppModule</ID>
+    <ID>TooManyFunctions:AtmTasks.kt$com.bydmate.app.helper.AtmTasks.kt</ID>
     <ID>TooManyFunctions:AutomationActionControls.kt$com.bydmate.app.ui.automation.AutomationActionControls.kt</ID>
     <ID>TooManyFunctions:AutomationActionRow.kt$com.bydmate.app.ui.automation.AutomationActionRow.kt</ID>
     <ID>TooManyFunctions:AutomationCallNavControls.kt$com.bydmate.app.ui.automation.AutomationCallNavControls.kt</ID>
@@ -554,7 +560,6 @@
     <ID>TooManyFunctions:AutomationEngine.kt$AutomationEngine</ID>
     <ID>TooManyFunctions:AutomationRuleList.kt$com.bydmate.app.ui.automation.AutomationRuleList.kt</ID>
     <ID>TooManyFunctions:AutomationViewModel.kt$AutomationViewModel : ViewModel</ID>
-    <ID>TooManyFunctions:AutomationViewModel.kt$com.bydmate.app.ui.automation.AutomationViewModel.kt</ID>
     <ID>TooManyFunctions:BlindSpotController.kt$BlindSpotController</ID>
     <ID>TooManyFunctions:BlindSpotPositionOverlay.kt$BlindSpotPositionOverlay</ID>
     <ID>TooManyFunctions:ChargeDao.kt$ChargeDao</ID>
@@ -584,6 +589,7 @@
     <ID>TooManyFunctions:IdleDrainDao.kt$IdleDrainDao</ID>
     <ID>TooManyFunctions:InsightsManager.kt$InsightsManager</ID>
     <ID>TooManyFunctions:LastSessionRepository.kt$LastSessionRepository</ID>
+    <ID>TooManyFunctions:LaunchFreeform.kt$com.bydmate.app.helper.LaunchFreeform.kt</ID>
     <ID>TooManyFunctions:ListeningOverlay.kt$ListeningOverlay</ID>
     <ID>TooManyFunctions:LogRecorder.kt$LogRecorder</ID>
     <ID>TooManyFunctions:NaviRichNotificationParser.kt$NaviRichNotificationParser</ID>
@@ -596,6 +602,7 @@
     <ID>TooManyFunctions:SettingsViewModel.kt$SettingsViewModel : ViewModel</ID>
     <ID>TooManyFunctions:SherpaTtsEngine.kt$SherpaTtsEngine : TtsEngine</ID>
     <ID>TooManyFunctions:SherpaTtsEngine.kt$SherpaTtsEngine$Companion</ID>
+    <ID>TooManyFunctions:Split37Daemon.kt$com.bydmate.app.helper.Split37Daemon.kt</ID>
     <ID>TooManyFunctions:Split37Engine.kt$Split37Engine</ID>
     <ID>TooManyFunctions:SplitOverlayController.kt$SplitOverlayController : SplitBackdrop</ID>
     <ID>TooManyFunctions:SplitPillView.kt$SplitPillView</ID>
@@ -645,6 +652,8 @@
     <ID>UnusedPrivateProperty:SettingsViewModel.kt$SettingsViewModel$private val adbOnDeviceClient: AdbOnDeviceClient</ID>
     <ID>UnusedPrivateProperty:SettingsViewModel.kt$SettingsViewModel$private val placeRepository: PlaceRepository</ID>
     <ID>UnusedPrivateProperty:SettingsViewModel.kt$SettingsViewModel$private val voiceController: VoiceController</ID>
+    <ID>UseCheckOrError:AtmTasks.kt$throw IllegalStateException("ActivityTaskManager.getService() returned null")</ID>
+    <ID>UseCheckOrError:AtmTasks.kt$throw IllegalStateException("setTaskWindowingMode(task=$taskId, mode=$windowingMode) returned false")</ID>
     <ID>UseCheckOrError:BackupManager.kt$BackupManager$throw IllegalStateException( "База данных занята, экспорт прерван. Повторите попытку позже." )</ID>
     <ID>UseCheckOrError:BackupManager.kt$BackupManager$throw IllegalStateException("Не удалось заменить файл базы данных при восстановлении")</ID>
     <ID>UseCheckOrError:BackupManager.kt$BackupManager$throw IllegalStateException("Не удалось открыть файл бэкапа")</ID>
@@ -653,15 +662,13 @@
     <ID>UseCheckOrError:BackupManager.kt$BackupManager.Companion$throw IllegalStateException("Файл бэкапа повреждён: запись превышает допустимый размер")</ID>
     <ID>UseCheckOrError:BackupManager.kt$BackupManager.Companion$throw IllegalStateException("Файл бэкапа повреждён: слишком много записей в архиве")</ID>
     <ID>UseCheckOrError:BackupManager.kt$BackupManager.Companion$throw IllegalStateException("Файл бэкапа слишком большой")</ID>
-    <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException( "freeform not supported: probe start coerced task=$taskId to mode=${after.windowingMode}" )</ID>
     <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("ActivityManager.getService() returned null")</ID>
-    <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("ActivityTaskManager.getService() returned null")</ID>
-    <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("am stack remove failed: ${removed.take(200)}")</ID>
-    <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("am start freeform failed: ${out.take(200)}")</ID>
-    <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("am start freeform failed: ${probe.take(200)}")</ID>
-    <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("am start fullscreen failed: ${out.take(200)}")</ID>
-    <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("setTaskWindowingMode(task=$taskId, mode=$windowingMode) returned false")</ID>
-    <ID>UseCheckOrError:HelperDaemon.kt$throw IllegalStateException("setWindowingModeCompat: no launcher component for task=$taskId")</ID>
+    <ID>UseCheckOrError:LaunchFreeform.kt$throw IllegalStateException( "freeform not supported: probe start coerced task=$taskId to mode=${after.windowingMode}" )</ID>
+    <ID>UseCheckOrError:LaunchFreeform.kt$throw IllegalStateException("am stack remove failed: ${removed.take(200)}")</ID>
+    <ID>UseCheckOrError:LaunchFreeform.kt$throw IllegalStateException("am start freeform failed: ${out.take(200)}")</ID>
+    <ID>UseCheckOrError:LaunchFreeform.kt$throw IllegalStateException("am start freeform failed: ${probe.take(200)}")</ID>
+    <ID>UseCheckOrError:LaunchFreeform.kt$throw IllegalStateException("am start fullscreen failed: ${out.take(200)}")</ID>
+    <ID>UseCheckOrError:LaunchFreeform.kt$throw IllegalStateException("setWindowingModeCompat: no launcher component for task=$taskId")</ID>
     <ID>UseCheckOrError:LaunchFreeformCoreTest.kt$LaunchFreeformCoreTest$throw IllegalStateException("relaunch race")</ID>
     <ID>UseCheckOrError:LaunchFreeformCoreTest.kt$LaunchFreeformCoreTest$throw IllegalStateException("transient vendor failure")</ID>
     <ID>UseCheckOrError:SherpaTtsEngine.kt$SherpaTtsEngine$throw IllegalStateException("audio track bad state")</ID>
