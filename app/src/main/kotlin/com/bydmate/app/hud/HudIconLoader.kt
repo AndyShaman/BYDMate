@@ -29,6 +29,4 @@ object HudIconLoader {
     }
 
     fun iconFor(gaode: Int): ByteArray? = if (gaode <= 0) null else icons[gaode]
-
-    fun loadedCount(): Int = icons.size
 }

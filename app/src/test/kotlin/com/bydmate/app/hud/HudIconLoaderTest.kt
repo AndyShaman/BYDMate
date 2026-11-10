@@ -47,6 +47,8 @@ class HudIconLoaderTest {
     }
 
     @Test fun `all 48 donor assets load`() {
-        assertEquals(48, HudIconLoader.loadedCount())
+        val icons = HudIconLoader::class.java.getDeclaredField("icons")
+            .apply { isAccessible = true }.get(HudIconLoader) as Map<*, *>
+        assertEquals(48, icons.size)
     }
 }
