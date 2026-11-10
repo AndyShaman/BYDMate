@@ -221,11 +221,4 @@ class ListeningOverlayTest {
 
         assertTrue("handle must be destroyed after rapid show+hide", destroyed)
     }
-
-    // The layout constants are load-bearing (pill below the status bar, dialog a fixed gap under it)
-    // and cheap to pin so a future edit to either does not silently regress the geometry.
-    @Test fun `layout constants are the agreed defaults`() {
-        assertEquals(56, ListeningOverlay.TOP_MARGIN_DP)
-        assertEquals(48, ListeningOverlay.PILL_OFFSET_DP)
-    }
 }

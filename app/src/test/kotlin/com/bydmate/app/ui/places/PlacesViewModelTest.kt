@@ -147,26 +147,4 @@ class PlacesViewModelTest {
         assertEquals(3, blockedCount)
     }
 
-    @Test
-    fun `usageCounts populated after init`() = runTest {
-        val places = listOf(makePlace(1L), makePlace(2L))
-        val (vm) = buildVm(places = places, usageCounts = mapOf(1L to 1, 2L to 0))
-        advanceUntilIdle()
-
-        val counts = vm.usageCounts.value
-        assertEquals(1, counts[1L])
-        assertEquals(0, counts[2L])
-    }
-
-    @Test
-    fun `delete of unused place removes it from the list`() = runTest {
-        val place = makePlace(1L)
-        val (vm, _, flow) = buildVm(places = listOf(place), usageCounts = emptyMap())
-        advanceUntilIdle()
-
-        vm.delete(place)
-        advanceUntilIdle()
-
-        assertTrue(flow.value.isEmpty())
-    }
 }

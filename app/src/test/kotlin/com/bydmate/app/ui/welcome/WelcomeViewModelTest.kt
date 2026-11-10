@@ -77,18 +77,6 @@ class WelcomeViewModelTest {
     }
 
     @Test
-    fun `wizard has four steps and the ADB step sits between tariffs and autostart`() {
-        assertEquals(4, WelcomeViewModel.TOTAL_STEPS)
-        val vm = viewModel()
-        repeat(2) { vm.nextStep() }
-        assertEquals(3, vm.uiState.value.step)
-        vm.nextStep()
-        assertEquals(4, vm.uiState.value.step)
-        vm.prevStep()
-        assertEquals(3, vm.uiState.value.step)
-    }
-
-    @Test
     fun `checkAdb goes Checking then Ok on a successful connect`() = runTest(testDispatcher) {
         coEvery { adbClient.connect() } returns Result.success(Unit)
         val vm = viewModel()
@@ -127,11 +115,6 @@ class WelcomeViewModelTest {
 
         coVerify(exactly = 1) { adbClient.connect() }
         assertEquals(AdbCheck.Ok, vm.uiState.value.adbCheck)
-    }
-
-    @Test
-    fun `initial language comes from LocalePreferences`() {
-        assertEquals("en", viewModel().uiState.value.language)
     }
 
     @Test

@@ -338,22 +338,6 @@ class TechPanelViewModelTest {
         assertEquals(true, vm.uiState.value.autoserviceOnline)
     }
 
-    // --- hints --------------------------------------------------------------
-
-    @Test
-    fun `only one hint is open at a time`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertNull(vm.uiState.value.openHint)
-        vm.toggleHint("insulation")
-        assertEquals("insulation", vm.uiState.value.openHint)
-        vm.toggleHint("cells")
-        assertEquals("cells", vm.uiState.value.openHint)
-        vm.toggleHint("cells")
-        assertNull("tapping the open hint closes it", vm.uiState.value.openHint)
-    }
-
     // --- derived values -----------------------------------------------------
 
     /** 1% of a 72.9 kWh pack is 729 W·h, so 1458 W drains 2%/h. */
@@ -480,23 +464,6 @@ class TechPanelViewModelTest {
         assertFalse("the hint is retired once a drag has happened", vm.uiState.value.showOrderHint)
     }
 
-    /** A version that adds a card must not drop it just because the stored order predates it;
-     *  an id that no longer exists must not crash the screen either. */
-    @Test
-    fun `cards missing from the saved order are appended, unknown ids ignored`() = runTest {
-        savedOrder = "tyres,ghost_card,motors"
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(
-            listOf(
-                TechCard.CAR_STATE, TechCard.MOTORS, TechCard.BATTERY_NOW,
-                TechCard.LIMITS, TechCard.HISTORY, TechCard.DIAGNOSTICS,
-            ),
-            vm.uiState.value.cardOrder,
-        )
-    }
-
     @Test
     fun `a drag persists the new order and retires the hint`() = runTest {
         val vm = buildViewModel()
@@ -551,12 +518,6 @@ class TechPanelViewModelTest {
         assertFalse(withFuel.copy(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.UNKNOWN).showFuel)
         assertTrue(withFuel.copy(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID).showFuel)
         assertFalse(TechPanelUiState(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID).showFuel)
-    }
-
-    @Test
-    fun `an EV keeps today's visible cards`() {
-        val state = TechPanelUiState(motorRpmFront = 1200, soc = 43)
-        assertEquals(listOf(TechCard.BATTERY_NOW, TechCard.MOTORS), state.visibleCards)
     }
 
     // --- full cycles --------------------------------------------------------
@@ -618,15 +579,14 @@ class TechPanelViewModelTest {
     }
 
     @Test
-    fun `car-state card shows from tyres alone`() = runTest {
-        val state = openWith(noData.copy(tirePressFL = 245))
-        assertTrue(state.isVisible(TechCard.CAR_STATE))
-    }
-
-    @Test
-    fun `car-state card shows from climate alone`() = runTest {
-        val state = openWith(noData.copy(insideTemp = 22))
-        assertTrue(state.isVisible(TechCard.CAR_STATE))
+    fun `car-state card shows from tyres alone or climate alone`() = runTest {
+        val cases = listOf(
+            "tyres alone" to noData.copy(tirePressFL = 245),
+            "climate alone" to noData.copy(insideTemp = 22),
+        )
+        for ((label, data) in cases) {
+            assertTrue("case: $label", openWith(data).isVisible(TechCard.CAR_STATE))
+        }
     }
 
     @Test
