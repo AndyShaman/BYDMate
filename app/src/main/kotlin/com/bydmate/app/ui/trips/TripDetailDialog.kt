@@ -784,7 +784,11 @@ private fun MetricSwitch(hasPower: Boolean, state: ScrubState, modifier: Modifie
 private fun ScrubLegend(metric: ScrubMetric, modifier: Modifier = Modifier) {
     val (stops, lo, hi) = when (metric) {
         ScrubMetric.SPEED -> Triple(TripScrub.SPEED_STOPS, 0.0, TripScrub.SPEED_SCALE_MAX_KMH)
-        ScrubMetric.CONSUMPTION -> Triple(TripScrub.CONSUMPTION_STOPS, -20.0, 60.0)
+        ScrubMetric.CONSUMPTION -> Triple(
+            TripScrub.CONSUMPTION_STOPS,
+            TripScrub.CONSUMPTION_STOPS.first().first,
+            TripScrub.CONSUMPTION_STOPS.last().first
+        )
     }
     val brush = remember(metric) {
         Brush.horizontalGradient(
