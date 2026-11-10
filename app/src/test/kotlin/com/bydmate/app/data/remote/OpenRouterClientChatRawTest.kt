@@ -74,6 +74,11 @@ class OpenRouterClientChatRawTest {
         assertTrue(!body.has("stream"))
     }
 
+    @Test fun http_error_returns_failure() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+        assertTrue(client.chatRaw("https://openrouter.ai/api/v1", "key", "m", messages(), null).isFailure)
+    }
+
     @Test fun malformed_body_returns_failure() = runTest {
         server.enqueue(MockResponse().setBody("not json"))
         assertTrue(client.chatRaw("https://openrouter.ai/api/v1", "key", "m", messages(), null).isFailure)

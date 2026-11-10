@@ -30,6 +30,11 @@ class InsightsManagerTest {
     }
 
     @Test
+    fun cacheKey_ruLang() {
+        assertEquals("insight_2026-05-13_ru_7", cacheKey("2026-05-13", "ru", 7))
+    }
+
+    @Test
     fun cacheKey_differsByPeriod() {
         assertNotEquals(cacheKey("2026-05-13", "ru", 7), cacheKey("2026-05-13", "ru", 30))
     }
