@@ -541,8 +541,8 @@
     <ID>TooGenericExceptionThrown:VoiceControllerSafetyTest.kt$VoiceControllerSafetyTest.FailingContinuousAsr$throw RuntimeException("boom")</ID>
     <ID>TooGenericExceptionThrown:VoiceControllerSessionTest.kt$VoiceControllerSessionTest.FailingContinuousAsr$throw RuntimeException("gigaam decode failed")</ID>
     <ID>TooManyFunctions:ActionDefBuilders.kt$com.bydmate.app.ui.automation.ActionDefBuilders.kt</ID>
-    <ID>TooManyFunctions:ActionDispatcher.kt$ActionDispatcher$Companion</ID>
     <ID>TooManyFunctions:ActionDispatcher.kt$ActionDispatcher</ID>
+    <ID>TooManyFunctions:ActionDispatcher.kt$ActionDispatcher$Companion</ID>
     <ID>TooManyFunctions:AdbOnDeviceClient.kt$AdbOnDeviceClient</ID>
     <ID>TooManyFunctions:AdbOnDeviceClient.kt$AdbOnDeviceClientImpl : AdbOnDeviceClient</ID>
     <ID>TooManyFunctions:AdbProtocolClient.kt$AdbProtocolClient : AdbProtocol</ID>
