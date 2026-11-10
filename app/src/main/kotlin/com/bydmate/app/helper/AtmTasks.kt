@@ -2,9 +2,10 @@ package com.bydmate.app.helper
 
 import android.graphics.Rect
 
-// Reflection shared by the task-list walks in HelperDaemon.kt (findTaskId, packageForTask,
-// topTaskPackage, topTaskInfo, findTaskState, taskModeState, taskActivityType).
-// None of these catch: each walk keeps its own runCatching and its own fallbacks.
+// The task list of the activity task manager, read and moved by reflection: first the helpers the
+// task-list walks share, then the walks themselves (findTaskId, packageForTask, topTaskPackage,
+// topTaskInfo, findTaskState, taskModeState, taskActivityType), then move, bounds and focus.
+// The shared helpers do not catch: each walk keeps its own runCatching and its own fallbacks.
 
 /** Package of [task] from topActivity, else baseActivity; null when neither yields one. */
 internal fun taskPackage(task: Any): String? =
