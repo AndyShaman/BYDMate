@@ -111,8 +111,6 @@ class AutoserviceChargingDetector @Inject constructor(
         // longer the true charge start, so we skip reconstruction. Applies ONLY
         // to socDelta below SOC_DELTA_TRUSTED_CHARGE (i.e. exactly 2%).
         const val ODOMETER_MOVED_EPSILON_KM = 1.0f
-        // Gun not connected — autoservice gunConnectState value meaning "no gun".
-        private const val GUN_STATE_NONE = 1
         // chargerConnectState (fid 89128973, dev 1009): 1 = plug physically in.
         private const val CHARGER_CONNECT_PLUGGED = 1
         // chargeConnectIndicator (fid 710934572, dev 1007): 1 = plug in, 2 = plug out.
@@ -131,7 +129,7 @@ class AutoserviceChargingDetector @Inject constructor(
         internal fun plugInserted(charger: Int?, indicator: Int?, gun: Int?): Boolean = when {
             charger == CHARGER_CONNECT_PLUGGED -> true
             indicator == CHARGE_INDICATOR_PLUGGED -> true
-            else -> gun != null && gun != 0 && gun != GUN_STATE_NONE
+            else -> gun != null && gun != 0 && gun != GunStateEdgeDetector.GUN_STATE_NONE
         }
         // A transient gun-fid glitch clears within a read or two; a gun fid
         // that stays silent across this many consecutive runs while sibling
@@ -457,7 +455,7 @@ class AutoserviceChargingDetector @Inject constructor(
                 status = "COMPLETED",
                 lifetimeKwhAtStart = null,
                 lifetimeKwhAtFinish = null,
-                gunState = charging?.gunConnectState?.takeIf { it != GUN_STATE_NONE },
+                gunState = charging?.gunConnectState?.takeIf { it != GunStateEdgeDetector.GUN_STATE_NONE },
                 detectionSource = detectionSource
             )
 
