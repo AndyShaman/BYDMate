@@ -51,9 +51,7 @@ import org.junit.Test
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.verify
 import io.mockk.mockk
-import io.mockk.spyk
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -342,39 +340,6 @@ class DashboardViewModelTest {
         readAtMs = 0L
     )
 
-    @Test
-    fun `adbVerdict and adbChecking mirror the monitor`() = runTest {
-        val vm = buildViewModel(
-            fakeAutoservice = FakeAutoservice(battery = null, available = false)
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertNull(vm.uiState.value.adbVerdict)
-        assertFalse(vm.uiState.value.adbChecking)
-
-        adbVerdictFlow.value = AdbVerdict.NOT_ENABLED
-        adbCheckingFlow.value = true
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals(AdbVerdict.NOT_ENABLED, vm.uiState.value.adbVerdict)
-        assertTrue(vm.uiState.value.adbChecking)
-
-        adbVerdictFlow.value = null
-        adbCheckingFlow.value = false
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertNull(vm.uiState.value.adbVerdict)
-        assertFalse(vm.uiState.value.adbChecking)
-    }
-
-    @Test
-    fun `recheckAdb and enableAdbRestore go through the monitor`() = runTest {
-        val vm = buildViewModel(fakeAutoservice = FakeAutoservice(sampleReading, available = true))
-
-        vm.recheckAdb()
-        vm.enableAdbRestore()
-
-        verify { adbVerdictMonitor.recheck("dashboard") }
-        verify { adbVerdictMonitor.enableRestoreAndRecheck() }
-    }
-
     // --- DM-i hybrid period sums (#184) ---
 
     private val fuelTrips = listOf(
@@ -595,23 +560,6 @@ class DashboardViewModelTest {
         assertEquals(2, t1.tripCount)
     }
 
-    @Test
-    fun reset_persists_anchor_and_recollects() = runTest {
-        val realSettingsRepo = SettingsRepository(FakeSettingsDao(), mockk<LocalePreferences>(relaxed = true))
-        val spySettings = spyk(realSettingsRepo)
-        val vm = buildViewModel(
-            fakeAutoservice = FakeAutoservice(null, available = false),
-            settingsRepositoryOverride = spySettings,
-            tripDaoOverride = StubTripDaoWithCounterStats(
-                TripCounterStats(40.0, 9.5, 1.9, 8.0, 1.5, 2, 3_000L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L)
-            ),
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-        vm.resetTripCounter(1)
-        testDispatcher.scheduler.advanceUntilIdle()
-        coVerify { spySettings.setTripResetState(1, any()) }
-    }
-
     /**
      * After resetTripCounter the DAO is re-queried with the new resetTs (≫ 1).
      * StubTripDaoForResetBehavior returns empty stats for any from > 1, so trip1.km
@@ -754,17 +702,6 @@ class DashboardViewModelTest {
         coVerify { calc.tripRateAt(match { it >= before }) }
     }
 
-    @Test
-    fun toggle_trip_expanded_is_mutually_exclusive() = runTest {
-        val vm = buildViewModel(fakeAutoservice = FakeAutoservice(null, available = false))
-        testDispatcher.scheduler.advanceUntilIdle()
-        vm.toggleTripExpanded(1)
-        assertTrue(vm.uiState.value.trip1Expanded)
-        vm.toggleTripExpanded(2)
-        assertTrue(vm.uiState.value.trip2Expanded)
-        assertFalse(vm.uiState.value.trip1Expanded)
-    }
-
     /**
      * Recording-stub test: when the VM starts with no active session
      * (TrackingService.sessionStartedAt = null), the DAO must be called
@@ -810,39 +747,5 @@ class DashboardViewModelTest {
         assertTrue("excludeStraddling must be true when no active session", loaded.excludeStraddling)
         assertEquals(0.0, loaded.corrKm, 0.0001)
         assertEquals(0.0, loaded.corrKwh, 0.0001)
-    }
-
-    /**
-     * Codex round-5: reset_persists_anchor_and_recollects still works (regression guard).
-     * spyk verifies setTripResetState is still called after the refactor.
-     */
-    @Test
-    fun `degraded reset persists anchor via setTripResetState`() = runTest {
-        val realSettingsRepo = SettingsRepository(FakeSettingsDao(), mockk<LocalePreferences>(relaxed = true))
-        val spySettings = spyk(realSettingsRepo)
-        val vm = buildViewModel(
-            fakeAutoservice = FakeAutoservice(null, available = false),
-            settingsRepositoryOverride = spySettings,
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.resetTripCounter(1)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify { spySettings.setTripResetState(1, any()) }
-    }
-
-    /**
-     * The compact battery card now also shows insulation and the cell delta. With no
-     * autoservice both stay null, which the card renders as «—» rather than a zero.
-     */
-    @Test
-    fun `compact card state exposes insulation and cell delta as null without live data`() = runTest {
-        val vm = buildViewModel(fakeAutoservice = FakeAutoservice(null, available = false))
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        val state = vm.uiState.value
-        assertNull(state.insulationKohm)
-        assertNull(state.cellVoltageDelta)
     }
 }

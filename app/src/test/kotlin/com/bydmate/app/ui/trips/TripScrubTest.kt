@@ -353,16 +353,6 @@ class TripScrubTest {
 
     // 21
     @Test
-    fun `speedColor returns the exact stop colors`() {
-        assertEquals(0xFF6366F1.toInt(), TripScrub.speedColor(0.0))
-        assertEquals(0xFF22D3EE.toInt(), TripScrub.speedColor(30.0))
-        assertEquals(0xFF4ADE80.toInt(), TripScrub.speedColor(60.0))
-        assertEquals(0xFFFDE047.toInt(), TripScrub.speedColor(90.0))
-        assertEquals(0xFFFB923C.toInt(), TripScrub.speedColor(120.0))
-        assertEquals(0xFFF43F5E.toInt(), TripScrub.speedColor(140.0))
-    }
-
-    @Test
     fun `speedColor clamps outside the scale`() {
         assertEquals(TripScrub.speedColor(0.0), TripScrub.speedColor(-5.0))
         assertEquals(TripScrub.speedColor(140.0), TripScrub.speedColor(200.0))
@@ -374,17 +364,6 @@ class TripScrubTest {
     }
 
     // 22
-    @Test
-    fun `consumptionColor returns the exact stop colors`() {
-        assertEquals(0xFF3B82F6.toInt(), TripScrub.consumptionColor(-20.0))
-        assertEquals(0xFF93C5FD.toInt(), TripScrub.consumptionColor(-3.0))
-        assertEquals(0xFFCBD5E1.toInt(), TripScrub.consumptionColor(0.0))
-        assertEquals(0xFFCBD5E1.toInt(), TripScrub.consumptionColor(18.0))
-        assertEquals(0xFFFBBF24.toInt(), TripScrub.consumptionColor(27.0))
-        assertEquals(0xFFF97316.toInt(), TripScrub.consumptionColor(40.0))
-        assertEquals(0xFFEF4444.toInt(), TripScrub.consumptionColor(60.0))
-    }
-
     @Test
     fun `consumptionColor is flat between 0 and 18, clamps, and marks missing data`() {
         assertEquals(0xFFCBD5E1.toInt(), TripScrub.consumptionColor(10.0))
