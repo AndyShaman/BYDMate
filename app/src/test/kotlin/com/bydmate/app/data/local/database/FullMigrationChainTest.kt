@@ -1,8 +1,11 @@
 package com.bydmate.app.data.local.database
 
+import androidx.room.Room
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
 import com.bydmate.app.di.AppModule
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -13,7 +16,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [29])
 class FullMigrationChainTest {
 
-    private val dbName = "migration-chain-5-22.db"
+    private val dbName = "migration-chain.db"
 
     @get:Rule
     val helper: MigrationTestHelper = MigrationTestHelper(
@@ -21,20 +24,56 @@ class FullMigrationChainTest {
         AppDatabase::class.java
     )
 
-    /** Oldest exported schema (5) through current (22) on PRODUCTION migrations only —
-     *  validates every step against the exported schema JSONs, like a v1.x-era user
-     *  updating straight to today's build. */
+    /**
+     * The oldest exported schema (5) opened by the very builder the app uses
+     * ([AppModule.withMigrations]), like a v1.x-era user updating straight to today's build.
+     * A migration left out of that list fails the open ("a migration from N to N+1 was required
+     * but not found"), and Room checks the result against the current entities. The trip, the
+     * charge and the tariff the user had come through with their numbers.
+     */
     @Test
-    fun `full chain 5 to 22 on production migrations`() {
-        helper.createDatabase(dbName, 5).close()
-        helper.runMigrationsAndValidate(
-            dbName, 22, true,
-            AppModule.MIGRATION_5_6, AppModule.MIGRATION_6_7, AppModule.MIGRATION_7_8,
-            AppModule.MIGRATION_8_9, AppModule.MIGRATION_9_10, AppModule.MIGRATION_10_11,
-            AppModule.MIGRATION_11_12, AppModule.MIGRATION_12_13, AppModule.MIGRATION_13_14,
-            AppModule.MIGRATION_14_15, AppModule.MIGRATION_15_16, AppModule.MIGRATION_16_17,
-            AppModule.MIGRATION_17_18, AppModule.MIGRATION_18_19,
-            AppModule.MIGRATION_19_20, AppModule.MIGRATION_20_21, AppModule.MIGRATION_21_22,
-        ).close()
+    fun `a version 5 database opens on the production migrations with the user's data intact`() {
+        helper.createDatabase(dbName, 5).apply {
+            execSQL(
+                "INSERT INTO trips (id, start_ts, end_ts, distance_km, kwh_consumed, kwh_per_100km, soc_start, soc_end, cost) " +
+                    "VALUES (1, 1700000000000, 1700003600000, 42.5, 8.1, 19.06, 80, 69, 1.62)"
+            )
+            execSQL(
+                "INSERT INTO charges (id, start_ts, end_ts, soc_start, soc_end, kwh_charged, type, cost, status, merged_count) " +
+                    "VALUES (1, 1700010000000, 1700020000000, 20, 80, 43.7, 'AC', 8.74, 'COMPLETED', 1)"
+            )
+            execSQL("INSERT INTO settings (key, value) VALUES ('home_tariff', '0.25')")
+            close()
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = AppModule.withMigrations(Room.databaseBuilder(context, AppDatabase::class.java, dbName)).build()
+        try {
+            val sql = db.openHelper.writableDatabase   // runs every migration and Room's schema check
+
+            sql.query("SELECT distance_km, kwh_consumed, kwh_per_100km, soc_start, soc_end, cost FROM trips WHERE id = 1").use { c ->
+                assertTrue("the trip is gone", c.moveToFirst())
+                assertEquals(42.5, c.getDouble(0), 0.0)
+                assertEquals(8.1, c.getDouble(1), 0.0)
+                assertEquals(19.06, c.getDouble(2), 0.0)
+                assertEquals(80, c.getInt(3))
+                assertEquals(69, c.getInt(4))
+                assertEquals(1.62, c.getDouble(5), 0.0)
+            }
+            sql.query("SELECT soc_start, soc_end, kwh_charged, type, cost FROM charges WHERE id = 1").use { c ->
+                assertTrue("the charge is gone", c.moveToFirst())
+                assertEquals(20, c.getInt(0))
+                assertEquals(80, c.getInt(1))
+                assertEquals(43.7, c.getDouble(2), 0.0)
+                assertEquals("AC", c.getString(3))
+                assertEquals(8.74, c.getDouble(4), 0.0)
+            }
+            sql.query("SELECT value FROM settings WHERE key = 'home_tariff'").use { c ->
+                assertTrue("the home tariff is gone", c.moveToFirst())
+                assertEquals("0.25", c.getString(0))
+            }
+        } finally {
+            db.close()
+        }
     }
 }
