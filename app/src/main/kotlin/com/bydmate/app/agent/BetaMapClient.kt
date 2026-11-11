@@ -230,7 +230,6 @@ internal object BetaMapParser {
         )
     }
 
-    /** Android's org.json turns a JSON null into the string "null" in optString: keep it null. */
     private interface CharSource {
         /** The next char, or -1 at the end of the stream. */
         fun next(): Int

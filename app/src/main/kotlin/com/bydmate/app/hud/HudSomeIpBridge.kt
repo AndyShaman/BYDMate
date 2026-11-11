@@ -64,7 +64,7 @@ class HudSomeIpBridge(
             services.entries.joinToString(",", "{", "}") { "${hex(it.key)}:${it.value}" }
 
         /** rc slot of a gateway call (startService, stopService, fireEvent) that threw instead of answering. */
-        const val THREW = -3
+        internal const val THREW = -3
 
         /** [e] through [gateway]; [THREW] when the call threw. */
         internal fun fire(gateway: HudSomeIpBridge, e: HudLauncherMapCnFrames.Event): Int =

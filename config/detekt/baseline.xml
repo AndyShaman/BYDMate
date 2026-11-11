@@ -51,7 +51,6 @@
     <ID>CyclomaticComplexMethod:AlicePollingManager.kt$AlicePollingManager$private fun reportState(endpoint: String, apiKey: String)</ID>
     <ID>CyclomaticComplexMethod:AutomationEngine.kt$AutomationEngine$private fun getParamValue(data: DiParsData, param: String): Double?</ID>
     <ID>CyclomaticComplexMethod:AutomationEngine.kt$AutomationEngine$suspend fun evaluate(data: DiParsData, tripStartedAt: Long?)</ID>
-    <ID>CyclomaticComplexMethod:AutomationViewModel.kt$AutomationViewModel$private fun validateActions(actions: List&lt;ActionDef&gt;): String?</ID>
     <ID>CyclomaticComplexMethod:AutoserviceChargingDetector.kt$AutoserviceChargingDetector$suspend fun runCatchUp( now: Long = System.currentTimeMillis(), observedKwAbs: Double? = null ): CatchUpResult</ID>
     <ID>CyclomaticComplexMethod:AvmCameraProbe.kt$AvmCameraProbe$@Synchronized private fun openBound(surfaces: Map&lt;Int, Surface&gt;): Boolean</ID>
     <ID>CyclomaticComplexMethod:BackupManager.kt$BackupManager$fun restore(file: File)</ID>

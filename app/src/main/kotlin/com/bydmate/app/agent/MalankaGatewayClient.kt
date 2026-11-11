@@ -80,7 +80,6 @@ class MalankaGatewayClient(private val http: OkHttpClient) {
         }
     }
 
-    /** Android's org.json turns a JSON null into the string "null" in optString: keep it null. */
     private companion object {
         const val TAG = "MalankaGateway"
         val NETWORKS = listOf(Network("", "Malanka"), Network("evika/", "Evika"), Network("battery-fly/", "Battery Fly"))

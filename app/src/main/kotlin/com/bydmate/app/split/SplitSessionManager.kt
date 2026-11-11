@@ -31,7 +31,7 @@ private val OUR_PACKAGE get() = BuildConfig.APPLICATION_ID
 // ─── Geometry constants (validated live on the car, screen 1920×1080) ────────
 
 internal const val SCREEN_W = 1920
-internal const val Y_TOP = 84
+private const val Y_TOP = 84
 internal const val Y_BOT = 990
 
 /** Narrow pane on the right: junction at x=1280 (one-third from the right). */
