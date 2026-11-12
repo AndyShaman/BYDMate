@@ -25,7 +25,7 @@
     <string name="settings_display_window_subhead">Cluster window</string>
     <string name="cluster_a11y_description">Intercepts steering-wheel buttons to project navigation onto the instrument cluster. Enabled manually, works only when the feature is on.</string>
     <string name="settings_display_mirror_title">Projection to cluster via wheel button</string>
-    <string name="settings_cluster_auto_container_title">Switch the cluster to the navigator and cameras</string>
+    <string name="settings_cluster_auto_container_title">Auto-switch the cluster</string>
     <string name="settings_cluster_auto_container_desc">When on, the app switches the cluster by itself so the navigator and the blind-spot cameras show on it. Turn it off if the stock cluster view with ADAS disappears when you use the turn signal or show the navigator: the picture then stays only in the small map.</string>
     <string name="settings_cluster_full_display_title">Full cluster screen</string>
     <string name="settings_cluster_full_display_desc">The map across the whole cluster, without the bottom strip with the speed. Turn on if the map takes only a narrow strip at the top. Applies at the next output to the cluster.</string>

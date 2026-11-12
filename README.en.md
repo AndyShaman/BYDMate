@@ -237,11 +237,11 @@ The right star turns on the projection by default. You can reassign the button, 
 
 ### Enabling
 
-Open **Settings → Display** and turn on the "Cluster projection" toggle. The app enables the needed service itself (this requires the ADB activation done during install, see "Install") and switches the cluster into projection mode by itself: that is what the "Switch the cluster to the navigator and cameras" toggle does, on by default. Nothing needs to be set up by hand on the head unit.
+Open **Settings → Display** and turn on the "Cluster projection" toggle. The app enables the needed service itself (this requires the ADB activation done during install, see "Install") and switches the cluster into projection mode by itself: that is what the "Auto-switch the cluster" toggle does, on by default. Nothing needs to be set up by hand on the head unit.
 
 After that, a short press of the chosen steering-wheel button (right star by default) moves the chosen app to the cluster and back.
 
-If you turn "Switch the cluster to the navigator and cameras" off, you will need to put the cluster into projection mode once yourself: the projection icon on the head unit's home screen, then the **IPC** button on the map that appears. It is worth turning off if, after projecting, ADAS or the native widget disappears from the cluster and does not come back by itself (on some DiLink 5.0 firmware the projection screen lives inside the native mini-map): with the toggle off the app does not touch the cluster mode at all, including for blind-spot cameras, and the picture is visible in the mini-map.
+If you turn "Auto-switch the cluster" off, you will need to put the cluster into projection mode once yourself: the projection icon on the head unit's home screen, then the **IPC** button on the map that appears. It is worth turning off if, after projecting, ADAS or the native widget disappears from the cluster and does not come back by itself (on some DiLink 5.0 firmware the projection screen lives inside the native mini-map): with the toggle off the app does not touch the cluster mode at all, including for blind-spot cameras, and the picture is visible in the mini-map.
 
 <img src="docs/screenshots/settings-display-en.jpg" alt="Settings → Display: cluster projection, what each option does" width="800">
 

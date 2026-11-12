@@ -26,7 +26,7 @@
     <string name="settings_display_card_blindspot_sub">Câmera pela seta. %1$s</string>
     <string name="settings_display_window_subhead">Janela no painel</string>
     <string name="settings_display_mirror_title">Projeção no painel via botão do volante</string>
-    <string name="settings_cluster_auto_container_title">Alternar o painel para o navegador e as câmeras</string>
+    <string name="settings_cluster_auto_container_title">Alternar o painel automaticamente</string>
     <string name="settings_cluster_auto_container_desc">Quando ativado, o app alterna o painel sozinho para que o navegador e as câmeras de ponto cego apareçam nele. Desative se a vista de fábrica do painel com o ADAS sumir ao usar a seta ou mostrar o navegador: então a imagem fica só no minimapa.</string>
     <string name="settings_cluster_full_display_title">Tela cheia do painel</string>
     <string name="settings_cluster_full_display_desc">O mapa no painel inteiro, sem a faixa de baixo com a velocidade. Ative se o mapa ocupa só uma faixa estreita em cima. Vale na próxima projeção no painel.</string>

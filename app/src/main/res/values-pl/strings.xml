@@ -29,7 +29,7 @@
     <string name="settings_display_card_blindspot_sub">Kamera przy kierunkowskazie. %1$s</string>
     <string name="settings_display_window_subhead">Okno na wskaźnikach</string>
     <string name="settings_display_mirror_title">Wyświetlanie na wskaźnikach przyciskiem kierownicy</string>
-    <string name="settings_cluster_auto_container_title">Przełączaj wskaźniki na nawigację i kamery</string>
+    <string name="settings_cluster_auto_container_title">Automatyczne przełączanie wskaźników</string>
     <string name="settings_cluster_auto_container_desc">Gdy włączone, aplikacja sama przełącza wskaźniki, aby była na nich widoczna nawigacja i kamery martwego pola. Wyłącz, jeśli przy kierunkowskazie lub wyświetlaniu nawigacji znika fabryczny widok wskaźników z ADAS: wtedy obraz zostanie tylko w małej mapie.</string>
     <string name="settings_cluster_full_display_title">Pełny ekran wskaźników</string>
     <string name="settings_cluster_full_display_desc">Mapa na całych wskaźnikach, bez dolnego paska z prędkością. Włącz, jeśli mapa zajmuje tylko wąski pasek u góry. Działa przy następnej projekcji na wskaźniki.</string>
