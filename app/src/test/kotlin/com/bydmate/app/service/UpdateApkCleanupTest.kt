@@ -107,6 +107,11 @@ class UpdateApkCleanupTest {
     }
 
     @Test
+    fun `run on empty dir returns zero`() {
+        assertEquals(0, UpdateApkCleanup.run(tempFolder.root, "3.17.5"))
+    }
+
+    @Test
     fun `run on missing dir returns zero`() {
         val missing = File(tempFolder.root, "does-not-exist")
         assertEquals(0, UpdateApkCleanup.run(missing, "3.17.5"))

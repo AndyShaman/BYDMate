@@ -14,6 +14,19 @@ class BeltProbeLogTest {
     private fun data(rl: Int?, settingRl: Int? = null, occupancyRl: Int? = null) =
         diParsData().copy(seatbeltRL = rl, rearBeltSettingRL = settingRl, occupancyRL = occupancyRl)
 
+    @Test fun `prints every rear belt reading next to the seats`() {
+        val line = probe.line(diParsData().copy(
+            seatbeltRL = 1, seatbeltRM = 0, seatbeltRR = 1,
+            rearBeltSettingRL = 2, rearBeltSettingRM = 1, rearBeltSettingRR = 2,
+            occupancyRL = 2, occupancyRM = 1, occupancyRR = 2,
+        ))
+
+        assertEquals(
+            "belt probe: instrument RL=1 RM=0 RR=1 setting RL=2 RM=1 RR=2 occupancy RL=2 RM=1 RR=2",
+            line,
+        )
+    }
+
     @Test fun `logs a change, not a repeat`() {
         probe.line(data(rl = 0))
         now += 10_000
