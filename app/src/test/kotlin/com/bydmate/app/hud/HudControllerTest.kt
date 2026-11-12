@@ -270,6 +270,21 @@ class HudControllerTest {
         assertEquals(HudController.Status.BIND_FAILED, c.status.value)
     }
 
+    @Test fun `a failed gateway start is a status line with its step and rc`() {
+        installSomeIp()
+        coEvery { helperBootstrap.ensureRunning() } returns true
+        val bridge = mockk<HudSomeIpBridge>(relaxed = true)
+        coEvery { bridge.bind() } returns true
+        every { bridge.startService(any()) } returns -2
+        val c = controller(bridge)
+        c.setEnabled(true)
+        assertEquals(HudController.Status.BIND_FAILED, c.status.value)
+        val status = trace.events().filter { it.contains(" status ") }
+        assertEquals(2, status.size)
+        assertTrue(status[0], status[0].contains("status to=connecting #"))
+        assertTrue(status[1], status[1].contains("status to=bind_failed step=start_service rc=-2 #"))
+    }
+
     @Test fun `the output on and off are status lines, the way goes to the route summary`() {
         installSomeIp()
         coEvery { helperBootstrap.ensureRunning() } returns true
@@ -281,6 +296,11 @@ class HudControllerTest {
         assertEquals(0, NavGuidanceHub.hudWay)
         val status = trace.events().filter { it.contains(" status ") }.map { it.substringAfter("status ").substringBefore(" #") }
         assertEquals(listOf("to=connecting", "to=on rc=0", "to=off"), status)
+    }
+
+    @Test fun `a service stop with the output already off writes no status line`() {
+        controller().stop()
+        assertTrue(trace.events().none { it.contains(" status ") })
     }
 
     // --- #301: the cluster card through the Amap adapter, only without the gateway ---

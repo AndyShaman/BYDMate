@@ -518,6 +518,15 @@ class HudCheckTest {
         assertTrue(prefs().contains(HudWayChannels.KEY_LMCN_LEFT))
     }
 
+    @Test fun `a check that never reached step 3 traces no CAN clear`() = runTest {
+        val s = setup()
+        val job = launch { s.check.run() }
+        advanceTimeBy(5_000)   // inside step 1
+        job.cancel()
+        job.join()
+        assertTrue(canClearEvents().isEmpty())
+    }
+
     // --- a route that starts during the check ---
 
     /** A projection running with its arming: the check shares its gateway. */

@@ -591,4 +591,29 @@ class HudArmingTest {
         assertTrue(trace.events().single { it.contains(" disarm ") }.let { it.contains(" reason=guidance-off ") && it.endsWith("by=#$offId") })
         a.stop()
     }
+
+    @Test fun `a disarm the HUD check's pause brought says paused`() = runTest {
+        val car = FakeCar()
+        val lines = mutableListOf<String>()
+        var paused = false
+        val a = arming(car, lines)
+        a.start(backgroundScope, layoutOwned = { !paused }) { !paused }
+        runCurrent()
+        paused = true
+        advanceTimeBy(1_100); runCurrent()
+        assertTrue(lines.last().endsWith(" reason=paused"))
+        assertFalse(trace.events().single { it.contains(" disarm ") }.contains("by=#"))
+        a.stop()
+    }
+
+    @Test fun `a stop's disarm carries the reason it was given`() = runTest {
+        val car = FakeCar()
+        val lines = mutableListOf<String>()
+        val a = arming(car, lines)
+        a.start(backgroundScope) { true }
+        runCurrent()
+        a.stop(HudArming.REASON_HUD_OFF)
+        assertTrue(lines.last().endsWith(" reason=hud-off"))
+        assertTrue(trace.events().single { it.contains(" disarm ") }.contains(" reason=hud-off "))
+    }
 }
