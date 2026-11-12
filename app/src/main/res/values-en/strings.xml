@@ -34,6 +34,7 @@
     <string name="settings_projection_mode_title">Cluster output mode</string>
     <string name="settings_projection_mode_direct">Extended</string>
     <string name="settings_projection_mode_vd">Factory</string>
+    <string name="settings_projection_mode_only_extended">Only “Extended” works on this car</string>
     <string name="settings_projection_mode_help" formatted="false">Factory: works like versions before 3.6, no system settings of the car are changed, the adjustment sliders work more precisely. Downside: the voice agent and HUD cannot see the navigator screen, guidance comes from the notification only. Extended: the navigator runs right on the cluster, the agent and HUD can see it. Enables the system freeform window mode, a one-time DiLink reboot is required. To restore factory state: switch back to Factory, the system setting returns to its factory value and fully applies after a reboot. The mode itself applies on the next projection start.</string>
     <string name="projection_extended_confirm_title">Enable extended mode?</string>
     <string name="projection_extended_confirm_body">Extended mode changes a DiLink system window setting so the navigator runs right on the instrument cluster and the voice agent and HUD can see it. A one-time DiLink reboot will be required. To restore the factory state, switch back to Factory and reboot DiLink.</string>
@@ -91,7 +92,7 @@
     <string name="settings_adb_restore_status_connecting">Restoring…</string>
     <string name="settings_adb_restore_status_restored">Restored at %1$s</string>
     <string name="settings_adb_restore_status_failed">Error: %1$s</string>
-    <string name="settings_adb_restore_status_unsupported">Not available on Android 10. If ADB is gone after a reboot, turn it on again following the guide on GitHub, section “Enable ADB”.</string>
+    <string name="settings_adb_restore_status_unsupported">Not available on Android 10</string>
     <string name="settings_cloud_wifi_title">BYD cloud over Wi-Fi</string>
     <string name="settings_cloud_wifi_desc">The BYD phone app sees the car while it is on Wi-Fi. Cars on the new BYD servers need a Chinese VPN.</string>
     <string name="settings_cloud_wifi_help_title">How the BYD cloud over Wi-Fi works</string>
@@ -100,6 +101,7 @@
     <string name="settings_cloud_wifi_status_own_cellular">The car has its own mobile data, the cloud works anyway</string>
     <string name="settings_cloud_wifi_status_waiting">Waiting for Wi-Fi with internet</string>
     <string name="settings_cloud_wifi_status_rejected">The car did not accept the connection setting</string>
+    <string name="settings_cloud_wifi_status_unavailable">Not available on the firmware of this car</string>
     <string name="settings_cloud_wifi_status_silent">The BYD cloud did not answer. We will try again on the next Wi-Fi connection</string>
     <string name="settings_cloud_wifi_status_refused">The BYD server refuses the car. It needs a Chinese VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">No ADB access: turn on ADB to use this setting</string>

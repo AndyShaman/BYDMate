@@ -38,6 +38,7 @@
     <string name="settings_projection_mode_title">Режим вывода на приборку</string>
     <string name="settings_projection_mode_direct">Расширенный</string>
     <string name="settings_projection_mode_vd">Заводской</string>
+    <string name="settings_projection_mode_only_extended">На этой машине работает только «Расширенный»</string>
     <string name="settings_projection_mode_help" formatted="false">Заводской: как в версиях до 3.6, системные настройки машины не меняются, точнее работают ползунки подстройки. Минус: голосовой агент и HUD не видят экран навигатора, подсказки только из уведомления. Расширенный: навигатор работает прямо на приборке, его видят агент и HUD. Включает системный оконный режим, нужна однократная перезагрузка ДиЛинка. Возврат к заводу: переключите на Заводской, системная настройка вернётся к заводскому значению и полностью применится после перезагрузки. Режим применяется при следующем выводе на приборку.</string>
     <string name="projection_extended_confirm_title">Включить расширенный режим?</string>
     <string name="projection_extended_confirm_body">Расширенный режим меняет системную настройку оконного режима ДиЛинка, чтобы навигатор работал прямо на приборке и его видели голосовой агент и HUD. Понадобится однократная перезагрузка ДиЛинка. Чтобы вернуть заводское состояние, переключите обратно на Заводской и перезагрузите ДиЛинк.</string>
@@ -95,7 +96,7 @@
     <string name="settings_adb_restore_status_connecting">Восстанавливаем…</string>
     <string name="settings_adb_restore_status_restored">Восстановлено в %1$s</string>
     <string name="settings_adb_restore_status_failed">Ошибка: %1$s</string>
-    <string name="settings_adb_restore_status_unsupported">Недоступно на Android 10. Если ADB пропал после перезагрузки, включите его снова по инструкции на GitHub, раздел «Активация ADB».</string>
+    <string name="settings_adb_restore_status_unsupported">На Android 10 недоступно</string>
     <string name="settings_cloud_wifi_title">Облако BYD через Wi-Fi</string>
     <string name="settings_cloud_wifi_desc">Приложение BYD на телефоне видит машину, когда она в Wi-Fi. На новых серверах BYD нужен китайский VPN.</string>
     <string name="settings_cloud_wifi_help_title">Как работает облако BYD через Wi-Fi</string>
@@ -104,6 +105,7 @@
     <string name="settings_cloud_wifi_status_own_cellular">У машины своя мобильная связь, облако работает и так</string>
     <string name="settings_cloud_wifi_status_waiting">Ждём Wi-Fi с интернетом</string>
     <string name="settings_cloud_wifi_status_rejected">Машина не приняла настройку связи</string>
+    <string name="settings_cloud_wifi_status_unavailable">На прошивке этой машины недоступно</string>
     <string name="settings_cloud_wifi_status_silent">Облако BYD не ответило. Попробуем снова при следующем подключении к Wi-Fi</string>
     <string name="settings_cloud_wifi_status_refused">Сервер BYD не пускает машину. Нужен китайский VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">Нет доступа ADB: включите ADB, чтобы пользоваться этой настройкой</string>

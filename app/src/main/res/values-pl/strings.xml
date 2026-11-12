@@ -38,6 +38,7 @@
     <string name="settings_projection_mode_title">Tryb wyświetlania na wskaźnikach</string>
     <string name="settings_projection_mode_direct">Rozszerzony</string>
     <string name="settings_projection_mode_vd">Fabryczny</string>
+    <string name="settings_projection_mode_only_extended">Na tym samochodzie działa tylko „Rozszerzony”</string>
     <string name="settings_projection_mode_help" formatted="false">Fabryczny: jak w wersjach do 3.6, ustawienia systemowe auta nie zmieniają się, dokładniej działają suwaki dopasowania. Minus: asystent głosowy i HUD nie widzą ekranu nawigacji, wskazówki tylko z powiadomienia. Rozszerzony: nawigacja działa bezpośrednio na wskaźnikach, widzą ją agent i HUD. Włącza systemowy tryb okienkowy, wymaga jednorazowego restartu DiLink. Powrót do fabryki: przełącz na Fabryczny, ustawienie systemowe wróci do wartości fabrycznej i w pełni zadziała po restarcie. Tryb jest stosowany przy następnym wyświetleniu na wskaźnikach.</string>
     <string name="projection_extended_confirm_title">Włączyć tryb rozszerzony?</string>
     <string name="projection_extended_confirm_body">Tryb rozszerzony zmienia systemowe ustawienie trybu okienkowego DiLink, żeby nawigacja działała bezpośrednio na wskaźnikach i widzieli ją asystent głosowy oraz HUD. Potrzebny będzie jednorazowy restart DiLink. Aby przywrócić stan fabryczny, przełącz z powrotem na Fabryczny i zrestartuj DiLink.</string>
@@ -95,7 +96,7 @@
     <string name="settings_adb_restore_status_connecting">Przywracanie…</string>
     <string name="settings_adb_restore_status_restored">Przywrócono o %1$s</string>
     <string name="settings_adb_restore_status_failed">Błąd: %1$s</string>
-    <string name="settings_adb_restore_status_unsupported">Niedostępne na Androidzie 10. Jeśli ADB zniknęło po ponownym uruchomieniu, włącz je ponownie według instrukcji na GitHubie, sekcja „Enable ADB”.</string>
+    <string name="settings_adb_restore_status_unsupported">Niedostępne na Androidzie 10</string>
     <string name="settings_cloud_wifi_title">Chmura BYD przez Wi-Fi</string>
     <string name="settings_cloud_wifi_desc">Aplikacja BYD na telefonie widzi auto, gdy jest w sieci Wi-Fi. Auta na nowych serwerach BYD potrzebują chińskiego VPN.</string>
     <string name="settings_cloud_wifi_help_title">Jak działa chmura BYD przez Wi-Fi</string>
@@ -104,6 +105,7 @@
     <string name="settings_cloud_wifi_status_own_cellular">Auto ma własną transmisję danych, chmura i tak działa</string>
     <string name="settings_cloud_wifi_status_waiting">Czekamy na Wi-Fi z internetem</string>
     <string name="settings_cloud_wifi_status_rejected">Auto nie przyjęło ustawienia łączności</string>
+    <string name="settings_cloud_wifi_status_unavailable">Niedostępne w oprogramowaniu tego samochodu</string>
     <string name="settings_cloud_wifi_status_silent">Chmura BYD nie odpowiedziała. Spróbujemy ponownie przy następnym połączeniu z Wi-Fi</string>
     <string name="settings_cloud_wifi_status_refused">Serwer BYD nie wpuszcza auta. Potrzebny jest chiński VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">Brak dostępu ADB: włącz ADB, aby korzystać z tego ustawienia</string>

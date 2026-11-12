@@ -132,6 +132,20 @@ fun SettingToggleRow(
     }
 }
 
+/** Row "title + one line", nothing to press: a setting this car cannot use, said as a fact. */
+@Composable
+fun SettingInfoRow(title: String, description: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RowLabel(title, description, enabled = true, Modifier.weight(1f))
+    }
+}
+
 /** Row "title + hint + slider with value label on the right". */
 @Composable
 fun SettingSliderRow(

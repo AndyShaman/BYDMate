@@ -396,4 +396,13 @@ internal fun cloudOverWifiStatusText(state: CloudOverWifiState): String? = when 
     CloudOverWifiState.ServerRefused -> stringResource(R.string.settings_cloud_wifi_status_refused)
     CloudOverWifiState.Connected -> stringResource(R.string.settings_cloud_wifi_status_connected)
     CloudOverWifiState.ReturnPending -> stringResource(R.string.settings_cloud_wifi_status_return_pending)
+    CloudOverWifiState.Unavailable -> stringResource(R.string.settings_cloud_wifi_status_unavailable)
 }
+
+/**
+ * Whether the cloud switch can be pressed. Locked off without ADB; once on, switching off stays
+ * possible so the return of the car's settings can wait for ADB to come back. On a firmware
+ * without a data profile (#330) it can only go off.
+ */
+internal fun cloudOverWifiSwitchEnabled(state: CloudOverWifiState, enabled: Boolean, adbReady: Boolean): Boolean =
+    if (state == CloudOverWifiState.Unavailable) enabled else enabled || adbReady

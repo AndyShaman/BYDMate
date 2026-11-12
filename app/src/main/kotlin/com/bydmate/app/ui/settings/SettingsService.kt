@@ -229,7 +229,7 @@ internal fun ServiceSection(
     // every car: where the port survives a reboot the status line simply says so.
     val adbRestore = remember { clusterEntryPoint.adbRestoreManager() }
     var adbRestoreEnabled by remember { mutableStateOf(adbRestore.isEnabled()) }
-    // Android 10: the toggle stays visible but locked off, the status line says why.
+    // Android 10: no switch, one line saying the restore is not available there.
     val adbRestoreSupported = remember { adbRestore.isSupported() }
     var adbRestoreHelpOpen by remember { mutableStateOf(false) }
     val adbRestoreState by adbRestore.state.collectAsStateWithLifecycle()
@@ -263,20 +263,25 @@ internal fun ServiceSection(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-            SettingToggleRow(
-                title = stringResource(R.string.settings_adb_restore_title),
-                traceId = "adb_restore",
-                description = stringResource(R.string.settings_adb_restore_desc),
-                checked = adbRestoreEnabled && adbRestoreSupported,
-                onCheckedChange = { enabled ->
-                    adbRestoreEnabled = enabled
-                    adbRestore.setEnabled(enabled)
-                },
-                enabled = adbRestoreSupported,
-                // The help explains a working restore; on Android 10 the status line says why there is none.
-                onHelp = if (adbRestoreSupported) ({ adbRestoreHelpOpen = true }) else null,
-            )
-            adbRestoreStatusText(adbRestoreState)?.let { SettingHint(text = it) }
+            if (adbRestoreSupported) {
+                SettingToggleRow(
+                    title = stringResource(R.string.settings_adb_restore_title),
+                    traceId = "adb_restore",
+                    description = stringResource(R.string.settings_adb_restore_desc),
+                    checked = adbRestoreEnabled,
+                    onCheckedChange = { enabled ->
+                        adbRestoreEnabled = enabled
+                        adbRestore.setEnabled(enabled)
+                    },
+                    onHelp = { adbRestoreHelpOpen = true },
+                )
+                adbRestoreStatusText(adbRestoreState)?.let { SettingHint(text = it) }
+            } else {
+                SettingInfoRow(
+                    title = stringResource(R.string.settings_adb_restore_title),
+                    description = stringResource(R.string.settings_adb_restore_status_unsupported),
+                )
+            }
             val verdict = adbVerdict
             if (adbChecking) {
                 Text(
@@ -312,9 +317,7 @@ internal fun ServiceSection(
                     cloudOverWifiEnabled = enabled
                     cloudOverWifi.setEnabled(enabled)
                 },
-                // Locked off without ADB; once on, switching off stays possible so the return
-                // of the car's settings can wait for ADB to come back.
-                enabled = cloudOverWifiEnabled || cloudAdbReady,
+                enabled = cloudOverWifiSwitchEnabled(cloudOverWifiState, cloudOverWifiEnabled, cloudAdbReady),
                 onHelp = { cloudOverWifiHelpOpen = true },
             )
             // A known verdict only: while the check runs there is nothing true to say yet.

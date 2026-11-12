@@ -35,6 +35,7 @@
     <string name="settings_projection_mode_title">Modo de exibição no painel</string>
     <string name="settings_projection_mode_direct">Estendido</string>
     <string name="settings_projection_mode_vd">De fábrica</string>
+    <string name="settings_projection_mode_only_extended">Neste carro só funciona o “Estendido”</string>
     <string name="settings_projection_mode_help" formatted="false">De fábrica: funciona como nas versões anteriores à 3.6, nenhuma configuração do sistema do carro é alterada, os controles de ajuste funcionam com mais precisão. Desvantagem: o agente de voz e o HUD não veem a tela do navegador, as orientações vêm apenas da notificação. Estendido: o navegador roda direto no painel de instrumentos, o agente e o HUD conseguem vê-lo. Ativa o modo de janelas do sistema, é preciso reiniciar o DiLink uma vez. Para voltar ao estado de fábrica: mude para De fábrica, a configuração do sistema volta ao valor de fábrica e é aplicada por completo após uma reinicialização. O modo em si é aplicado na próxima projeção.</string>
     <string name="projection_extended_confirm_title">Ativar o modo estendido?</string>
     <string name="projection_extended_confirm_body">O modo estendido altera uma configuração de janelas do sistema do DiLink para que o navegador rode direto no painel de instrumentos e o agente de voz e o HUD possam vê-lo. Será preciso reiniciar o DiLink uma vez. Para restaurar o estado de fábrica, volte para De fábrica e reinicie o DiLink.</string>
@@ -92,7 +93,7 @@
     <string name="settings_adb_restore_status_connecting">A restaurar…</string>
     <string name="settings_adb_restore_status_restored">Restaurado às %1$s</string>
     <string name="settings_adb_restore_status_failed">Erro: %1$s</string>
-    <string name="settings_adb_restore_status_unsupported">Indisponível no Android 10. Se o ADB sumiu após reiniciar, ative-o de novo seguindo o guia no GitHub, seção “Enable ADB”.</string>
+    <string name="settings_adb_restore_status_unsupported">Indisponível no Android 10</string>
     <string name="settings_cloud_wifi_title">Nuvem BYD via Wi-Fi</string>
     <string name="settings_cloud_wifi_desc">O app BYD no telefone vê o carro quando ele está no Wi-Fi. Carros nos novos servidores BYD precisam de uma VPN chinesa.</string>
     <string name="settings_cloud_wifi_help_title">Como funciona a nuvem BYD via Wi-Fi</string>
@@ -101,6 +102,7 @@
     <string name="settings_cloud_wifi_status_own_cellular">O carro tem dados móveis próprios, a nuvem já funciona</string>
     <string name="settings_cloud_wifi_status_waiting">Aguardando Wi-Fi com internet</string>
     <string name="settings_cloud_wifi_status_rejected">O carro não aceitou a configuração de ligação</string>
+    <string name="settings_cloud_wifi_status_unavailable">Indisponível no firmware deste carro</string>
     <string name="settings_cloud_wifi_status_silent">A nuvem BYD não respondeu. Tentaremos de novo na próxima ligação ao Wi-Fi</string>
     <string name="settings_cloud_wifi_status_refused">O servidor BYD recusa o carro. É preciso uma VPN chinesa</string>
     <string name="settings_cloud_wifi_status_no_adb">Sem acesso ADB: ative o ADB para usar esta opção</string>

@@ -348,8 +348,12 @@ internal fun DisplaySection() {
     var directProjection by remember {
         mutableStateOf(ClusterProjectionManager.isDirectProjectionEnabled(context))
     }
+    // #194: a car whose cluster only the daemon sees always runs the direct transport.
+    val directForced = remember { ClusterProjectionManager.isDirectForced(context) }
+    val modeRow = projectionModeRow(directProjection, directForced)
     var extendedConfirmOpen by remember { mutableStateOf(false) }
     var modeHelpOpen by remember { mutableStateOf(false) }
+    var autoContainerHelpOpen by remember { mutableStateOf(false) }
     var preferFullDisplay by remember {
         mutableStateOf(ClusterProjectionManager.isPreferFullDisplay(context))
     }
@@ -400,43 +404,53 @@ internal fun DisplaySection() {
         SettingToggleRow(
             title = stringResource(R.string.settings_cluster_auto_container_title),
             traceId = "cluster_auto_container",
-            description = stringResource(R.string.settings_cluster_auto_container_desc),
             checked = autoContainer,
             onCheckedChange = {
                 autoContainer = it
                 prefs.edit().putBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, it).apply()
             },
+            onHelp = { autoContainerHelpOpen = !autoContainerHelpOpen },
         )
+        if (autoContainerHelpOpen) {
+            SettingHint(text = stringResource(R.string.settings_cluster_auto_container_desc))
+        }
         SettingDivider()
         // Transport selector: direct freeform (agent/HUD can see the navigator) vs the
         // pre-3.6 VirtualDisplay pipeline. VD also returns the system freeform flag to its
         // factory value — the fix for third-party projection apps broken by a stale flag.
-        SettingChipRow(
-            title = stringResource(R.string.settings_projection_mode_title),
-            options = listOf(
-                stringResource(R.string.settings_projection_mode_vd),
-                stringResource(R.string.settings_projection_mode_direct),
-            ),
-            selectedIndex = if (directProjection) 1 else 0,
-            onSelect = { index ->
-                val direct = index == 1
-                if (direct != directProjection) {
-                    if (direct) {
-                        // Extended transport changes a system window setting - informed
-                        // consent first: what changes, why, and how to restore factory.
-                        extendedConfirmOpen = true
-                    } else {
-                        directProjection = false
-                        rebootPending = false
-                        ClusterProjectionManager.setDirectProjectionEnabled(
-                            context, false, entryPoint.helperClient(), entryPoint.helperBootstrap())
+        if (modeRow == ProjectionModeRow.OnlyExtended) {
+            SettingInfoRow(
+                title = stringResource(R.string.settings_projection_mode_title),
+                description = stringResource(R.string.settings_projection_mode_only_extended),
+            )
+        } else {
+            SettingChipRow(
+                title = stringResource(R.string.settings_projection_mode_title),
+                options = listOf(
+                    stringResource(R.string.settings_projection_mode_vd),
+                    stringResource(R.string.settings_projection_mode_direct),
+                ),
+                selectedIndex = if (directProjection) 1 else 0,
+                onSelect = { index ->
+                    val direct = index == 1
+                    if (direct != directProjection) {
+                        if (direct) {
+                            // Extended transport changes a system window setting - informed
+                            // consent first: what changes, why, and how to restore factory.
+                            extendedConfirmOpen = true
+                        } else {
+                            directProjection = false
+                            rebootPending = false
+                            ClusterProjectionManager.setDirectProjectionEnabled(
+                                context, false, entryPoint.helperClient(), entryPoint.helperBootstrap())
+                        }
                     }
-                }
-            },
-            onHelp = { modeHelpOpen = !modeHelpOpen },
-        )
-        if (modeHelpOpen) {
-            SettingHint(text = stringResource(R.string.settings_projection_mode_help))
+                },
+                onHelp = { modeHelpOpen = !modeHelpOpen },
+            )
+            if (modeHelpOpen) {
+                SettingHint(text = stringResource(R.string.settings_projection_mode_help))
+            }
         }
         SettingDivider()
         // Which cluster projection surface to render on: the native mini band ("..._1", default)
@@ -575,7 +589,7 @@ internal fun DisplaySection() {
         // override on the cluster display. That override is only ever set while no window of the
         // app is on the display (it kills Qt apps like 2GIS otherwise), so in direct mode a new
         // value lands on the next send to the cluster rather than right away.
-        if (directProjection) {
+        if (modeRow.effectiveDirect) {
             SettingHint(text = stringResource(R.string.settings_display_scale_direct_hint))
         }
     }
@@ -637,13 +651,13 @@ internal fun DisplaySection() {
                         }
                     },
                 )
+                SettingHint(text = stringResource(R.string.settings_hud_mode_pick_hint))
                 SettingHint(text = stringResource(R.string.settings_hud_mode_1_desc))
                 SettingHint(text = stringResource(R.string.settings_hud_mode_2_desc))
                 HudTrialHint(
                     text = stringResource(R.string.settings_hud_mode_3_desc),
                     tag = stringResource(R.string.settings_hud_mode_trial),
                 )
-                SettingHint(text = stringResource(R.string.settings_hud_mode_pick_hint))
                 SettingDivider()
             }
             SettingStatusRow(
@@ -961,3 +975,20 @@ internal fun steeringButtonLabel(keyCode: Int): String {
     return if (res != 0) stringResource(res)
     else stringResource(R.string.steering_button_unknown, keyCode)
 }
+
+/** What the «Режим вывода на приборку» row shows: a fact on a forced car (#194), else the chooser. */
+internal sealed interface ProjectionModeRow {
+    /** The transport the projection actually uses, for the hints under the row. */
+    val effectiveDirect: Boolean
+
+    data object OnlyExtended : ProjectionModeRow {
+        override val effectiveDirect = true
+    }
+
+    data class Chooser(val directSelected: Boolean) : ProjectionModeRow {
+        override val effectiveDirect: Boolean get() = directSelected
+    }
+}
+
+internal fun projectionModeRow(directChosen: Boolean, directForced: Boolean): ProjectionModeRow =
+    if (directForced) ProjectionModeRow.OnlyExtended else ProjectionModeRow.Chooser(directChosen)

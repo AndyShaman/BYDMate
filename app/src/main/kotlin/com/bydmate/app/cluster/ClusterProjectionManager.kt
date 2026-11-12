@@ -835,13 +835,17 @@ object ClusterProjectionManager {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_DIRECT_FORCED, false)
 
+    /** [readDirectForced] for the settings row, which shows the forced case instead of a choice. */
+    fun isDirectForced(context: Context): Boolean = readDirectForced(context)
+
     /**
      * The transport the projection will actually use: the user's choice, or direct regardless of
      * it when this car has no other option (#194). Every writer of enable_freeform_support asks
      * THIS, not the raw preference — otherwise the boot-time realignment would put the flag back
      * to 0 on a DiLink 4.0 whose owner picked "factory", and the next ignition cycle would have no
-     * freeform to place the window with. The settings chip and [hasTransportChoice] deliberately
-     * keep reading the raw preference: the marker is a property of the car, not a user decision.
+     * freeform to place the window with. [hasTransportChoice] deliberately keeps reading the raw
+     * preference: the marker is a property of the car, not a user decision (the settings row shows
+     * it as a fact, not as a selected chip).
      */
     private fun effectiveDirect(context: Context): Boolean =
         readDirectEnabled(context) || readDirectForced(context)
