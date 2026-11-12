@@ -10,6 +10,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The camera part of the trace: when our process held the AVM camera (open, close and why) and
@@ -124,6 +127,17 @@ class AvmCameraProbeTraceTest {
 
     // --- vendor events ---
 
+    @Test fun `every known vendor event is traced by name with its arguments`() {
+        openBoth()
+        val camera = AVMCamera.last!!
+        KNOWN.keys.forEachIndexed { i, type -> camera.fire(type, arg1 = i, arg2 = -i) }
+
+        assertEquals(
+            KNOWN.entries.mapIndexed { i, (type, name) -> "camera avm-event type=$type name=$name arg1=$i arg2=${-i}" },
+            events().drop(1),
+        )
+    }
+
     @Test fun `an unknown vendor event is traced by its number only`() {
         openBoth()
         AVMCamera.last!!.fire(1004, arg1 = 3, arg2 = 4)
@@ -216,9 +230,32 @@ class AvmCameraProbeTraceTest {
         assertTrue(line, Regex("""\d{2}:\d{2}:\d{2}\.\d{3} avm event type=1008 arg1=1 arg2=2""").matches(line))
     }
 
+    // --- dump ---
+
+    @Test fun `camera log lines carry the wall-clock time of day`() {
+        val at = 1_790_000_123_456L
+        val stamped = AvmCameraProbe(clock = { at })
+
+        stamped.append("closed cleanly")
+
+        val expected = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date(at))
+        assertEquals("$expected closed cleanly", stamped.log.value.single())
+    }
+
     private companion object {
         val ID = Regex(" #\\d+")
         val SPACES = Regex(" +")
         const val FRAME = 1001
+        val KNOWN = linkedMapOf(
+            1000 to "error",
+            1002 to "server-died",
+            1003 to "first-frame",
+            1005 to "gralloc-bad-buffer",
+            1006 to "no-camera-permission",
+            1007 to "dequeue-input-fail",
+            1008 to "preempted",
+            1009 to "device-free",
+            1010 to "hal-died",
+        )
     }
 }
