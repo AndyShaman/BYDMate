@@ -13,7 +13,8 @@ import java.util.concurrent.ConcurrentHashMap
  * comes each place trigger keeps its saved answer (false when nothing is saved), so the other
  * conditions of the rule go on working. The answers are kept on disk: the car does not move
  * while it is off, so after a restart a late first point is compared with where the car stood
- * instead of being taken as the starting state. A rule that is switched off or deleted loses
+ * instead of being taken as the starting state. Rules driven by an event trigger are left
+ * out: they work without this memory, as before. A rule that is switched off or deleted loses
  * its saved answers: the car may go anywhere while nobody watches the place.
  */
 internal class PlaceMemory(context: Context) {
@@ -65,6 +66,9 @@ internal class PlaceMemory(context: Context) {
     ): Pair<List<Boolean>, Boolean> {
         val isPlace = triggers.map { it.kind in RuleShare.PLACE_KINDS }
         if (isPlace.none { it }) return perTrigger to false
+        // A rule driven by an event («Запуск BYDMate» AND «в месте») works as it always did:
+        // it needs a real GPS point, yesterday's answer does not fire it.
+        if (triggers.any { it.kind in EVENT_TRIGGER_KINDS }) return perTrigger to false
         // An edited rule starts over: its saved answers belong to other conditions.
         val triggersHash = (rule.triggers + rule.triggerLogic).hashCode()
         val memo = memos[rule.id]?.takeIf { it.triggersHash == triggersHash }

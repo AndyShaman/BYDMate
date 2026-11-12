@@ -615,16 +615,13 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         perTrigger: List<Boolean>,
         logic: String
     ): Boolean {
-        // A one-shot rule fires at its first check at or after the moment, not on a false->true
-        // front: a rule first seen after the moment would otherwise only be remembered.
-        val eventKinds = setOf("service_start", "network_available", OneShotTrigger.KIND)
         return when (logic) {
             // OR: at least one event-trigger must be true on its own.
-            "OR" -> triggers.zip(perTrigger).any { (t, r) -> r && t.kind in eventKinds }
+            "OR" -> triggers.zip(perTrigger).any { (t, r) -> r && t.kind in EVENT_TRIGGER_KINDS }
             // AND: every trigger must be true; if at least one of them is an
             // event, the whole composition fires only when that event was true,
             // so the rule is event-driven.
-            else -> triggers.any { it.kind in eventKinds } && perTrigger.all { it }
+            else -> triggers.any { it.kind in EVENT_TRIGGER_KINDS } && perTrigger.all { it }
         }
     }
 
@@ -988,3 +985,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
     private fun createConfirmChannel() = createConfirmChannel(context, appStrings.context)
 }
+
+/**
+ * Trigger kinds that are events, not states: a rule with one fires when the event happens, not
+ * on a false->true front. A one-shot rule belongs here: it fires at its first check at or after
+ * the moment, a rule first seen after the moment would otherwise only be remembered.
+ */
+internal val EVENT_TRIGGER_KINDS = setOf("service_start", "network_available", OneShotTrigger.KIND)
