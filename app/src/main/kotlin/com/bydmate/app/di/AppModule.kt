@@ -757,6 +757,8 @@ object AppModule {
         @ApplicationContext ctx: Context,
     ): com.bydmate.app.split.SplitPreferences =
         com.bydmate.app.split.SplitPreferencesImpl(ctx)
+            // The cluster code computes enable_freeform_support from the split state too.
+            .also { com.bydmate.app.cluster.ClusterProjectionManager.splitPreferences = it }
 
     @Provides
     @Singleton

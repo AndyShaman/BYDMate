@@ -2,6 +2,7 @@ package com.bydmate.app.split
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import com.bydmate.app.cluster.voiceCompanionsFromCsv
 import com.bydmate.app.cluster.voiceCompanionsToCsv
 
@@ -75,7 +76,25 @@ interface SplitPreferences {
 
     /** True when a press of the split key does something: feature on and a key assigned. */
     fun isSteeringKeyActive(): Boolean = isFeatureEnabled() && getSteeringKeyCode() > 0
+
+    /**
+     * True when our freeform split is the one that runs, so the system flag
+     * `enable_freeform_support` must be 1 for it (read by ClusterProjectionManager).
+     */
+    fun isFreeformSplitInUse(): Boolean = isFeatureEnabled()
 }
+
+/**
+ * The split needs the freeform flag only on our freeform path: not in native mode, not on
+ * platformized firmware (3:7 engine), and not below SDK 31 where SplitSessionManager.start
+ * refuses to run (its MIN_SPLIT_SDK).
+ */
+internal fun freeformSplitInUse(
+    featureEnabled: Boolean,
+    nativeMode: Boolean,
+    platformizedFirmware: Boolean,
+    sdkInt: Int,
+): Boolean = featureEnabled && !nativeMode && !platformizedFirmware && sdkInt >= 31
 
 /**
  * No-op default used by ClusterProjectionManager before the production SplitPreferences
@@ -160,6 +179,13 @@ class SplitPreferencesImpl(context: Context) : SplitPreferences {
     override fun setNativeModeEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_NATIVE_MODE, enabled).apply()
     }
+
+    override fun isFreeformSplitInUse(): Boolean = freeformSplitInUse(
+        featureEnabled = isFeatureEnabled(),
+        nativeMode = isNativeModeEnabled(),
+        platformizedFirmware = Split37Engine.isPlatformizedFirmware(),
+        sdkInt = Build.VERSION.SDK_INT,
+    )
 
     override fun getSteeringKeyCode(): Int = prefs.getInt(KEY_STEERING_KEYCODE, 0)
 

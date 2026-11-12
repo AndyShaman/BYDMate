@@ -192,7 +192,7 @@ object ClusterProjectionManager {
         private set
 
     /**
-     * Split-screen feature preferences. Set by the DI container (Task 8) so the freeform
+     * Split-screen feature preferences. Set by AppModule.provideSplitPreferences so the freeform
      * flag computation includes the split consumer. Defaults to the disabled no-op, which
      * keeps freeformFlagValue() byte-identical to the pre-split behavior.
      */
@@ -648,7 +648,7 @@ object ClusterProjectionManager {
             runCatching {
                 helper.putGlobalSetting(
                     "enable_freeform_support",
-                    freeformFlagValue(effectiveDirect(context), splitPreferences.isFeatureEnabled()))
+                    freeformFlagValue(effectiveDirect(context), splitPreferences.isFreeformSplitInUse()))
             }.getOrDefault(false)
         }
 
@@ -1213,20 +1213,20 @@ object ClusterProjectionManager {
     ) {
         val appContext = context.applicationContext
         scope.launch {
-            val splitEnabled = splitPreferences.isFeatureEnabled()
+            val splitInUse = splitPreferences.isFreeformSplitInUse()
             // Skip passive users (no explicit transport or split choice) — their flag may be
             // owned by a third-party app. A split-enabled user is always an active user.
             // [force] bypasses this guard for explicit user toggle actions.
-            if (!force && !hasTransportChoice(appContext) && !splitEnabled) return@launch
+            if (!force && !hasTransportChoice(appContext) && !splitInUse) return@launch
             // When direct is chosen (and split is off), the flag is already 1 from project().
             // Only VD/factory transport and the split consumer need this boot-time realignment.
-            if (!force && effectiveDirect(appContext) && !splitEnabled) return@launch
+            if (!force && effectiveDirect(appContext) && !splitInUse) return@launch
             if (!bootstrap.ensureRunning()) {
                 Log.w(TAG, "realignFreeformFlag: daemon unreachable; retrying next service start")
                 return@launch
             }
             val ok = alignFreeformFlag(appContext, helper)
-            Log.i(TAG, "realignFreeformFlag: freeform flag write ok=$ok (split=$splitEnabled, force=$force)")
+            Log.i(TAG, "realignFreeformFlag: freeform flag write ok=$ok (split=$splitInUse, force=$force)")
         }
     }
 
@@ -1257,7 +1257,7 @@ object ClusterProjectionManager {
         if (!directTransport && hasTransportChoice(context)) runCatching {
             helper.putGlobalSetting(
                 "enable_freeform_support",
-                freeformFlagValue(directTransport, splitPreferences.isFeatureEnabled()))
+                freeformFlagValue(directTransport, splitPreferences.isFreeformSplitInUse()))
         }
         // #85/#62: resolve the display BEFORE any compositor ИПЦ write. Song family /
         // DiLink 3-4 expose no projection display; powering the compositor up there painted
@@ -1353,7 +1353,7 @@ object ClusterProjectionManager {
             runCatching {
                 helper.putGlobalSetting(
                     "enable_freeform_support",
-                    freeformFlagValue(direct, splitPreferences.isFeatureEnabled()))
+                    freeformFlagValue(direct, splitPreferences.isFreeformSplitInUse()))
             }
             if (remoteDisplayId == -1) releaseOrphanedDisplay(context, helper)
             if (tryDirectProjection(context, helper, target, geo, plan)) {
