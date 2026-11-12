@@ -24,21 +24,22 @@ class InsightToneLogicTest {
         assertEquals("critical", InsightToneLogic.consumptionTone(30.0))
     }
 
-    @Test fun voltage12v_good_at_or_above_124() {
+    @Test fun voltage12v_good_at_or_above_125() {
         assertEquals("good", InsightToneLogic.voltage12vTone(null))
-        assertEquals("good", InsightToneLogic.voltage12vTone(12.4))
+        assertEquals("good", InsightToneLogic.voltage12vTone(12.5))
         assertEquals("good", InsightToneLogic.voltage12vTone(14.0))
     }
 
-    @Test fun voltage12v_warning_118_to_124() {
-        assertEquals("warning", InsightToneLogic.voltage12vTone(11.8))
-        assertEquals("warning", InsightToneLogic.voltage12vTone(12.0))
-        assertEquals("warning", InsightToneLogic.voltage12vTone(12.39))
+    @Test fun voltage12v_warning_120_to_125() {
+        assertEquals("12.49 V", "warning", InsightToneLogic.voltage12vTone(12.49))
+        assertEquals("12.4 V", "warning", InsightToneLogic.voltage12vTone(12.4))
+        assertEquals("12.0 V", "warning", InsightToneLogic.voltage12vTone(12.0))
     }
 
-    @Test fun voltage12v_critical_below_118() {
-        assertEquals("critical", InsightToneLogic.voltage12vTone(11.79))
-        assertEquals("critical", InsightToneLogic.voltage12vTone(10.0))
+    @Test fun voltage12v_critical_below_120() {
+        assertEquals("11.99 V", "critical", InsightToneLogic.voltage12vTone(11.99))
+        assertEquals("11.8 V", "critical", InsightToneLogic.voltage12vTone(11.8))
+        assertEquals("10.0 V", "critical", InsightToneLogic.voltage12vTone(10.0))
     }
 
     @Test fun cellDelta_good_at_or_below_003() {

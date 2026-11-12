@@ -65,6 +65,32 @@ class LocalInsightEngineTest {
     }
 
     @Test
+    fun `12v just below 12 5 gets the below normal bullet`() {
+        // 12.40..12.49 used to fall between the two bullets and produced neither.
+        val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 12.45)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        assertTrue(!result.title.contains("критично", ignoreCase = true))
+        assertTrue("below normal bullet at 12.45 V", result.insights.any { it.contains("ниже нормы") })
+    }
+
+    @Test
+    fun `12v below 12 0 gets the critical title, not the below normal bullet`() {
+        val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 11.9)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        assertTrue("critical title at 11.9 V", result.title.contains("критично", ignoreCase = true))
+        assertTrue(result.insights.none { it.contains("ниже нормы") })
+    }
+
+    @Test
+    fun `12v at 12 5 gets the normal bullet`() {
+        val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 12.5)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        assertTrue(!result.title.contains("критично", ignoreCase = true))
+        assertTrue(result.insights.none { it.contains("ниже нормы") })
+        assertTrue("normal bullet at 12.5 V", result.insights.any { it.contains("в норме") })
+    }
+
+    @Test
     fun `idle drain insight when significant`() {
         val stats = baseStats(
             recentKwh = 20.0,

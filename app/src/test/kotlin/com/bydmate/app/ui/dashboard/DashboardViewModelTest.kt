@@ -424,6 +424,25 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `12v status is warning below 12 5 and critical below 12 0`() = runTest {
+        val live = liveDataFlow()
+        try {
+            val vm = buildViewModel(fakeAutoservice = FakeAutoservice(battery = null, available = false))
+            live.value = com.bydmate.app.data.remote.diParsData(soc = 60)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals("no reading", "ok", vm.uiState.value.voltage12vStatus)
+
+            for ((v, expected) in listOf(12.5 to "ok", 12.49 to "warning", 12.0 to "warning", 11.99 to "critical")) {
+                live.value = com.bydmate.app.data.remote.diParsData(soc = 60, voltage12v = v)
+                testDispatcher.scheduler.advanceUntilIdle()
+                assertEquals("$v V", expected, vm.uiState.value.voltage12vStatus)
+            }
+        } finally {
+            live.value = null
+        }
+    }
+
+    @Test
     fun `an EV never reads fuel sums even when trips carry litres`() = runTest {
         val vm = buildViewModel(
             fakeAutoservice = FakeAutoservice(battery = null, available = false),
