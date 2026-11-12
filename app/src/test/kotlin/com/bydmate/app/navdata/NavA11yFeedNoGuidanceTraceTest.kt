@@ -15,6 +15,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /** Issue #199: a window read without guidance while a route is guided logs what it saw, once per
  *  streak, with the id walk behind a 60 s floor; the read that brings guidance back says after how
@@ -31,6 +32,7 @@ class NavA11yFeedNoGuidanceTraceTest {
     private val readLines get() = lines.filter { it.startsWith("no-guidance read:") }
     private val walks get() = lines.filter { it.startsWith("nav tree [no-guidance") }
     private val againLines get() = lines.filter { it.startsWith("guidance read again") }
+    private val notFoundLines get() = lines.filter { it == "timer read: navigator window not found" }
     private val windowLines get() = lines.filter { it.startsWith("no-guidance window:") }
 
     @Before fun installSink() {
@@ -63,6 +65,13 @@ class NavA11yFeedNoGuidanceTraceTest {
         verify(exactly = 1) { root.recycle() }
     }
 
+    @Test @Config(sdk = [32])
+    fun `the display is read where the window info has one`() {
+        armGuidance()
+        timerRead(emptyGuidanceRoot(displayId = 2), T0 + 1_000)
+        assertTrue(readLines.single(), " display=2 window=7 " in readLines.single())
+    }
+
     @Test fun `a root without a window info prints question marks and does not crash`() {
         armGuidance()
         val root = emptyGuidanceRoot()
@@ -71,6 +80,58 @@ class NavA11yFeedNoGuidanceTraceTest {
         timerRead(root, T0 + 1_000, windows = null)
         assertTrue(readLines.single(),
             readLines.single().startsWith("no-guidance read: src=timer display=? window=? type=? active=? focused=? navWindows=? "))
+    }
+
+    @Test fun `a streak logs one line, the read that ends it says after how long`() {
+        armGuidance()
+        timerRead(emptyGuidanceRoot(), T0 + 1_000)
+        timerRead(emptyGuidanceRoot(), T0 + 6_000)
+        assertEquals(1, readLines.size)
+        timerRead(guidanceRoot(), T0 + 9_500)
+        timerRead(guidanceRoot(), T0 + 14_500)
+        assertEquals(listOf("guidance read again after 8500 ms (src=timer)"), againLines)
+    }
+
+    @Test fun `an event read is labelled as such`() {
+        armGuidance(System.currentTimeMillis())
+        eventRead(emptyGuidanceRoot())
+        eventRead(guidanceRoot())
+        assertTrue(readLines.single(), readLines.single().startsWith("no-guidance read: src=event "))
+        assertTrue(againLines.single(), Regex("""guidance read again after \d+ ms \(src=event\)""").matches(againLines.single()))
+    }
+
+    @Test fun `a new streak logs a line again, its walk waits for 60 s`() {
+        armGuidance()
+        timerRead(emptyGuidanceRoot(), T0 + 1_000)
+        timerRead(guidanceRoot(), T0 + 6_000)
+        timerRead(emptyGuidanceRoot(), T0 + 11_000)
+        assertEquals(2, readLines.size)
+        assertEquals(1, walks.size)
+        timerRead(guidanceRoot(), T0 + 16_000)
+        timerRead(emptyGuidanceRoot(), T0 + 61_000)
+        assertEquals(3, readLines.size)
+        assertEquals(2, walks.size)
+    }
+
+    @Test fun `no route guided, no line`() {
+        NavA11yFeed.enabled = true
+        NavA11yFeed.lastProcessMs = 0L
+        eventRead(emptyGuidanceRoot())
+        assertTrue(lines.isEmpty())
+        // Control: the same read with a route guided is traced.
+        armGuidance(System.currentTimeMillis())
+        eventRead(emptyGuidanceRoot())
+        assertEquals(1, readLines.size)
+    }
+
+    @Test fun `a missing navigator window on a timer read is said once until a window is found`() {
+        armGuidance()
+        timerRead(null, T0 + 1_000)
+        timerRead(null, T0 + 6_000)
+        assertEquals(1, notFoundLines.size)
+        timerRead(guidanceRoot(), T0 + 11_000)
+        timerRead(null, T0 + 16_000)
+        assertEquals(2, notFoundLines.size)
     }
 
     @Test fun `a traced read leaves the hub as it was`() {
@@ -154,6 +215,13 @@ class NavA11yFeedNoGuidanceTraceTest {
         issued.forEach { verify(exactly = 1) { it.recycle() } }
     }
 
+    @Test fun `one navigator window, one window line`() {
+        armGuidance()
+        timerRead(emptyGuidanceRoot(), T0 + 1_000)
+        assertEquals(1, windowLines.size)
+        assertTrue(windowLines.single(), " read=true " in windowLines.single())
+    }
+
     @Test fun `an unreadable window list writes the read line and no window line`() {
         armGuidance()
         timerRead(emptyGuidanceRoot(), T0 + 1_000, windows = null)
@@ -203,10 +271,10 @@ class NavA11yFeedNoGuidanceTraceTest {
         }
 
     /** A navigator window whose guidance widgets are there but blank: the parse reads no guidance. */
-    private fun emptyGuidanceRoot(windowId: Int = 7): AccessibilityNodeInfo {
+    private fun emptyGuidanceRoot(displayId: Int? = null, windowId: Int = 7): AccessibilityNodeInfo {
         val status = node(id = "status_panel_text", text = "Маршрут")
         val root = node(id = "root_container", children = listOf(status))
-        withWindow(root, windowId, active = true)
+        withWindow(root, windowId, active = true, displayId = displayId)
         lookup(root, "image_maneuverballoon_maneuver") { descNode("") }
         lookup(root, "text_maneuverballoon_distance") { textNode("") }
         lookup(root, "status_panel_text") { textNode("Маршрут") }
@@ -217,14 +285,14 @@ class NavA11yFeedNoGuidanceTraceTest {
     /** A navigator window without any guidance widget (another screen of the Navigator). */
     private fun noWidgetsRoot(): AccessibilityNodeInfo {
         val root = node(id = "root_container")
-        withWindow(root, windowId = 7, active = true)
+        withWindow(root, windowId = 7, active = true, displayId = null)
         return root
     }
 
     /** A second navigator window that does hold the guidance widgets. */
     private fun widgetsRoot(windowId: Int): AccessibilityNodeInfo {
         val root = node(id = "root_container")
-        withWindow(root, windowId, active = false)
+        withWindow(root, windowId, active = false, displayId = null)
         lookup(root, "image_maneuverballoon_maneuver") { descNode("Поверните направо") }
         lookup(root, "text_maneuverballoon_distance") { textNode("300") }
         lookup(root, "text_maneuverballoon_metrics") { textNode("м") }
@@ -232,13 +300,15 @@ class NavA11yFeedNoGuidanceTraceTest {
         return root
     }
 
-    private fun withWindow(root: AccessibilityNodeInfo, windowId: Int, active: Boolean) {
+    private fun withWindow(root: AccessibilityNodeInfo, windowId: Int, active: Boolean, displayId: Int?) {
         every { root.packageName } returns PKG
         every { root.windowId } returns windowId
         val window = mockk<AccessibilityWindowInfo>(relaxed = true)
         every { window.type } returns AccessibilityWindowInfo.TYPE_APPLICATION
         every { window.isActive } returns active
         every { window.isFocused } returns false
+        // getDisplayId() exists from API 30 on, so it is stubbed only where the test runs there.
+        if (displayId != null) every { window.displayId } returns displayId
         every { root.window } returns window
         every { root.findAccessibilityNodeInfosByViewId(any()) } answers { emptyList() }
     }
