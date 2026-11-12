@@ -7,6 +7,7 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Response
 import org.json.JSONException
+import org.json.JSONObject
 import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -19,6 +20,13 @@ internal class MapBadAnswer(reason: String) : IOException(reason)
 internal fun mapOutcome(e: IOException): String = if (e is MapBadAnswer) e.message.orEmpty() else e.javaClass.simpleName
 
 internal fun monotonicMs(): Long = System.nanoTime() / 1_000_000
+
+/** A station's name when the map gives neither a name nor an address. */
+internal const val DEFAULT_STATION_NAME = "Зарядная станция"
+
+/** Android's org.json turns a JSON null into the string "null" in optString: keep it null. */
+internal fun JSONObject.text(key: String): String? =
+    if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
 
 /**
  * Runs the call on OkHttp's thread pool and cancels it with the coroutine (a blocking execute()

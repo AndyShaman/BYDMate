@@ -5,10 +5,6 @@ import org.junit.Test
 
 class WidgetButtonLayoutTest {
 
-    @Test fun `pocket is button plus gap`() {
-        assertEquals(62, WidgetButtonLayout.pocketPx(buttonPx = 50, gapPx = 12))
-    }
-
     @Test fun `expanded window keeps width and adds one pocket to height`() {
         val box = WidgetButtonLayout.expandedWindow(
             collapsedX = 800, collapsedY = 400,

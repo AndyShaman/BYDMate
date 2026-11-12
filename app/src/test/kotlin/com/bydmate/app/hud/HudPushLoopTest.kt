@@ -210,6 +210,25 @@ class HudPushLoopTest {
         assertEquals("ул. Ленина", loop.runningLine(NavGuidanceHub.snapshot(1000L)))
     }
 
+    // Users post these logs in public: the trace gets the street's script class and length,
+    // one line per change of class, and never the street itself.
+    @Test fun `the frame street's script class is traced when it changes, never the street`() {
+        val loop = HudPushLoop(FakeSink(), nowMsProvider = { 1000L })
+        val streets = listOf("ул. Ленина", "ул. Ленина", "пр. Победителей", "长安街")
+        for (road in streets) {
+            NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = road), NavGuidanceHub.Source.A11Y, nowMs = 1000L)
+            loop.tick(wasActive = true)
+        }
+        val events = trace.events()
+        val roads = events.filter { it.contains(" road ") }
+        assertEquals(roads.toString(), 2, roads.size)       // the same class again adds no line
+        assertTrue(roads[0], roads[0].contains("script=cyrillic len=10"))
+        assertTrue(roads[1], roads[1].contains("script=other len=3"))
+        for (word in listOf("Ленина", "Победителей", "长安街")) {
+            assertTrue("street \"$word\" leaked into the trace: $events", events.none { it.contains(word) })
+        }
+    }
+
     @Test fun `tick_updates_diag_counters_and_records_nonzero_rc`() {
         activeHub(nowMs = 1000L)
         val sink = FakeSink()
@@ -227,8 +246,6 @@ class HudPushLoopTest {
         assertEquals(1L, loop.nonZeroRcCount)
     }
 
-    // --- trace audit: frames into the route summary, the street's script on change ---
-
     @Test fun `frames and their rc go to the route summary`() {
         activeHub(nowMs = 1000L)
         val sink = FakeSink()
@@ -237,21 +254,5 @@ class HudPushLoopTest {
         sink.nextRc = -5
         loop.tick(wasActive = true)
         assertTrue(NavGuidanceHub.routeSummary(nowMs = 1000L).contains(" frames=2 rc={-5:1,0:1} "))
-    }
-
-    @Test fun `the frame street's script class is traced when it changes, never the street`() {
-        val loop = HudPushLoop(FakeSink(), nowMsProvider = { 1000L })
-        fun street(road: String) {
-            NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = road), NavGuidanceHub.Source.A11Y, nowMs = 1000L)
-            loop.tick(wasActive = true)
-        }
-        street("ул. Ленина")
-        street("ул. Ленина")
-        street("пр. Победителей")                      // same class: no line
-        street("长安街")
-        val roads = trace.events().filter { it.contains(" road ") }
-        assertEquals(2, roads.size)
-        assertTrue(roads[0], roads[0].contains("road chan=someip script=cyrillic len=10"))
-        assertTrue(roads[1], roads[1].contains("road chan=someip script=other len=3"))
     }
 }

@@ -24,11 +24,8 @@ class ChargingTypeClassifier @Inject constructor() {
 
     /**
      * Maps the raw gun_state autoservice value to "AC"/"DC", or null if
-     * the gun is disconnected (state 1) or unknown.
-     *   1 = NONE
-     *   2 = AC
-     *   3 = DC
-     *   4 = GB_DC (treat as DC for UI/tariff purposes)
+     * the gun is disconnected (state 1) or unknown. Codes: see [GunStateEdgeDetector];
+     * 4 = AC_DC is treated as DC for UI/tariff purposes.
      */
     fun fromGunState(gunState: Int?): String? = when (gunState) {
         2 -> "AC"

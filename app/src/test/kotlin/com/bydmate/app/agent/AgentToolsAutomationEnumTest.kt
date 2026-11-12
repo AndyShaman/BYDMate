@@ -2,7 +2,6 @@ package com.bydmate.app.agent
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
@@ -10,7 +9,6 @@ import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -63,14 +61,22 @@ class AgentToolsAutomationEnumTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
 
-    private fun tools() = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
     )
 
     private fun call(name: String, args: String) = AgentToolCall("1", name, args)
@@ -88,19 +94,16 @@ class AgentToolsAutomationEnumTest {
         return TriggerDef.listFromJson(slot.captured.triggers).first()
     }
 
-    @Test fun gear_label_D_is_normalized_to_engine_code_4() = runTest {
-        val t = savedTrigger("""{"kind":"param","param":"Gear","operator":"==","value":"D"}""")
-        assertEquals("4", t.value)
-    }
-
-    @Test fun gear_lowercase_label_is_normalized_case_insensitively() = runTest {
-        val t = savedTrigger("""{"kind":"param","param":"Gear","operator":"==","value":"d"}""")
-        assertEquals("4", t.value)
-    }
-
-    @Test fun gear_numeric_code_is_kept() = runTest {
-        val t = savedTrigger("""{"kind":"param","param":"Gear","operator":"==","value":"4"}""")
-        assertEquals("4", t.value)
+    @Test fun gear_values_are_normalized_to_engine_codes() = runTest {
+        val cases = listOf(
+            Triple("label D is normalized to engine code 4", "D", "4"),
+            Triple("lowercase label is normalized case-insensitively", "d", "4"),
+            Triple("numeric code is kept", "4", "4"),
+        )
+        for ((label, input, expected) in cases) {
+            val t = savedTrigger("""{"kind":"param","param":"Gear","operator":"==","value":"$input"}""")
+            assertEquals("case: $label", expected, t.value)
+        }
     }
 
     @Test fun drive_mode_label_proves_fix_is_generic_not_gear_only() = runTest {

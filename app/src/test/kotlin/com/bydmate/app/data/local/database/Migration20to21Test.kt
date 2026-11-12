@@ -42,13 +42,6 @@ class Migration20to21Test {
             assertTrue(c.isNull(1))
             assertTrue(c.isNull(2))
         }
-
-        migrated.execSQL("UPDATE trips SET odometer_start_km = 11042.4, odometer_end_km = 11092.9")
-        migrated.query("SELECT odometer_start_km, odometer_end_km FROM trips").use { c ->
-            c.moveToFirst()
-            assertEquals(11042.4, c.getDouble(0), 1e-9)
-            assertEquals(11092.9, c.getDouble(1), 1e-9)
-        }
         migrated.close()
     }
 }

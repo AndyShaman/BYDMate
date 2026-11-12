@@ -6,15 +6,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Aggregated battery view used by Dashboard (TopBar warning, BatteryCard,
- * BatteryHealthScreen header).
- *
- * Phase 1: only `refresh()` (call-on-demand). Phase 2 will compose this
- * with TrackingService.lastData and emit as a Flow into DashboardViewModel.
+ * Aggregated battery view: SoH and lifetime counters for Dashboard, the Tech panel,
+ * Charges and the agent's vehicle state. Only `refresh()` (call-on-demand).
  */
 data class BatteryState(
     val socNow: Float?,
-    val voltage12v: Float?,
     val sohPercent: Float?,
     val lifetimeKm: Float?,
     val lifetimeKwh: Float?,
@@ -29,15 +25,14 @@ class BatteryStateRepository @Inject constructor(
 ) {
     suspend fun refresh(): BatteryState {
         if (!vehicleApi.isAvailable()) {
-            return BatteryState(null, null, null, null, null, autoserviceAvailable = false)
+            return BatteryState(null, null, null, null, autoserviceAvailable = false)
         }
         val r = vehicleApi.readBatterySnapshot()
-            ?: return BatteryState(null, null, null, null, null, autoserviceAvailable = false)
+            ?: return BatteryState(null, null, null, null, autoserviceAvailable = false)
 
         val sohFromSnapshot = batteryHealth.getLast()?.sohPercent?.toFloat()
         return BatteryState(
             socNow = r.socPercent,
-            voltage12v = r.voltage12v,
             sohPercent = r.sohPercent ?: sohFromSnapshot,
             lifetimeKm = r.lifetimeMileageKm,
             lifetimeKwh = r.lifetimeKwh,

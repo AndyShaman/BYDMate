@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.settings
 
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.nativestack.FidCatalog
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.RearSeat
@@ -43,6 +44,4 @@ internal object RearSeatHeatDiagnostics {
             "$label: has[${addr.hasFid}]=${has ?: "err"} state[${addr.stateFid}]=${state ?: "err"} set=${addr.setFid} -> $verdict"
         }
     }
-
-    private const val TX_GET_INT = 5
 }

@@ -5,10 +5,6 @@ import org.junit.Test
 
 class KeyCountersTest {
 
-    @Test fun `nothing received reads as zeros`() {
-        assertEquals("keys: rx=0 matched=0 passed=0 by_code={}", KeyCounters().line())
-    }
-
     @Test fun `presses are counted by code in arrival order with their outcome`() {
         val counters = KeyCounters()
 

@@ -21,10 +21,11 @@ data class NavGuidance(
  *  extractor and the notification channel; every field is optional and soft-fails. */
 object NavGuidanceParser {
 
-    private val DIST_KM = Regex("""(\d+(?:[.,]\d+)?)\s*(км|km)(?!\S)""", RegexOption.IGNORE_CASE)
-    private val DIST_M = Regex("""(\d+)\s*(м|m)(?!\S)""", RegexOption.IGNORE_CASE)
+    internal val DIST_KM = Regex("""(\d+(?:[.,]\d+)?)\s*(км|km)(?!\S)""", RegexOption.IGNORE_CASE)
+    internal val DIST_M = Regex("""(\d+)\s*(м|m)(?!\S)""", RegexOption.IGNORE_CASE)
     private val ETA_HR_MIN = Regex("""(\d+)\s*ч\s*(\d+)\s*мин""", RegexOption.IGNORE_CASE)
     private val ETA_MIN = Regex("""(\d+)\s*мин""", RegexOption.IGNORE_CASE)
+    private val DIGITS = Regex("""\d+""")
 
     data class RawFields(
         val maneuverDesc: String?,   // image_maneuverballoon_maneuver contentDescription
@@ -63,11 +64,17 @@ object NavGuidanceParser {
     /** Combined "300 м" / "1,2 км" string -> meters (notification distance, eta distance). */
     fun parseDistanceText(text: String?): Int {
         val s = text?.trim() ?: return 0
+        return parseDistanceMeters(s) ?: 0
+    }
+
+    /** "300 м" / "1,2 км" anywhere in [s] -> meters; null when there is none or its number does
+     *  not parse. Shared with the rich notification lane, which keeps the null. */
+    internal fun parseDistanceMeters(s: String): Int? {
         DIST_KM.find(s)?.let {
-            return ((it.groupValues[1].replace(',', '.').toDoubleOrNull() ?: 0.0) * 1000).toInt()
+            return (it.groupValues[1].replace(',', '.').toDoubleOrNull()?.times(1000))?.toInt()
         }
-        DIST_M.find(s)?.let { return it.groupValues[1].toIntOrNull() ?: 0 }
-        return 0
+        DIST_M.find(s)?.let { return it.groupValues[1].toIntOrNull() }
+        return null
     }
 
     private fun resolveManeuver(raw: RawFields): Int {
@@ -81,7 +88,7 @@ object NavGuidanceParser {
     }
 
     private fun exitNumberOf(raw: RawFields): Int? =
-        raw.exitNumber?.let { Regex("""\d+""").find(it)?.value }?.toIntOrNull()
+        raw.exitNumber?.let { DIGITS.find(it)?.value }?.toIntOrNull()
 
     private fun resolveDistance(distance: String?, unit: String?): Int {
         val rawText = distance?.trim() ?: return 0
@@ -106,8 +113,8 @@ object NavGuidanceParser {
  *  short enough for one journal line and without the street a screen text may go on with. */
 object NavManeuverRaw {
     const val MAX_CHARS = 40
-    private val SPACES = Regex("""[\s\p{Z}]+""")
-    private val EDGE_PUNCT = Regex("""^\p{Punct}+|\p{Punct}+$""")
+    internal val SPACES = Regex("""[\s\p{Z}]+""")
+    internal val EDGE_PUNCT = Regex("""^\p{Punct}+|\p{Punct}+$""")
 
     /** From a screen text: the table entry it matched (`key=`), else its words masked (the
      *  maneuver vocabulary kept lowercased, every other word `*`) and its length. */

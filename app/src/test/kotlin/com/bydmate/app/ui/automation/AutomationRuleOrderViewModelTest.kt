@@ -45,7 +45,6 @@ class AutomationRuleOrderViewModelTest {
             keys.mapNotNull { k -> map[k]?.let { SettingEntity(k, it) } }
         override suspend fun set(setting: SettingEntity) { writes++; map[setting.key] = setting.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
     private val testDispatcher = StandardTestDispatcher()
@@ -85,10 +84,6 @@ class AutomationRuleOrderViewModelTest {
     }
 
     private fun AutomationViewModel.shownIds() = uiState.value.rules.map { it.id }
-
-    @Test fun `without a saved order the rules stay newest first`() {
-        assertEquals(listOf(5L, 4L, 3L, 2L), vm().shownIds())
-    }
 
     @Test fun `a drop shows the new order at once and saves it once`() {
         val vm = vm()

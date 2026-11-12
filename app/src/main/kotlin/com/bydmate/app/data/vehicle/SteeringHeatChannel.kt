@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import android.util.Log
 import com.bydmate.app.data.autoservice.SentinelDecoder
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -146,14 +145,8 @@ class SteeringHeatChannel(
         state == (if (want == STATE_ON) STATE_OFF else STATE_ON)
 
     /** A throwing read is a failed read, not a verdict. */
-    private suspend fun readState(): Int? = runCatching { readback.read() }
-        .onFailure {
-            if (it is CancellationException) throw it
-            Log.w(TAG, "SteeringHeat: state read failed: ${it.message}")
-        }
-        .getOrNull()
-
-    private fun render(value: Int?) = value?.toString() ?: "err"
+    private suspend fun readState(): Int? =
+        readGuarded({ Log.w(TAG, "SteeringHeat: state read failed: ${it.message}") }) { readback.read() }
 
     private companion object {
         const val TAG = "SteeringHeatChannel"

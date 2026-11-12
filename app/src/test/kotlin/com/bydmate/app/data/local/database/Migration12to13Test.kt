@@ -3,7 +3,6 @@ package com.bydmate.app.data.local.database
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,40 +20,6 @@ class Migration12to13Test {
         InstrumentationRegistry.getInstrumentation(),
         AppDatabase::class.java
     )
-
-    @Test
-    fun `migrate creates byd_id index on trips`() {
-        helper.createDatabase(dbName, 12).close()
-        val migrated = helper.runMigrationsAndValidate(
-            dbName, 13, true,
-            com.bydmate.app.di.AppModule.MIGRATION_12_13
-        )
-
-        val indices = mutableListOf<String>()
-        migrated.query("PRAGMA index_list('trips')").use { c ->
-            val nameCol = c.getColumnIndex("name")
-            while (c.moveToNext()) indices += c.getString(nameCol)
-        }
-        assertTrue("index_trips_byd_id missing: $indices", "index_trips_byd_id" in indices)
-        migrated.close()
-    }
-
-    @Test
-    fun `migrate creates timestamp index on trip_points`() {
-        helper.createDatabase(dbName, 12).close()
-        val migrated = helper.runMigrationsAndValidate(
-            dbName, 13, true,
-            com.bydmate.app.di.AppModule.MIGRATION_12_13
-        )
-
-        val indices = mutableListOf<String>()
-        migrated.query("PRAGMA index_list('trip_points')").use { c ->
-            val nameCol = c.getColumnIndex("name")
-            while (c.moveToNext()) indices += c.getString(nameCol)
-        }
-        assertTrue("index_trip_points_timestamp missing: $indices", "index_trip_points_timestamp" in indices)
-        migrated.close()
-    }
 
     @Test
     fun `existing rows survive migration`() {

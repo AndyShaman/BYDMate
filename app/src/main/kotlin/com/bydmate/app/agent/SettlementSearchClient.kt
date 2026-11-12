@@ -7,26 +7,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.json.JSONObject
 import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /** Settlements around a point from OpenStreetMap via the Overpass API (same server as
  *  [ChargerSearchClient]); when Overpass fails, the point's own address from Nominatim reverse
@@ -121,7 +116,7 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
             try {
                 reverse(lat, lon)
             } catch (e: IOException) {
-                throw IOException("серверы карт недоступны: overpass ${outcome(overpassError)}, nominatim ${outcome(e)}")
+                throw IOException("серверы карт недоступны: overpass ${mapOutcome(overpassError)}, nominatim ${mapOutcome(e)}")
             }
         }
 
@@ -141,8 +136,8 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
             } catch (e: IOException) {
                 // A cancel that raced the failure: stop here instead of trying the next server.
                 currentCoroutineContext().ensureActive()
-                Log.w(TAG, "overpass $host: ${outcome(e)}, ${monotonicMs() - startMs}ms")
-                Trace.call("overpass", host, monotonicMs() - startMs, e, outcome(e))
+                Log.w(TAG, "overpass $host: ${mapOutcome(e)}, ${monotonicMs() - startMs}ms")
+                Trace.call("overpass", host, monotonicMs() - startMs, e, mapOutcome(e))
                 lastError = e
             } catch (e: CancellationException) {
                 Log.i(TAG, "overpass $host: cancelled or out of time after ${monotonicMs() - startMs}ms, in-flight call dropped")
@@ -179,8 +174,8 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
             return address
         } catch (e: IOException) {
             currentCoroutineContext().ensureActive()
-            Log.w(TAG, "nominatim ${url.host}: ${outcome(e)}, ${monotonicMs() - startMs}ms")
-            Trace.call("nominatim", url.host, monotonicMs() - startMs, e, outcome(e))
+            Log.w(TAG, "nominatim ${url.host}: ${mapOutcome(e)}, ${monotonicMs() - startMs}ms")
+            Trace.call("nominatim", url.host, monotonicMs() - startMs, e, mapOutcome(e))
             throw e
         } catch (e: CancellationException) {
             Log.i(TAG, "nominatim ${url.host}: cancelled or out of time after ${monotonicMs() - startMs}ms, in-flight call dropped")
@@ -204,7 +199,7 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
         val json = try { JSONObject(body) } catch (_: org.json.JSONException) { null }
         val error = json?.optString("error").orEmpty()
         val parts = json?.optJSONObject("address")?.takeIf { error.isEmpty() }
-            ?: throw BadAnswer(
+            ?: throw MapBadAnswer(
                 when {
                     json == null -> "bad JSON"
                     error.isNotEmpty() -> "error answer"
@@ -222,7 +217,7 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
             country = part("country"),
         )
         if (listOf(address.settlement, address.road, address.district, address.region, address.country).all { it == null }) {
-            throw BadAnswer("empty address")
+            throw MapBadAnswer("empty address")
         }
         return address
     }
@@ -235,7 +230,7 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
         if (remark.isNotEmpty()) Log.i(TAG, "overpass $host remark: $remark")
         val elements = json?.optJSONArray("elements")
             ?.takeUnless { remark.contains("error", ignoreCase = true) }
-            ?: throw BadAnswer(
+            ?: throw MapBadAnswer(
                 when {
                     json == null -> "bad JSON"
                     remark.isNotEmpty() -> "remark error"
@@ -256,33 +251,10 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
         }
     }
 
-    /** Runs [call] on OkHttp's thread pool and cancels it with the coroutine (a blocking
-     *  execute() would keep a cancelled voice turn waiting for the whole call timeout). The
-     *  body is read in the callback; returns it for a 2xx answer, throws IOException otherwise. */
-    private suspend fun await(call: Call): String = suspendCancellableCoroutine { cont ->
-        cont.invokeOnCancellation { call.cancel() }
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                cont.resumeWithException(e)
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                val body = try {
-                    response.use { resp ->
-                        if (!resp.isSuccessful) throw BadAnswer("HTTP ${resp.code}")
-                        resp.body?.string().takeUnless { it.isNullOrBlank() } ?: throw BadAnswer("empty body")
-                    }
-                } catch (e: IOException) {
-                    cont.resumeWithException(e)
-                    return
-                }
-                cont.resume(body)
-            }
-        })
+    /** [awaitRead] returning the body of a 2xx answer; a blank body is a [MapBadAnswer]. */
+    private suspend fun await(call: Call): String = call.awaitRead { resp ->
+        resp.body?.string().takeUnless { it.isNullOrBlank() } ?: throw MapBadAnswer("empty body")
     }
-
-    /** A server answered, but with nothing usable; the message is safe for a user-shared log. */
-    private class BadAnswer(message: String) : IOException(message)
 
     private companion object {
         const val TAG = "SettlementSearch"
@@ -290,11 +262,5 @@ class SettlementSearchClient @Inject constructor(private val http: OkHttpClient)
         const val NOMINATIM_INTERVAL_MS = 1_000L
         // Nominatim address keys for a settlement, largest first.
         val SETTLEMENT_KEYS = listOf("city", "town", "village", "hamlet")
-
-        /** For the per-server log line: the HTTP code or what was wrong with the answer, else the
-         *  exception class - never a URL, coordinates or a place name. */
-        fun outcome(e: IOException): String = if (e is BadAnswer) e.message.orEmpty() else e.javaClass.simpleName
-
-        fun monotonicMs(): Long = System.nanoTime() / 1_000_000
     }
 }

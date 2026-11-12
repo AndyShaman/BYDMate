@@ -4,13 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.SearchManager
 import android.content.ActivityNotFoundException
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
-import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Bundle
@@ -92,8 +90,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         private const val YANDEX_MUSIC_PACKAGE = "ru.yandex.music"
         private val YOUTUBE_PACKAGES = listOf("anddea.youtube", "com.google.android.youtube")
         private const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
-        // Hard cap on user-set delay action; protects against typos like "60000000".
-        internal const val MAX_DELAY_MS = 60_000L
+        // Hard cap on user-set delay action (24 h); BYDMate only runs while the car is on.
+        internal const val MAX_DELAY_MS = 86_400_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
 
         /**
@@ -143,22 +141,6 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
          */
         internal fun isSunroofOpenCommand(command: String): Boolean {
             if (!command.contains("天窗")) return false
-            if (command.contains("关")) return false
-            val opensViaPosition = POSITION_OPEN.find(command)
-                ?.let { (positionPercent(it.groupValues[1]) ?: 0) > 0 }
-                ?: command.contains("打开")        // bare "打开" (no %) -- treat as open
-            val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
-            return opensViaPosition || opensViaWord
-        }
-
-        /**
-         * True if [command] would OPEN the sunshade (遮阳帘). NEVER speed-gated
-         * (interior shade) -- used only by the voice early-fire guard, which must
-         * hold ALL aperture opens for the final because a bare-noun partial can
-         * still be qualified. Pure predicate -- unit-testable without Android deps.
-         */
-        internal fun isSunshadeOpenCommand(command: String): Boolean {
-            if (!command.contains("遮阳帘")) return false
             if (command.contains("关")) return false
             val opensViaPosition = POSITION_OPEN.find(command)
                 ?.let { (positionPercent(it.groupValues[1]) ?: 0) > 0 }
@@ -645,10 +627,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     internal var clusterPollAttempts = 30
 
     internal var activeMediaControllers: () -> List<MediaController> = {
-        runCatching {
-            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-            msm.getActiveSessions(ComponentName(context, MediaSessionListenerService::class.java))
-        }.getOrDefault(emptyList())
+        MediaSessionListenerService.activeControllers(context)
     }
 
     /**
@@ -1089,7 +1068,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val blockReason = if (isSpeedGated(action.command)) {
             speedOnlyBlockReason(action.command, gateSpeed(action.command))
         } else {
-            getBlockReason(action.command, data)
+            safetyBlockReason(action.command, data)
         }
         if (blockReason != null) {
             Log.w(TAG, "Blocked '${action.command}': $blockReason")
@@ -1121,11 +1100,6 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
 
     /** A failed [VehicleApi] write in the app language, the same text a rule step reports. */
     fun vehicleFailureReason(err: Throwable): String = paramFailureReason(err, appStrings)
-
-    // Delegate to the companion pure function so all callers (dispatch + manual test button)
-    // share identical gate logic.
-    private fun getBlockReason(command: String, data: DiParsData?): BlockReason? =
-        safetyBlockReason(command, data)
 
     // --- notifications (user-visible) ---
 

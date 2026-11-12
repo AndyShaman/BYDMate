@@ -10,24 +10,24 @@ import org.junit.Test
 class WidgetVisibilityLogicTest {
 
     @Test fun `camera always hides regardless of toggle`() {
-        assertTrue(WidgetController.shouldHideOverlay(
+        assertTrue(WidgetController.hideReason(
             cameraActive = true, youtubeForeground = false, hideOnYoutube = false,
-            foregroundPkg = null, hideInApps = emptySet()))
+            foregroundPkg = null, hideInApps = emptySet()) != null)
     }
 
     @Test fun `youtube hides only when toggle is on`() {
-        assertTrue(WidgetController.shouldHideOverlay(
+        assertTrue(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = true, hideOnYoutube = true,
-            foregroundPkg = null, hideInApps = emptySet()))
-        assertFalse(WidgetController.shouldHideOverlay(
+            foregroundPkg = null, hideInApps = emptySet()) != null)
+        assertFalse(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = true, hideOnYoutube = false,
-            foregroundPkg = null, hideInApps = emptySet()))
+            foregroundPkg = null, hideInApps = emptySet()) != null)
     }
 
     @Test fun `nothing foreground shows widget`() {
-        assertFalse(WidgetController.shouldHideOverlay(
+        assertFalse(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = false, hideOnYoutube = true,
-            foregroundPkg = null, hideInApps = emptySet()))
+            foregroundPkg = null, hideInApps = emptySet()) != null)
     }
 
     @Test fun `known youtube clients are recognized`() {
@@ -39,39 +39,39 @@ class WidgetVisibilityLogicTest {
     }
 
     @Test fun `foreground app on the hide list hides the widget`() {
-        assertTrue(WidgetController.shouldHideOverlay(
+        assertTrue(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
-            foregroundPkg = "com.android.chrome", hideInApps = setOf("com.android.chrome")))
+            foregroundPkg = "com.android.chrome", hideInApps = setOf("com.android.chrome")) != null)
     }
 
     @Test fun `foreground app outside the hide list keeps the widget`() {
-        assertFalse(WidgetController.shouldHideOverlay(
+        assertFalse(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
-            foregroundPkg = "ru.yandex.yandexnavi", hideInApps = setOf("com.android.chrome")))
+            foregroundPkg = "ru.yandex.yandexnavi", hideInApps = setOf("com.android.chrome")) != null)
     }
 
     @Test fun `empty hide list never hides`() {
-        assertFalse(WidgetController.shouldHideOverlay(
+        assertFalse(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
-            foregroundPkg = "com.android.chrome", hideInApps = emptySet()))
+            foregroundPkg = "com.android.chrome", hideInApps = emptySet()) != null)
     }
 
     @Test fun `youtube toggle off still wins over an unrelated hide list`() {
-        assertFalse(WidgetController.shouldHideOverlay(
+        assertFalse(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = true, hideOnYoutube = false,
-            foregroundPkg = "anddea.youtube", hideInApps = setOf("com.android.chrome")))
+            foregroundPkg = "anddea.youtube", hideInApps = setOf("com.android.chrome")) != null)
     }
 
     @Test fun `car settings foreground hides the widget with an empty hide list`() {
-        assertTrue(WidgetController.shouldHideOverlay(
+        assertTrue(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
-            foregroundPkg = "com.byd.carsettings", hideInApps = emptySet()))
+            foregroundPkg = "com.byd.carsettings", hideInApps = emptySet()) != null)
     }
 
     @Test fun `a different byd package does not hide the widget`() {
-        assertFalse(WidgetController.shouldHideOverlay(
+        assertFalse(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
-            foregroundPkg = "com.byd.music", hideInApps = emptySet()))
+            foregroundPkg = "com.byd.music", hideInApps = emptySet()) != null)
     }
 
     @Test fun `hideReason names which rule fired`() {

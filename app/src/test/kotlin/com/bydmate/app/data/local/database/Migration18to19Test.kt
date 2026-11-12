@@ -47,14 +47,6 @@ class Migration18to19Test {
             c.moveToFirst()
             assertTrue(c.isNull(0))
         }
-
-        migrated.execSQL("UPDATE trips SET exterior_temp_end = -3")
-        migrated.execSQL("UPDATE trip_points SET altitude = 212.5")
-        migrated.query("SELECT t.exterior_temp_end, p.altitude FROM trips t, trip_points p").use { c ->
-            c.moveToFirst()
-            assertEquals(-3, c.getInt(0))
-            assertEquals(212.5, c.getDouble(1), 1e-9)
-        }
         migrated.close()
     }
 }

@@ -43,35 +43,6 @@ class HudManeuverJournalTest {
         NavGuidanceHub.Source.A11Y, nowMs = clock,
     )
 
-    @Test fun `line carries both channels and the suppression flag`() {
-        journal().append(
-            maneuverGaode = 13, distanceMeters = 400, f28 = 0,
-            amapIcon = 11, roundaboutNum = null, suppressArrow = false,
-            source = "a11y", raw = "desc:Поверните налево",
-        )
-        assertTrue(
-            journal().lines().single()
-                .endsWith("gaode=13 dist=400m f28=0 amap=11 suppress=false src=a11y raw=\"desc:Поверните налево\""))
-    }
-
-    @Test fun `numbered roundabout maneuver is recorded next to the enter icon`() {
-        journal().append(
-            maneuverGaode = 27, distanceMeters = 120, f28 = 0,
-            amapIcon = 11, roundaboutNum = 3, suppressArrow = false,
-            source = "notification", raw = "res:ic_roundabout",
-        )
-        assertTrue(journal().lines().single().endsWith("f28=0 amap=11 rab=3 suppress=false src=notification raw=\"res:ic_roundabout\""))
-    }
-
-    @Test fun `a silent amap channel is visible as off`() {
-        journal().append(
-            maneuverGaode = 2, distanceMeters = 90, f28 = 2,
-            amapIcon = null, roundaboutNum = null, suppressArrow = true,
-            source = "a11y", raw = "",
-        )
-        assertTrue(journal().lines().single().endsWith("f28=2 amap=off suppress=true src=a11y raw=\"\""))
-    }
-
     @Test fun `ring drops the oldest entries past the cap`() {
         val j = journal()
         repeat(HudManeuverJournal.MAX_ENTRIES + 3) { i ->

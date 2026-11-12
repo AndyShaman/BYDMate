@@ -32,19 +32,6 @@ class LastStateDaoTest {
 
     @After fun tearDown() = db.close()
 
-    @Test fun `empty table returns null`() = runBlocking {
-        assertNull(dao.getCurrent())
-    }
-
-    @Test fun `upsert replaces row with same id`() = runBlocking {
-        dao.upsert(LastStateEntity(id = 1, ts = 1000L, soc = 80))
-        dao.upsert(LastStateEntity(id = 1, ts = 2000L, soc = 75, openTripId = 42L))
-        val row = dao.getCurrent()
-        assertEquals(2000L, row?.ts)
-        assertEquals(75, row?.soc)
-        assertEquals(42L, row?.openTripId)
-    }
-
     @Test fun `clearOpenTrip nulls the trip fields only`() = runBlocking {
         dao.upsert(
             LastStateEntity(

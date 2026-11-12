@@ -14,13 +14,6 @@ class ClusterProjectionStateTest {
         )
     }
 
-    @Test fun `default percentages equal a full-screen window`() {
-        assertEquals(
-            geometryFor(ClusterMode.FULLSCREEN, 1280, 480),
-            geometryFor(ClusterMode.FULLSCREEN, 1280, 480, 100, 100),
-        )
-    }
-
     @Test fun `half width centers horizontally only`() {
         assertEquals(
             ClusterGeometry(width = 640, height = 480, xOffset = 320, yOffset = 0),
@@ -152,16 +145,6 @@ class ClusterProjectionStateTest {
         assertEquals(false, shouldRecoverCompositor(markerSet = true, mode = ClusterMode.OFF, autoContainer = false))
     }
 
-    // --- shouldPowerDownCompositor (#85/#62: no ИПЦ write on cars we never powered up) ---
-
-    @Test fun `power-down is owed only when our write-ahead marker is set`() {
-        assertEquals(true, shouldPowerDownCompositor(markerSet = true))
-    }
-
-    @Test fun `no marker - compositor was never powered by us - no ИПЦ write`() {
-        assertEquals(false, shouldPowerDownCompositor(markerSet = false))
-    }
-
     // --- cameraNeedsCompositor (VV 2026-08-28: auto-container off = camera never sends 16/18/0) ---
 
     @Test fun `camera drives the compositor only with auto-container on and a real cluster window`() {
@@ -262,19 +245,6 @@ class ClusterProjectionStateTest {
 
     @Test fun `split ON with direct transport yields flag 1`() {
         assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = true))
-    }
-
-    @Test fun `split OFF with direct transport yields flag 1`() {
-        assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = false))
-    }
-
-    @Test fun `split OFF with VD transport yields flag 0 - unchanged from today`() {
-        assertEquals(0, freeformFlagValue(directEnabled = false, splitEnabled = false))
-    }
-
-    @Test fun `toggling split off while direct is enabled still yields flag 1`() {
-        // Direct keeps the flag live regardless of split state.
-        assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = false))
     }
 
     @Test fun `default display pick prefers the mini band`() {

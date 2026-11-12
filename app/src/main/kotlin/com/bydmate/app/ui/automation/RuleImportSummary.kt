@@ -3,6 +3,7 @@ package com.bydmate.app.ui.automation
 import android.content.Context
 import com.bydmate.app.R
 import com.bydmate.app.data.automation.ActionDispatcher
+import com.bydmate.app.data.automation.OneShotTrigger
 import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.SharedRule
@@ -11,6 +12,7 @@ import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
 import com.bydmate.app.util.appLocalizedContext
 import org.json.JSONObject
+import java.time.ZoneId
 
 /** The import preview as text: built off the main thread when a file is picked. */
 data class RuleImportPreview(
@@ -76,13 +78,6 @@ internal object RuleImportSummary {
         "voice" to R.string.automation_trigger_type_voice,
     )
 
-    private val TIME_OF_DAY_LABELS = mapOf(
-        "DAY" to R.string.automation_trigger_day,
-        "NIGHT" to R.string.automation_trigger_night,
-        "DAWN" to R.string.automation_trigger_dawn,
-        "DUSK" to R.string.automation_trigger_dusk,
-    )
-
     /**
      * Every line of [rule] in one pass. [autoGo] is the dispatcher's own answer to «will this
      * navigate press «Поехали» itself here» (ActionDispatcher.autoGoWillRun).
@@ -114,6 +109,7 @@ internal object RuleImportSummary {
         return if (detail.isBlank()) label else "$label: $detail"
     }
 
+    @Suppress("CyclomaticComplexMethod") // one branch per action kind
     private fun actionDetail(action: ActionDef, lc: Context, autoGo: (JSONObject) -> Boolean): String? {
         val json = payloadJson(action.payload)
         return when (action.kind) {
@@ -122,7 +118,8 @@ internal object RuleImportSummary {
                 listOf(json.optString("title"), json.optString("text")).filter { it.isNotBlank() }.joinToString(" / ")
             "app_launch", "app_close" -> json.optString("packageName")
             "call" -> callDetail(json, lc)
-            "delay", "media_volume" -> action.payload
+            "delay" -> action.payload?.toLongOrNull()?.let { durationText(it, lc) } ?: action.payload
+            "media_volume" -> action.payload
             "sentry", "hotspot", "cluster_projection" ->
                 lc.getString(if (action.payload == "1") R.string.auto_enum_on else R.string.auto_enum_off)
             TELEGRAM_REPORT_KIND -> (action.reportFields().map { lc.getString(it.labelRes) } + action.reportText())
@@ -132,8 +129,18 @@ internal object RuleImportSummary {
     }
 
     /** The trigger type and its key value, e.g. «Скорость > 7 км/ч», «Место: Въезд в «Дача»». */
-    fun trigger(trigger: TriggerDef, context: Context): String {
+    fun trigger(
+        trigger: TriggerDef,
+        context: Context,
+        now: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): String {
         val lc = context.appLocalizedContext()
+        if (trigger.kind == OneShotTrigger.KIND) {
+            // «завтра в 08:00, один раз», as the rule card words it; an unreadable moment as written.
+            val at = OneShotTrigger.momentMs(trigger.value, zone) ?: return trigger.value
+            return lc.getString(R.string.auto_ui_phrase_once, whenText(at, lc, now, zone))
+        }
         val typeRes = TRIGGER_TYPE_LABELS[trigger.kind] ?: return paramTrigger(trigger, lc)
         val value = triggerValue(trigger, lc)
         return if (value.isNullOrBlank()) lc.getString(typeRes) else "${lc.getString(typeRes)}: $value"
@@ -141,7 +148,7 @@ internal object RuleImportSummary {
 
     private fun triggerValue(trigger: TriggerDef, lc: Context): String? = when (trigger.kind) {
         "place_enter", "place_exit" -> placeValue(trigger, lc)
-        "time_of_day" -> TIME_OF_DAY_LABELS[trigger.value]?.let { lc.getString(it) } ?: trigger.value
+        "time_of_day" -> TIME_OF_DAY_NAMES.toMap()[trigger.value]?.let { lc.getString(it) } ?: trigger.value
         "time_range" -> ScheduleSpec.fromJson(trigger.value)?.let { scheduleDisplayName(lc, it) } ?: trigger.value
         "button_press" -> trigger.value
         "steering_key" -> steeringKeyValue(trigger, lc)

@@ -45,11 +45,11 @@ class WindowPercentResetTest {
     }
 
     @Test fun `each window's percent write is followed by 255 on the same fid 300 ms later`() = runTest {
-        val cases: List<Pair<Int, suspend (VehicleApi) -> Result<Unit>>> = listOf(
-            DRIVER_POS to { api -> api.writeWindowDriver(10) },
-            PASSENGER_POS to { api -> api.writeWindowPassenger(10) },
-            REAR_LEFT_POS to { api -> api.writeWindowRearLeft(10) },
-            REAR_RIGHT_POS to { api -> api.writeWindowRearRight(10) },
+        val cases: List<Pair<Int, suspend (VehicleApiImpl) -> Result<Unit>>> = listOf(
+            DRIVER_POS to { api -> api.doWrite("window_driver_pos", 10) },
+            PASSENGER_POS to { api -> api.doWrite("window_passenger_pos", 10) },
+            REAR_LEFT_POS to { api -> api.doWrite("window_rear_left_pos", 10) },
+            REAR_RIGHT_POS to { api -> api.doWrite("window_rear_right_pos", 10) },
         )
         for ((fid, command) in cases) {
             val car = car()
@@ -86,7 +86,7 @@ class WindowPercentResetTest {
     @Test fun `the failure branch resets every write and ends on the reset`() = runTest {
         val car = car().apply { frozen = true }
 
-        val result = car.api().writeWindowDriver(10)
+        val result = car.api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
         assertEquals(listOf(10, RESET, 11, RESET, 0, RESET, 10, RESET), car.writesTo(DRIVER_POS))
@@ -108,7 +108,7 @@ class WindowPercentResetTest {
         val car = car()
         car.refuse = { fid, value -> fid == DRIVER_POS && value == 10 }
 
-        val result = car.api().writeWindowDriver(10)
+        val result = car.api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         assertEquals(listOf(10, RESET), car.writesTo(DRIVER_POS))
@@ -121,7 +121,7 @@ class WindowPercentResetTest {
         var percents = 0
         car.refuse = { fid, value -> fid == DRIVER_POS && value != RESET && ++percents == 3 }
 
-        val result = car.api().writeWindowDriver(10)
+        val result = car.api().doWrite("window_driver_pos", 10)
 
         assertTrue(result.isFailure)
         assertEquals(listOf(10, RESET, 11, RESET, 0, RESET), car.writesTo(DRIVER_POS))
@@ -136,7 +136,7 @@ class WindowPercentResetTest {
             throw IOException("binder died")
         }
 
-        assertTrue(api.writeWindowDriver(10).isFailure)
+        assertTrue(api.doWrite("window_driver_pos", 10).isFailure)
         assertEquals(listOf(10, RESET), car.writesTo(DRIVER_POS))
         assertEveryPercentReset(car, DRIVER_POS)
     }
@@ -151,7 +151,7 @@ class WindowPercentResetTest {
             awaitCancellation()
         }
 
-        val job = launch { api.writeWindowDriver(10) }
+        val job = launch { api.doWrite("window_driver_pos", 10) }
         inWrite.await()
         job.cancel()
         job.join()
@@ -164,7 +164,7 @@ class WindowPercentResetTest {
         val car = car()
         val api = car.api()
 
-        val job = launch { api.writeWindowDriver(10) }
+        val job = launch { api.doWrite("window_driver_pos", 10) }
         runCurrent()
         advanceTimeBy(100)
         assertEquals(listOf(10), car.writesTo(DRIVER_POS))
@@ -181,9 +181,9 @@ class WindowPercentResetTest {
         val car = car()
         val api = car.api()
 
-        val first = launch { api.writeWindowDriver(10) }
+        val first = launch { api.doWrite("window_driver_pos", 10) }
         advanceTimeBy(250)
-        val second = launch { api.writeWindowDriver(50) }
+        val second = launch { api.doWrite("window_driver_pos", 50) }
         first.join()
         second.join()
 
@@ -195,9 +195,9 @@ class WindowPercentResetTest {
         val car = car()
         val api = car.api()
 
-        val first = launch { api.writeWindowDriver(10) }
+        val first = launch { api.doWrite("window_driver_pos", 10) }
         advanceTimeBy(100)
-        val second = launch { api.writeWindowDriver(50) }
+        val second = launch { api.doWrite("window_driver_pos", 50) }
         advanceTimeBy(50)
         first.cancel()
         first.join()
@@ -211,9 +211,9 @@ class WindowPercentResetTest {
         val car = car()
         val api = car.api()
 
-        val driver = launch { api.writeWindowDriver(10) }
+        val driver = launch { api.doWrite("window_driver_pos", 10) }
         advanceTimeBy(100)
-        val passenger = launch { api.writeWindowPassenger(50) }
+        val passenger = launch { api.doWrite("window_passenger_pos", 50) }
         runCurrent()
 
         val passengerWrite = car.writes.first { it.fid == PASSENGER_POS }
@@ -230,7 +230,7 @@ class WindowPercentResetTest {
         var resets = 0
         car.refuse = { fid, value -> fid == DRIVER_POS && value == RESET && ++resets == 1 }
 
-        assertTrue(car.api().writeWindowDriver(10).isSuccess)
+        assertTrue(car.api().doWrite("window_driver_pos", 10).isSuccess)
         assertEquals(listOf(10, RESET, RESET), car.writesTo(DRIVER_POS))
     }
 
@@ -238,14 +238,14 @@ class WindowPercentResetTest {
         val car = car()
         car.refuse = { fid, value -> fid == DRIVER_POS && value == RESET }
 
-        assertTrue(car.api().writeWindowDriver(10).isSuccess)
+        assertTrue(car.api().doWrite("window_driver_pos", 10).isSuccess)
         assertEquals(listOf(10, RESET, RESET), car.writesTo(DRIVER_POS))
     }
 
     @Test fun `255 is not a user target on a percent fid`() = runTest {
         val car = car()
 
-        val result = car.api().writeWindowDriver(RESET)
+        val result = car.api().doWrite("window_driver_pos", RESET)
 
         assertTrue(result.exceptionOrNull() is VehicleWriteError.OutOfRange)
         assertTrue(car.writes.toString(), car.writes.isEmpty())

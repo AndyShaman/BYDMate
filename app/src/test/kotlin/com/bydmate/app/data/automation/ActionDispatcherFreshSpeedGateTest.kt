@@ -11,6 +11,7 @@ import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import io.mockk.coEvery
+import io.mockk.confirmVerified
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -35,13 +36,7 @@ class ActionDispatcherFreshSpeedGateTest {
         every { createConfigurationContext(any()) } answers { self as Context }
         every { getString(R.string.gate_frunk_speed_unknown) } returns FRUNK_SPEED_UNKNOWN
     }
-    private val dispatcher = ActionDispatcher(vehicleApi, helper, context,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-        mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { mockk(relaxed = true) },
-    )
+    private val dispatcher = testDispatcher(vehicleApi, helper, context)
 
     private fun param(command: String) = ActionDef(command = command, displayName = command, kind = "param")
 
@@ -90,7 +85,8 @@ class ActionDispatcherFreshSpeedGateTest {
         assertTrue(dispatcher.dispatch(param(WINDOW_OPEN), diParsData(speed = 60)).success)
         val speed = FidAddresses.of("speed")
         coVerify(exactly = 1) { helper.readBatch(listOf(BatchReadItem(tx = 7, dev = speed.device, fid = speed.fid))) }
-        coVerify(exactly = 0) { vehicleApi.readSpeed() }
+        coVerify(exactly = 1) { vehicleApi.dispatch(WINDOW_OPEN) }
+        confirmVerified(vehicleApi)
     }
 
     @Test fun `the daemon read is rounded up`() = runBlocking {
@@ -122,7 +118,26 @@ class ActionDispatcherFreshSpeedGateTest {
         coEvery { helper.readBatch(any()) } returns listOf(0 to java.lang.Float.floatToRawIntBits(-1.0f))
         assertFalse(dispatcher.dispatch(param("前备箱打开"), diParsData(speed = 0)).success)
         coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
-        coVerify(exactly = 0) { vehicleApi.readSpeed() }
+        confirmVerified(vehicleApi)
+    }
+
+    // Frunk is a powered external panel: the open fails safe unless the speed read says 0.
+    @Test fun `the frunk opens only at a confirmed standstill`() = runBlocking {
+        dispatcher.readSpeedNow = { null }
+        assertFalse("null telemetry", dispatcher.dispatch(param(FRUNK_OPEN), null).success)
+        assertFalse("unknown speed", dispatcher.dispatch(param(FRUNK_OPEN), diParsData(speed = null)).success)
+        dispatcher.readSpeedNow = { 50 }
+        assertFalse("moving", dispatcher.dispatch(param(FRUNK_OPEN), diParsData(speed = 50)).success)
+        coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
+
+        dispatcher.readSpeedNow = { 0 }
+        assertTrue("standstill", dispatcher.dispatch(param(FRUNK_OPEN), diParsData(speed = 0)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch(FRUNK_OPEN) }
+    }
+
+    @Test fun `frunk close is ungated even with null telemetry`() = runBlocking {
+        assertTrue(dispatcher.dispatch(param("前备箱关闭"), null).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("前备箱关闭") }
     }
 
     @Test fun `a closing step reads no speed`() = runBlocking {
@@ -134,6 +149,7 @@ class ActionDispatcherFreshSpeedGateTest {
 
     private companion object {
         const val WINDOW_OPEN = "主驾打开100"
+        const val FRUNK_OPEN = "前备箱打开"
         const val FRUNK_SPEED_UNKNOWN = "Скорость неизвестна"
     }
 }

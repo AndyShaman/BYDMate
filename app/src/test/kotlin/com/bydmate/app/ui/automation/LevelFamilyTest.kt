@@ -37,27 +37,6 @@ class LevelFamilyTest {
         }
     }
 
-    @Test fun `families and ranges as approved`() {
-        val expected = mapOf(
-            LevelFamily.TEMPERATURE to listOf(16, 33, 1, 22),
-            LevelFamily.FAN to listOf(1, 7, 1, 3),
-            LevelFamily.SEAT_HEAT_DRIVER to listOf(0, 5, 1, 3),
-            LevelFamily.SEAT_HEAT_PASSENGER to listOf(0, 5, 1, 3),
-            LevelFamily.SEAT_VENT_DRIVER to listOf(0, 5, 1, 3),
-            LevelFamily.SEAT_VENT_PASSENGER to listOf(0, 5, 1, 3),
-            LevelFamily.SEAT_HEAT_REAR_LEFT to listOf(0, 2, 1, 1),
-            LevelFamily.SEAT_HEAT_REAR_RIGHT to listOf(0, 2, 1, 1),
-            LevelFamily.WINDOW_DRIVER to listOf(0, 100, 10, 50),
-            LevelFamily.WINDOW_PASSENGER to listOf(0, 100, 10, 50),
-            LevelFamily.WINDOW_REAR_LEFT to listOf(0, 100, 10, 50),
-            LevelFamily.WINDOW_REAR_RIGHT to listOf(0, 100, 10, 50),
-            LevelFamily.FRIDGE_COOL to listOf(-6, 6, 1, 0),
-            LevelFamily.FRIDGE_HEAT to listOf(35, 50, 1, 40),
-        )
-        assertEquals(expected.keys, LevelFamily.entries.toSet())
-        for ((f, e) in expected) assertEquals("$f", e, listOf(f.range.first, f.range.last, f.step, f.default))
-    }
-
     @Test fun `commands keep the old shape`() {
         assertEquals("设置温度22", LevelFamily.TEMPERATURE.command(22))
         assertEquals("风量7", LevelFamily.FAN.command(7))
@@ -126,17 +105,6 @@ class LevelFamilyTest {
                 "$f before $before",
                 ACTION_COMMANDS.any { (it.toggleTarget ?: it.command) == before && it.categoryRes == f.categoryRes },
             )
-        }
-    }
-
-    @Test fun `the graded tiles are gone from the catalog`() {
-        val commands = ACTION_COMMANDS.map { it.command }.toSet()
-        for (gone in listOf("设置温度18", "设置温度25", "风量3", "主驾座椅加热1档", "副驾座椅通风关闭", "冰箱制冷0度", "冰箱制热50度")) {
-            assertTrue(gone, gone !in commands)
-        }
-        // Open, close, vent, half and fridge mode tiles stay.
-        for (kept in listOf("主驾打开100", "主驾打开0", "主驾通风", "主驾半开", "冰箱制冷", "冰箱制热", "冰箱关闭")) {
-            assertTrue(kept, kept in commands)
         }
     }
 

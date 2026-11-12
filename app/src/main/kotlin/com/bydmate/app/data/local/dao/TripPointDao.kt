@@ -13,14 +13,8 @@ interface TripPointDao {
     @Query("SELECT * FROM trip_points WHERE trip_id = :tripId ORDER BY timestamp ASC")
     suspend fun getByTripId(tripId: Long): List<TripPointEntity>
 
-    @Query("SELECT * FROM trip_points WHERE trip_id IN (:tripIds) ORDER BY trip_id, timestamp ASC")
-    suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity>
-
     @Query("SELECT COUNT(*) FROM trip_points")
     suspend fun getCount(): Int
-
-    @Query("SELECT * FROM trip_points ORDER BY trip_id, timestamp ASC")
-    suspend fun getAll(): List<TripPointEntity>
 
     /**
      * Delete old points keeping every Nth one per trip.
@@ -37,14 +31,8 @@ interface TripPointDao {
     """)
     suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int
 
-    @Query("SELECT * FROM trip_points WHERE timestamp BETWEEN :from AND :to ORDER BY timestamp ASC")
-    suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity>
-
     @Query("UPDATE trip_points SET trip_id = :tripId WHERE timestamp BETWEEN :from AND :to AND trip_id = 0")
     suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int
-
-    @Insert
-    suspend fun insert(point: TripPointEntity): Long
 
     @Query("DELETE FROM trip_points WHERE trip_id = :tripId")
     suspend fun deleteByTripId(tripId: Long): Int

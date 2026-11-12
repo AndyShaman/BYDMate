@@ -29,12 +29,7 @@ class ActionDispatcherVolumeTest {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         every { context.getSystemService(Context.AUDIO_SERVICE) } returns audioManager
         every { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) } returns 39
-        dispatcher = ActionDispatcher(vehicleApi, helper, context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            audioCapture,
-            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { io.mockk.mockk(relaxed = true) })
+        dispatcher = testDispatcher(vehicleApi, helper, context, audioCapture = audioCapture)
     }
 
     private fun volume(payload: String) =

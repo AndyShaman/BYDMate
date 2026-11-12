@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.tech
 
+import androidx.compose.ui.graphics.Color
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.SocYellow
@@ -12,23 +13,17 @@ class CellDeltaColorTest {
     // --- Inside the LFP diagnostic band (SOC 20-80%) ---
 
     @Test
-    fun `in band — delta below 50 mV is green`() {
-        assertEquals(AccentGreen, cellDeltaColor(0.049, soc = 50))
-    }
-
-    @Test
-    fun `in band — delta at 50 mV is yellow`() {
-        assertEquals(SocYellow, cellDeltaColor(0.050, soc = 50))
-    }
-
-    @Test
-    fun `in band — delta just below 90 mV is yellow`() {
-        assertEquals(SocYellow, cellDeltaColor(0.089, soc = 50))
-    }
-
-    @Test
-    fun `in band — delta at 90 mV is red`() {
-        assertEquals(SocRed, cellDeltaColor(0.090, soc = 50))
+    fun `in band the delta is green below 50 mV, yellow from 50 to just under 90, red from 90`() {
+        class Case(val label: String, val delta: Double, val expected: Color)
+        val cases = listOf(
+            Case("delta below 50 mV is green", 0.049, AccentGreen),
+            Case("delta at 50 mV is yellow", 0.050, SocYellow),
+            Case("delta just below 90 mV is yellow", 0.089, SocYellow),
+            Case("delta at 90 mV is red", 0.090, SocRed),
+        )
+        for (c in cases) {
+            assertEquals("case: ${c.label}", c.expected, cellDeltaColor(c.delta, soc = 50))
+        }
     }
 
     @Test

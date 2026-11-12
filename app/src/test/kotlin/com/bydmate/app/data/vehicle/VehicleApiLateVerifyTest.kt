@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
-import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceRecorder
 import io.mockk.coEvery
@@ -49,7 +48,7 @@ class VehicleApiLateVerifyTest {
     }
 
     private fun api(scope: CoroutineScope) = VehicleApiImpl(
-        mockk<ParsReader>(relaxed = true), mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
+        mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
         mockk<VehicleWriteLogDao>(relaxed = true), seatStore, windowStore,
     ).also { it.readbackScope = scope }
 
@@ -61,7 +60,7 @@ class VehicleApiLateVerifyTest {
         coEvery { helper.read(entry.dev, entry.writeFid) } returns 1L
         val api = api(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)))
 
-        val result = withContext(Trace.causedBy(7L)) { api.writeLockDoors() }
+        val result = withContext(Trace.causedBy(7L)) { api.doWrite("doors_lock", 2) }
 
         assertTrue(result.isSuccess)
         // The result came back first; nothing was read yet.
@@ -82,7 +81,7 @@ class VehicleApiLateVerifyTest {
         coEvery { helper.read(any(), any()) } throws IllegalStateException("daemon gone")
         val api = api(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)))
 
-        assertTrue(api.writeAcOn().isSuccess)
+        assertTrue(api.doWrite("ac_on", 1).isSuccess)
         advanceTimeBy(VehicleApiImpl.LATE_VERIFY_MS + 1)
         runCurrent()
 
@@ -94,7 +93,7 @@ class VehicleApiLateVerifyTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 1) } returns false
         val api = api(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)))
 
-        api.writeAcOn()
+        api.doWrite("ac_on", 1)
         advanceTimeBy(VehicleApiImpl.LATE_VERIFY_MS + 1)
         runCurrent()
 

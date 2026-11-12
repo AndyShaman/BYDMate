@@ -62,6 +62,9 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         /** Current Room schema version. Must match the @Database(version = ...) annotation above. */
         const val SCHEMA_VERSION = 25
+
+        /** Room database file name in the app database directory. */
+        const val FILE_NAME = "bydmate.db"
     }
 
     abstract fun tripDao(): TripDao

@@ -28,7 +28,7 @@ class ZaiSearchClient @Inject constructor(private val http: OkHttpClient) {
             val payload = JSONObject()
                 .put("search_engine", "search-prime")
                 .put("search_query", query)
-                .put("count", MAX_RESULTS)
+                .put("count", ExaSearchClient.MAX_RESULTS)
             val base = baseUrlForTest ?: LlmConnectionResolver.ZAI_BASE_URL
             val request = Request.Builder()
                 .url("$base/web_search")
@@ -40,23 +40,12 @@ class ZaiSearchClient @Inject constructor(private val http: OkHttpClient) {
                 val body = resp.body?.string().takeUnless { it.isNullOrBlank() }
                     ?: throw IOException("z.ai: empty body")
                 val results = JSONObject(body).optJSONArray("search_result") ?: JSONArray()
-                val out = JSONArray()
-                for (i in 0 until minOf(results.length(), MAX_RESULTS)) {
-                    val r = results.getJSONObject(i)
-                    out.put(JSONObject().apply {
-                        put("title", r.optString("title"))
-                        put("url", r.optString("link"))
-                        put("text", r.optString("content").take(TEXT_LIMIT))
-                    })
-                }
-                JSONObject().put("results", out).toString()
+                ExaSearchClient.resultsJson(results, urlKey = "link", textKey = "content")
             }
         }
     }
 
     companion object {
-        private const val MAX_RESULTS = 5
-        private const val TEXT_LIMIT = 1500
         private val JSON_MEDIA = "application/json".toMediaType()
     }
 }

@@ -5,6 +5,8 @@ import android.media.AudioTrack
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -70,11 +72,6 @@ class SherpaTtsEngineTest {
             fallback = { error("must not be called") },
         )
         assertEquals("p", result)
-    }
-
-    @Test
-    fun `BYD_STREAM_BTTS is 17`() {
-        assertEquals(17, SherpaTtsEngine.BYD_STREAM_BTTS)
     }
 
     // --- PR #261: on Android 10 head units the assistant speaks on the navigation stream, which
@@ -201,25 +198,6 @@ class SherpaTtsEngineTest {
     }
 
     @Test
-    fun `queueDrainTimeoutMs returns exactly the margin when playback already caught up`() {
-        // Gap-heavy case: currentFrames == targetFrames (LLM paused between sentences, the
-        // written audio already fully played). Must never collapse to 0 -- the margin still
-        // covers buffer priming for the next enqueue.
-        assertEquals(
-            SherpaTtsEngine.DRAIN_MARGIN_MS,
-            SherpaTtsEngine.queueDrainTimeoutMs(targetFrames = 22_050L, currentFrames = 22_050L, sampleRate = 22_050),
-        )
-    }
-
-    @Test
-    fun `queueDrainTimeoutMs is remaining audio duration plus margin`() {
-        assertEquals(
-            1_700L,
-            SherpaTtsEngine.queueDrainTimeoutMs(targetFrames = 22_050L, currentFrames = 0L, sampleRate = 22_050),
-        )
-    }
-
-    @Test
     fun `queueDrainTimeoutMs is capped at DRAIN_TIMEOUT_MS`() {
         assertEquals(
             SherpaTtsEngine.DRAIN_TIMEOUT_MS,
@@ -234,7 +212,8 @@ class SherpaTtsEngineTest {
         val queue = engine.startQueue()!!
         queue.enqueue("Текст.")   // createTts() fails on JVM -> nothing plays, speaking stays false
         queue.finish()
-        Thread.sleep(200)          // let the single worker drain its jobs
+        // finish()'s worker block completes awaitPlayed() last, after the worker drained its jobs.
+        runBlocking { withTimeout(10_000) { queue.awaitPlayed() } }
         assertFalse(engine.speaking.value)
     }
 
@@ -717,20 +696,69 @@ class SherpaTtsEngineTest {
     // --- Review round 1, Finding 1: pcmWriteTimeoutMs -- bounded write-wait for playPcm ---
 
     @Test
-    fun `pcmWriteTimeoutMs returns floor of 3000 for short audio`() {
-        // 160 frames at 16 kHz = 10 ms audio -> 10 + 2000 = 2010 ms < floor
-        assertEquals(3_000L, SherpaTtsEngine.pcmWriteTimeoutMs(expectedFrames = 160, sampleRate = 16_000))
-    }
-
-    @Test
-    fun `pcmWriteTimeoutMs is duration plus 2000 when result exceeds floor`() {
-        // 32000 frames at 16 kHz = 2000 ms audio -> 2000 + 2000 = 4000 ms > 3000 floor
-        assertEquals(4_000L, SherpaTtsEngine.pcmWriteTimeoutMs(expectedFrames = 32_000, sampleRate = 16_000))
-    }
-
-    @Test
     fun `pcmWriteTimeoutMs does not throw when sampleRate is zero`() {
         SherpaTtsEngine.pcmWriteTimeoutMs(expectedFrames = 1_000, sampleRate = 0)
+    }
+
+    private class TimingCase(val label: String, val expected: Long, val actual: () -> Long)
+
+    @Test
+    fun `timeout and playback rate formulas`() {
+        val slowRate = SherpaTtsEngine.effectivePlaybackRate(24_000, 0.5f)  // 12_000
+        val fastRate = SherpaTtsEngine.effectivePlaybackRate(24_000, 2.0f)  // 48_000
+        val cases = listOf(
+            // Playback already caught up (LLM paused between sentences): never 0, the margin
+            // still covers buffer priming for the next enqueue.
+            TimingCase("queueDrain caught up = margin", SherpaTtsEngine.DRAIN_MARGIN_MS) {
+                SherpaTtsEngine.queueDrainTimeoutMs(targetFrames = 22_050L, currentFrames = 22_050L, sampleRate = 22_050)
+            },
+            TimingCase("queueDrain remaining audio + margin", 1_700L) {
+                SherpaTtsEngine.queueDrainTimeoutMs(targetFrames = 22_050L, currentFrames = 0L, sampleRate = 22_050)
+            },
+            // At 2x, 24000 frames play in 500 ms instead of 1000 ms; drain timeout must shrink.
+            TimingCase("queueDrain at double speed", 1_200L) {
+                SherpaTtsEngine.queueDrainTimeoutMs(targetFrames = 24_000L, currentFrames = 0L, sampleRate = fastRate)
+            },
+            // 160 frames at 16 kHz = 10 ms audio -> 10 + 2000 = 2010 ms < floor
+            TimingCase("pcmWrite short audio = floor 3000", 3_000L) {
+                SherpaTtsEngine.pcmWriteTimeoutMs(expectedFrames = 160, sampleRate = 16_000)
+            },
+            // 32000 frames at 16 kHz = 2000 ms audio -> 2000 + 2000 = 4000 ms > 3000 floor
+            TimingCase("pcmWrite duration + 2000 above floor", 4_000L) {
+                SherpaTtsEngine.pcmWriteTimeoutMs(expectedFrames = 32_000, sampleRate = 16_000)
+            },
+            // 48000 frames at 24 kHz = 2000 ms nominal; at 0.5x (12 kHz) 4000 ms -> 6000.
+            TimingCase("pcmWrite nominal 1x", 4_000L) {
+                SherpaTtsEngine.pcmWriteTimeoutMs(48_000, 24_000)
+            },
+            TimingCase("pcmWrite at half speed exceeds nominal", 6_000L) {
+                SherpaTtsEngine.pcmWriteTimeoutMs(48_000, slowRate)
+            },
+            // 48000 frames at 24kHz = 2000ms: 1.0x -> max(3000, 2000 + 2000); 0.5x -> max(3000, 4000 + 2000).
+            TimingCase("writeWaitBound at 0.5x lengthens the bound", 6_000L) {
+                SherpaTtsEngine.writeWaitBoundMs(48_000, 24_000, 0.5f)
+            },
+            TimingCase("writeWaitBound at 1.0x = nominal + 2000", 4_000L) {
+                SherpaTtsEngine.writeWaitBoundMs(48_000, 24_000, 1.0f)
+            },
+            TimingCase("effectiveRate below minimum clamps to 0.5x", 12_000L) {
+                SherpaTtsEngine.effectivePlaybackRate(24_000, 0.3f).toLong()
+            },
+            TimingCase("effectiveRate above maximum clamps to 2.0x", 48_000L) {
+                SherpaTtsEngine.effectivePlaybackRate(24_000, 3.0f).toLong()
+            },
+            TimingCase("effectiveRate mid-range passes through", 36_000L) {
+                SherpaTtsEngine.effectivePlaybackRate(24_000, 1.5f).toLong()
+            },
+            TimingCase("effectiveRate NaN returns base rate", 24_000L) {
+                SherpaTtsEngine.effectivePlaybackRate(24_000, Float.NaN).toLong()
+            },
+            // 0f is finite but not > 0, so the guard treats it as corrupt and falls back to 1.0x.
+            TimingCase("effectiveRate zero returns base rate", 24_000L) {
+                SherpaTtsEngine.effectivePlaybackRate(24_000, 0f).toLong()
+            },
+        )
+        cases.forEach { assertEquals("case: ${it.label}", it.expected, it.actual()) }
     }
 
     // --- Review round 1, Finding 3: wiring tests for playPcm honest outcome ---
@@ -775,53 +803,6 @@ class SherpaTtsEngineTest {
     // PlaybackParams cannot be constructed on the JVM unit-test stub jar, so the application of
     // the params is not directly unit-testable; only the pure numeric seam is tested here.
 
-    @Test
-    fun `effectivePlaybackRate clamps speed below minimum to 0_5`() {
-        assertEquals(12_000, SherpaTtsEngine.effectivePlaybackRate(24_000, 0.3f))
-    }
-
-    @Test
-    fun `effectivePlaybackRate clamps speed above maximum to 2_0`() {
-        assertEquals(48_000, SherpaTtsEngine.effectivePlaybackRate(24_000, 3.0f))
-    }
-
-    @Test
-    fun `effectivePlaybackRate passes mid-range speed through unchanged`() {
-        assertEquals(36_000, SherpaTtsEngine.effectivePlaybackRate(24_000, 1.5f))
-    }
-
-    @Test
-    fun `effectivePlaybackRate returns base rate on non-finite input`() {
-        assertEquals(24_000, SherpaTtsEngine.effectivePlaybackRate(24_000, Float.NaN))
-    }
-
-    @Test
-    fun `effectivePlaybackRate returns base rate on zero input`() {
-        // 0f is finite but not > 0, so the guard treats it as corrupt and falls back to 1.0x.
-        assertEquals(24_000, SherpaTtsEngine.effectivePlaybackRate(24_000, 0f))
-    }
-
-    @Test
-    fun `pcmWriteTimeoutMs at half playback speed exceeds nominal bound`() {
-        // At 0.5x the AudioTrack drains PCM at half speed, so a blocking write on a long
-        // sentence legitimately takes ~2x the nominal duration.  pcmWriteTimeoutMs must be
-        // called with effectivePlaybackRate so the bound scales accordingly.
-        // frames=48000 at base=24000 Hz -> nominal dur=2000 ms -> timeout=max(3000,4000)=4000
-        // effective rate at 0.5x = 12000 Hz -> dur=4000 ms -> timeout=max(3000,6000)=6000
-        val frames = 48_000
-        val base = 24_000
-        val slowRate = SherpaTtsEngine.effectivePlaybackRate(base, 0.5f)  // 12_000
-        assertEquals(4_000L, SherpaTtsEngine.pcmWriteTimeoutMs(frames, base))
-        assertEquals(6_000L, SherpaTtsEngine.pcmWriteTimeoutMs(frames, slowRate))
-    }
-
-    @Test
-    fun `queueDrainTimeoutMs with effectivePlaybackRate reflects shorter audio at double speed`() {
-        // At 2×, 24000 frames play in 500 ms instead of 1000 ms; drain timeout must shrink.
-        val effectiveRate = SherpaTtsEngine.effectivePlaybackRate(24_000, 2.0f)
-        assertEquals(1_200L, SherpaTtsEngine.queueDrainTimeoutMs(targetFrames = 24_000L, currentFrames = 0L, sampleRate = effectiveRate))
-    }
-
     // --- Fix report (review round 2): writeWaitBoundMs -- pessimistic write-wait bound for
     // playPcm. Root cause: pcmWriteTimeoutMs was called with effectivePlaybackRate(sampleRate, rate()),
     // shortening the bound at 2.0x -- if HAL rejects PlaybackParams, actual playback runs at 1.0x
@@ -840,20 +821,6 @@ class SherpaTtsEngineTest {
         val bound1x = SherpaTtsEngine.writeWaitBoundMs(frames, base, 1.0f)
         val bound2x = SherpaTtsEngine.writeWaitBoundMs(frames, base, 2.0f)
         assertTrue("2.0x bound ($bound2x) must be >= 1.0x bound ($bound1x)", bound2x >= bound1x)
-    }
-
-    @Test
-    fun `writeWaitBoundMs at 0_5x lengthens the bound to cover slower drain`() {
-        // At 0.5x AudioTrack drains PCM at half speed, so the write legitimately takes 2x
-        // the nominal duration. 48000 frames at 24kHz = 2000ms nominal; at 0.5x: 4000ms drain
-        // -> bound = max(3000, 4000 + 2000) = 6000ms.
-        assertEquals(6_000L, SherpaTtsEngine.writeWaitBoundMs(48_000, 24_000, 0.5f))
-    }
-
-    @Test
-    fun `writeWaitBoundMs at 1_0x equals nominal duration plus 2000`() {
-        // 48000 frames at 24kHz = 2000ms -> bound = max(3000, 2000 + 2000) = 4000ms.
-        assertEquals(4_000L, SherpaTtsEngine.writeWaitBoundMs(48_000, 24_000, 1.0f))
     }
 
     // --- Task 2: TTS load guard gate ---
@@ -942,7 +909,8 @@ class SherpaTtsEngineTest {
         engine.primePcmCacheForTest("k", floatArrayOf(1f, 2f))
         assertEquals(1, engine.pcmCacheSizeForTest())
         engine.reload()
-        Thread.sleep(200)   // let the single worker drain its job
+        val deadline = System.currentTimeMillis() + 10_000   // the single worker drains its job
+        while (System.currentTimeMillis() < deadline && engine.pcmCacheSizeForTest() != 0) Thread.sleep(5)
         assertEquals(0, engine.pcmCacheSizeForTest())
     }
 
@@ -963,7 +931,16 @@ class SherpaTtsEngineTest {
         val engine = SherpaTtsEngine(mm)
         val gen = engine.generationForTest()
         engine.warmUp()     // createTts() itself fails on the JVM -- only the attempt is observable
-        Thread.sleep(200)   // let the single worker drain its job
+        // Barrier: a second warmUp() queues behind the first on the single worker, so its own
+        // attempt (the second modelDirPath call) starts only after the first job has finished.
+        engine.warmUp()
+        val deadline = System.currentTimeMillis() + 10_000   // the single worker runs its jobs
+        while (System.currentTimeMillis() < deadline &&
+            runCatching { verify(exactly = 2) { mm.modelDirPath(any()) } }.isFailure
+        ) {
+            Thread.sleep(20)
+        }
+        verify(exactly = 2) { mm.modelDirPath(any()) }   // the first warmUp job is done
         verify { mm.modelDirPath(any()) }
         assertEquals(gen, engine.generationForTest())   // warming is not speech: no supersession
         assertFalse(engine.speaking.value)

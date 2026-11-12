@@ -70,17 +70,6 @@ class SplitJournalTest {
         assertTrue(lines.last().endsWith("event ${SplitJournalImpl.MAX_ENTRIES + 4}"))
     }
 
-    @Test
-    fun `an empty store reads as no entries`() {
-        assertEquals(emptyList<String>(), journal.read())
-    }
-
-    @Test
-    fun `the no-op journal records nothing`() {
-        NoSplitJournal.append("start narrow=a wide=b side=RIGHT -> OK")
-        assertEquals(emptyList<String>(), NoSplitJournal.read())
-    }
-
     private fun timestampOf(ms: Long): String =
         java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
             .format(java.util.Date(ms))

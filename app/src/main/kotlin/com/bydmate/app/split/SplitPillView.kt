@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
@@ -61,11 +60,6 @@ import com.bydmate.app.ui.theme.TextPrimary
 
 private const val TAG = "SplitPillView"
 
-// ── Screen-space constants (match SplitSessionManager; on-car-adjust) ─────────
-
-private const val SCREEN_W_PX = 1920
-private const val Y_BOT_PX = 990        // bottom of the app area (excluding navbar)
-
 // ── Circle-button window geometry (screen pixels; on-car-adjust) ──────────────
 //
 // Window params use raw screen pixels; Compose layout uses density-converted dp
@@ -112,7 +106,7 @@ class SplitPillView(private val context: Context) {
     private val pickerModeState: MutableState<PickerMode?> = mutableStateOf(null)
     private val pickerTitleResState: MutableState<Int> = mutableStateOf(0)
     private val appsState: MutableState<List<LauncherAppEntry>> = mutableStateOf(emptyList())
-    private val junctionXState: MutableState<Int> = mutableStateOf(1280)
+    private val junctionXState: MutableState<Int> = mutableStateOf(X_JUNCTION_NARROW_RIGHT)
 
     // Callbacks set by the controller:
     var onPillTap: () -> Unit = {}
@@ -248,12 +242,12 @@ class SplitPillView(private val context: Context) {
 
     private fun pillWindowX(junctionX: Int, menuOpen: Boolean): Int {
         val w = if (menuOpen) MENU_WIN_W else CIRCLE_WIN_SIZE
-        return (junctionX - w / 2).coerceIn(0, SCREEN_W_PX - w)
+        return (junctionX - w / 2).coerceIn(0, SCREEN_W - w)
     }
 
     private fun pillWindowY(menuOpen: Boolean): Int {
         val h = if (menuOpen) MENU_WIN_H else CIRCLE_WIN_SIZE
-        return Y_BOT_PX - h
+        return Y_BOT - h
     }
 
     private fun expandPillWindow() {
@@ -360,12 +354,8 @@ class SplitPillView(private val context: Context) {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    @Suppress("DEPRECATION")
     private fun overlayType(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            WindowManager.LayoutParams.TYPE_PHONE
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 }
 
 // ── Composables ────────────────────────────────────────────────────────────────

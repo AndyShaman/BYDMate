@@ -40,8 +40,6 @@ class HudAmapClusterLoop(
 
         // Same receiver flags as HudAmapBroadcaster (0x11000000: RECEIVER_FOREGROUND | hidden
         // RECEIVER_INCLUDE_BACKGROUND), so this channel differs from it only in TYPE, IS_BYD_MAP and addressing.
-        private const val RECEIVER_FLAGS = 285212672
-
         @SuppressLint("WrongConstant")  // the hidden flag has no public constant
         internal fun buildGuideIntent(s: NavGuidanceHub.Snapshot): Intent {
             val routeRemDis = if (s.totalDistMeters > 0) s.totalDistMeters else -1
@@ -56,8 +54,7 @@ class HudAmapClusterLoop(
             if (s.maneuverGaode in 25..34) {
                 intent.putExtra("ROUNG_ABOUT_NUM", s.maneuverGaode - 24)
             }
-            val segDis = if (s.distanceMeters in 1 until HudProtobufBuilder.MIN_DISTANCE_METERS)
-                HudProtobufBuilder.MIN_DISTANCE_METERS else s.distanceMeters
+            val segDis = HudWayChannels.glassDistance(s.distanceMeters)
             intent.putExtra("SEG_REMAIN_DIS", segDis)
             intent.putExtra("NEXT_ROAD_NAME", s.road)
             intent.putExtra("ROUTE_REMAIN_DIS", routeRemDis)
@@ -67,13 +64,13 @@ class HudAmapClusterLoop(
             intent.putExtra("SEG_REMAIN_DIS_AUTO", HudAmapBroadcaster.distanceAuto(segDis))
             if (routeRemDis != -1) intent.putExtra("ROUTE_REMAIN_DIS_AUTO", HudAmapBroadcaster.distanceAuto(routeRemDis))
             if (routeRemTime != -1) intent.putExtra("ROUTE_REMAIN_TIME_AUTO", HudAmapBroadcaster.remainTimeAuto(routeRemTime))
-            intent.addFlags(RECEIVER_FLAGS)
+            intent.addFlags(HudAmapBroadcaster.RECEIVER_FLAGS)
             return intent
         }
 
         @SuppressLint("WrongConstant")  // same flag literal as buildGuideIntent
         private fun sendKill(context: Context, prefs: SharedPreferences) {
-            context.sendBroadcast(Intent(ACTION_KILL).setPackage(PACKAGE).addFlags(RECEIVER_FLAGS))
+            context.sendBroadcast(Intent(ACTION_KILL).setPackage(PACKAGE).addFlags(HudAmapBroadcaster.RECEIVER_FLAGS))
             prefs.edit().remove(KEY_AMAP_CLUSTER_LEFT).apply()
         }
 

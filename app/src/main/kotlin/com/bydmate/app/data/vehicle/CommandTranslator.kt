@@ -338,18 +338,8 @@ object CommandTranslator {
     )
 
     /** Parse a seat heat/vent command into (group, level), or null if not a seat command. */
-    fun resolveSeat(commandString: String): SeatCommand? {
-        val s = commandString.removePrefix("迪加")
-        for ((prefix, group) in SEAT_PREFIXES) {
-            if (!s.startsWith(prefix)) continue
-            val tail = s.removePrefix(prefix)
-            if (tail == "关闭") return SeatCommand(group, 0)
-            val m = Regex("""(\d)档""").matchEntire(tail) ?: return null
-            val lvl = m.groupValues[1].toInt()
-            return if (lvl in 1..5) SeatCommand(group, lvl) else null
-        }
-        return null
-    }
+    fun resolveSeat(commandString: String): SeatCommand? =
+        parseSeatLevel(commandString, SEAT_PREFIXES, 5)?.let { (group, lvl) -> SeatCommand(group, lvl) }
 
     private val REAR_SEAT_HEAT_PREFIXES: Map<String, RearSeat> = mapOf(
         "后左座椅加热" to RearSeat.LEFT,
@@ -357,15 +347,22 @@ object CommandTranslator {
     )
 
     /** Parse a rear seat heat command (#327) into (seat, level), or null if not one. */
-    fun resolveRearSeatHeat(commandString: String): RearSeatCommand? {
+    fun resolveRearSeatHeat(commandString: String): RearSeatCommand? =
+        parseSeatLevel(commandString, REAR_SEAT_HEAT_PREFIXES, RearSeatHeat.MAX_LEVEL)
+            ?.let { (seat, lvl) -> RearSeatCommand(seat, lvl) }
+
+    private val SEAT_LEVEL_REGEX = Regex("""(\d)档""")
+
+    /** "<prefix>关闭" → level 0, "<prefix>N档" → N when in 1..[maxLevel]; an optional 迪加 before. */
+    private fun <K> parseSeatLevel(commandString: String, prefixes: Map<String, K>, maxLevel: Int): Pair<K, Int>? {
         val s = commandString.removePrefix("迪加")
-        for ((prefix, seat) in REAR_SEAT_HEAT_PREFIXES) {
+        for ((prefix, key) in prefixes) {
             if (!s.startsWith(prefix)) continue
             val tail = s.removePrefix(prefix)
-            if (tail == "关闭") return RearSeatCommand(seat, 0)
-            val m = Regex("""(\d)档""").matchEntire(tail) ?: return null
+            if (tail == "关闭") return key to 0
+            val m = SEAT_LEVEL_REGEX.matchEntire(tail) ?: return null
             val lvl = m.groupValues[1].toInt()
-            return if (lvl in 1..RearSeatHeat.MAX_LEVEL) RearSeatCommand(seat, lvl) else null
+            return if (lvl in 1..maxLevel) key to lvl else null
         }
         return null
     }

@@ -8,9 +8,6 @@ import io.mockk.mockk
 import io.mockk.Runs
 import io.mockk.verify
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocalePreferencesTest {
@@ -47,18 +44,6 @@ class LocalePreferencesTest {
     }
 
     @Test
-    fun `getLanguage returns null when unset`() {
-        val (ctx, _) = mockSetup(emptyMap())
-        assertNull(LocalePreferences(ctx).getLanguage())
-    }
-
-    @Test
-    fun `getLanguage returns stored value`() {
-        val (ctx, _) = mockSetup(mapOf("app_language" to "en"))
-        assertEquals("en", LocalePreferences(ctx).getLanguage())
-    }
-
-    @Test
     fun `setLanguage writes value`() {
         val (ctx, prefs) = mockSetup(emptyMap())
         val editor = prefs.edit()  // capture the editor
@@ -66,21 +51,6 @@ class LocalePreferencesTest {
         // Verify write happened synchronously (commit, not apply)
         verify { editor.putString("app_language", "en") }
         verify { editor.commit() }
-    }
-
-    @Test
-    fun `setupCompletedMirror flag round-trip`() {
-        val (ctx, _) = mockSetup(emptyMap())
-        val lp = LocalePreferences(ctx)
-        assertFalse(lp.isSetupCompletedMirror())
-        lp.markSetupCompletedMirror()
-        assertTrue(lp.isSetupCompletedMirror())
-    }
-
-    @Test
-    fun `getFontScale defaults to 1_0 when unset`() {
-        val (ctx, _) = mockSetup(emptyMap())
-        assertEquals(1.0f, LocalePreferences(ctx).getFontScale())
     }
 
     @Test

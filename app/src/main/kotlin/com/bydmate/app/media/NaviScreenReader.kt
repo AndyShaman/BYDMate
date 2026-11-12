@@ -1,6 +1,7 @@
 package com.bydmate.app.media
 
 import android.view.accessibility.AccessibilityNodeInfo
+import com.bydmate.app.navdata.NavA11yExtractor
 
 /** On-demand a11y read of the Navigator screen.
  *
@@ -28,16 +29,16 @@ object NaviScreenReader {
         if (root == null) return null
         val pkg = root.packageName?.toString() ?: return null
         if (pkg !in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return null
-        val maneuverDist = textOf(root, "$pkg:id/text_maneuverballoon_distance")
-        val maneuverMetrics = textOf(root, "$pkg:id/text_maneuverballoon_metrics")
+        val maneuverDist = textOf(root, "$pkg:id/${NavA11yExtractor.DISTANCE_ID}")
+        val maneuverMetrics = textOf(root, "$pkg:id/${NavA11yExtractor.METRICS_ID}")
         return ScreenInfo(
-            speedLimit = textOf(root, "$pkg:id/text_speedlimit"),
-            exitNumber = textOf(root, "$pkg:id/exit_number_text"),
+            speedLimit = textOf(root, "$pkg:id/${NavA11yExtractor.SPEED_LIMIT_ID}"),
+            exitNumber = textOf(root, "$pkg:id/${NavA11yExtractor.EXIT_NUMBER_ID}"),
             maneuverDistance = maneuverDist?.let { (it + (maneuverMetrics ?: "")).trim() },
-            remainingDistance = textOf(root, "$pkg:id/textview_eta_distance"),
-            remainingTime = textOf(root, "$pkg:id/textview_eta_time"),
+            remainingDistance = textOf(root, "$pkg:id/${NavA11yExtractor.ETA_DISTANCE_ID}"),
+            remainingTime = textOf(root, "$pkg:id/${NavA11yExtractor.ETA_TIME_ID}"),
             arrivalTime = textOf(root, "$pkg:id/textview_eta_arrival"),
-            street = textOf(root, "$pkg:id/status_panel_text"),
+            street = textOf(root, "$pkg:id/${NavA11yExtractor.STATUS_ID}"),
         )
     }
 

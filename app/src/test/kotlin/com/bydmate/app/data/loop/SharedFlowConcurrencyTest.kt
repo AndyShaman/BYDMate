@@ -9,10 +9,8 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -75,18 +73,6 @@ class SharedFlowConcurrencyTest {
         // Each fast subscriber should have observed all 6 ticks (SharedFlow replay=1; extra
         // subscriber latency negligible in virtual-time test).
         seenLists.forEach { assertTrue("subscriber received ticks: $it", it.size in 5..6) }
-        scope.cancel()
-    }
-
-    @Test fun `late subscriber receives the latest replayed value (replay=1)`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val (loop, _) = buildLoop(dispatcher)
-        val scope = TestScope(dispatcher)
-        loop.start(scope)
-        advanceTimeBy(2_500)   // 3 ticks emitted; replay buffer holds last value
-
-        val latest = scope.async { loop.flow.first() }.also { advanceTimeBy(10) }.await()
-        assertTrue("late subscriber sees a replayed value", latest.soc != null)
         scope.cancel()
     }
 }

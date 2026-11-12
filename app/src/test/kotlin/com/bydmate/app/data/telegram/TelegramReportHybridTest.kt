@@ -59,13 +59,15 @@ class TelegramReportHybridTest {
         assertEquals(listOf(ReportField.RANGE), none.skipped)
     }
 
-    @Test fun `a hybrid counter gets the fuel line over all km of its trips`() {
+    @Test fun `a hybrid counter gets the fuel line over the trips with recorded fuel`() {
         val text = build(
             ReportInputs(hybridData, null, null, null, null, null, trip1 = counter, hybrid = true,
                 trip1Fuel = FuelTotals(liters = 7.6, km = 420.0)),
             setOf(ReportField.TRIP1),
         )
-        assertEquals("${em}Топливо: 7,6 л за период, 1,8 л/100 на все км", text.lines().last())
+        // 420 km include the trips driven on the battery alone (0 l recorded), so the line
+        // must not claim the figure belongs to the trips that burned fuel.
+        assertEquals("${em}Топливо: 7,6 л, в среднем 1,8 л/100 км", text.lines().last())
     }
 
     @Test fun `a hybrid counter without litres has no fuel line`() {

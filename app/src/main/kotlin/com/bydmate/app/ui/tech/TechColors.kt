@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.tech
 
 import androidx.compose.ui.graphics.Color
+import com.bydmate.app.domain.BatteryThresholds
 import com.bydmate.app.domain.battery.BatteryCalibration
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.SocRed
@@ -67,10 +68,10 @@ internal fun insulationColor(mohm: Double?): Color = when {
     else -> SocRed
 }
 
-/** 12 V bus, same thresholds the Dashboard status uses. */
+/** 12 V bus, the shared [BatteryThresholds] every screen uses. */
 internal fun voltage12vColor(v: Double?): Color = when {
     v == null -> TextPrimary
-    v < 11.8 -> SocRed
-    v < 12.4 -> SocYellow
+    v < BatteryThresholds.V12_CRIT -> SocRed
+    v < BatteryThresholds.V12_WARN -> SocYellow
     else -> AccentGreen
 }

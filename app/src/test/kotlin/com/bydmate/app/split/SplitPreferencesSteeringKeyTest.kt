@@ -24,14 +24,6 @@ class SplitPreferencesSteeringKeyTest {
         assertFalse(Prefs(enabled = false, key = 383).isSteeringKeyActive())
         assertFalse(Prefs(enabled = true, key = 0).isSteeringKeyActive())
     }
-    @Test fun `the disabled default has no key`() {
-        assertFalse(DisabledSplitPreferences.isSteeringKeyActive())
-    }
-
-    @Test fun `companions default to none`() {
-        assertEquals(emptySet<Int>(), Prefs(enabled = true, key = 383).getSteeringKeyCompanions())
-        assertEquals(emptySet<Int>(), DisabledSplitPreferences.getSteeringKeyCompanions())
-    }
 
     private fun newProcess(store: MutableMap<String, Any?>): SplitPreferencesImpl {
         val ctx = mockk<Context>()

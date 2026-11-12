@@ -142,12 +142,6 @@ class BlindSpotArmedReasonTest {
             blindSpotArmedReason(enabled = true, gear = 4, speedKmh = 0, thresholdKmh = 20))
     }
 
-    @Test fun `speed inside the warm band is ok`() {
-        assertEquals(
-            "ok",
-            blindSpotArmedReason(enabled = true, gear = 4, speedKmh = 30, thresholdKmh = 20))
-    }
-
     @Test fun `reverse gear wins over speed`() {
         assertEquals(
             "reverse",

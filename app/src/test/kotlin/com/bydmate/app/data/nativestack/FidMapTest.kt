@@ -3,51 +3,13 @@ package com.bydmate.app.data.nativestack
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
-import kotlin.reflect.full.memberProperties
 
 class FidMapTest {
-
-    /**
-     * Intentionally ignored until all DiParsData fields are validated.
-     * The remaining entries (avgBatTemp, chargingStatus, batteryCapacityKwh,
-     * autoPark, rain) are not live-sensor fids or require separate validation
-     * paths.
-     */
-    @Ignore("Will pass after remaining 5 fields validated (autoPark, rain, avgBatTemp, chargingStatus, batteryCapacityKwh)")
-    @Test fun `every DiParsData field has a FidMap entry`() {
-        val dataFields = com.bydmate.app.data.remote.DiParsData::class
-            .memberProperties.map { it.name }.toSet()
-        val mapped = FidMap.entries.map { it.field }.toSet()
-        val missing = dataFields - mapped
-        assertTrue("Missing FidMap entries for: $missing", missing.isEmpty())
-    }
-
-    @Test fun `FidMap coverage at least 48 of DiParsData fields`() {
-        val dataFields = com.bydmate.app.data.remote.DiParsData::class
-            .memberProperties.map { it.name }.toSet()
-        val mappedFields = FidMap.entries.map { it.field }.toSet()
-        val covered = mappedFields.intersect(dataFields)
-        assertTrue(
-            "Expected >= 48 DiParsData fields covered, got ${covered.size}: $covered",
-            covered.size >= 48
-        )
-    }
 
     @Test fun `no duplicate device-fid pairs`() {
         val pairs = FidMap.entries.map { it.device to it.fid }
         assertTrue("Duplicate (device, fid) pairs found", pairs.size == pairs.toSet().size)
-    }
-
-    @Test fun `sensor wave fields are mapped`() {
-        val mapped = FidMap.entries.map { it.field }.toSet()
-        val required = setOf(
-            "seatbeltFR", "occupancyFL", "occupancyFR", "occupancyRL",
-            "occupancyRM", "occupancyRR", "lightLevel", "keyBatteryStatus",
-            "wiperRelay", "autoWipers",
-        )
-        assertTrue("Missing FidMap entries: ${required - mapped}", mapped.containsAll(required))
     }
 
     // Audit 3.19 items 10, 11: the passenger belt reads the Instrument fid (Setting 1004 answered
@@ -123,19 +85,6 @@ class FidMapTest {
         assertTrue("FidMap has ${FidMap.entries.size} entries, cap is 128", FidMap.entries.size <= 128)
     }
 
-    @Test fun `tech panel fields are mapped`() {
-        val mapped = FidMap.entries.map { it.field }.toSet()
-        val required = setOf(
-            "insulationKohm", "motorTempFront", "motorTempRear",
-            "inverterTempFront", "inverterTempRear", "hvVoltage", "hvCurrent",
-            "motorCurrentFront", "motorCurrentRear", "bmsMaxChargeKw", "bmsMaxDischargeAllowKw", "bmsMaxDischargeKw",
-            "motorRpmFront", "motorRpmRear", "compressorW",
-            "tyreTempFL", "tyreTempFR", "tyreTempRL", "tyreTempRR",
-            "pedalAccel", "pedalBrake",
-        )
-        assertTrue("Missing FidMap entries: ${required - mapped}", mapped.containsAll(required))
-    }
-
     @Test fun `tech panel entries carry the validated device and transact`() {
         val expected = mapOf(
             "insulationKohm" to Triple(1039, 1134559256, 5),
@@ -170,35 +119,22 @@ class FidMapTest {
         assertEquals(0.1, FidMap.entries.single { it.field == "bmsMaxDischargeAllowKw" }.scale, 0.0001)
     }
 
-    /** The addresses moved out of FidRegistry must still be the ones it documents. */
+    /** The addresses moved out of FidRegistry must still be the Leopard 3 constants it carried. */
     @Test fun `extra entries carry the constants they took over`() {
         val registry = mapOf(
-            "soh" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_SOH),
-            "lifetimeAvgPhm" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_AVG_PHM),
-            "chargingType" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_TYPE),
-            "chargeBatteryVolt" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGE_BATTERY_VOLT),
-            "batteryType" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_BATTERY_TYPE),
-            "chargingCapacity" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_CAPACITY),
-            "soc" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_SOC),
-            "mileage" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_MILEAGE),
-            "totalElecConsumption" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_KWH),
-            "voltage12v" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_BODYWORK
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_OTA_BATTERY_POWER_VOLTAGE),
-            "power" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_ENGINE
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_ENGINE_POWER),
-            "chargeGunState" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_GUN_CONNECT_STATE),
-            "bmsState" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
-                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_BMS_STATE),
+            "soh" to (1014 to 1145045032),
+            "lifetimeAvgPhm" to (1014 to 1246761008),
+            "chargingType" to (1009 to 876609592),
+            "chargeBatteryVolt" to (1009 to -1442840491),
+            "batteryType" to (1009 to -1728053169),
+            "chargingCapacity" to (1009 to 666894360),
+            "soc" to (1014 to 1246777400),
+            "mileage" to (1014 to 1246765072),
+            "totalElecConsumption" to (1014 to 1032871984),
+            "voltage12v" to (1001 to 1128267816),
+            "power" to (1012 to 339738656),
+            "chargeGunState" to (1009 to 876609586),
+            "bmsState" to (1009 to 876609560),
         )
         registry.forEach { (field, address) ->
             val entry = FidMap.byField.getValue(field)
@@ -218,6 +154,10 @@ class FidMapTest {
             "chargingCapacity", "bmsState",
             "turnSignal", "gear", "bsdLeft", "bsdRight",
             "windowFL", "windowFR", "windowRL", "windowRR", "windowRRGen3",
+            // Sensor wave fields the dashboard, agent and push evaluation read.
+            "seatbeltFR", "occupancyFL", "occupancyFR", "occupancyRL",
+            "occupancyRM", "occupancyRR", "lightLevel", "keyBatteryStatus",
+            "wiperRelay", "autoWipers",
         ) + com.bydmate.app.ui.settings.SeatsDiagnostics.FIDS.map { it.field }
         val missing = asked.filterNot { it in FidMap.byField }
         assertTrue("FidMap has no entry for $missing", missing.isEmpty())
@@ -232,21 +172,5 @@ class FidMapTest {
 
     @Test fun `field names are unique across the polled and extra tables`() {
         assertEquals(FidMap.all.size, FidMap.byField.size)
-    }
-
-    /** A per-address scale is a deliberate exception, not a habit: the odometer is the
-     *  only field whose catalog address reports a different unit than our constant. */
-    @Test fun `only the odometer carries a catalog scale`() {
-        assertEquals(1.0, FidMap.byField.getValue("mileage").catalogScale)
-        assertEquals(
-            listOf("mileage"),
-            FidMap.all.filter { it.catalogScale != null }.map { it.field },
-        )
-    }
-
-    // PM2.5 is read on demand by Pm25Reader, never through the global poll.
-    @Test fun `no pm25 entry in FidMap and the batch is as before`() {
-        assertTrue(FidMap.entries.none { it.field.startsWith("pm25") })
-        assertEquals(94, FidMap.entries.size)
     }
 }

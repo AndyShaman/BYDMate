@@ -70,7 +70,7 @@ class MalankaGatewayClient(private val http: OkHttpClient) {
             val lon = o.optDouble("longitude")
             if (lat.isNaN() || lon.isNaN()) return@mapNotNull null
             ChargerStation(
-                name = o.text("name") ?: o.text("address") ?: DEFAULT_NAME,
+                name = o.text("name") ?: o.text("address") ?: DEFAULT_STATION_NAME,
                 address = o.text("address"),
                 operator = operator,
                 lat = lat,
@@ -80,13 +80,8 @@ class MalankaGatewayClient(private val http: OkHttpClient) {
         }
     }
 
-    /** Android's org.json turns a JSON null into the string "null" in optString: keep it null. */
-    private fun JSONObject.text(key: String): String? =
-        if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
-
     private companion object {
         const val TAG = "MalankaGateway"
-        const val DEFAULT_NAME = "Зарядная станция"
         val NETWORKS = listOf(Network("", "Malanka"), Network("evika/", "Evika"), Network("battery-fly/", "Battery Fly"))
         val STATUSES = mapOf(
             "AVAILABLE" to StationStatus.FREE,

@@ -76,7 +76,12 @@ class AutomationTabViewModelTest {
         actionDispatcher = dispatcher,
         settingsRepository = mockk(relaxed = true),
         context = ctx,
-    ).also { testDispatcher.scheduler.advanceUntilIdle() }
+    ).also {
+        // The editor asks the car for rear seats on Dispatchers.IO by default: a real thread that
+        // comes back to Main while tearDown resets it ("Dispatchers.Main is used concurrently").
+        it.ioDispatcher = testDispatcher
+        testDispatcher.scheduler.advanceUntilIdle()
+    }
 
     private fun log(id: Long, ruleId: Long) = RuleLogEntity(
         id = id, ruleId = ruleId, ruleName = "r$ruleId", triggeredAt = id, triggersSnapshot = "{}",

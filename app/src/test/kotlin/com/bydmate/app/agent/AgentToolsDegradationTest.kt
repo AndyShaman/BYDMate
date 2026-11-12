@@ -1,7 +1,6 @@
 package com.bydmate.app.agent
 
 import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
@@ -10,7 +9,6 @@ import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.repository.PlaceRepository
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
@@ -54,14 +52,22 @@ class AgentToolsDegradationTest {
 
     private val context = mockk<Context>(relaxed = true)
 
-    private fun tools() = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
     )
 
     private fun call(name: String, args: String) = AgentToolCall("1", name, args)
@@ -150,53 +156,34 @@ class AgentToolsDegradationTest {
 
     // --- (c) create_automation: garbage/malformed LLM JSON, wrong types ---
 
-    @Test fun create_automation_trigger_is_array_not_object_reports_error() = runTest {
-        coEvery { ruleDao.getAllList() } returns emptyList()
-        val out = JSONObject(tools().execute(call("create_automation",
-            """{"name":"Х","trigger":[1,2,3],"actions":[{"kind":"param","command_id":"windows_close_all"}]}""")))
-        assertEquals("не указан триггер", out.getString("error"))
-        coVerify(exactly = 0) { ruleDao.insert(any()) }
-    }
+    private class MalformedCase(val label: String, val args: String, val errorEquals: String? = null)
 
-    @Test fun create_automation_actions_is_object_not_array_reports_error() = runTest {
-        coEvery { ruleDao.getAllList() } returns emptyList()
-        val out = JSONObject(tools().execute(call("create_automation",
-            """{"name":"Х","trigger":{"kind":"service_start"},"actions":{"kind":"param"}}""")))
-        assertEquals("не указаны действия", out.getString("error"))
-        coVerify(exactly = 0) { ruleDao.insert(any()) }
-    }
-
-    @Test fun create_automation_action_item_is_string_not_object_reports_error() = runTest {
-        coEvery { ruleDao.getAllList() } returns emptyList()
-        val out = JSONObject(tools().execute(call("create_automation",
-            """{"name":"Х","trigger":{"kind":"service_start"},"actions":["не объект"]}""")))
-        assertEquals("некорректное описание действия", out.getString("error"))
-        coVerify(exactly = 0) { ruleDao.insert(any()) }
-    }
-
-    @Test fun create_automation_empty_trigger_object_reports_error() = runTest {
-        coEvery { ruleDao.getAllList() } returns emptyList()
-        val out = JSONObject(tools().execute(call("create_automation",
-            """{"name":"Х","trigger":{},"actions":[{"kind":"param","command_id":"windows_close_all"}]}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { ruleDao.insert(any()) }
-    }
-
-    @Test fun create_automation_empty_action_object_reports_error() = runTest {
-        coEvery { ruleDao.getAllList() } returns emptyList()
-        val out = JSONObject(tools().execute(call("create_automation",
-            """{"name":"Х","trigger":{"kind":"service_start"},"actions":[{}]}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { ruleDao.insert(any()) }
-    }
-
-    @Test fun create_automation_nested_object_action_reports_error() = runTest {
-        coEvery { ruleDao.getAllList() } returns emptyList()
-        val out = JSONObject(tools().execute(call("create_automation",
-            """{"name":"Х","trigger":{"kind":"service_start"},
-                "actions":[{"kind":{"nested":"nonsense"}}]}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { ruleDao.insert(any()) }
+    @Test fun create_automation_malformed_args_report_error_and_no_insert() = runTest {
+        val cases = listOf(
+            MalformedCase("trigger is an array, not an object",
+                """{"name":"Х","trigger":[1,2,3],"actions":[{"kind":"param","command_id":"windows_close_all"}]}""",
+                errorEquals = "не указан триггер"),
+            MalformedCase("actions is an object, not an array",
+                """{"name":"Х","trigger":{"kind":"service_start"},"actions":{"kind":"param"}}""",
+                errorEquals = "не указаны действия"),
+            MalformedCase("action item is a string, not an object",
+                """{"name":"Х","trigger":{"kind":"service_start"},"actions":["не объект"]}""",
+                errorEquals = "некорректное описание действия"),
+            MalformedCase("empty trigger object",
+                """{"name":"Х","trigger":{},"actions":[{"kind":"param","command_id":"windows_close_all"}]}"""),
+            MalformedCase("empty action object",
+                """{"name":"Х","trigger":{"kind":"service_start"},"actions":[{}]}"""),
+            MalformedCase("nested object as action kind",
+                """{"name":"Х","trigger":{"kind":"service_start"},
+                "actions":[{"kind":{"nested":"nonsense"}}]}"""),
+        )
+        for (c in cases) {
+            coEvery { ruleDao.getAllList() } returns emptyList()
+            val out = JSONObject(tools().execute(call("create_automation", c.args)))
+            assertTrue("case: ${c.label}: $out", out.has("error"))
+            c.errorEquals?.let { assertEquals("case: ${c.label}", it, out.getString("error")) }
+            coVerify(exactly = 0) { ruleDao.insert(any()) }
+        }
     }
 
     // --- FIX 1: execute() top-level guard ---

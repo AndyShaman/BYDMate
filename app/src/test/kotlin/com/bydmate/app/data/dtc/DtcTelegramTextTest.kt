@@ -66,7 +66,7 @@ class DtcTelegramTextTest {
         val pending = DtcScanSummary(
             answered = 1, total = 18, now = 0, old = 0, pending = 1,
             found = listOf(
-                DtcFound(0x7E0, DtcRow("U0164-87", 0x04, DtcKind.PENDING, 0x87), DtcBlockName(DtcBlock.URE, 0x7E0)),
+                DtcFound(0x7E0, DtcRow("U0164-87", 0x04, DtcKind.PENDING), DtcBlockName(DtcBlock.URE, 0x7E0)),
             ),
         )
         val lines = text(pending).lines()
@@ -96,7 +96,7 @@ class DtcTelegramTextTest {
     private fun manyCodes(n: Int) = DtcScanSummary(
         answered = 14, total = 18, now = 0, old = n, pending = 0,
         found = (0 until n).map {
-            DtcFound(0x747, DtcRow("B%04X-13".format(it), 0x08, DtcKind.OLD, 0x13), DtcBlockName(DtcBlock.BODY, 0x747))
+            DtcFound(0x747, DtcRow("B%04X-13".format(it), 0x08, DtcKind.OLD), DtcBlockName(DtcBlock.BODY, 0x747))
         },
     )
 
@@ -118,7 +118,7 @@ class DtcTelegramTextTest {
     }
 
     private fun found(addr: Int, code: String, kind: DtcKind, block: DtcBlock) =
-        DtcFound(addr, DtcRow(code, if (kind == DtcKind.NOW) 0x09 else 0x08, kind, 0x87), DtcBlockName(block, addr))
+        DtcFound(addr, DtcRow(code, if (kind == DtcKind.NOW) 0x09 else 0x08, kind), DtcBlockName(block, addr))
 
     private val lost = DtcDescription("Lost CAN communication with SEC", "与SEC丢失CAN通信", DtcDescLevel.EXACT)
 

@@ -14,12 +14,6 @@ interface BatterySnapshotDao {
     @Query("SELECT * FROM battery_snapshots ORDER BY timestamp DESC")
     fun getAll(): Flow<List<BatterySnapshotEntity>>
 
-    @Query("SELECT * FROM battery_snapshots ORDER BY timestamp DESC LIMIT :limit")
-    fun getRecent(limit: Int = 50): Flow<List<BatterySnapshotEntity>>
-
     @Query("SELECT * FROM battery_snapshots ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLast(): BatterySnapshotEntity?
-
-    @Query("SELECT COUNT(*) FROM battery_snapshots")
-    suspend fun getCount(): Int
 }

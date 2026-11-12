@@ -3,7 +3,6 @@ package com.bydmate.app.data.vehicle
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -37,7 +36,7 @@ class VehicleApiDriveModeTest {
         coEvery { it.getFloat(1013, any()) } answers { kmh }
     }
     private val impl = VehicleApiImpl(
-        mockk<ParsReader>(relaxed = true), autoservice, helper, allowlist,
+        autoservice, helper, allowlist,
         dao, seatStore, windowStore,
     )
     private val target = WriteAllowlist.DRIVE_MODE_TARGET_FID
@@ -103,19 +102,14 @@ class VehicleApiDriveModeTest {
         assertTrue(impl.dispatch("雪地模式").isSuccess)
     }
 
-    @Test fun `a terrain mode at 15point1 kmh is refused, the fraction is not truncated away`() = runTest {
-        kmh = 15.1f
-        val err = impl.dispatch("雪地模式").exceptionOrNull()
-        assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
-        assertEquals(16, (err as VehicleWriteError.SpeedBlocked).speed)
-        coVerify(exactly = 0) { helper.read(any(), any(), any()) }
-    }
-
-    @Test fun `a terrain mode at 15point9 kmh is refused`() = runTest {
-        kmh = 15.9f
-        val err = impl.dispatch("雪地模式").exceptionOrNull()
-        assertTrue("got $err", err is VehicleWriteError.SpeedBlocked)
-        assertEquals(16, (err as VehicleWriteError.SpeedBlocked).speed)
+    @Test fun `a terrain mode just above 15 kmh is refused, the fraction is not truncated away`() = runTest {
+        for (speed in listOf(15.1f, 15.9f)) {
+            kmh = speed
+            val err = impl.dispatch("雪地模式").exceptionOrNull()
+            assertTrue("$speed kmh: got $err", err is VehicleWriteError.SpeedBlocked)
+            assertEquals("$speed kmh", 16, (err as VehicleWriteError.SpeedBlocked).speed)
+            coVerify(exactly = 0) { helper.read(any(), any(), any()) }
+        }
     }
 
     /**

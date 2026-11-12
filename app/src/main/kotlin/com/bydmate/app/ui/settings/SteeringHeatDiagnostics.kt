@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.settings
 
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.WriteAllowlist
 
@@ -34,6 +35,4 @@ internal object SteeringHeatDiagnostics {
             "$name[dev=${WriteAllowlist.STEERING_HEAT_STATE_DEV} fid=$fid]=$rendered"
         }
     }
-
-    private const val TX_GET_INT = 5
 }

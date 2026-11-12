@@ -1,8 +1,6 @@
 package com.bydmate.app.media
 
-import android.content.ComponentName
 import android.content.Context
-import android.media.session.MediaSessionManager
 import android.util.Log
 import com.bydmate.app.split.RealMediaControllerHandle
 
@@ -47,11 +45,7 @@ object KnobPlayPause {
      * Returns true when a key pair was actually sent.
      */
     fun dispatch(context: Context): Boolean {
-        val controllers = runCatching {
-            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-            val component = ComponentName(context, MediaSessionListenerService::class.java)
-            msm.getActiveSessions(component)
-        }.getOrElse { emptyList() }
+        val controllers = MediaSessionListenerService.activeControllers(context)
         val snapshots = controllers.map { SessionSnapshot(it.packageName, it.playbackState?.state) }
         val index = pickTarget(snapshots)
         if (index == null) {

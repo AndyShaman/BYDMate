@@ -15,7 +15,6 @@
 
     <!-- Settings: Section labels (left pane) -->
     <string name="settings_section_auto_battery_title">车辆与电池</string>
-    <string name="settings_section_trips_title">行程</string>
     <string name="settings_section_integrations_title">集成</string>
     <string name="settings_section_widget_title">小组件</string>
     <string name="settings_section_display_title">显示</string>
@@ -29,25 +28,23 @@
     <string name="settings_display_card_hud_sub">导航提示显示在原厂 HUD 上。%1$s</string>
     <string name="settings_display_card_blindspot_sub">转向灯触发摄像头。%1$s</string>
     <string name="settings_display_window_subhead">仪表盘窗口</string>
-    <string name="settings_display_mirror_header">投射到仪表盘</string>
     <string name="settings_display_mirror_title">方向盘按键投射到仪表盘</string>
-    <string name="settings_display_mirror_desc">短按所选方向盘按键，将所选应用投射到仪表盘或返回屏幕。</string>
-    <string name="settings_cluster_auto_container_title">立即显示到仪表盘</string>
-    <string name="settings_cluster_auto_container_desc">应用会自动将仪表盘切换到投屏模式并切回（导航和盲区摄像头）。如果之后仪表盘上的 ADAS 或原厂小部件消失且不会自行恢复，请关闭此项：此时请手动切换仪表盘模式，画面会显示在小地图中</string>
+    <string name="settings_cluster_auto_container_title">自动切换仪表盘</string>
+    <string name="settings_cluster_auto_container_desc">开启后，应用会自动切换仪表盘，以便在上面显示导航和盲区摄像头。如果打转向灯或投射导航时仪表盘上带 ADAS 的原厂画面消失，请关闭此项：此时画面只保留在小地图中。</string>
     <string name="settings_cluster_full_display_title">仪表盘全屏</string>
-    <string name="settings_cluster_full_display_desc">默认地图占仪表盘上半部分，下方保留原厂的车速和主要信息条。若希望地图占满整个仪表盘、不显示该信息条，请开启。仅在新界面固件上有效，其他固件不受影响。下次投屏时生效</string>
+    <string name="settings_cluster_full_display_desc">地图占满整个仪表盘，不显示下方的车速信息条。如果地图只占顶部一条窄带，请开启。下次投射到仪表盘时生效。</string>
     <string name="settings_cluster_direct_reboot_hint">要让语音助手看到仪表盘上的导航，请将DiLink车机重启一次：长按音量旋钮即可重启。仅熄火并不能重启车机。重启之前投屏仍然可用，但语音助手看不到路线。</string>
     <string name="cluster_direct_unsupported_hint">此车机固件不支持直连输出，已使用兼容模式</string>
-    <string name="settings_projection_mode_title">投影模式</string>
+    <string name="settings_projection_mode_title">仪表盘投射模式</string>
     <string name="settings_projection_mode_direct">扩展</string>
     <string name="settings_projection_mode_vd">出厂</string>
+    <string name="settings_projection_mode_only_extended">此车仅支持“扩展”模式</string>
     <string name="settings_projection_mode_help" formatted="false">出厂：与 3.6 之前的版本相同，不更改车辆的任何系统设置，调节滑块工作更精确。缺点：语音助手和 HUD 看不到导航画面，引导信息仅来自通知。扩展：导航直接运行在仪表盘上，助手和 HUD 可以看到它。会开启系统窗口模式，需要重启一次 DiLink。恢复出厂状态：切换回出厂，系统设置将恢复为出厂值，重启后完全生效。模式本身在下次投影时生效。</string>
     <string name="projection_extended_confirm_title">开启扩展模式？</string>
     <string name="projection_extended_confirm_body">扩展模式会更改 DiLink 的系统窗口设置，让导航直接运行在仪表盘上，语音助手和 HUD 可以看到它。需要重启一次 DiLink。要恢复出厂状态，请切换回出厂并重启 DiLink。</string>
     <string name="projection_extended_confirm_enable">开启</string>
     <string name="projection_extended_confirm_cancel">取消</string>
     <string name="settings_display_app_title">投射到仪表盘的应用</string>
-    <string name="settings_display_size_header">仪表盘窗口大小</string>
     <string name="settings_display_size_width">宽度</string>
     <string name="settings_display_size_width_desc">窗口宽度，占仪表盘宽度的百分比</string>
     <string name="settings_display_size_height">高度</string>
@@ -70,10 +67,6 @@
     <string name="settings_tariff_dc_label">快充电价（%1$s/kWh）</string>
     <string name="settings_tariff_trip_label">行程电价</string>
     <string name="settings_tariff_custom_label">自定义电价（%1$s/kWh）</string>
-    <string name="settings_save_tariffs_button">保存电价</string>
-    <string name="settings_tariff_future_note">新电价将应用于未来行程。\n已计算的行程不会改变。</string>
-    <string name="settings_recalc_all_button">重新计算所有行程</string>
-    <string name="settings_recalc_note">按当前电价重新计算\n所有行程的费用。</string>
     <string name="settings_tariff_periods_title">电价与时段</string>
     <string name="settings_tariff_card_period">时段</string>
     <string name="settings_tariff_periods_button">打开</string>
@@ -116,18 +109,8 @@
     <string name="range_table_dialog_save">保存</string>
 
     <!-- Settings: Recalculate confirmation dialog -->
-    <string name="settings_recalc_dialog_title">重新计算费用？</string>
-    <string name="settings_recalc_dialog_text">所有行程将按电价 %1$s %2$s/kWh 重新计算。\n已计算的数值将被替换。</string>
-    <string name="settings_recalc_confirm_button">重新计算</string>
     <string name="settings_cancel_button">取消</string>
 
-    <!-- Settings: Trips section -->
-    <string name="settings_trips_datasource_header">行程数据来源</string>
-    <string name="settings_trips_datasource_note">钛3 - BYD energydata。\n宋及其他无内置数据库的车型 - DiPlus TripInfo。</string>
-    <string name="settings_trips_datasource_hint">如果行驶 2-3 次后列表为空，请切换模式。</string>
-    <string name="settings_trips_system_header">系统数据（实验性）</string>
-    <string name="settings_trips_system_note">车辆扩展数据：电池 SoH、BMS 真实里程、充电统计。仅读取。</string>
-    <string name="settings_trips_system_enable_label">启用</string>
 
     <!-- Settings: Integrations section -->
     <string name="settings_abrp_section_header">ABRP - 遥测</string>
@@ -147,8 +130,6 @@
     <string name="settings_webhook_save_button">保存 Webhook</string>
     <string name="settings_webhook_saved">Webhook 已保存</string>
     <string name="settings_webhook_invalid_url">URL 无效</string>
-    <string name="settings_openrouter_section_header">OpenRouter</string>
-    <string name="settings_openrouter_api_key_label">OpenRouter API 密钥</string>
     <string name="settings_openrouter_model_selected">模型：%1$s</string>
     <string name="settings_openrouter_model_pick">选择模型</string>
     <string name="settings_exa_section_header">Exa</string>
@@ -195,10 +176,6 @@
     <string name="settings_widget_buttons_label">小组件按钮</string>
     <string name="settings_widget_buttons_description">单击滑出 4 个按钮，双击打开 BYDMate。按钮运行带有"按钮按下"触发器的规则。</string>
 
-    <!-- Settings: Places section -->
-    <string name="settings_places_section_header">地点</string>
-    <string name="settings_places_entry_title">自动化地点</string>
-    <string name="settings_places_entry_description">家、公司、常去地点 - "进入地点" / "离开地点" 触发器</string>
 
     <!-- Settings: Application section -->
     <string name="settings_app_units_header">单位与货币</string>
@@ -220,13 +197,6 @@
     <string name="settings_update_check_toggle_description">启动 30 秒后检查 GitHub 并提示更新</string>
     <string name="settings_update_check_button">立即检查更新</string>
 
-    <!-- Settings: Autoservice status -->
-    <string name="settings_autoservice_disconnected_title">未连接</string>
-    <string name="settings_autoservice_disconnected_detail">如果 ADB 已开启，请重启应用</string>
-    <string name="settings_autoservice_sentinel_title">已连接，但数据不可读</string>
-    <string name="settings_autoservice_sentinel_detail">此功能可能仅适用于 钛3</string>
-    <string name="settings_autoservice_connected_title">已连接</string>
-    <string name="settings_autoservice_connected_detail">SoH %1$s • 生命周期 %2$s / %3$s</string>
 
     <!-- Settings: Update dialog -->
     <string name="settings_update_dialog_title">更新</string>
@@ -333,11 +303,7 @@
     <string name="charges_delete_dialog_text">%1$s kWh - 删除后无法恢复。</string>
     <string name="trips_delete_dialog_title">删除行程？</string>
     <string name="trips_delete_dialog_text">%1$s km - 该行程及其路线将被删除，无法恢复。</string>
-    <string name="charges_onboarding_empty_text">充电统计不可用。要在每次充电中查看 kWh 和费用，请在设置中启用"系统数据"。</string>
-    <string name="charges_go_to_settings_button">前往设置</string>
     <string name="charges_sentinel_empty_text">您的车型不支持充电统计 - 无法读取诊断数据。SoH 也不会显示。</string>
-    <string name="charges_not_tracking_banner">当前未追踪新的充电记录。</string>
-    <string name="charges_enable_tracking_button">启用 →</string>
     <string name="charges_stats_period_label">所选时间段</string>
     <string name="charges_stats_sessions">次数</string>
     <string name="charges_stats_cost">费用</string>
@@ -346,7 +312,6 @@
     <string name="charges_stats_equiv_cycles">等效循环</string>
     <string name="charges_stats_bms_mileage">BMS 里程</string>
     <string name="charges_stats_per100km">/100公里 全生命周期</string>
-    <string name="charges_lifetime_enable_hint">在设置中启用"系统数据"，以查看 BMS 里程和车辆累计充入量。</string>
     <string name="charges_lifetime_waiting">等待车辆首次响应...</string>
     <string name="charges_stats_dynamics_label">趋势</string>
     <string name="charges_chart_cell_delta_title">电芯压差 (V)</string>
@@ -391,7 +356,7 @@
     <string name="automation_cancel_button">取消</string>
 
     <!-- Rule card stats -->
-    <string name="automation_rule_cooldown">冷却：%1$d 秒</string>
+    <string name="automation_rule_cooldown">最短间隔：%1$d 秒</string>
 
     <!-- Editor dialog -->
     <string name="automation_editor_new_rule_title">新建规则</string>
@@ -476,7 +441,7 @@
     <string name="automation_action_call">拨打电话</string>
     <string name="automation_action_navigate">Yandex 导航路线</string>
     <string name="automation_action_url">打开 URL</string>
-    <string name="automation_action_delay">延迟</string>
+    <string name="automation_action_delay">等待</string>
 
     <!-- Overlay permission dialog -->
     <string name="automation_overlay_permission_title">需要权限</string>
@@ -525,8 +490,6 @@
     <!-- Journal relative time -->
 
     <!-- Places screen -->
-    <string name="places_tab_title">地点</string>
-    <string name="places_back_content_description">返回</string>
     <string name="places_add_button">+ 添加</string>
     <string name="places_empty">暂无地点。点击"+ 添加"创建一个。</string>
     <string name="places_row_coords">%1$.5f, %2$.5f · %3$d 米</string>
@@ -598,7 +561,6 @@
 
     <!-- Dashboard -->
     <string name="dashboard_vehicle_data_offline">未收到车辆数据</string>
-    <string name="dashboard_diplus_offline">DiPlus 无响应</string>
     <string name="dashboard_status_online">在线</string>
     <string name="dashboard_status_offline">离线</string>
 
@@ -684,7 +646,6 @@
 
     <!-- Battery readings shared by the compact card and the tech panel -->
     <string name="battery_health_cell_delta_label">电芯压差</string>
-    <string name="battery_health_cell_delta_value">%1$.3f V</string>
     <string name="battery_health_cell_voltage_value">%1$.3f V</string>
     <string name="battery_health_bat_temp_label">电池温度</string>
     <string name="battery_health_12v_label">车载电源</string>
@@ -697,14 +658,6 @@
     <string name="battery_health_avg_all_time_label">全部时间</string>
     <string name="battery_health_avg_soc_hint" formatted="false">按时间加权的平均电量：电池保持高电量的时间越长，该值越高。比亚迪LFP电池长期高电量存放会加速日历老化，建议保持较低水平。参考：65%以下很好，65-85%正常，高于85%建议推迟或减少充电。每1-2周仍需充满一次以平衡电芯。根据BYDMate行程和充电历史计算。</string>
 
-    <!-- Shared summary row (Components.kt SummaryRow) -->
-    <string name="summary_unit_km">公里</string>
-    <string name="summary_label_mileage">里程</string>
-    <string name="summary_unit_kwh">kWh</string>
-    <string name="summary_label_energy">能耗</string>
-    <string name="summary_unit_kwh_per_100km">kWh/100km</string>
-    <string name="summary_label_consumption">百公里电耗</string>
-    <string name="summary_label_cost">费用</string>
 
     <!-- Settings: unit chips and language labels -->
     <string name="settings_tariff_trip_custom_chip">自定义</string>
@@ -713,12 +666,9 @@
 
     <!-- Settings: ViewModel status strings -->
     <string name="settings_saved">已保存</string>
-    <string name="settings_datasource_switching">切换中...</string>
     <string name="settings_datasource_done">完成</string>
-    <string name="settings_recalc_done">已重新计算：%1$d 次行程</string>
     <string name="settings_export_in_progress">导出中...</string>
     <string name="settings_error_with_message">错误：%1$s</string>
-    <string name="settings_error_prefix">错误</string>
     <string name="settings_log_recording_started">录制中（2 小时后自动停止）... - %1$s</string>
     <string name="settings_log_saved">已保存：%1$s（%2$d KB）</string>
     <string name="settings_log_error_no_fs_access">错误：无法访问文件系统</string>
@@ -730,8 +680,6 @@
     <string name="settings_log_tg_missing">找不到文件，可能已从 Download 文件夹中删除。</string>
     <string name="settings_tg_log_auto_title">将录制的日志发送到 Telegram</string>
     <string name="settings_tg_log_auto_hint">日志录制结束后，文件会自动发送到你的机器人。</string>
-    <string name="settings_update_check_in_progress">检查中...</string>
-    <string name="settings_update_available_short">可更新至 v%1$s</string>
 
     <!-- UpdateChecker: download progress strings -->
     <string name="update_downloading_progress">下载中：%1$d%%</string>
@@ -777,8 +725,6 @@
     <string name="insight_night_idle_prev">%1$.1f kWh</string>
 
     <!-- Local insight engine -->
-    <string name="local_insight_not_enough_data_title">数据不足</string>
-    <string name="local_insight_not_enough_data_summary">最近 7 天至少需要 5 次行程</string>
     <string name="local_insight_consumption_up_title">能耗上升 %1$.0f%%</string>
     <string name="local_insight_consumption_up_title_month">能耗上升 %1$.0f%%</string>
     <string name="local_insight_consumption_up_summary_short">短途较多，预热消耗额外电量</string>
@@ -794,7 +740,7 @@
     <string name="local_insight_idle_month">怠速耗电 %1$.1f kWh / %2$s，占本月 %3$d%%</string>
     <string name="local_insight_12v_critical_title">12V 电压过低</string>
     <string name="local_insight_12v_critical_summary">辅电池 %1$.1f V，请检查</string>
-    <string name="local_insight_12v_low">12V 当前 %1$.1f V，低于正常 12.4 V</string>
+    <string name="local_insight_12v_low">12V 当前 %1$.2f V，低于正常 12.5 V</string>
     <string name="local_insight_12v_falling">12V 一周下降：%1$.2f → %2$.2f V</string>
     <string name="local_insight_12v_falling_month">12V 一个月下降：%1$.2f → %2$.2f V</string>
     <string name="local_insight_cell_critical_title">电芯压差过大</string>
@@ -844,7 +790,7 @@
     <string name="learn_button_cancel">取消</string>
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">方向盘音量旋钮</string>
-    <string name="settings_knob_play_pause_desc">按下旋钮暂停和继续播放，而不是切换音源。固件更新后按下变为切换音源时需要开启。</string>
+    <string name="settings_knob_play_pause_desc">按下旋钮暂停音乐，再按继续。不开启此项时，车机按下旋钮会切换音源或静音。</string>
     <string name="settings_timezone_lock_title">不通过网络更改时区</string>
     <string name="settings_timezone_lock_desc">适用于边境附近、时区会自动重置为北京时间的车辆。请先在车机设置中选择正确的时区，然后再开启。</string>
     <string name="settings_timezone_lock_failed">失败：请重启 ADB 助手后重试</string>
@@ -853,9 +799,9 @@
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">重启后恢复 ADB</string>
-    <string name="settings_adb_restore_desc">适用于每次重启后 ADB 都会关闭的固件。需要打开 Wi-Fi。</string>
+    <string name="settings_adb_restore_desc">仅适用于每次车机重启后 ADB 都会关闭的固件（2606 及更新版本）。如果重启后车辆控制正常，请不要开启。需要时应用会提示。</string>
     <string name="settings_adb_restore_help_title">ADB 恢复功能的工作原理</string>
-    <string name="settings_adb_restore_help_body">在较新的 DiLink 固件上（2026 年夏季之后），ADB 端口在每次重启后都会关闭，BYDMate 会失去对车辆控制功能的访问。\n\n应用可以通过 Android 内置的无线调试重新打开 ADB。为此：\n\n1. 车机的 Wi-Fi 必须打开并连接到网络：家里的网络、手机热点或其他任意网络。没有 Wi-Fi 时 Android 不允许开启无线调试，这是系统限制。\n\n2. 在每个新网络上首次开启时，屏幕上会出现系统对话框“Allow wireless debugging on this network?”。恢复功能开启时，BYDMate 会通过自己的无障碍服务自动确认。如果该服务已关闭，请勾选“Always allow on this network”并点击 ALLOW。\n\n3. 在 ADB 仍然可用时，应用会一次性给自己授予所需的系统权限。如果状态行显示“需要激活”，请按常规方式连接一次 ADB，然后重启应用。\n\n如果您的固件在重启后 ADB 本来就能工作，则无需开启：状态行会显示“无需开启”。</string>
+    <string name="settings_adb_restore_help_body">在较新的 DiLink 固件上（2026 年夏季之后），ADB 端口在每次重启后都会关闭，BYDMate 会失去对车辆控制功能的访问。\n\n应用可以通过 Android 内置的无线调试重新打开 ADB。为此：\n\n1. 车机的 Wi-Fi 必须打开并连接到网络：家里的网络、手机热点或其他任意网络。没有 Wi-Fi 时 Android 不允许开启无线调试，这是系统限制。\n\n2. 长时间停车后，Android 会再次显示“Allow wireless debugging on this network?”窗口。勾选“Always allow on this network”并点击 ALLOW：10–30 秒后车辆控制就会恢复。Android 12 无法在重启之间记住这个选择，设置中无需更改任何内容。\n\n3. 在 ADB 仍然可用时，应用会一次性给自己授予所需的系统权限。如果状态行显示“需要激活”，请按常规方式连接一次 ADB，然后重启应用。\n\n如果您的固件在重启后 ADB 本来就能工作，则无需开启：状态行会显示“无需开启”。</string>
     <string name="settings_adb_restore_status_not_needed">无需开启：ADB 已在工作</string>
     <string name="settings_adb_restore_status_needs_activation">需要激活：请先正常连接一次 ADB，然后重启应用</string>
     <string name="settings_adb_restore_status_waiting_wifi">等待 Wi-Fi</string>
@@ -863,7 +809,7 @@
     <string name="settings_adb_restore_status_connecting">正在恢复…</string>
     <string name="settings_adb_restore_status_restored">已于 %1$s 恢复</string>
     <string name="settings_adb_restore_status_failed">错误：%1$s</string>
-    <string name="settings_adb_restore_status_unsupported">Android 10 上不可用。如果重启后 ADB 消失，请按照 GitHub 上的说明重新开启，见“激活 ADB”一节。</string>
+    <string name="settings_adb_restore_status_unsupported">Android 10 上不可用</string>
     <string name="settings_cloud_wifi_title">通过 Wi-Fi 连接 BYD 云</string>
     <string name="settings_cloud_wifi_desc">车辆连上 Wi-Fi 时，手机上的 BYD 应用即可看到车辆。使用新版 BYD 服务器的车辆需要中国 VPN。</string>
     <string name="settings_cloud_wifi_help_title">通过 Wi-Fi 连接 BYD 云的工作方式</string>
@@ -872,6 +818,7 @@
     <string name="settings_cloud_wifi_status_own_cellular">车辆有自己的移动网络，云本来就能正常工作</string>
     <string name="settings_cloud_wifi_status_waiting">正在等待可上网的 Wi-Fi</string>
     <string name="settings_cloud_wifi_status_rejected">车辆未接受网络设置</string>
+    <string name="settings_cloud_wifi_status_unavailable">此车固件不支持</string>
     <string name="settings_cloud_wifi_status_silent">BYD 云没有响应。下次连接 Wi-Fi 时会再试</string>
     <string name="settings_cloud_wifi_status_refused">BYD 服务器拒绝了车辆。需要中国 VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">无法访问 ADB：请先开启 ADB 才能使用此设置</string>
@@ -1042,7 +989,6 @@
     <string name="settings_fid_dump_error_unavailable">守护进程不可用</string>
     <!-- %1$s = short technical detail, e.g. "status=-1 at chunk 0" or "transact failed at chunk 2" -->
     <string name="settings_fid_dump_error_read">读取错误：%1$s</string>
-    <string name="settings_display_button_change">更改</string>
     <string name="settings_display_button_title">触发按键</string>
     <string name="steering_button_aux_left">左侧辅助键</string>
     <string name="steering_button_aux_right">右侧辅助键</string>
@@ -1400,7 +1346,6 @@
     <!-- call_contact tool: contacts permission row -->
     <string name="settings_voice_contacts_label">通讯录访问权限</string>
     <string name="settings_voice_contacts_description">用于按姓名语音拨打联系人</string>
-    <string name="settings_voice_contacts_granted">已授权</string>
     <string name="settings_voice_contacts_grant">授权</string>
 
     <!-- Voice journal: debug screen with the last voice sessions -->
@@ -1541,8 +1486,6 @@
     <string name="settings_search_status_hint">未配置 Exa 密钥时，代理使用当前连接的自带搜索。如果它也不可用，代理会如实告知搜索无法使用。</string>
     <string name="settings_section_service_title">服务与数据</string>
     <string name="settings_battery_capacity_desc">用于估算续航里程和费用</string>
-    <string name="settings_tariff_home_desc">家用充电 (AC) 每 1 kWh 的费用</string>
-    <string name="settings_tariff_dc_desc">快充 (DC) 每 1 kWh 的费用</string>
     <string name="settings_tariff_trip_desc">行程费用使用哪种电价计算</string>
     <string name="settings_consumption_good_desc">低于此能耗的行程显示为绿色</string>
     <string name="settings_consumption_bad_desc">高于此能耗的行程显示为红色</string>
@@ -1584,9 +1527,6 @@
     <string name="settings_donate_button">支持项目</string>
 
     <!-- HUD navigation -->
-    <string name="settings_hud_header">HUD 抬头显示</string>
-    <string name="settings_hud_title">导航投射到 HUD</string>
-    <string name="settings_hud_desc">将 Yandex 导航提示投射到抬头显示：转向、距离、街道、到达时间</string>
     <string name="settings_hud_speed_sign_title">箭头下方的限速标志</string>
     <string name="settings_hud_speed_sign_desc">在 HUD 下方槽位显示红色限速标志</string>
     <string name="settings_hud_status_unsupported">未找到 SOME/IP 总线：此车辆不支持 HUD 输出</string>
@@ -1603,7 +1543,7 @@
     <string name="settings_hud_mode_3">方式 3</string>
     <string name="settings_hud_mode_3_desc">方式 3：与方式 2 相同，并多走一条通道。如果前两种都没有显示，请尝试此方式。</string>
     <string name="settings_hud_mode_trial">试用</string>
-    <string name="settings_hud_mode_pick_hint">不确定选哪个？请运行“HUD 检测”。</string>
+    <string name="settings_hud_mode_pick_hint">不确定选哪种方式？请运行“HUD 检测”。</string>
     <string name="settings_hud_answer_title">您在挡风玻璃上看到了哪个数字？</string>
     <string name="settings_hud_answer_text">应用会自动选择方式。如果看到了多个数字，请点最小的那个。</string>
     <string name="settings_hud_answer_none">都没有</string>
@@ -1614,8 +1554,6 @@
     <string name="settings_hud_answer_done">完成</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">盲区</string>
-    <string name="settings_blindspot_title">转向灯触发摄像头</string>
-    <string name="settings_blindspot_desc">左转向灯 - 仪表盘显示左侧摄像头，右转向灯 - 主屏幕上显示小窗。默认关闭。</string>
     <string name="settings_blindspot_threshold_title">速度阈值</string>
     <string name="settings_blindspot_threshold_desc">低于该速度时不显示摄像头</string>
     <string name="settings_blindspot_pip_width_title">小窗宽度</string>
@@ -1740,7 +1678,7 @@
     <string name="split_feature_disabled">分屏功能已在设置中关闭</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">绝缘</string>
-    <string name="tech_title">技术</string>
+    <string name="tech_title">车辆</string>
     <string name="tech_status_online">autoservice 在线</string>
     <string name="tech_status_offline">autoservice 离线</string>
     <string name="tech_no_data">车辆未提供这些数据</string>
@@ -1769,7 +1707,7 @@
     <string name="tech_label_battery_power">电池功率</string>
     <string name="tech_label_max_charge">最大充电功率</string>
     <string name="tech_label_max_discharge_allow">最大放电功率</string>
-    <string name="tech_label_max_discharge">电池容量</string>
+    <string name="tech_label_max_discharge">当前电池容量</string>
     <string name="tech_label_motor_temp">电机温度</string>
     <string name="tech_label_inverter_temp">逆变器温度</string>
     <string name="tech_label_rpm">转速 rpm</string>
@@ -1781,10 +1719,6 @@
     <string name="tech_label_inside_outside">车内 / 车外</string>
     <string name="tech_on">开</string>
     <string name="tech_off">关</string>
-    <string name="tech_tyre_fl">左前</string>
-    <string name="tech_tyre_fr">右前</string>
-    <string name="tech_tyre_rl">左后</string>
-    <string name="tech_tyre_rr">右后</string>
     <string name="tech_value_mohm">%1$.1f MΩ</string>
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
@@ -1797,7 +1731,6 @@
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
     <string name="tech_value_percent">%1$d%%</string>
-    <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">电池健康度，由车辆自己估算：相比新电池还剩多少容量。新车为 100%，随着年份缓慢下降。这是一个独立的数值，与“剩余电量”没有公式上的关系，不需要互相比较。</string>
@@ -1927,7 +1860,7 @@
     <string name="dispatch_split_wide_missing">未设置 wide</string>
     <string name="dispatch_split_invalid_side">方向无效</string>
     <string name="dispatch_split_pair_not_saved">未保存分屏应用组合</string>
-    <string name="dispatch_delay_missing">未设置延迟时长</string>
+    <string name="dispatch_delay_missing">未设置等待时长</string>
     <string name="dispatch_delay_out_of_range">延迟时长超出范围（0..%1$d 毫秒）</string>
     <string name="dispatch_volume_missing">未设置音量</string>
     <string name="dispatch_audio_unavailable">AudioManager 不可用</string>
@@ -2026,6 +1959,7 @@
     <string name="dispatch_tg_report_queued">没有网络，联网后将发送报告</string>
     <string name="dispatch_tg_report_no_bot">请在设置中连接机器人</string>
     <string name="auto_msg_tg_report_empty">操作 #%1$d：请至少选择一项报告内容或填写自定义文字</string>
+    <string name="auto_msg_delay_invalid">操作 #%1$d：等待时长为 0 到 24 小时</string>
     <string name="automation_action_tg_report">Telegram 报告</string>
     <!-- Telegram reports (3.19): settings and automation editor -->
     <string name="tg_report_field_location_desc">「在地图上打开」链接</string>
@@ -2107,6 +2041,10 @@
     <string name="auto_ui_act_volume">%1$s %2$d</string>
     <string name="auto_ui_seconds">%1$s 秒</string>
     <string name="auto_ui_minutes">%1$s 分钟</string>
+    <string name="auto_ui_hours">%1$s 小时</string>
+    <string name="auto_ui_unit_seconds">秒</string>
+    <string name="auto_ui_unit_minutes">分钟</string>
+    <string name="auto_ui_unit_hours">小时</string>
     <string name="auto_ui_when_today">今天 %1$s</string>
     <string name="auto_ui_when_yesterday">昨天 %1$s</string>
     <string name="auto_ui_when_tomorrow">明天 %1$s</string>

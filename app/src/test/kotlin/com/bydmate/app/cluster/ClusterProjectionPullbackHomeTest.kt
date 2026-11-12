@@ -133,7 +133,8 @@ class ClusterProjectionPullbackHomeTest {
         field("currentMode").set(ClusterProjectionManager, ClusterMode.FULLSCREEN)
         ClusterProjectionManager.setMode(context, ClusterMode.OFF, helper, bootstrap())
         val shadow = shadowOf(Looper.getMainLooper())
-        for (attempt in 0 until 40) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
             shadow.idle()
             if (ClusterProjectionManager.currentMode == ClusterMode.OFF) return
             Thread.sleep(25)

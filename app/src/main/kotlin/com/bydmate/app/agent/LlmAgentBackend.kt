@@ -42,7 +42,7 @@ class LlmAgentBackend @Inject constructor(
         onDelta: ((String) -> Unit)?,
     ): Result<AgentReply> {
         val primary = connections.primary()
-            ?: return Result.failure(LlmError("Агент не настроен: заполните адрес, API-ключ и модель в Настройки, Интеграции"))
+            ?: return Result.failure(LlmError(AgentOrchestrator.NOT_CONFIGURED_TEXT))
         var forwarded = false
         val guarded: ((String) -> Unit)? = onDelta?.let { cb -> { d -> forwarded = true; cb(d) } }
 

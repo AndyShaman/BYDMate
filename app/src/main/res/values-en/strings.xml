@@ -10,7 +10,6 @@
     <string name="settings_title">Settings</string>
     <string name="settings_rail_sections_label">Sections</string>
     <string name="settings_section_auto_battery_title">Car and battery</string>
-    <string name="settings_section_trips_title">Trips</string>
     <string name="settings_section_integrations_title">Integrations</string>
     <string name="settings_section_widget_title">Widget</string>
     <string name="settings_section_display_title">Display</string>
@@ -25,25 +24,23 @@
     <string name="settings_display_card_blindspot_sub">Camera on turn signal. %1$s</string>
     <string name="settings_display_window_subhead">Cluster window</string>
     <string name="cluster_a11y_description">Intercepts steering-wheel buttons to project navigation onto the instrument cluster. Enabled manually, works only when the feature is on.</string>
-    <string name="settings_display_mirror_header">Projection to cluster</string>
     <string name="settings_display_mirror_title">Projection to cluster via wheel button</string>
-    <string name="settings_display_mirror_desc">A short press of the chosen steering-wheel button moves the selected app to the cluster and back.</string>
-    <string name="settings_cluster_auto_container_title">Show on the cluster right away</string>
-    <string name="settings_cluster_auto_container_desc">The app switches the cluster into projection mode and back by itself (navigator and blind-spot cameras). Turn it off if ADAS or the stock widget disappears from the cluster afterwards and does not come back on its own: then switch the cluster mode manually, the picture shows in the mini-map</string>
+    <string name="settings_cluster_auto_container_title">Auto-switch the cluster</string>
+    <string name="settings_cluster_auto_container_desc">When on, the app switches the cluster by itself so the navigator and the blind-spot cameras show on it. Turn it off if the stock cluster view with ADAS disappears when you use the turn signal or show the navigator: the picture then stays only in the small map.</string>
     <string name="settings_cluster_full_display_title">Full cluster screen</string>
-    <string name="settings_cluster_full_display_desc">By default the map fills the top of the cluster and the stock strip with speed and key readings stays at the bottom. Turn on if you want the map across the whole cluster without that strip. Works only on firmwares with the new interface, changes nothing elsewhere. Applies at the next projection</string>
+    <string name="settings_cluster_full_display_desc">The map across the whole cluster, without the bottom strip with the speed. Turn on if the map takes only a narrow strip at the top. Applies at the next output to the cluster.</string>
     <string name="settings_cluster_direct_reboot_hint">For the voice agent to see the navigator on the cluster, reboot the DiLink head unit once: press and hold the volume knob. Simply turning the car off is not enough. Until the reboot projection still works, but the agent cannot see the route.</string>
     <string name="cluster_direct_unsupported_hint">Direct output is not available on this car\'s firmware, a compatible mode is used</string>
-    <string name="settings_projection_mode_title">Projection mode</string>
+    <string name="settings_projection_mode_title">Cluster output mode</string>
     <string name="settings_projection_mode_direct">Extended</string>
     <string name="settings_projection_mode_vd">Factory</string>
+    <string name="settings_projection_mode_only_extended">Only “Extended” works on this car</string>
     <string name="settings_projection_mode_help" formatted="false">Factory: works like versions before 3.6, no system settings of the car are changed, the adjustment sliders work more precisely. Downside: the voice agent and HUD cannot see the navigator screen, guidance comes from the notification only. Extended: the navigator runs right on the cluster, the agent and HUD can see it. Enables the system freeform window mode, a one-time DiLink reboot is required. To restore factory state: switch back to Factory, the system setting returns to its factory value and fully applies after a reboot. The mode itself applies on the next projection start.</string>
     <string name="projection_extended_confirm_title">Enable extended mode?</string>
     <string name="projection_extended_confirm_body">Extended mode changes a DiLink system window setting so the navigator runs right on the instrument cluster and the voice agent and HUD can see it. A one-time DiLink reboot will be required. To restore the factory state, switch back to Factory and reboot DiLink.</string>
     <string name="projection_extended_confirm_enable">Enable</string>
     <string name="projection_extended_confirm_cancel">Cancel</string>
     <string name="settings_display_app_title">App on cluster</string>
-    <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>
     <string name="settings_display_size_width_desc" formatted="false">Window width as % of the cluster width</string>
     <string name="settings_display_size_height">Height</string>
@@ -66,7 +63,6 @@
     <string name="steering_button_unknown">Button (code %1$d)</string>
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Trigger button</string>
-    <string name="settings_display_button_change">Change</string>
     <string name="learn_button_dialog_title">Assign button</string>
     <string name="learn_button_waiting">Press a steering-wheel button…</string>
     <string name="learn_button_rejected">This button can\'t be assigned. Press another.</string>
@@ -77,7 +73,7 @@
     <string name="learn_button_cancel">Cancel</string>
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Steering wheel volume knob</string>
-    <string name="settings_knob_play_pause_desc">Pressing the knob pauses and resumes playback instead of switching the audio source. Needed after the firmware update that made the press change the source.</string>
+    <string name="settings_knob_play_pause_desc">Pressing the knob pauses the music and resumes it. Without this setting the car switches the source or mutes the sound on a press.</string>
     <string name="settings_timezone_lock_title">Don\'t change the time zone from the network</string>
     <string name="settings_timezone_lock_desc">For cars near the border where the time zone keeps resetting to Beijing time. First pick your time zone in the car\'s settings, then turn this on.</string>
     <string name="settings_timezone_lock_failed">Failed: restart the ADB helper and try again</string>
@@ -86,9 +82,9 @@
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Restore ADB after a reboot</string>
-    <string name="settings_adb_restore_desc">For firmwares where ADB turns off at every reboot. Wi-Fi must be on.</string>
+    <string name="settings_adb_restore_desc">Only for firmwares where ADB turns off after every head unit reboot (builds 2606 and newer). If car control works after a reboot, leave it off. The app will tell you when it is needed.</string>
     <string name="settings_adb_restore_help_title">How ADB restore works</string>
-    <string name="settings_adb_restore_help_body">On newer DiLink firmwares (since summer 2026) the ADB port closes at every reboot, and BYDMate loses access to the car control features.\n\nThe app can bring ADB back up through the wireless debugging built into Android. For that:\n\n1. Wi-Fi in the car must be on and connected to a network: your home one, a phone hotspot or any other. Without Wi-Fi, Android does not allow wireless debugging to be enabled, that is a system limitation.\n\n2. The first time on each new network the system dialog “Allow wireless debugging on this network?” appears on the screen. When restore is on, BYDMate confirms it by itself through its accessibility service. If the service is off, tick “Always allow on this network” and press ALLOW.\n\n3. Once, while ADB still works, the app grants itself the system permission it needs. If the status line shows “Activation needed”, connect ADB the usual way and restart the app.\n\nIf ADB on your firmware works after a reboot anyway, there is no need to turn this on: the status line will show “Not needed”.</string>
+    <string name="settings_adb_restore_help_body">On newer DiLink firmwares (since summer 2026) the ADB port closes at every reboot, and BYDMate loses access to the car control features.\n\nThe app can bring ADB back up through the wireless debugging built into Android. For that:\n\n1. Wi-Fi in the car must be on and connected to a network: your home one, a phone hotspot or any other. Without Wi-Fi, Android does not allow wireless debugging to be enabled, that is a system limitation.\n\n2. After a long stop Android shows the “Allow wireless debugging on this network?” window again. Tick “Always allow on this network” and press ALLOW: car control comes back in 10–30 seconds. Android 12 cannot remember this answer across reboots, there is nothing to change in the settings.\n\n3. Once, while ADB still works, the app grants itself the system permission it needs. If the status line shows “Activation needed”, connect ADB the usual way and restart the app.\n\nIf ADB on your firmware works after a reboot anyway, there is no need to turn this on: the status line will show “Not needed”.</string>
     <string name="settings_adb_restore_status_not_needed">Not needed: ADB already works</string>
     <string name="settings_adb_restore_status_needs_activation">Activation needed: connect ADB once and restart the app</string>
     <string name="settings_adb_restore_status_waiting_wifi">Waiting for Wi-Fi</string>
@@ -96,7 +92,7 @@
     <string name="settings_adb_restore_status_connecting">Restoring…</string>
     <string name="settings_adb_restore_status_restored">Restored at %1$s</string>
     <string name="settings_adb_restore_status_failed">Error: %1$s</string>
-    <string name="settings_adb_restore_status_unsupported">Not available on Android 10. If ADB is gone after a reboot, turn it on again following the guide on GitHub, section “Enable ADB”.</string>
+    <string name="settings_adb_restore_status_unsupported">Not available on Android 10</string>
     <string name="settings_cloud_wifi_title">BYD cloud over Wi-Fi</string>
     <string name="settings_cloud_wifi_desc">The BYD phone app sees the car while it is on Wi-Fi. Cars on the new BYD servers need a Chinese VPN.</string>
     <string name="settings_cloud_wifi_help_title">How the BYD cloud over Wi-Fi works</string>
@@ -105,6 +101,7 @@
     <string name="settings_cloud_wifi_status_own_cellular">The car has its own mobile data, the cloud works anyway</string>
     <string name="settings_cloud_wifi_status_waiting">Waiting for Wi-Fi with internet</string>
     <string name="settings_cloud_wifi_status_rejected">The car did not accept the connection setting</string>
+    <string name="settings_cloud_wifi_status_unavailable">Not available on the firmware of this car</string>
     <string name="settings_cloud_wifi_status_silent">The BYD cloud did not answer. We will try again on the next Wi-Fi connection</string>
     <string name="settings_cloud_wifi_status_refused">The BYD server refuses the car. It needs a Chinese VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">No ADB access: turn on ADB to use this setting</string>
@@ -161,10 +158,6 @@
     <string name="settings_tariff_dc_label">DC tariff (%1$s/kWh)</string>
     <string name="settings_tariff_trip_label">Trip tariff</string>
     <string name="settings_tariff_custom_label">Custom tariff (%1$s/kWh)</string>
-    <string name="settings_save_tariffs_button">Save tariffs</string>
-    <string name="settings_tariff_future_note">The new tariff applies to future trips.\nTrips already calculated will not change.</string>
-    <string name="settings_recalc_all_button">Recalculate all trips</string>
-    <string name="settings_recalc_note">Recalculates the cost of all trips\nusing the current tariff.</string>
     <string name="settings_tariff_periods_title">Tariffs and periods</string>
     <string name="settings_tariff_card_period">Period</string>
     <string name="settings_tariff_periods_button">Open</string>
@@ -207,18 +200,8 @@
     <string name="range_table_dialog_save">Save</string>
 
     <!-- Settings: Trips section -->
-    <string name="settings_trips_datasource_header">Trip data source</string>
-    <string name="settings_trips_datasource_note">Titan 3 — BYD energydata.\nSong and other models without built-in DB — DiPlus TripInfo.</string>
-    <string name="settings_trips_datasource_hint">If the list stays empty after 2–3 drives — switch the mode.</string>
-    <string name="settings_trips_system_header">System data (beta)</string>
-    <string name="settings_trips_system_note">Extended vehicle data: battery SoH, BMS mileage, charge statistics. Read-only.</string>
-    <string name="settings_trips_system_enable_label">Enable</string>
-    <string name="settings_datasource_switching">Switching...</string>
     <string name="settings_datasource_done">Done</string>
 
-    <string name="settings_recalc_dialog_title">Recalculate cost?</string>
-    <string name="settings_recalc_dialog_text">All trips will be recalculated using tariff %1$s %2$s/kWh.\nExisting calculated values will be replaced.</string>
-    <string name="settings_recalc_confirm_button">Recalculate</string>
     <string name="settings_cancel_button">Cancel</string>
     <string name="settings_abrp_section_header">ABRP - telemetry</string>
     <string name="settings_abrp_telemetry_label">Live data -> A Better Route Planner</string>
@@ -237,8 +220,6 @@
     <string name="settings_webhook_save_button">Save webhook</string>
     <string name="settings_webhook_saved">Webhook saved</string>
     <string name="settings_webhook_invalid_url">Invalid URL</string>
-    <string name="settings_openrouter_section_header">OpenRouter</string>
-    <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Model: %1$s</string>
     <string name="settings_openrouter_model_pick">Choose model</string>
     <string name="settings_exa_section_header">Exa</string>
@@ -280,9 +261,6 @@
     <string name="settings_widget_left_tap_description">Default is Yandex Navigator. If the app is removed, the tap will not work.</string>
     <string name="settings_widget_buttons_label">Widget buttons</string>
     <string name="settings_widget_buttons_description">A single tap slides out 4 buttons, a double tap opens BYDMate. A button runs a rule with the "Button press" trigger.</string>
-    <string name="settings_places_section_header">Places</string>
-    <string name="settings_places_entry_title">Automation points</string>
-    <string name="settings_places_entry_description">Home, work, favorite places - Place enter / Place exit triggers</string>
     <string name="settings_app_units_header">Units and currency</string>
     <string name="settings_app_distance_label">Distance</string>
     <string name="settings_app_currency_label">Currency</string>
@@ -301,12 +279,6 @@
     <string name="settings_update_check_toggle_label">Check for updates</string>
     <string name="settings_update_check_toggle_description">Check GitHub 30 seconds after startup and suggest updating</string>
     <string name="settings_update_check_button">Check for updates now</string>
-    <string name="settings_autoservice_disconnected_title">not connected</string>
-    <string name="settings_autoservice_disconnected_detail">restart the app if ADB is already on</string>
-    <string name="settings_autoservice_sentinel_title">connected, but data is not readable</string>
-    <string name="settings_autoservice_sentinel_detail">the feature may work only on Leopard 3</string>
-    <string name="settings_autoservice_connected_title">connected</string>
-    <string name="settings_autoservice_connected_detail">SoH %1$s • lifetime %2$s / %3$s</string>
     <string name="settings_update_dialog_title">Updates</string>
     <string name="settings_update_current_version">Current version: v%1$s</string>
     <string name="settings_update_check_now_button">Check for updates</string>
@@ -405,11 +377,7 @@
     <string name="charges_delete_dialog_text">%1$s kWh - cannot be restored.</string>
     <string name="trips_delete_dialog_title">Delete trip?</string>
     <string name="trips_delete_dialog_text">%1$s km - the trip and its route will be deleted and cannot be restored.</string>
-    <string name="charges_onboarding_empty_text">Charging statistics are unavailable. To see kWh and cost for each charging session, enable \"System data\" in Settings.</string>
-    <string name="charges_go_to_settings_button">Go to Settings</string>
     <string name="charges_sentinel_empty_text">Charging statistics are unavailable for your car model - diagnostic data cannot be read. SoH is not shown either.</string>
-    <string name="charges_not_tracking_banner">New charging sessions are not being tracked right now.</string>
-    <string name="charges_enable_tracking_button">Enable -></string>
     <string name="charges_stats_period_label">For the selected period</string>
     <string name="charges_stats_sessions">Sessions</string>
     <string name="charges_stats_cost">Cost</string>
@@ -419,7 +387,6 @@
     <string name="charges_stats_bms_mileage">BMS mileage</string>
     <string name="charges_stats_per100km">/100km lifetime</string>
     <string name="charges_lifetime_waiting">Waiting for the first response from the car...</string>
-    <string name="charges_lifetime_enable_hint">Enable "System data" in Settings to see BMS mileage and lifetime pumped total.</string>
     <string name="charges_stats_dynamics_label">Trends</string>
     <string name="charges_chart_cell_delta_title">Cell delta (V)</string>
     <string name="charges_chart_cell_delta_placeholder">Cell delta: shown after 3 completed charging sessions (now: %1$d)</string>
@@ -449,7 +416,7 @@
     <string name="automation_delete_confirm_text">This action cannot be undone.</string>
     <string name="automation_delete_button">Delete</string>
     <string name="automation_cancel_button">Cancel</string>
-    <string name="automation_rule_cooldown">Cooldown: %1$d s</string>
+    <string name="automation_rule_cooldown">No more often than every %1$d s</string>
     <string name="automation_editor_new_rule_title">New rule</string>
     <string name="automation_rule_name_placeholder">Rule name</string>
     <string name="automation_section_when">WHEN (conditions)</string>
@@ -520,7 +487,7 @@
     <string name="automation_action_call">Call</string>
     <string name="automation_action_navigate">Route in Y.Navigator</string>
     <string name="automation_action_url">Open URL</string>
-    <string name="automation_action_delay">Delay</string>
+    <string name="automation_action_delay">Wait</string>
     <string name="automation_action_media_volume">Media volume</string>
     <string name="automation_action_media_volume_label">Volume</string>
     <string name="automation_action_sentry">Sentry mode</string>
@@ -588,8 +555,6 @@
     <string name="automation_music_minimize_label">Minimize after launch (after 3 s)</string>
     <string name="automation_journal_title">Trigger journal</string>
     <string name="automation_journal_empty">Journal is empty</string>
-    <string name="places_tab_title">Places</string>
-    <string name="places_back_content_description">Back</string>
     <string name="places_add_button">+ Add</string>
     <string name="places_empty">No places yet. Tap \"+ Add\" to create one.</string>
     <string name="places_row_coords">%1$.5f, %2$.5f · %3$d m</string>
@@ -651,7 +616,6 @@
     <string name="widget_trash_release">release - widget hidden</string>
     <string name="widget_trash_hint">drag here to hide</string>
     <string name="dashboard_vehicle_data_offline">No vehicle data</string>
-    <string name="dashboard_diplus_offline">DiPlus is not responding</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
     <string name="dashboard_unit_km">km</string>
@@ -716,7 +680,6 @@
     <string name="applauncher_close_button">Close</string>
     <string name="battery_health_charging_cd">Charging</string>
     <string name="battery_health_cell_delta_label">Cell delta</string>
-    <string name="battery_health_cell_delta_value">%1$.3f V</string>
     <string name="battery_health_cell_voltage_value">%1$.3f V</string>
     <string name="battery_health_bat_temp_label">battery temp.</string>
     <string name="battery_health_12v_label">12V system</string>
@@ -728,21 +691,12 @@
     <string name="battery_health_avg_since_charge_label">since last charge</string>
     <string name="battery_health_avg_all_time_label">all time</string>
     <string name="battery_health_avg_soc_hint" formatted="false">Time-weighted state of charge: the longer the battery sits charged, the higher the value. BYD LFP packs age slower when kept lower: storing at a high charge speeds up calendar aging. Guideline: below 65% is great, 65-85% is fine, above 85% consider charging later or less often. A 100% charge once every 1-2 weeks is still needed for cell balancing. Computed from BYDMate trip and charge history.</string>
-    <string name="summary_unit_km">km</string>
-    <string name="summary_label_mileage">Mileage</string>
-    <string name="summary_unit_kwh">kWh</string>
-    <string name="summary_label_energy">Energy</string>
-    <string name="summary_unit_kwh_per_100km">kWh/100km</string>
-    <string name="summary_label_consumption">Consumption</string>
-    <string name="summary_label_cost">Cost</string>
     <string name="settings_tariff_trip_custom_chip">Custom</string>
     <string name="settings_unit_km">km</string>
     <string name="settings_unit_miles">miles</string>
     <string name="settings_saved">Saved</string>
-    <string name="settings_recalc_done">Recalculated: %1$d trips</string>
     <string name="settings_export_in_progress">Exporting...</string>
     <string name="settings_error_with_message">Error: %1$s</string>
-    <string name="settings_error_prefix">Error</string>
     <string name="settings_log_recording_started">Recording (auto-stop after 2h)... - %1$s</string>
     <string name="settings_log_saved">Saved: %1$s (%2$d KB)</string>
     <string name="settings_log_error_no_fs_access">Error: no file system access</string>
@@ -754,8 +708,6 @@
     <string name="settings_log_tg_missing">File not found. It may have been deleted from the Download folder.</string>
     <string name="settings_tg_log_auto_title">Send the recorded log to Telegram</string>
     <string name="settings_tg_log_auto_hint">When a log recording ends, the file arrives in your bot by itself.</string>
-    <string name="settings_update_check_in_progress">Checking...</string>
-    <string name="settings_update_available_short">v%1$s available</string>
     <string name="update_downloading_progress">Downloading: %1$d%%</string>
     <string name="update_downloading_done">Downloaded. Installing...</string>
     <string name="update_downloading_paused">Paused...</string>
@@ -797,8 +749,6 @@
     <string name="insight_night_idle_prev">%1$.1f kWh</string>
 
     <!-- Local insight engine (offline rules) -->
-    <string name="local_insight_not_enough_data_title">Not enough data</string>
-    <string name="local_insight_not_enough_data_summary">Need at least 5 trips in the last 7 days</string>
     <string name="local_insight_consumption_up_title">Consumption up %1$.0f%%</string>
     <string name="local_insight_consumption_up_title_month">Consumption up %1$.0f%%</string>
     <string name="local_insight_consumption_up_summary_short">Many short trips — warmup uses extra energy</string>
@@ -814,7 +764,7 @@
     <string name="local_insight_idle_month">Idle with engine on: %1$.1f kWh over %2$s, %3$d%% of monthly use</string>
     <string name="local_insight_12v_critical_title">12V critically low</string>
     <string name="local_insight_12v_critical_summary">Aux battery %1$.1f V — have it checked</string>
-    <string name="local_insight_12v_low">12V now %1$.1f V — below normal 12.4 V</string>
+    <string name="local_insight_12v_low">12V now %1$.2f V, below normal 12.5 V</string>
     <string name="local_insight_12v_falling">12V falling: %1$.2f to %2$.2f V over the week</string>
     <string name="local_insight_12v_falling_month">12V falling: %1$.2f to %2$.2f V over the month</string>
     <string name="local_insight_cell_critical_title">Large cell spread</string>
@@ -1285,7 +1235,6 @@
     <!-- call_contact tool: contacts permission row -->
     <string name="settings_voice_contacts_label">Contacts access</string>
     <string name="settings_voice_contacts_description">Needed to call a contact by name using voice</string>
-    <string name="settings_voice_contacts_granted">Granted</string>
     <string name="settings_voice_contacts_grant">Grant</string>
 
     <!-- Voice journal: debug screen with the last voice sessions -->
@@ -1426,8 +1375,6 @@
     <string name="settings_search_status_hint">Without an Exa key the agent uses the current connection\'s built-in search. If that is unavailable too, the agent will honestly say search is not working.</string>
     <string name="settings_section_service_title">Service &amp; Data</string>
     <string name="settings_battery_capacity_desc">Used to estimate range and cost</string>
-    <string name="settings_tariff_home_desc">Cost of 1 kWh when charging at home (AC)</string>
-    <string name="settings_tariff_dc_desc">Cost of 1 kWh at DC fast chargers</string>
     <string name="settings_tariff_trip_desc">Which tariff to use for trip costs</string>
     <string name="settings_consumption_good_desc">Trips with lower consumption are highlighted green</string>
     <string name="settings_consumption_bad_desc">Trips with higher consumption are highlighted red</string>
@@ -1469,9 +1416,6 @@
     <string name="settings_donate_button">Support the project</string>
 
     <!-- HUD navigation -->
-    <string name="settings_hud_header">HUD (head-up display)</string>
-    <string name="settings_hud_title">Navigation on HUD</string>
-    <string name="settings_hud_desc">Yandex Navigator guidance on the head-up display: maneuver, distance, street, arrival</string>
     <string name="settings_hud_speed_sign_title">Speed sign under the arrow</string>
     <string name="settings_hud_speed_sign_desc">Red speed-limit sign in the lower HUD slot</string>
     <string name="settings_hud_status_unsupported">SOME/IP bus not found: HUD output is unavailable on this car</string>
@@ -1488,7 +1432,7 @@
     <string name="settings_hud_mode_3">Method 3</string>
     <string name="settings_hud_mode_3_desc">Method 3. Like method 2, plus one more path. Try it if the first two showed nothing.</string>
     <string name="settings_hud_mode_trial">trial</string>
-    <string name="settings_hud_mode_pick_hint">Not sure which one? Run the “HUD check”.</string>
+    <string name="settings_hud_mode_pick_hint">Not sure which method to choose? Run the “HUD check”.</string>
     <string name="settings_hud_answer_title">Which number did you see on the glass?</string>
     <string name="settings_hud_answer_text">The app picks the method itself. If you saw several numbers, tap the smallest one.</string>
     <string name="settings_hud_answer_none">Nothing</string>
@@ -1499,8 +1443,6 @@
     <string name="settings_hud_answer_done">Done</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Blind spots</string>
-    <string name="settings_blindspot_title">Camera on turn signal</string>
-    <string name="settings_blindspot_desc">Left turn signal - left camera on the cluster, right one - a small window on the main screen. Off by default.</string>
     <string name="settings_blindspot_threshold_title">Speed threshold</string>
     <string name="settings_blindspot_threshold_desc">Below this speed the camera stays hidden</string>
     <string name="settings_blindspot_pip_width_title">Window width</string>
@@ -1626,7 +1568,7 @@
     <string name="split_feature_disabled">Split screen is disabled in settings</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">insulation</string>
-    <string name="tech_title">Tech</string>
+    <string name="tech_title">Car</string>
     <string name="tech_status_online">autoservice online</string>
     <string name="tech_status_offline">autoservice offline</string>
     <string name="tech_no_data">The car does not report this data</string>
@@ -1655,7 +1597,7 @@
     <string name="tech_label_battery_power">battery power</string>
     <string name="tech_label_max_charge">max charge power</string>
     <string name="tech_label_max_discharge_allow">max discharge power</string>
-    <string name="tech_label_max_discharge">battery capacity</string>
+    <string name="tech_label_max_discharge">current battery capacity</string>
     <string name="tech_label_motor_temp">motor temperature</string>
     <string name="tech_label_inverter_temp">inverter temperature</string>
     <string name="tech_label_rpm">rpm</string>
@@ -1667,10 +1609,6 @@
     <string name="tech_label_inside_outside">cabin / outside</string>
     <string name="tech_on">on</string>
     <string name="tech_off">off</string>
-    <string name="tech_tyre_fl">FL</string>
-    <string name="tech_tyre_fr">FR</string>
-    <string name="tech_tyre_rl">RL</string>
-    <string name="tech_tyre_rr">RR</string>
     <string name="tech_value_mohm">%1$.1f MΩ</string>
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
@@ -1683,7 +1621,6 @@
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
     <string name="tech_value_percent">%1$d%%</string>
-    <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Battery health, as the car itself estimates it: how much capacity is left compared to new. 100% on a new car, slowly decreasing over the years. This is a separate figure, it is not linked to \"Remaining\" by any formula, there is no need to compare them.</string>
@@ -1813,7 +1750,7 @@
     <string name="dispatch_split_wide_missing">wide not set</string>
     <string name="dispatch_split_invalid_side">invalid side</string>
     <string name="dispatch_split_pair_not_saved">no split screen pair saved</string>
-    <string name="dispatch_delay_missing">Delay duration not set</string>
+    <string name="dispatch_delay_missing">Wait duration not set</string>
     <string name="dispatch_delay_out_of_range">Delay duration out of range (0..%1$d ms)</string>
     <string name="dispatch_volume_missing">Volume level not set</string>
     <string name="dispatch_audio_unavailable">AudioManager unavailable</string>
@@ -1912,6 +1849,7 @@
     <string name="dispatch_tg_report_queued">No connection, the report will go out when the internet is back</string>
     <string name="dispatch_tg_report_no_bot">Connect the bot in Settings</string>
     <string name="auto_msg_tg_report_empty">Action #%1$d: pick at least one report item or write your own text</string>
+    <string name="auto_msg_delay_invalid">Action #%1$d: wait from 0 to 24 h</string>
     <string name="automation_action_tg_report">Telegram report</string>
     <!-- Telegram reports (3.19): settings and automation editor -->
     <string name="tg_report_field_location_desc">An «Open on the map» link</string>
@@ -1993,6 +1931,10 @@
     <string name="auto_ui_act_volume">%1$s %2$d</string>
     <string name="auto_ui_seconds">%1$s s</string>
     <string name="auto_ui_minutes">%1$s min</string>
+    <string name="auto_ui_hours">%1$s h</string>
+    <string name="auto_ui_unit_seconds">s</string>
+    <string name="auto_ui_unit_minutes">min</string>
+    <string name="auto_ui_unit_hours">h</string>
     <string name="auto_ui_when_today">Today at %1$s</string>
     <string name="auto_ui_when_yesterday">Yesterday at %1$s</string>
     <string name="auto_ui_when_tomorrow">Tomorrow at %1$s</string>

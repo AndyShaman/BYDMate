@@ -108,8 +108,8 @@ class SteeringWheelKeyService : AccessibilityService() {
         // Voice check: runs after learn-mode, before star decision. Returns true only when voice is
         // enabled and the configured voice key is pressed (isDown). Non-voice keys fall through.
         val voicePrefs = applicationContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
-        val voiceEnabled = voicePrefs.getBoolean("voice_enabled", false)
-        val voiceKey = voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE)
+        val voiceEnabled = voicePrefs.getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
+        val voiceKey = voicePrefs.getInt(SettingsRepository.KEY_VOICE_KEYCODE, DEFAULT_VOICE_KEYCODE)
         val voiceCompanions = voiceCompanionsFromCsv(
             voicePrefs.getString(SettingsRepository.KEY_VOICE_COMPANIONS, null))
         when (voiceDecision(event.keyCode, isDown, voiceEnabled, voiceKey, voiceCompanions)) {

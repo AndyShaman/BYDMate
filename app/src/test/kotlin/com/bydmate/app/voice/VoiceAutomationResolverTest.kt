@@ -35,6 +35,7 @@ class VoiceAutomationResolverTest {
         assertEquals(VoiceAutomationMatch(1L, "r1"), r.match("Эй, режим елка, пожалуйста!"))
     }
 
+    // Keeps the resolver's use of the whole-utterance rule pinned: a wrong match runs a user automation.
     @Test fun `no partial-word match`() = runBlocking {
         assertNull(resolver(listOf(voiceRule(1, "окно"))).match("окновать"))
     }

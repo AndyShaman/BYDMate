@@ -100,53 +100,6 @@ class OpenRouterClient @Inject constructor(
         }
     }
 
-    suspend fun chat(
-        apiKey: String,
-        modelId: String,
-        systemPrompt: String,
-        userMessage: String
-    ): String? = withContext(Dispatchers.IO) {
-        try {
-            val messages = JSONArray().apply {
-                put(JSONObject().put("role", "system").put("content", systemPrompt))
-                put(JSONObject().put("role", "user").put("content", userMessage))
-            }
-            val payload = JSONObject().apply {
-                put("model", modelId)
-                put("messages", messages)
-                put("temperature", 0.7)
-                put("max_tokens", 1024)
-            }
-
-            val request = Request.Builder()
-                .url("$BASE_URL/chat/completions")
-                .addHeader("Authorization", "Bearer $apiKey")
-                .addHeader("HTTP-Referer", "https://github.com/AndyShaman/BYDMate")
-                .addHeader("X-Title", "BYDMate")
-                .post(payload.toString().toRequestBody(JSON_MEDIA))
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            val body = response.body?.string()
-
-            if (!response.isSuccessful) {
-                Log.w(TAG, "chat HTTP ${response.code}: $body")
-                return@withContext null
-            }
-
-            val json = JSONObject(body ?: return@withContext null)
-            val choices = json.optJSONArray("choices") ?: return@withContext null
-            if (choices.length() == 0) return@withContext null
-
-            choices.getJSONObject(0)
-                .optJSONObject("message")
-                ?.optString("content")
-        } catch (e: Exception) {
-            Log.e(TAG, "chat failed: ${e.message}")
-            null
-        }
-    }
-
     /** Test seam: overrides the OpenRouter base URL. Production leaves it null. */
     internal var baseUrlForTest: String? = null
 
@@ -169,6 +122,19 @@ class OpenRouterClient @Inject constructor(
         extras?.keys()?.forEach { put(it, extras.get(it)) }
     }
 
+    /** POST [payload] to [baseUrl]/chat/completions with the OpenRouter headers; shared by
+     *  [chatRaw] and [chatStream]. */
+    private fun buildRequest(baseUrl: String, apiKey: String, payload: JSONObject): Request {
+        val base = baseUrlForTest ?: baseUrl
+        return Request.Builder()
+            .url("$base/chat/completions")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("HTTP-Referer", "https://github.com/AndyShaman/BYDMate")
+            .addHeader("X-Title", "BYDMate")
+            .post(payload.toString().toRequestBody(JSON_MEDIA))
+            .build()
+    }
+
     /**
      * Raw chat-completions call for the voice agent: full message history plus optional
      * tool schemas, against any OpenAI-compatible [baseUrl] (OpenRouter, z.ai, or a custom
@@ -185,14 +151,7 @@ class OpenRouterClient @Inject constructor(
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
             val payload = buildPayload(modelId, messages, tools, stream = false, extras = extras)
-            val base = baseUrlForTest ?: baseUrl
-            val request = Request.Builder()
-                .url("$base/chat/completions")
-                .addHeader("Authorization", "Bearer $apiKey")
-                .addHeader("HTTP-Referer", "https://github.com/AndyShaman/BYDMate")
-                .addHeader("X-Title", "BYDMate")
-                .post(payload.toString().toRequestBody(JSON_MEDIA))
-                .build()
+            val request = buildRequest(baseUrl, apiKey, payload)
             httpClient.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) throw LlmHttpException(resp.code)
                 val bodyStr = resp.body?.string().takeUnless { it.isNullOrBlank() }
@@ -230,14 +189,7 @@ class OpenRouterClient @Inject constructor(
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
             val payload = buildPayload(modelId, messages, tools, stream = true, extras = extras)
-            val base = baseUrlForTest ?: baseUrl
-            val request = Request.Builder()
-                .url("$base/chat/completions")
-                .addHeader("Authorization", "Bearer $apiKey")
-                .addHeader("HTTP-Referer", "https://github.com/AndyShaman/BYDMate")
-                .addHeader("X-Title", "BYDMate")
-                .post(payload.toString().toRequestBody(JSON_MEDIA))
-                .build()
+            val request = buildRequest(baseUrl, apiKey, payload)
             val call = streamClient.newCall(request)
             // A blocked call.execute()/readUtf8Line() never observes coroutine cancellation by itself.
             // A sibling watcher resumes on cancellation (on another thread) and cancels the OkHttp call,

@@ -146,12 +146,10 @@ class AvmCameraProbe(
         return true
     }
 
-    fun open(previewIndex: Int, surface: Surface): Boolean = openBound(mapOf(previewIndex to surface))
-
     /**
      * Opens the camera with SEVERAL previews bound at once (the donor drives its multi-window
      * views that way), so one warm camera can feed both blind-spot windows and a side swap is
-     * just an alpha flip. Same error contract as [open]: any failure closes the camera.
+     * just an alpha flip. Any failure closes the camera.
      */
     fun openWarm(surfaces: Map<Int, Surface>): Boolean = openBound(surfaces)
 

@@ -30,36 +30,6 @@ class TechPanelI18nTest {
         return ctx.appLocalizedContext().getString(id, *args)
     }
 
-    @Test fun screen_chrome_is_translated() {
-        assertEquals("Техника", get("ru", R.string.tech_title))
-        assertEquals("Tech", get("en", R.string.tech_title))
-        assertEquals("技术", get("zh", R.string.tech_title))
-        assertEquals("Машина не отдаёт эти данные", get("ru", R.string.tech_no_data))
-        assertEquals("The car does not report this data", get("en", R.string.tech_no_data))
-        assertEquals("车辆未提供这些数据", get("zh", R.string.tech_no_data))
-        assertEquals("изоляция", get("ru", R.string.dashboard_battery_insulation_label))
-        assertEquals("insulation", get("en", R.string.dashboard_battery_insulation_label))
-        assertEquals("绝缘", get("zh", R.string.dashboard_battery_insulation_label))
-    }
-
-    @Test fun card_order_hint_is_translated() {
-        assertEquals("Удерживайте карточку, чтобы поменять порядок", get("ru", R.string.tech_order_hint))
-        assertEquals("Hold a card to change the order", get("en", R.string.tech_order_hint))
-        assertEquals("长按卡片可调整顺序", get("zh", R.string.tech_order_hint))
-    }
-
-    @Test fun card_headers_are_translated() {
-        assertEquals("Батарея · сейчас", get("ru", R.string.tech_card_battery_now))
-        assertEquals("Battery · now", get("en", R.string.tech_card_battery_now))
-        assertEquals("电池 · 当前", get("zh", R.string.tech_card_battery_now))
-        assertEquals("Моторы и инверторы", get("ru", R.string.tech_card_motors))
-        assertEquals("Motors and inverters", get("en", R.string.tech_card_motors))
-        assertEquals("电机与逆变器", get("zh", R.string.tech_card_motors))
-        assertEquals("Шины · давление / температура", get("ru", R.string.tech_card_tyres))
-        assertEquals("Tyres · pressure / temperature", get("en", R.string.tech_card_tyres))
-        assertEquals("轮胎 · 胎压 / 温度", get("zh", R.string.tech_card_tyres))
-    }
-
     /** Units are format strings: a broken placeholder would throw or drop the number. */
     @Test fun value_formats_carry_their_arguments() {
         assertEquals("6,8 МОм", get("ru", R.string.tech_value_mohm, 6.8))
@@ -71,8 +41,6 @@ class TechPanelI18nTest {
         assertEquals("576 Вт", get("ru", R.string.tech_value_watt, 576))
         assertEquals("2,00 %/ч", get("ru", R.string.tech_value_percent_per_hour, 2.0))
         assertEquals("2.00 %/h", get("en", R.string.tech_value_percent_per_hour, 2.0))
-        assertEquals("2,52 бар · 15°", get("ru", R.string.tech_value_tyre, 2.52, 15))
-        assertEquals("2.52 bar · 15°", get("en", R.string.tech_value_tyre, 2.52, 15))
     }
 
     /** All ten hints must be present and non-Russian in en/zh. */

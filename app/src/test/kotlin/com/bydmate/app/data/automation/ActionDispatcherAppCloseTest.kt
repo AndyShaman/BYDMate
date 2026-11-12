@@ -40,12 +40,7 @@ class ActionDispatcherAppCloseTest {
         every { packageManager.getLaunchIntentForPackage(any()) } returns mockk<Intent>(relaxed = true)
         coEvery { helper.isAlive() } returns true
         coEvery { helper.forceStop(any()) } returns true
-        dispatcher = ActionDispatcher(mockk<VehicleApi>(relaxed = true), helper, context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()), dagger.Lazy { mockk(relaxed = true) })
+        dispatcher = testDispatcher(helper = helper, context = context, appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()))
     }
 
     private fun close(pkg: String) = ActionDef(

@@ -172,13 +172,9 @@ class ChargerSearchClient @Inject constructor(private val http: OkHttpClient) {
             val operator = tags?.text("operator")
             val address = listOfNotNull(tags?.text("addr:city"), tags?.text("addr:street"), tags?.text("addr:housenumber"))
                 .joinToString(", ").ifEmpty { null }
-            ChargerStation(tags?.text("name") ?: operator ?: "Зарядная станция", address, operator, cLat, cLon)
+            ChargerStation(tags?.text("name") ?: operator ?: DEFAULT_STATION_NAME, address, operator, cLat, cLon)
         }
     }
-
-    /** Android's org.json turns a JSON null into the string "null" in optString: keep it null. */
-    private fun JSONObject.text(key: String): String? =
-        if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
 
     private fun inBelarus(lat: Double, lon: Double) = lat in BELARUS_LAT && lon in BELARUS_LON
 

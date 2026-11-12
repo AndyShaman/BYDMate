@@ -154,12 +154,10 @@ class SplitStageActivity : ComponentActivity() {
          */
         @Volatile private var generation: Int = 0
 
-        /**
-         * Called by [SplitOverlayController.show] at the start of each show() invocation.
-         * Returns the new generation so the caller can pass it into [finishInstance] if needed
-         * (currently unused by the caller, but kept for future flexibility).
-         */
-        internal fun nextGeneration(): Int = ++generation
+        /** Called by [SplitOverlayController.show] at the start of each show() invocation. */
+        internal fun nextGeneration() {
+            ++generation
+        }
 
         /**
          * Set by [SplitOverlayController] before each [SplitOverlayController.show] call.

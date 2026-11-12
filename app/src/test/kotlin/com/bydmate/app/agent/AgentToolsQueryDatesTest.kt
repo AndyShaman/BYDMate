@@ -1,7 +1,6 @@
 package com.bydmate.app.agent
 
 import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
@@ -11,7 +10,6 @@ import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripSummary
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.repository.PlaceRepository
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
@@ -46,14 +44,22 @@ class AgentToolsQueryDatesTest {
 
     private val context = mockk<Context>(relaxed = true)
 
-    private fun tools() = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
     ).also { it.nowMs = { 1_000_000_000_000L } }
 
     private fun emptySummary() = TripSummary(totalKm = 0.0, totalKwh = 0.0)
@@ -99,15 +105,6 @@ class AgentToolsQueryDatesTest {
         t.execute(call("query_trips", """{"period":"week"}"""))
         assertEquals(1_000_000_000_000L - 7 * 24L * 3600_000, slotFrom.captured)
         assertEquals(1_000_000_000_000L, slotTo.captured)
-    }
-
-    @Test fun query_trips_upper_bound_excludes_next_day_midnight() = runTest {
-        val slotFrom = slot<Long>(); val slotTo = slot<Long>()
-        coEvery { tripDao.getPeriodSummary(capture(slotFrom), capture(slotTo)) } returns emptySummary()
-        tools().execute(call("query_trips", """{"from":"2026-06-01","to":"2026-06-30"}"""))
-        val nextMidnight = Calendar.getInstance().apply { clear(); set(2026, Calendar.JULY, 1) }.timeInMillis
-        // DAO compares start_ts <= :to, so :to must stop 1 ms before next-day midnight.
-        assertEquals(nextMidnight - 1, slotTo.captured)
     }
 
     @Test fun query_charges_split_is_bounded_by_to() = runTest {

@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.PixelFormat
-import android.os.Build
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
@@ -22,22 +21,16 @@ import com.bydmate.app.MainActivity
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.data.local.LocalePreferences
-import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.service.TrackingService
-import com.bydmate.app.split.SplitOverlayController
 import com.bydmate.app.split.SplitSessionManager
 import com.bydmate.app.split.SplitSessionState
 import com.bydmate.app.split.SplitStartResult
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
 import com.bydmate.app.data.nativestack.VehicleKind
-import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -51,19 +44,6 @@ import com.bydmate.app.domain.calculator.Trend
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-
-/**
- * Hilt entry point used by [WidgetController] (a singleton object, not Hilt-managed)
- * to reach the split-screen singletons without constructor injection.
- */
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface SplitWidgetEntryPoint {
-    fun splitSessionManager(): SplitSessionManager
-    fun splitOverlayController(): SplitOverlayController
-    fun helperBootstrap(): HelperBootstrap
-    fun vehicleKindMonitor(): VehicleKindMonitor
-}
 
 /**
  * DM-i hybrid (#184) inputs of the widget: the car type, the two fuel slots and the car's own
@@ -80,46 +60,6 @@ private data class WidgetHybrid(
 
     fun withData(data: com.bydmate.app.data.remote.DiParsData?): WidgetHybrid =
         copy(fuelPercent = data?.fuelPercent, fuelRangeKm = data?.fuelRangeKm, evRangeKm = data?.evRangeKm)
-}
-
-/**
- * A person's own split gesture: the widget's left tap or the split steering key. [WidgetController.runSplitTap]
- * toggle; no saved pair opens the first-pair picker; errors go to the overlay, in the language
- * of [context] (the caller passes a context localized to the app language).
- */
-@Suppress("TooGenericExceptionCaught") // callers' scopes have no exception handler
-internal suspend fun toggleSplitByUser(context: Context, fromWidget: Boolean) {
-    try {
-        val ep = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            SplitWidgetEntryPoint::class.java,
-        )
-        val manager = ep.splitSessionManager()
-        WidgetController.runSplitTap(
-            manager = manager,
-            onNoPair = { ep.splitOverlayController().showFirstPairPicker() },
-            onError = { res ->
-                OverlayNotificationManager.show(
-                    context.applicationContext,
-                    context.getString(res),
-                    "",
-                )
-            },
-            adbBlocked = {
-                // Only a daemon that is dead RIGHT NOW makes the recorded reason
-                // relevant: a later successful spawn leaves the old record in place
-                // for the dump, but isHealthy() then keeps it out of the UI.
-                val bootstrap = ep.helperBootstrap()
-                !bootstrap.isHealthy() && bootstrap.lastSpawnFailure()?.reason ==
-                    HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE
-            },
-            alwaysStart = WidgetController.splitAlwaysStart(fromWidget, manager.isNativePanesFirmware()),
-        )
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Log.w("WidgetController", "split toggle failed (widget=$fromWidget): ${e.message}")
-    }
 }
 
 /** Car type through the split entry point; on failure the widget simply stays EV. */
@@ -147,8 +87,8 @@ object WidgetController {
     private const val TAG = "WidgetController"
 
     // Widget dimensions in dp — matches FloatingWidgetView layout
-    private const val WIDGET_WIDTH_DP = 260
-    private const val WIDGET_HEIGHT_DP = 108
+    private const val WIDGET_WIDTH_DP = WidgetButtonLayout.PANEL_WIDTH_DP
+    private const val WIDGET_HEIGHT_DP = WidgetButtonLayout.PANEL_HEIGHT_DP
     private const val DRAG_THRESHOLD_DP = 8
     private const val TRASH_RADIUS_DP = 48
     private const val LONG_PRESS_MS = 1500L
@@ -215,7 +155,6 @@ object WidgetController {
     private var expandedState = mutableStateOf(false)
     @Volatile private var collapsedX: Int = 0
     @Volatile private var collapsedY: Int = 0
-    private var buttonLayerView: ComposeView? = null
     private var buttonLifecycle: OverlayLifecycleOwner? = null
     private var rootContainer: android.widget.FrameLayout? = null
 
@@ -257,11 +196,7 @@ object WidgetController {
         val params = WindowManager.LayoutParams(
             widgetWpx,
             widgetHpx,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
@@ -323,7 +258,6 @@ object WidgetController {
                 )
             }
         }
-        buttonLayerView = buttonCompose
 
         // Transparent container: button layer fills the window; the panel pins to
         // the top so the single bottom-row button pocket appears below it on expand.
@@ -430,7 +364,6 @@ object WidgetController {
         widgetLifecycle?.onDestroy()
         buttonLifecycle?.onDestroy()
         widgetView = null
-        buttonLayerView = null
         rootContainer = null
         widgetLifecycle = null
         buttonLifecycle = null
@@ -699,11 +632,7 @@ object WidgetController {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -890,15 +819,6 @@ object WidgetController {
         return if (reason != null) Trace.event(TraceArea.WIDGET, "hide", "reason" to reason, by = cause)
         else Trace.event(TraceArea.WIDGET, "show", "was" to previous, by = cause)
     }
-
-    /** Boolean wrapper over [hideReason] for callers that only need the yes/no answer. */
-    fun shouldHideOverlay(
-        cameraActive: Boolean,
-        youtubeForeground: Boolean,
-        hideOnYoutube: Boolean,
-        foregroundPkg: String?,
-        hideInApps: Set<String>,
-    ): Boolean = hideReason(cameraActive, youtubeForeground, hideOnYoutube, foregroundPkg, hideInApps) != null
 
     /**
      * Split-mode left tap, as an inverse toggle: no session → restore the last pair

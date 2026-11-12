@@ -1,13 +1,9 @@
 package com.bydmate.app.agent
 
-import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
-import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -39,17 +35,20 @@ class AgentToolsWeatherLogTest {
     private val weather = mockk<WeatherClient>()
     private val places = mockk<PlaceRepository> { coEvery { getAllSnapshot() } returns emptyList() }
 
-    private fun tools() = AgentTools(
-        mockk<VoiceGate>(), mockk<BatteryStateRepository>(), mockk<RangeCalculator>(),
-        mockk<TripDao>(), mockk<ChargeDao>(), mockk<ActionDispatcher>(relaxed = true),
-        mockk<RuleDao>(), mockk<AutomationEngine>(), places, weather,
-        mockk<ExaSearchClient>(), mockk<OpenRouterClient>(), mockk<SettingsRepository>(),
-        mockk<ContactLookup>(), mockk<Context>(relaxed = true),
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = mockk<VoiceGate>(),
+        batteryStateRepository = mockk<BatteryStateRepository>(),
+        rangeCalculator = mockk<RangeCalculator>(),
+        tripDao = mockk<TripDao>(),
+        chargeDao = mockk<ChargeDao>(),
+        ruleDao = mockk<RuleDao>(),
+        automationEngine = mockk<AutomationEngine>(),
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = mockk<ExaSearchClient>(),
+        openRouterClient = mockk<OpenRouterClient>(),
+        settingsRepository = mockk<SettingsRepository>(),
+        contactLookup = mockk<ContactLookup>(),
     )
 
     private fun weatherLog(): List<String> =

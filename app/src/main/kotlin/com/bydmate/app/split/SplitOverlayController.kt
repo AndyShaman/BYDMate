@@ -61,7 +61,6 @@ class SplitOverlayController @Inject constructor(
         private set
 
     // App list cache for the picker (populated once per session, cleared on SessionEnded/Idle).
-    @Volatile private var supportCache: Map<String, Boolean?> = emptyMap()
     @Volatile private var launcherApps: List<LauncherAppEntry> = emptyList()
     @Volatile private var appListReady: Boolean = false
 
@@ -499,7 +498,6 @@ class SplitOverlayController @Inject constructor(
             // Query split support concurrently (binder calls), cache results.
             val pkgs = resolved.map { it.activityInfo.packageName }.distinct()
             val supportMap = buildSupportCache(pkgs)
-            supportCache = supportMap
 
             // Build LauncherAppEntry list, filtered and sorted.
             val entries = resolved
@@ -544,7 +542,6 @@ class SplitOverlayController @Inject constructor(
     }
 
     private fun clearAppCache() {
-        supportCache = emptyMap()
         launcherApps = emptyList()
         appListReady = false
     }
@@ -636,10 +633,6 @@ class SplitOverlayController @Inject constructor(
     }
 
     companion object {
-        // Mirror of SplitSessionManager constants (on-car-adjust).
-        private const val X_JUNCTION_NARROW_RIGHT = 1280
-        private const val X_JUNCTION_NARROW_LEFT = 640
-
         internal fun junctionXForSide(side: SplitSide): Int = when (side) {
             SplitSide.RIGHT -> X_JUNCTION_NARROW_RIGHT
             SplitSide.LEFT -> X_JUNCTION_NARROW_LEFT

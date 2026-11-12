@@ -1,13 +1,6 @@
 package com.bydmate.app.helper
 
 /**
- * Pure line-filtering core of the cluster-display diagnostic snapshot (TX_CLUSTER_DISPLAY_DIAG).
- *
- * The daemon only runs the commands and logs; every decision about what is worth keeping out of a
- * multi-kilobyte dumpsys lives here so it can be tested without a device. All outputs are already
- * trimmed and capped at [MAX_LINE] characters — the caller just prefixes them with "cdiag: ".
- */
-/**
  * One display of the firmware's display stack as the daemon reads it out of `dumpsys display`
  * under shell uid. This is the app-uid [android.view.Display] the projection cannot see on
  * firmwares that whitelist DisplayManager per app (DiLink 4.0, issue #194), reduced to the
@@ -27,6 +20,13 @@ data class DisplayDevice(
     val flags: List<String>,
 )
 
+/**
+ * Pure line-filtering core of the cluster-display diagnostic snapshot (TX_CLUSTER_DISPLAY_DIAG).
+ *
+ * The daemon only runs the commands and logs; every decision about what is worth keeping out of a
+ * multi-kilobyte dumpsys lives here so it can be tested without a device. All outputs are already
+ * trimmed and capped at [MAX_LINE] characters — the caller just prefixes them with "cdiag: ".
+ */
 internal object ClusterDisplayDiag {
 
     const val MAX_LINE = 300

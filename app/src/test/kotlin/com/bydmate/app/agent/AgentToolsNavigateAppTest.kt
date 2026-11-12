@@ -1,22 +1,10 @@
 package com.bydmate.app.agent
 
-import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
-import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
-import com.bydmate.app.data.local.dao.ChargeDao
-import com.bydmate.app.data.local.dao.RuleDao
-import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
-import com.bydmate.app.data.remote.InsightsManager
-import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
-import com.bydmate.app.data.repository.SettingsRepository
-import com.bydmate.app.domain.battery.BatteryStateRepository
-import com.bydmate.app.domain.calculator.RangeCalculator
-import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -47,16 +35,9 @@ class AgentToolsNavigateAppTest {
     private val places = mockk<PlaceRepository>(relaxed = true)
 
     /** A tools instance with the production foreground check left in place. */
-    private fun newTools() = AgentTools(
-        mockk<VoiceGate>(relaxed = true), mockk<BatteryStateRepository>(relaxed = true),
-        mockk<RangeCalculator>(relaxed = true), mockk<TripDao>(relaxed = true),
-        mockk<ChargeDao>(relaxed = true), dispatcher, mockk<RuleDao>(relaxed = true),
-        mockk<AutomationEngine>(relaxed = true), places, mockk<WeatherClient>(relaxed = true),
-        mockk<ExaSearchClient>(relaxed = true), mockk<OpenRouterClient>(relaxed = true),
-        mockk<SettingsRepository>(relaxed = true), mockk<ContactLookup>(relaxed = true),
-        mockk<Context>(relaxed = true), mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true), mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true), mockk<LlmConnectionResolver>(relaxed = true),
+    private fun newTools() = agentTools(
+        actionDispatcher = dispatcher,
+        placeRepository = places,
     ).also {
         it.nowMs = { 1_000_000_000_000L }
         it.naviVerifyAttempts = 1

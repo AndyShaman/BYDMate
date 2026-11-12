@@ -53,131 +53,6 @@ open class EnergyDataReader @Inject constructor(
     }
 
     /**
-     * Run full diagnostics and return a human-readable report.
-     * Shows directory access, DB files, table structure, row counts, sample data.
-     */
-    suspend fun diagnose(): String = withContext(Dispatchers.IO) {
-        val sb = StringBuilder()
-        sb.appendLine("=== Хранилище BYD ===")
-
-        val energyDir = File(ENERGY_DIR_PATH)
-        sb.appendLine("Путь: $ENERGY_DIR_PATH")
-        sb.appendLine("Существует: ${energyDir.exists()}")
-        sb.appendLine("isDirectory: ${energyDir.isDirectory}")
-
-        if (!energyDir.exists()) {
-            sb.appendLine("ОШИБКА: директория не найдена!")
-            return@withContext sb.toString()
-        }
-
-        // Try listFiles
-        val allFiles = energyDir.listFiles()
-        if (allFiles == null) {
-            sb.appendLine("listFiles(): null (нет доступа)")
-        } else {
-            sb.appendLine("listFiles(): ${allFiles.size} файлов")
-            allFiles.forEach { f ->
-                sb.appendLine("  ${f.name} (${f.length()} bytes, ${if (f.isFile) "file" else "dir"})")
-            }
-        }
-
-        // Try known names
-        sb.appendLine("\nПроверка известных имён:")
-        for (name in KNOWN_DB_NAMES) {
-            val f = File(energyDir, name)
-            val status = when {
-                !f.exists() -> "не найден"
-                f.length() == 0L -> "пустой"
-                else -> "${f.length()} bytes, canRead=${f.canRead()}"
-            }
-            sb.appendLine("  $name: $status")
-        }
-
-        // Try to find and read the DB
-        val sourceDb = findDbViaListFiles(energyDir) ?: findDbViaKnownNames(energyDir)
-        if (sourceDb == null) {
-            sb.appendLine("\nОШИБКА: не удалось найти БД!")
-            return@withContext sb.toString()
-        }
-
-        sb.appendLine("\nИсточник: ${sourceDb.name} (${sourceDb.length()} bytes)")
-
-        try {
-            val localDb = copyToLocal(sourceDb)
-            sb.appendLine("Копия: ${localDb.absolutePath} (${localDb.length()} bytes)")
-
-            // READWRITE on our private copy: read-only open cannot replay the -wal sidecar.
-            val db = SQLiteDatabase.openDatabase(
-                localDb.absolutePath, null, SQLiteDatabase.OPEN_READWRITE
-            )
-            db.use { database ->
-                // Tables
-                val tables = mutableListOf<String>()
-                database.rawQuery(
-                    "SELECT name FROM sqlite_master WHERE type='table'", null
-                ).use { c -> while (c.moveToNext()) tables.add(c.getString(0)) }
-                sb.appendLine("\n=== Таблицы в БД ===")
-                sb.appendLine(tables.joinToString(", "))
-
-                if (!tables.contains("EnergyConsumption")) {
-                    sb.appendLine("ОШИБКА: таблица EnergyConsumption не найдена!")
-                    return@withContext sb.toString()
-                }
-
-                // Columns
-                database.rawQuery("PRAGMA table_info(EnergyConsumption)", null).use { c ->
-                    sb.appendLine("\n=== Колонки EnergyConsumption ===")
-                    while (c.moveToNext()) {
-                        sb.appendLine("  ${c.getString(1)} (${c.getString(2)})")
-                    }
-                }
-
-                // Counts
-                val totalCount = database.rawQuery(
-                    "SELECT COUNT(*) FROM EnergyConsumption", null
-                ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
-                val activeCount = database.rawQuery(
-                    "SELECT COUNT(*) FROM EnergyConsumption WHERE is_deleted = 0", null
-                ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
-
-                sb.appendLine("\n=== Строки ===")
-                sb.appendLine("Всего: $totalCount")
-                sb.appendLine("Активных (is_deleted=0): $activeCount")
-                sb.appendLine("Удалённых: ${totalCount - activeCount}")
-
-                // Sample data (first 5)
-                sb.appendLine("\n=== Примеры данных (первые 5) ===")
-                database.rawQuery(
-                    """SELECT _id, start_timestamp, end_timestamp, duration, trip, electricity, is_deleted
-                       FROM EnergyConsumption
-                       ORDER BY start_timestamp DESC
-                       LIMIT 5""", null
-                ).use { c ->
-                    while (c.moveToNext()) {
-                        val id = c.getLong(0)
-                        val startTs = c.getLong(1)
-                        val endTs = c.getLong(2)
-                        val dur = c.getLong(3)
-                        val km = c.getDouble(4)
-                        val kwh = c.getDouble(5)
-                        val deleted = c.getInt(6)
-                        // Format timestamp for readability
-                        val startFmt = try {
-                            java.text.SimpleDateFormat("dd.MM.yy HH:mm", java.util.Locale.US)
-                                .format(java.util.Date(startTs * 1000L))
-                        } catch (_: Exception) { "?" }
-                        sb.appendLine("#$id: $startFmt, ${dur}s, %.1f km, %.2f kWh, del=$deleted".format(km, kwh))
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            sb.appendLine("ОШИБКА при чтении БД: ${e.message}")
-        }
-
-        sb.toString()
-    }
-
-    /**
      * Read-only change detector. Does NOT mutate watermark — caller must invoke
      * [markSourceProcessed] only after a successful sync, so a failed import
      * does not silently skip the next event.
@@ -187,17 +62,17 @@ open class EnergyDataReader @Inject constructor(
         val dir = energyDataDir()
         if (!dir.exists()) return false
 
-        val sourceDb = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return false
+        val sourceDb = findSourceDb(dir) ?: return false
         // WAL-aware (AC-04): a live DB may keep new trips wal-only for a long time —
         // the main file alone can read as "unchanged". Same formula as sourceFingerprint().
-        val wal = File(dir, sourceDb.name + "-wal")
+        val (modified, size) = fingerprintOf(dir, sourceDb)
 
         val storedModified = prefs.getLong("lastModified", 0L)
         val storedSize = prefs.getLong("fileSize", 0L)
         val storedPath = prefs.getString("filePath", "") ?: ""
 
-        return (sourceDb.lastModified() + wal.lastModified()) != storedModified ||
-            (sourceDb.length() + wal.length()) != storedSize ||
+        return modified != storedModified ||
+            size != storedSize ||
             sourceDb.absolutePath != storedPath
     }
 
@@ -205,11 +80,11 @@ open class EnergyDataReader @Inject constructor(
     fun markSourceProcessed(context: Context) {
         val dir = energyDataDir()
         if (!dir.exists()) return
-        val sourceDb = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return
-        val wal = File(dir, sourceDb.name + "-wal")
+        val sourceDb = findSourceDb(dir) ?: return
+        val (modified, size) = fingerprintOf(dir, sourceDb)
         context.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE).edit()
-            .putLong("lastModified", sourceDb.lastModified() + wal.lastModified())
-            .putLong("fileSize", sourceDb.length() + wal.length())
+            .putLong("lastModified", modified)
+            .putLong("fileSize", size)
             .putString("filePath", sourceDb.absolutePath)
             .apply()
     }
@@ -230,8 +105,7 @@ open class EnergyDataReader @Inject constructor(
             return@withContext emptyList()
         }
 
-        val sourceDb = findDbViaListFiles(energyDir)
-            ?: findDbViaKnownNames(energyDir)
+        val sourceDb = findSourceDb(energyDir)
             ?: run {
                 Log.i(TAG, "readTripsSince: no .db files in ${energyDir.path} (Song / non-Leopard?) — empty")
                 return@withContext emptyList()
@@ -275,8 +149,7 @@ open class EnergyDataReader @Inject constructor(
             throw EnergyDataException("Директория energydata не найдена: ${energyDir.path}")
         }
 
-        val sourceDb = findDbViaListFiles(energyDir)
-            ?: findDbViaKnownNames(energyDir)
+        val sourceDb = findSourceDb(energyDir)
             ?: run {
                 Log.w(TAG, "readTrips: no .db files in ${energyDir.path} — throwing")
                 throw EnergyDataException("Не найдены файлы БД в ${energyDir.path}")
@@ -300,7 +173,7 @@ open class EnergyDataReader @Inject constructor(
     fun isAvailable(): Boolean {
         val dir = energyDataDir()
         if (!dir.exists() || !dir.isDirectory) return false
-        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return false
+        val db = findSourceDb(dir) ?: return false
         return db.canRead() && db.length() >= 16
     }
 
@@ -315,9 +188,8 @@ open class EnergyDataReader @Inject constructor(
     fun sourceFingerprint(): Pair<Long, Long>? {
         val dir = energyDataDir()
         if (!dir.exists() || !dir.isDirectory) return null
-        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return null
-        val wal = File(dir, db.name + "-wal")
-        return (db.lastModified() + wal.lastModified()) to (db.length() + wal.length())
+        val db = findSourceDb(dir) ?: return null
+        return fingerprintOf(dir, db)
     }
 
     /**
@@ -335,9 +207,17 @@ open class EnergyDataReader @Inject constructor(
     fun sourceLastModifiedMs(): Long? {
         val dir = energyDataDir()
         if (!dir.exists() || !dir.isDirectory) return null
-        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return null
+        val db = findSourceDb(dir) ?: return null
         val wal = File(dir, db.name + "-wal")
         return maxOf(db.lastModified(), wal.lastModified()).takeIf { it > 0L }
+    }
+
+    private fun findSourceDb(dir: File): File? = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir)
+
+    /** (mtime sum, length sum) of [db] and its -wal sidecar; an absent -wal adds zeros. */
+    private fun fingerprintOf(dir: File, db: File): Pair<Long, Long> {
+        val wal = File(dir, db.name + "-wal")
+        return (db.lastModified() + wal.lastModified()) to (db.length() + wal.length())
     }
 
     private fun findDbViaListFiles(dir: File): File? {

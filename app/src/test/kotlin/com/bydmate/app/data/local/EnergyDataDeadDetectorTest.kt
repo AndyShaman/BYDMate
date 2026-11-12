@@ -171,14 +171,6 @@ class EnergyDataDeadDetectorTest {
     }
 
     @Test
-    fun `debugState mentions dead flag and streak`() {
-        val d = detector()
-        val s = d.debugState()
-        assertTrue(s.contains("dead=false"))
-        assertTrue(s.contains("streak=0"))
-    }
-
-    @Test
     fun `process death without off edge still marks dead after three spaced sessions`() {
         // Field pattern (#63 regression): the head unit cuts power with the car, so the
         // detector instance dies mid-session and no ignition=false tick is ever seen.

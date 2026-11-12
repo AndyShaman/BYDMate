@@ -32,7 +32,6 @@ class AutoserviceClientImplTest {
         override suspend fun killHelper(): Boolean = false
         override suspend fun readHelperLog(): String? = null
         override suspend fun helperHeartbeat(): Boolean = false
-        override suspend fun shutdown() {}
     }
 
     private fun parcelInt(value: Int): String =
@@ -93,11 +92,11 @@ class AutoserviceClientImplTest {
 
     @Test
     fun `getFloat returns null on -1f sentinel (0xBF800000)`() = runTest {
-        val cmd = "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_LIFETIME_KWH}"
+        val cmd = "service call autoservice 7 i32 1014 i32 1032871984"
         val adb = FakeAdb(responses = mapOf(cmd to parcelFloat(0xBF800000.toInt())))
         val client = AutoserviceClientImpl(adb)
 
-        assertNull(client.getFloat(dev = 1014, fid = FidRegistry.FID_LIFETIME_KWH))
+        assertNull(client.getFloat(dev = 1014, fid = 1032871984))
     }
 
     @Test
@@ -105,13 +104,13 @@ class AutoserviceClientImplTest {
         // SoH (1145045032) is an INT fid (tx=5) — int 100 = 0x64.
         // LIFETIME_MILEAGE (1246765072) is an INT fid (tx=5) returned ×10 — 21165 raw → 2116.5 km.
         // SOC, LIFETIME_KWH, OTA_12V are FLOAT fids (tx=7).
-        // dev=1001 for bodywork (12V), dev=1014 for statistic.
+        // dev=1001 for bodywork (12V; the earlier 1003 does not exist), dev=1014 for statistic.
         val adb = FakeAdb(responses = mapOf(
-            "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}" to parcelInt(100),
-            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_SOC}" to parcelFloat(0x42B60000.toInt()),  // 91f
-            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_LIFETIME_KWH}" to parcelFloat(0x4416B333.toInt()),  // ~602.7f
-            "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_LIFETIME_MILEAGE}" to parcelInt(21165),  // 2116.5 km
-            "service call autoservice 7 i32 1001 i32 ${FidRegistry.FID_OTA_BATTERY_POWER_VOLTAGE}" to parcelFloat(0x41600000.toInt())  // 14.0f
+            "service call autoservice 5 i32 1014 i32 1145045032" to parcelInt(100),
+            "service call autoservice 7 i32 1014 i32 1246777400" to parcelFloat(0x42B60000.toInt()),  // 91f
+            "service call autoservice 7 i32 1014 i32 1032871984" to parcelFloat(0x4416B333.toInt()),  // ~602.7f
+            "service call autoservice 5 i32 1014 i32 1246765072" to parcelInt(21165),  // 2116.5 km
+            "service call autoservice 7 i32 1001 i32 1128267816" to parcelFloat(0x41600000.toInt())  // 14.0f
         ))
         val client = AutoserviceClientImpl(adb)
 
@@ -129,11 +128,11 @@ class AutoserviceClientImplTest {
     fun `readBatterySnapshot returns null lifetimeMileageKm on sentinel`() = runTest {
         // 0x000FFFFF = 1048575 = "20-bit not initialized" sentinel for fresh-out-of-factory cars.
         val adb = FakeAdb(responses = mapOf(
-            "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}" to parcelInt(100),
-            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_SOC}" to parcelFloat(0x42B60000.toInt()),
-            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_LIFETIME_KWH}" to parcelFloat(0x4416B333.toInt()),
-            "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_LIFETIME_MILEAGE}" to parcelInt(0x000FFFFF),
-            "service call autoservice 7 i32 1001 i32 ${FidRegistry.FID_OTA_BATTERY_POWER_VOLTAGE}" to parcelFloat(0x41600000.toInt())
+            "service call autoservice 5 i32 1014 i32 1145045032" to parcelInt(100),
+            "service call autoservice 7 i32 1014 i32 1246777400" to parcelFloat(0x42B60000.toInt()),
+            "service call autoservice 7 i32 1014 i32 1032871984" to parcelFloat(0x4416B333.toInt()),
+            "service call autoservice 5 i32 1014 i32 1246765072" to parcelInt(0x000FFFFF),
+            "service call autoservice 7 i32 1001 i32 1128267816" to parcelFloat(0x41600000.toInt())
         ))
         val client = AutoserviceClientImpl(adb)
 
@@ -151,11 +150,12 @@ class AutoserviceClientImplTest {
 
     @Test
     fun `readChargingSnapshot aggregates gun_state and type at dev 1009`() = runTest {
+        // 1009 = charging (catalog 2026-04-25); the earlier 1005 is the power MCU and answered sentinels.
         val adb = FakeAdb(responses = mapOf(
-            "service call autoservice 5 i32 1009 i32 ${FidRegistry.FID_GUN_CONNECT_STATE}" to parcelInt(2),
-            "service call autoservice 5 i32 1009 i32 ${FidRegistry.FID_CHARGING_TYPE}" to parcelInt(2),
-            "service call autoservice 5 i32 1009 i32 ${FidRegistry.FID_CHARGE_BATTERY_VOLT}" to parcelInt(512),
-            "service call autoservice 5 i32 1009 i32 ${FidRegistry.FID_BATTERY_TYPE}" to parcelInt(1)
+            "service call autoservice 5 i32 1009 i32 876609586" to parcelInt(2),
+            "service call autoservice 5 i32 1009 i32 876609592" to parcelInt(2),
+            "service call autoservice 5 i32 1009 i32 -1442840491" to parcelInt(512),
+            "service call autoservice 5 i32 1009 i32 -1728053169" to parcelInt(1)
         ))
         val client = AutoserviceClientImpl(adb)
 
@@ -178,7 +178,7 @@ class AutoserviceClientImplTest {
 
     @Test
     fun `isAvailable returns true when ADB connected and SoH read succeeds via getInt`() = runTest {
-        val cmd = "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}"
+        val cmd = "service call autoservice 5 i32 1014 i32 1145045032"
         val adb = FakeAdb(responses = mapOf(cmd to parcelInt(100)))
         val client = AutoserviceClientImpl(adb)
 
@@ -187,7 +187,7 @@ class AutoserviceClientImplTest {
 
     @Test
     fun `isAvailable returns false when SoH read returns sentinel`() = runTest {
-        val cmd = "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}"
+        val cmd = "service call autoservice 5 i32 1014 i32 1145045032"
         val adb = FakeAdb(responses = mapOf(cmd to parcelInt(0xFFFF)))
         val client = AutoserviceClientImpl(adb)
 
@@ -203,9 +203,9 @@ class AutoserviceClientImplTest {
         // would see "ADB не отвечает" while catch-up still works.
         val adb = FakeAdb(responses = mapOf(
             // SoH int returns 0xFFFF = FEATURE_LINK_ERROR sentinel → null
-            "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}" to parcelInt(0xFFFF),
+            "service call autoservice 5 i32 1014 i32 1145045032" to parcelInt(0xFFFF),
             // lifetime_kwh float returns valid bits 0x44197A66 ≈ 612.6f → non-null → true
-            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_LIFETIME_KWH}" to parcelFloat(0x44197A66)
+            "service call autoservice 7 i32 1014 i32 1032871984" to parcelFloat(0x44197A66)
         ))
         val client = AutoserviceClientImpl(adb)
 
@@ -217,9 +217,9 @@ class AutoserviceClientImplTest {
         // SoH (int) → FEATURE_LINK_ERROR (0x0000FFFF); lifetime_kwh + SOC (float) → -1.0f
         // sentinel (0xBF800000). All three return null → isAvailable() = false.
         val adb = FakeAdb(responses = mapOf(
-            "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}" to parcelInt(0xFFFF),
-            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_LIFETIME_KWH}" to parcelFloat(0xBF800000.toInt()),
-            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_SOC}" to parcelFloat(0xBF800000.toInt())
+            "service call autoservice 5 i32 1014 i32 1145045032" to parcelInt(0xFFFF),
+            "service call autoservice 7 i32 1014 i32 1032871984" to parcelFloat(0xBF800000.toInt()),
+            "service call autoservice 7 i32 1014 i32 1246777400" to parcelFloat(0xBF800000.toInt())
         ))
         val client = AutoserviceClientImpl(adb)
 

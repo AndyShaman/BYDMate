@@ -429,7 +429,7 @@ object AppModule {
             Room.databaseBuilder(
                 context,
                 AppDatabase::class.java,
-                "bydmate.db"
+                AppDatabase.FILE_NAME
             )
         )
             .build()
@@ -663,7 +663,6 @@ object AppModule {
     @Singleton
     @Suppress("LongParameterList") // Hilt-injected dependencies
     fun provideVehicleApi(
-        parsReader: com.bydmate.app.data.nativestack.ParsReader,
         autoservice: com.bydmate.app.data.autoservice.AutoserviceClient,
         helper: com.bydmate.app.data.vehicle.HelperClient,
         allowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
@@ -674,7 +673,7 @@ object AppModule {
         fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     ): com.bydmate.app.data.vehicle.VehicleApi =
         com.bydmate.app.data.vehicle.VehicleApiImpl(
-            parsReader, autoservice, helper, allowlist, writeLogDao, seatChannelStore, windowChannelStore,
+            autoservice, helper, allowlist, writeLogDao, seatChannelStore, windowChannelStore,
             seatCommandJournal, rearCatalog = { fidCatalogManager.catalog },
         )
 
@@ -758,6 +757,8 @@ object AppModule {
         @ApplicationContext ctx: Context,
     ): com.bydmate.app.split.SplitPreferences =
         com.bydmate.app.split.SplitPreferencesImpl(ctx)
+            // The cluster code computes enable_freeform_support from the split state too.
+            .also { com.bydmate.app.cluster.ClusterProjectionManager.splitPreferences = it }
 
     @Provides
     @Singleton

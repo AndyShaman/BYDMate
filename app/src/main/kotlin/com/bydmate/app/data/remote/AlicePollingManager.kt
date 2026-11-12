@@ -23,7 +23,6 @@ import javax.inject.Singleton
 
 @Singleton
 class AlicePollingManager @Inject constructor(
-    private val httpClient: OkHttpClient,
     private val settingsRepository: SettingsRepository,
     private val sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop,
     private val vehicleApi: VehicleApi,

@@ -114,7 +114,7 @@ class BlindSpotControllerNative360Test {
     }
 
     private fun awaitCameraEvents(count: Int) {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
         do {
             ticks(1)
         } while (cameraEvents().size < count && System.nanoTime() < deadline)

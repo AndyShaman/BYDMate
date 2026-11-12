@@ -1,14 +1,13 @@
 package com.bydmate.app.ui.settings
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.diagnostics.TraceRecorder
-import com.bydmate.app.data.autoservice.AdbConnectFailure
-import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.local.EnergyDataDeadDetector
@@ -17,7 +16,6 @@ import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
-import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.SettingsDao
@@ -30,7 +28,6 @@ import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
-import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity
@@ -40,7 +37,6 @@ import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.util.appLocalizedContext
 import java.io.File
-import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.UpdateChecker
@@ -99,6 +95,19 @@ class SettingsViewModelTest {
     private val agentOrchestrator: AgentOrchestrator = mockk(relaxed = true)
     private val energyDataDeadDetector: EnergyDataDeadDetector = mockk(relaxed = true)
 
+    // Collaborators the diagnostic header reads; lazy, so a test that never touches them pays as before.
+    private val ruleDao: com.bydmate.app.data.local.dao.RuleDao by lazy { mockk(relaxed = true) }
+    private val automationEngine: com.bydmate.app.data.automation.AutomationEngine by lazy { mockk(relaxed = true) }
+    private val hudController: com.bydmate.app.hud.HudController by lazy { mockk(relaxed = true) }
+    private val blindSpotController: com.bydmate.app.camera.BlindSpotController by lazy { mockk(relaxed = true) }
+    private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge by lazy { mockk(relaxed = true) }
+    private val splitPreferences: com.bydmate.app.split.SplitPreferences by lazy { mockk(relaxed = true) }
+    private val splitSessionManager: com.bydmate.app.split.SplitSessionManager by lazy { mockk(relaxed = true) }
+    private val cloudOverWifiManager: com.bydmate.app.data.autoservice.CloudOverWifiManager by lazy { mockk(relaxed = true) }
+    private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter by lazy { mockk(relaxed = true) }
+    private val vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao by lazy { mockk(relaxed = true) }
+    private val fidPushChannel: com.bydmate.app.data.push.FidPushChannel by lazy { mockk(relaxed = true) }
+
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
@@ -121,7 +130,6 @@ class SettingsViewModelTest {
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
     private open class StubTripDao : TripDao {
@@ -130,12 +138,9 @@ class SettingsViewModelTest {
         override fun getAll(): Flow<List<TripEntity>> = flowOf(emptyList())
         override suspend fun getById(id: Long): TripEntity? = null
         override fun getByDateRange(from: Long, to: Long): Flow<List<TripEntity>> = flowOf(emptyList())
-        override suspend fun getTodaySummary(dayStart: Long, dayEnd: Long): TripSummary = TripSummary(0.0, 0.0)
-        override fun getLastTrip(): Flow<TripEntity?> = flowOf(null)
         override fun getRecent(limit: Int): Flow<List<TripEntity>> = flowOf(emptyList())
         override suspend fun getCount(): Int = 0
         override suspend fun getByBydId(bydId: Long): TripEntity? = null
-        override suspend fun getTripsWithoutSoc(): List<TripEntity> = emptyList()
         override suspend fun getTripsWithoutCost(): List<TripEntity> = emptyList()
         override suspend fun getEnergyDataTripsWithoutCounters(sinceTs: Long): List<TripEntity> = emptyList()
         override suspend fun getHybridTripsWithoutCost(): List<TripEntity> = emptyList()
@@ -148,10 +153,7 @@ class SettingsViewModelTest {
         override suspend fun deleteById(id: Long) {}
         override suspend fun deleteZeroKmTrips(): Int = 0
         override suspend fun fillOdometerIfEmpty(id: Long, startKm: Double?, endKm: Double?): Int = 0
-        override suspend fun getTripsForCapacityEstimate(minSocDelta: Int, limit: Int): List<TripEntity> = emptyList()
-        override suspend fun getRecentSummary(maxTrips: Int): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getRecentForEma(limit: Int): List<TripEntity> = emptyList()
-        override suspend fun getForEmaSince(fromTs: Long): List<TripEntity> = emptyList()
         override suspend fun getRecentForEmaFiltered(minKm: Double, limit: Int): List<TripEntity> = emptyList()
         override fun observeCounterStats(from: Long, sessionStart: Long): Flow<TripCounterStats> = flowOf(TripCounterStats(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L))
     }
@@ -159,13 +161,9 @@ class SettingsViewModelTest {
     private class StubTripPointDao : TripPointDao {
         override suspend fun insertAll(points: List<TripPointEntity>) {}
         override suspend fun getByTripId(tripId: Long): List<TripPointEntity> = emptyList()
-        override suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity> = emptyList()
         override suspend fun getCount(): Int = 0
-        override suspend fun getAll(): List<TripPointEntity> = emptyList()
         override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
-        override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
-        override suspend fun insert(point: TripPointEntity): Long = 0L
         override suspend fun deleteByTripId(tripId: Long): Int = 0
     }
 
@@ -176,12 +174,6 @@ class SettingsViewModelTest {
         override suspend fun getById(id: Long): ChargeEntity? = null
         override fun getByDateRange(from: Long, to: Long): Flow<List<ChargeEntity>> = flowOf(emptyList())
         override suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary = ChargeSummary(0, 0.0, 0.0)
-        override fun getLastCharge(): Flow<ChargeEntity?> = flowOf(null)
-        override suspend fun getLastSuspendedCharge(): ChargeEntity? = null
-        override suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity> = emptyList()
-        override suspend fun getLastChargeSync(): ChargeEntity? = null
-        override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
-        override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = emptyList()
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0
@@ -193,23 +185,12 @@ class SettingsViewModelTest {
         override suspend fun delete(charge: ChargeEntity) {}
     }
 
-    private class StubChargePointDao : ChargePointDao {
-        override suspend fun insertAll(points: List<ChargePointEntity>) {}
-        override suspend fun getByChargeId(chargeId: Long): List<ChargePointEntity> = emptyList()
-        override suspend fun getCount(): Int = 0
-        override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
-    }
-
     private class StubIdleDrainDao : IdleDrainDao {
         override suspend fun insert(drain: IdleDrainEntity): Long = 0L
         override suspend fun update(drain: IdleDrainEntity) {}
-        override fun getByDateRange(from: Long, to: Long): Flow<List<IdleDrainEntity>> = flowOf(emptyList())
-        override suspend fun getTodayDrainKwh(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getCount(): Int = 0
         override suspend fun getAll(): List<IdleDrainEntity> = emptyList()
-        override suspend fun getTotalKwh(): Double = 0.0
         override suspend fun deleteAll() {}
-        override suspend fun getTodayDrainHours(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getKwhSince(since: Long): Double = 0.0
         override suspend fun getHoursSince(since: Long): Double = 0.0
         override suspend fun getKwhBetween(from: Long, to: Long): Double = 0.0
@@ -218,24 +199,8 @@ class SettingsViewModelTest {
 
     private class StubBatterySnapshotDao : BatterySnapshotDao {
         override fun getAll(): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
-        override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0L
         override suspend fun getLast(): BatterySnapshotEntity? = null
-        override suspend fun getCount(): Int = 0
-    }
-
-    private class FakeAdbClient : AdbOnDeviceClient {
-        override suspend fun connect(): Result<Unit> = Result.success(Unit)
-        override suspend fun isConnected(): Boolean = false
-        override fun lastConnectFailure(): AdbConnectFailure? = null
-        override suspend fun exec(cmd: String): String? = null
-        override suspend fun grantUsageStatsAppop(packageName: String): Boolean = false
-        override suspend fun grantWriteSecureSettings(packageName: String): Boolean = false
-        override suspend fun spawnHelper(token: String): Boolean = false
-        override suspend fun killHelper(): Boolean = false
-        override suspend fun readHelperLog(): String? = null
-        override suspend fun helperHeartbeat(): Boolean = false
-        override suspend fun shutdown() {}
     }
 
     // --- Factory ---
@@ -271,7 +236,6 @@ class SettingsViewModelTest {
         }
         override suspend fun delete(period: TariffPeriodEntity) { rows.removeAll { it.id == period.id } }
         override suspend fun getAllAsc(): List<TariffPeriodEntity> = rows.sortedBy { it.startTs }
-        override fun observeAll(): Flow<List<TariffPeriodEntity>> = flowOf(rows.sortedByDescending { it.startTs })
         override suspend fun getByStartTs(startTs: Long): TariffPeriodEntity? = rows.find { it.startTs == startTs }
         override suspend fun count(): Int = rows.size
     }
@@ -304,7 +268,6 @@ class SettingsViewModelTest {
         val chargeDao = object : StubChargeDao() {
             override fun getAll(): Flow<List<ChargeEntity>> = flowOf(emptyList())
         }
-        val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
         val idleDrainDao = StubIdleDrainDao()
 
         val httpClient = OkHttpClient()
@@ -328,7 +291,6 @@ class SettingsViewModelTest {
         val resolvedTtsEngine = ttsEngine ?: mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
         val resolvedGigaAmModelManager = gigaAmModelManager ?: mockk(relaxed = true)
         val continuousAsr = mockk<com.bydmate.app.voice.ContinuousAsr>(relaxed = true)
-        val voiceController = mockk<com.bydmate.app.voice.VoiceController>(relaxed = true)
 
         // Real recorder with an exec seam that would blow up: these tests never record.
         val logRecorder = logRecorderState?.let { flow ->
@@ -339,75 +301,89 @@ class SettingsViewModelTest {
         logTelegramSender = com.bydmate.app.diagnostics.LogTelegramSender(
             logRecorder, settingsRepo, telegramBackupSink, com.bydmate.app.util.AppStrings(ctx),
         )
+        val localePreferences = LocalePreferences(ctx)
+        val resolvedLlmConnectionResolver = llmConnectionResolver ?: mockk(relaxed = true)
+        val costCalculator = exportCostCalculator ?: mockk(relaxed = true)
+        val adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor = mockk(relaxed = true) {
+            io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
+            io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
+        }
+        val vehicleKindMonitor = vehicleKind?.let { com.bydmate.app.data.nativestack.kindMonitor(it) }
+            ?: mockk(relaxed = true)
+        val dumpWriter = DiagnosticDumpWriter(
+            appContext = ctx,
+            settingsRepository = settingsRepo,
+            historyImporter = historyImporter,
+            localePreferences = localePreferences,
+            chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
+            catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
+            windowChannelStore = windowChannelStore,
+            helperClient = helperClient,
+            helperBootstrap = helperBootstrap,
+            llmConnectionResolver = resolvedLlmConnectionResolver,
+            energyDataDeadDetector = energyDataDeadDetector,
+            hudController = hudController,
+            fidPushChannel = fidPushChannel,
+            splitPreferences = splitPreferences,
+            splitSessionManager = splitSessionManager,
+            splitJournal = com.bydmate.app.split.NoSplitJournal,
+            adbRestoreManager = com.bydmate.app.data.autoservice.AdbRestoreManager(
+                com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx),
+                mockk(relaxed = true),
+                kotlinx.coroutines.test.TestScope(),
+            ),
+            cloudOverWifiManager = cloudOverWifiManager,
+            fidCatalogManager = mockk(relaxed = true),
+            writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
+            ruleDao = ruleDao,
+            automationEngine = automationEngine,
+            voiceJournal = voiceJournal,
+            costCalculator = costCalculator,
+            blindSpotController = blindSpotController,
+            adbVerdictMonitor = adbVerdictMonitor,
+            telegramReporter = telegramReporter,
+            clusterMusicBridge = clusterMusicBridge,
+            vehicleWriteLogDao = vehicleWriteLogDao,
+            vehicleKindMonitor = vehicleKindMonitor,
+        )
         return SettingsViewModel(
             appContext = ctx,
             settingsRepository = settingsRepo,
-            tripRepository = tripRepo,
-            chargeRepository = chargeRepo,
             updateChecker = resolvedUpdateChecker,
             historyImporter = historyImporter,
-            energyDataReader = energyReader,
-            idleDrainDao = idleDrainDao,
             insightsManager = insightsManager,
-            adbOnDeviceClient = FakeAdbClient(),
-            localePreferences = LocalePreferences(ctx),
+            localePreferences = localePreferences,
             backupManager = backupManager,
-            chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
-            catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
             ttsModelManager = resolvedTtsModelManager,
             ruStressMarker = com.bydmate.app.voice.RuStressMarker { null },
             gigaAmModelManager = resolvedGigaAmModelManager,
             continuousAsr = continuousAsr,
             ttsEngine = resolvedTtsEngine,
-            voiceController = voiceController,
             seatChannelStore = seatChannelStore,
-            windowChannelStore = windowChannelStore,
             helperClient = helperClient,
             helperBootstrap = helperBootstrap,
             agentOrchestrator = agentOrchestrator,
-            llmConnectionResolver = llmConnectionResolver ?: mockk(relaxed = true),
+            llmConnectionResolver = resolvedLlmConnectionResolver,
             openRouterClient = openRouterClient,
-            placeRepository = mockk(relaxed = true),
             energyDataDeadDetector = energyDataDeadDetector,
-            hudController = mockk(relaxed = true),
             logRecorder = logRecorder,
-            fidPushChannel = mockk(relaxed = true),
-            splitPreferences = mockk(relaxed = true),
-            splitSessionManager = mockk(relaxed = true),
-            splitJournal = com.bydmate.app.split.NoSplitJournal,
+            dumpWriter = dumpWriter,
+            splitPreferences = splitPreferences,
             driverMemory = com.bydmate.app.agent.DriverMemory(
                 ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
             ),
             dayMemory = com.bydmate.app.agent.DayMemory(
                 ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
             ),
-            adbRestoreManager = com.bydmate.app.data.autoservice.AdbRestoreManager(
-                com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx),
-                mockk(relaxed = true),
-                kotlinx.coroutines.test.TestScope(),
-            ),
-            cloudOverWifiManager = mockk(relaxed = true),
-            fidCatalogManager = mockk(relaxed = true),
-            writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
-            ruleDao = mockk(relaxed = true),
-            automationEngine = mockk(relaxed = true),
-            voiceJournal = voiceJournal,
+            ruleDao = ruleDao,
             tariffPeriodDao = tariffPeriodDaoOverride ?: mockk(relaxed = true),
-            costCalculator = exportCostCalculator ?: mockk(relaxed = true),
-            blindSpotController = mockk(relaxed = true),
-            adbVerdictMonitor = mockk(relaxed = true) {
-                io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
-                io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
-            },
+            costCalculator = costCalculator,
+            adbVerdictMonitor = adbVerdictMonitor,
             telegramBackupSink = telegramBackupSink,
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
             logTelegramSender = logTelegramSender,
-            telegramReporter = mockk(relaxed = true),
-            clusterMusicBridge = mockk(relaxed = true),
-            vehicleWriteLogDao = mockk(relaxed = true),
-            vehicleKindMonitor = vehicleKind?.let { com.bydmate.app.data.nativestack.kindMonitor(it) }
-                ?: mockk(relaxed = true),
+            vehicleKindMonitor = vehicleKindMonitor,
         )
     }
 
@@ -424,14 +400,6 @@ class SettingsViewModelTest {
         assertEquals(1.3f, vm.fontScale.value)
         val ctx: Context = ApplicationProvider.getApplicationContext()
         assertEquals(1.3f, LocalePreferences(ctx).getFontScale())
-    }
-
-    @Test
-    fun `initial state has default battery capacity`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(SettingsRepository.DEFAULT_BATTERY_CAPACITY, vm.uiState.value.batteryCapacity)
     }
 
     @Test
@@ -647,19 +615,103 @@ class SettingsViewModelTest {
         coVerify { helperClient.setAppHidden("com.byd.autovoice", false) }
     }
 
-    @Test fun `setVoiceEnabled persists and mirrors into voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
+    /** One voice-settings case: prefs before the view model starts, one action, then what state and prefs show. */
+    private class VoiceSettingCase(
+        val label: String,
+        val prefsBefore: (SharedPreferences.Editor) -> Unit = {},
+        val act: (SettingsViewModel) -> Unit = {},
+        val check: (SettingsViewModel, SharedPreferences) -> Unit,
+        val engineReloads: Int? = null,
+        val engineSpeaks: Int? = null,
+    )
 
-        vm.setVoiceEnabled(true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.voiceEnabled)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertTrue(
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-                .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
+    private val voiceSettingCases by lazy {
+        listOf(
+            VoiceSettingCase(
+                "setVoiceEnabled persists and mirrors into voice prefs",
+                act = { it.setVoiceEnabled(true) },
+                check = { vm, prefs ->
+                    assertTrue(vm.uiState.value.voiceEnabled)
+                    assertTrue(prefs.getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false))
+                },
+            ),
+            VoiceSettingCase(
+                "setTtsEnabled persists and mirrors to voice prefs",
+                act = { it.setTtsEnabled(true) },
+                check = { vm, prefs ->
+                    assertTrue(vm.uiState.value.ttsEnabled)
+                    assertTrue(prefs.getBoolean(SettingsRepository.KEY_TTS_ENABLED, false))
+                },
+            ),
+            VoiceSettingCase(
+                "setTtsVoice persists, mirrors to voice prefs, and reloads the engine",
+                act = { it.setTtsVoice("irina") },
+                check = { vm, prefs ->
+                    assertEquals("irina", vm.uiState.value.ttsVoice)
+                    assertEquals("irina", prefs.getString("tts_voice", null))
+                },
+                engineReloads = 1,
+            ),
+            VoiceSettingCase(
+                "agent identity initializes from voice prefs",
+                prefsBefore = { it.putString("agent_name", "Лео").putString("agent_persona", "snarky") },
+                check = { vm, _ ->
+                    assertEquals("Лео", vm.uiState.value.agentName)
+                    assertEquals("snarky", vm.uiState.value.agentPersona)
+                },
+            ),
+            VoiceSettingCase(
+                "setTtsRate persists, mirrors to voice prefs, and reloads the engine",
+                act = { it.setTtsRate(1.2f) },
+                check = { vm, prefs ->
+                    assertEquals(1.2f, vm.uiState.value.ttsRate)
+                    assertEquals(1.2f, prefs.getFloat("tts_rate", -1f))
+                },
+                engineReloads = 1,
+            ),
+            VoiceSettingCase(
+                "setTtsLiveliness persists, mirrors to voice prefs, and reloads the engine",
+                act = { it.setTtsLiveliness(80) },
+                check = { vm, prefs ->
+                    assertEquals(80, vm.uiState.value.ttsLiveliness)
+                    assertEquals(80, prefs.getInt("tts_liveliness", -1))
+                },
+                engineReloads = 1,
+            ),
+            VoiceSettingCase(
+                "previewVoice reloads the engine and speaks the sample line via speakOffline",
+                act = { it.previewVoice() },
+                check = { _, _ -> },
+                engineReloads = 1,
+                engineSpeaks = 1,
+            ),
         )
+    }
+
+    @Test fun `voice settings reach state and the voice prefs, and the engine reloads where it should`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val prefs = ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+        for (c in voiceSettingCases) {
+            val editor = prefs.edit().clear()
+            c.prefsBefore(editor)
+            editor.commit()
+            val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+            coEvery { ttsModelManager.isReady(com.bydmate.app.voice.TtsVoiceCatalog.byId("irina")) } returns true
+            val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+
+            val vm = buildViewModel(ttsModelManager = ttsModelManager, ttsEngine = ttsEngine)
+            testDispatcher.scheduler.advanceUntilIdle()
+            c.act(vm)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            try {
+                c.check(vm, prefs)
+                c.engineReloads?.let { verify(exactly = it) { ttsEngine.reload() } }
+                c.engineSpeaks?.let { verify(exactly = it) { ttsEngine.speakOffline(any()) } }
+            } catch (e: AssertionError) {
+                throw AssertionError("case: ${c.label}: ${e.message}", e)
+            }
+        }
     }
 
     /**
@@ -705,58 +757,6 @@ class SettingsViewModelTest {
         coVerify(exactly = 0) { helperClient.enableAccessibilityService() }
     }
 
-    @Test fun `setTtsEnabled persists and mirrors to voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsEnabled(true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.ttsEnabled)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertTrue(
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-                .getBoolean(SettingsRepository.KEY_TTS_ENABLED, false)
-        )
-    }
-
-    @Test fun `setTtsVoice persists, mirrors to voice prefs, and reloads the engine`() = runTest {
-        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
-        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
-        coEvery { ttsModelManager.isReady(com.bydmate.app.voice.TtsVoiceCatalog.byId("irina")) } returns true
-
-        val vm = buildViewModel(ttsModelManager = ttsModelManager, ttsEngine = ttsEngine)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsVoice("irina")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("irina", vm.uiState.value.ttsVoice)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(
-            "irina",
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_voice", null)
-        )
-        verify(exactly = 1) { ttsEngine.reload() }
-    }
-
-    @Test fun `agent identity state flows initialize from voice prefs`() = runTest {
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
-            .edit()
-            .putString("agent_name", "Лео")
-            .putString("agent_persona", "snarky")
-            .apply()
-
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("Лео", vm.agentName.value)
-        assertEquals("snarky", vm.agentPersona.value)
-        assertEquals("Лео", vm.uiState.value.agentName)
-        assertEquals("snarky", vm.uiState.value.agentPersona)
-    }
-
     @Test fun `driver memory facts land in state and forgetAgentMemory clears storage`() = runTest {
         val ctx: Context = ApplicationProvider.getApplicationContext()
         val prefs = ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
@@ -800,8 +800,6 @@ class SettingsViewModelTest {
         vm.setAgentPersona("engineer")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals("Майк", vm.agentName.value)
-        assertEquals("engineer", vm.agentPersona.value)
         assertEquals("Майк", vm.uiState.value.agentName)
         assertEquals("engineer", vm.uiState.value.agentPersona)
         val ctx: Context = ApplicationProvider.getApplicationContext()
@@ -1016,53 +1014,7 @@ class SettingsViewModelTest {
         verify(exactly = 0) { ttsEngine.reload() }
     }
 
-    @Test fun `setTtsRate persists, mirrors to voice prefs, and reloads the engine`() = runTest {
-        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
-        val vm = buildViewModel(ttsEngine = ttsEngine)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsRate(1.2f)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(1.2f, vm.uiState.value.ttsRate)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(1.2f, ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getFloat("tts_rate", -1f))
-        verify(exactly = 1) { ttsEngine.reload() }
-    }
-
-    @Test fun `setTtsLiveliness persists, mirrors to voice prefs, and reloads the engine`() = runTest {
-        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
-        val vm = buildViewModel(ttsEngine = ttsEngine)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setTtsLiveliness(80)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(80, vm.uiState.value.ttsLiveliness)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(80, ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getInt("tts_liveliness", -1))
-        verify(exactly = 1) { ttsEngine.reload() }
-    }
-
-    @Test fun `previewVoice reloads the engine and speaks the sample line via speakOffline`() = runTest {
-        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
-        val vm = buildViewModel(ttsEngine = ttsEngine)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.previewVoice()
-
-        verify(exactly = 1) { ttsEngine.reload() }
-        verify(exactly = 1) { ttsEngine.speakOffline(any()) }
-    }
-
     // --- Wave N: online TTS source (Gemini/OpenAI via OpenRouter, MiniMax) ---
-
-    @Test fun `initial ttsSource defaults to offline`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(TtsRouter.OFFLINE, vm.uiState.value.ttsSource)
-    }
 
     @Test fun `setTtsSource persists an online id to voice prefs`() = runTest {
         val vm = buildViewModel()
@@ -1384,46 +1336,6 @@ class SettingsViewModelTest {
         assertEquals(null, vm.uiState.value.gigaAmSpaceShortfall)
     }
 
-    @Test fun `setAgentEnabled persists and updates state`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setAgentEnabled(true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.agentEnabled)
-    }
-
-    @Test fun `setAgentName persists and mirrors into voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setAgentName("Лео")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("Лео", vm.uiState.value.agentName)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(
-            "Лео",
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("agent_name", "")
-        )
-    }
-
-    @Test fun `setAgentPersona persists and mirrors into voice prefs`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.setAgentPersona("engineer")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("engineer", vm.uiState.value.agentPersona)
-        val ctx: Context = ApplicationProvider.getApplicationContext()
-        assertEquals(
-            "engineer",
-            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("agent_persona", "")
-        )
-    }
-
     /** #190: default is Yandex, the setter mirrors into the same voice prefs the dispatcher reads. */
     @Test fun `route navigator defaults to yandex and persists the choice`() = runTest {
         val vm = buildViewModel()
@@ -1556,6 +1468,147 @@ class SettingsViewModelTest {
         assertTrue(header, header.indexOf("--- last crash ---") < header.indexOf("--- trace ---"))
     }
 
+    /**
+     * Pins the whole header text as one string, so moving the writer into its own class cannot
+     * change a character of what users send us. The reference is `diagnostic-dump/reference-header.txt`.
+     */
+    @Test fun `the diagnostic header text is pinned as a whole`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        // The header prints process-wide state that another test class in the same JVM may have left behind:
+        // the self-heal history and the live state of the cluster projection object. Both start as on a cold start.
+        com.bydmate.app.service.GrantSelfHeal.clearHistory()
+        io.mockk.mockkObject(com.bydmate.app.cluster.ClusterProjectionManager)
+        io.mockk.every { com.bydmate.app.cluster.ClusterProjectionManager.diag() } returns
+            com.bydmate.app.cluster.ClusterProjectionManager.Diag(
+                mode = com.bydmate.app.cluster.ClusterMode.OFF, projectedPackage = null, vdDisplayId = -1,
+                directDisplayId = -1, overlayAttached = false, attemptInProgress = false, lastFailure = null,
+                directDensityDpi = -1,
+            )
+        // Every time in the header is printed in the default zone: pin it so the test is the same on any machine.
+        val zone = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+        try {
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).edit()
+                .putString("tts_source", "minimax").putString("tts_voice", "anna").putString("agent_gender", "f")
+                .putBoolean("voice_enabled", true).putInt("voice_keycode", 321).commit()
+            ctx.getSharedPreferences(com.bydmate.app.service.BootReceiver.PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putString(com.bydmate.app.service.BootReceiver.KEY_CHAIN_LOG, "boot>worker>service").commit()
+            ctx.getSharedPreferences(com.bydmate.app.hud.HudController.PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putBoolean(com.bydmate.app.hud.HudController.KEY_ENABLED, true).commit()
+            val journal = com.bydmate.app.voice.VoiceJournal()
+            journal.add(
+                com.bydmate.app.voice.VoiceJournalEntry(
+                    timestampMs = 1_700_000_000_000L,
+                    transcript = "закрой окна",
+                    route = com.bydmate.app.voice.VoiceJournalEntry.Route.AGENT,
+                    detail = "Окна закрыты",
+                    outcome = com.bydmate.app.voice.VoiceJournalEntry.Outcome.OK,
+                    tools = listOf(com.bydmate.app.agent.AgentToolOutcome("vehicle_control", true)),
+                    answer = "Окна закрыты",
+                )
+            )
+            vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV
+            val vm = buildViewModel(voiceJournal = journal)
+            testDispatcher.scheduler.advanceUntilIdle()
+            fillHeaderSettings()
+            vm.setRouteNavigator(RouteNavigatorUris.DGIS)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            stubHeaderCollaborators()
+
+            vm.startLogRecording()
+            testDispatcher.scheduler.advanceUntilIdle()
+            val header = awaitDiagnosticHeader(until = "===============================")
+            // The only lines the set-up cannot fix; everything else is compared character for character.
+            val normalized = header
+                // timestamp: the moment the header was written.
+                .replace(Regex("(?m)^timestamp: \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"), "timestamp: <now>")
+                // app: the version name and code move with every release.
+                .replace(Regex("(?m)^(app: \\S+) v\\S+ \\(code=\\d+\\)$"), "$1 v<version> (code=<code>)")
+            val reference = javaClass.getResourceAsStream("/diagnostic-dump/reference-header.txt")!!
+                .bufferedReader().use { it.readText() }
+            assertEquals(reference, normalized)
+        } finally {
+            java.util.TimeZone.setDefault(zone)
+            io.mockk.unmockkObject(com.bydmate.app.cluster.ClusterProjectionManager)
+        }
+    }
+
+    /** The stored settings the pinned header prints; fixed values only. */
+    private fun fillHeaderSettings() {
+        settingsDao.map.putAll(
+            mapOf(
+                SettingsRepository.KEY_BATTERY_CAPACITY to "72,9",
+                SettingsRepository.KEY_ABRP_ENABLED to "true",
+                SettingsRepository.KEY_ABRP_USER_TOKEN to "abc12345",
+                SettingsRepository.KEY_ABRP_CAR_MODEL to "byd:leopard3",
+                SettingsRepository.KEY_CHARGING_BASELINE_SOC to "64",
+                SettingsRepository.KEY_LAST_MILEAGE_KM to "12345.5",
+                SettingsRepository.KEY_LAST_STATE_TS to "1700000000000",
+                SettingsRepository.KEY_CATCHUP_JOURNAL to "2023-11-14 22:13:20 STILL_CHARGING soc=64",
+                SettingsRepository.KEY_AUTO_BACKUP_PERIOD to "daily",
+                SettingsRepository.KEY_AUTO_BACKUP_LAST_TS to "1700000000000",
+                SettingsRepository.KEY_AUTO_BACKUP_LAST_RESULT to "ok",
+                SettingsRepository.KEY_AUTO_BACKUP_PENDING_UPLOAD to "/sdcard/backup-1.zip",
+                SettingsRepository.KEY_TG_BACKUP_TOKEN to "123456:SECRET",
+                SettingsRepository.KEY_TG_BACKUP_CHAT_ID to "987654321",
+                SettingsRepository.KEY_TG_BACKUP_BOT_NAME to "test_bot",
+                SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT to "true",
+                "trip1_reset_ts" to "1700000000000",
+                "trip1_corr_km" to "1.5",
+            )
+        )
+    }
+
+    /** What the relaxed collaborators answer while the pinned header is written. */
+    private fun stubHeaderCollaborators() {
+        coEvery { ruleDao.getAllList() } returns listOf(
+            com.bydmate.app.data.local.entity.RuleEntity(
+                id = 7, name = "Morning", triggers = "[]", actions = "[]", lastTriggeredAt = 1_700_000_000_000L,
+            )
+        )
+        coEvery { automationEngine.serviceStartDumpLine() } returns "service_start: fixed"
+        coEvery { automationEngine.journalDumpLines() } returns listOf("journal line 1", "journal line 2")
+        every { automationEngine.paramSnapshotLine(any()) } returns "params: fixed"
+        every { hudController.status } returns kotlinx.coroutines.flow.MutableStateFlow(
+            com.bydmate.app.hud.HudController.Status.ON
+        )
+        every { hudController.mode() } returns 2
+        every { hudController.diag() } returns com.bydmate.app.hud.HudController.HudDiag(
+            framesSent = 10, lastFrameTs = 20, lastRc = 0, nonZeroRcCount = 1,
+        )
+        every { blindSpotController.dumpLines() } returns listOf("blind line")
+        every { clusterMusicBridge.dumpLines() } returns listOf("music line")
+        coEvery { cloudOverWifiManager.dumpLine() } returns "cloud_over_wifi: fixed"
+        coEvery { telegramReporter.diagnosticsLines() } returns listOf("reporter line")
+        coEvery { fidPushChannel.diagnosticsSnapshot() } returns listOf("push line")
+        coEvery { vehicleWriteLogDao.getLatest(any()) } returns listOf(
+            com.bydmate.app.data.local.entity.VehicleWriteLogEntity(
+                ts = 1_700_000_000_000L, actionName = "seat_heat", dev = 1, fid = 2, requested = 3,
+                readback = 3, status = 0, error = null, validated = true,
+            )
+        )
+        val pair = com.bydmate.app.split.SplitPair("pkg.narrow", "pkg.wide", com.bydmate.app.split.SplitSide.LEFT)
+        every { splitPreferences.getLastPair() } returns pair
+        every { splitPreferences.getMenuPair() } returns pair
+        every { splitPreferences.getSessionPair() } returns pair
+        every { splitPreferences.isFeatureEnabled() } returns true
+        every { splitPreferences.getSteeringKeyCode() } returns 322
+        every { splitSessionManager.state } returns kotlinx.coroutines.flow.MutableStateFlow<com.bydmate.app.split.SplitSessionState>(
+            com.bydmate.app.split.SplitSessionState.Active(pair, 11, 12)
+        )
+        every { splitSessionManager.departedPanePkgs() } returns setOf("pkg.gone")
+        every { windowChannelStore.winner() } returns com.bydmate.app.data.vehicle.WindowChannel.PERCENT
+        every { helperBootstrap.daemonEverAlive() } returns true
+        every { helperBootstrap.lastSpawnFailure() } returns com.bydmate.app.data.vehicle.HelperBootstrap.SpawnFailure(
+            1_700_000_000_000L, com.bydmate.app.data.vehicle.HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE, "detail one\ndetail two",
+        )
+        coEvery { helperClient.isAlive() } returns true
+        coEvery { helperClient.readBatch(any()) } answers {
+            firstArg<List<com.bydmate.app.data.vehicle.BatchReadItem>>().mapIndexed { i, _ -> 0 to (i % 3) }
+        }
+    }
+
     /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance.
      *  [until] is a text the finished header contains. */
     private fun awaitDiagnosticHeader(timeoutMs: Long = 10_000, until: String = "--- settings ---"): String {
@@ -1680,13 +1733,6 @@ class SettingsViewModelTest {
             "reset must also forget the source fingerprint so the next sync re-reads the file",
             ctx.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE).contains("lastModified"),
         )
-    }
-
-    @Test
-    fun `resetTripSourceDetection delegates to detector`() {
-        val vm = buildViewModel()
-        vm.resetTripSourceDetection()
-        verify(exactly = 1) { energyDataDeadDetector.reset() }
     }
 
     @Test

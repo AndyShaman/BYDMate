@@ -5,12 +5,10 @@ import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
-import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
-import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
@@ -71,7 +69,6 @@ class ChargesViewModelTest {
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
     private class FakeChargeDao(
@@ -99,12 +96,6 @@ class ChargesViewModelTest {
             flowOf(chargesFlow.value.filter { it.startTs in from..to })
         override suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary =
             ChargeSummary(0, 0.0, 0.0)
-        override fun getLastCharge(): Flow<ChargeEntity?> = flowOf(null)
-        override suspend fun getLastSuspendedCharge(): ChargeEntity? = null
-        override suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity> = emptyList()
-        override suspend fun getLastChargeSync(): ChargeEntity? = null
-        override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
-        override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = autoserviceCharges
         override suspend fun hasLegacyCharges(): Boolean = legacyExists
         override suspend fun deleteEmpty(): Int {
@@ -127,21 +118,12 @@ class ChargesViewModelTest {
             }
     }
 
-    private class StubChargePointDao : ChargePointDao {
-        override suspend fun insertAll(points: List<ChargePointEntity>) {}
-        override suspend fun getByChargeId(chargeId: Long): List<ChargePointEntity> = emptyList()
-        override suspend fun getCount(): Int = 0
-        override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
-    }
-
     private class FakeBatterySnapshotDao(
         private val snapshots: List<BatterySnapshotEntity> = emptyList()
     ) : BatterySnapshotDao {
         override fun getAll(): Flow<List<BatterySnapshotEntity>> = flowOf(snapshots)
-        override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(snapshots.take(limit))
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0L
         override suspend fun getLast(): BatterySnapshotEntity? = snapshots.firstOrNull()
-        override suspend fun getCount(): Int = snapshots.size
     }
 
     private class FakeAutoserviceClient(
@@ -150,32 +132,7 @@ class ChargesViewModelTest {
     ) : VehicleApi {
         override suspend fun isAvailable(): Boolean = available
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
-        override suspend fun readSnapshot(): com.bydmate.app.data.remote.DiParsData? = null
-        override suspend fun readSoc(): Float? = null
-        override suspend fun readSpeed(): Float? = null
-        override suspend fun readMileageKm(): Float? = null
-        override suspend fun readPowerKw(): Int? = null
-        override suspend fun readAcStatus(): Int? = null
-        override suspend fun readAcTemp(): Int? = null
-        override suspend fun readInsideTemp(): Int? = null
-        override suspend fun readExteriorTemp(): Int? = null
-        override suspend fun readFanLevel(): Int? = null
-        override suspend fun readWindowDriver(): Int? = null
-        override suspend fun readWindowPassenger(): Int? = null
-        override suspend fun readWindowRearLeft(): Int? = null
-        override suspend fun readWindowRearRight(): Int? = null
         override suspend fun dispatch(commandString: String): Result<Unit> = Result.success(Unit)
-        override suspend fun writeAcOn(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeAcOff(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSetDriverTemp(celsius: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowDriver(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowPassenger(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowRearLeft(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowRearRight(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeLockDoors(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeUnlockDoors(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSunroof(mode: com.bydmate.app.data.vehicle.SunroofMode): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSunshade(open: Boolean): Result<Unit> = Result.success(Unit)
     }
 
     // ─── Factory ──────────────────────────────────────────────────────────────
@@ -209,7 +166,7 @@ class ChargesViewModelTest {
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val chargeDao = FakeChargeDao(chargesFlow, autoserviceCharges, legacyExists)
-        val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
+        val chargeRepo = ChargeRepository(chargeDao)
 
         val snapshotDao = FakeBatterySnapshotDao(snapshots)
         val autoservice = FakeAutoserviceClient(batteryReading, autoserviceAvailable)
@@ -619,22 +576,6 @@ class ChargesViewModelTest {
     }
 
     @Test
-    fun `hasLegacyCharges_onlyAutoservice_returnsFalse`() = runTest {
-        val vm = buildViewModel(legacyExists = false)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertFalse(vm.uiState.value.hasLegacyCharges)
-    }
-
-    @Test
-    fun `hasLegacyCharges_someLegacy_returnsTrue`() = runTest {
-        val vm = buildViewModel(legacyExists = true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.hasLegacyCharges)
-    }
-
-    @Test
     fun `sohSeries_populatedFromSnapshots`() = runTest {
         val snapshots = listOf(
             BatterySnapshotEntity(id = 1, timestamp = 1000L, socStart = 10, socEnd = 80,
@@ -647,22 +588,6 @@ class ChargesViewModelTest {
 
         assertEquals(2, vm.uiState.value.sohSeries.size)
         assertEquals(2, vm.uiState.value.capacitySeries.size)
-    }
-
-    @Test
-    fun `defaultPeriod_isMonth`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(ChargesPeriod.MONTH, vm.uiState.value.period)
-    }
-
-    @Test
-    fun `defaultTypeFilter_isAll`() = runTest {
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(ChargeTypeFilter.ALL, vm.uiState.value.typeFilter)
     }
 
     @Test
@@ -740,14 +665,6 @@ class ChargesViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify { costCalculator.recalculate(sep1, Long.MAX_VALUE) }
-    }
-
-    @Test
-    fun `initialAutoserviceCheckDone_startsAsFalse`() = runTest {
-        val vm = buildViewModel()
-
-        // Before any coroutines run, the flag must still be false (default value).
-        assertFalse(vm.uiState.value.initialAutoserviceCheckDone)
     }
 
     @Test

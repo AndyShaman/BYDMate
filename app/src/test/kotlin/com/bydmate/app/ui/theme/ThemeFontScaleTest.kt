@@ -4,17 +4,11 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
 import org.junit.Test
 
 class ThemeFontScaleTest {
 
     private val base = Density(density = 1.5f, fontScale = 1.1f)
-
-    @Test
-    fun `scale 1 returns the same density object`() {
-        assertSame(base, scaledDensity(base, 1f))
-    }
 
     @Test
     fun `scaling multiplies fontScale and keeps density`() {

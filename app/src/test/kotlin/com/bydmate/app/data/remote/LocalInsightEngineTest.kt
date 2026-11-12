@@ -65,6 +65,42 @@ class LocalInsightEngineTest {
     }
 
     @Test
+    fun `12v just below 12 5 gets the below normal bullet`() {
+        // 12.40..12.49 used to fall between the two bullets and produced neither.
+        val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 12.45)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        assertTrue(!result.title.contains("критично", ignoreCase = true))
+        assertTrue("below normal bullet at 12.45 V", result.insights.any { it.contains("ниже нормы") })
+    }
+
+    @Test
+    fun `12v below normal bullet prints the reading with two decimals`() {
+        // 12.45..12.49 read «сейчас 12,5 В — ниже нормы 12.5 В» with one decimal. The ru resources
+        // format with a decimal comma, so two decimals read «12,45».
+        val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 12.45)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        val bullet = result.insights.first { it.contains("ниже нормы") }
+        assertTrue(bullet, bullet.contains("12,45"))
+    }
+
+    @Test
+    fun `12v below 12 0 gets the critical title, not the below normal bullet`() {
+        val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 11.9)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        assertTrue("critical title at 11.9 V", result.title.contains("критично", ignoreCase = true))
+        assertTrue(result.insights.none { it.contains("ниже нормы") })
+    }
+
+    @Test
+    fun `12v at 12 5 gets the normal bullet`() {
+        val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 12.5)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        assertTrue(!result.title.contains("критично", ignoreCase = true))
+        assertTrue(result.insights.none { it.contains("ниже нормы") })
+        assertTrue("normal bullet at 12.5 V", result.insights.any { it.contains("в норме") })
+    }
+
+    @Test
     fun `idle drain insight when significant`() {
         val stats = baseStats(
             recentKwh = 20.0,
@@ -73,13 +109,6 @@ class LocalInsightEngineTest {
         )
         val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(result.insights.any { it.contains("стоянке") || it.contains("кВт") })
-    }
-
-    @Test
-    fun `not enough data template`() {
-        val result = LocalInsightEngine.notEnoughData(res("ru"))
-        assertTrue(result.insights.isEmpty())
-        assertTrue(result.title.isNotBlank())
     }
 
     @Test
@@ -243,7 +272,6 @@ class LocalInsightEngineTest {
         bestTripCons = 14.0,
         bestTripKm = 30.0,
         worstTripCons = 24.0,
-        worstTripKm = 5.0,
         recentCost = 0.0,
         currencyCode = "RUB",
         drainKwh = drainKwh,

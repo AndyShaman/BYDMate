@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -29,7 +28,6 @@ class VehicleApiWindowRoutingTest {
         val PROBE_FIDS = listOf(947912728, 1267728400, 947912736, 947912752)
     }
 
-    private val parsReader: ParsReader = mockk(relaxed = true)
     private val autoservice: AutoserviceClient = mockk(relaxed = true)
     private val writeLogDao: VehicleWriteLogDao = mockk(relaxed = true)
 
@@ -58,8 +56,8 @@ class VehicleApiWindowRoutingTest {
         coEvery { autoservice.getIntRaw(any(), any()) } returns null
     }
 
-    private fun api(helper: HelperClient, channel: WindowChannel): VehicleApi =
-        VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, fixedStore(channel))
+    private fun api(helper: HelperClient, channel: WindowChannel): VehicleApiImpl =
+        VehicleApiImpl(autoservice, helper, allowlist, writeLogDao, seatStore, fixedStore(channel))
 
     private fun writingHelper(): HelperClient {
         val helper = mockk<HelperClient>()
@@ -70,7 +68,7 @@ class VehicleApiWindowRoutingTest {
     @Test fun `PERCENT channel writes the percent fid byte for byte`() = runTest {
         val helper = writingHelper()
 
-        val result = api(helper, WindowChannel.PERCENT).writeWindowDriver(50)
+        val result = api(helper, WindowChannel.PERCENT).doWrite("window_driver_pos", 50)
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { helper.write(DEV, DRIVER_POS_FID, 50) }
@@ -81,7 +79,7 @@ class VehicleApiWindowRoutingTest {
         val helper = writingHelper()
         PROBE_FIDS.forEach { coEvery { helper.read(DEV, it) } returns null }
 
-        val result = api(helper, WindowChannel.UNKNOWN).writeWindowDriver(50)
+        val result = api(helper, WindowChannel.UNKNOWN).doWrite("window_driver_pos", 50)
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { helper.write(DEV, DRIVER_POS_FID, 50) }
@@ -91,7 +89,7 @@ class VehicleApiWindowRoutingTest {
     @Test fun `CTRL channel writes the ctrl fid with the mapped detent`() = runTest {
         val helper = writingHelper()
 
-        val result = api(helper, WindowChannel.CTRL).writeWindowDriver(50)
+        val result = api(helper, WindowChannel.CTRL).doWrite("window_driver_pos", 50)
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { helper.write(DEV, DRIVER_CTRL_FID, 4) }
@@ -101,7 +99,7 @@ class VehicleApiWindowRoutingTest {
     @Test fun `CTRL channel routes the rear right window too`() = runTest {
         val helper = writingHelper()
 
-        val result = api(helper, WindowChannel.CTRL).writeWindowRearRight(0)
+        val result = api(helper, WindowChannel.CTRL).doWrite("window_rear_right_pos", 0)
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { helper.write(DEV, REAR_RIGHT_CTRL_FID, 2) }
@@ -153,7 +151,7 @@ class VehicleApiWindowRoutingTest {
     @Test fun `sunroof write is unaffected by the CTRL channel`() = runTest {
         val helper = writingHelper()
 
-        api(helper, WindowChannel.CTRL).writeSunroof(SunroofMode.OPEN)
+        api(helper, WindowChannel.CTRL).doWrite("sunroof_open", 1)
 
         coVerify(exactly = 1) { helper.write(DEV, 1125122056, 1) }
         coVerify(exactly = 0) { helper.read(any(), any()) }

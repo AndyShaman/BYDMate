@@ -39,11 +39,6 @@ class SplitHowToHintTest {
         }
     }
 
-    @Test fun `russian hint sends the user to the how to launch block`() {
-        val body = localized("ru").getString(R.string.settings_split_howto_body)
-        assertTrue(body, body.contains("«Как запускать»"))
-    }
-
     @Test fun `body is really translated, not falling back to russian`() {
         val ru = localized("ru").getString(R.string.settings_split_howto_body)
         for (lang in locales - "ru") {

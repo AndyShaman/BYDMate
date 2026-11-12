@@ -39,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.PlaceEntity
+import com.bydmate.app.data.repository.parseNumericSetting
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
@@ -63,7 +64,7 @@ import com.bydmate.app.ui.theme.ScaledDialogContent
  * toDoubleOrNull() returns null on the comma, so both validation and the map re-centre would fail.
  * Normalise the comma to a dot first (same fix as ChargeEditDialog / parseNumericSetting).
  */
-internal fun parseCoordinate(text: String): Double? = text.replace(',', '.').trim().toDoubleOrNull()
+internal fun parseCoordinate(text: String): Double? = text.parseNumericSetting()
 
 @Composable
 fun PlaceEditDialog(

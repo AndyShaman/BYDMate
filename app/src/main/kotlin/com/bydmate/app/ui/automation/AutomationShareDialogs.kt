@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.ui.components.AppAlertDialog
-import com.bydmate.app.ui.settings.PlacesInlineContent
+import com.bydmate.app.ui.places.PlacesInlineContent
 import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.AccentOrange

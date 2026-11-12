@@ -2,7 +2,6 @@ package com.bydmate.app.data.vehicle
 
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -108,9 +107,8 @@ internal class WindowCarModel(private val rule: Rule, private val now: () -> Lon
             (WriteAllowlist.LIVE_VALIDATED + WriteAllowlist.CANDIDATE_UNVALIDATED)
                 .associateBy { it.actionName.lowercase() }
         )
-        val parsReader = mockk<ParsReader>(relaxed = true)
         val dao = mockk<VehicleWriteLogDao>(relaxed = true)
-        return VehicleApiImpl(parsReader, autoservice, helper, allowlist, dao, seatStore, store)
+        return VehicleApiImpl(autoservice, helper, allowlist, dao, seatStore, store)
             .also { it.readbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined) }
     }
 

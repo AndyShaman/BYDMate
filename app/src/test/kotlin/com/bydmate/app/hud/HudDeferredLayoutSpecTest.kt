@@ -6,7 +6,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -122,31 +121,6 @@ class HudDeferredLayoutSpecTest {
         car.writes.clear()
         advanceTimeBy(20_000); runCurrent()   // the layout is back: quiet from here
         assertTrue(car.writes.isEmpty())
-        a.stop()
-    }
-
-    // --- B4 ---
-
-    @Test fun `B4 while the HUD check owns the layout the loop never touches the key or the car`() = runTest {
-        val car = FakeCar(initialScreen = HudArming.LAYOUT_NAVI, initialCluster = HudArming.CLUSTER_FULLSCREEN)
-        prefs.edit().putInt(HudArming.KEY_AS_FOUND, 7).commit()
-        val a = arming(car)
-        a.start(backgroundScope, layoutOwned = { false }) { false }
-        advanceTimeBy(30_000); runCurrent()
-        assertTrue(car.writes.isEmpty())
-        assertTrue(prefs.contains(HudArming.KEY_AS_FOUND))
-        a.stop()
-    }
-
-    // --- B5 ---
-
-    @Test fun `B5 no key and no guidance the loop never reads or writes anything`() = runTest {
-        val car = FakeCar(initialScreen = 7, initialCluster = 0)
-        val a = arming(car)
-        a.start(backgroundScope) { false }
-        advanceTimeBy(30_000); runCurrent()
-        assertTrue(car.writes.isEmpty())
-        coVerify(exactly = 0) { car.helper.readBatch(any()) }
         a.stop()
     }
 }

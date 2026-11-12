@@ -15,6 +15,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.RemoteViews
 import android.widget.TextView
+import com.bydmate.app.navdata.NavGuidanceParser
 import com.bydmate.app.navdata.NavManeuverCodes
 import com.bydmate.app.navdata.NavPackages
 import java.io.ByteArrayOutputStream
@@ -52,9 +53,7 @@ object NaviRichNotificationParser {
         val maneuverRes: String? = null,
     )
 
-    // Donor RemoteViewsParser regexes (distance regexes match NavGuidanceParser's)
-    private val DIST_KM = Regex("""(\d+(?:[.,]\d+)?)\s*(км|km)(?!\S)""", RegexOption.IGNORE_CASE)
-    private val DIST_M = Regex("""(\d+)\s*(м|m)(?!\S)""", RegexOption.IGNORE_CASE)
+    // Donor RemoteViewsParser regexes (the distance ones are NavGuidanceParser's)
     internal val TIME_HHMM = Regex("""\b([01]?\d|2[0-3]):([0-5]\d)\b""")
     private val DUR = Regex("""(?:(\d+)\s*ч)?\s*(?:(\d+)\s*мин)?""")
 
@@ -174,13 +173,7 @@ object NaviRichNotificationParser {
         rv.maneuverGaode != null || rv.distToManeuverM > 0 || rv.totalDistM > 0 ||
             rv.road.isNotEmpty() || rv.cameraAlert.isNotEmpty()
 
-    internal fun parseDistanceOrNull(s: String): Int? {
-        DIST_KM.find(s)?.let {
-            return (it.groupValues[1].replace(',', '.').toDoubleOrNull()?.times(1000))?.toInt()
-        }
-        DIST_M.find(s)?.let { return it.groupValues[1].toIntOrNull() }
-        return null
-    }
+    internal fun parseDistanceOrNull(s: String): Int? = NavGuidanceParser.parseDistanceMeters(s)
 
     internal fun parseDuration(s: String): Int {
         val m = DUR.find(s) ?: return 0

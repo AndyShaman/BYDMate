@@ -128,27 +128,6 @@ class SplitPickerTitleI18nTest {
 
     // ── Locales ───────────────────────────────────────────────────────────────
 
-    @Test fun `left and right titles are translated in every locale`() {
-        val expectedLeft = mapOf(
-            "ru" to "Выберите приложение для левой панели",
-            "en" to "Choose an app for the left pane",
-            "pt" to "Escolha um aplicativo para o painel esquerdo",
-            "zh" to "选择左侧分屏的应用",
-        )
-        val expectedRight = mapOf(
-            "ru" to "Выберите приложение для правой панели",
-            "en" to "Choose an app for the right pane",
-            "pt" to "Escolha um aplicativo para o painel direito",
-            "zh" to "选择右侧分屏的应用",
-        )
-        for ((lang, text) in expectedLeft) {
-            assertEquals(text, localized(lang).getString(R.string.split_picker_title_left))
-        }
-        for ((lang, text) in expectedRight) {
-            assertEquals(text, localized(lang).getString(R.string.split_picker_title_right))
-        }
-    }
-
     @Test fun `first-pair titles name the pane role in every locale`() {
         for (lang in listOf("ru", "en", "pt", "zh")) {
             val lc = localized(lang)

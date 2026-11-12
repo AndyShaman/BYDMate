@@ -1,7 +1,6 @@
 package com.bydmate.app.data.vehicle
 
 import android.content.pm.PackageManager
-import com.bydmate.app.diagnostics.TraceRecorder
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
@@ -13,14 +12,11 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Rule
 import org.junit.Test
 
 /** PR #261: the "disable the stock assistant" toggle also covers com.byd.vrassistant, the stock
  *  voice UI of Android 10 head units, only where that package is installed. */
 class NativeAssistantTest {
-
-    @get:Rule val trace = TraceRecorder()
 
     private val helper = mockk<HelperClient>(relaxed = true)
 
@@ -172,18 +168,4 @@ class NativeAssistantTest {
         )
     }
 
-    @Test fun `a toggle shown on from the system is traced with the disabled packages, an untouched one is not`() {
-        NativeAssistant.disabledInSystem(
-            states(PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER, PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER),
-            legacyHeadUnit = true)
-        NativeAssistant.disabledInSystem(states(null, null), legacyHeadUnit = true)
-        NativeAssistant.disabledInSystem(
-            states(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, PackageManager.COMPONENT_ENABLED_STATE_DEFAULT),
-            legacyHeadUnit = true)
-
-        assertEquals(
-            listOf("app    native-assistant-from-system packages=com.byd.autovoice,com.byd.vrassistant #1"),
-            trace.events(),
-        )
-    }
 }

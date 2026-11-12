@@ -18,6 +18,10 @@ class ResolveVolumeOpTest {
         assertEquals(ActionDispatcher.VolumeOp.Mute, ActionDispatcher.resolveVolumeOp("mute", 7, 15))
         assertEquals(ActionDispatcher.VolumeOp.Unmute, ActionDispatcher.resolveVolumeOp("unmute", 7, 15))
     }
+    @Test fun `zero is a level and a negative max degrades to zero`() {
+        assertEquals(ActionDispatcher.VolumeOp.SetTo(0), ActionDispatcher.resolveVolumeOp("0", 7, 15))
+        assertEquals(ActionDispatcher.VolumeOp.SetTo(0), ActionDispatcher.resolveVolumeOp("5", 7, -1))
+    }
     @Test fun `garbage is invalid`() {
         assertEquals(ActionDispatcher.VolumeOp.Invalid, ActionDispatcher.resolveVolumeOp("loud", 7, 15))
     }

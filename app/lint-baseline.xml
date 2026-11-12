@@ -793,93 +793,13 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_section_trips_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_section_trips_title&quot;>Поездки&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="13"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_trips_datasource_header` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_trips_datasource_header&quot;>Источник данных поездок&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="76"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_trips_datasource_note` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_trips_datasource_note&quot;>Titan 3 — BYD energydata.\nSong и другие модели без встроенной БД — DiPlus TripInfo.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="77"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_trips_datasource_hint` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_trips_datasource_hint&quot;>Если список пуст после 2-3 поездок — переключите режим.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="78"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_trips_system_header` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_trips_system_header&quot;>Системные данные (бета)&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="79"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_trips_system_note` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_trips_system_note&quot;>Расширенные данные авто: SoH батареи, пробег BMS, статистика зарядок. Только чтение.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="80"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_trips_system_enable_label` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_trips_system_enable_label&quot;>Включить&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="81"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_datasource_switching` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_datasource_switching&quot;>Переключение...&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="82"
-            column="13"/>
-    </issue>
 
     <issue
         id="UnusedResources"
@@ -892,148 +812,18 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_openrouter_section_header` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_openrouter_section_header&quot;>OpenRouter&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="97"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_openrouter_api_key_label` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_openrouter_api_key_label&quot;>OpenRouter API Key&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="98"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_autoservice_disconnected_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_autoservice_disconnected_title&quot;>не подключено&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="158"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_autoservice_disconnected_detail` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_autoservice_disconnected_detail&quot;>перезапусти приложение, если ADB включён в Настройках разработчика&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="159"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_autoservice_sentinel_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_autoservice_sentinel_title&quot;>подключено, но данные не читаются&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="160"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_autoservice_sentinel_detail` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_autoservice_sentinel_detail&quot;>возможно функция работает только на Leopard 3&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="161"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_autoservice_connected_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_autoservice_connected_title&quot;>подключено&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="162"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_autoservice_connected_detail` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_autoservice_connected_detail&quot;>SoH %1$s • lifetime %2$s / %3$s&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="163"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.charges_onboarding_empty_text` appears to be unused"
-        errorLine1="    &lt;string name=&quot;charges_onboarding_empty_text&quot;>Статистика зарядок недоступна. Чтобы видеть кВт·ч и стоимость каждой зарядки - включи «Системные данные» в Настройках.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="228"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.charges_go_to_settings_button` appears to be unused"
-        errorLine1="    &lt;string name=&quot;charges_go_to_settings_button&quot;>Перейти в Настройки&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="229"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.charges_not_tracking_banner` appears to be unused"
-        errorLine1="    &lt;string name=&quot;charges_not_tracking_banner&quot;>Новые зарядки сейчас не отслеживаются.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="231"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.charges_enable_tracking_button` appears to be unused"
-        errorLine1="    &lt;string name=&quot;charges_enable_tracking_button&quot;>Включить →&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="232"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.charges_lifetime_enable_hint` appears to be unused"
-        errorLine1="    &lt;string name=&quot;charges_lifetime_enable_hint&quot;>Включите «Системные данные» в Настройках, чтобы видеть пробег BMS и общий объём зарядок.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="242"
-            column="13"/>
-    </issue>
 
     <issue
         id="UnusedResources"
@@ -1079,16 +869,6 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.dashboard_diplus_offline` appears to be unused"
-        errorLine1="    &lt;string name=&quot;dashboard_diplus_offline&quot;>DiPlus не отвечает&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="529"
-            column="13"/>
-    </issue>
 
     <issue
         id="UnusedResources"

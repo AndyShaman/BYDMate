@@ -134,23 +134,6 @@ internal class GigaAmAsrEngine @Suppress("LongParameterList") constructor(
 
     override fun requiresWarmBeforeListening(): Boolean = warmVad
 
-    /** Drop the cached recognizer so the next session reloads the model from disk. Called when
-     *  the model files change (re-download). The old handle is NOT closed here: an in-flight
-     *  session may still be decoding with it; the one-handle leak per re-download is bounded
-     *  and rare, and beats a use-after-free.
-     *
-     *  Not wired to a call site yet: GigaAmModelManager (the re-download/delete owner) has no
-     *  reference to this engine, and re-download is a rare, manual user action after which the
-     *  driver restarts the app anyway -- building that wiring now would be speculative (YAGNI).
-     *  The spare VAD, unused by definition, is closed. */
-    internal fun invalidateCachedRecognizer() {
-        cachedRecognizer = null
-        synchronized(this) {
-            spareVad?.let { runCatching { it.close() } }
-            spareVad = null
-        }
-    }
-
     /** Pre-builds the cached recognizer (~1.3 s cold load of the 226 MiB model) so the first
      *  PTT's transcribe() starts the mic immediately instead of after model load (field defect:
      *  first words swallowed on the first session after app start). With [warmVad] also the

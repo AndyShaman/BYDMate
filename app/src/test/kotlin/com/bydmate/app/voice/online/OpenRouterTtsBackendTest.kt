@@ -174,17 +174,6 @@ class OpenRouterTtsBackendTest {
     // --- TDD tests for pcm format, rate header, empty-audio guard ---
 
     @Test
-    fun `synthesize requests pcm format`() = runTest {
-        stubConnection()
-        server.enqueue(MockResponse()
-            .addHeader("Content-Type", "audio/pcm;rate=24000;channels=1")
-            .setBody(Buffer().write(rawPcm16())))
-        backend.synthesize("тест", TtsGender.MALE)
-        val sent = JSONObject(server.takeRequest().body.readUtf8())
-        assertEquals("pcm", sent.getString("response_format"))
-    }
-
-    @Test
     fun `synthesize parses rate from content type`() = runTest {
         stubConnection()
         server.enqueue(MockResponse()

@@ -304,7 +304,7 @@ class ChargesViewModel @Inject constructor(
 
             // Phase 2: slow Binder probe — updates connection / sentinel / BMS lifetime fields.
             val disconnectedDefault = com.bydmate.app.domain.battery.BatteryState(
-                socNow = null, voltage12v = null, sohPercent = null,
+                socNow = null, sohPercent = null,
                 lifetimeKm = null, lifetimeKwh = null, autoserviceAvailable = false
             )
             val state = runCatching { batteryStateRepository.refresh() }

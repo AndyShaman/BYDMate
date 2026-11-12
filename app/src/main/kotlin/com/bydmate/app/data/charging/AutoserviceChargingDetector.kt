@@ -9,14 +9,10 @@ import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.cost.CostCalculator
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
-
-enum class DetectorState { IDLE, EVALUATING, ERROR }
 
 enum class CatchUpOutcome {
     AUTOSERVICE_UNAVAILABLE,
@@ -95,7 +91,7 @@ class AutoserviceChargingDetector @Inject constructor(
         // baselines and counter overruns.
         const val SOC_SANITY_RATIO_LOW = 0.70
         const val SOC_SANITY_RATIO_HIGH = 1.30
-        // Min SOC delta for BatterySnapshot capacity calculation (matches BatteryHealthRepository).
+        // Min SOC delta for BatterySnapshot capacity calculation (BatteryHealthRepository uses it too).
         const val MIN_SOC_DELTA_FOR_SNAPSHOT = 5
         // Minimum SOC rise (percentage points) for a wake-up jump to count as a
         // real charging session. Anything below this is noise: a BMS/LFP
@@ -115,8 +111,6 @@ class AutoserviceChargingDetector @Inject constructor(
         // longer the true charge start, so we skip reconstruction. Applies ONLY
         // to socDelta below SOC_DELTA_TRUSTED_CHARGE (i.e. exactly 2%).
         const val ODOMETER_MOVED_EPSILON_KM = 1.0f
-        // Gun not connected — autoservice gunConnectState value meaning "no gun".
-        private const val GUN_STATE_NONE = 1
         // chargerConnectState (fid 89128973, dev 1009): 1 = plug physically in.
         private const val CHARGER_CONNECT_PLUGGED = 1
         // chargeConnectIndicator (fid 710934572, dev 1007): 1 = plug in, 2 = plug out.
@@ -135,7 +129,7 @@ class AutoserviceChargingDetector @Inject constructor(
         internal fun plugInserted(charger: Int?, indicator: Int?, gun: Int?): Boolean = when {
             charger == CHARGER_CONNECT_PLUGGED -> true
             indicator == CHARGE_INDICATOR_PLUGGED -> true
-            else -> gun != null && gun != 0 && gun != GUN_STATE_NONE
+            else -> gun != null && gun != 0 && gun != GunStateEdgeDetector.GUN_STATE_NONE
         }
         // A transient gun-fid glitch clears within a read or two; a gun fid
         // that stays silent across this many consecutive runs while sibling
@@ -155,8 +149,6 @@ class AutoserviceChargingDetector @Inject constructor(
     // treated as unsupported and the cascade proceeds without it.
     private var consecutiveGunGlitches = 0
     @Volatile private var lastSample: DiParsData? = null
-    private val _state = MutableStateFlow(DetectorState.IDLE)
-    val state: StateFlow<DetectorState> = _state
 
     /** Feed the most recent shared-loop sample so runCatchUp can avoid a live fetch. */
     fun onSample(data: DiParsData) {
@@ -232,13 +224,11 @@ class AutoserviceChargingDetector @Inject constructor(
         now: Long = System.currentTimeMillis(),
         observedKwAbs: Double? = null
     ): CatchUpResult = mutex.withLock {
-        _state.value = DetectorState.EVALUATING
         try {
             // Step 1: liveness check
             if (!client.isAvailable()) {
                 android.util.Log.i(TAG, "runCatchUp: autoservice client not available")
                 logJournal(now, "UNAVAILABLE")
-                _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.AUTOSERVICE_UNAVAILABLE)
             }
 
@@ -256,7 +246,6 @@ class AutoserviceChargingDetector @Inject constructor(
             val currentSoc: Int = battery?.socPercent?.toInt() ?: run {
                 android.util.Log.i(TAG, "runCatchUp: autoservice SOC sentinel → SENTINEL (retry later)")
                 logJournal(now, "SENTINEL")
-                _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.SENTINEL)
             }
 
@@ -271,7 +260,6 @@ class AutoserviceChargingDetector @Inject constructor(
                 )
                 android.util.Log.i(TAG, "runCatchUp: cold start, seeded state soc=$currentSoc")
                 logJournal(now, "BASELINE_INITIALIZED soc=$currentSoc")
-                _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.BASELINE_INITIALIZED)
             }
 
@@ -330,7 +318,6 @@ class AutoserviceChargingDetector @Inject constructor(
                 stateStore.setChargePending(true)
                 android.util.Log.i(TAG, "runCatchUp: gun=$gun, deviceReadable=$chargingDeviceReadable → STILL_CHARGING (defer to live edge)")
                 logJournal(now, "STILL_CHARGING gun=$gun" + if (gunGlitch) " glitch=$consecutiveGunGlitches" else "")
-                _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.STILL_CHARGING)
             }
 
@@ -374,7 +361,6 @@ class AutoserviceChargingDetector @Inject constructor(
                     ts = now
                 )
                 stateStore.setChargePending(false)
-                _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.NO_DELTA)
             }
 
@@ -469,7 +455,7 @@ class AutoserviceChargingDetector @Inject constructor(
                 status = "COMPLETED",
                 lifetimeKwhAtStart = null,
                 lifetimeKwhAtFinish = null,
-                gunState = charging?.gunConnectState?.takeIf { it != GUN_STATE_NONE },
+                gunState = charging?.gunConnectState?.takeIf { it != GunStateEdgeDetector.GUN_STATE_NONE },
                 detectionSource = detectionSource
             )
 
@@ -521,12 +507,10 @@ class AutoserviceChargingDetector @Inject constructor(
                 "SESSION_CREATED kwh=${"%.2f".format(delta)} src=$detectionSource " +
                     "type=$type soc=$socStart->$socEnd km=$kmNow prev_km=$kmPrev plug=$plugInfo"
             )
-            _state.value = DetectorState.IDLE
             return CatchUpResult(CatchUpOutcome.SESSION_CREATED, chargeId, delta)
         } catch (e: Exception) {
             android.util.Log.w(TAG, "runCatchUp: failed: ${e.message}", e)
             logJournal(now, "ERROR ${e.message}")
-            _state.value = DetectorState.ERROR
             return CatchUpResult(CatchUpOutcome.AUTOSERVICE_UNAVAILABLE)
         }
     }

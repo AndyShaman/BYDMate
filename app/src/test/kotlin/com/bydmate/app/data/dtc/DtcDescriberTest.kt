@@ -9,7 +9,7 @@ import java.io.FileNotFoundException
 class DtcDescriberTest {
 
     private val found = DtcFound(
-        0x712, DtcRow("U1166-87", 0x09, DtcKind.NOW, 0x87), DtcBlockName(DtcBlock.ADAS, 0x712),
+        0x712, DtcRow("U1166-87", 0x09, DtcKind.NOW), DtcBlockName(DtcBlock.ADAS, 0x712),
     )
 
     @Test fun `missing tables give no descriptions and no crash`() = runBlocking {

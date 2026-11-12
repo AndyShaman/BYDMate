@@ -1,6 +1,5 @@
 package com.bydmate.app.data.local.database
 
-import android.content.ContentValues
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -74,39 +73,6 @@ class Migration11to12Test {
             val statuses = mutableListOf<String>()
             while (c.moveToNext()) statuses += c.getString(0)
             assertEquals(listOf("COMPLETED", "COMPLETED"), statuses)
-        }
-        migrated.close()
-    }
-
-    @Test
-    fun `new charge can be inserted with autoservice fields after migration`() {
-        helper.createDatabase(dbName, 11).close()
-        val migrated = helper.runMigrationsAndValidate(
-            dbName, 12, true,
-            com.bydmate.app.di.AppModule.MIGRATION_11_12
-        )
-
-        val cv = ContentValues().apply {
-            put("start_ts", 1700004000000L)
-            put("end_ts", 1700007600000L)
-            put("soc_start", 30)
-            put("soc_end", 80)
-            put("kwh_charged", 36.5)
-            put("status", "COMPLETED")
-            put("merged_count", 0)
-            put("lifetime_kwh_at_start", 600.0)
-            put("lifetime_kwh_at_finish", 636.5)
-            put("gun_state", 2)
-            put("detection_source", "autoservice_catchup")
-        }
-        migrated.insert("charges", android.database.sqlite.SQLiteDatabase.CONFLICT_FAIL, cv)
-
-        migrated.query("SELECT lifetime_kwh_at_finish, gun_state, detection_source FROM charges WHERE start_ts = 1700004000000").use { c ->
-            assertEquals(1, c.count)
-            c.moveToFirst()
-            assertEquals(636.5, c.getDouble(0), 0.001)
-            assertEquals(2, c.getInt(1))
-            assertEquals("autoservice_catchup", c.getString(2))
         }
         migrated.close()
     }

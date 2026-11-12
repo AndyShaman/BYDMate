@@ -1,14 +1,12 @@
 package com.bydmate.app.agent
 
 import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -46,14 +44,22 @@ class AgentToolsNavigateRangeTest {
 
     private val context = mockk<Context>(relaxed = true)
 
-    private val tools = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private val tools = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
     ).also {
         it.nowMs = { 1_000_000_000_000L }
         it.naviForegroundCheck = { true }
@@ -127,20 +133,4 @@ class AgentToolsNavigateRangeTest {
         assertTrue(out.has("error"))
     }
 
-    @Test fun `tool catalog routes home commands to navigate_to`() = runTest {
-        val catalog = tools.schemas()
-        val navigateDesc = (0 until catalog.length()).mapNotNull {
-            val fn = catalog.getJSONObject(it).optJSONObject("function") ?: return@mapNotNull null
-            if (fn.getString("name") == "navigate_to") fn.getString("description") else null
-        }.first()
-        val searchDesc = (0 until catalog.length()).mapNotNull {
-            val fn = catalog.getJSONObject(it).optJSONObject("function") ?: return@mapNotNull null
-            if (fn.getString("name") == "search_on_map") fn.getString("description") else null
-        }.first()
-        // home/work commands belong to navigate_to now; search_on_map must not claim them
-        assertTrue(navigateDesc.contains("домой"))
-        assertTrue(navigateDesc.contains("на работу"))
-        assertFalse(searchDesc.contains("Дом\""))
-        assertTrue(searchDesc.contains("navigate_to"))
-    }
 }

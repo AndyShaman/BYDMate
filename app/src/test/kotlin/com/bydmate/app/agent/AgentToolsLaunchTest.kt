@@ -12,13 +12,13 @@ import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.voice.VoiceGate
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -53,13 +53,24 @@ class AgentToolsLaunchTest {
     private val clusterVoiceControl = mockk<ClusterVoiceControl>(relaxUnitFun = true)
     private val chargerSearchClient = mockk<ChargerSearchClient>(relaxed = true)
 
-    private fun tools() = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context, clusterVoiceControl,
-        chargerSearchClient,
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
+        clusterVoiceControl = clusterVoiceControl,
+        chargerSearchClient = chargerSearchClient,
     ).apply {
         naviForegroundCheck = { true }; naviVerifyAttempts = 1; naviVerifyIntervalMs = 1L
     }
@@ -109,14 +120,6 @@ class AgentToolsLaunchTest {
         assertEquals("home", payload.getString("shortcut"))
     }
 
-    // (d) empty destination -> error, dispatcher never called.
-    @Test fun navigate_to_empty_destination_reports_error() = runTest {
-        val out = JSONObject(tools().execute(
-            AgentToolCall("1", "navigate_to", """{"destination":"  "}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
-    }
-
     // (e) go_home dispatches the go_home kind.
     @Test fun go_home_dispatches_go_home_kind() = runTest {
         val captured = slot<ActionDef>()
@@ -126,8 +129,8 @@ class AgentToolsLaunchTest {
         assertEquals("go_home", captured.captured.kind)
     }
 
-    // end_conversation is offered to the model and only reports ok: the voice session closes itself.
-    @Test fun end_conversation_is_in_the_schemas_and_returns_ok() = runTest {
+    // end_conversation only reports ok: the voice session closes itself.
+    @Test fun end_conversation_returns_ok_and_dispatches_nothing() = runTest {
         coEvery { ruleDao.getEnabled() } returns emptyList()
         coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns ""
         val schemas = tools().schemas()
@@ -349,88 +352,58 @@ class AgentToolsLaunchTest {
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
-    // (a2) RU alias "камера" resolves to the Chinese label via com.byd.avc.
-    @Test fun launch_app_alias_camera_resolves_chinese_label() = runTest {
-        val captured = slot<ActionDef>()
-        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
-        val fixture = listOf("全景影像" to "com.byd.avc")
-        val t = tools().apply { launcherAppsProvider = { fixture } }
-        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"камера"}""")))
-        assertTrue(out.getBoolean("ok"))
-        assertEquals("全景影像", out.getString("app"))
-        assertEquals("app_launch", captured.captured.kind)
-        val payload = JSONObject(captured.captured.payload!!)
-        assertEquals("com.byd.avc", payload.getString("packageName"))
-    }
+    // RU aliases of launch_app: BYD stock-app labels and package priority lists, not label matches.
+    private class AliasCase(
+        val label: String,
+        val name: String,
+        val apps: List<Pair<String, String>>?, // null = launcherFixture
+        val expectedPackage: String?,          // null = not-found error, nothing dispatched
+        val expectedApp: String? = null,
+    )
 
-    // (b2) alias lookup is case-insensitive.
-    @Test fun launch_app_alias_camera_case_insensitive() = runTest {
-        val captured = slot<ActionDef>()
-        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
-        val fixture = listOf("全景影像" to "com.byd.avc")
-        val t = tools().apply { launcherAppsProvider = { fixture } }
-        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"Камера"}""")))
-        assertTrue(out.getBoolean("ok"))
-        assertEquals("全景影像", out.getString("app"))
-        val payload = JSONObject(captured.captured.payload!!)
-        assertEquals("com.byd.avc", payload.getString("packageName"))
-    }
-
-    // (c2) alias "ютуб" has two candidate packages in priority order; only the second is installed.
-    @Test fun launch_app_alias_youtube_falls_back_to_second_candidate() = runTest {
-        val captured = slot<ActionDef>()
-        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
-        val fixture = listOf("YouTube" to "com.google.android.youtube")
-        val t = tools().apply { launcherAppsProvider = { fixture } }
-        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"ютуб"}""")))
-        assertTrue(out.getBoolean("ok"))
-        val payload = JSONObject(captured.captured.payload!!)
-        assertEquals("com.google.android.youtube", payload.getString("packageName"))
-    }
-
-    // (d2) alias "видеорегистратор" has no candidate installed and no label match -> not-found error.
-    @Test fun launch_app_alias_dashcam_not_installed_reports_not_found() = runTest {
-        val t = tools().apply { launcherAppsProvider = { launcherFixture } }
-        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"видеорегистратор"}""")))
-        assertFalse(out.has("ok"))
-        assertTrue(out.getString("error").contains("приложение не найдено"))
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
-    }
-
-    // (e2) alias "яндекс карты" picks the first installed candidate of the Maps package list.
-    @Test fun launch_app_alias_yandex_maps_resolves_installed_package() = runTest {
-        val captured = slot<ActionDef>()
-        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
-        val fixture = listOf("Яндекс Карты" to "ru.yandex.yandexmaps.rustore")
-        val t = tools().apply { launcherAppsProvider = { fixture } }
-        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"яндекс карты"}""")))
-        assertTrue(out.getBoolean("ok"))
-        val payload = JSONObject(captured.captured.payload!!)
-        assertEquals("ru.yandex.yandexmaps.rustore", payload.getString("packageName"))
-    }
-
-    // (f2) alias "телефон" points at the BYD bluetooth dialer, not at a label match.
-    @Test fun launch_app_alias_phone_resolves_byd_dialer() = runTest {
-        val captured = slot<ActionDef>()
-        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
-        val fixture = listOf("Телефон" to "com.android.dialer", "蓝牙电话" to "com.byd.bluetoothcall")
-        val t = tools().apply { launcherAppsProvider = { fixture } }
-        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"телефон"}""")))
-        assertTrue(out.getBoolean("ok"))
-        val payload = JSONObject(captured.captured.payload!!)
-        assertEquals("com.byd.bluetoothcall", payload.getString("packageName"))
-    }
-
-    // (g2) alias "медиацентр" resolves the stock media app.
-    @Test fun launch_app_alias_mediacenter_resolves_stock_player() = runTest {
-        val captured = slot<ActionDef>()
-        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
-        val fixture = listOf("多媒体" to "com.byd.mediacenter")
-        val t = tools().apply { launcherAppsProvider = { fixture } }
-        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"медиацентр"}""")))
-        assertTrue(out.getBoolean("ok"))
-        val payload = JSONObject(captured.captured.payload!!)
-        assertEquals("com.byd.mediacenter", payload.getString("packageName"))
+    @Test fun launch_app_aliases_resolve_to_the_installed_package() = runTest {
+        val cases = listOf(
+            // alias "камера" resolves to the Chinese label via com.byd.avc.
+            AliasCase("camera resolves the Chinese label", "камера",
+                listOf("全景影像" to "com.byd.avc"), "com.byd.avc", expectedApp = "全景影像"),
+            // alias lookup is case-insensitive.
+            AliasCase("camera alias is case-insensitive", "Камера",
+                listOf("全景影像" to "com.byd.avc"), "com.byd.avc", expectedApp = "全景影像"),
+            // alias "ютуб" has two candidate packages in priority order; only the second is installed.
+            AliasCase("youtube falls back to the second candidate", "ютуб",
+                listOf("YouTube" to "com.google.android.youtube"), "com.google.android.youtube"),
+            // alias "видеорегистратор" has no candidate installed and no label match -> not-found error.
+            AliasCase("dashcam not installed reports not found", "видеорегистратор", null, null),
+            // alias "яндекс карты" picks the first installed candidate of the Maps package list.
+            AliasCase("yandex maps resolves the installed package", "яндекс карты",
+                listOf("Яндекс Карты" to "ru.yandex.yandexmaps.rustore"), "ru.yandex.yandexmaps.rustore"),
+            // alias "телефон" points at the BYD bluetooth dialer, not at a label match.
+            AliasCase("phone resolves the BYD dialer", "телефон",
+                listOf("Телефон" to "com.android.dialer", "蓝牙电话" to "com.byd.bluetoothcall"),
+                "com.byd.bluetoothcall"),
+            // alias "медиацентр" resolves the stock media app.
+            AliasCase("mediacenter resolves the stock player", "медиацентр",
+                listOf("多媒体" to "com.byd.mediacenter"), "com.byd.mediacenter"),
+        )
+        for (c in cases) {
+            clearMocks(dispatcher)
+            val captured = slot<ActionDef>()
+            coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
+            val fixture = c.apps ?: launcherFixture
+            val t = tools().apply { launcherAppsProvider = { fixture } }
+            val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"${c.name}"}""")))
+            if (c.expectedPackage == null) {
+                assertFalse("case: ${c.label}: $out", out.has("ok"))
+                assertTrue("case: ${c.label}: $out", out.getString("error").contains("приложение не найдено"))
+                coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+            } else {
+                assertTrue("case: ${c.label}: $out", out.getBoolean("ok"))
+                c.expectedApp?.let { assertEquals("case: ${c.label}", it, out.getString("app")) }
+                assertEquals("case: ${c.label}", "app_launch", captured.captured.kind)
+                val payload = JSONObject(captured.captured.payload!!)
+                assertEquals("case: ${c.label}", c.expectedPackage, payload.getString("packageName"))
+            }
+        }
     }
 
     // --- set_cluster_projection ---

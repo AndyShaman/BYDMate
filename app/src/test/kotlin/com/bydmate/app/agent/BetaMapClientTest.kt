@@ -164,13 +164,6 @@ class BetaMapClientTest {
 
     @After fun tearDown() { server.shutdown() }
 
-    @Test fun production_url_is_the_public_map_page_never_the_api() {
-        val fresh = BetaMapClient(OkHttpClient())
-        assertEquals("https://beta.by/map", fresh.url)
-        assertEquals(4_500L, fresh.callTimeoutMs)
-        assertEquals(4 * 60_000L, fresh.cacheTtlMs)
-    }
-
     @Test fun request_asks_for_the_rsc_payload_and_names_the_app() = runTest {
         server.enqueue(MockResponse().setBody(fixture))
         assertEquals(8, client.stations().getOrThrow().stations.size)

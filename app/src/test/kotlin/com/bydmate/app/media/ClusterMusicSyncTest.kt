@@ -373,16 +373,6 @@ class ClusterMusicSyncTest {
         assertFalse(sync.refused)
     }
 
-    @Test fun `an unreachable helper is retried quietly and never refuses`() = runTest {
-        val sync = ClusterMusicSync(FakePort { null })
-        assertEquals(Outcome.WRITE_FAILED, sync.step(true, fids, Target.Show(card()), 0))
-        repeat(10) {
-            val outcome = sync.step(true, fids, Target.Show(card()), (it + 1) * 1_500L)
-            assertTrue(outcome == Outcome.RETRYING || outcome == Outcome.NONE)
-        }
-        assertFalse(sync.refused)
-    }
-
     /** What the bridge logs: [ClusterMusicBridge] stays silent on these. */
     private fun reported(outcomes: List<Outcome>) =
         outcomes.filterNot { it in setOf(Outcome.NONE, Outcome.TICKED, Outcome.REASSERTED, Outcome.RETRYING) }

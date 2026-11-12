@@ -14,9 +14,20 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+
+/** Every release latch a test holds a sender task on; [OffReportTest.tearDown] opens them all. */
+private val held = CopyOnWriteArrayList<CountDownLatch>()
+
+private fun heldLatch() = CountDownLatch(1).also { held += it }
+
+private fun releaseHeldLatches() {
+    held.forEach { it.countDown() }
+    held.clear()
+}
 
 /**
  * The daemon's power-off report end to end, without the firmware: a fake listener registration
@@ -83,6 +94,9 @@ class OffReportTest {
     }
 
     @After fun tearDown() {
+        // A failed test leaves its sender task parked on a release latch: free it first, so the
+        // real sender thread is not held for up to 5 s into the next test.
+        releaseHeldLatches()
         OffReport.resetForTest()
         OffReport.registrar = realRegistrar
         OffReport.sender = realSender
@@ -525,7 +539,7 @@ class OffReportTest {
         arm("a1")
         drainSender() // a1's pending pass, nothing on disk
         val busy = CountDownLatch(1)
-        val release = CountDownLatch(1)
+        val release = heldLatch()
         OffReport.send(Runnable { busy.countDown(); release.await(5, TimeUnit.SECONDS) })
         assertTrue(busy.await(5, TimeUnit.SECONDS))
         push(level, 0) // taken and saved here; its send waits behind the busy sender
@@ -551,7 +565,7 @@ class OffReportTest {
         mono += OffReport.PENDING_BACKOFF_MAX_MS
         OffReport.send = realSend
         val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
+        val release = heldLatch()
         blockingSender(started, release, ok)
         arm("b1") // same chat 42: the pass starts with a1 and hangs in its send
         assertTrue(started.await(5, TimeUnit.SECONDS))
@@ -570,7 +584,7 @@ class OffReportTest {
         mono += OffReport.PENDING_BACKOFF_MAX_MS
         OffReport.send = realSend
         val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
+        val release = heldLatch()
         blockingSender(started, release, noNet)
         reads[level] = 2
         arm("b1") // the pass for a1 hangs in its send
@@ -590,7 +604,7 @@ class OffReportTest {
         val before = sent.size
         OffReport.send = realSend
         val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
+        val release = heldLatch()
         blockingSender(started, release, noNet)
         arm("b1")
         assertTrue(started.await(5, TimeUnit.SECONDS))
@@ -614,7 +628,7 @@ class OffReportTest {
         val before = sent.size
         OffReport.send = realSend
         val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
+        val release = heldLatch()
         val calls = AtomicInteger(0)
         OffReport.sender = { token, chatId, text, _, _ ->
             synchronized(sent) { sent += Sent(token, chatId, text) }
@@ -648,7 +662,7 @@ class OffReportTest {
         OffReport.send = realSend
         drainSender()
         val busy = CountDownLatch(1)
-        val release = CountDownLatch(1)
+        val release = heldLatch()
         OffReport.send(Runnable { busy.countDown(); release.await(5, TimeUnit.SECONDS) })
         assertTrue(busy.await(5, TimeUnit.SECONDS))
         OffReport.arm(ArmRequest("a2", "tok-a2", 42L, "a2 at ${TelegramReportBuilder.TIME_PLACEHOLDER}", ""))

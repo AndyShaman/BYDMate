@@ -82,15 +82,6 @@ class AutomationEngineButtonPressTest {
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
-    @Test fun `disabled rules are never seen (getEnabled excludes them)`() = runBlocking {
-        // getEnabled() returns only enabled rows in production; simulate that by
-        // returning an empty list when the only rule is disabled.
-        val (engine, _, dispatcher) = setup(emptyList())
-        val matched = engine.onButtonPress(2)
-        assertEquals(0, matched)
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
-    }
-
     @Test fun `bypasses cooldown - fires even within cooldown window`() = runBlocking {
         val r = rule(1, buttonId = 1, cooldown = 600, lastTriggeredAt = System.currentTimeMillis())
         val (engine, ruleDao, dispatcher) = setup(listOf(r))

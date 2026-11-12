@@ -33,7 +33,6 @@ class BootReceiverTest {
 
         assertNotNull(onUpdate)
         assertEquals(onBoot, onUpdate)
-        assertEquals(Intent.ACTION_MY_PACKAGE_REPLACED, bootLog.getString(BootReceiver.KEY_LAST_BOOT_ACTION, null))
     }
 
     @Test fun `the manifest delivers the app update broadcast to the boot receiver`() {

@@ -33,37 +33,6 @@ interface ChargeDao {
     """)
     suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary
 
-    @Query("SELECT * FROM charges ORDER BY start_ts DESC LIMIT 1")
-    fun getLastCharge(): Flow<ChargeEntity?>
-
-    @Query("SELECT * FROM charges WHERE status = 'SUSPENDED' ORDER BY start_ts DESC LIMIT 1")
-    suspend fun getLastSuspendedCharge(): ChargeEntity?
-
-    @Query("SELECT * FROM charges WHERE status != 'COMPLETED' AND start_ts < :cutoffTs")
-    suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity>
-
-    @Query("SELECT * FROM charges ORDER BY start_ts DESC LIMIT 1")
-    suspend fun getLastChargeSync(): ChargeEntity?
-
-    @Query("""
-        SELECT * FROM charges
-        WHERE status = 'COMPLETED' AND (cell_voltage_min IS NOT NULL OR voltage_12v IS NOT NULL)
-        ORDER BY start_ts DESC LIMIT 30
-    """)
-    suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity>
-
-    /**
-     * Returns the highest lifetime_kwh_at_finish recorded by an autoservice
-     * detector, or null if no autoservice-sourced sessions exist yet.
-     * Used as the catch-up baseline.
-     */
-    @Query("""
-        SELECT MAX(lifetime_kwh_at_finish) FROM charges
-        WHERE detection_source LIKE 'autoservice%'
-          AND lifetime_kwh_at_finish IS NOT NULL
-    """)
-    suspend fun getMaxLifetimeKwhAtFinish(): Double?
-
     /** All charges detected by the autoservice path, ascending by start time. */
     @Query("SELECT * FROM charges WHERE detection_source LIKE 'autoservice_%' ORDER BY start_ts ASC")
     suspend fun getAllAutoserviceCharges(): List<ChargeEntity>

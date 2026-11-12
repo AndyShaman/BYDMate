@@ -31,6 +31,8 @@ sealed class ActionValidationError {
     data class SplitScreenInvalidSide(val index: Int) : ActionValidationError()
     /** A Telegram report with no item checked and no text of its own. */
     data class TelegramReportEmpty(val index: Int) : ActionValidationError()
+    /** A pause that is empty, not a number, negative or above [ActionDispatcher.MAX_DELAY_MS]. */
+    data class DelayInvalid(val index: Int) : ActionValidationError()
 }
 
 /** Reason a trigger draft failed validation. */
@@ -108,10 +110,11 @@ object RuleDraftValidator {
                     if (mode.isBlank()) return ActionValidationError.YandexMusicModeMissing(n)
                 }
                 "media_volume" -> {
-                    // Mirrors ActionDispatcher.resolveVolumeOp exactly: "mute"/"unmute", or any
-                    // parseable int (unsigned = absolute level, signed "+N"/"-N" = relative step).
+                    // Valid exactly when the dispatcher can run it: "mute"/"unmute", or any parseable
+                    // int (unsigned = absolute level, signed "+N"/"-N" = relative step).
                     val payload = a.payload
-                    val valid = payload == "mute" || payload == "unmute" || payload?.toIntOrNull() != null
+                    val valid = payload != null &&
+                        ActionDispatcher.resolveVolumeOp(payload, 0, 100) != ActionDispatcher.VolumeOp.Invalid
                     if (!valid) return ActionValidationError.MediaVolumeMissing(n)
                 }
                 "sentry" -> {
@@ -152,6 +155,10 @@ object RuleDraftValidator {
                     if (fields.isEmpty() && json.optString("text").isBlank()) {
                         return ActionValidationError.TelegramReportEmpty(n)
                     }
+                }
+                "delay" -> {
+                    val ms = a.payload?.toLongOrNull()
+                    if (ms == null || ms !in 0..ActionDispatcher.MAX_DELAY_MS) return ActionValidationError.DelayInvalid(n)
                 }
             }
         }

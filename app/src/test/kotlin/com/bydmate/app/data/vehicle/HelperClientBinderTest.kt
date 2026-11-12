@@ -174,28 +174,17 @@ class HelperClientBinderTest {
     // writeStatus tests (TC-8 to TC-11)
     // ---------------------------------------------------------------------------
 
-    /** TC-8: writeStatus returns the RAW status forwarded by the binder (status=1 real action). */
+    /**
+     * TC-8..10: writeStatus returns the RAW status forwarded by the binder unmodified:
+     * 1 = real action, 0 = no-op, negative = error code.
+     */
     @Test
-    fun `writeStatus returns raw status 1 from binder`() = runBlocking {
-        val client = clientWith(liveFake(status = 1))
-        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
-        assertEquals(1, result)
-    }
-
-    /** TC-9: writeStatus returns raw status 0 (no-op) unmodified. */
-    @Test
-    fun `writeStatus returns raw status 0 from binder`() = runBlocking {
-        val client = clientWith(liveFake(status = 0))
-        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
-        assertEquals(0, result)
-    }
-
-    /** TC-10: writeStatus returns raw negative status (error code) unmodified. */
-    @Test
-    fun `writeStatus returns raw negative status from binder`() = runBlocking {
-        val client = clientWith(liveFake(status = -10011))
-        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
-        assertEquals(-10011, result)
+    fun `writeStatus returns the raw status from binder`() = runBlocking {
+        for (status in listOf(1, 0, -10011)) {
+            val client = clientWith(liveFake(status = status))
+            val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
+            assertEquals("status $status", status, result)
+        }
     }
 
     /** TC-11a: writeStatus returns null when daemon is unreachable (binder == null). */
@@ -259,19 +248,6 @@ class HelperClientBinderTest {
         assertNotNull(result)
         assertEquals(-1, result!!.taskId)
         assertEquals(0, result.windowingMode)
-    }
-
-    /** TC-14: getTaskState returns null when daemon replies with non-zero status. */
-    @Test
-    fun `getTaskState returns null on non-zero status`() = runBlocking {
-        val client = clientWith(taskStateFake(-1, 0, 0, 0, 0, 0, 0))
-        assertNull(client.getTaskState("com.example.app"))
-    }
-
-    /** TC-15: getTaskState returns null when binder is null (daemon unreachable). */
-    @Test
-    fun `getTaskState returns null when binder is null`() = runBlocking {
-        assertNull(clientWith(null).getTaskState("com.example.app"))
     }
 
     // ---------------------------------------------------------------------------

@@ -149,12 +149,6 @@ class MediaSessionListenerServiceTest {
     }
 
     @Test
-    fun `a navigator removal is traced on the lane`() {
-        assertEquals(listOf("navi notif removed: pkg=ru.yandex.yandexnavi id=1"),
-            traced { service.onNotificationRemoved(sbn("ru.yandex.yandexnavi", Notification())) })
-    }
-
-    @Test
     fun `a media post or removal is not traced`() {
         val media = Notification().apply { category = Notification.CATEGORY_TRANSPORT }
         assertTrue(traced { service.onNotificationRemoved(sbn("ru.yandex.yandexnavi", media)) }.isEmpty())

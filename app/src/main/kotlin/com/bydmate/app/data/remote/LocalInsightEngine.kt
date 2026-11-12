@@ -2,6 +2,7 @@ package com.bydmate.app.data.remote
 
 import android.content.res.Resources
 import com.bydmate.app.R
+import com.bydmate.app.domain.BatteryThresholds
 
 /**
  * Offline insight generator: deterministic rules + localized templates.
@@ -47,7 +48,7 @@ object LocalInsightEngine {
         // --- Title / summary drivers (highest priority wins) ---
 
         when {
-            stats.voltage12v != null && stats.voltage12v < 11.8 -> {
+            stats.voltage12v != null && stats.voltage12v < BatteryThresholds.V12_CRIT -> {
                 candidates += Candidate(
                     priority = 90,
                     title = res.getString(R.string.local_insight_12v_critical_title),
@@ -208,7 +209,9 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.voltage12v != null && stats.voltage12v in 11.8..12.39) {
+        if (stats.voltage12v != null && stats.voltage12v >= BatteryThresholds.V12_CRIT &&
+            stats.voltage12v < BatteryThresholds.V12_WARN
+        ) {
             bullets += InsightBullet(
                 priority = 50,
                 text = res.getString(R.string.local_insight_12v_low, stats.voltage12v),
@@ -444,7 +447,7 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.voltage12v != null && stats.voltage12v >= 12.5) {
+        if (stats.voltage12v != null && stats.voltage12v >= BatteryThresholds.V12_WARN) {
             bullets += InsightBullet(
                 priority = 32,
                 text = res.getString(R.string.local_insight_12v_ok, stats.voltage12v),
@@ -471,12 +474,6 @@ object LocalInsightEngine {
             insights = insights,
         )
     }
-
-    fun notEnoughData(res: Resources): TextResult = TextResult(
-        title = res.getString(R.string.local_insight_not_enough_data_title),
-        summary = res.getString(R.string.local_insight_not_enough_data_summary),
-        insights = emptyList(),
-    )
 
     private fun summaryForConsumptionRise(
         stats: InsightStats,

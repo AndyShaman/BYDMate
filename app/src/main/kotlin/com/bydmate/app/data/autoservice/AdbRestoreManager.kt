@@ -185,7 +185,7 @@ class AdbRestoreManager @Inject constructor(
                     // An explicit "settings" trigger is the user opening the screen to confirm the
                     // dialog right now — the write cooldown exists for triggers nobody is watching
                     // for, and must not make them wait out a wave's own cooldown too.
-                    attemptLocked(gen, isRetry, force = trigger == "settings")
+                    attemptLocked(gen, force = trigger == "settings")
                 } catch (e: CancellationException) {
                     // Switching the toggle off cancels the retry wave, which kills this coroutine
                     // at its next sleep — possibly the settle wait right after our own enable-write.
@@ -299,7 +299,7 @@ class AdbRestoreManager @Inject constructor(
         job.cancel()
     }
 
-    private suspend fun attemptLocked(gen: Int, isRetry: Boolean, force: Boolean) {
+    private suspend fun attemptLocked(gen: Int, force: Boolean) {
         if (!prefs.isEnabled()) {
             transition(AdbRestoreState.Disabled, "toggle off")
             return
@@ -329,8 +329,12 @@ class AdbRestoreManager @Inject constructor(
             return
         }
 
-        if (!enableWirelessDebugging(gen, network, isRetry, force)) return
+        if (!enableWirelessDebugging(gen, network, force)) return
+        restoreOverTls(gen)
+    }
 
+    /** With wireless debugging on: finds adbd's TLS port and asks it for `tcpip:5555`. */
+    private suspend fun restoreOverTls(gen: Int) {
         transition(AdbRestoreState.Connecting, "discovering tls port")
 
         // adbd publishes its own TLS port; when it is there, mDNS discovery (up to 45 s) is pure
@@ -478,25 +482,23 @@ class AdbRestoreManager @Inject constructor(
      * within a few hundred ms while the "Allow wireless debugging on this network?" dialog is
      * unconfirmed — that revert is the only signal that the dialog is waiting.
      *
-     * Re-writing on every trigger would spawn a dialog every time, so writes on one network are
-     * spaced out: closely inside a retry wave (bounded to five minutes, with the user expected to
-     * be looking at the dialog right now), far apart for any other trigger, so a stray event hours
-     * later cannot start nagging. [force] lifts the cooldown for the one trigger that is the user
-     * themselves acting right now (opening Settings) — nobody is nagged by a dialog they asked for.
-     * Returns true when wireless debugging is on.
+     * Every write raises one more dialog on top of the one already waiting, so writes on one
+     * network are spaced by [WRITE_COOLDOWN_MS] for every trigger, retries included: a retry wave
+     * only polls, since ALLOW sets `adb_wifi_enabled=1` itself and the next retry reads it. [force]
+     * lifts the cooldown for the one trigger that is the user themselves acting right now (opening
+     * Settings) — nobody is nagged by a dialog they asked for. Returns true when wireless debugging
+     * is on.
      */
     private suspend fun enableWirelessDebugging(
         gen: Int,
         network: String,
-        isRetry: Boolean,
         force: Boolean,
     ): Boolean {
         if (system.readAdbWifiEnabled() == 1) return true
 
         val now = system.nowMs()
-        val interval = if (isRetry) WRITE_RETRY_INTERVAL_MS else WRITE_COOLDOWN_MS
         val sameNetwork = prefs.lastWriteNetwork() == network
-        val withinCooldown = now - prefs.lastWriteAtMs() < interval
+        val withinCooldown = now - prefs.lastWriteAtMs() < WRITE_COOLDOWN_MS
         if (!force && sameNetwork && withinCooldown) {
             transition(AdbRestoreState.NeedsDialog, "write suppressed, cooldown for $network")
             return false
@@ -545,9 +547,6 @@ class AdbRestoreManager @Inject constructor(
         const val SETTINGS_SETTLE_MS = 1_500L
         const val DISCOVERY_TIMEOUT_MS = 45_000L
         const val WRITE_COOLDOWN_MS = 10 * 60 * 1000L
-
-        /** Shortest gap between two enable-writes on one network inside a retry wave. */
-        const val WRITE_RETRY_INTERVAL_MS = 15_000L
         const val TCPIP_POLL_TIMEOUT_MS = 15_000L
         const val TCPIP_POLL_INTERVAL_MS = 1_000L
 

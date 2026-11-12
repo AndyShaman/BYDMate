@@ -70,7 +70,12 @@ class AutomationEditorSaveViewModelTest {
         actionDispatcher = mockk(relaxed = true),
         settingsRepository = mockk(relaxed = true),
         context = ctx,
-    ).also { testDispatcher.scheduler.advanceUntilIdle() }
+    ).also {
+        // The editor asks the car for rear seats on Dispatchers.IO by default: a real thread that
+        // comes back to Main while tearDown resets it ("Dispatchers.Main is used concurrently").
+        it.ioDispatcher = testDispatcher
+        testDispatcher.scheduler.advanceUntilIdle()
+    }
 
     private fun AutomationViewModel.editWith(actions: List<ActionDef>) = updateEditing {
         copy(

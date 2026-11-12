@@ -204,7 +204,7 @@ class HudWayChannels(
             counter = 0
             positionAgeMs = RETRY_MS
             HudLauncherMapCnFrames.SERVICE_IDS.forEach { id ->
-                val rc = runCatching { bridge.startService(id) }.getOrDefault(THREW)
+                val rc = runCatching { bridge.startService(id) }.getOrDefault(HudSomeIpBridge.THREW)
                 lmcnServices[id] = rc
                 Trace.event(TraceArea.HUD, "way-service", "op" to "start", "id" to HudSomeIpBridge.hex(id), "rc" to rc)
             }
@@ -213,7 +213,7 @@ class HudWayChannels(
         log("hud way: route start way=$way channels=${channels()}$services")
         Trace.event(
             TraceArea.HUD, "way-route", "way" to way, "channels" to channels(),
-            "started" to if (lmcn) okCount(lmcnServices) else "none",
+            "started" to if (lmcn) HudSomeIpBridge.okCount(lmcnServices) else "none",
         )
     }
 
@@ -337,16 +337,8 @@ class HudWayChannels(
         HudLauncherMapCnFrames.update(
             iconId = openBydIcon(s.maneuverGaode), distanceM = glassDistance(s.distanceMeters), remainDistanceM = s.totalDistMeters,
             remainTimeS = s.etaSeconds, position = lastPosition, routeId = routeId, counter = counter, nowMs = nowMs(),
-        ).forEach { e -> countFire(e.topic, fire(bridge, e)) }
+        ).forEach { e -> HudSomeIpBridge.countFire(lmcnFires, e.topic, HudSomeIpBridge.fire(bridge, e)) }
         counter = (counter + 1) and COUNTER_MASK
-    }
-
-    private fun fire(bridge: HudSomeIpBridge, e: HudLauncherMapCnFrames.Event): Int =
-        runCatching { bridge.fireEvent(e.topic, e.payload) }.getOrDefault(THREW)
-
-    private fun countFire(topic: Long, rc: Int) {
-        val counts = lmcnFires.getOrPut(topic) { sortedMapOf() }
-        counts[rc] = (counts[rc] ?: 0) + 1
     }
 
     /** CAN first, while the status is still up, then the family; the route's end line. */
@@ -362,7 +354,7 @@ class HudWayChannels(
         var stopped: Map<Long, Int> = emptyMap()
         val bridge = gateway
         if (bridge != null && lmcnServices.isNotEmpty()) {
-            val off = HudLauncherMapCnFrames.stop(routeId, nowMs()).map { e -> fire(bridge, e).also { countFire(e.topic, it) } }
+            val off = HudLauncherMapCnFrames.stop(routeId, nowMs()).map { e -> HudSomeIpBridge.fire(bridge, e).also { HudSomeIpBridge.countFire(lmcnFires, e.topic, it) } }
             stopped = stopServices(bridge, lmcnServices.keys, prefs, off)
             lmcnServices.clear()
         }
@@ -383,11 +375,11 @@ class HudWayChannels(
         Trace.event(
             TraceArea.HUD, "way-route-end", "way" to way, "can-ok" to routeAccepted, "can-refused" to routeRefused,
             "clear" to clear, "fired" to lmcnFires.values.sumOf { it.values.sum() },
-            "stopped" to if (lmcn) okCount(stopped) else "none",
+            "stopped" to if (lmcn) HudSomeIpBridge.okCount(stopped) else "none",
         )
         // A trace value holds 80 characters: each topic its own line.
         lmcnFires.forEach { (topic, counts) ->
-            Trace.event(TraceArea.HUD, "way-fire", "topic" to HudSomeIpBridge.hex(topic), "rc" to histogram(counts))
+            Trace.event(TraceArea.HUD, "way-fire", "topic" to HudSomeIpBridge.hex(topic), "rc" to HudSomeIpBridge.histogram(counts))
         }
     }
 
@@ -420,8 +412,7 @@ class HudWayChannels(
         private const val MAX_REST_MILEAGE_M = 4_294_967_294L
         /** [sdkOff]: the daemon answers no SDK call at all. */
         private const val SDK_ALL = 0
-        /** rc slot of a gateway call that threw instead of answering. */
-        private const val THREW = -3
+        /** rc of a gateway that is not bound. */
         private const val UNBOUND = -1
 
         /** OpenBYD writes its icon id into TURN_KIND as is; ours is the same numbering (1 = left)
@@ -474,7 +465,7 @@ class HudWayChannels(
 
         /** Every off event and stop answered: not unbound (-1), not a transact that threw (-2), not a
          *  call that threw here (-3). Only then the family's leftover key goes, the HUD check's too. */
-        internal fun stopsAnswered(rcs: Collection<Int>): Boolean = rcs.none { it in THREW..UNBOUND }
+        internal fun stopsAnswered(rcs: Collection<Int>): Boolean = rcs.none { it in HudSomeIpBridge.THREW..UNBOUND }
 
         /** CAN values a process death left: blanked and forgotten; kept when the car refused.
          *  True when nothing is left. */
@@ -500,11 +491,11 @@ class HudWayChannels(
             if (!prefs.contains(KEY_LMCN_LEFT)) return
             val routeId = prefs.getLong(KEY_LMCN_LEFT, 0L)
             val off = HudLauncherMapCnFrames.stop(routeId, nowMs).map { e ->
-                runCatching { gateway.fireEvent(e.topic, e.payload) }.getOrDefault(THREW)
+                runCatching { gateway.fireEvent(e.topic, e.payload) }.getOrDefault(HudSomeIpBridge.THREW)
             }
             val stopped = stopServices(gateway, HudLauncherMapCnFrames.SERVICE_IDS, prefs, off)
             log("hud way: leftover lmcn stop=${HudSomeIpBridge.describeServices(stopped)}")
-            Trace.event(TraceArea.HUD, "way-leftover", "what" to "lmcn", "stopped" to okCount(stopped))
+            Trace.event(TraceArea.HUD, "way-leftover", "what" to "lmcn", "stopped" to HudSomeIpBridge.okCount(stopped))
         }
 
         /** Stops [ids]; the family's leftover key goes once its [off] events and every stop were
@@ -517,17 +508,12 @@ class HudWayChannels(
         ): Map<Long, Int> {
             val stopped = LinkedHashMap<Long, Int>()
             ids.forEach { id ->
-                val rc = runCatching { gateway.stopService(id) }.getOrDefault(THREW)
+                val rc = runCatching { gateway.stopService(id) }.getOrDefault(HudSomeIpBridge.THREW)
                 stopped[id] = rc
                 Trace.event(TraceArea.HUD, "way-service", "op" to "stop", "id" to HudSomeIpBridge.hex(id), "rc" to rc)
             }
             if (stopsAnswered(off + stopped.values)) prefs.edit().remove(KEY_LMCN_LEFT).apply()
             return stopped
         }
-
-        private fun okCount(services: Map<Long, Int>): String = "${services.values.count { it == 0 }}/${services.size}"
-
-        private fun histogram(rcs: Map<Int, Int>): String =
-            rcs.entries.joinToString(",", prefix = "{", postfix = "}") { "${it.key}:${it.value}" }
     }
 }

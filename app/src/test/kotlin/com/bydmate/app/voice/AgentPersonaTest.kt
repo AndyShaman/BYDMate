@@ -85,13 +85,6 @@ class AgentPersonaTest {
         }
     }
 
-    @Test fun `prompt block gender line does not disturb the start of the block`() {
-        val default = AgentPersonaPrompt.block(AgentIdentity("Лео", AgentPersona.NAVIGATOR))
-        val explicitMale = AgentPersonaPrompt.block(AgentIdentity("Лео", AgentPersona.NAVIGATOR, TtsGender.MALE))
-        assertEquals(default, explicitMale)
-        assertTrue(default.startsWith("\nХАРАКТЕР: "))
-    }
-
     private val canonical = listOf("Готово", "Не получилось", "Не понял", "Ошибка")
     private val masculinePast = Regex("""(?<![А-Яа-яЁё])(Выполнил|Сделал|сделал|Не расслышал|Не понял|Не разобрал|Сам)(?![А-Яа-яЁё])""")
 

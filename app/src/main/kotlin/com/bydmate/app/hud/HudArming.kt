@@ -237,12 +237,12 @@ class HudArming(
     /**
      * What a session killed before its disarm left behind (process death at ignition off
      * mid-route): the kept layout or the armed marker in [prefs] says our values are still up.
-     * Undone once, the same way as [disarm], when the HUD starts and no route is [guided]; a guided
+     * Undone once, the same way as [disarm], when the HUD starts and no route is guided; a guided
      * route arms and disarms it itself. Without a kept layout the layout is not written. Null when
-     * there was nothing to undo or it was left to the route.
+     * there was nothing to undo.
      */
-    suspend fun disarmLeftover(guided: Boolean): DisarmReport? {
-        if (!leftover(prefs) || guided) return null
+    suspend fun disarmLeftover(): DisarmReport? {
+        if (!leftover(prefs)) return null
         return disarmKept(REASON_LEFTOVER)
     }
 

@@ -6,6 +6,7 @@ import android.os.IBinder
 import android.os.Parcel
 import android.util.Log
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.helper.describeRootCause
 import java.lang.reflect.Method
 
 /**
@@ -183,7 +184,7 @@ internal object FidPushRegistry {
         val built = runCatching { className?.let { listenerFactory(dev, sink) } }
         val listener = built.getOrNull()
         if (className == null || listener == null) {
-            val text = built.exceptionOrNull()?.let { describe(it) } ?: FID_PUSH_UNSUPPORTED
+            val text = built.exceptionOrNull()?.let { describeRootCause(it) } ?: FID_PUSH_UNSUPPORTED
             fids.forEach {
                 Log.i(TAG, "register dev=$dev fid=$it -> $text")
                 out[it] = FidPushResult(it, dev, text)
@@ -200,7 +201,7 @@ internal object FidPushRegistry {
                 findListenerMethod(device, listener, "unregisterListener", withFeatureIds = false),
             )
         }.getOrElse { t ->
-            val text = describe(t)
+            val text = describeRootCause(t)
             fids.forEach {
                 Log.i(TAG, "register dev=$dev fid=$it -> $text")
                 out[it] = FidPushResult(it, dev, text)
@@ -213,7 +214,7 @@ internal object FidPushRegistry {
             val outcome = runCatching {
                 register.invoke(device, listener, intArrayOf(fid))
                 confirmRegistration(device, fid)
-            }.getOrElse { describe(it) }
+            }.getOrElse { describeRootCause(it) }
             Log.i(TAG, "register dev=$dev fid=$fid -> $outcome")
             out[fid] = FidPushResult(fid, dev, outcome)
             if (outcome == FID_PUSH_OK || outcome == FID_PUSH_SENT) anyLive = true
@@ -284,7 +285,7 @@ internal object FidPushRegistry {
         }.onFailure { t ->
             deliverErrors++
             consecutiveErrors++
-            Log.w(TAG, "deliver failed: ${describe(t)} ($consecutiveErrors in a row)")
+            Log.w(TAG, "deliver failed: ${describeRootCause(t)} ($consecutiveErrors in a row)")
             if (consecutiveErrors >= MAX_DELIVER_ERRORS) dropDeadCallback()
         }
         data.recycle()
@@ -346,7 +347,7 @@ internal object FidPushRegistry {
     private fun unregisterAll(regs: List<Registration>): Int {
         for (reg in regs) {
             runCatching { reg.unregister.invoke(reg.device, reg.listener) }
-                .onFailure { Log.w(TAG, "unregister dev=${reg.dev} failed: ${describe(it)}") }
+                .onFailure { Log.w(TAG, "unregister dev=${reg.dev} failed: ${describeRootCause(it)}") }
         }
         return regs.size
     }
@@ -434,10 +435,4 @@ private fun matchesListenerMethod(
     if (p.size != (if (withFeatureIds) 2 else 1)) return false
     if (!p[0].isAssignableFrom(listener.javaClass)) return false
     return !withFeatureIds || p[1] == IntArray::class.java
-}
-
-/** Reflection hides the real error inside InvocationTargetException — report the root. */
-private fun describe(t: Throwable): String {
-    val root = generateSequence(t) { it.cause }.last()
-    return "${root.javaClass.simpleName}: ${root.message ?: "(no message)"}"
 }

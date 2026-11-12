@@ -1,13 +1,10 @@
 package com.bydmate.app.agent
 
-import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -28,16 +25,21 @@ class AgentToolsAutomationAuditTest {
 
     private val ruleDao = mockk<RuleDao> { coEvery { getCount() } returns 0 }
 
-    private fun tools() = AgentTools(
-        mockk<VoiceGate>(), mockk<BatteryStateRepository>(), mockk<RangeCalculator>(), mockk<TripDao>(),
-        mockk<ChargeDao>(), mockk<ActionDispatcher>(), ruleDao, mockk<AutomationEngine>(),
-        mockk<PlaceRepository>(), mockk<WeatherClient>(), mockk<ExaSearchClient>(), mockk<OpenRouterClient>(),
-        mockk<SettingsRepository>(), mockk<ContactLookup>(), mockk<Context>(relaxed = true),
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = mockk<VoiceGate>(),
+        batteryStateRepository = mockk<BatteryStateRepository>(),
+        rangeCalculator = mockk<RangeCalculator>(),
+        tripDao = mockk<TripDao>(),
+        chargeDao = mockk<ChargeDao>(),
+        actionDispatcher = mockk<ActionDispatcher>(),
+        ruleDao = ruleDao,
+        automationEngine = mockk<AutomationEngine>(),
+        placeRepository = mockk<PlaceRepository>(),
+        weatherClient = mockk<WeatherClient>(),
+        exaSearchClient = mockk<ExaSearchClient>(),
+        openRouterClient = mockk<OpenRouterClient>(),
+        settingsRepository = mockk<SettingsRepository>(),
+        contactLookup = mockk<ContactLookup>(),
     )
 
     private suspend fun create(name: String, trigger: String, actions: String): JSONObject =
@@ -46,16 +48,16 @@ class AgentToolsAutomationAuditTest {
 
     private val socTrigger = """{"kind":"param","param":"SOC","operator":"<","value":"20"}"""
 
-    // Item 9: the editor offers a 60 s pause, the agent may too.
-    @Test fun `a pause of up to 60 s is accepted`() = runTest {
+    // Item 9: the editor offers pauses up to 24 h, the agent may too.
+    @Test fun `a pause of up to 24 h is accepted`() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
         coEvery { ruleDao.insert(any()) } returns 1L
 
-        val ok = create("Пауза", socTrigger, """[{"kind":"delay","ms":60000}]""")
-        val over = create("Длинная", socTrigger, """[{"kind":"delay","ms":60001}]""")
+        val ok = create("Пауза", socTrigger, """[{"kind":"delay","ms":86400000}]""")
+        val over = create("Длинная", socTrigger, """[{"kind":"delay","ms":86400001}]""")
 
         assertTrue(ok.toString(), ok.getBoolean("ok"))
-        assertEquals("не указана длительность паузы (мс, 0..60000)", over.getString("error"))
+        assertEquals("не указана длительность паузы (мс, 0..86400000)", over.getString("error"))
         coVerify(exactly = 1) { ruleDao.insert(any()) }
     }
 

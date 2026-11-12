@@ -3,11 +3,12 @@ package com.bydmate.app.helper.dtc
 import android.hardware.bydauto.BYDAutoEventValue
 import android.hardware.bydauto.mqtt.AbsBYDAutoMqttListener
 import android.util.Log
+import com.bydmate.app.helper.describeRootCause
 import com.bydmate.app.helper.push.FID_PUSH_NOT_IN_FEATURE_MAP
 import com.bydmate.app.helper.push.confirmRegistration
 import com.bydmate.app.helper.push.deviceInstance
 import com.bydmate.app.helper.push.findListenerMethod
-import com.bydmate.app.split.readSystemProperty
+import com.bydmate.app.util.readSystemProperty
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
@@ -59,7 +60,7 @@ internal class DtcVendorDevice : DtcDevice {
 
     override fun register(): String? {
         val dev = runCatching { deviceInstance(DEVICE_CLASS) }.getOrElse { e ->
-            Log.w(TAG, "register failed ${describe(e)}")
+            Log.w(TAG, "register failed ${describeRootCause(e)}")
             return reasonFor(e)
         }
         return runCatching {
@@ -71,7 +72,7 @@ internal class DtcVendorDevice : DtcDevice {
             Log.i(TAG, "register rx=0x%08X map=%s".format(RX, confirmed))
             if (confirmed == FID_PUSH_NOT_IN_FEATURE_MAP) "register_failed not_in_feature_map" else null
         }.getOrElse { e ->
-            Log.w(TAG, "register failed ${describe(e)}")
+            Log.w(TAG, "register failed ${describeRootCause(e)}")
             reasonFor(e)
         }
     }
@@ -113,11 +114,6 @@ internal class DtcVendorDevice : DtcDevice {
         } else {
             "register_failed ${root.javaClass.simpleName}"
         }
-    }
-
-    private fun describe(e: Throwable): String {
-        val root = generateSequence(e) { it.cause }.last()
-        return "${root.javaClass.simpleName}: ${root.message ?: "(no message)"}"
     }
 
     private companion object {

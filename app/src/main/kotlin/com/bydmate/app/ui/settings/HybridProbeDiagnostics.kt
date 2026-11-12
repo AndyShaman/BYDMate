@@ -1,5 +1,7 @@
 package com.bydmate.app.ui.settings
 
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_FLOAT
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.vehicle.BatchReadItem
 
 /**
@@ -41,15 +43,7 @@ internal object HybridProbeDiagnostics {
      * [readings] (daemon unreachable, timeout, old daemon without batch support) or a length
      * mismatch collapses to a single "(unavailable)" line — same contract as the seats block.
      */
-    fun format(readings: List<Pair<Int, Int>>?): List<String> {
-        if (readings == null || readings.size != FIDS.size) return listOf("(unavailable)")
-        return FIDS.mapIndexed { i, f ->
-            val (status, value) = readings[i]
-            val rendered = if (status == 0) value.toString() else "(status=$status)"
-            "${f.name}[dev=${f.dev} fid=${f.fid} tx=${f.tx}]=$rendered"
-        }
-    }
-
-    private const val TX_GET_INT = 5
-    private const val TX_GET_FLOAT = 7
+    fun format(readings: List<Pair<Int, Int>>?): List<String> =
+        FIDS.withReadings(readings)?.map { (f, reading) -> fidDumpRow(f.name, f.dev, f.fid, reading, f.tx) }
+            ?: listOf("(unavailable)")
 }

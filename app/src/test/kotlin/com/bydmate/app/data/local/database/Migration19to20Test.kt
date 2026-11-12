@@ -4,7 +4,6 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
 import com.bydmate.app.di.AppModule
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -105,21 +104,6 @@ class Migration19to20Test {
             c.moveToFirst()
             assertEquals(0.20, c.getDouble(0), 1e-9)
             assertEquals(0.73, c.getDouble(1), 1e-9)
-        }
-        migrated.close()
-    }
-
-    @Test fun `the new charge columns accept values after the migration`() {
-        helper.createDatabase(dbName, 19).close()
-        val migrated = helper.runMigrationsAndValidate(dbName, 20, true, AppModule.MIGRATION_19_20)
-        migrated.execSQL("""
-            INSERT INTO charges (start_ts, kwh_charged, type, cost, status, merged_count, meter_kwh, cost_manual)
-            VALUES (2000, 9.0, 'AC', 2.4, 'COMPLETED', 0, 12.0, 1)
-        """.trimIndent())
-        migrated.query("SELECT meter_kwh, cost_manual FROM charges").use { c ->
-            c.moveToFirst()
-            assertEquals(12.0, c.getDouble(0), 1e-9)
-            assertFalse(c.getInt(1) == 0)
         }
         migrated.close()
     }

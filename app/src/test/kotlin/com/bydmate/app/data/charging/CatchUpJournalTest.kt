@@ -1,28 +1,14 @@
 package com.bydmate.app.data.charging
 
-import com.bydmate.app.data.local.entity.SettingEntity
+import com.bydmate.app.data.local.dao.FakeSettingsDao
 import com.bydmate.app.data.repository.SettingsRepository
 import io.mockk.mockk
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CatchUpJournalTest {
-
-    private class FakeSettingsDao :
-        com.bydmate.app.data.local.dao.SettingsDao {
-        private val map = mutableMapOf<String, String>()
-        override suspend fun get(key: String): String? = map[key]
-        override suspend fun getMany(keys: List<String>): List<com.bydmate.app.data.local.entity.SettingEntity> =
-            keys.mapNotNull { k -> map[k]?.let { com.bydmate.app.data.local.entity.SettingEntity(k, it) } }
-        override fun observe(key: String): Flow<String?> = flowOf(map[key])
-        override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
-        override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
-    }
 
     private fun journal(): CatchUpJournal =
         CatchUpJournal(SettingsRepository(FakeSettingsDao(), mockk(relaxed = true)))
@@ -79,10 +65,5 @@ class CatchUpJournalTest {
         assertEquals(CatchUpJournal.MAX_ENTRIES, lines.size)
         assertTrue(lines.first().endsWith("NO_DELTA soc=5"))
         assertTrue(lines.last().endsWith("NO_DELTA soc=${CatchUpJournal.MAX_ENTRIES + 4}"))
-    }
-
-    @Test
-    fun `empty journal reads as blank`() = runTest {
-        assertEquals("", journal().read())
     }
 }

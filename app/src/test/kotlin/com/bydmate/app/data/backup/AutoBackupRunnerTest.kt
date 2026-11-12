@@ -1,8 +1,7 @@
 package com.bydmate.app.data.backup
 
 import com.bydmate.app.data.local.LocalePreferences
-import com.bydmate.app.data.local.dao.SettingsDao
-import com.bydmate.app.data.local.entity.SettingEntity
+import com.bydmate.app.data.local.dao.FakeSettingsDao
 import com.bydmate.app.data.repository.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -10,9 +9,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -30,17 +27,6 @@ import java.util.Locale
 class AutoBackupRunnerTest {
 
     @get:Rule val tmp = TemporaryFolder()
-
-    private class FakeSettingsDao : SettingsDao {
-        val map = mutableMapOf<String, String>()
-        override suspend fun get(key: String): String? = map[key]
-        override suspend fun getMany(keys: List<String>): List<SettingEntity> =
-            keys.mapNotNull { k -> map[k]?.let { SettingEntity(k, it) } }
-        override fun observe(key: String): Flow<String?> = flowOf(map[key])
-        override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
-        override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
-    }
 
     private lateinit var dir: File
     private lateinit var settings: SettingsRepository

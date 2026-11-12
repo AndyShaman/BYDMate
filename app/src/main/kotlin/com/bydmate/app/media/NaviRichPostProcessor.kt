@@ -1,6 +1,7 @@
 package com.bydmate.app.media
 
 import com.bydmate.app.navdata.NavGuidanceHub
+import com.bydmate.app.navdata.NavGuidanceParser
 import com.bydmate.app.navdata.NavManeuverCodes
 import com.bydmate.app.navdata.NavManeuverRaw
 
@@ -12,9 +13,6 @@ import com.bydmate.app.navdata.NavManeuverRaw
  */
 object NaviRichPostProcessor {
 
-    private val DIST_KM = Regex("""(\d+(?:[.,]\d+)?)\s*(км|km)(?!\S)""", RegexOption.IGNORE_CASE)
-    private val DIST_M = Regex("""(\d+)\s*(м|m)(?!\S)""", RegexOption.IGNORE_CASE)
-    private val TIME_HHMM = Regex("""\b([01]?\d|2[0-3]):([0-5]\d)\b""")
     private val ETA_H = Regex("""(\d+)\s*ч""")
     private val ETA_MIN = Regex("""(\d+)\s*мин""")
 
@@ -38,7 +36,7 @@ object NaviRichPostProcessor {
         ) extrasRoad else ""
 
         // Distance from extras (android.title) when the RV gave none
-        val extrasDist = if (rich.distToManeuverM <= 0) parseDistance(extraTitle ?: "") ?: 0 else 0
+        val extrasDist = if (rich.distToManeuverM <= 0) NavGuidanceParser.parseDistanceMeters(extraTitle ?: "") ?: 0 else 0
 
         val road = when {
             safeRoad.isNotEmpty() -> safeRoad
@@ -87,7 +85,7 @@ object NaviRichPostProcessor {
         val maneuverFromText = NavManeuverCodes.richPhraseGaode("$title $text")
         val maneuver = if (maneuverFromText == 0) NavManeuverCodes.richIconNameGaode(smallIconName)
             else maneuverFromText
-        val parsedDistance = parseDistance(text) ?: parseDistance(title)
+        val parsedDistance = NavGuidanceParser.parseDistanceMeters(text) ?: NavGuidanceParser.parseDistanceMeters(title)
         val distanceMeters = parsedDistance ?: 0
         val road = extractRoad(title, text)
         val etaSeconds = parseEtaSeconds(extraSubText ?: "")
@@ -138,7 +136,7 @@ object NaviRichPostProcessor {
     }
 
     private fun extractRoad(title: String, text: String): String {
-        val hasDist = DIST_KM.containsMatchIn(title) || DIST_M.containsMatchIn(title)
+        val hasDist = NavGuidanceParser.DIST_KM.containsMatchIn(title) || NavGuidanceParser.DIST_M.containsMatchIn(title)
         return if (hasDist) text.trim() else title.trim()
     }
 
@@ -146,17 +144,6 @@ object NaviRichPostProcessor {
      *  full-matches - keep both exactly as the donor has them. */
     private fun isDurationText(s: String): Boolean {
         val t = s.trim()
-        return t.contains("мин") || t.contains("ч") || TIME_HHMM.containsMatchIn(t)
-    }
-
-    private fun parseDistance(s: String): Int? {
-        val km = DIST_KM.find(s)
-        if (km != null) {
-            val v = km.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return null
-            return (v * 1000).toInt()
-        }
-        val m = DIST_M.find(s)
-        if (m != null) return m.groupValues[1].toIntOrNull()
-        return null
+        return t.contains("мин") || t.contains("ч") || NaviRichNotificationParser.TIME_HHMM.containsMatchIn(t)
     }
 }

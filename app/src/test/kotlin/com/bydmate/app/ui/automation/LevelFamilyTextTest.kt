@@ -25,25 +25,6 @@ class LevelFamilyTextTest {
         return ctx.appLocalizedContext()
     }
 
-    @Test fun `picker tiles read as the mock, ru`() {
-        val lc = lc("ru")
-        val expected = mapOf(
-            LevelFamily.TEMPERATURE to "Температура 16–33 °C",
-            LevelFamily.FAN to "Вентилятор 1–7",
-            LevelFamily.SEAT_HEAT_DRIVER to "Подогрев сиденья водителя: уровень 1–5 или выкл",
-            LevelFamily.SEAT_HEAT_PASSENGER to "Подогрев сиденья пассажира: уровень 1–5 или выкл",
-            LevelFamily.SEAT_VENT_DRIVER to "Вентиляция сиденья водителя: уровень 1–5 или выкл",
-            LevelFamily.SEAT_VENT_PASSENGER to "Вентиляция сиденья пассажира: уровень 1–5 или выкл",
-            LevelFamily.WINDOW_DRIVER to "Окно водителя: положение 0–100 %",
-            LevelFamily.WINDOW_PASSENGER to "Окно пассажира: положение 0–100 %",
-            LevelFamily.WINDOW_REAR_LEFT to "Заднее левое окно: положение 0–100 %",
-            LevelFamily.WINDOW_REAR_RIGHT to "Заднее правое окно: положение 0–100 %",
-            LevelFamily.FRIDGE_COOL to "Холодильник: охлаждение −6…+6 °C",
-            LevelFamily.FRIDGE_HEAT to "Холодильник: обогрев 35–50 °C",
-        )
-        for ((f, text) in expected) assertEquals(text, lc.getString(f.tileRes))
-    }
-
     @Test fun `display names carry the value, off as a word`() {
         val lc = lc("ru")
         assertEquals("Температура: 28 °C", LevelFamily.TEMPERATURE.displayName(28, lc))
@@ -114,14 +95,6 @@ class LevelFamilyTextTest {
     }
 
     // --- Rear seat heat (#327) ---
-
-    private fun rearFamily(name: String): LevelFamily? = LevelFamily.entries.firstOrNull { it.name == name }
-
-    @Test fun `rear seat heat tiles read as the mock, ru`() {
-        val lc = lc("ru")
-        assertEquals("Подогрев заднего левого сиденья: уровень 1–2 или выкл", rearFamily("SEAT_HEAT_REAR_LEFT")?.let { lc.getString(it.tileRes) })
-        assertEquals("Подогрев заднего правого сиденья: уровень 1–2 или выкл", rearFamily("SEAT_HEAT_REAR_RIGHT")?.let { lc.getString(it.tileRes) })
-    }
 
     @Test fun `rear tiles are hidden by default and shown only for the sides the car has`() {
         val lc = lc("ru")

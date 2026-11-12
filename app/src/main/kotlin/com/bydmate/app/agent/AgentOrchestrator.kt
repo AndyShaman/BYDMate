@@ -72,15 +72,10 @@ class AgentOrchestrator @Inject constructor(
         onSentence: ((String) -> Unit)? = null,
     ): AgentResult {
         mutex.withLock {
-            if (!settingsRepository.isAgentEnabled()) {
+            notReady()?.let {
                 // Close the follow-up window: a disabled/unconfigured agent must not swallow NLU traffic.
                 lastAnswerAt = 0L
-                return AgentResult.Disabled
-            }
-            if (!backend.isConfigured()) {
-                // Close the follow-up window: a disabled/unconfigured agent must not swallow NLU traffic.
-                lastAnswerAt = 0L
-                return AgentResult.Error("Агент не настроен: заполните адрес, API-ключ и модель в Настройки, Интеграции")
+                return it
             }
             val text = userText.trim()
             // Blank transcript: nothing to ask — degrade like a disabled agent.
@@ -155,8 +150,7 @@ class AgentOrchestrator @Inject constructor(
     suspend fun askDetached(userText: String): AgentResult {
         if (!mutex.tryLock()) return AgentResult.Error("агент занят")
         try {
-            if (!settingsRepository.isAgentEnabled()) return AgentResult.Disabled
-            if (!backend.isConfigured()) return AgentResult.Error("Агент не настроен: заполните адрес, API-ключ и модель в Настройки, Интеграции")
+            notReady()?.let { return it }
             val text = userText.trim()
             if (text.isEmpty()) return AgentResult.Disabled
             val messages = mutableListOf<AgentMessage>(AgentMessage.User(withTimeTag(text)))
@@ -165,6 +159,13 @@ class AgentOrchestrator @Inject constructor(
         } finally {
             mutex.unlock()
         }
+    }
+
+    /** Disabled or Error when the agent may not run a turn at all; null when it may. */
+    private suspend fun notReady(): AgentResult? = when {
+        !settingsRepository.isAgentEnabled() -> AgentResult.Disabled
+        !backend.isConfigured() -> AgentResult.Error(NOT_CONFIGURED_TEXT)
+        else -> null
     }
 
     /** The driver's line plus the local clock time ([TIME_TAG_PREFIX]). The time rides on the
@@ -376,6 +377,9 @@ class AgentOrchestrator @Inject constructor(
         /** Opens the "(время HH:mm)" tag [withTimeTag] adds to every user line; the rule that
          *  time comes only from it lives in the static [SYSTEM_PROMPT]. */
         internal const val TIME_TAG_PREFIX = "время"
+
+        /** Shown when the agent has no address, key or model; also LlmAgentBackend's error. */
+        internal const val NOT_CONFIGURED_TEXT = "Агент не настроен: заполните адрес, API-ключ и модель в Настройки, Интеграции"
         private const val SESSION_TTL_MS = 300_000L
         private const val FOLLOW_UP_WINDOW_MS = 60_000L
         private const val MAX_ITERATIONS = 8

@@ -49,7 +49,7 @@ class VoiceControllerPrecedenceTest {
         val dispatched: MutableList<String> = Collections.synchronizedList(mutableListOf())
     }
 
-    private fun awaitTrue(timeoutMs: Long = 2_000L, condition: () -> Boolean) {
+    private fun awaitTrue(timeoutMs: Long = 10_000L, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
@@ -70,7 +70,7 @@ class VoiceControllerPrecedenceTest {
         val rules = listOfNotNull(automationPhrase?.let { voiceRule(it) })
         val resolver = VoiceAutomationResolver(mockk<RuleDao> { coEvery { getEnabled() } returns rules })
         val engine = mockk<AutomationEngine>(relaxed = true)
-        coEvery { engine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired(true)
+        coEvery { engine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired
         val agent = mockk<AgentOrchestrator>(relaxed = true)
         coEvery { agent.ask(any(), any(), any()) } returns AgentResult.Disabled
         coEvery { agent.expectsFollowUp() } returns false

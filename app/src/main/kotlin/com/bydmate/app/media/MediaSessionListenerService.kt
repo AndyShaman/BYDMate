@@ -1,6 +1,10 @@
 package com.bydmate.app.media
 
 import android.app.Notification
+import android.content.ComponentName
+import android.content.Context
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -23,6 +27,14 @@ class MediaSessionListenerService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "MediaSessionListener"
+
+        /** The active MediaSessions in the system's priority order, asked through this listener's
+         *  component (job 1 above); empty when the call fails (access not granted). */
+        fun activeControllers(context: Context): List<MediaController> = runCatching {
+            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+            val component = ComponentName(context, MediaSessionListenerService::class.java)
+            msm.getActiveSessions(component)
+        }.getOrElse { emptyList() }
 
         /** Bound and connected right now, process-wide (#325): approval alone does not mean the
          *  framework bound us. Same signal as SteeringWheelKeyService.isConnected. */

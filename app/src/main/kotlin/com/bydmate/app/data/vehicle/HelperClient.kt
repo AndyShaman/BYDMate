@@ -640,9 +640,6 @@ interface HelperClient {
      */
     suspend fun pushSubscribe(callback: IBinder, subs: List<FidPushSub>): List<FidPushResult>?
 
-    /** Drops the push subscription (TX_PUSH_UNSUBSCRIBE). False on any transport failure. */
-    suspend fun pushUnsubscribe(): Boolean
-
     /** Live push counters for the dump (TX_PUSH_STATUS); null when the daemon is unreachable. */
     suspend fun pushStatus(): FidPushStatus?
 
@@ -1055,28 +1052,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
      * [mutex.withLock] or [getTopTaskPackageOrSkip]'s [mutex.tryLock]/finally block.
      * Returns the top package name, empty string (no top task), or null on any failure.
      */
-    private fun transactTopPackageBodyUnlocked(): String? {
-        for (attempt in 0..1) {
-            val binder = ensureBinder() ?: return null
-            val data = Parcel.obtain()
-            val reply = Parcel.obtain()
-            try {
-                data.writeInterfaceToken(HelperBinderProtocol.DESCRIPTOR)
-                if (!binder.transact(HelperBinderProtocol.TX_GET_TOP_PACKAGE, data, reply, 0)) return null
-                if (reply.dataAvail() < 4) return null
-                if (reply.readInt() != 0) return null
-                return reply.readString()
-            } catch (e: DeadObjectException) {
-                cached = null
-                if (attempt == 1) { Log.w(TAG, "binder dead after retry: ${e.message}"); return null }
-            } catch (e: Exception) {
-                Log.w(TAG, "transact failed: ${e.message}"); return null
-            } finally {
-                data.recycle(); reply.recycle()
-            }
+    private suspend fun transactTopPackageBodyUnlocked(): String? =
+        transactBodyUnlocked(HelperBinderProtocol.TX_GET_TOP_PACKAGE, { }) { reply ->
+            if (reply.dataAvail() < 4) return@transactBodyUnlocked null
+            if (reply.readInt() != 0) return@transactBodyUnlocked null
+            reply.readString()
         }
-        return null
-    }
 
     // RAISE_TIMEOUT_MS, not the default 2s: the daemon side spawns two processes
     // (cmd package resolve-activity + am start) — each can outrun REQ_TIMEOUT_MS on cold
@@ -1291,9 +1272,6 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             if (reply.readInt() != 0) return@transactParsed null
             readResultTable(reply)
         }
-
-    override suspend fun pushUnsubscribe(): Boolean =
-        statusOk(HelperBinderProtocol.TX_PUSH_UNSUBSCRIBE) { }
 
     override suspend fun pushStatus(): FidPushStatus? =
         transactParsed(HelperBinderProtocol.TX_PUSH_STATUS, { }) { reply ->

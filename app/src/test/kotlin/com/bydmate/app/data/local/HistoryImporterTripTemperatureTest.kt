@@ -1,10 +1,6 @@
 package com.bydmate.app.data.local
 
-import android.content.Context
-import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.local.dao.TripPointDao
-import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -31,22 +27,12 @@ class HistoryImporterTripTemperatureTest {
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val lastSessionRepository = mockk<LastSessionRepository>(relaxed = true)
 
-    private fun importer() = HistoryImporter(
-        context = mockk<Context>(relaxed = true),
+    private fun importer() = historyImporter(
         energyDataReader = energyDataReader,
         tripRepository = tripRepository,
         tripDao = tripDao,
-        tripPointDao = mockk<TripPointDao>(relaxed = true),
-        idleDrainDao = mockk<IdleDrainDao>(relaxed = true),
         settingsRepository = settingsRepository,
         lastSessionRepository = lastSessionRepository,
-        tripTombstoneDao = mockk<TripTombstoneDao>(relaxed = true),
-        costCalculator = mockk(relaxed = true),
-        odometerMarks = mockk(relaxed = true),
-        vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(),
-        counterSnapshotDao = mockk(relaxed = true),
-        counterSnapshotWriter = mockk(relaxed = true),
-        lastStateDao = mockk(relaxed = true),
     )
 
     private val record = BydTripRecord(
@@ -109,5 +95,30 @@ class HistoryImporterTripTemperatureTest {
             HistoryImporter.importedTempEnd(
                 sessionTemp = null, endTsMs = endTs, nowMs = endTs + 3_600_000L, liveTemp = 14),
         )
+    }
+
+    // energydata has no temperature of its own, so an imported trip may only borrow the live one
+    // while the drive has just ended. Everything older is left empty on purpose.
+    private val now = 1_000_000_000L
+
+    @Test
+    fun `a trip that ended a minute ago takes the live temperature`() {
+        assertEquals(-7, HistoryImporter.importedExteriorTemp(now - 60_000L, now, -7))
+    }
+
+    @Test
+    fun `the window closes after ten minutes`() {
+        assertEquals(-7, HistoryImporter.importedExteriorTemp(now - 10 * 60_000L, now, -7))
+        assertNull(HistoryImporter.importedExteriorTemp(now - 10 * 60_000L - 1, now, -7))
+    }
+
+    @Test
+    fun `no live reading means no temperature`() {
+        assertNull(HistoryImporter.importedExteriorTemp(now, now, null))
+    }
+
+    @Test
+    fun `a trip stamped in the future is not borrowed from either`() {
+        assertNull(HistoryImporter.importedExteriorTemp(now + 60_000L, now, -7))
     }
 }

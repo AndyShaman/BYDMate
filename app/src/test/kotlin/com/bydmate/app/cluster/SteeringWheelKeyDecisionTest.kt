@@ -84,10 +84,6 @@ class SteeringWheelKeyDecisionTest {
         assertEquals(LearnAction.CONSUME, learnDecision(309, isDown = false))
     }
 
-    @Test fun `learn companion window is 300 ms`() {
-        assertEquals(300L, LEARN_COMPANION_WINDOW_MS)
-    }
-
     @Test fun `a different assignable key inside the window is a companion of the learned press`() {
         // Atto 3: the mic button sends 304, then 327 for the same press.
         assertTrue(isLearnCompanion(327, isDown = true, primaryKeyCode = 304, primaryAtMs = 1_000, nowMs = 1_000))
@@ -115,7 +111,7 @@ class SteeringWheelKeyDecisionTest {
     @Test fun `knob press while disabled passes through to the native source switch`() {
         assertEquals(
             KnobDecision.PASS_THROUGH,
-            knobDecision(VOLUME_KNOB_PRESS_KEYCODE, isDown = true, enabled = false),
+            knobDecision(353, isDown = true, enabled = false),
         )
     }
 
@@ -126,19 +122,15 @@ class SteeringWheelKeyDecisionTest {
     @Test fun `knob down while enabled sends play pause and is consumed`() {
         assertEquals(
             KnobDecision.CONSUME_AND_PLAY_PAUSE,
-            knobDecision(VOLUME_KNOB_PRESS_KEYCODE, isDown = true, enabled = true),
+            knobDecision(353, isDown = true, enabled = true),
         )
     }
 
     @Test fun `knob up while enabled is consumed without a second play pause`() {
         assertEquals(
             KnobDecision.CONSUME,
-            knobDecision(VOLUME_KNOB_PRESS_KEYCODE, isDown = false, enabled = true),
+            knobDecision(353, isDown = false, enabled = true),
         )
-    }
-
-    @Test fun `knob keycode is KEYCODE_AUTO_MEDIA_PLAY_PAUSE`() {
-        assertEquals(353, VOLUME_KNOB_PRESS_KEYCODE)
     }
 
     // #326 / #367: on DiLink 3/4 (Han 2022, Seal 2022) the knob press arrives as 293, not 353.

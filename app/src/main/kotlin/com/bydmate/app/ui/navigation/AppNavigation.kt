@@ -28,8 +28,8 @@ import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -88,8 +88,8 @@ private val NavBarItemChrome = 40.dp
 
 enum class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
     Dashboard("dashboard", R.string.nav_tab_dashboard, Icons.Outlined.Home),
-    Tech("tech_panel", R.string.tech_title, Icons.Outlined.Speed),
-    Trips("trips", R.string.nav_tab_trips, Icons.Outlined.DirectionsCar),
+    Tech("tech_panel", R.string.tech_title, Icons.Outlined.DirectionsCar),
+    Trips("trips", R.string.nav_tab_trips, Icons.Outlined.Route),
     Charges("charges", R.string.nav_tab_charges, Icons.Outlined.BatteryChargingFull),
     Automation("automation", R.string.nav_tab_automation, Icons.Outlined.Bolt),
     Settings("settings", R.string.nav_tab_settings, Icons.Outlined.Settings)
@@ -315,7 +315,7 @@ fun AppNavigation(
                 TripsScreen(onOpenTemperature = { navController.navigate("trip_temperature") })
             }
             composable(Screen.Charges.route) {
-                ChargesScreen(onNavigateSettings = { navController.navigate(Screen.Settings.route) })
+                ChargesScreen()
             }
             composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) {

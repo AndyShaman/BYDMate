@@ -4,7 +4,6 @@ import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.FidAddresses
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -32,7 +31,6 @@ import org.junit.Test
  */
 class VehicleApiWriteTest {
 
-    private val parsReader: ParsReader = mockk(relaxed = true)
     private val autoservice: AutoserviceClient = mockk(relaxed = true)
     private val helper: HelperClient = mockk()
     private val writeLogDao: VehicleWriteLogDao = mockk(relaxed = true)
@@ -57,7 +55,7 @@ class VehicleApiWriteTest {
         override fun setCtrlCandidateAtMs(ts: Long) {}
     }
 
-    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
+    private val api: VehicleApiImpl = VehicleApiImpl(autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
 
     // ── Test 1: writeAcOn happy path ──────────────────────────────────────────
 
@@ -66,7 +64,7 @@ class VehicleApiWriteTest {
         // ac_on = ac_power (501219364) set to 1 (ON); no readbackFid
         coEvery { helper.write(entry.dev, entry.writeFid, 1) } returns true
 
-        assertTrue(api.writeAcOn().isSuccess)
+        assertTrue(api.doWrite("ac_on", 1).isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 1) }
         // No readback for ac_on
         coVerify(exactly = 0) { helper.read(any(), any()) }
@@ -75,14 +73,14 @@ class VehicleApiWriteTest {
     // ── Test 2: writeSetDriverTemp out of range rejected ──────────────────────
 
     @Test fun `writeSetDriverTemp with celsius=99 is rejected before calling helper`() = runTest {
-        val result = api.writeSetDriverTemp(99)
+        val result = api.doWrite("ac_temp_main", 99)
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.OutOfRange)
         coVerify(exactly = 0) { helper.write(any(), any(), any()) }
     }
 
     @Test fun `writeSetDriverTemp with celsius=5 is rejected before calling helper`() = runTest {
-        val result = api.writeSetDriverTemp(5)
+        val result = api.doWrite("ac_temp_main", 5)
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.OutOfRange)
         coVerify(exactly = 0) { helper.write(any(), any(), any()) }
@@ -95,7 +93,7 @@ class VehicleApiWriteTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 1) } returns true
         // No readback for doors_unlock (see WriteAllowlist comment).
 
-        assertTrue(api.writeUnlockDoors().isSuccess)
+        assertTrue(api.doWrite("doors_unlock", 1).isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 1) }
     }
 
@@ -106,15 +104,15 @@ class VehicleApiWriteTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 2) } returns true
         // No readback for doors_lock (see WriteAllowlist comment).
 
-        assertTrue(api.writeLockDoors().isSuccess)
+        assertTrue(api.doWrite("doors_lock", 2).isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 2) }
     }
 
     // ── Test 5: allowlist miss returns failure without crash ──────────────────
 
     @Test fun `write method with EMPTY allowlist returns failure AllowlistMiss without throwing`() = runTest {
-        val emptyApi: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, WriteAllowlist.EMPTY, writeLogDao, seatStore, windowStore)
-        val result = emptyApi.writeAcOn()
+        val emptyApi: VehicleApiImpl = VehicleApiImpl(autoservice, helper, WriteAllowlist.EMPTY, writeLogDao, seatStore, windowStore)
+        val result = emptyApi.doWrite("ac_on", 1)
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.AllowlistMiss)
         coVerify(exactly = 0) { helper.write(any(), any(), any()) }
@@ -131,7 +129,7 @@ class VehicleApiWriteTest {
         // state (1) right after writing 2. Stub is unreachable if the fix holds.
         coEvery { helper.read(entry.dev, 1081081864) } returns 1L
 
-        val result = api.writeLockDoors()
+        val result = api.doWrite("doors_lock", 2)
         assertTrue(result.isSuccess)
         coVerify(exactly = 0) { helper.read(any(), any()) }
     }
@@ -144,7 +142,7 @@ class VehicleApiWriteTest {
         // window_driver_pos has no readbackFid; an unreadable position means the movement
         // verification has no evidence and leaves the outcome alone (see the wave 3 block below).
         coEvery { autoservice.getIntRaw(any(), any()) } returns null
-        assertTrue(api.writeWindowDriver(50).isSuccess)
+        assertTrue(api.doWrite("window_driver_pos", 50).isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 50) }
     }
 
@@ -158,7 +156,7 @@ class VehicleApiWriteTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 50) } returns true
         coEvery { autoservice.getIntRaw(any(), any()) } coAnswers { awaitCancellation() }
 
-        val result = withTimeout(1_000) { api.writeWindowDriver(50) }
+        val result = withTimeout(1_000) { api.doWrite("window_driver_pos", 50) }
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 50) }
@@ -169,13 +167,13 @@ class VehicleApiWriteTest {
     // racing the WINDOW_BEFORE_READ_BUDGET_MS timeout against the real IO scheduler.
     @Test fun `writeWindowDriver reads the before position ahead of the write when the read is fast`() = runBlocking {
         val entry = allowlist.find("window_driver_pos")!!
-        val impl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
+        val impl = VehicleApiImpl(autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
         impl.readbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val calls = mutableListOf<String>()
         coEvery { autoservice.getIntRaw(any(), any()) } coAnswers { calls.add("read"); null }
         coEvery { helper.write(entry.dev, entry.writeFid, 50) } coAnswers { calls.add("write"); true }
 
-        val result = impl.writeWindowDriver(50)
+        val result = impl.doWrite("window_driver_pos", 50)
 
         assertTrue(result.isSuccess)
         assertEquals(listOf("read", "write"), calls)
@@ -186,7 +184,7 @@ class VehicleApiWriteTest {
     // Unconfined readback scope so the "before" sample is taken deterministically before the
     // write; runTest's virtual clock makes the two 400 ms verification waits free.
     private fun verifyingApi() = VehicleApiImpl(
-        parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore,
+        autoservice, helper, allowlist, writeLogDao, seatStore, windowStore,
     ).also { it.readbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined) }
 
     @Test fun `window write that does not move the pane is reported as a failure`() = runTest {
@@ -194,7 +192,7 @@ class VehicleApiWriteTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
         coEvery { autoservice.getIntRaw(any(), any()) } returns 100
 
-        val result = verifyingApi().writeWindowDriver(0)
+        val result = verifyingApi().doWrite("window_driver_pos", 0)
 
         assertTrue(result.isFailure)
         val err = result.exceptionOrNull() as VehicleWriteError.ReadbackMismatch
@@ -208,7 +206,7 @@ class VehicleApiWriteTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
         coEvery { autoservice.getIntRaw(any(), any()) } returnsMany listOf(100, 82)
 
-        assertTrue(verifyingApi().writeWindowDriver(0).isSuccess)
+        assertTrue(verifyingApi().doWrite("window_driver_pos", 0).isSuccess)
     }
 
     // A read we could not take is not evidence against the write: fail open, never invent a
@@ -218,7 +216,7 @@ class VehicleApiWriteTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
         coEvery { autoservice.getIntRaw(any(), any()) } returnsMany listOf(100, null)
 
-        assertTrue(verifyingApi().writeWindowDriver(0).isSuccess)
+        assertTrue(verifyingApi().doWrite("window_driver_pos", 0).isSuccess)
     }
 
     @Test fun `pane already at the requested position is not verified at all`() = runTest {
@@ -226,7 +224,7 @@ class VehicleApiWriteTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 100) } returns true
         coEvery { autoservice.getIntRaw(any(), any()) } returns 100
 
-        assertTrue(verifyingApi().writeWindowDriver(100).isSuccess)
+        assertTrue(verifyingApi().doWrite("window_driver_pos", 100).isSuccess)
         coVerify(exactly = 1) { autoservice.getIntRaw(any(), any()) }
     }
 
@@ -236,13 +234,13 @@ class VehicleApiWriteTest {
         coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
         coEvery { autoservice.getIntRaw(any(), any()) } returns -10011
 
-        assertTrue(verifyingApi().writeWindowDriver(0).isSuccess)
+        assertTrue(verifyingApi().doWrite("window_driver_pos", 0).isSuccess)
     }
 
     @Test fun `writeWindowDriver returns failure HelperUnreachable when helper write fails (validated entry)`() = runTest {
         val entry = allowlist.find("window_driver_pos")!!
         coEvery { helper.write(entry.dev, entry.writeFid, 50) } returns false
-        val result = api.writeWindowDriver(50)
+        val result = api.doWrite("window_driver_pos", 50)
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.HelperUnreachable)
     }
@@ -252,7 +250,7 @@ class VehicleApiWriteTest {
     @Test fun `writeSunroof TILT calls helper with sunroof_tilt entry fid and val=3`() = runTest {
         val entry = allowlist.find("sunroof_tilt")!!
         coEvery { helper.write(entry.dev, entry.writeFid, 3) } returns true
-        assertTrue(api.writeSunroof(SunroofMode.TILT).isSuccess)
+        assertTrue(api.doWrite("sunroof_tilt", 3).isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 3) }
     }
 
@@ -261,14 +259,14 @@ class VehicleApiWriteTest {
     @Test fun `writeSunshade open=true calls sunshade_open entry with val=1`() = runTest {
         val entry = allowlist.find("sunshade_open")!!
         coEvery { helper.write(entry.dev, entry.writeFid, 1) } returns true
-        assertTrue(api.writeSunshade(open = true).isSuccess)
+        assertTrue(api.doWrite("sunshade_open", 1).isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 1) }
     }
 
     @Test fun `writeSunshade open=false calls sunshade_close entry with val=2`() = runTest {
         val entry = allowlist.find("sunshade_close")!!
         coEvery { helper.write(entry.dev, entry.writeFid, 2) } returns true
-        assertTrue(api.writeSunshade(open = false).isSuccess)
+        assertTrue(api.doWrite("sunshade_close", 2).isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 2) }
     }
 
@@ -397,15 +395,15 @@ class VehicleApiWriteTest {
 
     @Test fun `rear logo light on and off write 1 and 2 once each (383)`() = runTest {
         coEvery { helper.write(1004, 1324621876, any()) } returns true
-        assertTrue((api as VehicleApiImpl).doWrite("rear_logo_light_on", 1).isSuccess)
+        assertTrue(api.doWrite("rear_logo_light_on", 1).isSuccess)
         coVerify(exactly = 1) { helper.write(1004, 1324621876, 1) }
-        assertTrue((api as VehicleApiImpl).doWrite("rear_logo_light_off", 2).isSuccess)
+        assertTrue(api.doWrite("rear_logo_light_off", 2).isSuccess)
         coVerify(exactly = 1) { helper.write(1004, 1324621876, 2) }
     }
 
     @Test fun `rear logo light rejects values outside its single value (383)`() = runTest {
         for ((name, v) in listOf("rear_logo_light_on" to 0, "rear_logo_light_on" to 2, "rear_logo_light_off" to 3)) {
-            val r = (api as VehicleApiImpl).doWrite(name, v)
+            val r = api.doWrite(name, v)
             assertTrue("$name $v", r.exceptionOrNull() is VehicleWriteError.OutOfRange)
         }
         coVerify(exactly = 0) { helper.write(any(), any(), any()) }
@@ -413,7 +411,7 @@ class VehicleApiWriteTest {
 
     @Test fun `rear logo light is live-validated, helper false is HelperUnreachable (383)`() = runTest {
         coEvery { helper.write(1004, 1324621876, 1) } returns false
-        val r = (api as VehicleApiImpl).doWrite("rear_logo_light_on", 1)
+        val r = api.doWrite("rear_logo_light_on", 1)
         assertTrue(r.exceptionOrNull() is VehicleWriteError.HelperUnreachable)
     }
 
@@ -442,7 +440,7 @@ class VehicleApiWriteTest {
         val insertions = mutableListOf<VehicleWriteLogEntity>()
         coEvery { helper.write(1000, 501219364, 1) } returns true
         coEvery { writeLogDao.insert(capture(insertions)) } returns Unit
-        api.writeAcOn()
+        api.doWrite("ac_on", 1)
         // Expect 2 rows: attempt (status=-2) + outcome (status=0)
         coVerify(exactly = 2) { writeLogDao.insert(any()) }
         val attempt = insertions.first { it.status == -2 }

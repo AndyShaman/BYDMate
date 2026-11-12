@@ -5,6 +5,7 @@ import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_CHARGES
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_DC
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_HOME
+import com.bydmate.app.data.repository.parseNumericSetting
 
 /** Price of one kWh in the pack at a point in time, and where it came from. */
 data class BatteryPrice(
@@ -76,7 +77,7 @@ class TariffSchedule(periods: List<TariffPeriodEntity>) {
             TRIP_RULE_HOME -> period.homeRate
             TRIP_RULE_DC -> period.dcRate
             TRIP_RULE_CHARGES -> null
-            else -> period.tripRule.replace(',', '.').trim().toDoubleOrNull() ?: period.homeRate
+            else -> period.tripRule.parseNumericSetting() ?: period.homeRate
         }
     }
 }

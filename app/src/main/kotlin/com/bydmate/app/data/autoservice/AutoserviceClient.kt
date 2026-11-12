@@ -26,14 +26,6 @@ interface AutoserviceClient {
     suspend fun getFloat(dev: Int, fid: Int): Float?
     suspend fun readBatterySnapshot(): BatteryReading?
     suspend fun readChargingSnapshot(): ChargingReading?
-
-    /**
-     * Live battery power in kW from autoservice ENG_POW. Single-read wrapper
-     * over getInt — IternioTelemetryClient applies the [-300, +500] sanity
-     * envelope, so this returns the raw decoded value or null on
-     * sentinel/parse/ADB failure.
-     */
-    suspend fun getEnginePowerKw(): Int?
 }
 
 /** Per-key log throttle: allows one line per key per window; pure function of (key, now) state. */
@@ -148,11 +140,6 @@ class AutoserviceClientImpl @Inject constructor(
             voltage12v = getFloat("voltage12v"),
             readAtMs = System.currentTimeMillis()
         )
-    }
-
-    override suspend fun getEnginePowerKw(): Int? {
-        if (!adb.isConnected()) return null
-        return getInt("power")
     }
 
     override suspend fun readChargingSnapshot(): ChargingReading? {

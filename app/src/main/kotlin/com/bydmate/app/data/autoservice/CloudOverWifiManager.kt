@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -28,6 +29,11 @@ interface CloudOverWifiPreferences {
     fun savedProfile(): String?
 
     fun setSavedProfile(profile: String?)
+
+    /** [CloudOverWifiSystem.firmwareFingerprint] of a firmware seen without a data profile; null when none. */
+    fun profileMissingFingerprint(): String?
+
+    fun setProfileMissingFingerprint(fingerprint: String?)
 }
 
 /** SharedPreferences-backed production implementation, file "cloud_over_wifi". */
@@ -50,10 +56,17 @@ class CloudOverWifiPreferencesImpl(context: Context) : CloudOverWifiPreferences 
         prefs.edit().putString(KEY_SAVED_PROFILE, profile).commit()
     }
 
+    override fun profileMissingFingerprint(): String? = prefs.getString(KEY_PROFILE_MISSING_FP, null)
+
+    override fun setProfileMissingFingerprint(fingerprint: String?) {
+        prefs.edit().putString(KEY_PROFILE_MISSING_FP, fingerprint).apply()
+    }
+
     companion object {
         const val PREFS_NAME = "cloud_over_wifi"
         const val KEY_ENABLED = "enabled"
         const val KEY_SAVED_PROFILE = "saved_profile"
+        const val KEY_PROFILE_MISSING_FP = "profile_missing_fp"
     }
 }
 
@@ -61,6 +74,9 @@ class CloudOverWifiPreferencesImpl(context: Context) : CloudOverWifiPreferences 
 interface CloudOverWifiSystem {
     /** True when a Wi-Fi network with validated internet is up. */
     fun hasValidatedWifi(): Boolean
+
+    /** The firmware build; a verdict about the firmware is dropped when it changes (OTA). */
+    fun firmwareFingerprint(): String
 
     suspend fun sleep(ms: Long)
 }
@@ -80,6 +96,8 @@ class AndroidCloudOverWifiSystem @Inject constructor(
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         }
     }.getOrDefault(false)
+
+    override fun firmwareFingerprint(): String = Build.FINGERPRINT.orEmpty()
 
     override suspend fun sleep(ms: Long) = delay(ms)
 }
@@ -115,6 +133,12 @@ sealed class CloudOverWifiState {
 
     /** Toggle is off but the car is not confirmed back on the profile we switched away from yet. */
     data object ReturnPending : CloudOverWifiState()
+
+    /**
+     * This firmware has no data-profile property at all (DiLink 3/4, #330): there is nothing to
+     * switch, so the feature cannot work here. Kept until the firmware changes.
+     */
+    data object Unavailable : CloudOverWifiState()
 }
 
 /**
@@ -139,7 +163,7 @@ class CloudOverWifiManager @Inject constructor(
     @AdbRestoreScope private val scope: CoroutineScope,
 ) {
 
-    private val _state = MutableStateFlow<CloudOverWifiState>(CloudOverWifiState.Disabled)
+    private val _state = MutableStateFlow(offState())
     val state: StateFlow<CloudOverWifiState> = _state.asStateFlow()
 
     /** Label of the last trigger that ran an attempt — for the dump. */
@@ -168,7 +192,7 @@ class CloudOverWifiManager @Inject constructor(
         prefs.setEnabled(enabled)
         Log.i(TAG, "toggle enabled=$enabled saved=${prefs.savedProfile()}")
         if (!enabled) {
-            transition(CloudOverWifiState.Disabled, "toggle off")
+            transition(offState(), "toggle off")
             requestAttempt(TRIGGER_TOGGLE_OFF)
         }
     }
@@ -244,7 +268,7 @@ class CloudOverWifiManager @Inject constructor(
     private suspend fun attemptLocked() {
         if (!prefs.isEnabled()) {
             val saved = prefs.savedProfile()
-            if (saved != null) restore(saved) else transition(CloudOverWifiState.Disabled, "toggle off")
+            if (saved != null) restore(saved) else transition(offState(), "toggle off")
             return
         }
         if (adb.connect().isFailure) {
@@ -307,6 +331,13 @@ class CloudOverWifiManager @Inject constructor(
     private suspend fun switchProfile(before: Profile): Boolean {
         // A blank current profile (property never set) falls back to the factory one.
         val back = prefs.savedProfile() ?: before.effective
+        if (back.isBlank()) {
+            // Both properties were read and both are empty: the firmware has no data profile,
+            // which is not a refusal of the car (#330). A failed read never gets here.
+            prefs.setProfileMissingFingerprint(system.firmwareFingerprint())
+            transition(CloudOverWifiState.Unavailable, "no data profile property on this firmware")
+            return false
+        }
         if (!back.matches(PROFILE_NAME)) {
             transition(CloudOverWifiState.ProfileRejected, "no valid profile to return to: '$back'")
             return false
@@ -446,6 +477,11 @@ class CloudOverWifiManager @Inject constructor(
             "app_reg=${getprop("persist.sys.cloud.app_reg_status")} " +
             "sim=${getprop("gsm.sim.operator.numeric")}/${getprop("gsm.sim.operator.iso-country")}"
     }
+
+    /** The state with the toggle off: [CloudOverWifiState.Unavailable] on a firmware seen without a profile. */
+    private fun offState(): CloudOverWifiState =
+        if (prefs.profileMissingFingerprint() == system.firmwareFingerprint()) CloudOverWifiState.Unavailable
+        else CloudOverWifiState.Disabled
 
     private fun transition(next: CloudOverWifiState, reason: String) {
         _state.value = next

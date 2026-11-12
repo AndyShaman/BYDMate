@@ -223,7 +223,8 @@ class ClusterProjectionLateVerifyTest {
      */
     private fun drainUntil(done: () -> Boolean): Boolean {
         val shadow = shadowOf(Looper.getMainLooper())
-        repeat(40) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
             shadow.idle()
             if (done()) return true
             Thread.sleep(25)

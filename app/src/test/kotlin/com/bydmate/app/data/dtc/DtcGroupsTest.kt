@@ -9,7 +9,7 @@ class DtcGroupsTest {
 
     private val found get() = DtcParser.summarize(DtcFixtures.preClearScan()).found
 
-    private fun row(code: String, status: Int = 0x08, kind: DtcKind = DtcKind.OLD) = DtcRow(code, status, kind, 0x87)
+    private fun row(code: String, status: Int = 0x08, kind: DtcKind = DtcKind.OLD) = DtcRow(code, status, kind)
 
     private fun at(addr: Int, block: DtcBlock, vararg rows: DtcRow) =
         rows.map { DtcFound(addr, it, DtcBlockName(block, addr)) }
@@ -58,8 +58,7 @@ class DtcGroupsTest {
         val results = DtcFixtures.preClearScan()
         val perAddress = results.sumOf { r ->
             val list = r.listUds ?: return@sumOf 0
-            val format = r.countUds?.let { DtcParser.parseCount(it) }?.format
-            DtcParser.parseList(list, format).rows.count { it.kind == DtcKind.OLD }
+            DtcParser.parseList(list).rows.count { it.kind == DtcKind.OLD }
         }
         assertEquals(perAddress - 5, DtcParser.summarize(results).old)
     }

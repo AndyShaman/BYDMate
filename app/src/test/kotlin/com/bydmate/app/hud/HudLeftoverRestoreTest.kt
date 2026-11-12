@@ -16,10 +16,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,6 +43,7 @@ class HudLeftoverRestoreTest {
     private val writes = Collections.synchronizedList(mutableListOf<Pair<Pair<Int, Int>, Int>>())
     private lateinit var state: MutableMap<Pair<Int, Int>, Int>
     private val reads = AtomicInteger()
+    private val time = HudVirtualTime()
 
     @Before fun reset() {
         NavGuidanceHub.reset()
@@ -76,10 +76,17 @@ class HudLeftoverRestoreTest {
         }
     }
 
+    @After fun stopLoops() {
+        time.close()
+        NavGuidanceHub.reset()
+        NavGuidanceHub.hudWay = 0
+        NavA11yFeed.enabled = false
+    }
+
     private fun prefs() = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
 
     private fun controller(): HudController = HudController(context, helperClient, helperBootstrap).apply {
-        scope = CoroutineScope(Dispatchers.Unconfined)
+        scope = time.scope
         bridgeFactory = { _, _ -> bridge }
         leftoverRetryMs = RETRY_MS
     }
@@ -105,7 +112,7 @@ class HudLeftoverRestoreTest {
         state[HudArming.CLUSTER] = HudArming.CLUSTER_FULLSCREEN
         val c = controller()
         c.startIfEnabled()
-        Thread.sleep(RETRY_MS * 4)
+        time.advance(RETRY_MS * 4)
         assertEquals(0, layoutWrites())
         assertEquals(3, state[HudArming.SCREEN])
         assertEquals(4, state[HudArming.NAVI])   // the status is lowered at once, only the layout waits
@@ -113,7 +120,7 @@ class HudLeftoverRestoreTest {
         awaitTrue { state[HudArming.SCREEN] == 1 }
         awaitTrue { !prefs().contains(HudArming.KEY_AS_FOUND) }
         val after = writes.size
-        Thread.sleep(RETRY_MS * 4)
+        time.advance(RETRY_MS * 4)
         assertEquals(after, writes.size)
         c.setEnabled(false)
     }
@@ -127,7 +134,7 @@ class HudLeftoverRestoreTest {
         state[HudArming.CLUSTER] = HudArming.CLUSTER_FULLSCREEN
         c.setMode(HudController.MODE_GLASS_ONLY)
         awaitTrue { state[HudArming.NAVI] == 4 }
-        Thread.sleep(RETRY_MS * 4)
+        time.advance(RETRY_MS * 4)
         assertEquals(3, state[HudArming.SCREEN])
         state[HudArming.CLUSTER] = 0
         awaitTrue { state[HudArming.SCREEN] == 1 }
@@ -142,7 +149,7 @@ class HudLeftoverRestoreTest {
         coEvery { bridge.bind() } coAnswers { bindGate.await(); true }
         val c = controller()
         c.startIfEnabled()
-        Thread.sleep(RETRY_MS * 2)
+        time.advance(RETRY_MS * 2)
         assertEquals(2, state[HudArming.NAVI])   // mode 2 with a route: left to the arming loop
         c.setMode(HudController.MODE_GLASS_ONLY)
         bindGate.complete(Unit)
@@ -159,9 +166,9 @@ class HudLeftoverRestoreTest {
         guideRoute()
         val c = controller()
         c.startIfEnabled()
-        Thread.sleep(RETRY_MS * 6)
+        time.advance(RETRY_MS * 6)
         c.setMode(HudController.MODE_GLASS_ONLY)
-        Thread.sleep(RETRY_MS * 4)
+        time.advance(RETRY_MS * 4)
         c.setEnabled(false)
         assertTrue(writes.isEmpty())
         coVerify(exactly = 0) { helperClient.writeStatus(any(), any(), any(), any()) }
@@ -175,7 +182,7 @@ class HudLeftoverRestoreTest {
         val c = controller()
         c.startIfEnabled()
         awaitTrue { c.armingLive }
-        Thread.sleep(RETRY_MS * 6)
+        time.advance(RETRY_MS * 6)
         // The route holds the status: nothing lowered it, the loop owns the kept as-found.
         coVerify(exactly = 0) { helperClient.hudNaviStatus(4) }
         assertTrue(synchronized(writes) { writes.none { it == HudArming.NAVI to 4 || it == HudArming.SCREEN to 1 } })
@@ -208,10 +215,10 @@ class HudLeftoverRestoreTest {
         NavGuidanceHub.reset()   // route over: a stray put-back job would poll the car now
         gate.complete(Unit)
         awaitTrue { c.status.value != HudController.Status.ON }
-        Thread.sleep(RETRY_MS * 2)
+        time.advance(RETRY_MS * 2)
         val readsAfter = reads.get()
         val writesAfter = writes.size
-        Thread.sleep(RETRY_MS * 6)
+        time.advance(RETRY_MS * 6)
         assertEquals(readsAfter, reads.get())
         assertEquals(writesAfter, writes.size)
         assertEquals(1, prefs().getInt(HudArming.KEY_AS_FOUND, -1))   // left for the next start
@@ -222,7 +229,7 @@ class HudLeftoverRestoreTest {
         state[HudArming.CLUSTER] = HudArming.CLUSTER_FULLSCREEN
         onLost()
         awaitTrue { c.status.value == HudController.Status.BIND_FAILED }
-        Thread.sleep(RETRY_MS * 3)
+        time.advance(RETRY_MS * 3)
         assertEquals(3, state[HudArming.SCREEN])
         state[HudArming.CLUSTER] = 0
         awaitTrue(timeoutMs = RETRY_MS * 20) { state[HudArming.SCREEN] == 1 }
@@ -243,14 +250,7 @@ class HudLeftoverRestoreTest {
         c.setEnabled(false)
     }
 
-    private fun awaitTrue(timeoutMs: Long = 5_000, cond: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (cond()) return
-            Thread.sleep(20)
-        }
-        assertTrue(cond())
-    }
+    private fun awaitTrue(timeoutMs: Long = 5_000, cond: () -> Boolean) = time.awaitTrue(timeoutMs, cond = cond)
 
     private companion object {
         const val RETRY_MS = 100L

@@ -10,6 +10,16 @@ import org.junit.Test
 class ClusterDisplayDiagTest {
 
     @Test
+    fun `props line reports every key even when getprop printed nothing`() {
+        val line = ClusterDisplayDiag.propsLine("")
+        assertEquals(
+            "sdk= rel= id= product= model= platform= fission_single_os=",
+            line,
+        )
+        assertTrue(line.length <= ClusterDisplayDiag.MAX_LINE)
+    }
+
+    @Test
     fun `props line keeps key order and shows a missing key as empty`() {
         val raw = """
             ro.build.version.sdk=29
@@ -26,16 +36,6 @@ class ClusterDisplayDiagTest {
                 "fission_single_os=",
             ClusterDisplayDiag.propsLine(raw),
         )
-    }
-
-    @Test
-    fun `props line reports every key even when getprop printed nothing`() {
-        val line = ClusterDisplayDiag.propsLine("")
-        assertEquals(
-            "sdk= rel= id= product= model= platform= fission_single_os=",
-            line,
-        )
-        assertTrue(line.length <= ClusterDisplayDiag.MAX_LINE)
     }
 
     @Test

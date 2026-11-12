@@ -130,11 +130,7 @@ class AutomationEngineAuditTest {
     // The real gate behind the engine: the rule's own zero is never trusted for an opening step.
     @Test fun `an opening step reads the speed itself, a closing one does not`() = runBlocking {
         val vehicleApi = mockk<VehicleApi>(relaxed = true) { coEvery { dispatch(any()) } returns Result.success(Unit) }
-        val realDispatcher = ActionDispatcher(vehicleApi, mockk(relaxed = true), ctx,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-            com.bydmate.app.util.AppStrings(ctx), dagger.Lazy { mockk(relaxed = true) },
-        )
+        val realDispatcher = testDispatcher(vehicleApi = vehicleApi, context = ctx, appStrings = com.bydmate.app.util.AppStrings(ctx))
         realDispatcher.readSpeedNow = { 130 }
         engine = engineWith(realDispatcher)
         engine.liveData = { diParsData(speed = 0) }

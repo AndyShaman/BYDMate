@@ -1,11 +1,12 @@
 package com.bydmate.app.data.remote
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -153,17 +154,21 @@ class OpenRouterClientChatStreamTest {
 
     @Test
     fun `coroutine cancellation aborts a stalled stream promptly`() = runBlocking {
+        val first = "data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n"
         server.enqueue(MockResponse()
             .setHeader("Content-Type", "text/event-stream")
-            .setBody("data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n")
+            // The first event goes out in the first period; then one endless comment line with no
+            // newline trickles in, so the client sits in a read with the stream open.
+            .setBody(first + ":" + "x".repeat(64 * 1024))
             // Short period: after the client cancels, MockWebServer's write thread must wake from
             // its throttle sleep and notice the broken socket within its own shutdown() timeout,
             // or tearDown()'s server.shutdown() fails with "gave up waiting for queue to shut down".
-            .throttleBody(1, 2, TimeUnit.SECONDS))
+            .throttleBody(first.toByteArray().size.toLong(), 250, TimeUnit.MILLISECONDS))
+        val firstDelta = CompletableDeferred<String>()
         val job = launch(Dispatchers.IO) {
-            client.chatStream("u", "k", "m", messages(), null) {}
+            client.chatStream("u", "k", "m", messages(), null) { firstDelta.complete(it) }
         }
-        delay(500)
+        assertEquals("a", withTimeout(10_000) { firstDelta.await() }) // the stream is open and read
         val elapsedMs = measureTimeMillis { job.cancelAndJoin() }
         assertTrue("cancellation took ${elapsedMs}ms, expected well under the 75s read timeout", elapsedMs < 5000)
     }

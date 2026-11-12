@@ -8,7 +8,6 @@ import com.bydmate.app.data.local.dao.TripPointDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Collections
-import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class TripState { IDLE, DRIVING }
@@ -19,20 +18,12 @@ enum class TripState { IDLE, DRIVING }
  * by HistoryImporter.attachGpsPoints().
  */
 @Singleton
-class TripTracker @Inject constructor(
+class TripTracker(
     private val tripPointDao: TripPointDao,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) {
     private val _state = MutableStateFlow(TripState.IDLE)
     val state: StateFlow<TripState> = _state
-
-    private val _tripStartedAt = MutableStateFlow<Long?>(null)
-    /**
-     * Epoch millis when the IDLE→DRIVING transition was confirmed (≤[START_DELAY_MS] ms after
-     * actual movement started). Null when not driving.
-     * Set on IDLE→DRIVING, cleared on DRIVING→IDLE and in [forceEnd].
-     */
-    val tripStartedAt: StateFlow<Long?> = _tripStartedAt
 
     private var speedAboveThresholdSince: Long? = null
     private var speedZeroSince: Long? = null
@@ -77,7 +68,6 @@ class TripTracker @Inject constructor(
                         speedAboveThresholdSince = now
                     } else if (now - speedAboveThresholdSince!! >= START_DELAY_MS) {
                         _state.value = TripState.DRIVING
-                        _tripStartedAt.value = now
                         speedZeroSince = null
                         speedAboveThresholdSince = null
                         Log.d(TAG, "Driving started (GPS collection)")
@@ -103,7 +93,6 @@ class TripTracker @Inject constructor(
                     } else if (now - speedZeroSince!! >= STOP_DELAY_MS) {
                         flushPoints()
                         _state.value = TripState.IDLE
-                        _tripStartedAt.value = null
                         speedZeroSince = null
                         speedAboveThresholdSince = null
                         Log.d(TAG, "Driving stopped (GPS collection ended)")
@@ -166,12 +155,11 @@ class TripTracker @Inject constructor(
     /**
      * Force-end on service shutdown. Just flush remaining GPS points.
      */
-    suspend fun forceEnd(lastData: DiParsData?, lastLocation: Location?) {
+    suspend fun forceEnd() {
         if (_state.value != TripState.DRIVING) return
         Log.w(TAG, "forceEnd: flushing GPS points on shutdown")
         flushPoints()
         _state.value = TripState.IDLE
-        _tripStartedAt.value = null
         speedZeroSince = null
         speedAboveThresholdSince = null
     }

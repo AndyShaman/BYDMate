@@ -30,8 +30,8 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 519
-        versionName = "4.3.1"
+        versionCode = 520
+        versionName = "4.3.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -102,13 +102,15 @@ android {
                 // Robolectric suite on RAM-constrained CI runners (TtsModelManagerTest OOM,
                 // CI runs 2026-08-19/24); dev machines pass on GC luck. One worker → 2g is safe.
                 test.maxHeapSize = "2g"
-                // CI only: retry individual failed tests to absorb the known inter-test
-                // pollution flake (UncaughtExceptionsBeforeTest hitting random classes).
-                // Local runs stay strict; a real failure still fails all 3 attempts.
+                // CI only: a failed test is rerun, but the run stays red even when the rerun
+                // passes. The rerun is there to tell in the log a test that fails at random
+                // (failed, then passed) from a real break (failed all 3 attempts); it no
+                // longer hides the random one behind a green run.
                 test.extensions.configure(org.gradle.testretry.TestRetryTaskExtension::class.java) {
                     if (System.getenv("CI") == "true") {
                         maxRetries.set(2)
                         maxFailures.set(10)
+                        failOnPassedAfterRetry.set(true)
                     }
                 }
             }

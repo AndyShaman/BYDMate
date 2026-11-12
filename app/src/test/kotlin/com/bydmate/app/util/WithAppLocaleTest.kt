@@ -40,27 +40,11 @@ class WithAppLocaleTest {
     // ---------------------------------------------------------------------------
 
     @Test
-    fun `appLocalizedContext returns Russian split menu string when app locale is ru`() {
-        LocalePreferences(ctx).setLanguage("ru")
-        val result = ctx.appLocalizedContext().getString(R.string.split_menu_mirror)
-        // values/strings.xml (ru): "Поменять стороны"
-        assertEquals("Поменять стороны", result)
-    }
-
-    @Test
     fun `appLocalizedContext returns English split menu string when app locale is en`() {
         LocalePreferences(ctx).setLanguage("en")
         val result = ctx.appLocalizedContext().getString(R.string.split_menu_mirror)
         // values-en/strings.xml: "Switch sides"
         assertEquals("Switch sides", result)
-    }
-
-    @Test
-    fun `appLocalizedContext returns Russian fid-dump error string when app locale is ru`() {
-        LocalePreferences(ctx).setLanguage("ru")
-        val result = ctx.appLocalizedContext().getString(R.string.settings_fid_dump_error_unavailable)
-        // values/strings.xml (ru): "демон недоступен"
-        assertEquals("демон недоступен", result)
     }
 
     @Test

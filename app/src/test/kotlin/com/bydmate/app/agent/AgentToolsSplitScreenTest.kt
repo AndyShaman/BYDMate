@@ -1,13 +1,11 @@
 package com.bydmate.app.agent
 
 import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -76,14 +74,22 @@ class AgentToolsSplitScreenTest {
         "Браузер" to "com.android.chrome",
     )
 
-    private fun tools(): AgentTools = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools(): AgentTools = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
     ).apply {
         injectSplit(splitPreferences, splitMgr)
         launcherAppsProvider = { launcherFixture }
@@ -94,23 +100,55 @@ class AgentToolsSplitScreenTest {
 
     // ─── Feature gate ────────────────────────────────────────────────────────────
 
-    // (a) Feature disabled → every action returns a "выключено" error.
-    @Test fun feature_disabled_returns_error_for_start() = runTest {
-        every { splitPreferences.isFeatureEnabled() } returns false
-        val out = JSONObject(tools().execute(
-            AgentToolCall("1", "split_screen", """{"action":"start"}""")))
-        assertTrue(out.has("error"))
-        assertTrue(out.getString("error").contains("выключено"))
-        coVerify(exactly = 0) { splitMgr.start(any()) }
-        coVerify(exactly = 0) { splitMgr.startLastPair() }
+    private class RefusedCase(
+        val label: String,
+        val args: String,
+        val errorContains: String?,
+        val verifyNoManagerCall: () -> Unit,
+    )
+
+    @Test fun feature_disabled_returns_error_and_calls_no_manager() = runTest {
+        val cases = listOf(
+            RefusedCase("start", """{"action":"start"}""", "выключено") {
+                coVerify(exactly = 0) { splitMgr.start(any()) }
+                coVerify(exactly = 0) { splitMgr.startLastPair() }
+            },
+            RefusedCase("exit", """{"action":"exit"}""", null) {
+                coVerify(exactly = 0) { splitMgr.exit() }
+            },
+        )
+        for (c in cases) {
+            every { splitPreferences.isFeatureEnabled() } returns false
+            val out = JSONObject(tools().execute(AgentToolCall("1", "split_screen", c.args)))
+            assertTrue("case: ${c.label}: $out", out.has("error"))
+            c.errorContains?.let { assertTrue("case: ${c.label}: $out", out.getString("error").contains(it)) }
+            c.verifyNoManagerCall()
+        }
     }
 
-    @Test fun feature_disabled_returns_error_for_exit() = runTest {
-        every { splitPreferences.isFeatureEnabled() } returns false
-        val out = JSONObject(tools().execute(
-            AgentToolCall("1", "split_screen", """{"action":"exit"}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { splitMgr.exit() }
+    // mirror / swap / change / exit when Idle → "сплит не запущен", no manager call.
+    @Test fun actions_when_idle_return_not_running_and_call_no_manager() = runTest {
+        val cases = listOf(
+            RefusedCase("mirror", """{"action":"mirror"}""", "сплит не запущен") {
+                coVerify(exactly = 0) { splitMgr.mirror() }
+            },
+            RefusedCase("swap", """{"action":"swap"}""", "сплит не запущен") {
+                coVerify(exactly = 0) { splitMgr.swapApps() }
+            },
+            RefusedCase("change", """{"action":"change","side":"right","app":"Камера"}""", "сплит не запущен") {
+                coVerify(exactly = 0) { splitMgr.changeApp(any(), any()) }
+            },
+            RefusedCase("exit", """{"action":"exit"}""", "сплит не запущен") {
+                coVerify(exactly = 0) { splitMgr.exit() }
+            },
+        )
+        for (c in cases) {
+            stateFlow.value = SplitSessionState.Idle
+            val out = JSONObject(tools().execute(AgentToolCall("1", "split_screen", c.args)))
+            assertTrue("case: ${c.label}: $out", out.has("error"))
+            assertTrue("case: ${c.label}: $out", out.getString("error").contains(c.errorContains!!))
+            c.verifyNoManagerCall()
+        }
     }
 
     // ─── start ───────────────────────────────────────────────────────────────────
@@ -227,16 +265,6 @@ class AgentToolsSplitScreenTest {
         assertEquals("одна из панелей сейчас на приборке", out.getString("error"))
     }
 
-    // (l) mirror when Idle → "сплит не запущен", no manager call.
-    @Test fun mirror_when_idle_returns_not_running() = runTest {
-        stateFlow.value = SplitSessionState.Idle
-        val out = JSONObject(tools().execute(
-            AgentToolCall("1", "split_screen", """{"action":"mirror"}""")))
-        assertTrue(out.has("error"))
-        assertTrue(out.getString("error").contains("сплит не запущен"))
-        coVerify(exactly = 0) { splitMgr.mirror() }
-    }
-
     // ─── swap ────────────────────────────────────────────────────────────────────
 
     // (m) swap when Active → calls swapApps(), ok.
@@ -247,16 +275,6 @@ class AgentToolsSplitScreenTest {
             AgentToolCall("1", "split_screen", """{"action":"swap"}""")))
         assertTrue(out.getBoolean("ok"))
         coVerify { splitMgr.swapApps() }
-    }
-
-    // (n) swap when Idle → "сплит не запущен", no manager call.
-    @Test fun swap_when_idle_returns_not_running() = runTest {
-        stateFlow.value = SplitSessionState.Idle
-        val out = JSONObject(tools().execute(
-            AgentToolCall("1", "split_screen", """{"action":"swap"}""")))
-        assertTrue(out.has("error"))
-        assertTrue(out.getString("error").contains("сплит не запущен"))
-        coVerify(exactly = 0) { splitMgr.swapApps() }
     }
 
     // ─── change ──────────────────────────────────────────────────────────────────
@@ -295,16 +313,6 @@ class AgentToolsSplitScreenTest {
             """{"action":"change","side":"right","app":"YouTube"}""")))
         assertTrue(out.has("error"))
         assertTrue(out.getString("error").contains("одинаковые"))
-        coVerify(exactly = 0) { splitMgr.changeApp(any(), any()) }
-    }
-
-    // (r) change when Idle → "сплит не запущен".
-    @Test fun change_when_idle_returns_not_running() = runTest {
-        stateFlow.value = SplitSessionState.Idle
-        val out = JSONObject(tools().execute(AgentToolCall("1", "split_screen",
-            """{"action":"change","side":"right","app":"Камера"}""")))
-        assertTrue(out.has("error"))
-        assertTrue(out.getString("error").contains("сплит не запущен"))
         coVerify(exactly = 0) { splitMgr.changeApp(any(), any()) }
     }
 
@@ -350,16 +358,6 @@ class AgentToolsSplitScreenTest {
             AgentToolCall("1", "split_screen", """{"action":"exit"}""")))
         assertTrue(out.getBoolean("ok"))
         coVerify { splitMgr.exit() }
-    }
-
-    // (w) exit when Idle → "сплит не запущен", no manager call.
-    @Test fun exit_when_idle_returns_not_running() = runTest {
-        stateFlow.value = SplitSessionState.Idle
-        val out = JSONObject(tools().execute(
-            AgentToolCall("1", "split_screen", """{"action":"exit"}""")))
-        assertTrue(out.has("error"))
-        assertTrue(out.getString("error").contains("сплит не запущен"))
-        coVerify(exactly = 0) { splitMgr.exit() }
     }
 
     // ─── Schema ──────────────────────────────────────────────────────────────────

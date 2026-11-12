@@ -39,14 +39,7 @@ class ActionDispatcherSplitToggleTest {
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns
             mockk<NotificationManager>(relaxed = true)
-        dispatcher = ActionDispatcher(
-            mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            splitManager,
-            strings, dagger.Lazy { io.mockk.mockk(relaxed = true) },
-        )
+        dispatcher = testDispatcher(context = context, splitSessionManager = splitManager, appStrings = strings)
     }
 
     private fun action(kind: String) =
@@ -103,22 +96,14 @@ class ActionDispatcherSplitToggleTest {
         assertTrue(result.reason?.isNotBlank() == true)
     }
 
-    @Test fun `toggle maps FREEFORM_UNAVAILABLE to failure`() = runBlocking {
+    @Test fun `toggle maps each failed start of the last pair to failure`() = runBlocking {
         stateIs(SplitSessionState.Idle)
-        coEvery { splitManager.startLastPair() } returns SplitStartResult.FREEFORM_UNAVAILABLE
-        assertFalse(dispatcher.dispatch(action("split_screen_toggle"), null).success)
-    }
-
-    @Test fun `toggle maps LAUNCH_FAILED to failure`() = runBlocking {
-        stateIs(SplitSessionState.Idle)
-        coEvery { splitManager.startLastPair() } returns SplitStartResult.LAUNCH_FAILED
-        assertFalse(dispatcher.dispatch(action("split_screen_toggle"), null).success)
-    }
-
-    @Test fun `toggle maps DISABLED to failure`() = runBlocking {
-        stateIs(SplitSessionState.Idle)
-        coEvery { splitManager.startLastPair() } returns SplitStartResult.DISABLED
-        assertFalse(dispatcher.dispatch(action("split_screen_toggle"), null).success)
+        for (failed in listOf(
+            SplitStartResult.FREEFORM_UNAVAILABLE, SplitStartResult.LAUNCH_FAILED, SplitStartResult.DISABLED,
+        )) {
+            coEvery { splitManager.startLastPair() } returns failed
+            assertFalse("case: $failed", dispatcher.dispatch(action("split_screen_toggle"), null).success)
+        }
     }
 
     // ── The launch kind stays as it was ─────────────────────────────────────────

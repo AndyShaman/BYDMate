@@ -38,12 +38,7 @@ class ActionDispatcherToggleTest {
     private val vehicleApi = mockk<VehicleApi>(relaxed = true)
     private val cluster = mockk<ClusterVoiceControl>(relaxed = true)
     private val app: Application = ApplicationProvider.getApplicationContext()
-    private val dispatcher = ActionDispatcher(vehicleApi, mockk<HelperClient>(relaxed = true), app,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        cluster,
-        mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            com.bydmate.app.util.AppStrings(app), dagger.Lazy { io.mockk.mockk(relaxed = true) })
+    private val dispatcher = testDispatcher(vehicleApi = vehicleApi, context = app, clusterVoiceControl = cluster, appStrings = com.bydmate.app.util.AppStrings(app))
         .also { it.readSpeedNow = { 0 } } // a standing car unless a test says otherwise
 
     init {

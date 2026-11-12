@@ -1,6 +1,5 @@
 package com.bydmate.app.split
 
-import android.content.ComponentName
 import android.content.Context
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -106,11 +105,8 @@ internal fun shouldReroute(
  */
 class ProductionMediaSessionSource(private val context: Context) : MediaSessionSource {
 
-    private fun sessions(): List<android.media.session.MediaController> = runCatching {
-        val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-        val component = ComponentName(context, MediaSessionListenerService::class.java)
-        msm.getActiveSessions(component)
-    }.getOrElse { emptyList() }
+    private fun sessions(): List<android.media.session.MediaController> =
+        MediaSessionListenerService.activeControllers(context)
 
     override fun activeSessionPackages(): Set<String> =
         sessions().mapTo(mutableSetOf()) { it.packageName }

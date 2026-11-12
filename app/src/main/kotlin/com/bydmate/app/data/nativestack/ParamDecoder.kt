@@ -4,7 +4,6 @@ import com.bydmate.app.data.autoservice.SentinelDecoder
 
 enum class Decoder {
     INT_RAW,
-    INT_DIV10,
     INT_SCALED,
     INT_PERCENT,
     INT_ENUM,
@@ -34,8 +33,6 @@ object ParamDecoder {
             Decoder.INT_TEMP_C -> cleaned.takeIf { it in -50..80 }
             // Battery temp fids (dev=1014) encode °C with a -40 CAN offset.
             Decoder.INT_TEMP_C_OFS40 -> (cleaned - 40).takeIf { it in -50..80 }
-            // INT_DIV10 is a float-producing decoder — callers should use decodeFloat
-            Decoder.INT_DIV10 -> cleaned
             Decoder.INT_RANGE_KM -> cleaned.takeIf { it != RANGE_ABSENT }
             Decoder.INT_RPM -> cleaned.takeIf { it != RPM_ABSENT }
             else -> null
@@ -49,10 +46,6 @@ object ParamDecoder {
 
     fun decodeFloat(rawInt: Int, decoder: Decoder): Double? {
         return when (decoder) {
-            Decoder.INT_DIV10 -> {
-                val v = SentinelDecoder.decodeInt(rawInt) ?: return null
-                v / 10.0
-            }
             Decoder.FLOAT_VOLT, Decoder.FLOAT_PERCENT,
             Decoder.FLOAT_KW, Decoder.FLOAT_KWH, Decoder.FLOAT_AMP -> {
                 val f = SentinelDecoder.parseFloatFromShellInt(rawInt) ?: return null

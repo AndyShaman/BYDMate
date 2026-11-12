@@ -28,13 +28,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [29])
 class ActionDispatcherNavigateMapsTest {
     private val app: Application = ApplicationProvider.getApplicationContext()
-    private val dispatcher = ActionDispatcher(
-        mockk<VehicleApi>(relaxed = true), mockk<HelperClient>(relaxed = true), app,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            com.bydmate.app.util.AppStrings(app), dagger.Lazy { io.mockk.mockk(relaxed = true) })
+    private val dispatcher = testDispatcher(context = app, appStrings = com.bydmate.app.util.AppStrings(app))
 
     private fun actionDef(payload: String) =
         ActionDef(command = "", displayName = "navi", kind = "navigate", payload = payload)

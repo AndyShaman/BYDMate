@@ -33,8 +33,9 @@ import java.util.concurrent.TimeUnit
 /**
  * Wave 6, live half: runs [AgentEvalCases] against a real model and prints a per-case verdict.
  *
- * Skipped unless OPENROUTER_API_KEY is set, so it never runs in CI or in a normal test run.
- * Use scripts/agent-eval.sh, which documents the environment variables.
+ * Skipped unless AGENT_EVAL=1 and OPENROUTER_API_KEY are both set, so it never runs in CI or in
+ * a normal test run, even from a shell that has the key exported for other work.
+ * Use scripts/agent-eval.sh, which sets AGENT_EVAL and documents the environment variables.
  */
 class AgentEvalLiveTest {
 
@@ -70,6 +71,7 @@ class AgentEvalLiveTest {
     ).also { it.ruleWatchScope = CoroutineScope(Dispatchers.Unconfined) }
 
     @Test fun the_model_handles_the_eval_set() = runBlocking {
+        assumeFalse("not started by scripts/agent-eval.sh — live eval skipped", System.getenv("AGENT_EVAL") != "1")
         assumeFalse("OPENROUTER_API_KEY is not set — live eval skipped", apiKey == null)
         val schemas = tools().schemas()
         val failures = mutableListOf<String>()

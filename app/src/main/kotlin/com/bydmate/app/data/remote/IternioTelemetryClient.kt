@@ -70,12 +70,14 @@ class IternioTelemetryClient @Inject constructor(
     }
 
     /**
-     * @param apiKey Developer API key issued by Iternio. Optional from caller
-     *               perspective — when blank, falls back to [DEFAULT_API_KEY]
-     *               so the request still passes Iternio's `api_key` gate.
-     * @param userToken Per-vehicle live-data token from ABRP "Generic" provider.
-     * @param data Live DiPars snapshot. SOC must be present — without it the
-     *             call returns a failure without hitting the network.
+     * Build the Iternio telemetry payload once, so the same JSON can be reused by other
+     * sinks (custom webhook) without a second round of autoservice reads; POST it with
+     * [sendTelemetry].
+     *
+     * @return null when SOC is missing — the one field Iternio requires.
+     *
+     * @param data Live DiPars snapshot. SOC must be present — without it there is
+     *             no payload (null is returned).
      * @param nominalCapacityKwh Nominal battery capacity (user setting; 72.9 on
      *                           Leopard 3). Sent as Iternio `capacity` so ABRP
      *                           can translate SOC% to kWh. We do NOT use the
@@ -101,46 +103,6 @@ class IternioTelemetryClient @Inject constructor(
      * The base payload carries no position. TrackingService adds `lat`/`lon`/`heading` per
      * target behind each target's own toggle (ABRP opt-in, webhook opt-in): ABRP on the head
      * unit reads GPS itself, and two sources make the car marker jump (ABRP tickets, June 2026).
-     */
-    suspend fun send(
-        apiKey: String,
-        userToken: String,
-        data: DiParsData,
-        nominalCapacityKwh: Double,
-        battery: BatteryReading?,
-        charging: ChargingReading?,
-        carModel: String?,
-        enginePowerKw: Int? = null,
-        sampleTimeMs: Long? = null,
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        val token = userToken.trim()
-        if (token.isEmpty()) return@withContext Result.failure(IllegalArgumentException("пустой токен"))
-        val telemetry = try {
-            buildTelemetry(
-                data = data,
-                nominalCapacityKwh = nominalCapacityKwh,
-                battery = battery,
-                charging = charging,
-                carModel = carModel,
-                enginePowerKw = enginePowerKw,
-                sampleTimeMs = sampleTimeMs,
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "отправка не удалась: ${e.message}")
-            return@withContext Result.failure(e)
-        }
-        // Iternio docs: SOC is the one truly required telemetry field. Without
-        // it the route planner has nothing to update, so we skip the call.
-        if (telemetry == null) return@withContext Result.failure(IllegalStateException("SOC недоступен"))
-        sendTelemetry(apiKey, token, telemetry)
-    }
-
-    /**
-     * Build the Iternio telemetry payload. Extracted from [send] so the same
-     * JSON can be reused by other sinks (custom webhook) without a second
-     * round of autoservice reads.
-     *
-     * @return null when SOC is missing — the one field Iternio requires.
      */
     internal fun buildTelemetry(
         data: DiParsData,
@@ -241,9 +203,8 @@ class IternioTelemetryClient @Inject constructor(
     }
 
     /**
-     * POST an already-built payload (see [buildTelemetry]). Kept separate from
-     * [send] so a caller that fans the same snapshot out to several sinks
-     * builds the JSON once.
+     * POST an already-built payload (see [buildTelemetry]), so a caller that fans
+     * the same snapshot out to several sinks builds the JSON once.
      */
     suspend fun sendTelemetry(
         apiKey: String,

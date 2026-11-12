@@ -92,8 +92,4 @@ class NavGuidanceHubRouteTraceTest {
         NavGuidanceHub.a11yBlind(true, nowMs = 6_000)
         assertTrue(NavGuidanceHub.routeSummary(nowMs = 7_000).contains(" blind_ms=4000 "))
     }
-
-    @Test fun `no route yet says so`() {
-        assertEquals("(no route)", NavGuidanceHub.routeSummary())
-    }
 }

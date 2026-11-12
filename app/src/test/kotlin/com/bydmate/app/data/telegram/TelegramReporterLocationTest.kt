@@ -53,7 +53,6 @@ class TelegramReporterLocationTest {
             keys.mapNotNull { k -> map[k]?.let { SettingEntity(k, it) } }
         override suspend fun set(setting: SettingEntity) { map[setting.key] = setting.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
-        override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
     private val ctx: Context get() = ApplicationProvider.getApplicationContext()

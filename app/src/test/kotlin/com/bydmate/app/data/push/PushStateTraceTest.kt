@@ -288,14 +288,6 @@ class PushStateTraceTest {
         )
     }
 
-    @Test fun `every ADAS state has its own short name`() = runTest {
-        channel.resubscribe("binder accepted") { CATALOG }
-
-        push(*ADAS.keys.map { it to 0 }.toTypedArray())
-
-        assertEquals(ADAS.values.map { "car adas name=$it to=0" }, changes())
-    }
-
     @Test fun `a sentinel is traced as none, not as a number`() = runTest {
         channel.resubscribe("binder accepted") { CATALOG }
 

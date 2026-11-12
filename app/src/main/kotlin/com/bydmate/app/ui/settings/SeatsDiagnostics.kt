@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.settings
 
 import android.content.Context
+import com.bydmate.app.data.autoservice.FidRegistry.TX_GET_INT
 import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.SeatCommandJournal
@@ -79,14 +80,9 @@ internal object SeatsDiagnostics {
      * [readings] (daemon unreachable, timeout, old daemon without batch support) or a
      * length mismatch collapses to a single "(unavailable)" line.
      */
-    fun format(readings: List<Pair<Int, Int>>?): List<String> {
-        if (readings == null || readings.size != FIDS.size) return listOf("(unavailable)")
-        return FIDS.mapIndexed { i, f ->
-            val (status, value) = readings[i]
-            val rendered = if (status == 0) value.toString() else "(status=$status)"
-            "${f.name}[dev=${f.dev} fid=${f.fid}]=$rendered"
-        }
-    }
+    fun format(readings: List<Pair<Int, Int>>?): List<String> =
+        FIDS.withReadings(readings)?.map { (f, reading) -> fidDumpRow(f.name, f.dev, f.fid, reading) }
+            ?: listOf("(unavailable)")
 
     /**
      * Command-journal ring for the dump, oldest first, "(none)" while nothing was actuated.
@@ -98,6 +94,4 @@ internal object SeatsDiagnostics {
         ).lines()
         return lines.ifEmpty { listOf("(none)") }
     }
-
-    private const val TX_GET_INT = 5
 }

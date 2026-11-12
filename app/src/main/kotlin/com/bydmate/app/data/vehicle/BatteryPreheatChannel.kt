@@ -3,10 +3,10 @@ package com.bydmate.app.data.vehicle
 import android.util.Log
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.nativestack.FidAddresses
+import com.bydmate.app.data.nativestack.VehicleKindDetector
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
-import com.bydmate.app.split.readSystemProperty
-import kotlinx.coroutines.CancellationException
+import com.bydmate.app.util.readSystemProperty
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -171,8 +171,8 @@ class BatteryPreheatChannel(
      * "0" fuel) are logged only.
      */
     private suspend fun notAnEv(line: StringBuilder): Outcome? {
-        val hev = read(WriteAllowlist.HEV_MILEAGE_DEV, WriteAllowlist.HEV_MILEAGE_FID)
-        val fuel = read(WriteAllowlist.HEV_MILEAGE_DEV, WriteAllowlist.FUEL_PERCENT_FID)
+        val hev = read(VehicleKindDetector.DEV, VehicleKindDetector.MILEAGE_HEV_FID)
+        val fuel = read(VehicleKindDetector.DEV, VehicleKindDetector.FUEL_PERCENT_FID)
         line.append(" hev=${render(hev)} fuel=${render(fuel)} type=${systemProperty(ENERGY_TYPE_PROP) ?: "err"}")
         return when {
             hev == HEV_MILEAGE_ABSENT -> null
@@ -227,12 +227,8 @@ class BatteryPreheatChannel(
     }
 
     /** A throwing read is a failed read, not a verdict. */
-    private suspend fun read(dev: Int, fid: Int): Int? = runCatching { reader.read(dev, fid) }
-        .onFailure {
-            if (it is CancellationException) throw it
-            Log.w(TAG, "Preheat: read dev=$dev fid=$fid failed: ${it.message}")
-        }
-        .getOrNull()
+    private suspend fun read(dev: Int, fid: Int): Int? =
+        readGuarded({ Log.w(TAG, "Preheat: read dev=$dev fid=$fid failed: ${it.message}") }) { reader.read(dev, fid) }
 
     companion object {
         private const val ACTION_ON = "battery_preheat_on"
@@ -262,5 +258,3 @@ class BatteryPreheatChannel(
         private val LATE_READS_MS = listOf(5_000L, 30_000L, 120_000L)
     }
 }
-
-private fun render(value: Int?) = value?.toString() ?: "err"

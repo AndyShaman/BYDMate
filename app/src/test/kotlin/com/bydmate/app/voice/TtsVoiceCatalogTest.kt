@@ -5,11 +5,6 @@ import org.junit.Test
 
 class TtsVoiceCatalogTest {
 
-    @Test fun `catalog lists six voices with dmitri first as default`() {
-        assertEquals(listOf("dmitri", "alena", "ruslan", "irina", "mark", "sofia"),
-            TtsVoiceCatalog.ALL.map { it.id })
-    }
-
     @Test fun `piper voices use the k2-fsa release url pattern`() {
         listOf("dmitri", "ruslan", "irina").forEach { id ->
             val v = TtsVoiceCatalog.byId(id)

@@ -1,7 +1,6 @@
 package com.bydmate.app.agent
 
 import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
@@ -12,12 +11,12 @@ import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.repository.PlaceRepository
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.voice.VoiceGate
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -51,14 +50,22 @@ class AgentToolsControlTest {
 
     private val context = mockk<Context>(relaxed = true)
 
-    private fun tools() = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
     )
 
     private fun call(name: String, args: String) = AgentToolCall("1", name, args)
@@ -107,7 +114,7 @@ class AgentToolsControlTest {
         every { gate.vehicleSnapshot() } returns null
         coEvery { ruleDao.getEnabled() } returns listOf(
             RuleEntity(id = 7, name = "Проветрить", triggers = "[]", actions = "[]"))
-        coEvery { engine.fireVoiceRule(7, null) } returns VoiceFireResult.Fired(true)
+        coEvery { engine.fireVoiceRule(7, null) } returns VoiceFireResult.Fired
         val out = JSONObject(tools().execute(
             call("run_automation", """{"name":"проветрить"}""")))
         assertTrue(out.getBoolean("ok"))
@@ -129,24 +136,6 @@ class AgentToolsControlTest {
             call("run_automation", """{"name":"нет такой"}""")))
         assertTrue(out.has("error"))
         coVerify(exactly = 0) { engine.fireVoiceRule(any(), any()) }
-    }
-
-    @Test fun schemas_embed_rule_names_enum() = runTest {
-        coEvery { ruleDao.getEnabled() } returns listOf(
-            RuleEntity(id = 1, name = "Ночной режим", triggers = "[]", actions = "[]"))
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
-        val arr = tools().schemas()
-        var found = false
-        for (i in 0 until arr.length()) {
-            val fn = arr.getJSONObject(i).getJSONObject("function")
-            if (fn.getString("name") == "run_automation") {
-                val enum = fn.getJSONObject("parameters").getJSONObject("properties")
-                    .getJSONObject("name").getJSONArray("enum")
-                assertEquals("Ночной режим", enum.getString(0))
-                found = true
-            }
-        }
-        assertTrue(found)
     }
 
     @Test fun vehicle_control_schema_has_readable_enum_no_chinese() = runTest {
@@ -251,13 +240,6 @@ class AgentToolsControlTest {
 
     // --- set_sentry ---
 
-    @Test fun set_sentry_on_true_dispatches_sentry_payload_1() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_sentry", """{"on":true}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "sentry" && it.payload == "1" }, null) }
-    }
-
     @Test fun set_sentry_on_false_is_dangerous_and_confirms() = runTest {
         coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
         val t = tools()
@@ -278,55 +260,52 @@ class AgentToolsControlTest {
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
-    @Test fun set_sentry_without_on_reports_russian_error_and_does_not_dispatch() = runTest {
-        val out = JSONObject(tools().execute(call("set_sentry", """{}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    // --- set_sentry / set_hotspot / set_screen (#275): on=true/false dispatches the payload, a missing "on" never dispatches ---
+
+    private class OnOffCase(val label: String, val tool: String, val args: String, val payload: String?)
+
+    @Test fun set_sentry_hotspot_screen_dispatch_payload_or_refuse_without_on() = runTest {
+        val cases = listOf(
+            OnOffCase("sentry on", "set_sentry", """{"on":true}""", "1"),
+            OnOffCase("sentry without on", "set_sentry", """{}""", null),
+            OnOffCase("hotspot on", "set_hotspot", """{"on":true}""", "1"),
+            OnOffCase("hotspot off", "set_hotspot", """{"on":false}""", "0"),
+            OnOffCase("hotspot without on", "set_hotspot", """{}""", null),
+            OnOffCase("screen off", "set_screen", """{"on":false}""", "0"),
+            OnOffCase("screen on", "set_screen", """{"on":true}""", "1"),
+            OnOffCase("screen without on", "set_screen", """{}""", null),
+        )
+        for (c in cases) {
+            clearMocks(dispatcher)
+            coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+            val out = JSONObject(tools().execute(call(c.tool, c.args)))
+            if (c.payload != null) {
+                val kind = c.tool.removePrefix("set_")
+                assertTrue("case: ${c.label}: $out", out.getBoolean("ok"))
+                coVerify { dispatcher.dispatch(match { it.kind == kind && it.payload == c.payload }, null) }
+            } else {
+                assertTrue("case: ${c.label}: $out", out.has("error"))
+                assertFalse("case: ${c.label}: $out", out.getString("error").contains("неизвестный инструмент"))
+                coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+            }
+        }
     }
 
-    // --- set_hotspot ---
-
-    @Test fun set_hotspot_on_true_dispatches_hotspot_payload_1() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_hotspot", """{"on":true}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "hotspot" && it.payload == "1" }, null) }
-    }
-
-    @Test fun set_hotspot_on_false_dispatches_hotspot_payload_0() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_hotspot", """{"on":false}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "hotspot" && it.payload == "0" }, null) }
-    }
-
-    @Test fun set_hotspot_without_on_reports_russian_error_and_does_not_dispatch() = runTest {
-        val out = JSONObject(tools().execute(call("set_hotspot", """{}""")))
-        assertTrue(out.has("error"))
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
-    }
-
-    // --- set_screen (#275) ---
-
-    @Test fun set_screen_on_false_dispatches_screen_payload_0() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_screen", """{"on":false}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "screen" && it.payload == "0" }, null) }
-    }
-
-    @Test fun set_screen_on_true_dispatches_screen_payload_1() = runTest {
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val out = JSONObject(tools().execute(call("set_screen", """{"on":true}""")))
-        assertTrue(out.getBoolean("ok"))
-        coVerify { dispatcher.dispatch(match { it.kind == "screen" && it.payload == "1" }, null) }
-    }
-
-    @Test fun set_screen_without_on_reports_error_and_does_not_dispatch() = runTest {
-        val out = JSONObject(tools().execute(call("set_screen", """{}""")))
-        assertTrue(out.has("error"))
-        assertFalse(out.getString("error"), out.getString("error").contains("неизвестный инструмент"))
-        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    // Parity: every tool the model is shown must have an execute() branch, so a schema entry can
+    // never be a tool that answers "неизвестный инструмент". Replaces the per-tool schema-listing tests.
+    @Test fun every_schema_tool_is_known_to_execute() = runTest {
+        coEvery { ruleDao.getEnabled() } returns emptyList()
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
+        val tools = tools()
+        val schemas = tools.schemas()
+        val names = (0 until schemas.length())
+            .map { schemas.getJSONObject(it).getJSONObject("function").getString("name") }
+        assertTrue("schema is empty", names.isNotEmpty())
+        for (name in names) {
+            val reply = tools.execute(call(name, "{}"))
+            assertFalse("$name is in the schema but execute() does not know it: $reply",
+                reply.contains("неизвестный инструмент"))
+        }
     }
 
     private fun screenRule(action: String) =

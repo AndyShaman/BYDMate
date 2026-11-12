@@ -26,43 +26,12 @@ class AgentCommandCatalogTest {
         assertEquals(voiceSpec.command(22), catalogCmd.chinese(22))
     }
 
-    @Test fun `resolve returns chinese string for fixed command`() {
-        assertEquals("车窗关闭", AgentCommandCatalog.resolve("windows_close_all", null))
-    }
-
-    @Test fun `resolve returns chinese string for per-window half and pair apertures`() {
-        assertEquals("主驾半开", AgentCommandCatalog.resolve("window_driver_half", null))
-        assertEquals("副驾半开", AgentCommandCatalog.resolve("window_passenger_half", null))
-        assertEquals("后左半开", AgentCommandCatalog.resolve("window_rear_left_half", null))
-        assertEquals("后右半开", AgentCommandCatalog.resolve("window_rear_right_half", null))
-        assertEquals("前排车窗半开", AgentCommandCatalog.resolve("windows_half_front", null))
-        assertEquals("前排车窗通风", AgentCommandCatalog.resolve("windows_vent_front", null))
-        assertEquals("后排车窗半开", AgentCommandCatalog.resolve("windows_half_rear", null))
-        assertEquals("后排车窗通风", AgentCommandCatalog.resolve("windows_vent_rear", null))
-    }
-
-    @Test fun `resolve returns chinese string for hazard commands`() {
-        assertEquals("双闪打开", AgentCommandCatalog.resolve("hazard_on", null))
-        assertEquals("双闪关闭", AgentCommandCatalog.resolve("hazard_off", null))
-    }
-
-    @Test fun `resolve returns chinese string for steering heat commands`() {
-        assertEquals("方向盘加热", AgentCommandCatalog.resolve("steering_heat_on", null))
-        assertEquals("关闭方向盘加热", AgentCommandCatalog.resolve("steering_heat_off", null))
-    }
-
-    @Test fun `resolve returns chinese string for hud commands`() {
-        assertEquals("打开抬头显示", AgentCommandCatalog.resolve("hud_on", null))
-        assertEquals("关闭抬头显示", AgentCommandCatalog.resolve("hud_off", null))
-    }
-
-    @Test fun `resolve returns chinese string for battery preheat commands`() {
-        assertEquals("打开电池预热", AgentCommandCatalog.resolve("battery_preheat_on", null))
-        assertEquals("关闭电池预热", AgentCommandCatalog.resolve("battery_preheat_off", null))
-    }
-
-    @Test fun `resolve applies value for ranged command`() {
-        assertEquals("设置温度22", AgentCommandCatalog.resolve("ac_set_temp", 22))
+    // The id is what the model picks, the string is what goes to the car: a pair swapped in the
+    // catalog (open for close, driver for passenger) still "resolves", so each pair is pinned.
+    @Test fun `each id resolves to its own car command`() {
+        for ((id, value, command) in idToCommand) {
+            assertEquals("case: $id value=$value", command, AgentCommandCatalog.resolve(id, value))
+        }
     }
 
     @Test fun `resolve rejects out-of-range value`() {
@@ -77,5 +46,42 @@ class AgentCommandCatalogTest {
         val doc = AgentCommandCatalog.idsDoc()
         assertEquals(AgentCommandCatalog.ALL.size, doc.lines().size)
         assertEquals(false, doc.any { it.code > 0x2E80 })
+    }
+
+    private val idToCommand by lazy {
+        listOf(
+            Triple("windows_close_all", null, "车窗关闭"),
+            Triple("window_driver_half", null, "主驾半开"),
+            Triple("window_passenger_half", null, "副驾半开"),
+            Triple("window_rear_left_half", null, "后左半开"),
+            Triple("window_rear_right_half", null, "后右半开"),
+            Triple("windows_half_front", null, "前排车窗半开"),
+            Triple("windows_vent_front", null, "前排车窗通风"),
+            Triple("windows_half_rear", null, "后排车窗半开"),
+            Triple("windows_vent_rear", null, "后排车窗通风"),
+            Triple("hazard_on", null, "双闪打开"),
+            Triple("hazard_off", null, "双闪关闭"),
+            Triple("steering_heat_on", null, "方向盘加热"),
+            Triple("steering_heat_off", null, "关闭方向盘加热"),
+            Triple("hud_on", null, "打开抬头显示"),
+            Triple("hud_off", null, "关闭抬头显示"),
+            Triple("battery_preheat_on", null, "打开电池预热"),
+            Triple("battery_preheat_off", null, "关闭电池预热"),
+            Triple("ac_set_temp", 22, "设置温度22"),
+            Triple("fridge_cool", -4, "冰箱制冷-4度"),
+            Triple("fridge_cool", 6, "冰箱制冷6度"),
+            Triple("fridge_heat", 40, "冰箱制热40度"),
+            Triple("fridge_off", null, "冰箱关闭"),
+            Triple("front_trunk_open", null, "前备箱打开"),
+            Triple("front_trunk_close", null, "前备箱关闭"),
+            Triple("seat_heat_driver_4", null, "主驾座椅加热4档"),
+            Triple("seat_heat_driver_5", null, "主驾座椅加热5档"),
+            Triple("seat_heat_passenger_4", null, "副驾座椅加热4档"),
+            Triple("seat_vent_driver_5", null, "主驾座椅通风5档"),
+            Triple("seat_vent_passenger_4", null, "副驾座椅通风4档"),
+            Triple("sunroof_stop", null, "天窗停止"),
+            Triple("sunroof_updip", null, "天窗通风"),
+            Triple("sunroof_comfort", null, "天窗舒适打开"),
+        )
     }
 }

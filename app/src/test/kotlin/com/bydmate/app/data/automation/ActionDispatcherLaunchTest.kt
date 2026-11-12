@@ -5,7 +5,6 @@ import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.cluster.ClusterVoiceControl
@@ -28,7 +27,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-// Robolectric so the real Intent/Uri built by the navigate/music/go_home branches
+// Robolectric so the real Intent/Uri built by the music/go_home branches
 // can be inspected; the daemon-launch tests still use only mocked collaborators.
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
@@ -45,12 +44,7 @@ class ActionDispatcherLaunchTest {
         LocalePreferences(ApplicationProvider.getApplicationContext()).setLanguage("ru")
         every { context.packageManager } returns packageManager
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
-        dispatcher = ActionDispatcher(vehicleApi, helper, context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
-            com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()), dagger.Lazy { io.mockk.mockk(relaxed = true) })
+        dispatcher = testDispatcher(vehicleApi, helper, context, appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()))
     }
 
     private fun launchAction(pkg: String) = ActionDef(
@@ -91,26 +85,6 @@ class ActionDispatcherLaunchTest {
         dispatcher.dispatch(launchAction("com.example.app"), null)
         coVerify(exactly = 1) { helper.launchApp("com.example.app") }
         verify(exactly = 1) { context.startActivity(any()) }
-    }
-
-    // --- navigate ---
-
-    @Test fun `navigate by free-text query opens Navigator map search`() {
-        val query = "аэропорт Сочи"
-        val action = ActionDef(command = "", displayName = "nav", kind = "navigate",
-            payload = """{"query":"$query"}""")
-        val (result, intent) = dispatchAndCapture(action)
-        assertTrue(result.success)
-        assertEquals(Intent.ACTION_VIEW, intent.action)
-        assertEquals("yandexnavi://map_search?text=${Uri.encode(query)}", intent.dataString)
-    }
-
-    @Test fun `navigate by lat lon keeps build_route_on_map deeplink`() {
-        val action = ActionDef(command = "", displayName = "nav", kind = "navigate",
-            payload = """{"lat":43.4,"lon":39.9}""")
-        val (result, intent) = dispatchAndCapture(action)
-        assertTrue(result.success)
-        assertEquals("yandexnavi://build_route_on_map?lat_to=43.4&lon_to=39.9", intent.dataString)
     }
 
     // --- yandex_music ---

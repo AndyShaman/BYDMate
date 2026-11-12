@@ -131,10 +131,8 @@ class PowerStateRuleMigration @Inject constructor(
                         param = GEAR, chineseName = "档位", operator = "==", value = GEAR_D,
                         displayName = labels.gearDrive,
                     ).takeUnless { kept.any { it.isGearD() } }
-                    1 in codes || 2 in codes -> TriggerDef(
-                        param = "ServiceStart", chineseName = "服务启动", operator = "==", value = "true",
-                        displayName = labels.serviceStart, kind = "service_start",
-                    ).takeUnless { kept.any { it.kind == "service_start" || it.kind == OneShotTrigger.KIND } }
+                    1 in codes || 2 in codes -> serviceStartTrigger(labels.serviceStart)
+                        .takeUnless { kept.any { it.kind == "service_start" || it.kind == OneShotTrigger.KIND } }
                     logic == "OR" -> null
                     else -> return null
                 }

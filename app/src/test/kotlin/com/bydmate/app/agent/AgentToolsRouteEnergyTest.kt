@@ -1,13 +1,11 @@
 package com.bydmate.app.agent
 
 import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -50,14 +48,22 @@ class AgentToolsRouteEnergyTest {
     private val contactLookup = mockk<ContactLookup>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
 
-    private fun tools() = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
     ).also { it.nowMs = { 1_000_000_000_000L } }
 
     @Before
@@ -160,7 +166,7 @@ class AgentToolsRouteEnergyTest {
     @Test fun `vehicle_state includes battery_effective_capacity when soh in sanity range`() = runTest {
         every { gate.vehicleSnapshot() } returns AgentToolsReadTest.snapshot(soc = 50, totalElec = 1234.5)
         coEvery { battery.refresh() } returns BatteryState(
-            socNow = 50f, voltage12v = null, sohPercent = 85f,
+            socNow = 50f, sohPercent = 85f,
             lifetimeKm = null, lifetimeKwh = null, autoserviceAvailable = true,
         )
         coEvery { range.estimateDetailed(50, 1234.5) } returns RangeEstimate(
@@ -186,54 +192,29 @@ class AgentToolsRouteEnergyTest {
         )
     }
 
-    @Test fun `thousands separator space 1 234 km gives 1234`() = runTest {
-        val t = tools()
-        t.naviScreenProvider = { screenWith("1 234 км") }
-        stubRange(t)
-        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
-        assertTrue(out.has("energy_estimate"))
-        assertEquals(1234.0, out.getJSONObject("energy_estimate").getDouble("remaining_km"), 0.01)
-    }
+    private class DistanceCase(val label: String, val dist: String, val expectedKm: Double?, val delta: Double = 0.001)
 
-    @Test fun `parse 800 m gives 0 8 km`() = runTest {
-        val t = tools()
-        t.naviScreenProvider = { screenWith("800 м") }
-        stubRange(t)
-        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
-        assertTrue(out.has("energy_estimate"))
-        assertEquals(0.8, out.getJSONObject("energy_estimate").getDouble("remaining_km"), 0.001)
-    }
-
-    @Test fun `parse 1 comma 5 km gives 1 5`() = runTest {
-        val t = tools()
-        t.naviScreenProvider = { screenWith("1,5 км") }
-        stubRange(t)
-        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
-        assertTrue(out.has("energy_estimate"))
-        assertEquals(1.5, out.getJSONObject("energy_estimate").getDouble("remaining_km"), 0.001)
-    }
-
-    @Test fun `negative distance string gives no energy_estimate`() = runTest {
-        val t = tools()
-        t.naviScreenProvider = { screenWith("-5 км") }
-        stubRange(t)
-        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
-        assertFalse(out.has("energy_estimate"))
-    }
-
-    @Test fun `text prefix gives no energy_estimate`() = runTest {
-        val t = tools()
-        t.naviScreenProvider = { screenWith("Осталось 124 км") }
-        stubRange(t)
-        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
-        assertFalse(out.has("energy_estimate"))
-    }
-
-    @Test fun `empty distance string gives no energy_estimate`() = runTest {
-        val t = tools()
-        t.naviScreenProvider = { screenWith("") }
-        stubRange(t)
-        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
-        assertFalse(out.has("energy_estimate"))
+    @Test fun `navigator distance text parses to remaining_km or gives no energy_estimate`() = runTest {
+        val cases = listOf(
+            DistanceCase("thousands separator space 1 234 km gives 1234", "1 234 км", 1234.0, delta = 0.01),
+            DistanceCase("800 m gives 0.8 km", "800 м", 0.8),
+            DistanceCase("1 comma 5 km gives 1.5", "1,5 км", 1.5),
+            DistanceCase("negative distance string gives no energy_estimate", "-5 км", null),
+            DistanceCase("text prefix gives no energy_estimate", "Осталось 124 км", null),
+            DistanceCase("empty distance string gives no energy_estimate", "", null),
+        )
+        for (c in cases) {
+            val t = tools()
+            t.naviScreenProvider = { screenWith(c.dist) }
+            stubRange(t)
+            val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+            if (c.expectedKm == null) {
+                assertFalse("case: ${c.label}: $out", out.has("energy_estimate"))
+            } else {
+                assertTrue("case: ${c.label}: $out", out.has("energy_estimate"))
+                assertEquals("case: ${c.label}", c.expectedKm,
+                    out.getJSONObject("energy_estimate").getDouble("remaining_km"), c.delta)
+            }
+        }
     }
 }

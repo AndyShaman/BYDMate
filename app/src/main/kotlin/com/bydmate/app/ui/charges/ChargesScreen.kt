@@ -61,7 +61,6 @@ import java.util.Locale
 
 @Composable
 fun ChargesScreen(
-    onNavigateSettings: () -> Unit = {},
     viewModel: ChargesViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()

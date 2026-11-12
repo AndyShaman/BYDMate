@@ -10,34 +10,26 @@ import org.junit.Test
  */
 class EmptyTripsStringResTest {
 
-    @Test fun `today with no trips in period explains the current trip is still running`() {
-        assertEquals(
-            R.string.trips_empty_today,
-            emptyTripsStringRes(TripPeriod.TODAY, hasTripsBeforeFilter = false),
+    @Test fun `with no trips in the period today and week say the current trip is still running, the rest stay generic`() {
+        val cases = listOf(
+            Triple("today", TripPeriod.TODAY, R.string.trips_empty_today),
+            Triple("week", TripPeriod.WEEK, R.string.trips_empty_week),
+            Triple("month", TripPeriod.MONTH, R.string.trips_empty),
+            Triple("year", TripPeriod.YEAR, R.string.trips_empty),
+            Triple("all", TripPeriod.ALL, R.string.trips_empty),
         )
-    }
-
-    @Test fun `week with no trips in period explains the current trip is still running`() {
-        assertEquals(
-            R.string.trips_empty_week,
-            emptyTripsStringRes(TripPeriod.WEEK, hasTripsBeforeFilter = false),
-        )
-    }
-
-    @Test fun `month, year and all keep the generic empty text`() {
-        assertEquals(R.string.trips_empty, emptyTripsStringRes(TripPeriod.MONTH, hasTripsBeforeFilter = false))
-        assertEquals(R.string.trips_empty, emptyTripsStringRes(TripPeriod.YEAR, hasTripsBeforeFilter = false))
-        assertEquals(R.string.trips_empty, emptyTripsStringRes(TripPeriod.ALL, hasTripsBeforeFilter = false))
+        for ((label, period, expected) in cases) {
+            assertEquals("case: $label", expected, emptyTripsStringRes(period, hasTripsBeforeFilter = false))
+        }
     }
 
     @Test fun `empty only because a type filter hides trips keeps the generic empty text`() {
-        assertEquals(
-            R.string.trips_empty,
-            emptyTripsStringRes(TripPeriod.TODAY, hasTripsBeforeFilter = true),
-        )
-        assertEquals(
-            R.string.trips_empty,
-            emptyTripsStringRes(TripPeriod.WEEK, hasTripsBeforeFilter = true),
-        )
+        for (period in listOf(TripPeriod.TODAY, TripPeriod.WEEK)) {
+            assertEquals(
+                "case: $period",
+                R.string.trips_empty,
+                emptyTripsStringRes(period, hasTripsBeforeFilter = true),
+            )
+        }
     }
 }

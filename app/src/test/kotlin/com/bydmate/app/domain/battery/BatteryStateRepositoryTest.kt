@@ -21,32 +21,7 @@ class BatteryStateRepositoryTest {
     ) : VehicleApi {
         override suspend fun isAvailable(): Boolean = available
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
-        override suspend fun readSnapshot(): com.bydmate.app.data.remote.DiParsData? = null
-        override suspend fun readSoc(): Float? = null
-        override suspend fun readSpeed(): Float? = null
-        override suspend fun readMileageKm(): Float? = null
-        override suspend fun readPowerKw(): Int? = null
-        override suspend fun readAcStatus(): Int? = null
-        override suspend fun readAcTemp(): Int? = null
-        override suspend fun readInsideTemp(): Int? = null
-        override suspend fun readExteriorTemp(): Int? = null
-        override suspend fun readFanLevel(): Int? = null
-        override suspend fun readWindowDriver(): Int? = null
-        override suspend fun readWindowPassenger(): Int? = null
-        override suspend fun readWindowRearLeft(): Int? = null
-        override suspend fun readWindowRearRight(): Int? = null
         override suspend fun dispatch(commandString: String): Result<Unit> = Result.success(Unit)
-        override suspend fun writeAcOn(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeAcOff(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSetDriverTemp(celsius: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowDriver(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowPassenger(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowRearLeft(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowRearRight(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeLockDoors(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeUnlockDoors(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSunroof(mode: com.bydmate.app.data.vehicle.SunroofMode): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSunshade(open: Boolean): Result<Unit> = Result.success(Unit)
     }
 
     // BatteryHealthRepository is not open, so we stub via the DAO
@@ -54,10 +29,8 @@ class BatteryStateRepositoryTest {
         private val lastValue: BatterySnapshotEntity?
     ) : com.bydmate.app.data.local.dao.BatterySnapshotDao {
         override fun getAll(): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
-        override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
         override suspend fun insert(snapshot: BatterySnapshotEntity): Long = 0
         override suspend fun getLast(): BatterySnapshotEntity? = lastValue
-        override suspend fun getCount(): Int = 0
     }
 
     private fun fakeBatteryHealth(last: BatterySnapshotEntity?): BatteryHealthRepository =
@@ -76,7 +49,6 @@ class BatteryStateRepositoryTest {
         assertEquals(91.0f, state.socNow!!, 0.01f)
         assertEquals(602.7f, state.lifetimeKwh!!, 0.01f)
         assertEquals(2091.0f, state.lifetimeKm!!, 0.01f)
-        assertEquals(14.0f, state.voltage12v!!, 0.01f)
         assertTrue(state.autoserviceAvailable)
     }
 

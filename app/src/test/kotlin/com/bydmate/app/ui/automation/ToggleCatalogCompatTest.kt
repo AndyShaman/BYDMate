@@ -46,7 +46,13 @@ class ToggleCatalogCompatTest {
 
     @Test fun `the default trunk toggle of the old picker is one of the catalog entries`() {
         val fromCatalog = catalogToggles.first { it.toggleTarget == ActionDispatcher.TOGGLE_TRUNK }
-        assertEquals(newToggleAction(app).toJson().toString(), actionDefFor(fromCatalog, app).toJson().toString())
+        val trunkToggle = ActionDef(
+            command = "",
+            displayName = toggleDisplayName(app, ActionDispatcher.TOGGLE_TRUNK),
+            kind = "toggle",
+            payload = ActionDispatcher.TOGGLE_TRUNK,
+        )
+        assertEquals(trunkToggle.toJson().toString(), actionDefFor(fromCatalog, app).toJson().toString())
     }
 
     @Test fun `all targets are reachable — catalog plus the two control rows`() {

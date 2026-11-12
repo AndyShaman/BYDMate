@@ -18,24 +18,18 @@ class RuleListLayoutTest {
     private val minText10 = 240.dp
     private val minText13 = 312.dp
 
-    @Test fun `grid keeps three columns on the car screen and at 800dp`() {
-        assertEquals(3, gridColumns(1248.dp))
-        assertEquals(3, gridColumns(768.dp))
-    }
-
-    @Test fun `grid drops to two columns at 640 and 512dp`() {
-        assertEquals(2, gridColumns(608.dp))
-        assertEquals(2, gridColumns(480.dp))
-    }
-
-    /** 962 px at density 1.5 (list 609.3dp): three columns give 48.1dp on paper but 47.3dp
+    /** 609.33dp: 962 px at density 1.5 (list 609.3dp): three columns give 48.1dp on paper but 47.3dp
      *  buttons once Compose rounds cards and cells to whole pixels. */
-    @Test fun `grid leaves room for pixel rounding at the column boundary`() {
-        assertEquals(2, gridColumns(609.33.dp))
-    }
-
-    @Test fun `grid goes to one column when two would squeeze a button under 48dp`() {
-        assertEquals(1, gridColumns(400.dp))
+    @Test fun `grid columns by list width`() {
+        val cases = listOf(
+            Triple("car screen", 1248.dp, 3),
+            Triple("800dp window", 768.dp, 3),
+            Triple("640dp window", 608.dp, 2),
+            Triple("512dp window", 480.dp, 2),
+            Triple("pixel rounding at the column boundary", 609.33.dp, 2),
+            Triple("two columns would squeeze a button under 48dp", 400.dp, 1),
+        )
+        for ((label, width, columns) in cases) assertEquals("case: $label", columns, gridColumns(width))
     }
 
     @Test fun `every grid button cell is at least 48dp wide for any width`() {
@@ -45,25 +39,23 @@ class RuleListLayoutTest {
         }
     }
 
-    @Test fun `car screen keeps labeled buttons beside the text at every text size`() {
-        assertEquals(ListActionMode.LABELED, listActionMode(1248.dp, labeled10, minText10))
-        assertEquals(ListActionMode.LABELED, listActionMode(1248.dp, labeled13, minText13))
-    }
-
-    @Test fun `800dp drops the labels and keeps icon buttons beside the text`() {
-        assertEquals(ListActionMode.ICONS, listActionMode(768.dp, labeled10, minText10))
-        assertEquals(ListActionMode.ICONS, listActionMode(768.dp, labeled13, minText13))
-    }
-
-    @Test fun `640dp keeps icons beside the text at normal size and moves them under at very large`() {
-        assertEquals(ListActionMode.ICONS, listActionMode(608.dp, labeled10, minText10))
-        assertEquals(ListActionMode.BELOW_LABELED, listActionMode(608.dp, labeled10, minText13))
-        assertEquals(ListActionMode.BELOW_ICONS, listActionMode(608.dp, labeled13, minText13))
-    }
-
-    @Test fun `512dp moves the buttons under the text`() {
-        assertEquals(ListActionMode.BELOW_ICONS, listActionMode(480.dp, labeled10, minText10))
-        assertEquals(ListActionMode.BELOW_ICONS, listActionMode(480.dp, labeled13, minText13))
+    @Test fun `action buttons placement by list width and text size`() {
+        val cases = listOf(
+            // label, (window width, labeled-buttons width, minimum text width), expected mode
+            Triple("car screen, 1.0", Triple(1248.dp, labeled10, minText10), ListActionMode.LABELED),
+            Triple("car screen, 1.3", Triple(1248.dp, labeled13, minText13), ListActionMode.LABELED),
+            Triple("800dp drops the labels, 1.0", Triple(768.dp, labeled10, minText10), ListActionMode.ICONS),
+            Triple("800dp drops the labels, 1.3", Triple(768.dp, labeled13, minText13), ListActionMode.ICONS),
+            Triple("640dp keeps icons beside the text at normal size", Triple(608.dp, labeled10, minText10), ListActionMode.ICONS),
+            Triple("640dp moves them under at very large (labeled row, 1.0 buttons)", Triple(608.dp, labeled10, minText13), ListActionMode.BELOW_LABELED),
+            Triple("640dp moves them under at very large (icons)", Triple(608.dp, labeled13, minText13), ListActionMode.BELOW_ICONS),
+            Triple("512dp, 1.0", Triple(480.dp, labeled10, minText10), ListActionMode.BELOW_ICONS),
+            Triple("512dp, 1.3", Triple(480.dp, labeled13, minText13), ListActionMode.BELOW_ICONS),
+        )
+        for ((label, input, expected) in cases) {
+            val (width, labeled, minText) = input
+            assertEquals("case: $label", expected, listActionMode(width, labeled, minText))
+        }
     }
 
     @Test fun `beside the text the text always keeps its minimum width`() {

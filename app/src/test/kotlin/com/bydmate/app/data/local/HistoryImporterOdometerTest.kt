@@ -1,12 +1,7 @@
 package com.bydmate.app.data.local
 
-import android.content.Context
-import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.local.dao.TripPointDao
-import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.entity.TripEntity
-import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.OdometerMarks
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -29,22 +24,12 @@ class HistoryImporterOdometerTest {
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val odometerMarks = mockk<OdometerMarks>(relaxed = true)
 
-    private fun importer() = HistoryImporter(
-        context = mockk<Context>(relaxed = true),
+    private fun importer() = historyImporter(
         energyDataReader = energyDataReader,
         tripRepository = tripRepository,
         tripDao = tripDao,
-        tripPointDao = mockk<TripPointDao>(relaxed = true),
-        idleDrainDao = mockk<IdleDrainDao>(relaxed = true),
         settingsRepository = settingsRepository,
-        lastSessionRepository = mockk<LastSessionRepository>(relaxed = true),
-        tripTombstoneDao = mockk<TripTombstoneDao>(relaxed = true),
-        costCalculator = mockk(relaxed = true),
         odometerMarks = odometerMarks,
-        vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(),
-        counterSnapshotDao = mockk(relaxed = true),
-        counterSnapshotWriter = mockk(relaxed = true),
-        lastStateDao = mockk(relaxed = true),
     )
 
     private val record = BydTripRecord(

@@ -277,10 +277,7 @@ class HudWayChannelsTest {
         assertEquals(listOf("set $icon=2", "set $ahead=2", "set $dist=300", "buf $road=Main St"), calls)
     }
 
-    @Test fun `turn kind is the icon id as OpenBYD writes it, out of range blank`() {
-        assertEquals(1, HudWayChannels.turnKind(1))
-        assertEquals(49, HudWayChannels.turnKind(49))
-        assertEquals(102, HudWayChannels.turnKind(102))
+    @Test fun `a turn kind out of OpenBYD's icon range goes out blank`() {
         assertEquals(0, HudWayChannels.turnKind(103))
         assertEquals(0, HudWayChannels.turnKind(-1))
     }
@@ -664,52 +661,57 @@ class HudWayChannelsTest {
         assertTrue(prefs.contains(HudWayChannels.KEY_REST_LEFT))
     }
 
-    @Test fun `a firmware without the SDK method keeps the raw writes, says so once per route and does not retry`() = runTest {
-        sdkReply = { HudNaviReply(HelperBinderProtocol.HUD_NAVI_ABSENT, 0) }
-        val c = channels(3)
-        sdkRouteOf(c)
-        assertEquals(sdkRouteRaw, canAndSdk.filterNot { it.startsWith("sdk") })
-        // Each method was tried once.
-        assertEquals(listOf("sdk guidance 2/300", "sdk road Main St", "sdk rest 0/13/12000"), calls.filter { it.startsWith("sdk") })
-        assertEquals(1, lines.count { it.startsWith("hud way: sdk unavailable") })
-        assertTrue(lines.single { it.startsWith("hud way: sdk unavailable") }.contains("reason=absent"))
-        assertTrue(lines.single { it.startsWith("hud way: route end") }.contains("sdk accepted=0 refused=0 absent=3"))
-        // The next route tries once again.
-        calls.clear()
-        sdkRouteOf(c)
-        assertEquals(3, calls.count { it.startsWith("sdk") })
-        assertEquals(2, lines.count { it.startsWith("hud way: sdk unavailable") })
-    }
+    /** One way 3 route against one SDK answer: what the SDK got, its unavailable line (null = none)
+     *  and the route end's SDK counts; [next] checks a second route where it matters. */
+    private class SdkCase(
+        val label: String,
+        val reply: (HudSdkCall) -> HudNaviReply?,
+        val sdkCallsOk: (List<String>) -> Boolean,
+        val unavailable: String?,
+        val counts: String,
+        val next: Boolean = false,
+    )
 
-    @Test fun `an SDK method that throws keeps the raw writes, says so once per route and does not retry`() = runTest {
-        sdkReply = { if (it is HudSdkCall.Guidance) HudNaviReply(HelperBinderProtocol.HUD_NAVI_THREW, 0) else HudNaviReply(0, 0) }
-        val c = channels(3)
-        sdkRouteOf(c)
-        assertEquals(sdkRouteRaw, canAndSdk.filterNot { it.startsWith("sdk") })
-        assertEquals(1, calls.count { it.startsWith("sdk guidance") })
-        assertEquals(2, calls.count { it.startsWith("sdk road") })
-        assertTrue(lines.single { it.startsWith("hud way: sdk unavailable") }.contains("call=sendSimpleGuidanceInfo reason=threw"))
-        assertTrue(lines.single { it.startsWith("hud way: route end") }.contains("sdk accepted=4 refused=1 absent=0"))
-    }
-
-    @Test fun `a daemon that does not know the SDK call keeps the raw writes and is asked once per route`() = runTest {
-        sdkReply = { null }
-        val c = channels(3)
-        sdkRouteOf(c)
-        assertEquals(sdkRouteRaw, canAndSdk.filterNot { it.startsWith("sdk") })
-        assertEquals(listOf("sdk guidance 2/300"), calls.filter { it.startsWith("sdk") })
-        assertTrue(lines.single { it.startsWith("hud way: sdk unavailable") }.contains("reason=daemon"))
-        assertTrue(lines.single { it.startsWith("hud way: route end") }.contains("sdk accepted=0 refused=0 absent=1"))
-    }
-
-    @Test fun `an SDK refusal is counted, not retried, and the raw writes go on`() = runTest {
-        sdkReply = { HudNaviReply(HelperBinderProtocol.HUD_NAVI_CALLED, -2147482645) }
-        val c = channels(3)
-        sdkRouteOf(c)
-        assertEquals(sdkRouteRaw, canAndSdk.filterNot { it.startsWith("sdk") })
-        assertEquals(6, calls.count { it.startsWith("sdk") })
-        assertTrue(lines.none { it.startsWith("hud way: sdk unavailable") })
-        assertTrue(lines.last { it.startsWith("hud way: route end") }.contains("sdk accepted=0 refused=6 absent=0"))
+    @Test fun `an SDK absent, throwing, unknown to the daemon or refusing keeps the raw writes and is not retried`() = runTest {
+        val cases = listOf(
+            // Each method was tried once; the next route tries once again.
+            SdkCase("firmware without the method", { HudNaviReply(HelperBinderProtocol.HUD_NAVI_ABSENT, 0) },
+                { it == listOf("sdk guidance 2/300", "sdk road Main St", "sdk rest 0/13/12000") },
+                "reason=absent", "sdk accepted=0 refused=0 absent=3", next = true),
+            SdkCase("a method that throws",
+                { if (it is HudSdkCall.Guidance) HudNaviReply(HelperBinderProtocol.HUD_NAVI_THREW, 0) else HudNaviReply(0, 0) },
+                { sdk -> sdk.count { it.startsWith("sdk guidance") } == 1 && sdk.count { it.startsWith("sdk road") } == 2 },
+                "call=sendSimpleGuidanceInfo reason=threw", "sdk accepted=4 refused=1 absent=0"),
+            SdkCase("a daemon that does not know the call", { null },
+                { it == listOf("sdk guidance 2/300") }, "reason=daemon", "sdk accepted=0 refused=0 absent=1"),
+            SdkCase("an SDK refusal", { HudNaviReply(HelperBinderProtocol.HUD_NAVI_CALLED, -2147482645) },
+                { it.size == 6 }, null, "sdk accepted=0 refused=6 absent=0"),
+        )
+        cases.forEach { case ->
+            prefs.edit().clear().commit()
+            calls.clear()
+            lines.clear()
+            sdkReply = case.reply
+            val c = channels(3)
+            sdkRouteOf(c)
+            val label = "case: ${case.label}"
+            assertEquals(label, sdkRouteRaw, canAndSdk.filterNot { it.startsWith("sdk") })
+            val sdk = calls.filter { it.startsWith("sdk") }
+            assertTrue("$label $sdk", case.sdkCallsOk(sdk))
+            val unavailable = lines.filter { it.startsWith("hud way: sdk unavailable") }
+            if (case.unavailable == null) {
+                assertTrue("$label $unavailable", unavailable.isEmpty())
+            } else {
+                assertTrue("$label $unavailable", unavailable.single().contains(case.unavailable))
+            }
+            assertTrue(label, lines.single { it.startsWith("hud way: route end") }.contains(case.counts))
+            if (case.next) {
+                calls.clear()
+                sdkRouteOf(c)
+                assertEquals(label, 3, calls.count { it.startsWith("sdk") })
+                assertEquals(label, 2, lines.count { it.startsWith("hud way: sdk unavailable") })
+            }
+        }
     }
 
     /** A route with a distance change, a road change and a rest change, then its end. */

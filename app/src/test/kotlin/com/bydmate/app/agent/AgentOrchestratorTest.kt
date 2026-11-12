@@ -276,17 +276,6 @@ class AgentOrchestratorTest {
         assertEquals("сколько времени (время 16:35)", user.content)
     }
 
-    @Test fun time_tag_sits_before_the_moving_tag() = runTest {
-        clock = localClock(9, 5)
-        coEvery { repo.isAgentEnabled() } returns true
-        coEvery { tools.schemas() } returns JSONArray()
-        val backend = FakeBackend(replies = ArrayDeque(listOf(answer("Готово"))))
-        AgentOrchestrator(backend, tools, repo, isMoving = { true }).also { it.nowMs = { clock } }
-            .ask("какой заряд")
-        val user = backend.requests.single().last() as AgentMessage.User
-        assertEquals("какой заряд (время 09:05) ${AgentOrchestrator.MOVING_TAG}", user.content)
-    }
-
     // The time changes every minute; the system messages must not, or the prompt cache misses.
     // (The dynamic message still grows by the day-memory exchange; it just never carries a time.)
     @Test fun system_messages_carry_no_time_across_turns_of_one_day() = runTest {
@@ -467,14 +456,6 @@ class AgentOrchestratorTest {
         val sentences = mutableListOf<String>()
         orch.ask("проверь", onSentence = { s -> sentences += s })
         assertEquals(listOf("Готово."), sentences)
-    }
-
-    @Test
-    fun `ask without onSentence keeps legacy behaviour`() = runTest {
-        val backend = FakeBackend(replies = ArrayDeque(listOf(Result.success(AgentReply("Ответ.", emptyList())))))
-        val orch = orchestrator(backend)
-        val r = orch.ask("вопрос")
-        assertEquals("Ответ.", (r as AgentResult.Answer).text)
     }
 
     @Test

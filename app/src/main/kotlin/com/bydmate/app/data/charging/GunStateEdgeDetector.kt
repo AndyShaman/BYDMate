@@ -17,7 +17,7 @@ package com.bydmate.app.data.charging
  *   1 = NONE        (no gun)
  *   2 = AC
  *   3 = DC
- *   4 = AC_DC
+ *   4 = AC_DC       (treated as DC by ChargingTypeClassifier)
  *   5 = VTOL
  *
  * Edge rule: previous state was a known non-NONE value AND current is NONE.
@@ -44,6 +44,7 @@ class GunStateEdgeDetector(initial: Int? = null) {
     }
 
     companion object {
+        /** Gun fid value meaning "no gun"; every gun-state check in the app compares with it. */
         const val GUN_STATE_NONE = 1
     }
 }

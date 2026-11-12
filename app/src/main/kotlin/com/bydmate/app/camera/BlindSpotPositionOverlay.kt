@@ -55,8 +55,6 @@ class BlindSpotPositionOverlay {
 
     private var removeAttempts = 0
 
-    val isShown: Boolean get() = view != null
-
     /**
      * True when the window is up; false when WindowManager refused it, or when the previous
      * window is still on screen — [hide] can leave one behind for its retry loop, and re-pointing
@@ -152,8 +150,8 @@ class BlindSpotPositionOverlay {
         val border = View(context).apply {
             background = GradientDrawable().apply {
                 setStroke(
-                    (BORDER_DP * context.resources.displayMetrics.density).roundToInt(),
-                    BORDER_COLOR,
+                    (GLOW_STROKE_DP * context.resources.displayMetrics.density).roundToInt(),
+                    GLOW_COLOR,
                 )
                 setColor(Color.TRANSPARENT)
             }
@@ -210,20 +208,14 @@ class BlindSpotPositionOverlay {
      * left one — the same rule [BlindSpotController] shows the camera with.
      */
     private fun placement(context: Context, metrics: DisplayMetrics): Rect {
-        val prefs = prefs(context)
-        val widthPct = prefs.widthPct()
-        val shape = PipShape(
-            widthPct, prefs.getBoolean(BlindSpotPreferences.KEY_PIP_ROTATE_90, false))
+        val prefs = BlindSpotPreferences(context)
+        val shape = prefs.pipShape
         val rightRect = BlindSpotPreferences.placedPipRect(
-            metrics.widthPixels, metrics.heightPixels, shape,
-            prefs.getInt(BlindSpotPreferences.KEY_PIP_X_PX, BlindSpotPreferences.UNSET_PX),
-            prefs.getInt(BlindSpotPreferences.KEY_PIP_Y_PX, BlindSpotPreferences.UNSET_PX),
+            metrics.widthPixels, metrics.heightPixels, shape, prefs.pipXPx, prefs.pipYPx,
         )
         if (side == Side.RIGHT) return rightRect
         return BlindSpotPreferences.leftPipRect(
-            metrics.widthPixels, metrics.heightPixels, shape,
-            prefs.getInt(BlindSpotPreferences.KEY_LEFT_PIP_X_PX, BlindSpotPreferences.UNSET_PX),
-            prefs.getInt(BlindSpotPreferences.KEY_LEFT_PIP_Y_PX, BlindSpotPreferences.UNSET_PX),
+            metrics.widthPixels, metrics.heightPixels, shape, prefs.leftPipXPx, prefs.leftPipYPx,
             rightRect,
         )
     }
@@ -239,9 +231,6 @@ class BlindSpotPositionOverlay {
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(BlindSpotPreferences.PREFS_NAME, Context.MODE_PRIVATE)
 
-    private fun SharedPreferences.widthPct(): Int = getInt(
-        BlindSpotPreferences.KEY_PIP_WIDTH_PCT, BlindSpotPreferences.DEFAULT_PIP_WIDTH_PCT)
-
     private fun realMetrics(context: Context): DisplayMetrics {
         val display = (context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
             .getDisplay(Display.DEFAULT_DISPLAY) ?: return context.resources.displayMetrics
@@ -250,7 +239,7 @@ class BlindSpotPositionOverlay {
     }
 
     private companion object {
-        const val TAG = "BlindSpot"
+        const val TAG = BLIND_SPOT_TAG
 
         /** Left up by mistake, the window would sit over the navigation; it takes itself away. */
         const val AUTO_HIDE_MS = 60_000L
@@ -258,8 +247,6 @@ class BlindSpotPositionOverlay {
         const val REMOVE_RETRY_MS = 1_000L
         const val MAX_REMOVE_ATTEMPTS = 5
 
-        const val BORDER_DP = 12f
-        const val BORDER_COLOR = 0xFFFF7A00.toInt()
         const val HINT_TEXT_SP = 16f
     }
 }

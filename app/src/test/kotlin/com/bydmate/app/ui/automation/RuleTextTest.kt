@@ -49,83 +49,71 @@ class RuleTextTest {
 
     // --- Conditions, every kind ---
 
-    @Test fun `numeric param with unit and word operator`() =
-        assertEquals("Скорость меньше 5 км/ч", phrase(listOf(param("Speed", "<", "5"))))
+    private class PhraseCase(
+        val label: String,
+        val triggers: List<TriggerDef>,
+        val expected: String,
+        val actions: List<ActionDef> = emptyList(),
+        val logic: String = "AND",
+    )
 
-    @Test fun `every operator reads as a word`() {
-        val words = listOf(">" to "больше", "<" to "меньше", ">=" to "не меньше", "<=" to "не больше", "==" to "равно", "!=" to "не равно")
-        for ((op, word) in words) assertEquals("SOC $word 20%", phrase(listOf(param("SOC", op, "20"))))
-    }
+    private fun sched(spec: ScheduleSpec) = TriggerDef("Schedule", "", "==", spec.toJson(), "", kind = "time_range")
 
-    @Test fun `hint units in brackets stay out`() =
-        assertEquals("Датчик дождя больше 0", phrase(listOf(param("Rain", ">", "0"))))
+    private val placeEnter = TriggerDef("Place", "", "==", "enter", "", kind = "place_enter", placeId = 1, placeName = "Дом")
+    private val oneShot = { at: String -> TriggerDef(OneShotTrigger.PARAM, "", "==", at, "", kind = OneShotTrigger.KIND) }
+    private val gearAndSpeed = listOf(param("Gear", "==", "1"), param("Speed", "<", "5"))
 
-    @Test fun `enum equals and not equals`() {
-        assertEquals("Передача P", phrase(listOf(param("Gear", "==", "1"))))
-        assertEquals("Передача не D", phrase(listOf(param("Gear", "!=", "4"))))
-        assertEquals("Режим вождения снег", phrase(listOf(param("DriveMode", "==", "4"))))
-    }
-
-    @Test fun `doors are named in full`() {
-        assertEquals("Дверь водителя открыта", phrase(listOf(param("DoorFL", "==", "1"))))
-        assertEquals("Дверь сзади справа закрыта", phrase(listOf(param("DoorRR", "==", "0"))))
-        assertEquals("Окно сзади слева больше 50% откр.", phrase(listOf(param("WindowRL", ">", "50"))))
-    }
-
-    @Test fun `wheels are named in full`() =
-        assertEquals("Давление левой передней шины меньше 230 кПа", phrase(listOf(param("TirePressFL", "<", "230"))))
-
-    @Test fun `cell voltages differ in the first word`() {
-        assertEquals("Мин. напряжение ячейки меньше 3,2 В", phrase(listOf(param("MinCellVoltage", "<", "3,2"))))
-        assertEquals("Макс. напряжение ячейки больше 4 В", phrase(listOf(param("MaxCellVoltage", ">", "4"))))
-    }
-
-    @Test fun `place enter and exit`() {
-        val enter = TriggerDef("Place", "", "==", "enter", "", kind = "place_enter", placeId = 1, placeName = "Дом")
-        assertEquals("Въезд в «Дом»", phrase(listOf(enter)))
-        assertEquals("Выезд из «Дом»", phrase(listOf(enter.copy(kind = "place_exit"))))
-    }
-
-    @Test fun `time of day`() =
-        assertEquals("Рассвет", phrase(listOf(TriggerDef("TimeOfDay", "", "==", "DAWN", "", kind = "time_of_day"))))
-
-    @Test fun `schedule exact, window and days`() {
-        fun sched(spec: ScheduleSpec) = TriggerDef("Schedule", "", "==", spec.toJson(), "", kind = "time_range")
-        assertEquals("В 08:00", phrase(listOf(sched(ScheduleSpec(480, 480, emptySet())))))
-        assertEquals("По будням с 08:00 до 10:00", phrase(listOf(sched(ScheduleSpec(480, 600, setOf(1, 2, 3, 4, 5))))))
-        assertEquals("По выходным в 09:30", phrase(listOf(sched(ScheduleSpec(570, 570, setOf(6, 7))))))
-        assertEquals("Пн, Ср в 07:00", phrase(listOf(sched(ScheduleSpec(420, 420, setOf(3, 1))))))
-    }
-
-    @Test fun `service start and internet`() {
-        assertEquals("Запуск BYDMate", phrase(listOf(TriggerDef("ServiceStart", "", "==", "true", "", kind = "service_start"))))
-        assertEquals("Доступен интернет", phrase(listOf(TriggerDef("NetworkAvailable", "", "==", "true", "", kind = "network_available"))))
-    }
-
-    @Test fun `button, steering key and voice`() {
-        assertEquals("Кнопка 1 на виджете", phrase(listOf(newButtonPressTrigger(1))))
-        assertEquals("Клавиша руля не назначена", phrase(listOf(newSteeringKeyTrigger(0))))
-        assertTrue(phrase(listOf(newSteeringKeyTrigger(383))).startsWith("Клавиша руля «"))
-        assertEquals("Голосом «открой багажник»", phrase(listOf(TriggerDef("Voice", "", "==", "открой багажник", "", kind = "voice"))))
-    }
-
-    @Test fun `one-shot with a param closes with a comma`() {
-        val once = TriggerDef(OneShotTrigger.PARAM, "", "==", "2026-09-30T07:30", "", kind = OneShotTrigger.KIND)
-        assertEquals(
-            "30 сентября в 07:30, один раз, и температура снаружи меньше 5 °C: авто AC, температура: 22 °C",
-            phrase(listOf(once, param("ExtTemp", "<", "5")), listOf(cmd("自动空调"), cmd("设置温度22"))),
+    private val phraseCases by lazy {
+        listOf(
+            PhraseCase("numeric param with unit and word operator", listOf(param("Speed", "<", "5")), "Скорость меньше 5 км/ч"),
+            PhraseCase("operator >", listOf(param("SOC", ">", "20")), "SOC больше 20%"),
+            PhraseCase("operator <", listOf(param("SOC", "<", "20")), "SOC меньше 20%"),
+            PhraseCase("operator >=", listOf(param("SOC", ">=", "20")), "SOC не меньше 20%"),
+            PhraseCase("operator <=", listOf(param("SOC", "<=", "20")), "SOC не больше 20%"),
+            PhraseCase("operator ==", listOf(param("SOC", "==", "20")), "SOC равно 20%"),
+            PhraseCase("operator !=", listOf(param("SOC", "!=", "20")), "SOC не равно 20%"),
+            PhraseCase("hint units in brackets stay out", listOf(param("Rain", ">", "0")), "Датчик дождя больше 0"),
+            PhraseCase("enum equals", listOf(param("Gear", "==", "1")), "Передача P"),
+            PhraseCase("enum not equals", listOf(param("Gear", "!=", "4")), "Передача не D"),
+            PhraseCase("drive mode enum", listOf(param("DriveMode", "==", "4")), "Режим вождения снег"),
+            PhraseCase("door driver open", listOf(param("DoorFL", "==", "1")), "Дверь водителя открыта"),
+            PhraseCase("door rear right closed", listOf(param("DoorRR", "==", "0")), "Дверь сзади справа закрыта"),
+            PhraseCase("window rear left percent", listOf(param("WindowRL", ">", "50")), "Окно сзади слева больше 50% откр."),
+            PhraseCase("wheel named in full", listOf(param("TirePressFL", "<", "230")), "Давление левой передней шины меньше 230 кПа"),
+            PhraseCase("min cell voltage", listOf(param("MinCellVoltage", "<", "3,2")), "Мин. напряжение ячейки меньше 3,2 В"),
+            PhraseCase("max cell voltage", listOf(param("MaxCellVoltage", ">", "4")), "Макс. напряжение ячейки больше 4 В"),
+            PhraseCase("place enter", listOf(placeEnter), "Въезд в «Дом»"),
+            PhraseCase("place exit", listOf(placeEnter.copy(kind = "place_exit")), "Выезд из «Дом»"),
+            PhraseCase("time of day", listOf(TriggerDef("TimeOfDay", "", "==", "DAWN", "", kind = "time_of_day")), "Рассвет"),
+            PhraseCase("schedule exact", listOf(sched(ScheduleSpec(480, 480, emptySet()))), "В 08:00"),
+            PhraseCase("schedule window on weekdays", listOf(sched(ScheduleSpec(480, 600, setOf(1, 2, 3, 4, 5)))), "По будням с 08:00 до 10:00"),
+            PhraseCase("schedule on weekends", listOf(sched(ScheduleSpec(570, 570, setOf(6, 7)))), "По выходным в 09:30"),
+            PhraseCase("schedule on listed days", listOf(sched(ScheduleSpec(420, 420, setOf(3, 1)))), "Пн, Ср в 07:00"),
+            PhraseCase("service start", listOf(TriggerDef("ServiceStart", "", "==", "true", "", kind = "service_start")), "Запуск BYDMate"),
+            PhraseCase("internet", listOf(TriggerDef("NetworkAvailable", "", "==", "true", "", kind = "network_available")), "Доступен интернет"),
+            PhraseCase("widget button", listOf(newButtonPressTrigger(1)), "Кнопка 1 на виджете"),
+            PhraseCase("steering key not assigned", listOf(newSteeringKeyTrigger(0)), "Клавиша руля не назначена"),
+            PhraseCase("voice", listOf(TriggerDef("Voice", "", "==", "открой багажник", "", kind = "voice")), "Голосом «открой багажник»"),
+            PhraseCase(
+                "one-shot with a param closes with a comma", listOf(oneShot("2026-09-30T07:30"), param("ExtTemp", "<", "5")),
+                "30 сентября в 07:30, один раз, и температура снаружи меньше 5 °C: авто AC, температура: 22 °C",
+                actions = listOf(cmd("自动空调"), cmd("设置温度22")),
+            ),
+            PhraseCase("one-shot tomorrow", listOf(oneShot("2026-09-28T07:30")), "Завтра в 07:30, один раз"),
+            PhraseCase(
+                "and with an action", gearAndSpeed, "Передача P и скорость меньше 5 км/ч: закрыть все окна",
+                actions = listOf(cmd("车窗关闭")),
+            ),
+            PhraseCase("or", gearAndSpeed, "Передача P или скорость меньше 5 км/ч", logic = "OR"),
         )
     }
 
-    @Test fun `one-shot tomorrow`() {
-        val once = TriggerDef(OneShotTrigger.PARAM, "", "==", "2026-09-28T07:30", "", kind = OneShotTrigger.KIND)
-        assertEquals("Завтра в 07:30, один раз", phrase(listOf(once)))
+    @Test fun `condition phrases read as words`() {
+        for (c in phraseCases) assertEquals("case: ${c.label}", c.expected, phrase(c.triggers, c.actions, c.logic))
     }
 
-    @Test fun `and, or and several actions`() {
-        val t = listOf(param("Gear", "==", "1"), param("Speed", "<", "5"))
-        assertEquals("Передача P и скорость меньше 5 км/ч: закрыть все окна", phrase(t, listOf(cmd("车窗关闭"))))
-        assertEquals("Передача P или скорость меньше 5 км/ч", phrase(t, logic = "OR"))
+    @Test fun `a steering key shows its code in quotes`() {
+        assertTrue(phrase(listOf(newSteeringKeyTrigger(383))).startsWith("Клавиша руля «"))
     }
 
     // --- Actions ---
@@ -135,9 +123,14 @@ class RuleTextTest {
         fun act(a: ActionDef) = phrase(listOf(param("Speed", ">", "0")), listOf(a)).substringAfter(": ")
         assertEquals("передний багажник, переключить",
             act(ActionDef("", "x", "toggle", ActionDispatcher.TOGGLE_FRONT_TRUNK)))
-        assertEquals("подождать 30 с", act(ActionDef("delay_30000", "x", "delay", "30000")))
-        assertEquals("подождать 0,5 с", act(ActionDef("delay_500", "x", "delay", "500")))
-        assertEquals("подождать 1 мин", act(ActionDef("delay_60000", "x", "delay", "60000")))
+        assertEquals("пауза 30 с", act(ActionDef("delay_30000", "x", "delay", "30000")))
+        assertEquals("пауза 0,5 с", act(ActionDef("delay_500", "x", "delay", "500")))
+        assertEquals("пауза 1 мин", act(ActionDef("delay_60000", "x", "delay", "60000")))
+        assertEquals("пауза 5 мин", act(ActionDef("delay_300000", "x", "delay", "300000")))
+        assertEquals("пауза 1 ч", act(ActionDef("delay_3600000", "x", "delay", "3600000")))
+        assertEquals("пауза 1,5 ч", act(ActionDef("delay_5400000", "x", "delay", "5400000")))
+        assertEquals("пауза 1,5 мин", act(ActionDef("delay_90000", "x", "delay", "90000")))
+        assertEquals("пауза 24 ч", act(ActionDef("delay_86400000", "x", "delay", "86400000")))
         assertEquals("уведомление «Закройте дверь»",
             act(newNotificationAction(lc).withNotification("Закройте дверь", "")))
         assertEquals("отчёт в Telegram", act(newTelegramReportAction(lc)))
@@ -284,12 +277,17 @@ class RuleTextTest {
         assertEquals("Центральный экран: выключить не выполнено", journalLine(run(recorded(off, success = false), success = false), ctx, now, zone).what)
     }
 
+    @Test fun `a long delay reads in hours in English`() {
+        LocalePreferences(ctx).setLanguage("en")
+        assertEquals("Wait 2 h", actionText(ActionDef("delay_7200000", "x", "delay", "7200000"), ctx.appLocalizedContext()))
+    }
+
     @Test fun `a run shows the parameters it recorded`() {
         val pause = ActionDef("", "Пауза", "delay", "30000")
         val note = ActionDef("", "Уведомление", "notification", """{"title":"Заряд","text":"t"}""")
         val sentry = ActionDef("", "Охрана", "sentry", "1")
         assertEquals(
-            "Подождать 30 с, уведомление «Заряд», режим охраны, включить",
+            "Пауза 30 с, уведомление «Заряд», режим охраны, включить",
             journalLine(run(recorded(pause), recorded(note), recorded(sentry)), ctx, now, zone).what,
         )
         assertEquals(

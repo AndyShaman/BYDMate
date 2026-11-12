@@ -9,8 +9,6 @@ import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.nativestack.FidCatalog
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
-import com.bydmate.app.data.nativestack.ParsReader
-import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import kotlinx.coroutines.CancellationException
@@ -33,7 +31,6 @@ import javax.inject.Singleton
 @Singleton
 @Suppress("LargeClass") // every car read and write behind VehicleApi, one verification channel each
 class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies + test seams
-    private val parsReader: ParsReader,
     private val autoservice: AutoserviceClient,
     private val helper: HelperClient,
     private val allowlist: WriteAllowlist,
@@ -80,9 +77,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     private val driveModeChannel = DriveModeChannel(
         DriveModeWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
         DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
-        // Rounded UP, not truncated: a plain toInt() turns 15.9 km/h into 15 and lets a
-        // terrain mode through above the owner's 15 km/h limit (finding 2026-09-27).
-        speed = { FidAddresses.of("speed").let { autoservice.getFloat(it.device, it.fid) }?.let { kotlin.math.ceil(it).toInt() } },
+        speed = { guardSpeedKmh { dev, fid -> autoservice.getFloat(dev, fid) } },
     )
 
     // Owns the window position samples taken around a write. A write that fails before the
@@ -99,33 +94,6 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     // Liveness + snapshots — passthroughs.
     override suspend fun isAvailable(): Boolean = autoservice.isAvailable()
     override suspend fun readBatterySnapshot(): BatteryReading? = autoservice.readBatterySnapshot()
-    override suspend fun readSnapshot(): DiParsData? = parsReader.fetch()
-
-    // Individual readers — direct autoservice fid hits.
-    override suspend fun readSoc(): Float? = autoservice.getFloat(1014, 1246777400)
-    override suspend fun readSpeed(): Float? = FidAddresses.of("speed").let { autoservice.getFloat(it.device, it.fid) }
-    override suspend fun readMileageKm(): Float? =
-        autoservice.getInt(1014, 1246765072)?.let { it / 10f }
-    override suspend fun readPowerKw(): Int? = autoservice.getInt(1012, 339738656)
-    override suspend fun readAcStatus(): Int? = autoservice.getInt(1000, 1077936144)
-    override suspend fun readAcTemp(): Int? = autoservice.getInt(1000, 1077936168)
-    override suspend fun readInsideTemp(): Int? = autoservice.getInt(1000, 1031798832)
-    override suspend fun readExteriorTemp(): Int? = autoservice.getInt(1000, 1077936184)
-    override suspend fun readFanLevel(): Int? = autoservice.getInt(1000, 1077936156)
-    override suspend fun readWindowDriver(): Int? = autoservice.getInt(1001, 947912728)
-    override suspend fun readWindowPassenger(): Int? = autoservice.getInt(1001, 1267728400)
-    override suspend fun readWindowRearLeft(): Int? = autoservice.getInt(1001, 947912736)
-    /**
-     * DiLink 5.0 fid, falling back to its alternative-generation twin ONLY when the primary
-     * reports DEVICE_THE_FEATURE_LINK_ERROR — the fid is absent on this generation (#79).
-     * Any other sentinel is a transient fault and must not be answered from a different fid.
-     */
-    override suspend fun readWindowRearRight(): Int? {
-        val raw = autoservice.getIntRaw(1001, 947912752) ?: return null
-        SentinelDecoder.decodeInt(raw)?.let { return it }
-        if (raw != SentinelDecoder.FEATURE_LINK_ERROR) return null
-        return autoservice.getInt(1001, 1267728408)
-    }
 
     // ─── Writes ────────────────────────────────────────────────────────────────
 
@@ -181,34 +149,6 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         }
         return firstError?.let { Result.failure(it) } ?: Result.success(Unit)
     }
-
-    // Climate
-    override suspend fun writeAcOn(): Result<Unit> = doWrite("ac_on", 1)
-    override suspend fun writeAcOff(): Result<Unit> = doWrite("ac_off", 0)
-    override suspend fun writeSetDriverTemp(celsius: Int): Result<Unit> =
-        doWrite("ac_temp_main", celsius)
-
-    // Windows
-    override suspend fun writeWindowDriver(percent: Int): Result<Unit> =
-        doWrite("window_driver_pos", percent)
-    override suspend fun writeWindowPassenger(percent: Int): Result<Unit> =
-        doWrite("window_passenger_pos", percent)
-    override suspend fun writeWindowRearLeft(percent: Int): Result<Unit> =
-        doWrite("window_rear_left_pos", percent)
-    override suspend fun writeWindowRearRight(percent: Int): Result<Unit> =
-        doWrite("window_rear_right_pos", percent)
-
-    // Locks
-    override suspend fun writeLockDoors(): Result<Unit> = doWrite("doors_lock", 2)
-    override suspend fun writeUnlockDoors(): Result<Unit> = doWrite("doors_unlock", 1)
-
-    // Sunroof — one allowlist entry per mode (sunroof_open, sunroof_close, etc.)
-    override suspend fun writeSunroof(mode: SunroofMode): Result<Unit> =
-        doWrite("sunroof_${mode.name.lowercase()}", mode.value)
-
-    // Sunshade
-    override suspend fun writeSunshade(open: Boolean): Result<Unit> =
-        doWrite(if (open) "sunshade_open" else "sunshade_close", if (open) 1 else 2)
 
     // ─── Core write helper ─────────────────────────────────────────────────────
 
@@ -353,7 +293,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         // NonCancellable here: the physical write has already landed, so the verdict (up to
         // ~1 s of reads) and the audit row that follows it must survive a caller cancelled in
         // that window — a command the car obeyed must never surface as an exception, whichever
-        // entry point (dispatch, writeWindowDriver, …) started the write.
+        // entry point started the write.
         if (windowCheck != null && verifyInto == null) {
             return withContext(NonCancellable) {
                 val failure = windowFailure(windowCheck)
@@ -968,9 +908,6 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
      * HelperUnreachable or ReadbackMismatch. These are the highest-signal
      * failures: the action was live-confirmed on Leopard 3, so a failure means
      * the helper daemon is down or the vehicle state machine rejected the command.
-     *
-     * TODO: route to Crashlytics when Firebase is integrated
-     *   (requires google-services.json + Firebase gradle plugin — out of scope for Phase 2).
      */
     private fun maybeReportValidatedFailure(actionName: String, err: VehicleWriteError, entry: WriteEntry) {
         if (entry.validated && (err is VehicleWriteError.HelperUnreachable || err is VehicleWriteError.ReadbackMismatch)) {
@@ -1078,6 +1015,5 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             "window_rear_right_close" to WINDOW_RR_FIELD,
             "window_rear_right_ctrl" to WINDOW_RR_FIELD,
         )
-        // TODO: route to Crashlytics when Firebase is integrated
     }
 }

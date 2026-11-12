@@ -1,11 +1,6 @@
 package com.bydmate.app.data.local
 
-import android.content.Context
-import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.local.dao.TripPointDao
-import com.bydmate.app.data.local.dao.TripTombstoneDao
-import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import io.mockk.coEvery
@@ -28,31 +23,20 @@ class HistoryImporterFutureRowRereadTest {
     private val tripDao = mockk<TripDao>(relaxed = true)
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
 
-    private fun importer() = HistoryImporter(
-        context = mockk<Context>(relaxed = true),
+    private fun importer() = historyImporter(
         energyDataReader = energyDataReader,
         tripRepository = tripRepository,
         tripDao = tripDao,
-        tripPointDao = mockk<TripPointDao>(relaxed = true),
-        idleDrainDao = mockk<IdleDrainDao>(relaxed = true),
         settingsRepository = settingsRepository,
-        lastSessionRepository = mockk<LastSessionRepository>(relaxed = true),
-        tripTombstoneDao = mockk<TripTombstoneDao>(relaxed = true),
-        costCalculator = mockk(relaxed = true),
-        odometerMarks = mockk(relaxed = true),
-        vehicleKind = com.bydmate.app.data.nativestack.kindMonitor(),
-        counterSnapshotDao = mockk(relaxed = true),
-        counterSnapshotWriter = mockk(relaxed = true),
-        lastStateDao = mockk(relaxed = true),
     )
 
     @Test
     fun `a row skipped as future is imported once after the clock catches up`() = runTest {
         val nowSec = System.currentTimeMillis() / 1000L
-        // Just beyond the skew now; the real clock passes it during the sleep below.
+        // An hour beyond the skew: the head unit clock is behind, the row reads as from the future.
+        var rowStart = nowSec + HistoryImporter.FUTURE_SKEW_SEC + 3_600L
         val row = BydTripRecord(
-            id = 601L, startTimestamp = nowSec + HistoryImporter.FUTURE_SKEW_SEC + 2,
-            endTimestamp = nowSec + HistoryImporter.FUTURE_SKEW_SEC + 2 + 1800L,
+            id = 601L, startTimestamp = rowStart, endTimestamp = rowStart + 1800L,
             duration = 1800L, tripKm = 12.0, electricityKwh = 2.0,
         )
         var watermark = nowSec - 3600L
@@ -60,7 +44,8 @@ class HistoryImporterFutureRowRereadTest {
         coEvery { energyDataReader.peekSourceChanged(any()) } answers { !fingerprintProcessed }
         every { energyDataReader.markSourceProcessed(any()) } answers { fingerprintProcessed = true }
         coEvery { energyDataReader.readTripsSince(any()) } answers {
-            listOf(row).filter { it.startTimestamp > firstArg<Long>() }
+            listOf(row.copy(startTimestamp = rowStart, endTimestamp = rowStart + 1800L))
+                .filter { it.startTimestamp > firstArg<Long>() }
         }
         coEvery { settingsRepository.getLastEnergyImportTs() } answers { watermark }
         coEvery { settingsRepository.setLastEnergyImportTs(any()) } answers { watermark = firstArg() }
@@ -72,7 +57,9 @@ class HistoryImporterFutureRowRereadTest {
         importer().syncFromEnergyData()
         coVerify(exactly = 0) { tripRepository.insertTrip(any()) }
 
-        Thread.sleep(3_000) // the head unit clock is corrected: the row is no longer in the future
+        // The head unit clock is corrected: the same row is no longer in the future. The file did not
+        // change, so only a fingerprint left uncommitted by the skipped sync lets it be read again.
+        rowStart = nowSec - 600L
 
         importer().syncFromEnergyData()
         coVerify(exactly = 1) { tripRepository.insertTrip(any()) }

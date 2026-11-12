@@ -63,7 +63,6 @@ class PlacesViewModelTest {
             deletedIds += place.id
             placesFlow.value = placesFlow.value.filter { it.id != place.id }
         }
-        override suspend fun getCount() = placesFlow.value.size
     }
 
     private class FakeRuleDao(
@@ -158,15 +157,4 @@ class PlacesViewModelTest {
         assertEquals(0, counts[2L])
     }
 
-    @Test
-    fun `delete of unused place removes it from the list`() = runTest {
-        val place = makePlace(1L)
-        val (vm, _, flow) = buildVm(places = listOf(place), usageCounts = emptyMap())
-        advanceUntilIdle()
-
-        vm.delete(place)
-        advanceUntilIdle()
-
-        assertTrue(flow.value.isEmpty())
-    }
 }

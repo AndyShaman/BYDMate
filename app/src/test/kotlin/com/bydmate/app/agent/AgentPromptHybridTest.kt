@@ -15,7 +15,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The fuel sentence of the system prompt depends on the car type; the EV prompt is frozen. */
+/** The fuel sentence of the system prompt depends on the car type; the EV prompt is the default. */
 class AgentPromptHybridTest {
 
     private class FakeBackend : AgentBackend {
@@ -42,11 +42,6 @@ class AgentPromptHybridTest {
         val backend = FakeBackend()
         AgentOrchestrator(backend, tools, repo).also { o -> monitor?.let(o::injectVehicleKind) }.ask("привет")
         return (backend.requests.single().first() as AgentMessage.System).content
-    }
-
-    @Test fun ev_prompt_is_byte_identical_to_the_baseline() {
-        val baseline = javaClass.classLoader!!.getResource("ev-baseline/agent-system-prompt.txt")!!.readText()
-        assertEquals(baseline, AgentOrchestrator.SYSTEM_PROMPT)
     }
 
     @Test fun ev_and_unknown_cars_get_the_ev_prompt() = runTest {

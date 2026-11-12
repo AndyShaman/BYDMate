@@ -61,70 +61,35 @@ class AutomationEngineSensorParamsTest {
         return engine to ruleDao
     }
 
-    private fun assertParamFires(param: String, op: String, value: String, seed: DiParsData, firing: DiParsData) = runBlocking {
-        val (engine, ruleDao) = setup(rule(1, paramTrigger(param, op, value)))
-        engine.evaluate(seed, null)    // seed edge state: condition false
-        engine.evaluate(firing, null)  // front: condition true -> must fire
-        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+    private class Case(val param: String, val op: String, val value: String, val seed: DiParsData, val firing: DiParsData)
+
+    private val cases by lazy {
+        listOf(
+            Case("SeatbeltFR", "==", "0", diParsData().copy(seatbeltFR = 1), diParsData().copy(seatbeltFR = 0)),
+            Case("OccupancyFL", "==", "2", diParsData().copy(occupancyFL = 1), diParsData().copy(occupancyFL = 2)),
+            Case("OccupancyFR", "==", "2", diParsData().copy(occupancyFR = 1), diParsData().copy(occupancyFR = 2)),
+            Case("OccupancyRL", "==", "1", diParsData().copy(occupancyRL = 2), diParsData().copy(occupancyRL = 1)),
+            Case("OccupancyRM", "==", "2", diParsData().copy(occupancyRM = 1), diParsData().copy(occupancyRM = 2)),
+            Case("OccupancyRR", "==", "2", diParsData().copy(occupancyRR = 1), diParsData().copy(occupancyRR = 2)),
+            // numeric compare
+            Case("LightLevel", "<=", "2", diParsData().copy(lightLevel = 4), diParsData().copy(lightLevel = 1)),
+            Case("KeyBattery", "!=", "0", diParsData().copy(keyBatteryStatus = 0), diParsData().copy(keyBatteryStatus = 1)),
+            // derived values
+            Case("Rain", "!=", "0", diParsData(rain = 0), diParsData(rain = 1)),
+            Case("ChargingStatus", "==", "2", diParsData(chargingStatus = 1), diParsData(chargingStatus = 2)),
+        )
     }
 
-    @Test fun `SeatbeltFR resolves`() = assertParamFires(
-        "SeatbeltFR", "==", "0",
-        seed = diParsData().copy(seatbeltFR = 1),
-        firing = diParsData().copy(seatbeltFR = 0),
-    )
-
-    @Test fun `OccupancyFL resolves`() = assertParamFires(
-        "OccupancyFL", "==", "2",
-        seed = diParsData().copy(occupancyFL = 1),
-        firing = diParsData().copy(occupancyFL = 2),
-    )
-
-    @Test fun `OccupancyFR resolves`() = assertParamFires(
-        "OccupancyFR", "==", "2",
-        seed = diParsData().copy(occupancyFR = 1),
-        firing = diParsData().copy(occupancyFR = 2),
-    )
-
-    @Test fun `OccupancyRL resolves`() = assertParamFires(
-        "OccupancyRL", "==", "1",
-        seed = diParsData().copy(occupancyRL = 2),
-        firing = diParsData().copy(occupancyRL = 1),
-    )
-
-    @Test fun `OccupancyRM resolves`() = assertParamFires(
-        "OccupancyRM", "==", "2",
-        seed = diParsData().copy(occupancyRM = 1),
-        firing = diParsData().copy(occupancyRM = 2),
-    )
-
-    @Test fun `OccupancyRR resolves`() = assertParamFires(
-        "OccupancyRR", "==", "2",
-        seed = diParsData().copy(occupancyRR = 1),
-        firing = diParsData().copy(occupancyRR = 2),
-    )
-
-    @Test fun `LightLevel resolves with numeric compare`() = assertParamFires(
-        "LightLevel", "<=", "2",
-        seed = diParsData().copy(lightLevel = 4),
-        firing = diParsData().copy(lightLevel = 1),
-    )
-
-    @Test fun `KeyBattery resolves`() = assertParamFires(
-        "KeyBattery", "!=", "0",
-        seed = diParsData().copy(keyBatteryStatus = 0),
-        firing = diParsData().copy(keyBatteryStatus = 1),
-    )
-
-    @Test fun `Rain fires on derived value`() = assertParamFires(
-        "Rain", "!=", "0",
-        seed = diParsData(rain = 0),
-        firing = diParsData(rain = 1),
-    )
-
-    @Test fun `ChargingStatus fires on derived value`() = assertParamFires(
-        "ChargingStatus", "==", "2",
-        seed = diParsData(chargingStatus = 1),
-        firing = diParsData(chargingStatus = 2),
-    )
+    @Test fun `each sensor param resolves and fires on its front`() = runBlocking {
+        for (c in cases) {
+            val (engine, ruleDao) = setup(rule(1, paramTrigger(c.param, c.op, c.value)))
+            engine.evaluate(c.seed, null)    // seed edge state: condition false
+            engine.evaluate(c.firing, null)  // front: condition true -> must fire
+            try {
+                coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+            } catch (e: AssertionError) {
+                throw AssertionError("case: ${c.param} ${c.op} ${c.value}", e)
+            }
+        }
+    }
 }

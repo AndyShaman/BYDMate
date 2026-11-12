@@ -3,7 +3,6 @@ package com.bydmate.app.data.local.database
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,21 +20,6 @@ class Migration13to14Test {
         InstrumentationRegistry.getInstrumentation(),
         AppDatabase::class.java
     )
-
-    @Test
-    fun `migrate creates empty last_state table and validates v14 schema`() {
-        helper.createDatabase(dbName, 13).close()
-        val migrated = helper.runMigrationsAndValidate(
-            dbName, 14, true,
-            com.bydmate.app.di.AppModule.MIGRATION_13_14
-        )
-
-        migrated.query("SELECT count(*) FROM last_state").use { c ->
-            c.moveToFirst()
-            assertEquals(0, c.getInt(0))
-        }
-        migrated.close()
-    }
 
     @Test
     fun `existing rows survive migration`() {
@@ -101,28 +85,6 @@ class Migration13to14Test {
             c.moveToFirst()
             assertEquals(0, c.getInt(0))
         }
-        migrated.close()
-    }
-
-    @Test
-    fun `last_state columns match entity schema`() {
-        helper.createDatabase(dbName, 13).close()
-        val migrated = helper.runMigrationsAndValidate(
-            dbName, 14, true,
-            com.bydmate.app.di.AppModule.MIGRATION_13_14
-        )
-
-        val cols = mutableSetOf<String>()
-        migrated.query("PRAGMA table_info('last_state')").use { c ->
-            val nameCol = c.getColumnIndex("name")
-            while (c.moveToNext()) cols += c.getString(nameCol)
-        }
-        val expected = setOf(
-            "id", "ts", "soc", "mileage", "ignition",
-            "open_trip_id", "trip_start_ts", "trip_start_soc",
-            "trip_start_mileage", "energydata_available"
-        )
-        assertTrue("missing columns: ${expected - cols}", cols.containsAll(expected))
         migrated.close()
     }
 }

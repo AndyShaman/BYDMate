@@ -7,6 +7,7 @@ import com.bydmate.app.data.vehicle.Split37AreaInfo
 import com.bydmate.app.data.vehicle.Split37Root
 import com.bydmate.app.data.vehicle.Split37RootState
 import com.bydmate.app.data.vehicle.TopTaskInfo
+import com.bydmate.app.util.readSystemProperty
 import kotlinx.coroutines.delay
 
 private const val TAG = "Split37Engine"

@@ -125,13 +125,6 @@ fun shouldRecoverCompositor(markerSet: Boolean, mode: ClusterMode, autoContainer
     markerSet && mode == ClusterMode.OFF && autoContainer
 
 /**
- * #85/#62: power-down (18 -> pause -> 0) is an ИПЦ write too - it must only be sent when OUR
- * write-ahead marker shows this app powered the compositor up. Platforms with no cluster
- * display (Song family, DiLink 3-4) never set the marker, so their cluster stays untouched.
- */
-fun shouldPowerDownCompositor(markerSet: Boolean): Boolean = markerSet
-
-/**
  * The blind-spot camera drives the cluster compositor (16 on show, 18 -> pause -> 0 on hide) only
  * when auto-container is ON, exactly like the projection does. With it OFF the user runs the
  * cluster by hand: on firmware that shows the projection display inside a native widget (VV,

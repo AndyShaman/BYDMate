@@ -151,10 +151,7 @@ object NavA11yFeed {
         try {
             return when (val result = NavA11yExtractor.read(root)) {
                 is NavA11yExtractor.ReadResult.Guidance -> {
-                    NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
-                    dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
-                    logUnknownManeuver(root, result.data, nowMs)
-                    traceGuidanceAgain(src, nowMs)
+                    feedGuidance(root, result.data, nowMs, src)
                     true
                 }
                 is NavA11yExtractor.ReadResult.NoGuidance -> {
@@ -170,6 +167,15 @@ object NavA11yFeed {
             @Suppress("DEPRECATION")
             runCatching { root.recycle() }
         }
+    }
+
+    /** A guidance read of [root] into the hub, then its tree dump, unknown-maneuver log and
+     *  guidance trace; [root] stays the caller's. */
+    private fun feedGuidance(root: AccessibilityNodeInfo, data: NavGuidance, nowMs: Long, src: String) {
+        NavGuidanceHub.update(data, NavGuidanceHub.Source.A11Y, nowMs)
+        dumpTreeOnManeuverChange(root, data.maneuverGaode, nowMs)
+        logUnknownManeuver(root, data, nowMs)
+        traceGuidanceAgain(src, nowMs)
     }
 
     /** Drops the current enable's timer; [start] posts a fresh one. */
@@ -205,10 +211,7 @@ object NavA11yFeed {
                 NavGuidanceHub.keepAlive(nowMs)
             }
             if (result !is NavA11yExtractor.ReadResult.Guidance) return false
-            NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
-            dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
-            logUnknownManeuver(root, result.data, nowMs)
-            traceGuidanceAgain("event", nowMs)
+            feedGuidance(root, result.data, nowMs, "event")
             return true
         } finally {
             @Suppress("DEPRECATION")

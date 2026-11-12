@@ -73,7 +73,6 @@ import android.os.IBinder
  */
 object HelperBinderProtocol {
     const val SERVICE_NAME = "bydmate_helper"
-    const val PROCESS_NAME = "bydmate_helper"   // app_process --nice-name + ps lookup
     const val DESCRIPTOR = "com.bydmate.app.helper.IHelper"
 
     /**

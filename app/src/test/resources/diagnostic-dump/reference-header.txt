@@ -1,0 +1,241 @@
+=== BYDMate diagnostic dump ===
+timestamp: <now>
+app: com.bydmate.app v<version> (code=<code>)
+device: unknown robolectric
+android: 10 (SDK 29)
+fingerprint: robolectric
+locale: jvm=en-US app=en
+font_scale: 1.0
+apps: yandexnavi=absent yandexmaps=absent music=absent dublgis=absent spotify=absent
+--- settings ---
+data_source: ENERGYDATA
+battery_capacity: raw="72,9" parsed=72.9
+abrp_enabled: true token_len=8 car_model="byd:leopard3" send_location=false
+route_navigator=dgis
+adb_restore=false/Unsupported trigger=none retries=0 write_secure_settings=false
+cloud_over_wifi: fixed
+adb_verdict: (none)
+daemon_ever_alive: true
+post_restore: pending=false ts=-
+widget_home_only=false home_packages=[]
+--- tariff periods ---
+periods=0 current=start=0 home=0.0 dc=0.0 loss=0.0/0.0 rule=
+fuel_price_per_liter=0.0
+--- charging catch-up ---
+anchor: soc=64 mileageKm=12345.5 ts=2023-11-14 22:13:20 pending=false
+journal:
+  2023-11-14 22:13:20 STILL_CHARGING soc=64
+--- live snapshot ---
+(no poll yet)
+--- car status ---
+read: unavailable reason=null cursor
+--- hybrid probe ---
+engine_rpm[dev=1012 fid=339738642 tx=5]=0
+engine_power[dev=1012 fid=339738656 tx=5]=1
+coolant_temp[dev=1012 fid=1320181824 tx=5]=2
+oil_level[dev=1012 fid=89129016 tx=5]=0
+fuel_percent[dev=1014 fid=1246785600 tx=5]=1
+fuel_range_km[dev=1014 fid=1246773304 tx=5]=2
+fuel_instant[dev=1014 fid=1246760996 tx=7]=0
+fuel_total[dev=1014 fid=1246760976 tx=7]=1
+fuel_avg_phm[dev=1014 fid=1246785552 tx=7]=2
+mileage_hev[dev=1014 fid=1246773264 tx=5]=0
+mileage_ev[dev=1014 fid=1246773284 tx=5]=1
+fuel_tank_cap[dev=1001 fid=1336934422 tx=5]=2
+ev_range_km[dev=1014 fid=1246765118 tx=5]=0
+elec_phm[dev=1014 fid=1032863794 tx=7]=1
+
+car_autotype=? source=none
+service_start: fixed
+--- rules ---
+rule id=7 "Morning" enabled=true logic=AND park=false once=false confirm=false cooldown=60s fired=0 last=2023-11-14 22:13:20
+  triggers: (none)
+  actions: (none)
+--- automation journal ---
+journal line 1
+journal line 2
+--- automation params ---
+params: fixed
+--- agent ---
+connection:  model=
+tts: source=minimax minimax_provider=official offline_voice=anna gender=f
+--- voice ---
+sessions=1 nlu_ok=0 automation_ok=0 agent=1 refused=0
+11-14 22:13:20 route=agent heard="закрой окна" cmd=- reason=- result=ok asr=- dispatch=-
+  tools: vehicle_control:ok
+  answer: Окна закрыты
+--- vehicle data sources ---
+energydata dir: exists=false isDir=false
+--- audio ---
+music_stream: vol=0/15 active=false
+byd_btts_stream17: present vol=0/0
+pre_duck_volume: (none)
+auto_voice: ext_amp_type=(none) marker=none last=(none)
+--- displays ---
+id=0 name="Built-in screen" 320x470 state=2
+--- hud ---
+enabled: true
+supported_pref: true
+status: ON
+someip_gateway: absent
+speed_sign: true
+mode: 2
+can_accepted=0 can_refused=0 can_left=false lmcn_left=false
+frames_sent=10 last_frame_ts=20
+last_fire_rc=0 nonzero_rc_count=1
+someip_services={}
+someip_fire_rc={}
+amap_capable=false amap_frames=0 amap_stops=0
+amap_cluster: frames=0 kills=0 last_frame_ts=0
+hub_snapshot=Snapshot(active=false, maneuverGaode=0, maneuverGaodeMs=0, distanceMeters=0, road_script=empty road_len=0, etaSeconds=0, totalDistMeters=0, speedLimit=0, speedLimitMs=0, lastUpdateMs=0, maneuverPng=null, cameraAlert=, cameraDistanceMeters=0, cameraIconPng=null, maneuverSource=, maneuverRaw=)
+route_summary: (no route)
+maneuver history:
+  (none)
+notif_listener_enabled=false
+notif_listener_connected=false
+grant_heal_history: (none)
+pkg com.unkwn2.yandexhud: absent
+pkg com.sr.openbyd: absent
+pkg com.byd.amapservice: absent
+pkg com.example.amapservice: absent
+--- blind spot ---
+blind line
+--- cluster ---
+mode: OFF attempt_in_progress=false last_failure=(none)
+transport: vd auto_container=true freeform_reboot_pending=false
+projected_pkg: (none) target=(default)
+density: (not set this session) unsafe=(none)
+vd: id=-1 overlay_attached=false direct_display=-1 direct_marker=-1
+surfaces: (none)
+display: (no XDJAScreenProjection surface on this car)
+bounds: n/a
+daemon displays: (none)
+wm displays: (none)
+nav task config: (none)
+target: none
+journal:
+  (empty)
+--- cluster music ---
+music line
+--- trip counters ---
+live_whole_session: true
+session_started_at: null
+baseline_mileage_km: absent
+baseline_elec_kwh: absent
+trip1: reset_ts=1700000000000 corr_km=1.5 corr_kwh=0 corr_ms=0 excl=0
+trip2: reset_ts=0 corr_km=0 corr_kwh=0 corr_ms=0 excl=0
+--- steering key ---
+a11y_connected: false
+a11y_framework_bound: false
+a11y_secure_setting: (null)
+a11y_auto_allow_last: (none)
+voice_ptt: enabled=true keycode=321 companions=-
+mirror_enabled: false
+split_key: enabled=true keycode=322
+keys: rx=0 matched=0 passed=0 by_code={}
+--- autostart ---
+chain_log:
+  boot>worker>service
+a11y_recovery_fail_streak: 0
+a11y_recovery_last_attempt_elapsed_ms: (never)
+elapsed_realtime_ms: 100
+a11y_recovery_allowed_now: yes
+--- native assistant packages ---
+disable_native_assistant pref: "true"
+com.byd.autovoice: not installed
+com.byd.autovoice.engine: not installed
+com.byd.autovoice.tts: not installed
+com.byd.vrassistant: not installed
+--- helper daemon ---
+alive: true
+hud_navi_gate:
+dynamic_navi_function_set[dev=1023 fid=1276174394]=0
+dynamic_navi_function_status[dev=1023 fid=951058472]=1
+hud_switch: status[dev=1023 fid=951058460]=0 config[dev=1023 fid=951058453]=1
+battery_preheat: config[dev=1009 fid=879755304]=0 permit[dev=1009 fid=1151336468]=1 status[dev=1009 fid=879755302]=2 gun[dev=1009 fid=876609586]=0 heat_power[dev=1009 fid=584067131]=1 hev[dev=1014 fid=1246773264]=2 fuel[dev=1014 fid=1246785600]=0 type=err
+transport: none
+broadcast_last_reject: (none)
+token_persisted: no
+last_transport: absent
+last_spawn_failure: 2023-11-14 22:13:20 reason=ADB_UNREACHABLE
+  detail one
+  detail two
+--- split ---
+feature_enabled: true
+enable_freeform_support: unset
+boot_count: -1
+freeform_verdict: known_good=false unsupported=false seen_boot=0 retry_boot=0 split_hint=false cluster_hint=false
+last_pair: narrow=pkg.narrow wide=pkg.wide side=LEFT
+menu_pair: pkg.narrow+pkg.wide
+session_pair: pkg.narrow+pkg.wide
+session: active narrow=pkg.narrow#11 wide=pkg.wide#12 side=LEFT native=false
+departed_panes: pkg.gone
+journal:
+  (empty)
+--- windows ---
+window channel: PERCENT
+percentage_control_config[dev=1001 fid=1222639652]=0
+control_plan[dev=1001 fid=1222639650]=1
+left_front_current_state[dev=1001 fid=1222639653]=2
+--- seats ---
+vent_status_driver[dev=1000 fid=702545928]=0
+heat_status_driver[dev=1000 fid=702545932]=1
+vent_level_driver[dev=1000 fid=702545944]=2
+heat_level_driver[dev=1000 fid=702545948]=0
+vent_level_passenger[dev=1000 fid=711983128]=1
+heat_level_passenger[dev=1000 fid=711983132]=2
+config_vent_lf[dev=1000 fid=715132952]=0
+config_heat_lf[dev=1000 fid=715132955]=1
+has_driver_seat_ventilating[dev=1023 fid=-811597816]=2
+has_driver_seat_heating[dev=1023 fid=-811597813]=0
+cand_passenger_vent_status[dev=1000 fid=711983112]=1
+cand_passenger_heat_status[dev=1000 fid=711983116]=2
+cand_3ce_vent_status_driver[dev=1000 fid=1021313032]=0
+cand_3ce_heat_status_driver[dev=1000 fid=1021313034]=1
+cand_3ce_vent_level_driver[dev=1000 fid=1021313044]=2
+cand_3ce_heat_level_driver[dev=1000 fid=1021313048]=0
+cand_lrse_vent_status_rl[dev=1000 fid=412180522]=1
+cand_lrse_heat_status_rl[dev=1000 fid=412180526]=2
+cand_lrse_vent_status_rr[dev=1000 fid=412180528]=0
+cand_lrse_heat_status_rr[dev=1000 fid=412180532]=1
+cand_lrse_level_1[dev=1000 fid=412180536]=2
+cand_lrse_level_2[dev=1000 fid=412180540]=0
+cand_lrse_level_3[dev=1000 fid=412180544]=1
+cand_lrse_level_4[dev=1000 fid=412180548]=2
+--- seat command journal ---
+(none)
+--- steering heat ---
+state[dev=1023 fid=1116733454]=0
+config[dev=1023 fid=1116733496]=1
+gear[dev=1023 fid=1116733465]=2
+mode[dev=1023 fid=1116733462]=0
+--- rear seat heat ---
+left: -> hidden not in catalog
+right: -> hidden not in catalog
+--- fid resolve ---
+catalog: source=constants symbols=0 devices=0
+resolved: 122 const, 0 catalog, 0 rejected, 0 no-symbol
+(every entry on its constant)
+--- auto backup ---
+period: daily
+parts: auto=tables,settings manual=tables,settings
+last_ts: 2023-11-14T22:13:20+0000
+last_result: ok
+pending: backup-1.zip
+telegram: configured=yes bot=@test_bot chat=…4321
+reporter line
+--- vehicle writes ---
+2023-11-14 22:13:20 seat_heat dev=1 fid=2 req=3 rb=3 ok
+--- fid push ---
+push line
+--- fid recorder ---
+not running
+--- dtc scan ---
+last: none
+daemon: state=IDLE done=0/0 reason=-
+--- last crash ---
+(none)
+--- trace ---
+(none)
+===============================
+

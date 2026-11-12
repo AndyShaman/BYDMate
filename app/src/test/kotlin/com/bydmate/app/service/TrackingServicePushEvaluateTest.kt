@@ -10,7 +10,7 @@ import org.junit.Test
 /**
  * The set of pushed fields that re-evaluate the automation rules on the event instead of on
  * the next poll tick. Touching the companion does NOT instantiate the Android Service — see
- * TrackingServiceSnapshotReuseTest.
+ * TrackingServiceButtonBridgeTest.
  */
 class TrackingServicePushEvaluateTest {
 

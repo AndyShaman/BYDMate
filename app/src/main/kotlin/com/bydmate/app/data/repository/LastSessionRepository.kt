@@ -80,20 +80,6 @@ class LastSessionRepository @Inject constructor(
     }
 
     /**
-     * Lazy-init: fill the in-progress session's start SOC when it was null at the
-     * exact start tick (autoservice SOC fid can sentinel-out during cold start).
-     * Mirrors the mileage/totalElec lazy-init in TrackingService. No-op once a
-     * non-null start SOC has been captured, or when no session is in progress.
-     */
-    fun fillStartSocIfMissing(soc: Int) = synchronized(lock) {
-        val p = pending ?: return
-        if (p.startTs != null && p.startSoc == null) {
-            pending = p.copy(startSoc = soc)
-            persistPendingLocked()
-        }
-    }
-
-    /**
      * Persist the live SOC read each active tick as the running session end (and
      * lazily fill the start SOC if it sentinelled-out at the start tick). This is
      * what makes the end SOC survive a power-cut: the last value written here is

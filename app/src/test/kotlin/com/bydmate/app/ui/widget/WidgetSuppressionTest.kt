@@ -48,8 +48,8 @@ class WidgetSuppressionTest {
 
     @Test fun `suppression does not change the preference-driven decision`() {
         WidgetController.setSuppressed("blind-spot camera", true)
-        assertFalse(WidgetController.shouldHideOverlay(
+        assertFalse(WidgetController.hideReason(
             cameraActive = false, youtubeForeground = false, hideOnYoutube = false,
-            foregroundPkg = null, hideInApps = emptySet()))
+            foregroundPkg = null, hideInApps = emptySet()) != null)
     }
 }

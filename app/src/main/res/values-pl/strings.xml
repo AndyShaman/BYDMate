@@ -15,7 +15,6 @@
 
     <!-- Settings: Section labels (left pane) -->
     <string name="settings_section_auto_battery_title">Auto i akumulator</string>
-    <string name="settings_section_trips_title">Przejazdy</string>
     <string name="settings_section_integrations_title">Integracje</string>
     <string name="settings_section_widget_title">Widżet</string>
     <string name="settings_section_display_title">Ekran</string>
@@ -29,25 +28,23 @@
     <string name="settings_display_card_hud_sub">Wskazówki nawigacji na fabryczny HUD. %1$s</string>
     <string name="settings_display_card_blindspot_sub">Kamera przy kierunkowskazie. %1$s</string>
     <string name="settings_display_window_subhead">Okno na wskaźnikach</string>
-    <string name="settings_display_mirror_header">Wyświetlanie na wskaźnikach</string>
     <string name="settings_display_mirror_title">Wyświetlanie na wskaźnikach przyciskiem kierownicy</string>
-    <string name="settings_display_mirror_desc">Krótkie naciśnięcie wybranego przycisku kierownicy przenosi wybraną aplikację na wskaźniki i z powrotem.</string>
-    <string name="settings_cluster_auto_container_title">Od razu pokazuj na wskaźnikach</string>
-    <string name="settings_cluster_auto_container_desc">Aplikacja sama przełącza wskaźniki w tryb projekcji i z powrotem (nawigacja i kamery martwego pola). Wyłącz, jeśli po tym ze wskaźników znika ADAS lub fabryczny widżet i nie wraca sam: wtedy tryb wskaźników przełączaj ręcznie, a obraz będzie widoczny w mini-mapie</string>
+    <string name="settings_cluster_auto_container_title">Automatyczne przełączanie wskaźników</string>
+    <string name="settings_cluster_auto_container_desc">Gdy włączone, aplikacja sama przełącza wskaźniki, aby była na nich widoczna nawigacja i kamery martwego pola. Wyłącz, jeśli przy kierunkowskazie lub wyświetlaniu nawigacji znika fabryczny widok wskaźników z ADAS: wtedy obraz zostanie tylko w małej mapie.</string>
     <string name="settings_cluster_full_display_title">Pełny ekran wskaźników</string>
-    <string name="settings_cluster_full_display_desc">Domyślnie mapa zajmuje górę wskaźników, a na dole zostaje fabryczny pasek z prędkością i głównymi wskazaniami. Włącz, jeśli chcesz mapę na całych wskaźnikach bez tego paska. Działa tylko na oprogramowaniu z nowym interfejsem, gdzie indziej nic nie zmienia. Działa przy następnej projekcji</string>
+    <string name="settings_cluster_full_display_desc">Mapa na całych wskaźnikach, bez dolnego paska z prędkością. Włącz, jeśli mapa zajmuje tylko wąski pasek u góry. Działa przy następnej projekcji na wskaźniki.</string>
     <string name="settings_cluster_direct_reboot_hint">Aby asystent głosowy widział nawigację na wskaźnikach, raz zrestartuj DiLink: naciśnij i przytrzymaj pokrętło głośności. Samo zgaszenie silnika nie wystarczy. Do restartu projekcja działa, ale agent nie widzi trasy.</string>
     <string name="cluster_direct_unsupported_hint">Bezpośredni tryb jest niedostępny w oprogramowaniu tego auta, używany jest tryb zgodności</string>
-    <string name="settings_projection_mode_title">Tryb projekcji</string>
+    <string name="settings_projection_mode_title">Tryb wyświetlania na wskaźnikach</string>
     <string name="settings_projection_mode_direct">Rozszerzony</string>
     <string name="settings_projection_mode_vd">Fabryczny</string>
+    <string name="settings_projection_mode_only_extended">Na tym samochodzie działa tylko „Rozszerzony”</string>
     <string name="settings_projection_mode_help" formatted="false">Fabryczny: jak w wersjach do 3.6, ustawienia systemowe auta nie zmieniają się, dokładniej działają suwaki dopasowania. Minus: asystent głosowy i HUD nie widzą ekranu nawigacji, wskazówki tylko z powiadomienia. Rozszerzony: nawigacja działa bezpośrednio na wskaźnikach, widzą ją agent i HUD. Włącza systemowy tryb okienkowy, wymaga jednorazowego restartu DiLink. Powrót do fabryki: przełącz na Fabryczny, ustawienie systemowe wróci do wartości fabrycznej i w pełni zadziała po restarcie. Tryb jest stosowany przy następnym wyświetleniu na wskaźnikach.</string>
     <string name="projection_extended_confirm_title">Włączyć tryb rozszerzony?</string>
     <string name="projection_extended_confirm_body">Tryb rozszerzony zmienia systemowe ustawienie trybu okienkowego DiLink, żeby nawigacja działała bezpośrednio na wskaźnikach i widzieli ją asystent głosowy oraz HUD. Potrzebny będzie jednorazowy restart DiLink. Aby przywrócić stan fabryczny, przełącz z powrotem na Fabryczny i zrestartuj DiLink.</string>
     <string name="projection_extended_confirm_enable">Włącz</string>
     <string name="projection_extended_confirm_cancel">Anuluj</string>
     <string name="settings_display_app_title">Aplikacja na wskaźnikach</string>
-    <string name="settings_display_size_header">Rozmiar okna na wskaźnikach</string>
     <string name="settings_display_size_width">Szerokość</string>
     <string name="settings_display_size_width_desc" formatted="false">Szerokość okna w % szerokości wskaźników</string>
     <string name="settings_display_size_height">Wysokość</string>
@@ -70,7 +67,6 @@
     <string name="steering_button_unknown">Przycisk (kod %1$d)</string>
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Przycisk uruchamiający</string>
-    <string name="settings_display_button_change">Zmień</string>
     <string name="learn_button_dialog_title">Przypisz przycisk</string>
     <string name="learn_button_waiting">Naciśnij przycisk na kierownicy…</string>
     <string name="learn_button_rejected">Tego przycisku nie można przypisać. Naciśnij inny.</string>
@@ -81,7 +77,7 @@
     <string name="learn_button_cancel">Anuluj</string>
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Pokrętło głośności na kierownicy</string>
-    <string name="settings_knob_play_pause_desc">Naciśnięcie wstrzymuje i wznawia odtwarzanie zamiast przełączać źródło dźwięku. Potrzebne po aktualizacji oprogramowania, w której naciśnięcie zaczęło zmieniać źródło.</string>
+    <string name="settings_knob_play_pause_desc">Naciśnięcie pokrętła wstrzymuje muzykę i ją wznawia. Bez tego ustawienia samochód po naciśnięciu zmienia źródło lub wycisza dźwięk.</string>
     <string name="settings_timezone_lock_title">Nie zmieniaj strefy czasowej z sieci</string>
     <string name="settings_timezone_lock_desc">Dla aut przy granicy, w których strefa czasowa sama wraca na czas pekiński. Najpierw wybierz właściwą strefę w ustawieniach auta, potem włącz.</string>
     <string name="settings_timezone_lock_failed">Nie udało się: uruchom ponownie pomocnika ADB i spróbuj jeszcze raz</string>
@@ -90,9 +86,9 @@
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Przywracaj ADB po restarcie</string>
-    <string name="settings_adb_restore_desc">Dla oprogramowania, w którym ADB wyłącza się przy każdym restarcie. Wymagane włączone Wi-Fi.</string>
+    <string name="settings_adb_restore_desc">Tylko dla oprogramowania, w którym ADB wyłącza się po każdym restarcie radia (wersje 2606 i nowsze). Jeśli sterowanie samochodem działa po restarcie, nie włączaj. Aplikacja sama podpowie, kiedy to potrzebne.</string>
     <string name="settings_adb_restore_help_title">Jak działa przywracanie ADB</string>
-    <string name="settings_adb_restore_help_body">W nowszym oprogramowaniu DiLink (od lata 2026) port ADB zamyka się przy każdym restarcie, a BYDMate traci dostęp do funkcji sterowania samochodem.\n\nAplikacja potrafi ponownie uruchomić ADB przez wbudowane w Androida debugowanie bezprzewodowe. W tym celu:\n\n1. Wi-Fi w samochodzie musi być włączone i połączone z siecią: domową, hotspotem telefonu lub dowolną inną. Bez Wi-Fi Android nie pozwala włączyć debugowania bezprzewodowego, to ograniczenie systemu.\n\n2. Przy pierwszym włączeniu w każdej nowej sieci na ekranie pojawi się systemowe okno „Allow wireless debugging on this network?”. Gdy przywracanie jest włączone, BYDMate potwierdza je sam przez swoją usługę ułatwień dostępu. Jeśli usługa jest wyłączona, zaznacz „Always allow on this network” i naciśnij ALLOW.\n\n3. Raz, dopóki ADB jeszcze działa, aplikacja nadaje sobie potrzebne uprawnienie systemowe. Jeśli wiersz stanu pokazuje „Potrzebna aktywacja”, podłącz ADB w zwykły sposób i uruchom aplikację ponownie.\n\nJeśli ADB w Twoim oprogramowaniu i tak działa po restarcie, nie trzeba tego włączać: wiersz stanu pokaże „Niepotrzebne”.</string>
+    <string name="settings_adb_restore_help_body">W nowszym oprogramowaniu DiLink (od lata 2026) port ADB zamyka się przy każdym restarcie, a BYDMate traci dostęp do funkcji sterowania samochodem.\n\nAplikacja potrafi ponownie uruchomić ADB przez wbudowane w Androida debugowanie bezprzewodowe. W tym celu:\n\n1. Wi-Fi w samochodzie musi być włączone i połączone z siecią: domową, hotspotem telefonu lub dowolną inną. Bez Wi-Fi Android nie pozwala włączyć debugowania bezprzewodowego, to ograniczenie systemu.\n\n2. Po długim postoju Android znowu pokazuje okno „Allow wireless debugging on this network?”. Zaznacz „Always allow on this network” i naciśnij ALLOW: po 10–30 sekundach sterowanie samochodem wróci. Android 12 nie potrafi zapamiętać tej odpowiedzi między restartami, w ustawieniach nie trzeba nic zmieniać.\n\n3. Raz, dopóki ADB jeszcze działa, aplikacja nadaje sobie potrzebne uprawnienie systemowe. Jeśli wiersz stanu pokazuje „Potrzebna aktywacja”, podłącz ADB w zwykły sposób i uruchom aplikację ponownie.\n\nJeśli ADB w Twoim oprogramowaniu i tak działa po restarcie, nie trzeba tego włączać: wiersz stanu pokaże „Niepotrzebne”.</string>
     <string name="settings_adb_restore_status_not_needed">Niepotrzebne: ADB już działa</string>
     <string name="settings_adb_restore_status_needs_activation">Potrzebna aktywacja: podłącz ADB raz i uruchom aplikację ponownie</string>
     <string name="settings_adb_restore_status_waiting_wifi">Oczekiwanie na Wi-Fi</string>
@@ -100,7 +96,7 @@
     <string name="settings_adb_restore_status_connecting">Przywracanie…</string>
     <string name="settings_adb_restore_status_restored">Przywrócono o %1$s</string>
     <string name="settings_adb_restore_status_failed">Błąd: %1$s</string>
-    <string name="settings_adb_restore_status_unsupported">Niedostępne na Androidzie 10. Jeśli ADB zniknęło po ponownym uruchomieniu, włącz je ponownie według instrukcji na GitHubie, sekcja „Enable ADB”.</string>
+    <string name="settings_adb_restore_status_unsupported">Niedostępne na Androidzie 10</string>
     <string name="settings_cloud_wifi_title">Chmura BYD przez Wi-Fi</string>
     <string name="settings_cloud_wifi_desc">Aplikacja BYD na telefonie widzi auto, gdy jest w sieci Wi-Fi. Auta na nowych serwerach BYD potrzebują chińskiego VPN.</string>
     <string name="settings_cloud_wifi_help_title">Jak działa chmura BYD przez Wi-Fi</string>
@@ -109,6 +105,7 @@
     <string name="settings_cloud_wifi_status_own_cellular">Auto ma własną transmisję danych, chmura i tak działa</string>
     <string name="settings_cloud_wifi_status_waiting">Czekamy na Wi-Fi z internetem</string>
     <string name="settings_cloud_wifi_status_rejected">Auto nie przyjęło ustawienia łączności</string>
+    <string name="settings_cloud_wifi_status_unavailable">Niedostępne w oprogramowaniu tego samochodu</string>
     <string name="settings_cloud_wifi_status_silent">Chmura BYD nie odpowiedziała. Spróbujemy ponownie przy następnym połączeniu z Wi-Fi</string>
     <string name="settings_cloud_wifi_status_refused">Serwer BYD nie wpuszcza auta. Potrzebny jest chiński VPN</string>
     <string name="settings_cloud_wifi_status_no_adb">Brak dostępu ADB: włącz ADB, aby korzystać z tego ustawienia</string>
@@ -168,10 +165,6 @@
     <string name="settings_tariff_dc_label">Taryfa DC (%1$s/kWh)</string>
     <string name="settings_tariff_trip_label">Taryfa przejazdów</string>
     <string name="settings_tariff_custom_label">Własna taryfa (%1$s/kWh)</string>
-    <string name="settings_save_tariffs_button">Zapisz taryfy</string>
-    <string name="settings_tariff_future_note">Nowa taryfa dotyczy przyszłych przejazdów.\nJuż policzone przejazdy się nie zmienią.</string>
-    <string name="settings_recalc_all_button">Przelicz wszystkie przejazdy</string>
-    <string name="settings_recalc_note">Przeliczy koszt wszystkich przejazdów\nwedług bieżącej taryfy.</string>
     <string name="settings_tariff_periods_title">Taryfy i okresy</string>
     <string name="settings_tariff_card_period">Okres</string>
     <string name="settings_tariff_periods_button">Otwórz</string>
@@ -214,19 +207,9 @@
     <string name="range_table_dialog_save">Zapisz</string>
 
     <!-- Settings: Trips section -->
-    <string name="settings_trips_datasource_header">Źródło danych przejazdów</string>
-    <string name="settings_trips_datasource_note">Titan 3 — BYD energydata.\nSong i inne modele bez wbudowanej bazy — DiPlus TripInfo.</string>
-    <string name="settings_trips_datasource_hint">Jeśli lista jest pusta po 2-3 przejazdach — przełącz tryb.</string>
-    <string name="settings_trips_system_header">Dane systemowe (beta)</string>
-    <string name="settings_trips_system_note">Rozszerzone dane auta: SoH akumulatora, przebieg BMS, statystyki ładowań. Tylko odczyt.</string>
-    <string name="settings_trips_system_enable_label">Włącz</string>
-    <string name="settings_datasource_switching">Przełączanie...</string>
     <string name="settings_datasource_done">Gotowe</string>
 
     <!-- Settings: Recalculate confirmation dialog -->
-    <string name="settings_recalc_dialog_title">Przeliczyć koszt?</string>
-    <string name="settings_recalc_dialog_text">Wszystkie przejazdy zostaną przeliczone według taryfy %1$s %2$s/kWh.\nJuż policzone wartości zostaną zastąpione.</string>
-    <string name="settings_recalc_confirm_button">Przelicz</string>
     <string name="settings_cancel_button">Anuluj</string>
 
     <!-- Settings: Integrations section -->
@@ -247,8 +230,6 @@
     <string name="settings_webhook_save_button">Zapisz webhook</string>
     <string name="settings_webhook_saved">Webhook zapisany</string>
     <string name="settings_webhook_invalid_url">Nieprawidłowy URL</string>
-    <string name="settings_openrouter_section_header">OpenRouter</string>
-    <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Model: %1$s</string>
     <string name="settings_openrouter_model_pick">Wybierz model</string>
     <string name="settings_exa_section_header">Exa</string>
@@ -295,10 +276,6 @@
     <string name="settings_widget_buttons_label">Przyciski na widżecie</string>
     <string name="settings_widget_buttons_description">Jedno dotknięcie widżetu wysuwa 4 przyciski, podwójne otwiera BYDMate. Przycisk uruchamia regułę z wyzwalaczem „Naciśnięcie przycisku”.</string>
 
-    <!-- Settings: Places section -->
-    <string name="settings_places_section_header">Miejsca</string>
-    <string name="settings_places_entry_title">Punkty do automatyzacji</string>
-    <string name="settings_places_entry_description">Dom, praca, ulubione miejsca - wyzwalacze „Wjazd” / „Wyjazd”</string>
 
     <!-- Settings: Application section -->
     <string name="settings_app_units_header">Jednostki i waluta</string>
@@ -320,13 +297,6 @@
     <string name="settings_update_check_toggle_description">30 sekund po starcie sprawdzaj GitHub i proponuj aktualizację</string>
     <string name="settings_update_check_button">Sprawdź aktualizacje teraz</string>
 
-    <!-- Settings: Autoservice status -->
-    <string name="settings_autoservice_disconnected_title">brak połączenia</string>
-    <string name="settings_autoservice_disconnected_detail">zrestartuj aplikację, jeśli ADB jest już włączone</string>
-    <string name="settings_autoservice_sentinel_title">połączono, ale dane nie są odczytywane</string>
-    <string name="settings_autoservice_sentinel_detail">możliwe, że funkcja działa tylko na Leopard 3</string>
-    <string name="settings_autoservice_connected_title">połączono</string>
-    <string name="settings_autoservice_connected_detail">SoH %1$s • lifetime %2$s / %3$s</string>
 
     <!-- Settings: Update dialog -->
     <string name="settings_update_dialog_title">Aktualizacje</string>
@@ -434,11 +404,7 @@
     <string name="charges_delete_dialog_text">%1$s kWh - nie będzie można tego cofnąć.</string>
     <string name="trips_delete_dialog_title">Usunąć przejazd?</string>
     <string name="trips_delete_dialog_text">%1$s km - przejazd i jego trasa zostaną usunięte, nie będzie można tego cofnąć.</string>
-    <string name="charges_onboarding_empty_text">Statystyka ładowań jest niedostępna. Aby widzieć kWh i koszt każdego ładowania - włącz „Dane systemowe” w Ustawieniach.</string>
-    <string name="charges_go_to_settings_button">Przejdź do Ustawień</string>
     <string name="charges_sentinel_empty_text">W twoim modelu auta statystyka ładowań jest niedostępna - dane diagnostyczne nie są odczytywane. SoH też nie jest pokazywany.</string>
-    <string name="charges_not_tracking_banner">Nowe ładowania nie są teraz śledzone.</string>
-    <string name="charges_enable_tracking_button">Włącz →</string>
     <string name="charges_stats_period_label">W wybranym okresie</string>
     <string name="charges_stats_sessions">Sesji</string>
     <string name="charges_stats_cost">Koszt</string>
@@ -448,7 +414,6 @@
     <string name="charges_stats_bms_mileage">Przebieg BMS</string>
     <string name="charges_stats_per100km">/100 km lifetime</string>
     <string name="charges_lifetime_waiting">Czekam na pierwszą odpowiedź auta…</string>
-    <string name="charges_lifetime_enable_hint">Włącz „Dane systemowe” w Ustawieniach, żeby widzieć przebieg BMS i łączną energię ładowań.</string>
     <string name="charges_stats_dynamics_label">Dynamika</string>
     <string name="charges_chart_cell_delta_title">Δ ogniw (V)</string>
     <string name="charges_chart_cell_delta_placeholder">Δ ogniw: pokaże się po 3 zakończonych ładowaniach (teraz: %1$d)</string>
@@ -492,7 +457,7 @@
     <string name="automation_cancel_button">Anuluj</string>
 
     <!-- Rule card stats -->
-    <string name="automation_rule_cooldown">Pauza: %1$d s</string>
+    <string name="automation_rule_cooldown">Nie częściej niż co %1$d s</string>
 
     <!-- Editor dialog -->
     <string name="automation_editor_new_rule_title">Nowa reguła</string>
@@ -665,8 +630,6 @@
     <!-- Journal relative time -->
 
     <!-- Places screen -->
-    <string name="places_tab_title">Miejsca</string>
-    <string name="places_back_content_description">Wstecz</string>
     <string name="places_add_button">+ Dodaj</string>
     <string name="places_empty">Nie ma jeszcze miejsc. Dotknij \"+ Dodaj\", aby utworzyć.</string>
     <string name="places_row_coords">%1$.5f, %2$.5f · %3$d m</string>
@@ -750,7 +713,6 @@
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_vehicle_data_offline">Brak danych z auta</string>
-    <string name="dashboard_diplus_offline">DiPlus nie odpowiada</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
 
@@ -841,8 +803,6 @@
 
     <!-- Battery readings shared by the compact card and the tech panel -->
     <string name="battery_health_cell_delta_label">Δ ogniw</string>
-    <!-- %1$.3f = delta volts -->
-    <string name="battery_health_cell_delta_value">%1$.3f V</string>
     <!-- %1$.3f = cell voltage volts -->
     <string name="battery_health_cell_voltage_value">%1$.3f V</string>
     <string name="battery_health_bat_temp_label">temp. akumulatora</string>
@@ -859,14 +819,6 @@
     <string name="battery_health_avg_all_time_label">od początku</string>
     <string name="battery_health_avg_soc_hint" formatted="false">Średni ważony poziom naładowania: im dłużej akumulator stoi naładowany, tym wyższa wartość. Dla akumulatora LFP w BYD warto trzymać ją niżej: przechowywanie przy wysokim naładowaniu przyspiesza starzenie. Orientacyjnie: do 65% świetnie, 65-85% normalnie, powyżej 85% lepiej ładować później lub rzadziej. Ładowanie do 100% raz na 1-2 tygodnie i tak jest potrzebne do balansowania ogniw. Liczone na podstawie historii przejazdów i ładowań w BYDMate.</string>
 
-    <!-- Shared summary row (Components.kt SummaryRow) -->
-    <string name="summary_unit_km">km</string>
-    <string name="summary_label_mileage">Przebieg</string>
-    <string name="summary_unit_kwh">kWh</string>
-    <string name="summary_label_energy">Energia</string>
-    <string name="summary_unit_kwh_per_100km">kWh/100 km</string>
-    <string name="summary_label_consumption">Zużycie</string>
-    <string name="summary_label_cost">Koszt</string>
 
     <!-- Settings: unit chips and language labels -->
     <string name="settings_tariff_trip_custom_chip">Własna</string>
@@ -876,14 +828,10 @@
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
     <string name="settings_saved">Zapisano</string>
-    <!-- %1$d = trip count -->
-    <string name="settings_recalc_done">Przeliczono: %1$d przejazdów</string>
     <string name="settings_export_in_progress">Eksport...</string>
     <!-- %1$d = trip count, %2$d = charge count, %3$d = track point count, %4$d = idle drain count -->
     <!-- Generic error with message: %1$s = error text -->
     <string name="settings_error_with_message">Błąd: %1$s</string>
-    <!-- Error prefix used for color detection in UI (must match start of settings_error_with_message) -->
-    <string name="settings_error_prefix">Błąd</string>
     <!-- %1$s = file path -->
     <string name="settings_log_recording_started">Zapis (auto-stop po 2 godz.)... - %1$s</string>
     <!-- %1$s = file path, %2$d = size KB -->
@@ -897,9 +845,6 @@
     <string name="settings_log_tg_missing">Nie znaleziono pliku. Mógł zostać usunięty z folderu Download.</string>
     <string name="settings_tg_log_auto_title">Wysyłaj nagrany log do Telegrama</string>
     <string name="settings_tg_log_auto_hint">Gdy nagrywanie logu się skończy, plik sam trafi do Twojego bota.</string>
-    <string name="settings_update_check_in_progress">Sprawdzanie...</string>
-    <!-- %1$s = version string -->
-    <string name="settings_update_available_short">Dostępna v%1$s</string>
 
     <!-- UpdateChecker: download progress strings (passed via callback) -->
     <string name="update_downloading_progress">Pobieranie: %1$d%%</string>
@@ -948,8 +893,6 @@
     <string name="insight_night_idle_prev">%1$.1f kWh</string>
 
     <!-- Local insight engine (offline rules) -->
-    <string name="local_insight_not_enough_data_title">Za mało danych do analizy</string>
-    <string name="local_insight_not_enough_data_summary">Potrzeba minimum 5 przejazdów w tygodniu</string>
     <string name="local_insight_consumption_up_title">Zużycie ▲%1$.0f%% w tygodniu</string>
     <string name="local_insight_consumption_up_title_month">Zużycie ▲%1$.0f%% w miesiącu</string>
     <string name="local_insight_consumption_up_summary_short">Dużo krótkich przejazdów — nagrzewanie zabiera energię</string>
@@ -965,7 +908,7 @@
     <string name="local_insight_idle_month">Na postoju z włączonym zapłonem: %1$.1f kWh przez %2$s, %3$d%% miesięcznego zużycia</string>
     <string name="local_insight_12v_critical_title">12V krytycznie niskie</string>
     <string name="local_insight_12v_critical_summary">Instalacja 12 V ma %1$.1f V — sprawdź akumulator</string>
-    <string name="local_insight_12v_low">12V teraz %1$.1f V — poniżej normy 12.4 V</string>
+    <string name="local_insight_12v_low">12V teraz %1$.2f V, poniżej normy 12,5 V</string>
     <string name="local_insight_12v_falling">12V spada: %1$.2f → %2$.2f V w ciągu tygodnia</string>
     <string name="local_insight_12v_falling_month">12V spada: %1$.2f → %2$.2f V w ciągu miesiąca</string>
     <string name="local_insight_cell_critical_title">Duży rozrzut ogniw</string>
@@ -1437,7 +1380,6 @@
     <!-- call_contact tool: contacts permission row -->
     <string name="settings_voice_contacts_label">Dostęp do kontaktów</string>
     <string name="settings_voice_contacts_description">Potrzebny, żeby zadzwonić do kontaktu po imieniu głosem</string>
-    <string name="settings_voice_contacts_granted">Przyznany</string>
     <string name="settings_voice_contacts_grant">Przyznaj</string>
 
     <!-- Voice journal: debug screen with the last voice sessions -->
@@ -1579,8 +1521,6 @@
     <string name="settings_search_status_hint">Bez klucza Exa agent używa wbudowanego wyszukiwania bieżącego połączenia. Jeśli i ono jest niedostępne, agent uczciwie powie, że wyszukiwanie nie działa.</string>
     <string name="settings_section_service_title">Serwis i dane</string>
     <string name="settings_battery_capacity_desc">Używana do szacowania zasięgu i kosztu</string>
-    <string name="settings_tariff_home_desc">Koszt 1 kWh przy ładowaniu w domu (AC)</string>
-    <string name="settings_tariff_dc_desc">Koszt 1 kWh na szybkich ładowarkach</string>
     <string name="settings_tariff_trip_desc">Według jakiej taryfy liczyć koszt przejazdów</string>
     <string name="settings_consumption_good_desc">Przejazdy z niższym zużyciem są podświetlane na zielono</string>
     <string name="settings_consumption_bad_desc">Przejazdy z wyższym zużyciem są podświetlane na czerwono</string>
@@ -1622,9 +1562,6 @@
     <string name="settings_donate_button">Wesprzyj projekt</string>
 
     <!-- HUD navigation -->
-    <string name="settings_hud_header">HUD (wyświetlacz przezierny)</string>
-    <string name="settings_hud_title">Nawigacja na HUD</string>
-    <string name="settings_hud_desc">Wskazówki Yandex Nawigatora na wyświetlaczu przeziernym: manewr, dystans, ulica, przyjazd</string>
     <string name="settings_hud_speed_sign_title">Znak prędkości pod strzałką</string>
     <string name="settings_hud_speed_sign_desc">Czerwony znak ograniczenia prędkości w dolnym polu HUD</string>
     <string name="settings_hud_status_unsupported">Nie znaleziono magistrali SOME/IP: w tym aucie wyświetlanie na HUD jest niedostępne</string>
@@ -1641,7 +1578,7 @@
     <string name="settings_hud_mode_3">Sposób 3</string>
     <string name="settings_hud_mode_3_desc">Sposób 3. Jak sposób 2, plus jeszcze jedna droga. Wypróbuj, jeśli dwa pierwsze nic nie pokazały.</string>
     <string name="settings_hud_mode_trial">próbny</string>
-    <string name="settings_hud_mode_pick_hint">Nie wiesz, który wybrać? Uruchom „Test HUD”.</string>
+    <string name="settings_hud_mode_pick_hint">Nie wiesz, który sposób wybrać? Uruchom „Test HUD”.</string>
     <string name="settings_hud_answer_title">Jaka liczba pojawiła się na szybie?</string>
     <string name="settings_hud_answer_text">Aplikacja sama wybierze sposób. Jeśli pojawiło się kilka liczb, naciśnij najmniejszą.</string>
     <string name="settings_hud_answer_none">Nic</string>
@@ -1652,8 +1589,6 @@
     <string name="settings_hud_answer_done">Gotowe</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Martwe pola</string>
-    <string name="settings_blindspot_title">Kamera przy kierunkowskazie</string>
-    <string name="settings_blindspot_desc">Lewy kierunkowskaz - lewa kamera na wskaźnikach, prawy - okienko na ekranie głównym. Domyślnie wyłączone.</string>
     <string name="settings_blindspot_threshold_title">Próg prędkości</string>
     <string name="settings_blindspot_threshold_desc">Poniżej tej prędkości kamera się nie pokazuje</string>
     <string name="settings_blindspot_pip_width_title">Szerokość okienka</string>
@@ -1778,7 +1713,7 @@
     <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">izolacja</string>
-    <string name="tech_title">Technika</string>
+    <string name="tech_title">Auto</string>
     <string name="tech_status_online">autoservice online</string>
     <string name="tech_status_offline">autoservice offline</string>
     <string name="tech_no_data">Samochód nie udostępnia tych danych</string>
@@ -1807,7 +1742,7 @@
     <string name="tech_label_battery_power">moc akumulatora</string>
     <string name="tech_label_max_charge">maks. moc ładowania</string>
     <string name="tech_label_max_discharge_allow">maks. moc rozładowania</string>
-    <string name="tech_label_max_discharge">pojemność akumulatora</string>
+    <string name="tech_label_max_discharge">aktualna pojemność akumulatora</string>
     <string name="tech_label_motor_temp">temperatura silnika</string>
     <string name="tech_label_inverter_temp">temperatura falownika</string>
     <string name="tech_label_rpm">obroty, obr/min</string>
@@ -1819,10 +1754,6 @@
     <string name="tech_label_inside_outside">w kabinie / na zewnątrz</string>
     <string name="tech_on">wł</string>
     <string name="tech_off">wył</string>
-    <string name="tech_tyre_fl">PL</string>
-    <string name="tech_tyre_fr">PP</string>
-    <string name="tech_tyre_rl">TL</string>
-    <string name="tech_tyre_rr">TP</string>
     <string name="tech_value_mohm">%1$.1f MΩ</string>
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
@@ -1835,7 +1766,6 @@
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
     <string name="tech_value_percent">%1$d%%</string>
-    <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Kondycja akumulatora według oceny samego samochodu: ile pojemności zostało w porównaniu z nowym. 100% w nowym samochodzie, powoli spada z latami. To osobna liczba, nie jest powiązana wzorem z „Pozostało”, nie trzeba ich ze sobą porównywać.</string>
@@ -2064,6 +1994,7 @@
     <string name="dispatch_tg_report_queued">Brak połączenia, raport zostanie wysłany, gdy wróci internet</string>
     <string name="dispatch_tg_report_no_bot">Połącz bota w Ustawieniach</string>
     <string name="auto_msg_tg_report_empty">Akcja #%1$d: wybierz co najmniej jeden element raportu lub wpisz własny tekst</string>
+    <string name="auto_msg_delay_invalid">Akcja #%1$d: pauza od 0 do 24 h</string>
     <string name="automation_action_tg_report">Raport w Telegramie</string>
     <!-- Telegram reports (3.19): settings and automation editor -->
     <string name="tg_report_field_location_desc">Link «Otwórz na mapie»</string>
@@ -2140,11 +2071,15 @@
     <string name="auto_ui_phrase_once">%1$s, jednorazowo</string>
     <string name="auto_ui_act_toggle">%1$s, przełącz</string>
     <string name="auto_ui_act_with">%1$s, %2$s</string>
-    <string name="auto_ui_act_wait">Poczekaj %1$s</string>
+    <string name="auto_ui_act_wait">Pauza %1$s</string>
     <string name="auto_ui_act_quoted">%1$s „%2$s”</string>
     <string name="auto_ui_act_volume">%1$s %2$d</string>
     <string name="auto_ui_seconds">%1$s s</string>
     <string name="auto_ui_minutes">%1$s min</string>
+    <string name="auto_ui_hours">%1$s h</string>
+    <string name="auto_ui_unit_seconds">s</string>
+    <string name="auto_ui_unit_minutes">min</string>
+    <string name="auto_ui_unit_hours">h</string>
     <string name="auto_ui_when_today">Dziś o %1$s</string>
     <string name="auto_ui_when_yesterday">Wczoraj o %1$s</string>
     <string name="auto_ui_when_tomorrow">Jutro o %1$s</string>
@@ -2176,7 +2111,7 @@
     <string name="auto_ui_number_hint">Wpisz liczbę, na przykład 12,5</string>
     <string name="auto_ui_cooldown">Nie częściej niż co</string>
     <string name="auto_ui_unit_s">s</string>
-    <string name="auto_ui_wait">Poczekaj</string>
+    <string name="auto_ui_wait">Pauza</string>
     <string name="auto_ui_miss_name">Wpisz nazwę</string>
     <string name="auto_ui_miss_conditions">Dodaj warunek</string>
     <string name="auto_ui_miss_param">Wybierz, co sprawdzać w warunku %1$d</string>

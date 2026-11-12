@@ -67,6 +67,17 @@ class HudAmapClusterLoopTest {
         assertEquals("20 min", i.getStringExtra("ROUTE_REMAIN_TIME_AUTO"))
     }
 
+    /** #301, Song Plus (DiLink 3.0): the 1for2 cluster draws the adapter's three *_AUTO strings as
+     *  they are. The frame is the log's 10:17:52 one: right turn in 50 m, 930 m and 3 min to go. */
+    @Test fun `the 301 frame goes out as the strings the cluster draws, a rest below 1 km in metres`() {
+        val i = HudAmapClusterLoop.buildGuideIntent(
+            NavGuidanceHub.Snapshot(active = true, maneuverGaode = 2, distanceMeters = 50,
+                road = "Maple Avenue", etaSeconds = 180, totalDistMeters = 930))
+        assertEquals("50 m", i.getStringExtra("SEG_REMAIN_DIS_AUTO"))
+        assertEquals("930 m", i.getStringExtra("ROUTE_REMAIN_DIS_AUTO"))
+        assertEquals("3 min", i.getStringExtra("ROUTE_REMAIN_TIME_AUTO"))   // no Chinese unit
+    }
+
     @Test fun `NEW_ICON follows the Gaode table and 0 stays 0`() {
         fun icon(gaode: Int): Intent =
             HudAmapClusterLoop.buildGuideIntent(NavGuidanceHub.Snapshot(active = true, maneuverGaode = gaode, distanceMeters = 300))

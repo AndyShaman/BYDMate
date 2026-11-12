@@ -48,6 +48,23 @@ class LastSessionRepositoryTest {
     }
 
     @Test
+    fun `endTs exactly at session start still matches`() {
+        val repo = LastSessionRepository(ctx())
+        repo.onSessionStart(soc = 90, ts = 10_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 70, ts = 20_000L, exteriorTemp = null)
+        assertEquals(70, repo.takeMatch(10_000L)?.endSoc)
+    }
+
+    @Test
+    fun `endTs one ms past the tolerance after session end does not match`() {
+        val repo = LastSessionRepository(ctx())
+        repo.onSessionStart(soc = 90, ts = 10_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 70, ts = 20_000L, exteriorTemp = null)
+        // END_TOLERANCE_MS is 30 s: 20_000 + 30_000 + 1 is the first ms outside the window
+        assertNull(repo.takeMatch(50_001L))
+    }
+
+    @Test
     fun `bookmarks survive a process restart (persisted)`() {
         val context = ctx()
         val repo1 = LastSessionRepository(context)
@@ -82,24 +99,6 @@ class LastSessionRepositoryTest {
         repo.onSessionStart(soc = 60, ts = 1_500L, exteriorTemp = null)
         repo.onSessionEnd(soc = 55, ts = 2_400L, exteriorTemp = null)   // end 2400, |2500-2400| = 100 -> nearest
         assertEquals(55, repo.takeMatch(2_500L)?.endSoc)
-    }
-
-    @Test
-    fun `lazy init fills start soc captured null at session start tick`() {
-        val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = null, ts = 1_000L, exteriorTemp = null)  // cold-start sentinel
-        repo.fillStartSocIfMissing(77)
-        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = null)
-        assertEquals(77, repo.takeMatch(2_000L)?.startSoc)
-    }
-
-    @Test
-    fun `lazy init does not overwrite an already captured start soc`() {
-        val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 90, ts = 1_000L, exteriorTemp = null)
-        repo.fillStartSocIfMissing(50)
-        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = null)
-        assertEquals(90, repo.takeMatch(2_000L)?.startSoc)
     }
 
     @Test

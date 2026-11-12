@@ -669,7 +669,9 @@ class AdbRestoreManagerTest {
     }
 
     @Test
-    fun `a retry rewrites the setting after the short interval, not the long cooldown`() = runTest {
+    fun `a retry wave writes the setting once per network and keeps polling`() = runTest {
+        // Each write raises one more «Allow wireless debugging» window; up to ~19 in five minutes
+        // was a re-write every 15 s. ALLOW sets adb_wifi_enabled=1 by itself, so polling is enough.
         val system = FakeSystem().apply {
             classicResults = mutableListOf(false)
             settingSticks = false
@@ -681,14 +683,70 @@ class AdbRestoreManagerTest {
 
         runCurrent()
 
-        // Retries at 2 s and 5 s fall inside the 15 s interval; the write only repeats past it.
-        assertTrue("expected repeated enable-writes, got ${system.settingsWrites}", system.settingsWrites.size > 1)
-        val writesInBudget =
-            AdbRestoreManager.RETRY_BUDGET_MS / AdbRestoreManager.WRITE_RETRY_INTERVAL_MS
-        assertTrue(
-            "one dialog per retry would be spam: ${system.settingsWrites.size} writes",
-            system.settingsWrites.size <= writesInBudget + 2,
-        )
+        assertEquals(listOf(1), system.settingsWrites)
+        assertEquals(AdbRestoreState.NeedsDialog, m.state.value)
+        assertTrue("the wave must keep polling, got ${system.retryWaits()}", system.retryWaits().size > 4)
+    }
+
+    @Test
+    fun `a window allowed late in the wave restores with our single write`() = runTest {
+        val system = FakeSystem().apply {
+            classicResults = mutableListOf(false)
+            settingSticks = false
+        }
+        // The person presses ALLOW during the fourth retry: Android sets the setting itself, no
+        // write of ours, and the port answers once tcpip has run.
+        var allowed = false
+        system.onWifiNetworkQuery = {
+            if (!allowed && system.retryWaits().size >= 4) {
+                allowed = true
+                system.adbWifiEnabled = 1
+                system.settingSticks = true
+                system.classicResults = mutableListOf(true)
+                system.classicCalls = 0
+            }
+        }
+        val m = manager(FakePrefs(), system, backgroundScope)
+
+        m.attemptIfNeeded("wifi_validated")
+        runCurrent()
+
+        assertTrue("expected Restored, got ${m.state.value}", m.state.value is AdbRestoreState.Restored)
+        assertTrue(allowed)
+        assertEquals(listOf(1), system.settingsWrites)
+        assertEquals(1, system.tcpipCalls)
+    }
+
+    @Test
+    fun `a network change during the wave writes once for the new network`() = runTest {
+        val system = FakeSystem().apply {
+            classicResults = mutableListOf(false)
+            settingSticks = false
+        }
+        system.onWifiNetworkQuery = {
+            if (system.retryWaits().size >= 2) system.wifi = "11:22:33:44:55:66"
+        }
+        val m = manager(FakePrefs(), system, backgroundScope)
+
+        m.attemptIfNeeded("wifi_validated")
+        runCurrent()
+
+        assertEquals(listOf(1, 1), system.settingsWrites)
+    }
+
+    @Test
+    fun `opening the settings writes even right after the wave's write`() = runTest {
+        val system = FakeSystem().apply {
+            classicResults = mutableListOf(false)
+            settingSticks = false
+        }
+        val m = manager(FakePrefs(), system, backgroundScope)
+
+        m.attemptIfNeeded("wifi_validated")
+        system.now += 3_000L
+        m.attemptIfNeeded("settings")
+
+        assertEquals(listOf(1, 1), system.settingsWrites)
     }
 
     @Test
@@ -778,8 +836,8 @@ class AdbRestoreManagerTest {
         m.attemptIfNeeded("wifi_validated")
         assertEquals(AdbRestoreState.NeedsDialog, m.state.value)
 
-        // Past the short interval, so the first retry writes again — and this time it sticks.
-        system.now += AdbRestoreManager.WRITE_RETRY_INTERVAL_MS
+        // Past the write cooldown, so the first retry writes again — and this time it sticks.
+        system.now += AdbRestoreManager.WRITE_COOLDOWN_MS
         system.settingSticks = true
         // The user flips the toggle off exactly while the retry is writing: the switch-off write
         // lands first, ours second, and the settle sleep after it dies with the cancelled wave.
@@ -828,32 +886,6 @@ class AdbRestoreManagerTest {
         assertEquals(1, system.discoverCalls)
         assertEquals(1, system.tcpipCalls)
         assertEquals(1, system.helperStarts)
-    }
-
-    @Test
-    fun `the last trigger is recorded for the dump`() = runTest {
-        val system = FakeSystem().apply { classicResults = mutableListOf(true) }
-        val m = manager(FakePrefs(), system)
-
-        assertEquals("none", m.lastTrigger)
-        m.attemptIfNeeded("user_present")
-
-        assertEquals("user_present", m.lastTrigger)
-        assertFalse(m.state.value is AdbRestoreState.Failed)
-    }
-
-    @Test
-    fun `states render as short names for the log dump`() {
-        // The dump is the only view we get of a car we cannot touch: an identity hash there
-        // ("AdbRestoreState$NotNeeded@1a2b3c") tells nobody anything.
-        assertEquals("Disabled", AdbRestoreState.Disabled.toString())
-        assertEquals("NotNeeded", AdbRestoreState.NotNeeded.toString())
-        assertEquals("NeedsActivation", AdbRestoreState.NeedsActivation.toString())
-        assertEquals("WaitingWifi", AdbRestoreState.WaitingWifi.toString())
-        assertEquals("NeedsDialog", AdbRestoreState.NeedsDialog.toString())
-        assertEquals("Connecting", AdbRestoreState.Connecting.toString())
-        assertEquals("Restored(atMs=42)", AdbRestoreState.Restored(42L).toString())
-        assertEquals("Failed(reason=mDNS timeout)", AdbRestoreState.Failed("mDNS timeout").toString())
     }
 
     @Test
@@ -1010,11 +1042,8 @@ class AdbRestoreManagerTest {
         // the coalesced pass's suppressed one.
         assertEquals(listOf(2_000L), system.retryWaits().take(1))
         assertTrue("expected more than one retry, got ${system.retryWaits()}", system.retryWaits().size > 1)
-        // ...and it keeps writing on the retry cadence, past the short interval.
-        assertTrue(
-            "expected a repeated enable-write from the wave, got ${system.settingsWrites}",
-            system.settingsWrites.size > 1,
-        )
+        // ...and it polls without writing again: one write, one window.
+        assertEquals(listOf(1), system.settingsWrites)
     }
 
     @Test

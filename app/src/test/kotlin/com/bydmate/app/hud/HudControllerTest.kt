@@ -23,9 +23,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -33,6 +30,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -46,12 +44,13 @@ class HudControllerTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val helperClient = mockk<HelperClient>(relaxed = true)
     private val helperBootstrap = mockk<HelperBootstrap>(relaxed = true)
+    private val time = HudVirtualTime()
 
     @get:Rule val trace = TraceRecorder()
 
     private fun controller(bridge: HudSomeIpBridge? = null): HudController =
         HudController(context, helperClient, helperBootstrap).apply {
-            scope = CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
+            scope = time.scope
             if (bridge != null) bridgeFactory = { _, _ -> bridge }
         }
 
@@ -72,6 +71,13 @@ class HudControllerTest {
         NavA11yFeed.enabled = false
         context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
             .edit().clear().commit()
+    }
+
+    @After fun stopLoops() {
+        time.close()
+        NavGuidanceHub.reset()
+        NavGuidanceHub.hudWay = 0
+        NavA11yFeed.enabled = false
     }
 
     @Test fun `unsupported head unit makes zero helper calls and stays inert`() {
@@ -122,7 +128,7 @@ class HudControllerTest {
         val bridge = mockk<HudSomeIpBridge>(relaxed = true)
         coEvery { bridge.bind() } coAnswers { delay(30_000); true }
         val c = HudController(context, helperClient, helperBootstrap).apply {
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            scope = time.scope
             bridgeFactory = { _, _ -> bridge }
         }
         c.setEnabled(true)
@@ -132,24 +138,13 @@ class HudControllerTest {
         awaitTrue { c.status.value == HudController.Status.OFF }
     }
 
-    @Test fun `speed sign pref default on and persists`() {
-        val c = controller()
-        assertTrue(c.isSpeedSignEnabled())
-        c.setSpeedSignEnabled(false)
-        assertFalse(c.isSpeedSignEnabled())
-    }
-
-    @Test fun `requiresA11y false when disabled`() {
-        assertFalse(controller().requiresA11y())
-    }
-
     @Test fun `connection lost cleans up so service restart can recover`() {
         installSomeIp()
         coEvery { helperBootstrap.ensureRunning() } returns true
         val bridge = connectedBridge()
         var onLost: () -> Unit = {}
         val c = HudController(context, helperClient, helperBootstrap).apply {
-            scope = CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
+            scope = time.scope
             bridgeFactory = { _, lost -> onLost = lost; bridge }
         }
         c.setEnabled(true)
@@ -171,12 +166,12 @@ class HudControllerTest {
             bridgeFactory = { _, _ -> bridge }   // scope left at its ordered default
         }
         c.setEnabled(true)
-        awaitTrue { c.status.value == HudController.Status.ON }
+        awaitReal { c.status.value == HudController.Status.ON }
         c.stop()             // TrackingService.onDestroy
         c.startIfEnabled()   // new service instance onCreate
-        awaitTrue { c.status.value == HudController.Status.ON }
+        awaitReal { c.status.value == HudController.Status.ON }
         c.setEnabled(false)
-        awaitTrue { c.status.value == HudController.Status.OFF }
+        awaitReal { c.status.value == HudController.Status.OFF }
     }
 
     @Test fun `refused arming writes never stop the frames`() {
@@ -202,7 +197,7 @@ class HudControllerTest {
         val c = controller(bridge)
         c.setEnabled(true)
         assertEquals(HudController.Status.ON, c.status.value)
-        Thread.sleep(2_500)   // the arming loop looks at the route three times
+        time.advance(2_500)   // the arming loop looks at the route three times
         c.setEnabled(false)
         coVerify(exactly = 0) { helperClient.writeStatus(any(), any(), any(), any()) }
         coVerify(exactly = 0) { helperClient.hudNaviStatus(any()) }
@@ -241,6 +236,7 @@ class HudControllerTest {
         c.startIfEnabled()
         assertEquals(HudController.Status.ON, c.status.value)
         coVerify(exactly = 1) { helperClient.hudNaviStatus(4) }
+        coVerify { helperClient.enableAccessibilityService() }
         assertEquals(1, state[HudArming.SCREEN])
         assertEquals(0, state[HudArming.CAN_NAVI])
         assertEquals(0, state[HudArming.ISA])
@@ -263,7 +259,16 @@ class HudControllerTest {
         c.setEnabled(false)
     }
 
-    // --- status lines (trace audit) ---
+    @Test fun `a failed gateway start service is BIND_FAILED`() {
+        installSomeIp()
+        coEvery { helperBootstrap.ensureRunning() } returns true
+        val bridge = mockk<HudSomeIpBridge>(relaxed = true)
+        coEvery { bridge.bind() } returns true
+        every { bridge.startService(any()) } returns -2
+        val c = controller(bridge)
+        c.setEnabled(true)
+        assertEquals(HudController.Status.BIND_FAILED, c.status.value)
+    }
 
     @Test fun `a failed gateway start is a status line with its step and rc`() {
         installSomeIp()
@@ -468,7 +473,7 @@ class HudControllerTest {
             probing(gateway = PackageManager.NameNotFoundException(), adapter = RuntimeException("package manager died")),
         )) {
             guidedRoute()
-            val c = HudController(probe, helperClient, helperBootstrap).apply { scope = CoroutineScope(Dispatchers.Unconfined) }
+            val c = HudController(probe, helperClient, helperBootstrap).apply { scope = time.scope }
             c.setEnabled(true)
             assertEquals(HudController.Status.UNSUPPORTED, c.status.value)
             assertNull(c.amapCluster)
@@ -538,7 +543,10 @@ class HudControllerTest {
         c.setEnabled(false)
     }
 
-    private fun awaitTrue(timeoutMs: Long = 5_000, cond: () -> Boolean) {
+    private fun awaitTrue(cond: () -> Boolean) = time.awaitTrue(cond = cond)
+
+    /** Real threads: the ordered default scope, polled with a deadline. */
+    private fun awaitReal(timeoutMs: Long = 10_000, cond: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (cond()) return

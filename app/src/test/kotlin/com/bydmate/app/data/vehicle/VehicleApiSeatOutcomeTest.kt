@@ -3,7 +3,6 @@ package com.bydmate.app.data.vehicle
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -14,7 +13,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VehicleApiSeatOutcomeTest {
-    private val parsReader: ParsReader = mockk(relaxed = true)
     private val autoservice: AutoserviceClient = mockk(relaxed = true)
     private val helper: HelperClient = mockk()
     private val writeLogDao: VehicleWriteLogDao = mockk(relaxed = true)
@@ -34,7 +32,7 @@ class VehicleApiSeatOutcomeTest {
         override fun ctrlCandidateAtMs() = 0L
         override fun setCtrlCandidateAtMs(ts: Long) {}
     }
-    private val impl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
+    private val impl = VehicleApiImpl(autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
 
     @Test fun `doWriteOutcome maps status 1 to REAL`() = runTest {
         val e = allowlist.find("driver_seat_vent_switch")!!

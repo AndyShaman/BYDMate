@@ -4,7 +4,6 @@ import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.FidCatalog
-import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -33,7 +32,7 @@ class VehicleApiRearSeatHeatTest {
     private val dao = mockk<VehicleWriteLogDao> { coEvery { insert(capture(audit)) } returns Unit }
 
     private fun api(catalog: FidCatalog? = RearSeatCatalogs.dl4) = VehicleApiImpl(
-        mockk<ParsReader>(relaxed = true), mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
+        mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
         dao, seatStore, windowStore, rearCatalog = { catalog },
     )
 
@@ -64,7 +63,7 @@ class VehicleApiRearSeatHeatTest {
 
     @Test fun `the default constructor has no catalog and writes nothing`() = runTest {
         val plain = VehicleApiImpl(
-            mockk<ParsReader>(relaxed = true), mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
+            mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
             dao, seatStore, windowStore,
         )
         assertTrue(plain.dispatch("后左座椅加热1档").isFailure)

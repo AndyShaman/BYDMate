@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bydmate.app.R
 import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.domain.BatteryThresholds
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.ui.components.socColor as componentsSocColor
 import com.bydmate.app.ui.theme.AccentGreen
@@ -133,7 +134,7 @@ fun FloatingWidgetView(
         Column(
             modifier = Modifier
                 .alpha(alpha.coerceIn(0.3f, 1.0f))
-                .size(width = 260.dp, height = 108.dp)
+                .size(width = WidgetButtonLayout.PANEL_WIDTH_DP.dp, height = WidgetButtonLayout.PANEL_HEIGHT_DP.dp)
                 .shadow(elevation = 8.dp, shape = RoundedCornerShape(14.dp))
                 .background(CardSurface, RoundedCornerShape(14.dp))
                 .then(borderModifier)
@@ -466,14 +467,14 @@ internal fun widgetStatus(soc: Int?, v12: Double?): Status {
     if (soc == null && v12 == null) return Status.NO_DATA
     val socStatus = when {
         soc == null -> Status.NO_DATA
-        soc < 15 -> Status.CRIT
-        soc < 30 -> Status.WARN
+        soc < BatteryThresholds.SOC_CRIT -> Status.CRIT
+        soc < BatteryThresholds.SOC_WARN -> Status.WARN
         else -> Status.OK
     }
     val vStatus = when {
         v12 == null -> Status.OK
-        v12 < 12.0 -> Status.CRIT
-        v12 < 12.5 -> Status.WARN
+        v12 < BatteryThresholds.V12_CRIT -> Status.CRIT
+        v12 < BatteryThresholds.V12_WARN -> Status.WARN
         else -> Status.OK
     }
     return listOf(socStatus, vStatus)
@@ -489,9 +490,6 @@ private fun severity(s: Status): Int = when (s) {
     Status.CRIT -> 2
 }
 
-// Mirrors DashboardScreen's SOC ring coloring (>50 green, >=20 yellow, <20 red).
-// Was a private widget-local function with different thresholds (>=30 green,
-// >=15 yellow) — split coloring between the two surfaces was confusing because
-// the same SOC value rendered green on the widget but yellow on the dashboard.
+// Same coloring as DashboardScreen's SOC ring and the widget border (BatteryThresholds).
 private fun socColor(soc: Int?): Color =
     if (soc == null) TextMuted else componentsSocColor(soc)

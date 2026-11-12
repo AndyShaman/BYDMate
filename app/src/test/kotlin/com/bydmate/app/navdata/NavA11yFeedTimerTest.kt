@@ -10,7 +10,6 @@ import io.mockk.verify
 import java.time.Duration
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -39,13 +38,13 @@ class NavA11yFeedTimerTest {
         val t0 = armedGuidance()
         NavA11yFeed.enabled = true
         NavA11yFeed.lastProcessMs = 0L
-        NavA11yFeed.onEvent(service(navigatorRoot(withGuidance = true)), navigatorEvent())
+        NavA11yFeed.onEvent(service(navigatorRoot()), navigatorEvent())
         val byEvent = NavGuidanceHub.snapshot(t0 + 1_000)
 
         armedGuidance()
         NavA11yFeed.lastProcessMs = 0L
         val now = System.currentTimeMillis()
-        NavA11yFeed.onTimer(service(navigatorRoot(withGuidance = true)), now)
+        NavA11yFeed.onTimer(service(navigatorRoot()), now)
         val byTimer = NavGuidanceHub.snapshot(t0 + 1_000)
 
         assertEquals(300, byTimer.distanceMeters)
@@ -58,16 +57,6 @@ class NavA11yFeedTimerTest {
         assertEquals(now, NavA11yFeed.lastProcessMs)
     }
 
-    @Test fun `a timer read of a navigator without guidance widgets neither ends nor refreshes guidance`() {
-        val t0 = armedGuidance()
-        NavA11yFeed.enabled = true
-        NavA11yFeed.lastProcessMs = 0L
-        NavA11yFeed.onTimer(service(navigatorRoot(withGuidance = false)), t0 + 1_000)
-        assertTrue(NavGuidanceHub.snapshot(t0 + 15_000).active)
-        assertEquals(t0, NavGuidanceHub.snapshot(t0 + 15_000).lastUpdateMs)
-        assertFalse(NavGuidanceHub.snapshot(t0 + NavGuidanceHub.ACTIVE_TIMEOUT_MS + 1).active)
-    }
-
     @Test fun `an unreachable window on a timer read says nothing`() {
         val t0 = armedGuidance()
         NavA11yFeed.enabled = true
@@ -78,7 +67,7 @@ class NavA11yFeedTimerTest {
     }
 
     @Test fun `no timer read right after an event read or without a route`() {
-        val svc = service(navigatorRoot(withGuidance = true))
+        val svc = service(navigatorRoot())
         NavA11yFeed.enabled = true
         val t0 = System.currentTimeMillis()
         NavA11yFeed.lastProcessMs = 0L
@@ -92,7 +81,7 @@ class NavA11yFeedTimerTest {
     @Test fun `the keep-alive line is logged once per quiet episode`() {
         armedGuidance()
         NavA11yFeed.enabled = true
-        val svc = service(navigatorRoot(withGuidance = true))
+        val svc = service(navigatorRoot())
         repeat(3) {
             NavA11yFeed.lastProcessMs = 0L
             NavA11yFeed.onTimer(svc, System.currentTimeMillis())
@@ -108,7 +97,7 @@ class NavA11yFeedTimerTest {
 
     @Test fun `the timer ticks every 5 s while the feed is on and stops with it`() {
         armedGuidance()
-        val svc = service(navigatorRoot(withGuidance = true))
+        val svc = service(navigatorRoot())
         NavA11yFeed.timerService = { svc }
         NavA11yFeed.enabled = true
         NavA11yFeed.lastProcessMs = 0L
@@ -147,18 +136,16 @@ class NavA11yFeedTimerTest {
         every { it.packageName } returns PKG
     }
 
-    private fun navigatorRoot(withGuidance: Boolean): AccessibilityNodeInfo {
+    private fun navigatorRoot(): AccessibilityNodeInfo {
         val root = mockk<AccessibilityNodeInfo>(relaxed = true)
         every { root.packageName } returns PKG
         every { root.findAccessibilityNodeInfosByViewId(any()) } returns emptyList()
-        if (withGuidance) {
-            every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_distance") } returns
-                listOf(textNode("300"))
-            every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_metrics") } returns
-                listOf(textNode("м"))
-            every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_nextstreet") } returns
-                listOf(textNode("Ленина"))
-        }
+        every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_distance") } returns
+            listOf(textNode("300"))
+        every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_maneuverballoon_metrics") } returns
+            listOf(textNode("м"))
+        every { root.findAccessibilityNodeInfosByViewId("$PKG:id/text_nextstreet") } returns
+            listOf(textNode("Ленина"))
         return root
     }
 

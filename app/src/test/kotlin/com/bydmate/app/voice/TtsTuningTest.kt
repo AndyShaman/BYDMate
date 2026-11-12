@@ -5,50 +5,22 @@ import org.junit.Test
 
 class TtsTuningTest {
 
+    // Linear map with a floor and a ceiling, and a clamped speed: every case of the old nine tests.
     @Test
-    fun `noiseScale at default liveliness 33 is about 0,4`() {
-        assertEquals(0.398f, TtsTuning.noiseScale(33), 0.0001f)
-    }
-
-    @Test
-    fun `noiseScale at liveliness 0 is the floor 0,2`() {
-        assertEquals(0.2f, TtsTuning.noiseScale(0), 0.0001f)
-    }
-
-    @Test
-    fun `noiseScale at liveliness 100 is the ceiling 0,8`() {
-        assertEquals(0.8f, TtsTuning.noiseScale(100), 0.0001f)
-    }
-
-    @Test
-    fun `noiseScale clamps below zero to the floor`() {
-        assertEquals(0.2f, TtsTuning.noiseScale(-10), 0.0001f)
-    }
-
-    @Test
-    fun `noiseScale clamps above 100 to the ceiling`() {
-        assertEquals(0.8f, TtsTuning.noiseScale(150), 0.0001f)
-    }
-
-    @Test
-    fun `noiseScaleW follows the same mapping as noiseScale`() {
-        assertEquals(0.398f, TtsTuning.noiseScaleW(33), 0.0001f)
-        assertEquals(0.2f, TtsTuning.noiseScaleW(0), 0.0001f)
-        assertEquals(0.8f, TtsTuning.noiseScaleW(100), 0.0001f)
-    }
-
-    @Test
-    fun `speed passes through values inside the allowed range`() {
-        assertEquals(1.0f, TtsTuning.speed(1.0f), 0.0001f)
-    }
-
-    @Test
-    fun `speed clamps below the minimum 0,7x`() {
-        assertEquals(0.7f, TtsTuning.speed(0.3f), 0.0001f)
-    }
-
-    @Test
-    fun `speed clamps above the maximum 1,4x`() {
-        assertEquals(1.4f, TtsTuning.speed(2.0f), 0.0001f)
+    fun `noiseScale, noiseScaleW and speed map inside the range and clamp at both ends`() {
+        val cases = listOf(
+            Triple("noiseScale default 33", 0.398f, TtsTuning.noiseScale(33)),
+            Triple("noiseScale floor 0", 0.2f, TtsTuning.noiseScale(0)),
+            Triple("noiseScale ceiling 100", 0.8f, TtsTuning.noiseScale(100)),
+            Triple("noiseScale below zero", 0.2f, TtsTuning.noiseScale(-10)),
+            Triple("noiseScale above 100", 0.8f, TtsTuning.noiseScale(150)),
+            Triple("noiseScaleW default 33", 0.398f, TtsTuning.noiseScaleW(33)),
+            Triple("noiseScaleW floor 0", 0.2f, TtsTuning.noiseScaleW(0)),
+            Triple("noiseScaleW ceiling 100", 0.8f, TtsTuning.noiseScaleW(100)),
+            Triple("speed inside the range", 1.0f, TtsTuning.speed(1.0f)),
+            Triple("speed below the minimum 0.7x", 0.7f, TtsTuning.speed(0.3f)),
+            Triple("speed above the maximum 1.4x", 1.4f, TtsTuning.speed(2.0f)),
+        )
+        for ((label, expected, actual) in cases) assertEquals("case: $label", expected, actual, 0.0001f)
     }
 }

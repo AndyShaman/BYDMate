@@ -24,19 +24,6 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE start_ts >= :from AND start_ts <= :to ORDER BY start_ts DESC")
     fun getByDateRange(from: Long, to: Long): Flow<List<TripEntity>>
 
-    @Query("""
-        SELECT COALESCE(SUM(distance_km), 0.0) as totalKm,
-               COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
-               COUNT(*) as tripCount,
-               COALESCE(SUM(cost), 0.0) as totalCost
-        FROM trips
-        WHERE start_ts >= :dayStart AND start_ts <= :dayEnd
-    """)
-    suspend fun getTodaySummary(dayStart: Long, dayEnd: Long): TripSummary
-
-    @Query("SELECT * FROM trips ORDER BY start_ts DESC LIMIT 1")
-    fun getLastTrip(): Flow<TripEntity?>
-
     @Query("SELECT * FROM trips ORDER BY start_ts DESC LIMIT :limit")
     fun getRecent(limit: Int = 5): Flow<List<TripEntity>>
 
@@ -49,9 +36,6 @@ interface TripDao {
     /** Frees a recycled energydata id (#348); conditional, so a stale full-row write cannot be undone by it. */
     @Query("UPDATE trips SET byd_id = NULL WHERE id = :id AND byd_id = :bydId")
     suspend fun unlinkBydId(id: Long, bydId: Long): Int
-
-    @Query("SELECT * FROM trips WHERE soc_start IS NULL AND source = 'energydata'")
-    suspend fun getTripsWithoutSoc(): List<TripEntity>
 
     /**
      * DM-i: energydata trips since [sinceTs] that have no fuel counters attached yet. Older
@@ -129,29 +113,6 @@ interface TripDao {
     """)
     suspend fun fillOdometerIfEmpty(id: Long, startKm: Double?, endKm: Double?): Int
 
-    /** Trips with sufficient SOC delta for battery capacity estimation. */
-    @Query("""
-        SELECT * FROM trips
-        WHERE soc_start IS NOT NULL AND soc_end IS NOT NULL
-          AND kwh_consumed IS NOT NULL AND kwh_consumed > 0
-          AND (soc_start - soc_end) >= :minSocDelta
-        ORDER BY start_ts DESC LIMIT :limit
-    """)
-    suspend fun getTripsForCapacityEstimate(minSocDelta: Int = 10, limit: Int = 20): List<TripEntity>
-
-    @Query("""
-        SELECT COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
-               COALESCE(SUM(distance_km), 0.0) as totalKm,
-               COUNT(*) as tripCount,
-               COALESCE(SUM(cost), 0.0) as totalCost
-        FROM (
-            SELECT kwh_consumed, distance_km, cost FROM trips
-            WHERE distance_km > 0 AND kwh_consumed > 0
-            ORDER BY start_ts DESC LIMIT :maxTrips
-        )
-    """)
-    suspend fun getRecentSummary(maxTrips: Int = 30): TripSummary
-
     @Query("""
         SELECT * FROM trips
         WHERE distance_km >= 1
@@ -160,13 +121,6 @@ interface TripDao {
         ORDER BY start_ts DESC LIMIT :limit
     """)
     suspend fun getRecentForEma(limit: Int = 10): List<TripEntity>
-
-    @Query("""
-        SELECT * FROM trips
-        WHERE distance_km >= 2 AND kwh_consumed > 0 AND start_ts >= :fromTs
-        ORDER BY start_ts DESC
-    """)
-    suspend fun getForEmaSince(fromTs: Long): List<TripEntity>
 
     @Query("""
         SELECT * FROM trips

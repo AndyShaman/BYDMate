@@ -106,7 +106,7 @@ class TripCounterMathTest {
      *
      * Old formula (epoch > sessionStart -> landedFrom=epoch, row excluded): 40 + 60 = 100 min.
      */
-    @Test fun codex_a_landed_row_windowed_to_session_start_gives_60_min() {
+    @Test fun landed_40_min_row_plus_60_min_live_session_gives_60_min_driving_not_100() {
         val sessionStart = 0L
         val rowMs = 40L * 60_000L       // 40 min row duration
         val nowMs = 60L * 60_000L       // 60 min live session time
@@ -128,7 +128,7 @@ class TripCounterMathTest {
      * (Room 11 km). Live shows 5 km post-restart delta. Without fix: 11 + 5 = 16.
      * With fix: liveWholeSession=false -> live suppressed -> 11 km.
      */
-    @Test fun codex_b_restore_fail_live_suppressed_room_only_11km() {
+    @Test fun restore_without_whole_session_live_suppresses_live_and_shows_room_11_km_not_16() {
         val stats = TripCounterStats(
             totalKm = 11.0, totalKwh = 2.2, totalCost = 0.44,
             drivingKwh = 2.2, idleKwh = 0.0, tripCount = 1, drivingMs = 660_000L,
@@ -147,7 +147,7 @@ class TripCounterMathTest {
      * covers the whole session (11 km). Landed session row also 11 km.
      * liveContrib = max(11 - 11, 0) = 0; total = Room 11 + 0 = 11.
      */
-    @Test fun codex_b_restore_ok_spanner_row_deducted_total_11km() {
+    @Test fun restore_with_whole_session_live_deducts_landed_row_and_shows_11_km() {
         val stats = TripCounterStats(
             totalKm = 11.0, totalKwh = 2.2, totalCost = 0.44,
             drivingKwh = 2.2, idleKwh = 0.0, tripCount = 1, drivingMs = 660_000L,
@@ -233,7 +233,7 @@ class TripCounterMathTest {
      * A spanner row of 15 km covers the reset. The straddling row is subtracted whole
      * (15 km) so the counter reads 0 -- not 14 km as the old corrKm=1 partial would give.
      */
-    @Test fun codex_r5_major1_degraded_reset_spanner_whole_row_excluded() {
+    @Test fun degraded_reset_excludes_whole_straddling_15_km_row_counter_reads_0_km_0_trips() {
         // Stats: the 15-km spanner row landed in Room, whole row is straddling.
         val stats = TripCounterStats(
             totalKm = 15.0, totalKwh = 3.0, totalCost = 0.6,
@@ -258,7 +258,7 @@ class TripCounterMathTest {
      * The new row is NOT straddling (starts after resetTs), so no subtraction applies.
      * Counter must show 4 km exactly.
      */
-    @Test fun codex_r5_major1_degraded_reset_next_trip_shows_4km() {
+    @Test fun degraded_reset_then_next_4_km_trip_lands_counter_reads_4_km_1_trip() {
         // Both the original 15-km spanner and a subsequent 4-km trip have landed.
         // The spanner is straddlingKm=15; the 4-km row started after resetTs so it
         // is not straddling (the DAO only counts rows that started before resetTs as straddling).
@@ -282,7 +282,7 @@ class TripCounterMathTest {
      * liveWholeSession=false, live 5 km present but suppressed -> counter shows Room-only 10.
      * Verifies that the degraded flag (not excludeStraddling) suppresses inflation mid-trip.
      */
-    @Test fun codex_r5_major2_degraded_flag_live_suppressed_shows_room_only() {
+    @Test fun degraded_live_coverage_suppresses_live_5_km_counter_shows_room_10_km() {
         // 10 km landed in Room; live session shows another 5 km but coverage is degraded.
         val stats = TripCounterStats(
             totalKm = 10.0, totalKwh = 2.0, totalCost = 0.4,
@@ -301,7 +301,7 @@ class TripCounterMathTest {
      * Major-2 convergence: second row lands (session ended), liveWholeSession no longer relevant.
      * totalKm now 15; counter must converge to 15.
      */
-    @Test fun codex_r5_major2_degraded_converges_after_second_row_lands() {
+    @Test fun degraded_session_converges_to_15_km_once_second_row_lands() {
         // Both rows have now landed: 10 km original + 5 km second trip = 15 km total.
         val stats = TripCounterStats(
             totalKm = 15.0, totalKwh = 3.0, totalCost = 0.6,
@@ -321,7 +321,7 @@ class TripCounterMathTest {
      * The spanner row (20 km), correction captured at reset = 5 km. kmSub = min(5, 20) = 5.
      * Same as the existing straddling_trip_landed_in_room_gets_correction_subtracted test.
      */
-    @Test fun codex_r5_exclude_false_keeps_capped_correction() {
+    @Test fun reset_without_straddling_exclusion_subtracts_capped_5_km_correction_from_20_km_row() {
         val stats = TripCounterStats(20.0, 4.0, 0.8, 4.0, 0.0, 1, 10_000L, 20.0, 4.0, 10_000L, 1, 0.0, 0.0, 0L)
         val r = reset(ts = 5_000L, km = 5.0, kwh = 1.0, ms = 4_000L, excludeStraddling = false)
         val ui = TripCounterMath.compute(stats, r, null, null, null, false, 30_000L, 0.2)

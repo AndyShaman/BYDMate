@@ -1,13 +1,9 @@
 package com.bydmate.app.data.local
 
-import android.content.Context
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
-import com.bydmate.app.data.local.dao.TripPointDao
-import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
-import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import io.mockk.coEvery
@@ -31,22 +27,13 @@ class HistoryImporterKwhSanityTest {
         kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
         monitor: com.bydmate.app.data.nativestack.VehicleKindMonitor =
             com.bydmate.app.data.nativestack.kindMonitor(kind),
-    ) = HistoryImporter(
-        context = mockk<Context>(relaxed = true),
+    ) = historyImporter(
         energyDataReader = energyDataReader,
         tripRepository = tripRepository,
         tripDao = tripDao,
-        tripPointDao = mockk<TripPointDao>(relaxed = true),
         idleDrainDao = idleDrainDao,
         settingsRepository = settingsRepository,
-        lastSessionRepository = mockk<LastSessionRepository>(relaxed = true),
-        tripTombstoneDao = mockk<TripTombstoneDao>(relaxed = true),
-        costCalculator = mockk(relaxed = true),
-        odometerMarks = mockk(relaxed = true),
         vehicleKind = monitor,
-        counterSnapshotDao = mockk(relaxed = true),
-        counterSnapshotWriter = mockk(relaxed = true),
-        lastStateDao = mockk(relaxed = true),
     )
 
     // VadimV, 2026-09-12: 54681,2 kWh on 38,2 km with SOC 92 -> 84.

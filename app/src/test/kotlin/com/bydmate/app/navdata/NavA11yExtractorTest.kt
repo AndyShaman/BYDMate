@@ -53,9 +53,4 @@ class NavA11yExtractorTest {
             NavA11yExtractor.formatNode(facts),
         )
     }
-
-    @Test fun `node facts with nothing readable print question marks`() {
-        val facts = NavA11yExtractor.NodeFacts(null, null, emptyList(), null, null, null, emptyList())
-        assertEquals("{id=? cls=? order=? sel=? chk=? extras=[]}", NavA11yExtractor.formatNode(facts))
-    }
 }

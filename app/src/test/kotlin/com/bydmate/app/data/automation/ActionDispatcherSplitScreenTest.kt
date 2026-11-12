@@ -17,7 +17,6 @@ import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -37,14 +36,7 @@ class ActionDispatcherSplitScreenTest {
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         // Relaxed context.getString() returns "" — enough to verify success=false for error cases.
-        dispatcher = ActionDispatcher(
-            vehicleApi, helper, context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true),
-            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-            splitManager,
-            mockk<com.bydmate.app.util.AppStrings>(relaxed = true), dagger.Lazy { io.mockk.mockk(relaxed = true) },
-        )
+        dispatcher = testDispatcher(vehicleApi, helper, context, splitSessionManager = splitManager)
     }
 
     private fun splitAction(
@@ -60,28 +52,17 @@ class ActionDispatcherSplitScreenTest {
 
     // ── Result mapping ──────────────────────────────────────────────────────────
 
-    @Test fun `OK result returns success`() = runBlocking {
-        coEvery { splitManager.start(any()) } returns SplitStartResult.OK
-        val result = dispatcher.dispatch(splitAction(), null)
-        assertTrue(result.success)
-    }
-
-    @Test fun `FREEFORM_UNAVAILABLE result returns failure`() = runBlocking {
-        coEvery { splitManager.start(any()) } returns SplitStartResult.FREEFORM_UNAVAILABLE
-        val result = dispatcher.dispatch(splitAction(), null)
-        assertFalse(result.success)
-    }
-
-    @Test fun `LAUNCH_FAILED result returns failure`() = runBlocking {
-        coEvery { splitManager.start(any()) } returns SplitStartResult.LAUNCH_FAILED
-        val result = dispatcher.dispatch(splitAction(), null)
-        assertFalse(result.success)
-    }
-
-    @Test fun `DISABLED result returns failure without null reason`() = runBlocking {
-        coEvery { splitManager.start(any()) } returns SplitStartResult.DISABLED
-        val result = dispatcher.dispatch(splitAction(), null)
-        assertFalse(result.success)
+    @Test fun `each manager result maps to success or failure`() = runBlocking {
+        val cases = listOf(
+            SplitStartResult.OK to true,
+            SplitStartResult.FREEFORM_UNAVAILABLE to false,
+            SplitStartResult.LAUNCH_FAILED to false,
+            SplitStartResult.DISABLED to false,
+        )
+        for ((managerResult, success) in cases) {
+            coEvery { splitManager.start(any()) } returns managerResult
+            assertEquals("case: $managerResult", success, dispatcher.dispatch(splitAction(), null).success)
+        }
     }
 
     // ── SplitPair construction ──────────────────────────────────────────────────
@@ -104,35 +85,16 @@ class ActionDispatcherSplitScreenTest {
 
     // ── Malformed payload — manager must NOT be called ──────────────────────────
 
-    @Test fun `blank narrow package returns failure without calling manager`() = runBlocking {
-        val result = dispatcher.dispatch(splitAction(narrow = ""), null)
-        assertFalse(result.success)
-        coVerify(exactly = 0) { splitManager.start(any()) }
-    }
-
-    @Test fun `blank wide package returns failure without calling manager`() = runBlocking {
-        val result = dispatcher.dispatch(splitAction(wide = ""), null)
-        assertFalse(result.success)
-        coVerify(exactly = 0) { splitManager.start(any()) }
-    }
-
-    @Test fun `unknown side returns failure without calling manager`() = runBlocking {
-        val result = dispatcher.dispatch(splitAction(side = "center"), null)
-        assertFalse(result.success)
-        coVerify(exactly = 0) { splitManager.start(any()) }
-    }
-
-    @Test fun `null payload returns failure without calling manager`() = runBlocking {
-        val action = ActionDef(command = "", displayName = "x", kind = "split_screen", payload = null)
-        val result = dispatcher.dispatch(action, null)
-        assertFalse(result.success)
-        coVerify(exactly = 0) { splitManager.start(any()) }
-    }
-
-    @Test fun `malformed json payload returns failure without calling manager`() = runBlocking {
-        val action = ActionDef(command = "", displayName = "x", kind = "split_screen", payload = "not-json")
-        val result = dispatcher.dispatch(action, null)
-        assertFalse(result.success)
+    @Test fun `a malformed payload fails without calling the manager`() = runBlocking {
+        fun raw(payload: String?) = ActionDef(command = "", displayName = "x", kind = "split_screen", payload = payload)
+        val cases = listOf(
+            "blank narrow package" to splitAction(narrow = ""),
+            "blank wide package" to splitAction(wide = ""),
+            "unknown side" to splitAction(side = "center"),
+            "null payload" to raw(null),
+            "malformed json payload" to raw("not-json"),
+        )
+        for ((label, action) in cases) assertFalse("case: $label", dispatcher.dispatch(action, null).success)
         coVerify(exactly = 0) { splitManager.start(any()) }
     }
 }

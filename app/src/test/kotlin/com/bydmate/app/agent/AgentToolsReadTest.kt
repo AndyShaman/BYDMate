@@ -1,7 +1,6 @@
 package com.bydmate.app.agent
 
 import android.content.Context
-import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
@@ -11,6 +10,7 @@ import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripSummary
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.repository.PlaceRepository
+import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.SettingsRepository
@@ -49,29 +49,28 @@ class AgentToolsReadTest {
     private val openRouterClient = mockk<OpenRouterClient>()
     private val settingsRepository = mockk<SettingsRepository>()
     private val contactLookup = mockk<ContactLookup>()
+    private val insightsManager = mockk<InsightsManager>(relaxed = true)
 
     private val context = mockk<Context>(relaxed = true)
 
-    private fun tools() = AgentTools(
-        gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
-        exa, openRouterClient, settingsRepository, contactLookup, context,
-        mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<ChargerSearchClient>(relaxed = true),
-        mockk<InsightsManager>(relaxed = true),
-        mockk<ZaiSearchClient>(relaxed = true),
-        mockk<LlmConnectionResolver>(relaxed = true),
+    private fun tools() = agentTools(
+        gate = gate,
+        batteryStateRepository = battery,
+        rangeCalculator = range,
+        tripDao = tripDao,
+        chargeDao = chargeDao,
+        actionDispatcher = dispatcher,
+        ruleDao = ruleDao,
+        automationEngine = engine,
+        placeRepository = places,
+        weatherClient = weather,
+        exaSearchClient = exa,
+        openRouterClient = openRouterClient,
+        settingsRepository = settingsRepository,
+        contactLookup = contactLookup,
+        context = context,
+        insightsManager = insightsManager,
     ).also { it.nowMs = { 1_000_000_000_000L } }
-
-    @Test fun schemas_lists_read_tools() = runTest {
-        coEvery { ruleDao.getEnabled() } returns emptyList()
-        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns "exa-key"
-        val names = mutableListOf<String>()
-        val arr = tools().schemas()
-        for (i in 0 until arr.length()) {
-            names += arr.getJSONObject(i).getJSONObject("function").getString("name")
-        }
-        assertTrue(names.containsAll(listOf("get_vehicle_state", "query_trips", "query_charges")))
-    }
 
     @Test fun vehicle_state_null_snapshot_reports_error() = runTest {
         every { gate.vehicleSnapshot() } returns null
@@ -84,7 +83,7 @@ class AgentToolsReadTest {
             soc = 80, speed = 0, gear = 1, seatHeatDriver = 2, totalElec = 1234.5,
         )
         coEvery { battery.refresh() } returns
-            BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+            BatteryState(80f, 100f, null, null, autoserviceAvailable = true)
         coEvery { range.estimateDetailed(80, 1234.5) } returns
             RangeEstimate(rangeKm = 321.4, avgKwhPer100 = 18.0, capacityKwh = 72.9, remainingKwh = 200.0)
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
@@ -99,7 +98,7 @@ class AgentToolsReadTest {
         every { gate.vehicleSnapshot() } returns snapshot(soc = 50)
         every { gate.snapshotAgeMs() } returns 7_400L
         coEvery { battery.refresh() } returns
-            BatteryState(50f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+            BatteryState(50f, 100f, null, null, autoserviceAvailable = true)
         coEvery { range.estimateDetailed(any(), any()) } returns null
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertEquals(7L, out.getLong("age_s"))
@@ -108,7 +107,7 @@ class AgentToolsReadTest {
     @Test fun vehicle_state_omits_age_when_unknown() = runTest {
         every { gate.vehicleSnapshot() } returns snapshot(soc = 50)
         coEvery { battery.refresh() } returns
-            BatteryState(50f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+            BatteryState(50f, 100f, null, null, autoserviceAvailable = true)
         coEvery { range.estimateDetailed(any(), any()) } returns null
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertTrue(!out.has("age_s"))
@@ -382,7 +381,7 @@ class AgentToolsReadTest {
             occupancyRL = 1, occupancyRM = 1, occupancyRR = 2,
             lightLevel = 2, keyBatteryStatus = 0, rain = 1,
         )
-        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { battery.refresh() } returns BatteryState(80f, 100f, null, null, autoserviceAvailable = true)
         coEvery { range.estimate(any(), any()) } returns null
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertTrue(out.getBoolean("seatbelt_driver_fastened"))
@@ -399,7 +398,7 @@ class AgentToolsReadTest {
 
     @Test fun vehicle_state_absent_sensors_omit_keys() = runTest {
         every { gate.vehicleSnapshot() } returns snapshot(soc = 50)
-        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { battery.refresh() } returns BatteryState(80f, 100f, null, null, autoserviceAvailable = true)
         coEvery { range.estimate(any(), any()) } returns null
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertFalse(out.has("seatbelt_front_passenger_fastened"))
@@ -414,7 +413,7 @@ class AgentToolsReadTest {
         every { gate.vehicleSnapshot() } returns snapshot(speed = 40).copy(
             seatbeltFL = 1, seatbeltFR = 0, occupancyFR = 2,
         )
-        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { battery.refresh() } returns BatteryState(80f, 100f, null, null, autoserviceAvailable = true)
         coEvery { range.estimate(any(), any()) } returns null
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertTrue(out.has("seatbelt_warning"))
@@ -422,7 +421,7 @@ class AgentToolsReadTest {
 
     @Test fun vehicle_state_warns_on_unbuckled_driver_while_moving() = runTest {
         every { gate.vehicleSnapshot() } returns snapshot(speed = 40).copy(seatbeltFL = 0)
-        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { battery.refresh() } returns BatteryState(80f, 100f, null, null, autoserviceAvailable = true)
         coEvery { range.estimate(any(), any()) } returns null
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertTrue(out.has("seatbelt_warning"))
@@ -432,7 +431,7 @@ class AgentToolsReadTest {
         every { gate.vehicleSnapshot() } returns snapshot(speed = 0).copy(
             seatbeltFL = 0, seatbeltFR = 0, occupancyFR = 2,
         )
-        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { battery.refresh() } returns BatteryState(80f, 100f, null, null, autoserviceAvailable = true)
         coEvery { range.estimate(any(), any()) } returns null
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertFalse(out.has("seatbelt_warning"))
@@ -504,10 +503,29 @@ class AgentToolsReadTest {
 
     @Test fun `lifetime km and kwh from battery state`() = runTest {
         every { gate.vehicleSnapshot() } returns snapshot(soc = 80)
-        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, 24513.5f, 4321.25f, autoserviceAvailable = true)
+        coEvery { battery.refresh() } returns BatteryState(80f, 100f, 24513.5f, 4321.25f, autoserviceAvailable = true)
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertEquals(24513.5, out.getDouble("lifetime_km"), 0.01)
         assertEquals(4321.25, out.getDouble("lifetime_kwh"), 0.01)
+    }
+
+    @Test fun stats_summary_week_serializes_metrics() = runTest {
+        coEvery { insightsManager.dynamicsFor(7) } returns listOf(
+            DynamicMetric(label = "Расход", current = "18.2 кВтч/100", previous = "19.0",
+                changePct = -4.2, sentiment = "good", section = null, kind = "consumption"))
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_stats_summary", "{}")))
+        val arr = out.getJSONArray("metrics")
+        assertEquals(1, arr.length())
+        assertEquals("Расход", arr.getJSONObject(0).getString("label"))
+        assertEquals("18.2 кВтч/100", arr.getJSONObject(0).getString("current"))
+        assertEquals(-4.2, arr.getJSONObject(0).getDouble("change_pct"), 0.01)
+    }
+
+    @Test fun stats_summary_month_uses_30_days() = runTest {
+        coEvery { insightsManager.dynamicsFor(30) } returns emptyList()
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_stats_summary", """{"period":"month"}""")))
+        assertTrue(out.has("error"))   // empty -> honest "no data" error
+        coVerify { insightsManager.dynamicsFor(30) }
     }
 
     companion object {
