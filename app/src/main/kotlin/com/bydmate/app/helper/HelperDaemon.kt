@@ -976,6 +976,9 @@ fun main(args: Array<String>) {
     System.out.println("READY via=$transport pid=${android.os.Process.myPid()}")
     System.out.flush()
 
+    // Keeps "5 GHz, auto channel" from killing the hotspot on firmware that can't start it (exits at once elsewhere).
+    HotspotChannelGuard.start(systemContext)
+
     // Keepalive: Looper.loop() blocks this thread indefinitely so main() never returns
     // and the process stays alive. Incoming binder transactions are dispatched by the
     // binder threadpool that app_process starts via ProcessState::startThreadPool() in
