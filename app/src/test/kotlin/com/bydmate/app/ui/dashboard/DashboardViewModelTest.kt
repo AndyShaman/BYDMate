@@ -688,6 +688,17 @@ class DashboardViewModelTest {
         coVerify { calc.tripRateAt(match { it >= before }) }
     }
 
+    @Test
+    fun toggle_trip_expanded_is_mutually_exclusive() = runTest {
+        val vm = buildViewModel(fakeAutoservice = FakeAutoservice(null, available = false))
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.toggleTripExpanded(1)
+        assertTrue(vm.uiState.value.trip1Expanded)
+        vm.toggleTripExpanded(2)
+        assertTrue(vm.uiState.value.trip2Expanded)
+        assertFalse(vm.uiState.value.trip1Expanded)
+    }
+
     /**
      * Recording-stub test: when the VM starts with no active session
      * (TrackingService.sessionStartedAt = null), the DAO must be called
