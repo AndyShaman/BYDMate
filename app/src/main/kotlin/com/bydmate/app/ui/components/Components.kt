@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.domain.BatteryThresholds
 import com.bydmate.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -59,9 +60,9 @@ import java.util.concurrent.TimeUnit
 // -- Helper functions --
 
 fun socColor(soc: Int): Color = when {
-    soc > 50 -> SocGreen
-    soc >= 20 -> SocYellow
-    else -> SocRed
+    soc < BatteryThresholds.SOC_CRIT -> SocRed
+    soc < BatteryThresholds.SOC_WARN -> SocYellow
+    else -> SocGreen
 }
 
 data class ConsumptionThresholds(val good: Double, val bad: Double) {

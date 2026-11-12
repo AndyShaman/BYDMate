@@ -1,6 +1,8 @@
 // app/src/main/kotlin/com/bydmate/app/data/automation/InsightToneLogic.kt
 package com.bydmate.app.data.automation
 
+import com.bydmate.app.domain.BatteryThresholds
+
 object InsightToneLogic {
     fun consumptionTone(changePct: Double?): String = when {
         changePct == null -> "good"
@@ -11,8 +13,8 @@ object InsightToneLogic {
 
     fun voltage12vTone(volts: Double?): String = when {
         volts == null -> "good"
-        volts < 11.8 -> "critical"
-        volts < 12.4 -> "warning"
+        volts < BatteryThresholds.V12_CRIT -> "critical"
+        volts < BatteryThresholds.V12_WARN -> "warning"
         else -> "good"
     }
 

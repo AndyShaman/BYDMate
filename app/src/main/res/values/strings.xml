@@ -910,7 +910,7 @@
     <string name="local_insight_idle_month">На стоянке с мотором: %1$.1f кВт·ч за %2$s, %3$d%% месячного расхода</string>
     <string name="local_insight_12v_critical_title">12V критично низкий</string>
     <string name="local_insight_12v_critical_summary">Бортовая сеть %1$.1f В — проверьте аккумулятор</string>
-    <string name="local_insight_12v_low">12V сейчас %1$.1f В — ниже нормы 12.4 В</string>
+    <string name="local_insight_12v_low">12V сейчас %1$.1f В — ниже нормы 12.5 В</string>
     <string name="local_insight_12v_falling">12V снижается: %1$.2f → %2$.2f В за неделю</string>
     <string name="local_insight_12v_falling_month">12V снижается: %1$.2f → %2$.2f В за месяц</string>
     <string name="local_insight_cell_critical_title">Большой разброс банок</string>

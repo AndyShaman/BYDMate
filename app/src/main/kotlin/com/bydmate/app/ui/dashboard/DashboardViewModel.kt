@@ -19,6 +19,7 @@ import com.bydmate.app.data.trips.TripCounterMath
 import com.bydmate.app.data.trips.TripCounterResets
 import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.data.trips.TripResetState
+import com.bydmate.app.domain.BatteryThresholds
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
@@ -575,8 +576,8 @@ class DashboardViewModel @Inject constructor(
     private fun calculate12vStatus(voltage: Double?): String {
         if (voltage == null) return "ok"
         return when {
-            voltage < 11.8 -> "critical"
-            voltage < 12.4 -> "warning"
+            voltage < BatteryThresholds.V12_CRIT -> "critical"
+            voltage < BatteryThresholds.V12_WARN -> "warning"
             else -> "ok"
         }
     }
