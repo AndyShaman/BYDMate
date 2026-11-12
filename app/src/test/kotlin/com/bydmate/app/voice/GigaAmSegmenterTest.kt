@@ -457,4 +457,16 @@ class GigaAmSegmenterTest {
             trace.events().map { it.replace(Regex(""" ms=\d+"""), " ms=N") },
         )
     }
+
+    @Test fun `warm vad - a prebuilt vad is traced as prebuilt`() = runTest {
+        val engine = warmEngine(mutableListOf(), ManualExecutor())
+        engine.warmUp()
+
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+
+        assertEquals(
+            listOf("voice  vad-ready ms=N prebuilt=true #1"),
+            trace.events().map { it.replace(Regex(""" ms=\d+"""), " ms=N") },
+        )
+    }
 }
