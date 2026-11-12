@@ -127,6 +127,11 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     // rules right at save time (issue #51).
     private data class EvalState(val triggersHash: Int, val matched: Boolean)
     private val lastEvalResults = ConcurrentHashMap<Long, EvalState>()
+
+    // Per rule: what each trigger answered at the last GPS point (only the place slots are read).
+    // Absent = no point seen yet for this rule, so inside/outside is unknown (#418).
+    private data class PlaceMemo(val triggersHash: Int, val results: List<Boolean>)
+    private val lastPlaceResults = ConcurrentHashMap<Long, PlaceMemo>()
     // Once-per-trip gate: ruleId -> tripStartedAt captured when rule last fired
     private val lastFiredTripByRule = ConcurrentHashMap<Long, Long>()
     // Per-rule consumption marker for the network_available trigger. Tracks the
@@ -320,6 +325,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // rules. O(rules) per tick — negligible at typical N (≤ a few dozen).
         val activeIds = rules.mapTo(HashSet()) { it.id }
         lastEvalResults.keys.retainAll(activeIds)
+        lastPlaceResults.keys.retainAll(activeIds)
         lastFiredTripByRule.keys.retainAll(activeIds)
         lastSeenNetworkAvailableAt.keys.retainAll(activeIds)
         // serviceStartConsumed is not pruned: a rule disabled for a tick must not fire twice.
@@ -368,7 +374,11 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 }
 
                 val serviceStartActive = serviceStartWindow && rule.id !in serviceStartConsumed
-                val perTrigger = evaluateEachTrigger(triggers, data, location, placesById, serviceStartActive, networkEdge)
+                val triggersHash = (rule.triggers + rule.triggerLogic).hashCode()
+                val (perTrigger, firstPointOnly) = withPlaceMemory(
+                    rule, triggers, triggersHash, location != null,
+                    evaluateEachTrigger(triggers, data, location, placesById, serviceStartActive, networkEdge),
+                )
                 val matched = combineByLogic(perTrigger, rule.triggerLogic)
                 if (!matched) logMissingData(rule, triggers, data)
 
@@ -385,15 +395,16 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 // сработал сам по себе"). A front must happen while the rule is able
                 // to act on it.
                 val matchedViaEvent = matchedViaEventTrigger(triggers, perTrigger, rule.triggerLogic)
-                val triggersHash = (rule.triggers + rule.triggerLogic).hashCode()
                 val state = EvalState(triggersHash, matched)
                 val shouldFire = if (matchedViaEvent) {
                     lastEvalResults[rule.id] = state
                     matched
-                } else if (location == null && triggers.any { it.kind in PLACE_KINDS }) {
-                    // No GPS point yet (#418): inside or outside is unknown, not "outside".
-                    // Nothing is remembered, so the first point only seeds the state below
-                    // and a car started inside the place does not "enter" it.
+                } else if (firstPointOnly) {
+                    // #418: the first GPS point only tells where the car already is. A match
+                    // that exists only because of it is remembered, not fired.
+                    lastEvalResults[rule.id] = state
+                    Log.i(TAG, "rule ${rule.id} '${rule.name}': true at the first GPS point, remembered without firing")
+                    AutoTrace.edge(rule.id, EdgeOutcome.SEED_FIRST_CHECK, SRC_POLL)
                     false
                 } else {
                     val previous = lastEvalResults.put(rule.id, state)
@@ -587,6 +598,34 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 compare(actual, trigger.operator, expected)
             }
         }
+    }
+
+    /**
+     * Place triggers need a GPS point. Without one each keeps its last known answer (false
+     * before the first point), so the other conditions of the rule go on working and a GPS
+     * gap does not look like leaving the place. Returns the answers to use on this tick and
+     * whether the rule matches only because of its first GPS point (#418): the car did not
+     * enter or leave anything, it was started there.
+     */
+    private fun withPlaceMemory(
+        rule: RuleEntity,
+        triggers: List<TriggerDef>,
+        triggersHash: Int,
+        hasFix: Boolean,
+        perTrigger: List<Boolean>,
+    ): Pair<List<Boolean>, Boolean> {
+        if (triggers.none { it.kind in PLACE_KINDS }) return perTrigger to false
+        val memo = lastPlaceResults[rule.id]?.takeIf { it.triggersHash == triggersHash }
+        if (!hasFix) {
+            if (memo == null) return perTrigger to false
+            return perTrigger.mapIndexed { i, r -> if (triggers[i].kind in PLACE_KINDS) memo.results[i] else r } to false
+        }
+        lastPlaceResults[rule.id] = PlaceMemo(triggersHash, perTrigger)
+        if (memo != null) return perTrigger to false
+        val withoutPlaces = perTrigger.mapIndexed { i, r -> r && triggers[i].kind !in PLACE_KINDS }
+        val onlyByFirstPoint = combineByLogic(perTrigger, rule.triggerLogic) &&
+            !combineByLogic(withoutPlaces, rule.triggerLogic)
+        return perTrigger to onlyByFirstPoint
     }
 
     private fun combineByLogic(results: List<Boolean>, logic: String): Boolean = when (logic) {
