@@ -236,8 +236,9 @@ class AutomationEnginePlaceStartupTest {
         coVerify(exactly = 0) { ruleDao.updateLastTriggered(any(), any()) }
     }
 
-    @Test fun `start of the app at a remembered place fires before the first GPS point`() = runBlocking {
-        // «Запуск BYDMate» AND «в месте»: the car stood in the yard when it was switched off.
+    @Test fun `a rule with the app-start condition works as before, without the saved place`() = runBlocking {
+        // «Запуск BYDMate» AND «в месте»: as in 4.3.1 it needs a real GPS point, the answer
+        // saved before the restart is not used for rules driven by an event.
         fun startAtPlace() = placeRule("place_enter").let { rule ->
             rule.copy(
                 triggers = TriggerDef.listToJson(
@@ -250,8 +251,10 @@ class AutomationEnginePlaceStartupTest {
         before.tick(inside)
 
         val (engine, ruleDao) = setup(startAtPlace())
-        engine.tick(null)     // cold start, no fix yet
+        engine.tick(null)     // cold start, no fix yet: nothing fires on yesterday's answer
+        coVerify(exactly = 0) { ruleDao.updateLastTriggered(any(), any()) }
 
+        engine.tick(inside)   // the point comes inside the start window: fires, as before
         coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
     }
 }
