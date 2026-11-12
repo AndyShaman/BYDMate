@@ -64,6 +64,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         private const val SRC_POLL = "poll"
         private const val SRC_VOICE = "voice"
         private val PLACE_KINDS = setOf("place_enter", "place_exit")
+        private const val PLACE_PREFS = "automation_place_state"
 
         const val ACTION_CONFIRM = "com.bydmate.app.AUTOMATION_CONFIRM"
         const val ACTION_CANCEL = "com.bydmate.app.AUTOMATION_CANCEL"
@@ -128,10 +129,41 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     private data class EvalState(val triggersHash: Int, val matched: Boolean)
     private val lastEvalResults = ConcurrentHashMap<Long, EvalState>()
 
-    // Per rule: what each trigger answered at the last GPS point (only the place slots are read).
+    // Per rule: what each place trigger answered at the last GPS point (other slots are false).
     // Absent = no point seen yet for this rule, so inside/outside is unknown (#418).
-    private data class PlaceMemo(val triggersHash: Int, val results: List<Boolean>)
+    // Kept on disk too: the car does not move while it is off, so after a restart a late
+    // first point is compared with where the car stood, not taken as the starting state.
+    private data class PlaceMemo(val triggersHash: Int, val results: List<Boolean>) {
+        fun encode(): String = "$triggersHash:" + results.joinToString("") { if (it) "1" else "0" }
+
+        companion object {
+            fun decode(text: String): PlaceMemo? {
+                val hash = text.substringBefore(':').toIntOrNull() ?: return null
+                return PlaceMemo(hash, text.substringAfter(':', "").map { it == '1' })
+            }
+        }
+    }
     private val lastPlaceResults = ConcurrentHashMap<Long, PlaceMemo>()
+    private val placePrefs by lazy { context.getSharedPreferences(PLACE_PREFS, Context.MODE_PRIVATE) }
+    private var placeMemoLoaded = false
+
+    /** Reads the saved place answers once and drops those of rules that are gone or disabled. */
+    private fun loadPlaceMemo(activeIds: Set<Long>) {
+        if (placeMemoLoaded) return
+        placeMemoLoaded = true
+        val stale = placePrefs.edit()
+        for ((key, value) in placePrefs.all) {
+            val id = key.toLongOrNull()
+            val memo = (value as? String)?.let { PlaceMemo.decode(it) }
+            if (id != null && id in activeIds && memo != null) lastPlaceResults[id] = memo else stale.remove(key)
+        }
+        stale.apply()
+    }
+
+    private fun rememberPlaces(ruleId: Long, memo: PlaceMemo, previous: PlaceMemo?) {
+        lastPlaceResults[ruleId] = memo
+        if (memo != previous) placePrefs.edit().putString(ruleId.toString(), memo.encode()).apply()
+    }
     // Once-per-trip gate: ruleId -> tripStartedAt captured when rule last fired
     private val lastFiredTripByRule = ConcurrentHashMap<Long, Long>()
     // Per-rule consumption marker for the network_available trigger. Tracks the
@@ -325,6 +357,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // rules. O(rules) per tick — negligible at typical N (≤ a few dozen).
         val activeIds = rules.mapTo(HashSet()) { it.id }
         lastEvalResults.keys.retainAll(activeIds)
+        loadPlaceMemo(activeIds)
         lastPlaceResults.keys.retainAll(activeIds)
         lastFiredTripByRule.keys.retainAll(activeIds)
         lastSeenNetworkAvailableAt.keys.retainAll(activeIds)
@@ -618,9 +651,13 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val memo = lastPlaceResults[rule.id]?.takeIf { it.triggersHash == triggersHash }
         if (!hasFix) {
             if (memo == null) return perTrigger to false
-            return perTrigger.mapIndexed { i, r -> if (triggers[i].kind in PLACE_KINDS) memo.results[i] else r } to false
+            return perTrigger.mapIndexed { i, r ->
+                if (triggers[i].kind in PLACE_KINDS) memo.results.getOrElse(i) { false } else r
+            } to false
         }
-        lastPlaceResults[rule.id] = PlaceMemo(triggersHash, perTrigger)
+        // Only the place slots are kept, so a speed or SOC condition changing does not rewrite the file.
+        val places = perTrigger.mapIndexed { i, r -> r && triggers[i].kind in PLACE_KINDS }
+        rememberPlaces(rule.id, PlaceMemo(triggersHash, places), memo)
         if (memo != null) return perTrigger to false
         val withoutPlaces = perTrigger.mapIndexed { i, r -> r && triggers[i].kind !in PLACE_KINDS }
         val onlyByFirstPoint = combineByLogic(perTrigger, rule.triggerLogic) &&
