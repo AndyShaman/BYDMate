@@ -758,7 +758,7 @@
     <string name="local_insight_idle_month">Inativo com o motor ligado: %1$.1f kWh durante %2$s, %3$d%% do uso mensal</string>
     <string name="local_insight_12v_critical_title">12V criticamente baixa</string>
     <string name="local_insight_12v_critical_summary">Bateria aux. %1$.1f V — verifique-a</string>
-    <string name="local_insight_12v_low">12V agora %1$.2f V — abaixo do normal 12.5 V</string>
+    <string name="local_insight_12v_low">12V agora %1$.2f V, abaixo do normal 12,5 V</string>
     <string name="local_insight_12v_falling">12V caindo: %1$.2f para %2$.2f V durante a semana</string>
     <string name="local_insight_12v_falling_month">12V caindo: %1$.2f para %2$.2f V durante o mês</string>
     <string name="local_insight_cell_critical_title">Grande variação entre células</string>

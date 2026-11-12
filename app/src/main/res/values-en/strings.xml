@@ -764,7 +764,7 @@
     <string name="local_insight_idle_month">Idle with engine on: %1$.1f kWh over %2$s, %3$d%% of monthly use</string>
     <string name="local_insight_12v_critical_title">12V critically low</string>
     <string name="local_insight_12v_critical_summary">Aux battery %1$.1f V — have it checked</string>
-    <string name="local_insight_12v_low">12V now %1$.2f V — below normal 12.5 V</string>
+    <string name="local_insight_12v_low">12V now %1$.2f V, below normal 12.5 V</string>
     <string name="local_insight_12v_falling">12V falling: %1$.2f to %2$.2f V over the week</string>
     <string name="local_insight_12v_falling_month">12V falling: %1$.2f to %2$.2f V over the month</string>
     <string name="local_insight_cell_critical_title">Large cell spread</string>

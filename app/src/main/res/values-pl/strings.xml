@@ -908,7 +908,7 @@
     <string name="local_insight_idle_month">Na postoju z włączonym zapłonem: %1$.1f kWh przez %2$s, %3$d%% miesięcznego zużycia</string>
     <string name="local_insight_12v_critical_title">12V krytycznie niskie</string>
     <string name="local_insight_12v_critical_summary">Instalacja 12 V ma %1$.1f V — sprawdź akumulator</string>
-    <string name="local_insight_12v_low">12V teraz %1$.2f V — poniżej normy 12.5 V</string>
+    <string name="local_insight_12v_low">12V teraz %1$.2f V, poniżej normy 12,5 V</string>
     <string name="local_insight_12v_falling">12V spada: %1$.2f → %2$.2f V w ciągu tygodnia</string>
     <string name="local_insight_12v_falling_month">12V spada: %1$.2f → %2$.2f V w ciągu miesiąca</string>
     <string name="local_insight_cell_critical_title">Duży rozrzut ogniw</string>
