@@ -42,6 +42,25 @@ class NaviNotificationShapeTest {
         assertFalse(line, line.contains("-16777216"))
     }
 
+    @Test fun extras_keys_are_sorted_and_views_keep_their_field_names() {
+        val line = NaviNotificationShape.line(
+            kind = "empty",
+            extrasKeys = setOf("android.text", "android.title", "android.progress"),
+            title = null, text = null, subText = null,
+            views = mapOf("contentView" to emptyList(), "bigContentView" to content.take(1)),
+        )
+        assertEquals(
+            "nav notif shape [empty]: extras=[android.progress,android.text,android.title] title=- text=- sub=- " +
+                "contentView=[] bigContentView=[titleView.setText(len=5)]",
+            line,
+        )
+    }
+
+    @Test fun absent_views_say_so() {
+        val line = NaviNotificationShape.line("empty", emptySet(), null, null, null, emptyMap())
+        assertTrue(line, line.endsWith("views=none"))
+    }
+
     // RemoteViews actions are read by reflection; these fakes carry the same field names.
     @Suppress("unused") private class FakeAction(val methodName: String, val viewId: Int, val value: Any?)
     @Suppress("unused") private class NestedViewsAdd(val viewId: Int)

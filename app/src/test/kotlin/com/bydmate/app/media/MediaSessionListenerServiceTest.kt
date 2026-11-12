@@ -126,6 +126,39 @@ class MediaSessionListenerServiceTest {
     }
 
     @Test
+    fun `a navigator post is traced with numbers only, a repeat or a quick change of its shape is not`() {
+        val first = traced { naviPost("500 м", "Поверните направо") }
+        assertEquals(
+            listOf("navi notif posted: pkg=ru.yandex.yandexnavi id=1 ongoing=true channel=null kind=extras man=2 " +
+                "dist=500 roadLen=17 skippedChanges=0"),
+            first,
+        )
+        assertTrue(traced { naviPost("450 м", "Поверните направо") }.isEmpty())
+        // A change of shape within 5 s of the last line is counted for the next line instead.
+        assertTrue(traced { naviPost("450 м", "Тверская", ongoing = false) }.isEmpty())
+    }
+
+    @Test
+    fun `a post the hub does not take is traced as empty`() {
+        val lines = traced { naviPost("Навигатор", "") }
+        assertEquals(
+            listOf("navi notif posted: pkg=ru.yandex.yandexnavi id=1 ongoing=true channel=null kind=empty man=0 " +
+                "dist=0 roadLen=0 skippedChanges=0"),
+            lines,
+        )
+    }
+
+    @Test
+    fun `a media post or removal is not traced`() {
+        val media = Notification().apply { category = Notification.CATEGORY_TRANSPORT }
+        assertTrue(traced { service.onNotificationRemoved(sbn("ru.yandex.yandexnavi", media)) }.isEmpty())
+        assertTrue(traced { service.onNotificationPosted(sbn("ru.yandex.yandexnavi", media)) }.isEmpty())
+        // Control: the same calls for a navigator notification are traced.
+        assertEquals(1, traced { service.onNotificationRemoved(sbn("ru.yandex.yandexnavi", Notification())) }.size)
+        assertEquals(1, traced { naviPost("500 м", "Тверская") }.size)
+    }
+
+    @Test
     fun `a removal whose notification cannot be read still clears the holder and schedules the grace check`() {
         val unreadable = Notification().apply { extras = null }
         naviPost("500 м", "Тверская")
@@ -191,6 +224,11 @@ class MediaSessionListenerServiceTest {
     }
 
     @Test
+    fun `extras post with a recognised maneuver logs nothing`() {
+        assertTrue(postAndRun("ru.yandex.yandexnavi", "500 м", "Поверните направо").isEmpty())
+    }
+
+    @Test
     fun `a notification without guidance logs its shape under its package (301)`() {
         val shapes = mutableListOf<String>()
         service.emptyShapeSink = { shapes.add(it) }
@@ -198,6 +236,11 @@ class MediaSessionListenerServiceTest {
         assertEquals(1, shapes.size)
         assertTrue(shapes[0], shapes[0].startsWith("nav notif shape [empty ru.yandex.yandexnavi]: "))
         assertFalse(shapes[0], shapes[0].contains("Тверская"))
+    }
+
+    @Test
+    fun `extras post without a distance logs nothing`() {
+        assertTrue(postAndRun("ru.yandex.yandexnavi", "Тверская", "").isEmpty())
     }
 
     @Test
