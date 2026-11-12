@@ -8,10 +8,10 @@ import org.junit.Test
 /** Fake that overrides only the abstract members, so isFreeformSplitInUse() is the default. */
 private class AbstractOnlySplitPrefs(private val enabled: Boolean) : SplitPreferences {
     override fun getLastPair(): SplitPair? = null
-    override fun saveLastPair(pair: SplitPair) {}
-    override fun clearLastPair() {}
+    override fun saveLastPair(pair: SplitPair) = Unit
+    override fun clearLastPair() = Unit
     override fun isFeatureEnabled(): Boolean = enabled
-    override fun setFeatureEnabled(enabled: Boolean) {}
+    override fun setFeatureEnabled(enabled: Boolean) = Unit
 }
 
 /** The split consumes enable_freeform_support only on the freeform path: feature on, not the

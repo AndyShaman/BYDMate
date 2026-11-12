@@ -27,10 +27,10 @@ private class FakeSplitPrefsInUse(
 ) : SplitPreferences {
     override fun isFeatureEnabled(): Boolean = featureEnabled
     override fun isFreeformSplitInUse(): Boolean = inUse
-    override fun setFeatureEnabled(enabled: Boolean) {}
+    override fun setFeatureEnabled(enabled: Boolean) = Unit
     override fun getLastPair(): SplitPair? = null
-    override fun saveLastPair(pair: SplitPair) {}
-    override fun clearLastPair() {}
+    override fun saveLastPair(pair: SplitPair) = Unit
+    override fun clearLastPair() = Unit
 }
 
 /** The freeform flag follows whether the split actually uses it, not the bare feature switch:
