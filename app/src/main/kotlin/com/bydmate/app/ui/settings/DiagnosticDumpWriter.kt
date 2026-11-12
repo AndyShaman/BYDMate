@@ -572,6 +572,14 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
                 val pickedName = com.bydmate.app.cluster.pickProjectionDisplayName(
                     projectionDisplays.map { it.name }, preferFullDisplay)
                 val clusterDisplay = projectionDisplays.firstOrNull { it.name == pickedName }
+                // Both surfaces with their sizes: «Полный экран приборки» only matters where
+                // the car has two, and only these lines tell which firmwares do.
+                appendLine("surfaces: " + if (projectionDisplays.isEmpty()) "(none)" else
+                    projectionDisplays.joinToString(" ") { d ->
+                        val p = android.graphics.Point()
+                        @Suppress("DEPRECATION") d.getRealSize(p)
+                        "${d.name}=${p.x}x${p.y}"
+                    })
                 if (clusterDisplay == null) {
                     appendLine("display: (no XDJAScreenProjection surface on this car)")
                     appendLine("bounds: n/a")

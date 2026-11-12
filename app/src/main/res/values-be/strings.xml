@@ -908,7 +908,7 @@
     <string name="local_insight_idle_month">На стаянцы з маторам: %1$.1f кВт·гадз за %2$s, %3$d%% месячнага расходу</string>
     <string name="local_insight_12v_critical_title">12V крытычна нізкі</string>
     <string name="local_insight_12v_critical_summary">Бартавая сетка %1$.1f В — праверце акумулятар</string>
-    <string name="local_insight_12v_low">12V зараз %1$.1f В — ніжэй за норму 12.5 В</string>
+    <string name="local_insight_12v_low">12V зараз %1$.2f В — ніжэй за норму 12.5 В</string>
     <string name="local_insight_12v_falling">12V зніжаецца: %1$.2f → %2$.2f В за тыдзень</string>
     <string name="local_insight_12v_falling_month">12V зніжаецца: %1$.2f → %2$.2f В за месяц</string>
     <string name="local_insight_cell_critical_title">Вялікі разбег банак</string>

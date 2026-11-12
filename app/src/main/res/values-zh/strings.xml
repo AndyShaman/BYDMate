@@ -740,7 +740,7 @@
     <string name="local_insight_idle_month">怠速耗电 %1$.1f kWh / %2$s，占本月 %3$d%%</string>
     <string name="local_insight_12v_critical_title">12V 电压过低</string>
     <string name="local_insight_12v_critical_summary">辅电池 %1$.1f V，请检查</string>
-    <string name="local_insight_12v_low">12V 当前 %1$.1f V，低于正常 12.5 V</string>
+    <string name="local_insight_12v_low">12V 当前 %1$.2f V，低于正常 12.5 V</string>
     <string name="local_insight_12v_falling">12V 一周下降：%1$.2f → %2$.2f V</string>
     <string name="local_insight_12v_falling_month">12V 一个月下降：%1$.2f → %2$.2f V</string>
     <string name="local_insight_cell_critical_title">电芯压差过大</string>

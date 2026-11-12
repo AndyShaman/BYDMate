@@ -63,6 +63,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // Trace `src=` of the edges that do not come from a manual trigger kind.
         private const val SRC_POLL = "poll"
         private const val SRC_VOICE = "voice"
+        private val PLACE_KINDS = setOf("place_enter", "place_exit")
 
         const val ACTION_CONFIRM = "com.bydmate.app.AUTOMATION_CONFIRM"
         const val ACTION_CANCEL = "com.bydmate.app.AUTOMATION_CANCEL"
@@ -389,6 +390,11 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 val shouldFire = if (matchedViaEvent) {
                     lastEvalResults[rule.id] = state
                     matched
+                } else if (location == null && triggers.any { it.kind in PLACE_KINDS }) {
+                    // No GPS point yet (#418): inside or outside is unknown, not "outside".
+                    // Nothing is remembered, so the first point only seeds the state below
+                    // and a car started inside the place does not "enter" it.
+                    false
                 } else {
                     val previous = lastEvalResults.put(rule.id, state)
                     // Audit point 1: a condition already true when first seen is only remembered.
