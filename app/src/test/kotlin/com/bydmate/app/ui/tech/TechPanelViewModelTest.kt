@@ -338,6 +338,22 @@ class TechPanelViewModelTest {
         assertEquals(true, vm.uiState.value.autoserviceOnline)
     }
 
+    // --- hints --------------------------------------------------------------
+
+    @Test
+    fun `only one hint is open at a time`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(vm.uiState.value.openHint)
+        vm.toggleHint("insulation")
+        assertEquals("insulation", vm.uiState.value.openHint)
+        vm.toggleHint("cells")
+        assertEquals("cells", vm.uiState.value.openHint)
+        vm.toggleHint("cells")
+        assertNull("tapping the open hint closes it", vm.uiState.value.openHint)
+    }
+
     // --- derived values -----------------------------------------------------
 
     /** 1% of a 72.9 kWh pack is 729 W·h, so 1458 W drains 2%/h. */
@@ -535,6 +551,12 @@ class TechPanelViewModelTest {
         assertFalse(withFuel.copy(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.UNKNOWN).showFuel)
         assertTrue(withFuel.copy(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID).showFuel)
         assertFalse(TechPanelUiState(vehicleKind = com.bydmate.app.data.nativestack.VehicleKind.HYBRID).showFuel)
+    }
+
+    @Test
+    fun `an EV keeps today's visible cards`() {
+        val state = TechPanelUiState(motorRpmFront = 1200, soc = 43)
+        assertEquals(listOf(TechCard.BATTERY_NOW, TechCard.MOTORS), state.visibleCards)
     }
 
     // --- full cycles --------------------------------------------------------
