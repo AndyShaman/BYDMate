@@ -196,4 +196,40 @@ class AutomationEnginePlaceStartupTest {
 
         coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
     }
+
+    // The car does not move while it is off: what the engine knew about the place before the
+    // restart still holds, so a late first GPS point is compared with it, not swallowed.
+
+    @Test fun `a leave rule fires after a restart inside when the first GPS point is already outside`() = runBlocking {
+        val (before, _) = setup("place_exit")
+        before.tick(inside)   // parked in the garage, engine goes down with the car
+
+        val (engine, ruleDao) = setup("place_exit")
+        engine.tick(null)     // cold start under a roof: no fix yet
+        engine.tick(outside)  // the first fix comes when the car is already on the street
+
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `an enter rule stays silent after a restart inside the place`() = runBlocking {
+        val (before, _) = setup()
+        before.tick(inside)
+
+        val (engine, ruleDao) = setup()
+        engine.tick(null)
+        engine.tick(inside)
+
+        coVerify(exactly = 0) { ruleDao.updateLastTriggered(any(), any()) }
+    }
+
+    @Test fun `an enter rule fires after a restart outside when the first GPS point is already inside`() = runBlocking {
+        val (before, _) = setup()
+        before.tick(outside)
+
+        val (engine, ruleDao) = setup()
+        engine.tick(null)
+        engine.tick(inside)
+
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+    }
 }
