@@ -28,9 +28,13 @@ class CloudOverWifiManagerTest {
         override fun setEnabled(enabled: Boolean) { this.enabled = enabled }
         override fun savedProfile(): String? = saved
         override fun setSavedProfile(profile: String?) { saved = profile }
+        var profileMissingFp: String? = null
+        override fun profileMissingFingerprint(): String? = profileMissingFp
+        override fun setProfileMissingFingerprint(fingerprint: String?) { profileMissingFp = fingerprint }
     }
 
     private class FakeSystem : CloudOverWifiSystem {
+        override fun firmwareFingerprint(): String = "byd/test/fp:1"
         var wifiInternet = true
         var onWifiCheck: () -> Unit = {}
         override fun hasValidatedWifi(): Boolean {
@@ -625,6 +629,8 @@ class CloudOverWifiManagerTest {
 
         assertEquals(CloudOverWifiState.ProfileRejected, m.state.value)
         assertNull(prefs.saved)
+        // The factory property is there: this car is not one without a profile (#330).
+        assertNull(prefs.profileMissingFp)
     }
 
     @Test

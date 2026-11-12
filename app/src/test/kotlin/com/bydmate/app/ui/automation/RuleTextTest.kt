@@ -287,7 +287,7 @@ class RuleTextTest {
         val note = ActionDef("", "Уведомление", "notification", """{"title":"Заряд","text":"t"}""")
         val sentry = ActionDef("", "Охрана", "sentry", "1")
         assertEquals(
-            "Подождать 30 с, уведомление «Заряд», режим охраны, включить",
+            "Пауза 30 с, уведомление «Заряд», режим охраны, включить",
             journalLine(run(recorded(pause), recorded(note), recorded(sentry)), ctx, now, zone).what,
         )
         assertEquals(

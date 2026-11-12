@@ -74,6 +74,16 @@ class LocalInsightEngineTest {
     }
 
     @Test
+    fun `12v below normal bullet prints the reading with two decimals`() {
+        // 12.45..12.49 read «сейчас 12,5 В — ниже нормы 12.5 В» with one decimal. The ru resources
+        // format with a decimal comma, so two decimals read «12,45».
+        val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 12.45)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        val bullet = result.insights.first { it.contains("ниже нормы") }
+        assertTrue(bullet, bullet.contains("12,45"))
+    }
+
+    @Test
     fun `12v below 12 0 gets the critical title, not the below normal bullet`() {
         val stats = baseStats(consumptionChangePct = 2.0, voltage12v = 11.9)
         val result = LocalInsightEngine.generate(stats, res("ru"), 7)

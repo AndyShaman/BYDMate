@@ -106,6 +106,7 @@ transport: vd auto_container=true freeform_reboot_pending=false
 projected_pkg: (none) target=(default)
 density: (not set this session) unsafe=(none)
 vd: id=-1 overlay_attached=false direct_display=-1 direct_marker=-1
+surfaces: (none)
 display: (no XDJAScreenProjection surface on this car)
 bounds: n/a
 daemon displays: (none)
