@@ -69,8 +69,19 @@ class AutomationEnginePlaceStartupTest {
         cooldownSeconds = 0,
     )
 
-    private fun setup(kind: String = "place_enter"): Pair<AutomationEngine, RuleDao> {
-        val rule = placeRule(kind)
+    /** «Въезд в место» OR «скорость > 5»: the speed condition must not wait for GPS. */
+    private fun placeOrSpeedRule() = placeRule("place_enter").let { rule ->
+        rule.copy(
+            triggerLogic = "OR",
+            triggers = TriggerDef.listToJson(
+                TriggerDef.listFromJson(rule.triggers) + TriggerDef("Speed", "车速", ">", "5", "speed")
+            ),
+        )
+    }
+
+    private fun setup(kind: String = "place_enter"): Pair<AutomationEngine, RuleDao> = setup(placeRule(kind))
+
+    private fun setup(rule: RuleEntity): Pair<AutomationEngine, RuleDao> {
         val ruleDao = mockk<RuleDao>(relaxed = true) {
             coEvery { getEnabled() } returns listOf(rule)
         }
@@ -90,9 +101,9 @@ class AutomationEnginePlaceStartupTest {
         return engine to ruleDao
     }
 
-    private suspend fun AutomationEngine.tick(location: Location?) {
+    private suspend fun AutomationEngine.tick(location: Location?, speed: Int? = null) {
         locationFlow.value = location
-        evaluate(diParsData(soc = 50), null)
+        evaluate(diParsData(soc = 50, speed = speed), null)
     }
 
     @Test fun `start-up inside the place does not fire on the first GPS point`() = runBlocking {
@@ -153,6 +164,34 @@ class AutomationEnginePlaceStartupTest {
         engine.tick(outside)
         engine.tick(inside)
         engine.tick(outside)
+        engine.tick(outside)
+
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `a place-or-speed rule fires on the speed front before the first GPS point`() = runBlocking {
+        val (engine, ruleDao) = setup(placeOrSpeedRule())
+
+        engine.tick(null, speed = 0)   // underground parking: no fix yet
+        engine.tick(null, speed = 10)  // the car moves off, still no fix
+
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `a place-or-speed rule does not fire when the first GPS point is inside the place`() = runBlocking {
+        val (engine, ruleDao) = setup(placeOrSpeedRule())
+
+        engine.tick(null, speed = 0)
+        engine.tick(inside, speed = 0)
+
+        coVerify(exactly = 0) { ruleDao.updateLastTriggered(any(), any()) }
+    }
+
+    @Test fun `a leave rule fires when GPS comes back outside after a gap`() = runBlocking {
+        val (engine, ruleDao) = setup("place_exit")
+
+        engine.tick(inside)
+        engine.tick(null)     // GPS lost under a roof: the car is still counted as inside
         engine.tick(outside)
 
         coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
