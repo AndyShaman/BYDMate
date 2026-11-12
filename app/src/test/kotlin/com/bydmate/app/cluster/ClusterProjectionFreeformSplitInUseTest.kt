@@ -104,9 +104,11 @@ class ClusterProjectionFreeformSplitInUseTest {
     }
 
     @Test
-    fun `realign writes 1 without a transport choice when the freeform split is in use`() {
+    fun `realign writes nothing without a transport choice even when the freeform split is in use`() {
+        // A driver who never chose a cluster transport keeps today's behaviour: the split
+        // start itself writes 1 (SplitSessionManager), the service start writes nothing.
         ClusterProjectionManager.splitPreferences = FakeSplitPrefsInUse(featureEnabled = true, inUse = true)
         realign()
-        assertEquals(listOf(1), written)
+        assertEquals(emptyList<Int>(), written)
     }
 }

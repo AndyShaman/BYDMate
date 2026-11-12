@@ -1214,10 +1214,12 @@ object ClusterProjectionManager {
         val appContext = context.applicationContext
         scope.launch {
             val splitInUse = splitPreferences.isFreeformSplitInUse()
-            // Skip passive users (no explicit transport or split choice) — their flag may be
-            // owned by a third-party app. A split-enabled user is always an active user.
+            // Skip drivers with no explicit transport choice — their flag may be owned by a
+            // third-party app, and for a split user SplitSessionManager writes 1 at the split
+            // start. This is what every released version did (the split state never reached
+            // this code), so it stays: only a driver with a transport choice is realigned.
             // [force] bypasses this guard for explicit user toggle actions.
-            if (!force && !hasTransportChoice(appContext) && !splitInUse) return@launch
+            if (!force && !hasTransportChoice(appContext)) return@launch
             // When direct is chosen (and split is off), the flag is already 1 from project().
             // Only VD/factory transport and the split consumer need this boot-time realignment.
             if (!force && effectiveDirect(appContext) && !splitInUse) return@launch
