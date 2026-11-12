@@ -25,13 +25,13 @@
     <string name="settings_display_window_subhead">Cluster window</string>
     <string name="cluster_a11y_description">Intercepts steering-wheel buttons to project navigation onto the instrument cluster. Enabled manually, works only when the feature is on.</string>
     <string name="settings_display_mirror_title">Projection to cluster via wheel button</string>
-    <string name="settings_cluster_auto_container_title">Show on the cluster right away</string>
-    <string name="settings_cluster_auto_container_desc">The app switches the cluster into projection mode and back by itself (navigator and blind-spot cameras). Turn it off if ADAS or the stock widget disappears from the cluster afterwards and does not come back on its own: then switch the cluster mode manually, the picture shows in the mini-map</string>
+    <string name="settings_cluster_auto_container_title">Switch the cluster to the navigator and cameras</string>
+    <string name="settings_cluster_auto_container_desc">When on, the app switches the cluster by itself so the navigator and the blind-spot cameras show on it. Turn it off if the stock cluster view with ADAS disappears when you use the turn signal or show the navigator: the picture then stays only in the small map.</string>
     <string name="settings_cluster_full_display_title">Full cluster screen</string>
-    <string name="settings_cluster_full_display_desc">By default the map fills the top of the cluster and the stock strip with speed and key readings stays at the bottom. Turn on if you want the map across the whole cluster without that strip. Works only on firmwares with the new interface, changes nothing elsewhere. Applies at the next projection</string>
+    <string name="settings_cluster_full_display_desc">The map across the whole cluster, without the bottom strip with the speed. Turn on if the map takes only a narrow strip at the top. Applies at the next output to the cluster.</string>
     <string name="settings_cluster_direct_reboot_hint">For the voice agent to see the navigator on the cluster, reboot the DiLink head unit once: press and hold the volume knob. Simply turning the car off is not enough. Until the reboot projection still works, but the agent cannot see the route.</string>
     <string name="cluster_direct_unsupported_hint">Direct output is not available on this car\'s firmware, a compatible mode is used</string>
-    <string name="settings_projection_mode_title">Projection mode</string>
+    <string name="settings_projection_mode_title">Cluster output mode</string>
     <string name="settings_projection_mode_direct">Extended</string>
     <string name="settings_projection_mode_vd">Factory</string>
     <string name="settings_projection_mode_help" formatted="false">Factory: works like versions before 3.6, no system settings of the car are changed, the adjustment sliders work more precisely. Downside: the voice agent and HUD cannot see the navigator screen, guidance comes from the notification only. Extended: the navigator runs right on the cluster, the agent and HUD can see it. Enables the system freeform window mode, a one-time DiLink reboot is required. To restore factory state: switch back to Factory, the system setting returns to its factory value and fully applies after a reboot. The mode itself applies on the next projection start.</string>
@@ -72,7 +72,7 @@
     <string name="learn_button_cancel">Cancel</string>
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Steering wheel volume knob</string>
-    <string name="settings_knob_play_pause_desc">Pressing the knob pauses and resumes playback instead of switching the audio source. Needed after the firmware update that made the press change the source.</string>
+    <string name="settings_knob_play_pause_desc">Pressing the knob pauses the music and resumes it. Without this setting the car switches the source or mutes the sound on a press.</string>
     <string name="settings_timezone_lock_title">Don\'t change the time zone from the network</string>
     <string name="settings_timezone_lock_desc">For cars near the border where the time zone keeps resetting to Beijing time. First pick your time zone in the car\'s settings, then turn this on.</string>
     <string name="settings_timezone_lock_failed">Failed: restart the ADB helper and try again</string>
@@ -81,9 +81,9 @@
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Restore ADB after a reboot</string>
-    <string name="settings_adb_restore_desc">For firmwares where ADB turns off at every reboot. Wi-Fi must be on.</string>
+    <string name="settings_adb_restore_desc">Only for firmwares where ADB turns off after every head unit reboot (builds 2606 and newer). If car control works after a reboot, leave it off. The app will tell you when it is needed.</string>
     <string name="settings_adb_restore_help_title">How ADB restore works</string>
-    <string name="settings_adb_restore_help_body">On newer DiLink firmwares (since summer 2026) the ADB port closes at every reboot, and BYDMate loses access to the car control features.\n\nThe app can bring ADB back up through the wireless debugging built into Android. For that:\n\n1. Wi-Fi in the car must be on and connected to a network: your home one, a phone hotspot or any other. Without Wi-Fi, Android does not allow wireless debugging to be enabled, that is a system limitation.\n\n2. The first time on each new network the system dialog “Allow wireless debugging on this network?” appears on the screen. When restore is on, BYDMate confirms it by itself through its accessibility service. If the service is off, tick “Always allow on this network” and press ALLOW.\n\n3. Once, while ADB still works, the app grants itself the system permission it needs. If the status line shows “Activation needed”, connect ADB the usual way and restart the app.\n\nIf ADB on your firmware works after a reboot anyway, there is no need to turn this on: the status line will show “Not needed”.</string>
+    <string name="settings_adb_restore_help_body">On newer DiLink firmwares (since summer 2026) the ADB port closes at every reboot, and BYDMate loses access to the car control features.\n\nThe app can bring ADB back up through the wireless debugging built into Android. For that:\n\n1. Wi-Fi in the car must be on and connected to a network: your home one, a phone hotspot or any other. Without Wi-Fi, Android does not allow wireless debugging to be enabled, that is a system limitation.\n\n2. After a long stop Android shows the “Allow wireless debugging on this network?” window again. Tick “Always allow on this network” and press ALLOW: car control comes back in 10–30 seconds. Android 12 cannot remember this answer across reboots, there is nothing to change in the settings.\n\n3. Once, while ADB still works, the app grants itself the system permission it needs. If the status line shows “Activation needed”, connect ADB the usual way and restart the app.\n\nIf ADB on your firmware works after a reboot anyway, there is no need to turn this on: the status line will show “Not needed”.</string>
     <string name="settings_adb_restore_status_not_needed">Not needed: ADB already works</string>
     <string name="settings_adb_restore_status_needs_activation">Activation needed: connect ADB once and restart the app</string>
     <string name="settings_adb_restore_status_waiting_wifi">Waiting for Wi-Fi</string>
@@ -414,7 +414,7 @@
     <string name="automation_delete_confirm_text">This action cannot be undone.</string>
     <string name="automation_delete_button">Delete</string>
     <string name="automation_cancel_button">Cancel</string>
-    <string name="automation_rule_cooldown">Cooldown: %1$d s</string>
+    <string name="automation_rule_cooldown">No more often than every %1$d s</string>
     <string name="automation_editor_new_rule_title">New rule</string>
     <string name="automation_rule_name_placeholder">Rule name</string>
     <string name="automation_section_when">WHEN (conditions)</string>
@@ -485,7 +485,7 @@
     <string name="automation_action_call">Call</string>
     <string name="automation_action_navigate">Route in Y.Navigator</string>
     <string name="automation_action_url">Open URL</string>
-    <string name="automation_action_delay">Delay</string>
+    <string name="automation_action_delay">Wait</string>
     <string name="automation_action_media_volume">Media volume</string>
     <string name="automation_action_media_volume_label">Volume</string>
     <string name="automation_action_sentry">Sentry mode</string>
@@ -1430,7 +1430,7 @@
     <string name="settings_hud_mode_3">Method 3</string>
     <string name="settings_hud_mode_3_desc">Method 3. Like method 2, plus one more path. Try it if the first two showed nothing.</string>
     <string name="settings_hud_mode_trial">trial</string>
-    <string name="settings_hud_mode_pick_hint">Not sure which one? Run the “HUD check”.</string>
+    <string name="settings_hud_mode_pick_hint">Not sure which method to choose? Run the “HUD check”.</string>
     <string name="settings_hud_answer_title">Which number did you see on the glass?</string>
     <string name="settings_hud_answer_text">The app picks the method itself. If you saw several numbers, tap the smallest one.</string>
     <string name="settings_hud_answer_none">Nothing</string>
@@ -1595,7 +1595,7 @@
     <string name="tech_label_battery_power">battery power</string>
     <string name="tech_label_max_charge">max charge power</string>
     <string name="tech_label_max_discharge_allow">max discharge power</string>
-    <string name="tech_label_max_discharge">battery capacity</string>
+    <string name="tech_label_max_discharge">current battery capacity</string>
     <string name="tech_label_motor_temp">motor temperature</string>
     <string name="tech_label_inverter_temp">inverter temperature</string>
     <string name="tech_label_rpm">rpm</string>
@@ -1748,7 +1748,7 @@
     <string name="dispatch_split_wide_missing">wide not set</string>
     <string name="dispatch_split_invalid_side">invalid side</string>
     <string name="dispatch_split_pair_not_saved">no split screen pair saved</string>
-    <string name="dispatch_delay_missing">Delay duration not set</string>
+    <string name="dispatch_delay_missing">Wait duration not set</string>
     <string name="dispatch_delay_out_of_range">Delay duration out of range (0..%1$d ms)</string>
     <string name="dispatch_volume_missing">Volume level not set</string>
     <string name="dispatch_audio_unavailable">AudioManager unavailable</string>
@@ -1847,7 +1847,7 @@
     <string name="dispatch_tg_report_queued">No connection, the report will go out when the internet is back</string>
     <string name="dispatch_tg_report_no_bot">Connect the bot in Settings</string>
     <string name="auto_msg_tg_report_empty">Action #%1$d: pick at least one report item or write your own text</string>
-    <string name="auto_msg_delay_invalid">Action #%1$d: pause from 0 to 24 h</string>
+    <string name="auto_msg_delay_invalid">Action #%1$d: wait from 0 to 24 h</string>
     <string name="automation_action_tg_report">Telegram report</string>
     <!-- Telegram reports (3.19): settings and automation editor -->
     <string name="tg_report_field_location_desc">An «Open on the map» link</string>

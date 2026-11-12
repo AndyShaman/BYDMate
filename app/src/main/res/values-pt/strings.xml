@@ -26,13 +26,13 @@
     <string name="settings_display_card_blindspot_sub">Câmera pela seta. %1$s</string>
     <string name="settings_display_window_subhead">Janela no painel</string>
     <string name="settings_display_mirror_title">Projeção no painel via botão do volante</string>
-    <string name="settings_cluster_auto_container_title">Mostrar no painel imediatamente</string>
-    <string name="settings_cluster_auto_container_desc">O app alterna o painel para o modo de projeção e de volta sozinho (navegador e câmeras de ponto cego). Desative se depois disso o ADAS ou o widget de fábrica sumir do painel e não voltar sozinho: então alterne o modo do painel manualmente, a imagem aparece no minimapa</string>
+    <string name="settings_cluster_auto_container_title">Alternar o painel para o navegador e as câmeras</string>
+    <string name="settings_cluster_auto_container_desc">Quando ativado, o app alterna o painel sozinho para que o navegador e as câmeras de ponto cego apareçam nele. Desative se a vista de fábrica do painel com o ADAS sumir ao usar a seta ou mostrar o navegador: então a imagem fica só no minimapa.</string>
     <string name="settings_cluster_full_display_title">Tela cheia do painel</string>
-    <string name="settings_cluster_full_display_desc">Por padrão o mapa ocupa a parte de cima do painel e embaixo fica a faixa de fábrica com velocidade e leituras principais. Ative se quiser o mapa no painel inteiro sem essa faixa. Funciona só em firmwares com a nova interface, nos demais não muda nada. Vale na próxima projeção</string>
+    <string name="settings_cluster_full_display_desc">O mapa no painel inteiro, sem a faixa de baixo com a velocidade. Ative se o mapa ocupa só uma faixa estreita em cima. Vale na próxima projeção no painel.</string>
     <string name="settings_cluster_direct_reboot_hint">Para o agente de voz ver o navegador no painel, reinicie o DiLink uma vez: mantenha pressionado o botão de volume. Apenas desligar o carro não é suficiente. Até o reinício a projeção funciona, mas o agente não vê a rota.</string>
     <string name="cluster_direct_unsupported_hint">A saída direta não está disponível no firmware deste carro, um modo compatível é usado</string>
-    <string name="settings_projection_mode_title">Modo de projeção</string>
+    <string name="settings_projection_mode_title">Modo de exibição no painel</string>
     <string name="settings_projection_mode_direct">Estendido</string>
     <string name="settings_projection_mode_vd">De fábrica</string>
     <string name="settings_projection_mode_help" formatted="false">De fábrica: funciona como nas versões anteriores à 3.6, nenhuma configuração do sistema do carro é alterada, os controles de ajuste funcionam com mais precisão. Desvantagem: o agente de voz e o HUD não veem a tela do navegador, as orientações vêm apenas da notificação. Estendido: o navegador roda direto no painel de instrumentos, o agente e o HUD conseguem vê-lo. Ativa o modo de janelas do sistema, é preciso reiniciar o DiLink uma vez. Para voltar ao estado de fábrica: mude para De fábrica, a configuração do sistema volta ao valor de fábrica e é aplicada por completo após uma reinicialização. O modo em si é aplicado na próxima projeção.</string>
@@ -73,7 +73,7 @@
     <string name="learn_button_cancel">Cancelar</string>
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Botão giratório de volume no volante</string>
-    <string name="settings_knob_play_pause_desc">Pressionar pausa e retoma a reprodução em vez de trocar a fonte de áudio. Necessário após a atualização de firmware em que o toque passou a mudar a fonte.</string>
+    <string name="settings_knob_play_pause_desc">Pressionar o botão pausa a música e retoma. Sem esta opção, o carro troca a fonte ou corta o som ao pressionar.</string>
     <string name="settings_timezone_lock_title">Não mudar o fuso horário pela rede</string>
     <string name="settings_timezone_lock_desc">Para carros perto da fronteira, onde o fuso horário volta sozinho para o de Pequim. Primeiro escolha o fuso certo nas configurações do carro, depois ative.</string>
     <string name="settings_timezone_lock_failed">Falhou: reinicie o auxiliar ADB e tente de novo</string>
@@ -82,9 +82,9 @@
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Restaurar o ADB após reiniciar</string>
-    <string name="settings_adb_restore_desc">Para firmwares em que o ADB desliga a cada reinício. É necessário Wi-Fi ligado.</string>
+    <string name="settings_adb_restore_desc">Só para firmwares em que o ADB desliga após cada reinício da central multimídia (versões 2606 e mais novas). Se o controle do carro funciona após o reinício, não ative. O app avisa quando for preciso.</string>
     <string name="settings_adb_restore_help_title">Como funciona a restauração do ADB</string>
-    <string name="settings_adb_restore_help_body">Nos firmwares DiLink mais recentes (desde o verão de 2026) a porta ADB fecha a cada reinício e o BYDMate perde o acesso às funções de controlo do carro.\n\nA aplicação consegue repor o ADB através da depuração sem fios integrada no Android. Para isso:\n\n1. O Wi-Fi do carro tem de estar ligado e associado a uma rede: a de casa, a partilha do telemóvel ou qualquer outra. Sem Wi-Fi o Android não permite ativar a depuração sem fios, é uma limitação do sistema.\n\n2. Na primeira ativação em cada rede nova aparece no ecrã a caixa do sistema “Allow wireless debugging on this network?”. Com a restauração ativada, o BYDMate confirma-a sozinho através do seu serviço de acessibilidade. Se o serviço estiver desligado, marque “Always allow on this network” e toque em ALLOW.\n\n3. Uma vez, enquanto o ADB ainda funciona, a aplicação concede a si própria a permissão de sistema necessária. Se a linha de estado mostrar “É necessário ativar”, ligue o ADB da forma habitual e reinicie a aplicação.\n\nSe no seu firmware o ADB continuar a funcionar depois de reiniciar, não precisa de ativar: a linha de estado mostra “Não é necessário”.</string>
+    <string name="settings_adb_restore_help_body">Nos firmwares DiLink mais recentes (desde o verão de 2026) a porta ADB fecha a cada reinício e o BYDMate perde o acesso às funções de controlo do carro.\n\nA aplicação consegue repor o ADB através da depuração sem fios integrada no Android. Para isso:\n\n1. O Wi-Fi do carro tem de estar ligado e associado a uma rede: a de casa, a partilha do telemóvel ou qualquer outra. Sem Wi-Fi o Android não permite ativar a depuração sem fios, é uma limitação do sistema.\n\n2. Depois de muito tempo parado, o Android volta a mostrar a janela “Allow wireless debugging on this network?”. Marque “Always allow on this network” e toque em ALLOW: em 10–30 segundos o controle do carro volta. O Android 12 não consegue lembrar essa resposta entre reinícios, não é preciso mudar nada nas configurações.\n\n3. Uma vez, enquanto o ADB ainda funciona, a aplicação concede a si própria a permissão de sistema necessária. Se a linha de estado mostrar “É necessário ativar”, ligue o ADB da forma habitual e reinicie a aplicação.\n\nSe no seu firmware o ADB continuar a funcionar depois de reiniciar, não precisa de ativar: a linha de estado mostra “Não é necessário”.</string>
     <string name="settings_adb_restore_status_not_needed">Não é necessário: o ADB já funciona</string>
     <string name="settings_adb_restore_status_needs_activation">É necessário ativar: ligue o ADB uma vez e reinicie a aplicação</string>
     <string name="settings_adb_restore_status_waiting_wifi">À espera de Wi-Fi</string>
@@ -412,7 +412,7 @@
     <string name="automation_delete_confirm_text">Esta ação não pode ser desfeita.</string>
     <string name="automation_delete_button">Excluir</string>
     <string name="automation_cancel_button">Cancelar</string>
-    <string name="automation_rule_cooldown">Tempo de espera: %1$d s</string>
+    <string name="automation_rule_cooldown">No máximo uma vez a cada %1$d s</string>
     <string name="automation_editor_new_rule_title">Nova regra</string>
     <string name="automation_rule_name_placeholder">Nome da regra</string>
     <string name="automation_section_when">QUANDO (condições)</string>
@@ -479,7 +479,7 @@
     <string name="automation_action_call">Ligar</string>
     <string name="automation_action_navigate">Rota no Y.Navigator</string>
     <string name="automation_action_url">Abrir URL</string>
-    <string name="automation_action_delay">Atraso</string>
+    <string name="automation_action_delay">Pausa</string>
     <string name="automation_action_media_volume">Volume de mídia</string>
     <string name="automation_action_media_volume_label">Volume</string>
     <string name="automation_action_sentry">Modo sentinela</string>
@@ -1427,7 +1427,7 @@
     <string name="settings_hud_mode_3">Método 3</string>
     <string name="settings_hud_mode_3_desc">Método 3. Como o método 2, e por mais um caminho. Experimente se os dois primeiros não mostraram nada.</string>
     <string name="settings_hud_mode_trial">teste</string>
-    <string name="settings_hud_mode_pick_hint">Não sabe qual escolher? Rode o “Teste do HUD”.</string>
+    <string name="settings_hud_mode_pick_hint">Não sabe qual método escolher? Rode o “Teste do HUD”.</string>
     <string name="settings_hud_answer_title">Qual número você viu no para-brisa?</string>
     <string name="settings_hud_answer_text">O aplicativo escolhe o método sozinho. Se viu vários números, toque no menor.</string>
     <string name="settings_hud_answer_none">Nada</string>
@@ -1591,7 +1591,7 @@
     <string name="tech_label_battery_power">potência da bateria</string>
     <string name="tech_label_max_charge">potência máx. de carga</string>
     <string name="tech_label_max_discharge_allow">potência máx. de descarga</string>
-    <string name="tech_label_max_discharge">capacidade da bateria</string>
+    <string name="tech_label_max_discharge">capacidade atual da bateria</string>
     <string name="tech_label_motor_temp">temperatura do motor</string>
     <string name="tech_label_inverter_temp">temperatura do inversor</string>
     <string name="tech_label_rpm">rotações, rpm</string>
@@ -1920,7 +1920,7 @@
     <string name="auto_ui_phrase_once">%1$s, uma vez</string>
     <string name="auto_ui_act_toggle">%1$s, alternar</string>
     <string name="auto_ui_act_with">%1$s, %2$s</string>
-    <string name="auto_ui_act_wait">Aguardar %1$s</string>
+    <string name="auto_ui_act_wait">Pausa %1$s</string>
     <string name="auto_ui_act_quoted">%1$s «%2$s»</string>
     <string name="auto_ui_act_volume">%1$s %2$d</string>
     <string name="auto_ui_seconds">%1$s s</string>
@@ -1960,7 +1960,7 @@
     <string name="auto_ui_number_hint">Digite um número, por exemplo 12,5</string>
     <string name="auto_ui_cooldown">No máximo uma vez a cada</string>
     <string name="auto_ui_unit_s">s</string>
-    <string name="auto_ui_wait">Aguardar</string>
+    <string name="auto_ui_wait">Pausa</string>
     <string name="auto_ui_miss_name">Digite um nome</string>
     <string name="auto_ui_miss_conditions">Adicione uma condição</string>
     <string name="auto_ui_miss_param">Escolha o que verificar na condição %1$d</string>

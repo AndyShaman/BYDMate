@@ -29,13 +29,13 @@
     <string name="settings_display_card_blindspot_sub">Камера по поворотнику. %1$s</string>
     <string name="settings_display_window_subhead">Окно на приборке</string>
     <string name="settings_display_mirror_title">Вывод на приборку кнопкой руля</string>
-    <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
-    <string name="settings_cluster_auto_container_desc">Приложение само переключает приборку в режим проекции и обратно (навигатор и камеры слепых зон). Выключите, если после этого с приборки пропадает ADAS или штатный виджет и не возвращается сам: тогда режим приборки переключайте вручную, а картинка будет видна в мини-карте</string>
+    <string name="settings_cluster_auto_container_title">Переключать приборку на навигатор и камеры</string>
+    <string name="settings_cluster_auto_container_desc">Когда включено, приложение само переключает приборку, чтобы на ней были видны навигатор и камеры слепых зон. Выключите, если при поворотнике или выводе навигатора пропадает штатный вид приборки с ADAS: тогда картинка останется только в маленькой карте.</string>
     <string name="settings_cluster_full_display_title">Полный экран приборки</string>
-    <string name="settings_cluster_full_display_desc">По умолчанию карта занимает верх приборки, а внизу остаётся штатная полоса со скоростью и основными показателями. Включите, если хотите карту на всю приборку без этой полосы. Работает только на прошивках с новым интерфейсом, на остальных ничего не меняет. Применяется при следующем выводе на приборку</string>
+    <string name="settings_cluster_full_display_desc">Карта на всю приборку, без нижней полосы со скоростью. Включите, если карта занимает только узкую полосу сверху. Применяется при следующем выводе на приборку.</string>
     <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
     <string name="cluster_direct_unsupported_hint">Прямой вывод недоступен на прошивке этой машины, используется совместимый режим</string>
-    <string name="settings_projection_mode_title">Режим проекции</string>
+    <string name="settings_projection_mode_title">Режим вывода на приборку</string>
     <string name="settings_projection_mode_direct">Расширенный</string>
     <string name="settings_projection_mode_vd">Заводской</string>
     <string name="settings_projection_mode_help" formatted="false">Заводской: как в версиях до 3.6, системные настройки машины не меняются, точнее работают ползунки подстройки. Минус: голосовой агент и HUD не видят экран навигатора, подсказки только из уведомления. Расширенный: навигатор работает прямо на приборке, его видят агент и HUD. Включает системный оконный режим, нужна однократная перезагрузка ДиЛинка. Возврат к заводу: переключите на Заводской, системная настройка вернётся к заводскому значению и полностью применится после перезагрузки. Режим применяется при следующем выводе на приборку.</string>
@@ -76,7 +76,7 @@
     <string name="learn_button_cancel">Отмена</string>
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Колёсико громкости на руле</string>
-    <string name="settings_knob_play_pause_desc">Нажатие ставит на паузу и продолжает воспроизведение, а не переключает источник звука. Нужно после обновления прошивки, где нажатие стало менять источник.</string>
+    <string name="settings_knob_play_pause_desc">Нажатие на колёсико ставит музыку на паузу и продолжает. Без этой настройки машина по нажатию меняет источник или выключает звук.</string>
     <string name="settings_timezone_lock_title">Не менять часовой пояс по сети</string>
     <string name="settings_timezone_lock_desc">Для машин у границы, где часовой пояс сам сбрасывается на пекинский. Сначала выберите нужный пояс в настройках машины, затем включите.</string>
     <string name="settings_timezone_lock_failed">Не удалось: перезапустите помощник ADB и попробуйте снова</string>
@@ -85,9 +85,9 @@
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Восстанавливать ADB после перезагрузки</string>
-    <string name="settings_adb_restore_desc">Для прошивок, где ADB выключается при каждой перезагрузке. Нужен включённый Wi-Fi.</string>
+    <string name="settings_adb_restore_desc">Только для прошивок, где ADB выключается после каждой перезагрузки магнитолы (сборки 2606 и новее). Если управление машиной после перезагрузки работает, не включайте. Приложение само подскажет, когда это нужно.</string>
     <string name="settings_adb_restore_help_title">Как работает восстановление ADB</string>
-    <string name="settings_adb_restore_help_body">На новых прошивках DiLink (с лета 2026) порт ADB закрывается при каждой перезагрузке, и BYDMate теряет доступ к функциям управления машиной.\n\nПриложение умеет поднимать ADB заново через встроенную в Android беспроводную отладку. Для этого:\n\n1. Wi-Fi в машине должен быть включён и подключён к сети: домашней, к раздаче с телефона или любой другой. Без Wi-Fi Android не даёт включить беспроводную отладку, это ограничение системы.\n\n2. При первом включении на каждой новой сети на экране появится системный диалог «Allow wireless debugging on this network?». Когда восстановление включено, BYDMate подтверждает его сам через свою службу специальных возможностей. Если она выключена, отметьте «Always allow on this network» и нажмите ALLOW.\n\n3. Один раз, пока ADB ещё работает, приложение выдаёт себе нужное системное разрешение. Если строка состояния показывает «Нужна активация», подключите ADB обычным способом и перезапустите приложение.\n\nЕсли ADB на вашей прошивке и так работает после перезагрузки, включать не нужно: строка состояния покажет «Не требуется».</string>
+    <string name="settings_adb_restore_help_body">На новых прошивках DiLink (с лета 2026) порт ADB закрывается при каждой перезагрузке, и BYDMate теряет доступ к функциям управления машиной.\n\nПриложение умеет поднимать ADB заново через встроенную в Android беспроводную отладку. Для этого:\n\n1. Wi-Fi в машине должен быть включён и подключён к сети: домашней, к раздаче с телефона или любой другой. Без Wi-Fi Android не даёт включить беспроводную отладку, это ограничение системы.\n\n2. После долгой стоянки Android заново показывает окно «Allow wireless debugging on this network?». Отметьте «Always allow on this network» и нажмите ALLOW: через 10–30 секунд управление машиной вернётся. Запоминать этот ответ между перезагрузками Android 12 не умеет, в настройках менять ничего не нужно.\n\n3. Один раз, пока ADB ещё работает, приложение выдаёт себе нужное системное разрешение. Если строка состояния показывает «Нужна активация», подключите ADB обычным способом и перезапустите приложение.\n\nЕсли ADB на вашей прошивке и так работает после перезагрузки, включать не нужно: строка состояния покажет «Не требуется».</string>
     <string name="settings_adb_restore_status_not_needed">Не требуется: ADB уже работает</string>
     <string name="settings_adb_restore_status_needs_activation">Нужна активация: подключите ADB один раз и перезапустите приложение</string>
     <string name="settings_adb_restore_status_waiting_wifi">Ожидание Wi-Fi</string>
@@ -455,7 +455,7 @@
     <string name="automation_cancel_button">Отмена</string>
 
     <!-- Rule card stats -->
-    <string name="automation_rule_cooldown">Пауза: %1$d сек</string>
+    <string name="automation_rule_cooldown">Не чаще, чем раз в %1$d с</string>
 
     <!-- Editor dialog -->
     <string name="automation_editor_new_rule_title">Новое правило</string>
@@ -1580,7 +1580,7 @@
     <string name="settings_hud_mode_3">Способ 3</string>
     <string name="settings_hud_mode_3_desc">Способ 3. Как способ 2, и ещё одним путём. Попробуйте, если первые два ничего не показали.</string>
     <string name="settings_hud_mode_trial">пробный</string>
-    <string name="settings_hud_mode_pick_hint">Не знаете, какой выбрать? Запустите «Проверку HUD».</string>
+    <string name="settings_hud_mode_pick_hint">Не знаете, какой способ выбрать? Запустите «Проверку HUD».</string>
     <string name="settings_hud_answer_title">Какое число вы увидели на стекле?</string>
     <string name="settings_hud_answer_text">Приложение само выберет способ. Если видели несколько чисел, нажмите меньшее.</string>
     <string name="settings_hud_answer_none">Ничего</string>
@@ -1744,7 +1744,7 @@
     <string name="tech_label_battery_power">мощность батареи</string>
     <string name="tech_label_max_charge">макс. мощность заряда</string>
     <string name="tech_label_max_discharge_allow">макс. мощность разряда</string>
-    <string name="tech_label_max_discharge">ёмкость батареи</string>
+    <string name="tech_label_max_discharge">текущая ёмкость батареи</string>
     <string name="tech_label_motor_temp">температура мотора</string>
     <string name="tech_label_inverter_temp">температура инвертора</string>
     <string name="tech_label_rpm">обороты, об/мин</string>
@@ -2083,7 +2083,7 @@
     <string name="auto_ui_phrase_once">%1$s, один раз</string>
     <string name="auto_ui_act_toggle">%1$s, переключить</string>
     <string name="auto_ui_act_with">%1$s, %2$s</string>
-    <string name="auto_ui_act_wait">Подождать %1$s</string>
+    <string name="auto_ui_act_wait">Пауза %1$s</string>
     <string name="auto_ui_act_quoted">%1$s «%2$s»</string>
     <string name="auto_ui_act_volume">%1$s %2$d</string>
     <string name="auto_ui_seconds">%1$s с</string>
@@ -2123,7 +2123,7 @@
     <string name="auto_ui_number_hint">Введите число, например 12,5</string>
     <string name="auto_ui_cooldown">Не чаще, чем раз в</string>
     <string name="auto_ui_unit_s">с</string>
-    <string name="auto_ui_wait">Подождать</string>
+    <string name="auto_ui_wait">Пауза</string>
     <string name="auto_ui_miss_name">Введите название</string>
     <string name="auto_ui_miss_conditions">Добавьте условие</string>
     <string name="auto_ui_miss_param">Выберите, что проверять в условии %1$d</string>

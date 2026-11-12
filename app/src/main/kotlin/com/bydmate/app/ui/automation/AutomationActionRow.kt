@@ -314,7 +314,7 @@ internal fun delayAction(ms: Long, context: Context): ActionDef {
 }
 
 /**
- * «Подождать [5] [мин]»: the wait between two actions, a number plus its unit, up to 24 h.
+ * «Пауза [5] [мин]»: the wait between two actions, a number plus its unit, up to 24 h.
  * An invalid number clears the payload, so the validator blocks saving and names the action.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
