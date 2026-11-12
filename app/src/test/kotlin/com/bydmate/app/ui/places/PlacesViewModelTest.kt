@@ -146,4 +146,15 @@ class PlacesViewModelTest {
         assertEquals(3, blockedCount)
     }
 
+    @Test
+    fun `usageCounts populated after init`() = runTest {
+        val places = listOf(makePlace(1L), makePlace(2L))
+        val (vm) = buildVm(places = places, usageCounts = mapOf(1L to 1, 2L to 0))
+        advanceUntilIdle()
+
+        val counts = vm.usageCounts.value
+        assertEquals(1, counts[1L])
+        assertEquals(0, counts[2L])
+    }
+
 }
