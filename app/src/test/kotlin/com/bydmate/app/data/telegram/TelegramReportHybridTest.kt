@@ -65,7 +65,9 @@ class TelegramReportHybridTest {
                 trip1Fuel = FuelTotals(liters = 7.6, km = 420.0)),
             setOf(ReportField.TRIP1),
         )
-        assertEquals("${em}Топливо: 7,6 л за период, 1,8 л/100 км в поездках с расходом топлива", text.lines().last())
+        // 420 km include the trips driven on the battery alone (0 l recorded), so the line
+        // must not claim the figure belongs to the trips that burned fuel.
+        assertEquals("${em}Топливо: 7,6 л, в среднем 1,8 л/100 км", text.lines().last())
     }
 
     @Test fun `a hybrid counter without litres has no fuel line`() {

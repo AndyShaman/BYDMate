@@ -187,16 +187,6 @@ class AutomationEnginePlaceStartupTest {
         coVerify(exactly = 0) { ruleDao.updateLastTriggered(any(), any()) }
     }
 
-    @Test fun `a leave rule fires when GPS comes back outside after a gap`() = runBlocking {
-        val (engine, ruleDao) = setup("place_exit")
-
-        engine.tick(inside)
-        engine.tick(null)     // GPS lost under a roof: the car is still counted as inside
-        engine.tick(outside)
-
-        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
-    }
-
     // The car does not move while it is off: what the engine knew about the place before the
     // restart still holds, so a late first GPS point is compared with it, not swallowed.
 
@@ -229,6 +219,38 @@ class AutomationEnginePlaceStartupTest {
         val (engine, ruleDao) = setup()
         engine.tick(null)
         engine.tick(inside)
+
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `a rule switched off forgets where the car stood`() = runBlocking {
+        val (before, dao) = setup("place_exit")
+        before.tick(inside)
+        coEvery { dao.getEnabled() } returns emptyList()
+        before.tick(inside)   // the rule is off now: the car may go anywhere unseen
+
+        val (engine, ruleDao) = setup("place_exit")
+        engine.tick(null)
+        engine.tick(outside)  // nothing to compare with: the first point is only remembered
+
+        coVerify(exactly = 0) { ruleDao.updateLastTriggered(any(), any()) }
+    }
+
+    @Test fun `start of the app at a remembered place fires before the first GPS point`() = runBlocking {
+        // «Запуск BYDMate» AND «в месте»: the car stood in the yard when it was switched off.
+        fun startAtPlace() = placeRule("place_enter").let { rule ->
+            rule.copy(
+                triggers = TriggerDef.listToJson(
+                    TriggerDef.listFromJson(rule.triggers) +
+                        TriggerDef("", "", "", "", "start", kind = "service_start")
+                ),
+            )
+        }
+        val (before, _) = setup(startAtPlace())
+        before.tick(inside)
+
+        val (engine, ruleDao) = setup(startAtPlace())
+        engine.tick(null)     // cold start, no fix yet
 
         coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
     }
