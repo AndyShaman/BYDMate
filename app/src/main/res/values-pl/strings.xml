@@ -1711,7 +1711,7 @@
     <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">izolacja</string>
-    <string name="tech_title">Technika</string>
+    <string name="tech_title">Auto</string>
     <string name="tech_status_online">autoservice online</string>
     <string name="tech_status_offline">autoservice offline</string>
     <string name="tech_no_data">Samochód nie udostępnia tych danych</string>

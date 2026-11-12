@@ -1562,7 +1562,7 @@
     <string name="split_feature_disabled">Tela dividida desativada nas configurações</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">isolamento</string>
-    <string name="tech_title">Técnica</string>
+    <string name="tech_title">Carro</string>
     <string name="tech_status_online">autoservice online</string>
     <string name="tech_status_offline">autoservice offline</string>
     <string name="tech_no_data">O carro não fornece estes dados</string>

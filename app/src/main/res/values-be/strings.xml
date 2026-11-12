@@ -1711,7 +1711,7 @@
     <string name="split_feature_disabled">Падзел экрана выключаны ў наладах</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">ізаляцыя</string>
-    <string name="tech_title">Тэхніка</string>
+    <string name="tech_title">Машына</string>
     <string name="tech_status_online">autoservice online</string>
     <string name="tech_status_offline">autoservice offline</string>
     <string name="tech_no_data">Машына не аддае гэтыя даныя</string>
