@@ -38,6 +38,7 @@ class TelegramReportBuilderTest {
 
     private val fullData = diParsData(
         soc = 64, mileage = 23_456.7, exteriorTemp = 12, insideTemp = 19,
+        avgBatTemp = 23, minBatTemp = 21, maxBatTemp = 25,
         doorFL = 0, doorFR = 0, doorRL = 0, doorRR = 0,
         windowFL = 30, windowFR = 0, windowRL = 0, windowRR = 0,
         sunroof = 0, trunk = 2, hood = 0,
@@ -95,6 +96,7 @@ class TelegramReportBuilderTest {
                 "🔋 Заряд <b>64%</b>, запас <b>312 км</b>",
                 "🧭 Пробег 23\u00A0456 км",
                 "🌡 Снаружи +12°, в салоне +19°",
+                "🌡 Батарея +23° (от +21° до +25°)",
                 "🛞 Шины: ПЛ 2,4 · ПП 2,4 · ЗЛ 2,3 · ЗП 2,4 бар",
                 "",
                 "🚗 <b>Поездка</b>",
@@ -163,7 +165,8 @@ class TelegramReportBuilderTest {
             listOf(
                 ReportField.LOCATION, ReportField.RANGE, ReportField.ODOMETER, ReportField.TRIP,
                 ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST,
-                ReportField.TRIP1, ReportField.TRIP2, ReportField.TEMPS, ReportField.OPENINGS, ReportField.TIRES,
+                ReportField.TRIP1, ReportField.TRIP2, ReportField.TEMPS, ReportField.BATTERY_TEMP,
+                ReportField.OPENINGS, ReportField.TIRES,
             ),
             report.skipped,
         )
