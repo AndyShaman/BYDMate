@@ -6,8 +6,11 @@ package com.bydmate.app.helper
  * config_wifiSoftap5gChannelList empty, so hostapd gets `channels={2=0}` -> "Malformed channel value detected" ->
  * SoftApManager start failed. A fixed 5 GHz channel works (36 tested, survives reboots), and the car's own Band menu
  * writes exactly the broken {2=0} whenever 5 GHz is picked. [HotspotChannelGuard] puts channel 36 back.
+ * If channel 36 doesn't start either (one report: Leopard 3 after a password change, "channel 0, country code 00,
+ * Could not select hw_mode and channel", t.me/byd_ota/195445), it falls back to 2.4 GHz, which starts everywhere.
  */
 internal object HotspotChannelPolicy {
+    const val BAND_2GHZ = 1 // SoftApConfiguration.BAND_2GHZ
     const val BAND_5GHZ = 2 // SoftApConfiguration.BAND_5GHZ
     const val CHANNEL = 36
     // WifiManager.WIFI_AP_STATE_*
@@ -42,6 +45,70 @@ internal object HotspotChannelPolicy {
             Firmware.UNKNOWN -> apState == AP_FAILED
             Firmware.OK -> false
         }
+    }
+}
+
+/**
+ * What the guard does on one poll: pin channel 36 on a broken 5 GHz auto config, or fall back to 2.4 GHz once the
+ * channel 36 it set has failed to start too (and from then on go straight to 2.4 GHz until the daemon restarts).
+ */
+internal class HotspotFixPlanner(
+    private val firmware: HotspotChannelPolicy.Firmware,
+    private val outcome: PinOutcomeTracker = PinOutcomeTracker(),
+) {
+    enum class Action { NONE, CHANNEL_36, BAND_2GHZ, BAND_2GHZ_AFTER_36_FAILED }
+
+    private val ourChannel = mapOf(HotspotChannelPolicy.BAND_5GHZ to HotspotChannelPolicy.CHANNEL)
+    private var channel36Failed = false
+
+    fun next(now: Long, channels: Map<Int, Int>, apState: Int): Action {
+        if (channels != ourChannel) outcome.clear()
+        if (HotspotChannelPolicy.needsPin(channels, firmware, apState)) {
+            return if (channel36Failed) Action.BAND_2GHZ else Action.CHANNEL_36
+        }
+        if (outcome.failed(now, apState)) {
+            channel36Failed = true
+            return Action.BAND_2GHZ_AFTER_36_FAILED
+        }
+        return Action.NONE
+    }
+
+    /** [ok] = setSoftApConfiguration accepted [action]. */
+    fun saved(action: Action, ok: Boolean) { if (action == Action.CHANNEL_36 && ok) outcome.pinned() }
+
+    /** The guard started the hotspot again. */
+    fun started(now: Long) = outcome.started(now)
+}
+
+/**
+ * Whether the channel 36 this guard set has failed to start too, so it should fall back to 2.4 GHz. The pin itself
+ * usually happens while the state is still FAILED from the broken config, so a FAILED only counts once the hotspot has
+ * been in another state since the pin, or [failAfterStartMs] after this guard started it again. Coming up (ENABLED)
+ * proves channel 36 works and ends the watch.
+ */
+internal class PinOutcomeTracker(private val failAfterStartMs: Long = 5_000L) {
+    private var watching = false
+    private var leftFailed = false
+    private var startedAt = -1L
+
+    fun pinned() { watching = true; leftFailed = false; startedAt = -1L }
+
+    fun started(now: Long) { if (watching) startedAt = now }
+
+    /** The saved config is no longer our channel 36 (the user or the Band menu changed it). */
+    fun clear() { watching = false }
+
+    /** One poll. True once, when channel 36 has failed to start. */
+    fun failed(now: Long, apState: Int): Boolean {
+        if (!watching) return false
+        when (apState) {
+            HotspotChannelPolicy.AP_ENABLED -> { watching = false; return false }
+            HotspotChannelPolicy.AP_FAILED -> Unit
+            else -> { leftFailed = true; return false }
+        }
+        val failed = leftFailed || (startedAt >= 0 && now - startedAt >= failAfterStartMs)
+        if (failed) watching = false
+        return failed
     }
 }
 

@@ -2,6 +2,7 @@ package com.bydmate.app.helper
 
 import com.bydmate.app.helper.HotspotChannelPolicy.AP_DISABLED
 import com.bydmate.app.helper.HotspotChannelPolicy.AP_ENABLED
+import com.bydmate.app.helper.HotspotChannelPolicy.AP_ENABLING
 import com.bydmate.app.helper.HotspotChannelPolicy.AP_FAILED
 import com.bydmate.app.helper.HotspotChannelPolicy.Firmware.BROKEN
 import com.bydmate.app.helper.HotspotChannelPolicy.Firmware.OK
@@ -106,5 +107,73 @@ class HotspotChannelPolicyTest {
         t.tick(now, AP_ENABLED, pinned = false)
         t.tick(now + 2_000, AP_DISABLED, pinned = true)
         assertTrue(t.tick(now + 6_000, AP_DISABLED, pinned = false))
+    }
+
+    @Test fun failedStateLeftOverFromTheBrokenConfigIsNotAChannel36Failure() {
+        val o = PinOutcomeTracker()
+        o.pinned() // pinned while the {2=0} start is still FAILED
+        assertFalse(o.failed(2_000, AP_FAILED))
+        assertFalse(o.failed(4_000, AP_FAILED))
+    }
+
+    @Test fun channel36FailingAfterOurRestartFallsBack() {
+        val o = PinOutcomeTracker()
+        o.pinned()
+        assertFalse(o.failed(2_000, AP_FAILED))
+        o.started(4_000)
+        assertFalse(o.failed(6_000, AP_FAILED)) // too soon to tell
+        assertTrue(o.failed(10_000, AP_FAILED))
+        assertFalse(o.failed(12_000, AP_FAILED)) // once
+    }
+
+    @Test fun channel36FailingOnALaterStartFallsBack() {
+        val o = PinOutcomeTracker()
+        o.pinned()
+        assertFalse(o.failed(2_000, AP_DISABLED))
+        assertFalse(o.failed(60_000, AP_ENABLING)) // the user switches it on
+        assertTrue(o.failed(62_000, AP_FAILED))
+    }
+
+    @Test fun channel36ThatComesUpIsKept() {
+        val o = PinOutcomeTracker()
+        o.pinned()
+        o.started(4_000)
+        assertFalse(o.failed(6_000, AP_ENABLED))
+        assertFalse(o.failed(600_000, AP_FAILED)) // a later unrelated failure doesn't move the band
+    }
+
+    @Test fun aChangedConfigEndsTheWatch() {
+        val o = PinOutcomeTracker()
+        o.pinned()
+        o.failed(2_000, AP_DISABLED)
+        o.clear()
+        assertFalse(o.failed(4_000, AP_FAILED))
+    }
+
+    @Test fun plannerPinsThenFallsBackThenGoesStraightTo24() {
+        val p = HotspotFixPlanner(BROKEN)
+        assertEquals(HotspotFixPlanner.Action.CHANNEL_36, p.next(0, mapOf(2 to 0), AP_FAILED))
+        p.saved(HotspotFixPlanner.Action.CHANNEL_36, ok = true)
+        assertEquals(HotspotFixPlanner.Action.NONE, p.next(2_000, mapOf(2 to 36), AP_FAILED))
+        p.started(4_000)
+        assertEquals(HotspotFixPlanner.Action.BAND_2GHZ_AFTER_36_FAILED, p.next(10_000, mapOf(2 to 36), AP_FAILED))
+        assertEquals(HotspotFixPlanner.Action.NONE, p.next(12_000, mapOf(1 to 0), AP_ENABLED))
+        // the Band menu picks 5 GHz again: straight to 2.4 GHz
+        assertEquals(HotspotFixPlanner.Action.BAND_2GHZ, p.next(60_000, mapOf(2 to 0), AP_FAILED))
+    }
+
+    @Test fun plannerKeepsAWorkingChannel36() {
+        val p = HotspotFixPlanner(BROKEN)
+        p.next(0, mapOf(2 to 0), AP_FAILED)
+        p.saved(HotspotFixPlanner.Action.CHANNEL_36, ok = true)
+        p.started(4_000)
+        assertEquals(HotspotFixPlanner.Action.NONE, p.next(6_000, mapOf(2 to 36), AP_ENABLED))
+        assertEquals(HotspotFixPlanner.Action.NONE, p.next(600_000, mapOf(2 to 36), AP_FAILED))
+    }
+
+    @Test fun plannerLeavesAUserChosenChannel36Alone() {
+        val p = HotspotFixPlanner(BROKEN) // never pinned by us
+        assertEquals(HotspotFixPlanner.Action.NONE, p.next(0, mapOf(2 to 36), AP_FAILED))
+        assertEquals(HotspotFixPlanner.Action.NONE, p.next(10_000, mapOf(2 to 36), AP_FAILED))
     }
 }

@@ -13,6 +13,7 @@ import java.lang.reflect.Proxy
  * hotspot config is 5 GHz on auto and this firmware can't start that, it is re-saved on channel 36 (name, password
  * and the rest kept), and a hotspot that was on is started again the way BYD's settings app does it
  * (ITetheringConnector.startTethering, Wi-Fi type, no entitlement exemption: asking for one returns error 14).
+ * If channel 36 fails to start too, the config is moved to 2.4 GHz (auto channel), see [HotspotFixPlanner].
  * Firmware whose overlay has a 5 GHz channel list (or no ACS) is left alone and the thread exits.
  * Hidden APIs (Android 11+), so reflection.
  */
@@ -62,16 +63,33 @@ internal object HotspotChannelGuard {
         return (0 until size).associate { keyAt.invoke(sparse, it) as Int to valueAt.invoke(sparse, it) as Int }
     }
 
-    private fun pin(cfg: Any): Boolean {
+    /** Re-saves [cfg] (name, password and the rest kept) with [change] applied to its builder. */
+    private fun save(cfg: Any, change: (Class<*>, Any) -> Unit): Boolean {
         val sc = Class.forName("android.net.wifi.SoftApConfiguration")
         val bc = Class.forName("android.net.wifi.SoftApConfiguration\$Builder")
         val builder = bc.getConstructor(sc).newInstance(cfg)
-        bc.getMethod("setChannel", Int::class.java, Int::class.java)
-            .invoke(builder, HotspotChannelPolicy.CHANNEL, HotspotChannelPolicy.BAND_5GHZ)
+        change(bc, builder)
         val pinned = bc.getMethod("build").invoke(builder)
         val set = wifi.javaClass.methods.first { it.name == "setSoftApConfiguration" }
         val r = if (set.parameterCount == 2) set.invoke(wifi, pinned, SHELL_PKG) else set.invoke(wifi, pinned)
         return r == true
+    }
+
+    /** Saves what [action] asks for; true = saved. */
+    private fun apply(action: HotspotFixPlanner.Action, cfg: Any): Boolean {
+        val (ok, what) = when (action) {
+            HotspotFixPlanner.Action.NONE -> return false
+            HotspotFixPlanner.Action.CHANNEL_36 -> save(cfg) { bc, b ->
+                bc.getMethod("setChannel", Int::class.java, Int::class.java)
+                    .invoke(b, HotspotChannelPolicy.CHANNEL, HotspotChannelPolicy.BAND_5GHZ)
+            } to "5 GHz on auto channel can't start here, channel ${HotspotChannelPolicy.CHANNEL}"
+            // setBand clears the channel: 2.4 GHz on auto
+            else -> save(cfg) { bc, b -> bc.getMethod("setBand", Int::class.java).invoke(b, HotspotChannelPolicy.BAND_2GHZ) } to
+                if (action == HotspotFixPlanner.Action.BAND_2GHZ) "5 GHz can't start here (channel ${HotspotChannelPolicy.CHANNEL} failed before), 2.4 GHz"
+                else "channel ${HotspotChannelPolicy.CHANNEL} didn't start either, 2.4 GHz"
+        }
+        log("$what ${if (ok) "set" else "NOT set (save failed)"}")
+        return ok
     }
 
     @Suppress("SpreadOperator") // one reflective call per restart, the copy is nothing
@@ -107,20 +125,20 @@ internal object HotspotChannelGuard {
                 log("no SoftApConfiguration (Android 10 or older), guard off"); return@Thread
             }
             val tracker = HotspotRestartTracker()
+            val planner = HotspotFixPlanner(firmware)
             var failing = ""
             while (true) {
                 runCatching {
+                    val now = SystemClock.elapsedRealtime()
                     val cfg = config()
                     val state = apState()
-                    var pinned = false
-                    if (HotspotChannelPolicy.needsPin(channels(cfg), firmware, state)) {
-                        pinned = pin(cfg)
-                        log("5 GHz on auto channel can't start here, " +
-                            if (pinned) "set channel ${HotspotChannelPolicy.CHANNEL}" else "setting channel ${HotspotChannelPolicy.CHANNEL} FAILED")
-                    }
-                    if (tracker.tick(SystemClock.elapsedRealtime(), state, pinned)) {
-                        log("was on before the band change, starting it again")
+                    val action = planner.next(now, channels(cfg), state)
+                    val pinned = apply(action, cfg)
+                    if (action != HotspotFixPlanner.Action.NONE) planner.saved(action, pinned)
+                    if (tracker.tick(now, state, pinned)) {
+                        log("was on before the change, starting it again")
                         startTethering()
+                        planner.started(now)
                     }
                     failing = ""
                 }.onFailure { val e = it.toString(); if (e != failing) { failing = e; log("guard: $e") } }
