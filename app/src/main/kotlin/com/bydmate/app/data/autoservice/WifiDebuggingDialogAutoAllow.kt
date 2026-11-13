@@ -37,6 +37,9 @@ object WifiDebuggingDialogAutoAllow {
     // Framework resource id first (Android 12 layout), the older internal spelling second.
     private val ALWAYS_USE_IDS = listOf("android:id/alwaysUse", "com.android.internal:id/alwaysUse")
     private const val ALLOW_BUTTON_ID = "android:id/button1"
+    private const val MAC_PAIRS = 6
+    // Every maximal run of colon-separated hex pairs: a MAC is six pairs, an MD5 fingerprint sixteen.
+    private val HEX_CHAIN = Regex("(?<![0-9A-Fa-f:])[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2})+(?![0-9A-Fa-f:])")
 
     // What WifiManager returns when the BSSID is hidden from us: as good as no BSSID at all.
     private const val MASKED_BSSID = "02:00:00:00:00:00"
@@ -100,10 +103,21 @@ object WifiDebuggingDialogAutoAllow {
         if (!recentWrite) return Decision.Skip("no recent adb_wifi_enabled write of ours")
         val bssid = currentBssid?.trim()
         if (bssid.isNullOrEmpty() || bssid.equals(MASKED_BSSID, ignoreCase = true)) {
-            return Decision.Skip("bssid unknown")
+            // Android hides the BSSID from apps while location is off. The two dialogs still differ
+            // by their text: wireless debugging names one network address of six pairs, USB
+            // debugging a key fingerprint, which is a longer chain.
+            return if (hasLoneNetworkAddress(windowText)) Decision.Press
+            else Decision.Skip("bssid unknown, no lone network address in window")
         }
         if (windowText?.contains(bssid, ignoreCase = true) != true) return Decision.Skip("bssid not in window")
         return Decision.Press
+    }
+
+    /** True when [text] holds a six-pair address and no longer colon-separated hex chain (a key fingerprint). */
+    private fun hasLoneNetworkAddress(text: CharSequence?): Boolean {
+        if (text == null) return false
+        val chains = HEX_CHAIN.findAll(text).map { it.value.count { c -> c == ':' } + 1 }.toList()
+        return chains.any { it == MAC_PAIRS } && chains.none { it > MAC_PAIRS }
     }
 
     /**
@@ -179,7 +193,7 @@ object WifiDebuggingDialogAutoAllow {
         val strict = restoreEnabled && hasButton && cls?.toString() == PLAIN_DIALOG_CLASS
         val recentWrite = strict && recentWriteOfOurs(appContext)
         val bssid = if (recentWrite) currentBssid(appContext) else null
-        val text = if (recentWrite && root != null) windowText(root) else null
+        val text = if (recentWrite) windowText(root) else null
         val decision = decide(pkg, cls, hasButton, text, bssid, restoreEnabled, recentWrite)
         val outcome = if (decision === Decision.Press) root?.let { allow(it) } ?: Outcome.NoAllowButton else null
         report(appContext, "pkg=$pkg cls=$cls", decision, outcome, via)
