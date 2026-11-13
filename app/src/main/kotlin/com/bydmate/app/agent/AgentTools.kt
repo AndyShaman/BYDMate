@@ -1129,7 +1129,7 @@ class AgentTools @Inject constructor(
             return dispatchRoute(args.getDouble("lat"), args.getDouble("lon"), "destination", label, opts)
         }
         if (destination.isEmpty()) return """{"error":"не указано, куда ехать"}"""
-        homeWorkTarget(destination)?.let { return navigateHomeWork(it, opts) }
+        homeWorkTarget(destination)?.let { return navigateHomeWork(it, opts).json }
         val placesResult = runCatchingCancellable { placeRepository.getAllSnapshot() }
         val place = placesResult.getOrNull()?.firstOrNull { it.name.equals(destination, ignoreCase = true) }
         if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name, opts)
@@ -1191,22 +1191,41 @@ class AgentTools @Inject constructor(
             else -> null
         }
 
+    /**
+     * «домой» / «на работу» routed. [error]: the navigate action's refusal, null when it reported
+     * success; [viaPlace]: the BYDMate Place [placeName] carried the route, not the navigator's
+     * own saved point; [json]: the agent's tool answer.
+     */
+    class HomeWorkRoute(val error: String?, val viaPlace: Boolean, val placeName: String, val json: String)
+
+    /** The offline phrase «поехали домой / на работу» ([shortcut] "home" / "work"): the agent's
+     *  own route, started as for «поехали». */
+    suspend fun routeHomeWork(shortcut: String): HomeWorkRoute =
+        navigateHomeWork(requireNotNull(homeWorkTarget(shortcut)) { "unknown shortcut $shortcut" }, NavOptions(go = true))
+
     // "домой"/"на работу": the BYDMate Place wins (exact coordinates, range assessment works),
     // then the Navigator's own saved Home/Work via its exported shortcut actions.
-    private suspend fun navigateHomeWork(target: HomeWork, opts: NavOptions): String {
+    private suspend fun navigateHomeWork(target: HomeWork, opts: NavOptions): HomeWorkRoute {
         val place = runCatchingCancellable { placeRepository.getAllSnapshot() }
             .getOrNull()?.firstOrNull { it.name.equals(target.placeName, ignoreCase = true) }
-        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name, opts)
+        if (place != null) {
+            val json = dispatchRoute(place.lat, place.lon, "place", place.name, opts)
+            val error = JSONObject(json).optString("error").takeIf(String::isNotEmpty)
+            return HomeWorkRoute(error, viaPlace = true, target.placeName, json)
+        }
         val result = dispatchNavigate("Навигация",
             JSONObject().put("shortcut", target.shortcut).put("go", opts.go).putApp(opts.app))
-        if (!result.success) return JSONObject().put("error",
-            result.reason ?: ("адрес не найден: добавь Место \"${target.placeName}\" в BYDMate " +
-                "или сохрани точку \"${target.placeName}\" в Навигаторе")).toString()
+        if (!result.success) {
+            val error = result.reason ?: ("адрес не найден: добавь Место \"${target.placeName}\" в BYDMate " +
+                "или сохрани точку \"${target.placeName}\" в Навигаторе")
+            return HomeWorkRoute(error, viaPlace = false, target.placeName, JSONObject().put("error", error).toString())
+        }
         // A new route to a point we do not know: the previous destination is no longer the route.
         routeDestination = null
-        return JSONObject().put("ok", true).put("mode", "route").put("target", target.placeName)
+        return HomeWorkRoute(null, viaPlace = false, target.placeName, JSONObject().put("ok", true)
+            .put("mode", "route").put("target", target.placeName)
             .put("note", "если адрес \"${target.placeName}\" сохранён в Навигаторе, " +
-                "маршрут построится по нему; запас хода не оценивался, координаты неизвестны").toString()
+                "маршрут построится по нему; запас хода не оценивался, координаты неизвестны").toString())
     }
 
     private suspend fun dispatchRoute(
@@ -1738,21 +1757,13 @@ class AgentTools @Inject constructor(
         }
     }
 
-    /** "навигатор" = the app chosen in «Навигатор для маршрутов» (#334); the Yandex Navigator is the
-     *  last candidate, so a chosen app that is not installed falls back the way routes do. */
-    private fun chosenNavigatorPackages(): List<String> {
-        val chosen = RouteNavigatorUris.normalize(
-            runCatching {
-                context.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
-                    .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null)
-            }.getOrNull())
-        val preferred = when (chosen) {
-            RouteNavigatorUris.MAPS -> YANDEX_MAPS_PACKAGES
-            RouteNavigatorUris.DGIS, RouteNavigatorUris.WAZE -> listOf(RouteNavigatorUris.packageOf(chosen))
-            else -> emptyList()
-        }
-        return preferred + RouteNavigatorUris.YANDEX_PACKAGE
-    }
+    /** "навигатор" = the app chosen in «Навигатор для маршрутов» (#334), also for the offline
+     *  «открой навигатор» (#416); see [RouteNavigatorUris.launchPackages]. */
+    internal fun chosenNavigatorPackages(): List<String> = RouteNavigatorUris.launchPackages(
+        runCatching {
+            context.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null)
+        }.getOrNull())
 
     private suspend fun launchAppTool(args: JSONObject): String {
         val name = args.optString("name").trim()

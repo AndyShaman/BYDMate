@@ -29,6 +29,8 @@
 #                       the phrase to the agent
 #   MUSIC               Yandex Music's personal mix («Моя волна»), as the agent's play_music
 #                       starts it with no query
+#   NAVIGATE SHORTCUT   a route to Home or Work (home, work), as the agent routes «домой»
+#   OPEN_NAVIGATOR      the navigator chosen for routes, launched as the agent's launch_app does
 # Every template phrase has a row in app/src/test/resources/voice/ru_commands_golden.tsv.
 
 # ---- Verbs ---------------------------------------------------------------------------------
@@ -292,6 +294,15 @@ solo громкость [на] {vol} [<pct_word>] => VOL {vol}
 rule yandex_music: яндекс (музыку|музыка|мьюзик)
 (включи|запусти|открой|поставь) <yandex_music> => MUSIC
 solo <yandex_music> => MUSIC
+
+# ---- Navigation ----------------------------------------------------------------------------
+# Home and Work only with a verb or «маршрут»: a bare «домой» or «поехали» says too little.
+
+list home_work: домой => home ; на работу => work
+(поехали|едем|проложи маршрут|построй маршрут) {home_work} => NAVIGATE {home_work}
+solo маршрут {home_work} => NAVIGATE {home_work}
+(открой|запусти|включи) (навигацию|навигатор) => OPEN_NAVIGATOR
+solo навигация => OPEN_NAVIGATOR
 
 # ---- Locks and trunk -----------------------------------------------------------------------
 # "закрой дверь" said to a passenger is not addressed to the car: only "машину" and the lock
