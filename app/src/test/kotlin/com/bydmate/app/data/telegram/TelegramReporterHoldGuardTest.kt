@@ -3,6 +3,8 @@ package com.bydmate.app.data.telegram
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.backup.TelegramBackupSink
+import com.bydmate.app.data.backup.TelegramError
+import com.bydmate.app.data.backup.TelegramSinkException
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
@@ -123,6 +125,26 @@ class TelegramReporterHoldGuardTest {
         coEvery { helper.offReportStatus(any()) } returns status(pending = 0)
         assertEquals(TelegramReporter.SendResult.Sent, reporter.sendRuleReport("R", setOf(ReportField.SOC), ""))
         assertEquals(1, sent.size)
+        assertEquals("", settings.getTgReportOutbox())
+    }
+
+    /** The armer ticks every 10 s: it must not turn into a retry loop while there is no network. */
+    @Test fun `a tick does not retry a send that met no network, the network drain does`() = runBlocking {
+        connect()
+        powerOffReport(false)
+        var online = false
+        coEvery { sink.sendMessage("tok", any(), any(), "HTML", false) } answers {
+            sent += thirdArg<String>()
+            if (online) Result.success(Unit) else Result.failure(TelegramSinkException(TelegramError.NO_NETWORK, null))
+        }
+        reporter.enqueue(entry("a"))
+        reporter.drainOutbox("service_start")
+        assertEquals(1, sent.size)
+        repeat(3) { reporter.drainOutbox(TelegramReporter.REASON_TICK) }
+        assertEquals("ticks must leave the dead network alone", 1, sent.size)
+        online = true
+        reporter.drainOutbox("network")
+        assertEquals(2, sent.size)
         assertEquals("", settings.getTgReportOutbox())
     }
 }
