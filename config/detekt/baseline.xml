@@ -280,7 +280,6 @@
     <ID>LongParameterList:AutomationEngine.kt$AutomationEngine$( triggers: List&lt;TriggerDef&gt;, data: DiParsData, location: Location?, places: Map&lt;Long, PlaceEntity&gt;, serviceStartActive: Boolean, networkAvailableEdge: Boolean )</ID>
     <ID>LongParameterList:AutomationEngineButtonPressTest.kt$AutomationEngineButtonPressTest$( id: Long, buttonId: Int, cooldown: Int = 0, requirePark: Boolean = false, fireOncePerTrip: Boolean = false, lastTriggeredAt: Long? = null, enabled: Boolean = true, )</ID>
     <ID>LongParameterList:AutomationEngineEdgeTest.kt$AutomationEngineEdgeTest$( id: Long, triggers: List&lt;TriggerDef&gt;, logic: String = "AND", cooldown: Int = 0, requirePark: Boolean = false, lastTriggeredAt: Long? = null, )</ID>
-    <ID>LongParameterList:AutoserviceChargingDetectorHybridAnchorTest.kt$AutoserviceChargingDetectorHybridAnchorTest$( soc: Int, speed: Int?, rpm: Int?, mileage: Double, power: Double? = 0.0, gun: Int? = 1, )</ID>
     <ID>LongParameterList:AutoserviceChargingDetectorTest.kt$AutoserviceChargingDetectorTest$( battery: BatteryReading?, charging: ChargingReading? = ChargingReading( gunConnectState = 1, chargingType = 1, chargeBatteryVoltV = 0, batteryType = 1, chargingCapacityKwh = null, bmsState = null, readAtMs = 0L ), prevSoc: Int? = null, prevCapacityKwh: Float? = null, prevMileageKm: Float? = null, prevTs: Long? = null, autoserviceAvailable: Boolean = true, homeTariff: Double = 0.20, dcTariff: Double = 0.73, diParsData: DiParsData? = null )</ID>
     <ID>LongParameterList:AutoserviceTransact.kt$( svc: IBinder, autoIface: String, tx: Int, dev: Int, fid: Int, value: Int, writeValue: Boolean )</ID>
     <ID>LongParameterList:BlindSpotPreferences.kt$BlindSpotPreferences.Companion$( displayW: Int, displayH: Int, shape: PipShape, leftX: Int, leftY: Int, rightRect: Rect, )</ID>
@@ -369,7 +368,6 @@
     <ID>MatchingDeclarationName:SettingsScreen.kt$SettingsSection</ID>
     <ID>MatchingDeclarationName:ShellExec.kt$CmdResult</ID>
     <ID>MatchingDeclarationName:SplitPairPicker.kt$SplitRole</ID>
-    <ID>MatchingDeclarationName:TangHybridFixture.kt$TangHybrid</ID>
     <ID>MatchingDeclarationName:UpdateDialog.kt$UpdateState</ID>
     <ID>MatchingDeclarationName:WidgetSplitTap.kt$SplitWidgetEntryPoint</ID>
     <ID>MayBeConst:DumpFidsCoreTest.kt$DumpFidsCoreTest.FakeConstants$@JvmField val ALPHA: Int = 1</ID>

@@ -323,6 +323,14 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
                     .format(helperClient.readBatch(HybridProbeDiagnostics.batchItems()))
                     .forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
+            // Where the poll reads the hybrid fields on this car (#394): the compiled address, or
+            // the catalog one where the compiled address answers an error.
+            try {
+                val hybridTable = com.bydmate.app.data.nativestack.FidAddresses.hybrid
+                HybridProbeDiagnostics
+                    .formatTable(hybridTable, helperClient.readBatch(HybridProbeDiagnostics.tableItems(hybridTable)))
+                    .forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("hybrid table: error ${e.message}") }
             try {
                 appendLine(vehicleKindMonitor.dumpLine())
             } catch (e: Exception) { appendLine("vehicle_kind: error ${e.message}") }

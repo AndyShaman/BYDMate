@@ -44,6 +44,14 @@ mileage_ev[dev=1014 fid=1246773284 tx=5]=1
 fuel_tank_cap[dev=1001 fid=1336934422 tx=5]=2
 ev_range_km[dev=1014 fid=1246765118 tx=5]=0
 elec_phm[dev=1014 fid=1032863794 tx=7]=1
+hybrid table: source=constants resolved: 7 const, 0 catalog, 0 rejected, 1 no-symbol
+  fuelPercent Statistic.STATISTIC_FUEL_PERCENTAGE dev=1014 fid=1246785600 const now=0
+  fuelRangeKm Statistic.STATISTIC_FUEL_DRIVING_RANGE dev=1014 fid=1246773304 const now=1
+  fuelTotalL Statistic.STATISTIC_TOTAL_FUEL_CONSUMPTION dev=1014 fid=1246760976 const now=2
+  mileageHevKm Statistic.STATISTIC_MILEAGE_HEV dev=1014 fid=1246773264 const now=0
+  mileageEvKm Statistic.STATISTIC_MILEAGE_EV dev=1014 fid=1246773284 const now=1
+  engineRpm (no symbol) dev=1012 fid=339738642 const now=2
+  evRangeKm Statistic.STATISTIC_ELEC_DRIVING_RANGE dev=1014 fid=1246765118 const now=0
 
 car_autotype=? source=none
 service_start: fixed

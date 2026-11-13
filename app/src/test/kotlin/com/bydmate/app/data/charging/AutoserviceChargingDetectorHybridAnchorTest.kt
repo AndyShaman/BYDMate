@@ -46,6 +46,7 @@ class AutoserviceChargingDetectorHybridAnchorTest {
         return Setup(detector, stateStore)
     }
 
+    @Suppress("LongParameterList")
     private fun tick(
         soc: Int, speed: Int?, rpm: Int?, mileage: Double, power: Double? = 0.0, gun: Int? = 1,
     ): DiParsData = diParsData(soc = soc, speed = speed, mileage = mileage, power = power, chargeGunState = gun)
