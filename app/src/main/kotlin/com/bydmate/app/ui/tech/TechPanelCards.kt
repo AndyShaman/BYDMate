@@ -66,12 +66,6 @@ internal fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, m
             state.hvVoltage?.let { stringResource(R.string.tech_value_volt, it) } ?: DASH,
             hintKey = "hvVoltage", onHint = onHint,
         )
-        TechRow(
-            stringResource(R.string.tech_label_power),
-            state.powerKw?.let { stringResource(R.string.tech_value_kw, it.roundToInt()) } ?: DASH,
-            valueColor = if ((state.powerKw ?: 0.0) < 0.0) AccentBlue else TextPrimary,
-            hintKey = "power", onHint = onHint,
-        )
         // #153: negative = the pack is taking energy in (green), positive = it is giving it away.
         TechRow(
             stringResource(R.string.tech_label_battery_power),
@@ -103,7 +97,6 @@ internal fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, m
         Hint(state.openHint, "remainKwh", R.string.tech_hint_remain_kwh)
         Hint(state.openHint, "soh", R.string.tech_hint_soh)
         Hint(state.openHint, "hvVoltage", R.string.tech_hint_hv_voltage)
-        Hint(state.openHint, "power", R.string.tech_hint_motor_power)
         Hint(state.openHint, "batteryPower", R.string.tech_hint_power)
         Hint(state.openHint, "voltage12v", R.string.tech_hint_12v)
         Hint(state.openHint, "insulation", R.string.tech_hint_insulation)
@@ -186,11 +179,14 @@ internal fun LimitsAndCellsCard(state: TechPanelUiState, onHint: (String) -> Uni
 /**
  * Rows of the motors card, in the order they are drawn. Kept as data so the order is pinned by
  * a unit test — the module has no Compose UI test harness. The front/rear split sits last:
- * VadimV reported it reads as a repeat of the per-motor numbers when it is at the top.
+ * VadimV reported it reads as a repeat of the per-motor numbers when it is at the top. The
+ * motors' total power opens the card: it used to sit in the battery card, where people read it
+ * as the battery's power.
  */
-internal enum class MotorRow { HEADER, MOTOR_TEMP, INVERTER_TEMP, RPM, PEDALS, POWER_SPLIT }
+internal enum class MotorRow { TOTAL_POWER, HEADER, MOTOR_TEMP, INVERTER_TEMP, RPM, PEDALS, POWER_SPLIT }
 
 internal val MOTOR_CARD_ROWS: List<MotorRow> = listOf(
+    MotorRow.TOTAL_POWER,
     MotorRow.HEADER,
     MotorRow.MOTOR_TEMP,
     MotorRow.INVERTER_TEMP,
@@ -208,19 +204,26 @@ internal fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit, modif
         modifier = modifier,
     ) {
         MOTOR_CARD_ROWS.forEach {
-            MotorCardRow(it, state)
+            MotorCardRow(it, state, onHint)
             // DM-i: the engine is not a motor pair, so its rpm is one value under the motors' rpm.
             if (it == MotorRow.RPM && state.isHybrid) EngineRpmRow(state.engineRpm, R.string.tech_label_engine_rpm)
         }
+        Hint(state.openHint, "power", R.string.tech_hint_motor_power)
         Hint(state.openHint, "motors", R.string.tech_hint_motors)
     }
 }
 
 @Composable
-private fun MotorCardRow(row: MotorRow, state: TechPanelUiState) {
+private fun MotorCardRow(row: MotorRow, state: TechPanelUiState, onHint: (String) -> Unit) {
     val anyTemp = state.motorTempFront ?: state.motorTempRear
         ?: state.inverterTempFront ?: state.inverterTempRear
     when (row) {
+        MotorRow.TOTAL_POWER -> TechRow(
+            stringResource(R.string.tech_label_power),
+            state.powerKw?.let { stringResource(R.string.tech_value_kw, it.roundToInt()) } ?: DASH,
+            valueColor = if ((state.powerKw ?: 0.0) < 0.0) AccentBlue else TextPrimary,
+            hintKey = "power", onHint = onHint,
+        )
         MotorRow.HEADER -> PairRow(
             "",
             stringResource(R.string.tech_label_front),
