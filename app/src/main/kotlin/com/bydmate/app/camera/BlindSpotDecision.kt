@@ -1,5 +1,7 @@
 package com.bydmate.app.camera
 
+import kotlin.math.roundToInt
+
 /** Which blind-spot window is on screen; NONE = both hidden. */
 enum class BlindSpotSide { NONE, LEFT, RIGHT }
 
@@ -228,3 +230,68 @@ fun blindSpotCoversMainScreen(
     BlindSpotSide.RIGHT -> rightOnMainScreen
     BlindSpotSide.NONE -> false
 }
+
+/**
+ * Optional cap on how long one show stays on screen (0 = no cap, the default). A long-held
+ * blinker at a junction kept the window over the cluster map for up to 40 s (#397 log). The cap
+ * only hides the window: the camera stays warm and cools down as it does after a signal goes off.
+ *
+ * A show is timed from the tick [apply]'s `decided` became that side, so a show the speed gate
+ * interrupts starts over. Once cut, the window stays down until the turn-signal side changes
+ * (off, the other side): otherwise a held blinker would bring it back on the next tick.
+ */
+class BlindSpotShowLimit {
+    private var side = BlindSpotSide.NONE
+    private var since = 0L
+    private var lastSignal = BlindSpotSide.NONE
+
+    /** True while a cut show is waiting for the turn signal to change; read for the log. */
+    var expired = false
+        private set
+
+    fun apply(decided: BlindSpotSide, signal: BlindSpotSide, nowMs: Long, limitSec: Int): BlindSpotSide {
+        if (signal != lastSignal) {
+            lastSignal = signal
+            expired = false
+        }
+        // A clock that went back restarts the timer rather than running it negative.
+        if (decided != side || nowMs < since) {
+            side = decided
+            since = nowMs
+        }
+        if (limitSec <= 0) {
+            expired = false
+            return decided
+        }
+        if (decided == BlindSpotSide.NONE) return BlindSpotSide.NONE
+        if (!expired && nowMs - since >= limitSec * MS_PER_SEC) expired = true
+        return if (expired) BlindSpotSide.NONE else decided
+    }
+
+    private companion object {
+        const val MS_PER_SEC = 1_000L
+    }
+}
+
+/** Mean brightness (0..255) of ARGB pixels; null for an empty frame. */
+fun blindSpotFrameLuma(pixels: IntArray): Int? {
+    if (pixels.isEmpty()) return null
+    var sum = 0.0
+    for (p in pixels) {
+        val r = (p shr 16) and 0xFF
+        val g = (p shr 8) and 0xFF
+        val b = p and 0xFF
+        sum += 0.299 * r + 0.587 * g + 0.114 * b
+    }
+    return (sum / pixels.size).roundToInt()
+}
+
+/**
+ * Whether the first frame's brightness is measured for the camera under [tag]. The panoramic
+ * cameras the side-view index map was proven on are left alone; the others (`apa`, `byd_apa`,
+ * firmware tags) showed a black window on some cars (#409, #397) and the log has to say whether
+ * the frames really are black.
+ */
+fun blindSpotLumaChecked(tag: String?): Boolean = tag != null && tag !in LUMA_SKIPPED_TAGS
+
+private val LUMA_SKIPPED_TAGS = setOf("pano_h", "pano_l")

@@ -1596,6 +1596,10 @@
     <string name="settings_blindspot_header">Слепые зоны</string>
     <string name="settings_blindspot_threshold_title">Порог скорости</string>
     <string name="settings_blindspot_threshold_desc">Ниже этой скорости камера не показывается</string>
+    <string name="settings_blindspot_max_show_title">Убирать камеру через</string>
+    <string name="settings_blindspot_max_show_desc">Если поворотник горит долго, камера уйдёт с экрана через это время и вернётся при следующем включении поворотника. Рамка-предупреждение о машине в слепой зоне уйдёт вместе с ней.</string>
+    <string name="settings_blindspot_max_show_off">без лимита</string>
+    <string name="settings_blindspot_max_show_value">%d с</string>
     <string name="settings_blindspot_pip_width_title">Ширина окошка</string>
     <string name="settings_blindspot_pip_width_desc">Ширина окошка на главном экране в % от ширины экрана</string>
     <string name="settings_blindspot_rotate_title">Окно камеры вертикально</string>

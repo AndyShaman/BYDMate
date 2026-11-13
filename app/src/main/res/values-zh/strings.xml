@@ -1557,6 +1557,10 @@
     <string name="settings_blindspot_header">盲区</string>
     <string name="settings_blindspot_threshold_title">速度阈值</string>
     <string name="settings_blindspot_threshold_desc">低于该速度时不显示摄像头</string>
+    <string name="settings_blindspot_max_show_title">摄像头自动隐藏</string>
+    <string name="settings_blindspot_max_show_desc">转向灯长时间开着时，摄像头会在这段时间后从屏幕上消失，下次打开转向灯时再出现。盲区有车的提示边框也会一起消失。</string>
+    <string name="settings_blindspot_max_show_off">不限制</string>
+    <string name="settings_blindspot_max_show_value">%d 秒</string>
     <string name="settings_blindspot_pip_width_title">小窗宽度</string>
     <string name="settings_blindspot_pip_width_desc">主屏幕小窗的宽度，占屏幕宽度的百分比</string>
     <string name="settings_blindspot_rotate_title">竖向摄像头窗口</string>

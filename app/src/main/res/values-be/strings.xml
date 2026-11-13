@@ -1592,6 +1592,10 @@
     <string name="settings_blindspot_header">Сляпыя зоны</string>
     <string name="settings_blindspot_threshold_title">Парог хуткасці</string>
     <string name="settings_blindspot_threshold_desc">Ніжэй за гэту хуткасць камера не паказваецца</string>
+    <string name="settings_blindspot_max_show_title">Прыбіраць камеру праз</string>
+    <string name="settings_blindspot_max_show_desc">Калі паваротнік гарыць доўга, камера сыдзе з экрана праз гэты час і вернецца пры наступным уключэнні паваротніка. Рамка-папярэджанне пра машыну ў сляпой зоне сыдзе разам з ёй.</string>
+    <string name="settings_blindspot_max_show_off">без ліміту</string>
+    <string name="settings_blindspot_max_show_value">%d с</string>
     <string name="settings_blindspot_pip_width_title">Шырыня акенца</string>
     <string name="settings_blindspot_pip_width_desc">Шырыня акенца на галоўным экране ў % ад шырыні экрана</string>
     <string name="settings_blindspot_rotate_title">Акно камеры вертыкальна</string>

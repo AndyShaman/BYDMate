@@ -1446,6 +1446,10 @@
     <string name="settings_blindspot_header">Blind spots</string>
     <string name="settings_blindspot_threshold_title">Speed threshold</string>
     <string name="settings_blindspot_threshold_desc">Below this speed the camera stays hidden</string>
+    <string name="settings_blindspot_max_show_title">Hide the camera after</string>
+    <string name="settings_blindspot_max_show_desc">If the turn signal stays on for a long time, the camera leaves the screen after this time and comes back the next time you turn the signal on. The warning border for a car in the blind spot goes away with it.</string>
+    <string name="settings_blindspot_max_show_off">no limit</string>
+    <string name="settings_blindspot_max_show_value">%d s</string>
     <string name="settings_blindspot_pip_width_title">Window width</string>
     <string name="settings_blindspot_pip_width_desc">Width of the main-screen window as % of the screen width</string>
     <string name="settings_blindspot_rotate_title">Vertical camera window</string>

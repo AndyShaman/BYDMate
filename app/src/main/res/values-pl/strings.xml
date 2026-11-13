@@ -1592,6 +1592,10 @@
     <string name="settings_blindspot_header">Martwe pola</string>
     <string name="settings_blindspot_threshold_title">Próg prędkości</string>
     <string name="settings_blindspot_threshold_desc">Poniżej tej prędkości kamera się nie pokazuje</string>
+    <string name="settings_blindspot_max_show_title">Ukryj kamerę po</string>
+    <string name="settings_blindspot_max_show_desc">Jeśli kierunkowskaz świeci długo, kamera zniknie z ekranu po tym czasie i wróci przy następnym włączeniu kierunkowskazu. Ramka ostrzegająca o aucie w martwym polu zniknie razem z nią.</string>
+    <string name="settings_blindspot_max_show_off">bez limitu</string>
+    <string name="settings_blindspot_max_show_value">%d s</string>
     <string name="settings_blindspot_pip_width_title">Szerokość okienka</string>
     <string name="settings_blindspot_pip_width_desc" formatted="false">Szerokość okienka na ekranie głównym w % szerokości ekranu</string>
     <string name="settings_blindspot_rotate_title">Pionowe okno kamery</string>

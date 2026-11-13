@@ -1443,6 +1443,10 @@
     <string name="settings_blindspot_header">Pontos cegos</string>
     <string name="settings_blindspot_threshold_title">Limite de velocidade</string>
     <string name="settings_blindspot_threshold_desc">Abaixo desta velocidade a câmera não é exibida</string>
+    <string name="settings_blindspot_max_show_title">Ocultar a câmera após</string>
+    <string name="settings_blindspot_max_show_desc">Se a seta ficar ligada por muito tempo, a câmera sai da tela depois desse tempo e volta na próxima vez que você ligar a seta. A moldura de aviso de carro no ponto cego some junto com ela.</string>
+    <string name="settings_blindspot_max_show_off">sem limite</string>
+    <string name="settings_blindspot_max_show_value">%d s</string>
     <string name="settings_blindspot_pip_width_title">Largura da janelinha</string>
     <string name="settings_blindspot_pip_width_desc">Largura da janelinha na tela principal em % da largura da tela</string>
     <string name="settings_blindspot_rotate_title">Janela da câmera na vertical</string>
