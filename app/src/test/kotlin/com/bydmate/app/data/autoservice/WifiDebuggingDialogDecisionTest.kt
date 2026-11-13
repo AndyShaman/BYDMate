@@ -57,8 +57,39 @@ class WifiDebuggingDialogDecisionTest {
     }
 
     @Test
-    fun `A5 unknown current BSSID is skipped for the Dialog class`() {
-        assertSkipped(decide(currentBssid = null), "bssid")
+    fun `A5 unknown current BSSID still presses the wireless dialog, told apart by its text`() {
+        // Android hides the BSSID from apps while location is off: null or the masked placeholder.
+        // The wireless dialog shows one network address of six pairs; that is enough with our write.
+        assertEquals(Decision.Press, decide(currentBssid = null))
+        assertEquals(Decision.Press, decide(currentBssid = "02:00:00:00:00:00"))
+        assertEquals(Decision.Press, decide(currentBssid = "  "))
+    }
+
+    @Test
+    fun `A5 unknown current BSSID never presses a window without a lone network address`() {
+        // The USB debugging dialog shows a key fingerprint: a chain longer than six pairs.
+        val md5 = "Allow USB debugging? The computer's RSA key fingerprint is: " +
+            "0A:1B:2C:3D:4E:5F:60:71:82:93:A4:B5:C6:D7:E8:F9 Always allow from this computer"
+        for (bssid in listOf(null, "02:00:00:00:00:00")) {
+            assertSkipped(decide(windowText = md5, currentBssid = bssid), "bssid")
+            assertSkipped(decide(windowText = usbText, currentBssid = bssid), "bssid")
+            assertSkipped(decide(windowText = "Allow?", currentBssid = bssid), "bssid")
+            assertSkipped(decide(windowText = null, currentBssid = bssid), "bssid")
+            // A fingerprint next to an address is still not ours to press.
+            assertSkipped(decide(windowText = "$dialogText $md5", currentBssid = bssid), "bssid")
+        }
+    }
+
+    @Test
+    fun `A5 unknown current BSSID keeps the other conditions`() {
+        assertSkipped(decide(currentBssid = null, recentWrite = false), "write")
+        assertSkipped(decide(currentBssid = null, restoreEnabled = false), "toggle")
+        assertEquals(Decision.NoAllowButton, decide(currentBssid = null, hasAllowButton = false))
+    }
+
+    @Test
+    fun `A5 a known BSSID still has to be the one in the window`() {
+        assertSkipped(decide(currentBssid = "02:00:00:11:22:33"), "bssid")
     }
 
     @Test
