@@ -17,6 +17,7 @@ class WifiDebuggingDialogDecisionTest {
             "02:00:00:AA:BB:CC Always allow on this network"
     private val usbText = "Allow USB debugging? The computer's RSA key fingerprint is: 00:11:22:33"
 
+    @Suppress("LongParameterList") // one parameter per input of the decision
     private fun decide(
         pkg: String? = SYSTEMUI,
         cls: String? = PLAIN_DIALOG,
