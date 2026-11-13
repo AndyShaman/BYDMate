@@ -16,7 +16,7 @@ sealed interface ParseResult {
     /** Yandex Music's personal mix, started like the agent's play_music with no query. */
     data object Music : ParseResult
     /** A route to the driver's Home or Work ([shortcut] "home" / "work"), as the agent routes «домой». */
-    data class Navigate(val shortcut: String) : ParseResult
+    data class Navigate(val shortcut: String, val go: Boolean = true) : ParseResult
     /** The navigator chosen for routes, launched like the agent's launch_app for «навигатор». */
     data object OpenNavigator : ParseResult
     data object Unrecognized : ParseResult

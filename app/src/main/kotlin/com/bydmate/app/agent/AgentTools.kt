@@ -1196,12 +1196,16 @@ class AgentTools @Inject constructor(
      * success; [viaPlace]: the BYDMate Place [placeName] carried the route, not the navigator's
      * own saved point; [json]: the agent's tool answer.
      */
-    class HomeWorkRoute(val error: String?, val viaPlace: Boolean, val placeName: String, val json: String)
+    class HomeWorkRoute(
+        val error: String?, val viaPlace: Boolean, val placeName: String, val json: String,
+        /** The navigator refused its saved point and named no reason of its own. */
+        val addressMissing: Boolean = false,
+    )
 
-    /** The offline phrase «поехали домой / на работу» ([shortcut] "home" / "work"): the agent's
-     *  own route, started as for «поехали». */
-    suspend fun routeHomeWork(shortcut: String): HomeWorkRoute =
-        navigateHomeWork(requireNotNull(homeWorkTarget(shortcut)) { "unknown shortcut $shortcut" }, NavOptions(go = true))
+    /** The offline phrases «поехали домой» ([go]) and «маршрут домой» (built, not started), and the
+     *  same for «на работу» ([shortcut] "home" / "work"): the agent's own route. */
+    suspend fun routeHomeWork(shortcut: String, go: Boolean): HomeWorkRoute =
+        navigateHomeWork(requireNotNull(homeWorkTarget(shortcut)) { "unknown shortcut $shortcut" }, NavOptions(go = go))
 
     // "домой"/"на работу": the BYDMate Place wins (exact coordinates, range assessment works),
     // then the Navigator's own saved Home/Work via its exported shortcut actions.
@@ -1218,7 +1222,8 @@ class AgentTools @Inject constructor(
         if (!result.success) {
             val error = result.reason ?: ("адрес не найден: добавь Место \"${target.placeName}\" в BYDMate " +
                 "или сохрани точку \"${target.placeName}\" в Навигаторе")
-            return HomeWorkRoute(error, viaPlace = false, target.placeName, JSONObject().put("error", error).toString())
+            return HomeWorkRoute(error, viaPlace = false, target.placeName,
+                JSONObject().put("error", error).toString(), addressMissing = result.reason == null)
         }
         // A new route to a point we do not know: the previous destination is no longer the route.
         routeDestination = null

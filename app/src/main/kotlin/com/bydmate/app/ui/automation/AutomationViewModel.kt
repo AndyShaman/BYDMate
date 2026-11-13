@@ -58,6 +58,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -886,7 +887,8 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
 
     /** Reads the file [name] with [read] off the main thread and opens its preview, see [pickImportFile]. */
     private suspend fun importFrom(name: String, read: () -> String?) {
-        val places = _uiState.value.places
+        // Not the UI state: a file opened from a file manager can get here before its first load.
+        val places = placeRepository.getAll().first()
         val lc = context.appLocalizedContext()
         val callLabel = lc.getString(R.string.auto_act_call)
         val parsed = try {

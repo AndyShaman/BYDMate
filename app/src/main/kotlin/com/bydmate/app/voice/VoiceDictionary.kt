@@ -117,8 +117,9 @@ internal sealed interface CommandExpr {
         override fun resolve(values: Map<String, String>) = ParseResult.Music
     }
 
-    class Navigate(private val shortcut: String) : CommandExpr {
-        override fun resolve(values: Map<String, String>) = ParseResult.Navigate(fill(shortcut, values).single())
+    /** [go]: «поехали» starts the route; «маршрут» only builds it and leaves the start to the driver. */
+    class Navigate(private val shortcut: String, private val go: Boolean) : CommandExpr {
+        override fun resolve(values: Map<String, String>) = ParseResult.Navigate(fill(shortcut, values).single(), go)
     }
 
     object OpenNavigator : CommandExpr {
@@ -137,7 +138,8 @@ internal sealed interface CommandExpr {
             text == "TEMP -1" -> Temp(-1)
             text == "MUSIC" -> Music
             text == "OPEN_NAVIGATOR" -> OpenNavigator
-            text.startsWith("NAVIGATE ") -> Navigate(text.removePrefix("NAVIGATE ").trim())
+            text.startsWith("NAVIGATE ") -> Navigate(text.removePrefix("NAVIGATE ").trim(), go = true)
+            text.startsWith("ROUTE ") -> Navigate(text.removePrefix("ROUTE ").trim(), go = false)
             text.startsWith("VOL ") -> Vol(text.removePrefix("VOL ").trim())
             text.startsWith("ASK ") -> text.removePrefix("ASK ").trim().let { id ->
                 Ask(requireNotNull(VehicleQuestion.of(id)) { "unknown question \"$id\" in \"$text\"" })

@@ -678,14 +678,14 @@ utterance	expected	category	danger
 обдув на лобовое стекло	除霜	climate	
 поехали домой	NAVIGATE:home	navigation	
 едем домой	NAVIGATE:home	navigation	
-маршрут домой	NAVIGATE:home	navigation	
-проложи маршрут домой	NAVIGATE:home	navigation	
-построй маршрут домой	NAVIGATE:home	navigation	
+маршрут домой	ROUTE:home	navigation	
+проложи маршрут домой	ROUTE:home	navigation	
+построй маршрут домой	ROUTE:home	navigation	
 поехали на работу	NAVIGATE:work	navigation	
 едем на работу	NAVIGATE:work	navigation	
-маршрут на работу	NAVIGATE:work	navigation	
-проложи маршрут на работу	NAVIGATE:work	navigation	
-построй маршрут на работу	NAVIGATE:work	navigation	
+маршрут на работу	ROUTE:work	navigation	
+проложи маршрут на работу	ROUTE:work	navigation	
+построй маршрут на работу	ROUTE:work	navigation	
 навигация	OPEN_NAVIGATOR	navigation	
 открой навигацию	OPEN_NAVIGATOR	navigation	
 запусти навигацию	OPEN_NAVIGATOR	navigation	

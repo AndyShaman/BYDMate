@@ -655,7 +655,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
             is ParseResult.Volume -> Resolution.Vol(r.payload)
             ParseResult.Music -> Resolution.Music
-            is ParseResult.Navigate -> Resolution.Navigate(r.shortcut)
+            is ParseResult.Navigate -> Resolution.Navigate(r.shortcut, r.go)
             ParseResult.OpenNavigator -> Resolution.OpenNavigator
             // A value the car does not report goes to the agent, never a made-up answer; so does
             // every question while the snapshot is not live: it is never cleared on transport
@@ -675,7 +675,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is Resolution.RelTemp -> dispatchRelativeTemp(res.sign, transcript, decodeMs)
             is Resolution.Vol -> dispatchVolume(res.payload, transcript, decodeMs)
             Resolution.Music -> dispatchMusic(transcript, decodeMs)
-            is Resolution.Navigate -> dispatchHomeWork(res.shortcut, transcript, decodeMs)
+            is Resolution.Navigate -> dispatchHomeWork(res.shortcut, res.go, transcript, decodeMs)
             Resolution.OpenNavigator -> dispatchOpenNavigator(transcript, decodeMs)
             is Resolution.Answer -> answer(res, transcript, decodeMs)
             is Resolution.Auto -> fireAutomation(res.match, transcript, decodeMs)
@@ -866,18 +866,21 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
     /** «поехали домой / на работу»: the agent's own Home/Work route ([AgentTools.routeHomeWork]),
      *  the BYDMate Place «Дом» / «Работа» first, then the navigator's saved point, route started. */
-    private suspend fun dispatchHomeWork(shortcut: String, transcript: String, decodeMs: Long) {
-        val route = agentTools.routeHomeWork(shortcut)
+    private suspend fun dispatchHomeWork(shortcut: String, go: Boolean, transcript: String, decodeMs: Long) {
+        val route = agentTools.routeHomeWork(shortcut, go)
         val name = route.placeName
         val failure = route.error?.let { error ->
             Failure(error, when {
                 installedNavigator() == null -> NO_NAVIGATOR
                 route.viaPlace -> "Не получилось построить маршрут"
-                else -> "Адрес «$name» не найден. Добавь Место «$name» в BYDMate или сохрани точку «$name» в навигаторе"
+                route.addressMissing ->
+                    "Адрес «$name» не найден. Добавь Место «$name» в BYDMate или сохрани точку «$name» в навигаторе"
+                // The action named its own reason (no accessibility, split restore): say that one.
+                else -> null
             })
         }
         val via = if (route.viaPlace) "place" else "navigator"
-        report("navigate=$shortcut", "cmd=navigate shortcut=$shortcut via=$via", failure, transcript, decodeMs)
+        report("navigate=$shortcut", "cmd=navigate shortcut=$shortcut go=$go via=$via", failure, transcript, decodeMs)
     }
 
     /** «открой навигатор»: the app chosen for routes, launched like the agent's launch_app does for
@@ -1155,7 +1158,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         data class RelTemp(val sign: Int) : Resolution
         data class Vol(val payload: String) : Resolution
         data object Music : Resolution
-        data class Navigate(val shortcut: String) : Resolution
+        data class Navigate(val shortcut: String, val go: Boolean) : Resolution
         data object OpenNavigator : Resolution
         /** A dictionary question with the value known: [text] is said, nothing is dispatched. */
         data class Answer(val question: VehicleQuestion, val text: String) : Resolution {

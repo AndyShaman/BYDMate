@@ -7,19 +7,24 @@ import org.junit.Test
 class NluParserNavigationTest {
 
     @Test fun home_phrases_navigate_to_the_home_shortcut() {
-        for (phrase in listOf(
-            "поехали домой", "едем домой", "маршрут домой", "проложи маршрут домой", "построй маршрут домой",
-        )) {
-            assertEquals(phrase, ParseResult.Navigate("home"), NluParser.parse(phrase))
+        for (phrase in listOf("поехали домой", "едем домой")) {
+            assertEquals(phrase, ParseResult.Navigate("home", go = true), NluParser.parse(phrase))
+        }
+    }
+
+    // «Маршрут» builds the route and leaves the start to the driver, as the agent does.
+    @Test fun route_phrases_build_the_route_without_starting_it() {
+        for (phrase in listOf("маршрут домой", "проложи маршрут домой", "построй маршрут домой")) {
+            assertEquals(phrase, ParseResult.Navigate("home", go = false), NluParser.parse(phrase))
+        }
+        for (phrase in listOf("маршрут на работу", "проложи маршрут на работу", "построй маршрут на работу")) {
+            assertEquals(phrase, ParseResult.Navigate("work", go = false), NluParser.parse(phrase))
         }
     }
 
     @Test fun work_phrases_navigate_to_the_work_shortcut() {
-        for (phrase in listOf(
-            "поехали на работу", "едем на работу", "маршрут на работу", "проложи маршрут на работу",
-            "построй маршрут на работу",
-        )) {
-            assertEquals(phrase, ParseResult.Navigate("work"), NluParser.parse(phrase))
+        for (phrase in listOf("поехали на работу", "едем на работу")) {
+            assertEquals(phrase, ParseResult.Navigate("work", go = true), NluParser.parse(phrase))
         }
     }
 
