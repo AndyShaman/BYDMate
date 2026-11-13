@@ -534,7 +534,10 @@ class LogRecorder internal constructor(
             // out: it floods (~20 lines/s on Leopard 3).
             "BYDAutoSettingDevice:*", "AbsBYDAutoSettingListener:*", "BYDAutoAcDevice:*",
             // The event journal: one line per user action, decision and failure, by=#id links.
-            "Trace:*"
+            "Trace:*",
+            // Split on DiLink 3/4 (#385): who starts an activity while the split comes up, and
+            // the firmware's own multi-window controllers.
+            "ActivityTaskManager:I", "BydSmartMultiIviController:D", "BydSmartMultiController:D"
         )
     }
 }

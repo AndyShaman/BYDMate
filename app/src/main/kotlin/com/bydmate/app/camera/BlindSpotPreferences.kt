@@ -29,6 +29,10 @@ class BlindSpotPreferences @Inject constructor(
     val thresholdKmh: Int get() = prefs.getInt(KEY_THRESHOLD_KMH, DEFAULT_THRESHOLD_KMH)
     val pipWidthPct: Int get() = prefs.getInt(KEY_PIP_WIDTH_PCT, DEFAULT_PIP_WIDTH_PCT)
 
+    /** Longest a single show stays on screen, in seconds; 0 = as long as the signal holds. */
+    val maxShowSec: Int
+        get() = prefs.getInt(KEY_MAX_SHOW_SEC, DEFAULT_MAX_SHOW_SEC).coerceIn(MIN_MAX_SHOW_SEC, MAX_MAX_SHOW_SEC)
+
     /** Top-left corner in real display pixels; [UNSET_PX] until the user drags the window. */
     val pipXPx: Int get() = prefs.getInt(KEY_PIP_X_PX, UNSET_PX)
     val pipYPx: Int get() = prefs.getInt(KEY_PIP_Y_PX, UNSET_PX)
@@ -62,6 +66,7 @@ class BlindSpotPreferences @Inject constructor(
         const val KEY_BOTH_ON_MAIN = "both_on_main"
         const val KEY_BOTH_ON_CLUSTER = "both_on_cluster"
         const val KEY_PIP_ROTATE_90 = "pip_rotate_90"
+        const val KEY_MAX_SHOW_SEC = "max_show_sec"
 
         /** Position is stored in absolute pixels, so "never placed" needs its own value. */
         const val UNSET_PX = -1
@@ -75,6 +80,9 @@ class BlindSpotPreferences @Inject constructor(
         const val MAX_THRESHOLD_KMH = 60
         const val MIN_PIP_WIDTH_PCT = 20
         const val MAX_PIP_WIDTH_PCT = 60
+        const val DEFAULT_MAX_SHOW_SEC = 0
+        const val MIN_MAX_SHOW_SEC = 0
+        const val MAX_MAX_SHOW_SEC = 60
 
         /** The settings card's main switch: writes it and traces the flip, old to new. */
         fun setEnabled(prefs: SharedPreferences, on: Boolean) {

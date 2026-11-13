@@ -33,7 +33,7 @@ class OpenRouterTtsBackendTest {
         server = MockWebServer(); server.start()
         backend = OpenRouterTtsBackend(
             id = "gemini",
-            model = "google/gemini-3.1-flash-tts-preview",
+            model = "google/gemini-3.8-flash-tts",
             maleVoice = "Charon",
             femaleVoice = "Kore",
             http = OkHttpClient(),
@@ -116,7 +116,7 @@ class OpenRouterTtsBackendTest {
         assertEquals("/api/v1/audio/speech", req.path)
         assertEquals("Bearer sk-abc", req.getHeader("Authorization"))
         val sent = JSONObject(req.body.readUtf8())
-        assertEquals("google/gemini-3.1-flash-tts-preview", sent.getString("model"))
+        assertEquals("google/gemini-3.8-flash-tts", sent.getString("model"))
         assertEquals("привет", sent.getString("input"))
         assertEquals("Charon", sent.getString("voice"))
         assertEquals("pcm", sent.getString("response_format"))
@@ -139,6 +139,40 @@ class OpenRouterTtsBackendTest {
         server.enqueue(MockResponse()
             .addHeader("Content-Type", "audio/pcm;rate=22050;channels=1")
             .setBody(Buffer().write(rawPcm16(200))))
+        val pcm = backend.synthesize("привет", TtsGender.MALE)
+        assertEquals(22_050, pcm.sampleRate)
+        assertEquals(200, pcm.samples.size)
+    }
+
+    /** Mono PCM16 WAV of [numSamples] frames at [rate] Hz, large enough to pass MIN_AUDIO_BYTES. */
+    private fun wavOf(numSamples: Int, rate: Int): ByteArray {
+        val data = rawPcm16(numSamples)
+        val out = ByteArrayOutputStream()
+        out.write("RIFF".toByteArray(Charsets.US_ASCII))
+        out.write(leInt(4 + (8 + 16) + (8 + data.size)))
+        out.write("WAVE".toByteArray(Charsets.US_ASCII))
+        out.write("fmt ".toByteArray(Charsets.US_ASCII))
+        out.write(leInt(16))
+        out.write(leShort(1)) // PCM
+        out.write(leShort(1)) // mono
+        out.write(leInt(rate))
+        out.write(leInt(rate * 2))
+        out.write(leShort(2))
+        out.write(leShort(16))
+        out.write("data".toByteArray(Charsets.US_ASCII))
+        out.write(leInt(data.size))
+        out.write(data)
+        return out.toByteArray()
+    }
+
+    // The Gemini 3.8 TTS family can hand back a WAV container where the 3.1 preview sent raw PCM;
+    // played as raw PCM the 44-byte header is an audible click and the header's rate is ignored.
+    @Test
+    fun `synthesize decodes a WAV container returned for the pcm format`() = runTest {
+        stubConnection()
+        server.enqueue(MockResponse()
+            .addHeader("Content-Type", "audio/wav")
+            .setBody(Buffer().write(wavOf(numSamples = 200, rate = 22_050))))
         val pcm = backend.synthesize("привет", TtsGender.MALE)
         assertEquals(22_050, pcm.sampleRate)
         assertEquals(200, pcm.samples.size)

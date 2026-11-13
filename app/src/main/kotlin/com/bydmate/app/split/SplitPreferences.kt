@@ -2,7 +2,6 @@ package com.bydmate.app.split
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Build
 import com.bydmate.app.cluster.voiceCompanionsFromCsv
 import com.bydmate.app.cluster.voiceCompanionsToCsv
 
@@ -85,16 +84,15 @@ interface SplitPreferences {
 }
 
 /**
- * The split needs the freeform flag only on our freeform path: not in native mode, not on
- * platformized firmware (3:7 engine), and not below SDK 31 where SplitSessionManager.start
- * refuses to run (its MIN_SPLIT_SDK).
+ * The split needs the freeform flag only on our freeform path: not in native mode and not on
+ * platformized firmware (3:7 engine). The Android level is no part of it: the freeform path
+ * runs below Android 12 too (#385).
  */
 internal fun freeformSplitInUse(
     featureEnabled: Boolean,
     nativeMode: Boolean,
     platformizedFirmware: Boolean,
-    sdkInt: Int,
-): Boolean = featureEnabled && !nativeMode && !platformizedFirmware && sdkInt >= 31
+): Boolean = featureEnabled && !nativeMode && !platformizedFirmware
 
 /**
  * No-op default used by ClusterProjectionManager before the production SplitPreferences
@@ -184,7 +182,6 @@ class SplitPreferencesImpl(context: Context) : SplitPreferences {
         featureEnabled = isFeatureEnabled(),
         nativeMode = isNativeModeEnabled(),
         platformizedFirmware = Split37Engine.isPlatformizedFirmware(),
-        sdkInt = Build.VERSION.SDK_INT,
     )
 
     override fun getSteeringKeyCode(): Int = prefs.getInt(KEY_STEERING_KEYCODE, 0)

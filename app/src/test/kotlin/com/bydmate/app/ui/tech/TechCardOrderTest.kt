@@ -58,9 +58,12 @@ class TechCardOrderTest {
      * the per-motor rows already show and cost a line of screen height.
      */
     @Test
-    fun `the motors card draws the power split last`() {
+    fun `the motors card opens with the motor power and draws the power split last`() {
         assertEquals(
             listOf(
+                // Asked twice in the Leopard chat: the value is the motors' power, so it
+                // belongs here and not in the battery card.
+                MotorRow.TOTAL_POWER,
                 MotorRow.HEADER,
                 MotorRow.MOTOR_TEMP,
                 MotorRow.INVERTER_TEMP,

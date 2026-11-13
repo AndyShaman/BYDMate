@@ -1384,7 +1384,7 @@ class TrackingService : Service(), LocationListener {
                     // the last pre-shutdown SOC. No-op (cheap read) on most ticks.
                     // Returns true when the live SOC sits ABOVE the anchor with the
                     // gun out — an un-reconstructed charge (stale read at wake).
-                    val socAboveAnchor = autoserviceDetector.recordParkedAnchor(data)
+                    val socAboveAnchor = autoserviceDetector.recordParkedAnchor(data, catchUpSettled = catchUpResolved)
                     if (socAboveAnchor && catchUpResolved && !socRearmUsed) {
                         socRearmUsed = true
                         catchUpResolved = false

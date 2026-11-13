@@ -87,6 +87,18 @@ class TelegramReporter @Inject constructor(
         private const val PARSE_MODE = "HTML"
         private const val RECENT_TRIPS = 5
         private const val FUEL_CACHE_TTL_MS = 60_000L
+
+        /**
+         * The longest the outbox waits for the daemon's power-off reports in one episode (#413):
+         * longer than the daemon's longest pending backoff plus one armer tick, so a daemon that
+         * meets the network inside the episode still delivers first.
+         */
+        const val POWER_OFF_FIRST_CAP_MS = 5 * 60_000L
+
+        /** The internet came back ([drainOutbox] reason): a new hold episode starts. */
+        private const val REASON_NETWORK = "network"
+        /** The armer's tick ([PowerOffArmer]): it only ends a hold, never retries a dead network. */
+        const val REASON_TICK = "armer_tick"
     }
 
     sealed interface SendResult {
@@ -116,12 +128,31 @@ class TelegramReporter @Inject constructor(
     private val fuelCache = ConcurrentHashMap<Int, FuelEntry>()
 
     /**
-     * Bumped by every [drainOutbox] call. [deliver] reads it before sending: if it moved while the
-     * send was in flight, a network-regain or after-send drain ran and found the queue empty
-     * (the failed report was not enqueued yet), so it runs [drainOutbox] once more itself instead
-     * of leaving the report stuck until the next trigger.
+     * Bumped by [drainOutbox] each time it reads the outbox. [deliver] takes it before it decides to
+     * send: if it moved by the time the report is in the outbox, a drain read the queue without it,
+     * so [deliver] runs [drainOutbox] once more instead of leaving the report stuck until the next
+     * trigger.
      */
     private val drainGeneration = AtomicInteger(0)
+
+    /**
+     * The hold (#413): while the daemon still has power-off reports to deliver, the outbox sends
+     * nothing and fresh reports queue, so the power-off reports arrive first. An episode starts with
+     * the first drain of the process and at every [REASON_NETWORK] drain, and holds at most
+     * [POWER_OFF_FIRST_CAP_MS]. Episode fields are touched under [outboxMutex].
+     */
+    private var episodeStartMs = 0L
+    private var episodeOver = false
+    /** Why the outbox is held now (`bootstrap_pending`, `pending=N`), null when it is not. */
+    @Volatile private var holdReason: String? = null
+    /** Why the last hold ended (`delivered`, `cap`, `daemon_silent`, `off`), for the dump. */
+    @Volatile private var lastRelease: String? = null
+
+    /**
+     * The last send met no network or a busy Telegram: the armer's tick leaves the outbox to the
+     * usual triggers (network back, the next send) instead of retrying it every tick.
+     */
+    @Volatile private var networkWait = false
 
     /** The `telegram_report` automation action: header «BYDMate: <rule name>». */
     suspend fun sendRuleReport(ruleName: String?, fields: Set<ReportField>, customText: String): SendResult {
@@ -161,15 +192,16 @@ class TelegramReporter @Inject constructor(
     }
 
     /**
-     * Sends what the outbox holds, oldest first: at service start, when the internet comes back and
-     * after every report that went through. Stops at the first temporary failure; a report whose bot
-     * was disconnected or whose chat changed is dropped, so it never lands in someone else's chat.
+     * Sends what the outbox holds, oldest first: at service start, when the internet comes back,
+     * after every report that went through and on the armer's tick ([REASON_TICK], which ends a
+     * hold). Sends nothing while held for the daemon's power-off reports. Stops at the first
+     * temporary failure; a report whose bot was disconnected or whose chat changed is dropped, so it
+     * never lands in someone else's chat.
      */
     suspend fun drainOutbox(reason: String) {
-        drainGeneration.incrementAndGet()
         outboxMutex.withLock {
-            var queue = loadOutbox()
-            if (queue.isEmpty()) return
+            drainGeneration.incrementAndGet()
+            var queue = drainable(reason) ?: return
             Log.i(TAG, "outbox drain reason=$reason size=${queue.size}")
             val config = settings.getTgBackupConfig()
             while (queue.isNotEmpty()) {
@@ -190,10 +222,12 @@ class TelegramReporter @Inject constructor(
                 when {
                     failure == null -> {
                         Log.i(TAG, "outbox sent id=${entry.id} age_s=$ageS late_mark=$late")
+                        networkWait = false
                         queue = queue.drop(1)
                     }
                     isTransient(failure) -> {
                         Log.w(TAG, "outbox keep id=${entry.id} rc=${errorKey(failure)} age_s=$ageS left=${queue.size}")
+                        networkWait = true
                         return
                     }
                     else -> {
@@ -244,12 +278,25 @@ class TelegramReporter @Inject constructor(
                 "daemon=${offState.daemon} pending=${status?.pending ?: "-"} outbox=${outboxSize()}",
             "telegram report last_off: ${PowerOffArmState.lastOffLine(status?.last)}",
             "telegram report listener: ${PowerOffArmState.listenerLine(status?.fids.orEmpty())}",
+            "telegram report hold: ${holdReason ?: "-"} last_release=${lastRelease ?: "-"}",
         )
     }
 
+    /**
+     * Older reports first: the outbox is drained before the fresh report goes out, and a report that
+     * still has older ones waiting, or meets a hold for the daemon's power-off reports, goes behind
+     * them instead of overtaking them (#413).
+     */
     private suspend fun deliver(id: String, config: TgBackupConfig, chatId: Long, text: String, builtAtMs: Long): SendResult {
-        val generationBeforeSend = drainGeneration.get()
+        drainOutbox("before_send")
+        val generation = drainGeneration.get()
+        val waiting = outboxSize()
+        if (waiting > 0 || outboxMutex.withLock { held(0) }) {
+            Log.i(TAG, "send id=$id behind=$waiting hold=${holdReason ?: "-"} -> outbox")
+            return queue(OutboxEntry(id, chatId, builtAtMs, text), generation)
+        }
         val failure = sink.sendMessage(config.token, chatId, text, PARSE_MODE, linkPreview = false).exceptionOrNull()
+        networkWait = failure != null && isTransient(failure)
         return when {
             failure == null -> {
                 Log.i(TAG, "send id=$id rc=ok")
@@ -259,17 +306,77 @@ class TelegramReporter @Inject constructor(
             }
             isTransient(failure) -> {
                 Log.w(TAG, "send id=$id rc=${errorKey(failure)} -> outbox")
-                enqueue(OutboxEntry(id, chatId, builtAtMs, text))
-                // A drain that ran while the send was in flight found this report not queued yet
-                // (see drainGeneration doc): run it once more so it is not stuck until the next trigger.
-                if (drainGeneration.get() != generationBeforeSend) drainOutbox("late_edge")
-                SendResult.Queued
+                queue(OutboxEntry(id, chatId, builtAtMs, text), generation)
             }
             else -> {
                 Log.w(TAG, "send id=$id rc=${errorKey(failure)} permanent")
                 SendResult.Failed(errorKey(failure))
             }
         }
+    }
+
+    /** The outbox this drain sends, or null when it sends nothing now: empty, held or not wanted. */
+    private suspend fun drainable(reason: String): List<OutboxEntry>? {
+        if (!drainWanted(reason)) return null
+        return loadOutbox().takeUnless { it.isEmpty() || held(it.size) }
+    }
+
+    /**
+     * The first drain of the process starts the hold episode, and every network drain a new one.
+     * False for a tick while the last send met no network: the usual triggers take it from there.
+     */
+    private fun drainWanted(reason: String): Boolean {
+        if (episodeStartMs == 0L || reason == REASON_NETWORK) {
+            episodeStartMs = clock()
+            episodeOver = false
+        }
+        if (reason == REASON_NETWORK) networkWait = false
+        return reason != REASON_TICK || !networkWait
+    }
+
+    /** Whether the outbox waits for the daemon now; logs the start and the end of a hold. Under [outboxMutex]. */
+    private suspend fun held(outbox: Int): Boolean {
+        val verdict = holdVerdict()
+        val was = holdReason
+        holdReason = verdict.reason
+        if (verdict.reason != null && was == null) {
+            Log.i(TAG, "outbox hold reason=${verdict.reason} outbox=$outbox")
+        } else if (verdict.reason == null && was != null) {
+            lastRelease = verdict.release
+            Log.i(TAG, "outbox hold end released=${verdict.release} outbox=$outbox")
+        }
+        return verdict.reason != null
+    }
+
+    /** [reason] why the outbox is held, or null with the [release] that ended (or skipped) the hold. */
+    private data class HoldVerdict(val reason: String?, val release: String = "")
+
+    /**
+     * Held only with the power-off report on, a bot connected and the episode under its cap, while
+     * the helper bootstrap has not run yet or the daemon reports pending power-off reports. A daemon
+     * that does not answer after the bootstrap holds nothing.
+     */
+    private suspend fun holdVerdict(): HoldVerdict {
+        if (episodeOver) return HoldVerdict(null, "cap")
+        if (!settings.isTgReportOffEnabled() || !settings.getTgBackupConfig().configured) return HoldVerdict(null, "off")
+        // A wall clock that jumped back ends the episode too, rather than holding without a bound.
+        if (clock() - episodeStartMs !in 0 until POWER_OFF_FIRST_CAP_MS) {
+            episodeOver = true
+            return HoldVerdict(null, "cap")
+        }
+        if (!offState.bootstrapAttempted) return HoldVerdict("bootstrap_pending")
+        val pending = offState.daemonStatus()?.pending ?: return HoldVerdict(null, "daemon_silent")
+        return if (pending > 0) HoldVerdict("pending=$pending") else HoldVerdict(null, "delivered")
+    }
+
+    /**
+     * Puts [entry] in the outbox; when a drain read the outbox after [generation] was taken, it missed
+     * [entry] (see [drainGeneration]), so drain once more rather than leave it to the next trigger.
+     */
+    private suspend fun queue(entry: OutboxEntry, generation: Int): SendResult {
+        enqueue(entry)
+        if (drainGeneration.get() != generation) drainOutbox("late_edge")
+        return SendResult.Queued
     }
 
     /**

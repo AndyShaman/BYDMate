@@ -185,13 +185,16 @@ class TripRecorder @Inject @Suppress("LongParameterList") constructor( // inject
 
     private suspend fun close(open: Open, end: DiParsData) {
         val cap = batteryCapacityKwh()
-        val kwh = computeKwh(open.startTotalElec, end.totalElecConsumption, open.startSoc, end.soc, cap)
-        val distance = plausibleDistance(open.startMileage, end.mileage)
-        val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
-        val (odoStart, odoEnd) = odometerPair(open.startMileage, end.mileage)
         // The end edge is one ON tick, whose time is also the trip's endTs: the confirming tick
         // comes OFF_AFTER_MS later, with the car off and its counters no longer the trip's.
         val edgeMs = endEdge.tickMs?.takeIf { it >= open.startTs }
+        // DM-i: the confirming tick may carry no BMS counter any more; the edge's one is the trip's.
+        val edgeElec = if (kind() == VehicleKind.HYBRID) edgeMs?.let { endEdge.totalElecConsumption } else null
+        val endElec = end.totalElecConsumption ?: edgeElec
+        val kwh = computeKwh(open.startTotalElec, endElec, open.startSoc, end.soc, cap)
+        val distance = plausibleDistance(open.startMileage, end.mileage)
+        val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
+        val (odoStart, odoEnd) = odometerPair(open.startMileage, end.mileage)
         val fuel = fuelColumns(
             open.startFuelTotal, edgeMs?.let { endEdge.fuelTotalL },
             open.startMileageHev, edgeMs?.let { endEdge.mileageHevKm }, distance,
@@ -226,7 +229,8 @@ class TripRecorder @Inject @Suppress("LongParameterList") constructor( // inject
         )
         if (kind() == VehicleKind.HYBRID) {
             Log.i(TAG, "trip close fuel: l=${fuel.fuelLiters} hev=${fuel.hevKm} " +
-                "total=${fuel.fuelTotalStart}/${fuel.fuelTotalEnd} hevOdo=${fuel.mileageHevStart}/${fuel.mileageHevEnd}")
+                "total=${fuel.fuelTotalStart}/${fuel.fuelTotalEnd} hevOdo=${fuel.mileageHevStart}/${fuel.mileageHevEnd} " +
+                "elec=${open.startTotalElec}/$endElec closeElec=${end.totalElecConsumption}")
         }
         Log.i(TAG, "trip close: km=$distance kwh=$kwh " +
             "ext_temp=${open.startExteriorTemp}/${end.exteriorTemp} odo=$odoStart/$odoEnd")

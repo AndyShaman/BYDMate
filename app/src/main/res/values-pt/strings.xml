@@ -477,6 +477,7 @@
     <string name="automation_action_media_play">Mídia: tocar</string>
     <string name="automation_action_media_pause">Mídia: pausar</string>
     <string name="automation_action_media_key_hint">Funciona quando um player já está aberto: para abri-lo, coloque “Abrir aplicativo” antes desta etapa.</string>
+    <string name="automation_action_hazard_on_hint">Desliga apenas com a ação “Pisca-alerta: desligar”. Adicione-a depois de uma pausa. A marcha à ré precisa de duas regras: “Marcha = R” e “Marcha não R”.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Ligar</string>
     <string name="automation_action_navigate">Rota no Y.Navigator</string>
@@ -1442,6 +1443,10 @@
     <string name="settings_blindspot_header">Pontos cegos</string>
     <string name="settings_blindspot_threshold_title">Limite de velocidade</string>
     <string name="settings_blindspot_threshold_desc">Abaixo desta velocidade a câmera não é exibida</string>
+    <string name="settings_blindspot_max_show_title">Ocultar a câmera após</string>
+    <string name="settings_blindspot_max_show_desc">Se a seta ficar ligada por muito tempo, a câmera sai da tela depois desse tempo e volta na próxima vez que você ligar a seta. A moldura de aviso de carro no ponto cego some junto com ela.</string>
+    <string name="settings_blindspot_max_show_off">sem limite</string>
+    <string name="settings_blindspot_max_show_value">%d s</string>
     <string name="settings_blindspot_pip_width_title">Largura da janelinha</string>
     <string name="settings_blindspot_pip_width_desc">Largura da janelinha na tela principal em % da largura da tela</string>
     <string name="settings_blindspot_rotate_title">Janela da câmera na vertical</string>
@@ -1805,6 +1810,7 @@
     <string name="tg_report_field_trip_kwh">Energia da viagem</string>
     <string name="tg_report_field_trip_cost">Custo da viagem</string>
     <string name="tg_report_field_temps">Temperatura</string>
+    <string name="tg_report_field_battery_temp">Temperatura da bateria</string>
     <string name="tg_report_field_openings">O que está aberto</string>
     <string name="tg_report_field_tires">Pressão dos pneus</string>
     <string name="tg_report_header_off">BYDMate: carro desligado às %1$s</string>
@@ -1826,6 +1832,8 @@
     <string name="tg_report_trip_cost">Custo %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">lado de fora %1$+d°</string>
     <string name="tg_report_temp_inside">cabine %1$+d°</string>
+    <string name="tg_report_battery_temp">Bateria %1$+d°</string>
+    <string name="tg_report_battery_temp_range">Bateria %1$+d° (de %2$+d° a %3$+d°)</string>
     <string name="tg_report_open_list">Aberto: %1$s</string>
     <string name="tg_report_all_closed">Tudo fechado</string>
     <string name="tg_report_open_door_fl">porta do motorista</string>
@@ -1859,6 +1867,7 @@
     <string name="tg_report_field_trip1_desc">Contador TRIP 1 do Painel: quilômetros, tempo de viagem e consumo</string>
     <string name="tg_report_field_trip2_desc">Contador TRIP 2 do Painel: quilômetros, tempo de viagem e consumo</string>
     <string name="tg_report_field_temps_desc">Lado de fora e na cabine</string>
+    <string name="tg_report_field_battery_temp_desc">Média da bateria</string>
     <string name="tg_report_field_openings_desc">Portas, janelas, teto solar, porta-malas, capô</string>
     <string name="tg_report_field_tires_desc">As quatro rodas</string>
     <string name="settings_tg_report_off_title">Relatório ao desligar o carro</string>

@@ -18,7 +18,9 @@ import javax.inject.Singleton
  *
  * Reads run in rounds: a round starts at the service start, then takes one read per poll tick
  * at most every [VehicleKindConfirmation.MIN_GAP_MS] until two identical results confirm the
- * type or [MAX_ATTEMPTS] reads are spent; the next round starts [RECHECK_MS] after the last one.
+ * type or [MAX_ATTEMPTS] reads are spent; the next round starts [RECHECK_MS] after the last one,
+ * or at once when a round ended unconfirmed and the catalog has since moved the three fids
+ * ([FidAddresses.hybrid], old fid numbering, #394).
  */
 @Singleton
 class VehicleKindMonitor @Inject constructor(
@@ -36,6 +38,9 @@ class VehicleKindMonitor @Inject constructor(
     private var lastAttemptAtMs = 0L
     private var roundStartedAtMs = 0L
     private var roundDone = false
+    private var roundConfirmed = false
+    /** The batch the last read sent, to notice a hybrid table installed after it. */
+    private var lastItems: List<BatchReadItem>? = null
     private var inFlight = false
 
     /** Loads the cache and opens a fresh round with an immediate read. */
@@ -52,7 +57,8 @@ class VehicleKindMonitor @Inject constructor(
     fun claimProbe(nowMs: Long): Boolean = synchronized(lock) {
         if (inFlight) return false
         if (roundDone) {
-            if (nowMs - roundStartedAtMs < RECHECK_MS) return false
+            val newAddresses = !roundConfirmed && lastItems != null && lastItems != items()
+            if (!newAddresses && nowMs - roundStartedAtMs < RECHECK_MS) return false
             startRound(nowMs)
         }
         if (attempts > 0 && nowMs - lastAttemptAtMs < VehicleKindConfirmation.MIN_GAP_MS) return false
@@ -66,7 +72,9 @@ class VehicleKindMonitor @Inject constructor(
     @Suppress("TooGenericExceptionCaught") // runs on serviceScope, which has no exception handler
     suspend fun probe(nowMs: Long) {
         try {
-            val reply = helperClient.readBatch(ITEMS)
+            val items = items()
+            synchronized(lock) { lastItems = items }
+            val reply = helperClient.readBatch(items)
             val hev = reply?.getOrNull(0)?.let { (s, v) -> VehicleKindDetector.word(s, v) }
             val ev = reply?.getOrNull(1)?.let { (s, v) -> VehicleKindDetector.word(s, v) }
             val fuel = reply?.getOrNull(2)?.let { (s, v) -> VehicleKindDetector.word(s, v) }
@@ -84,7 +92,10 @@ class VehicleKindMonitor @Inject constructor(
                     )
                 )
                 _kind.value = confirmed
-                synchronized(lock) { roundDone = true }
+                synchronized(lock) {
+                    roundDone = true
+                    roundConfirmed = true
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -126,6 +137,7 @@ class VehicleKindMonitor @Inject constructor(
     private fun startRound(nowMs: Long) {
         attempts = 0
         roundDone = false
+        roundConfirmed = false
         roundStartedAtMs = nowMs
         confirmation.reset()
     }
@@ -135,7 +147,16 @@ class VehicleKindMonitor @Inject constructor(
         const val MAX_ATTEMPTS = 10
         const val RECHECK_MS = 24 * 60 * 60 * 1000L
 
-        /** HEV odometer, EV odometer, fuel percent: dev 1014, tx 5, in this order. */
+        /**
+         * The three reads at the installed hybrid addresses, in [ITEMS] order; equal to [ITEMS]
+         * while the hybrid table is on its constants.
+         */
+        fun items(table: ResolvedFidTable = FidAddresses.hybrid): List<BatchReadItem> =
+            listOf("mileageHevKm", "mileageEvKm", "fuelPercent").map {
+                BatchReadItem(TX_GET_INT, table.device(it), table.fid(it))
+            }
+
+        /** HEV odometer, EV odometer, fuel percent: dev 1014, tx 5, in this order (compiled addresses). */
         val ITEMS: List<BatchReadItem> = listOf(
             BatchReadItem(TX_GET_INT, VehicleKindDetector.DEV, VehicleKindDetector.MILEAGE_HEV_FID),
             BatchReadItem(TX_GET_INT, VehicleKindDetector.DEV, VehicleKindDetector.MILEAGE_EV_FID),

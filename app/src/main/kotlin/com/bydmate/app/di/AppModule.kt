@@ -806,7 +806,7 @@ object AppModule {
         // Alternative to our freeform split for firmwares that gate the freeform flag (#139).
         // Only reached while the native-mode switch is on; off for the whole fleet by default.
         nativeLauncher = com.bydmate.app.split.NativeSplitLauncher(ctx, journal),
-        // #385: below Android 12 (DiLink 3/4) every start answers "unavailable on this firmware".
+        // #385: below Android 12 (DiLink 3/4) a start is attempted and its outcome is checked.
         platformSdk = android.os.Build.VERSION.SDK_INT,
         // The firmware's own 3:7 split (OTA V1.6). isApplicable() is false on every other
         // firmware, so this is inert for the rest of the fleet.

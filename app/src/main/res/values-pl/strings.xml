@@ -538,6 +538,7 @@
     <string name="automation_action_media_play">Multimedia: odtwórz</string>
     <string name="automation_action_media_pause">Multimedia: pauza</string>
     <string name="automation_action_media_key_hint">Działa, gdy odtwarzacz jest już uruchomiony: aby go uruchomić, dodaj przed tym krokiem „Uruchomienie aplikacji”.</string>
+    <string name="automation_action_hazard_on_hint">Wyłącza się tylko akcją „Awaryjne: wyłącz”. Dodaj ją po pauzie. Bieg wsteczny wymaga dwóch reguł: „Bieg = R” i „Bieg nie R”.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Połączenie</string>
     <string name="automation_action_navigate">Trasa w Yandex Nawigatorze</string>
@@ -1591,6 +1592,10 @@
     <string name="settings_blindspot_header">Martwe pola</string>
     <string name="settings_blindspot_threshold_title">Próg prędkości</string>
     <string name="settings_blindspot_threshold_desc">Poniżej tej prędkości kamera się nie pokazuje</string>
+    <string name="settings_blindspot_max_show_title">Ukryj kamerę po</string>
+    <string name="settings_blindspot_max_show_desc">Jeśli kierunkowskaz świeci długo, kamera zniknie z ekranu po tym czasie i wróci przy następnym włączeniu kierunkowskazu. Ramka ostrzegająca o aucie w martwym polu zniknie razem z nią.</string>
+    <string name="settings_blindspot_max_show_off">bez limitu</string>
+    <string name="settings_blindspot_max_show_value">%d s</string>
     <string name="settings_blindspot_pip_width_title">Szerokość okienka</string>
     <string name="settings_blindspot_pip_width_desc" formatted="false">Szerokość okienka na ekranie głównym w % szerokości ekranu</string>
     <string name="settings_blindspot_rotate_title">Pionowe okno kamery</string>
@@ -1954,6 +1959,7 @@
     <string name="tg_report_field_trip_kwh">Energia podróży</string>
     <string name="tg_report_field_trip_cost">Koszt podróży</string>
     <string name="tg_report_field_temps">Temperatura</string>
+    <string name="tg_report_field_battery_temp">Temperatura baterii</string>
     <string name="tg_report_field_openings">Co jest otwarte</string>
     <string name="tg_report_field_tires">Ciśnienie w oponach</string>
     <string name="tg_report_header_off">BYDMate: samochód wyłączony o %1$s</string>
@@ -1975,6 +1981,8 @@
     <string name="tg_report_trip_cost">Koszt %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">na zewnątrz %1$+d°</string>
     <string name="tg_report_temp_inside">w kabinie %1$+d°</string>
+    <string name="tg_report_battery_temp">Bateria %1$+d°</string>
+    <string name="tg_report_battery_temp_range">Bateria %1$+d° (od %2$+d° do %3$+d°)</string>
     <string name="tg_report_open_list">Otwarte: %1$s</string>
     <string name="tg_report_all_closed">Wszystko zamknięte</string>
     <string name="tg_report_open_door_fl">drzwi kierowcy</string>
@@ -2008,6 +2016,7 @@
     <string name="tg_report_field_trip1_desc">Licznik TRIP 1 z ekranu Główna: kilometry, czas jazdy i zużycie</string>
     <string name="tg_report_field_trip2_desc">Licznik TRIP 2 z ekranu Główna: kilometry, czas jazdy i zużycie</string>
     <string name="tg_report_field_temps_desc">Na zewnątrz i w kabinie</string>
+    <string name="tg_report_field_battery_temp_desc">Średnia baterii</string>
     <string name="tg_report_field_openings_desc">Drzwi, okna, szyberdach, bagażnik, maska</string>
     <string name="tg_report_field_tires_desc">Wszystkie cztery koła</string>
     <string name="settings_tg_report_off_title">Raport po wyłączeniu samochodu</string>

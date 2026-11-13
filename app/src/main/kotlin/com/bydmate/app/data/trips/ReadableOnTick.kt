@@ -21,6 +21,9 @@ class ReadableOnTick {
         private set
     var odometerKm: Double? = null
         private set
+    /** BMS lifetime electric counter of the edge tick, kWh; null on a resumed trip (not in last_state). */
+    var totalElecConsumption: Double? = null
+        private set
 
     /** [isOnTick]: the car was on at [nowMs] by its own evidence. True when the edge moved here. */
     fun update(data: DiParsData, nowMs: Long, isOnTick: Boolean): Boolean {
@@ -35,6 +38,9 @@ class ReadableOnTick {
         mileageHevKm = hev
         mileageEvKm = data.mileageEvKm?.toDouble()
         odometerKm = data.mileage
+        // Kept when this tick has none: at power-off the BMS counter can go silent a tick before
+        // the fuel counters, and the trip would close without its kWh.
+        data.totalElecConsumption?.let { totalElecConsumption = it }
         return true
     }
 
@@ -45,6 +51,7 @@ class ReadableOnTick {
         this.mileageHevKm = mileageHevKm
         this.mileageEvKm = null
         this.odometerKm = odometerKm
+        this.totalElecConsumption = null
     }
 
     fun clear() {
@@ -53,5 +60,6 @@ class ReadableOnTick {
         mileageHevKm = null
         mileageEvKm = null
         odometerKm = null
+        totalElecConsumption = null
     }
 }

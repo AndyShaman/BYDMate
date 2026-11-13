@@ -7,6 +7,7 @@ import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.nativestack.FidAddress
 import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.nativestack.FidCatalog
+import com.bydmate.app.data.nativestack.WriteFidSymbols
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.diagnostics.Trace
@@ -39,7 +40,8 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     private val windowStore: WindowChannelStore,
     // Null in unit tests (no SharedPreferences); production gets the singleton from AppModule.
     private val seatJournal: SeatCommandJournal? = null,
-    // This car's fid catalog for the rear seat heat gate (#327); none in unit tests = no rear heat.
+    // This car's fid catalog for the rear seat heat gate (#327) and the window percent write
+    // check (#417); none in unit tests = no rear heat, no window CTRL fallback.
     private val rearCatalog: () -> FidCatalog? = { null },
 ) : VehicleApi {
 
@@ -221,6 +223,11 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         lock?.lock()
         var sent = false
         var wrote = false
+        // A percent write on a firmware whose catalog has no symbol for it keeps its raw status:
+        // the refusal code is the second sign for the CTRL fallback (#417). Every other write
+        // goes out through helper.write exactly as before.
+        val percentSymbolAbsent = reset != null && percentSymbolAbsent(entry)
+        var percentStatus: Int? = null
         try {
             wrote = try {
                 if (windowCheck != null) {
@@ -229,7 +236,13 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
                     withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowCheck.before.await() }
                 }
                 sent = true
-                helper.write(entry.dev, entry.writeFid, value)
+                if (percentSymbolAbsent) {
+                    // Same transact and acceptance rule as helper.write, status kept.
+                    percentStatus = helper.writeStatus(entry.dev, entry.writeFid, value)
+                    percentStatus?.let(HelperClientImpl::writeAccepted) ?: false
+                } else {
+                    helper.write(entry.dev, entry.writeFid, value)
+                }
             } catch (e: Exception) {
                 if (sent && reset != null) releasePercentTarget(reset, value)
                 // Rethrow cancellation so callers outside the NonCancellable write unit
@@ -249,6 +262,13 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
 
         if (!wrote) {
             windowCheck?.before?.cancel()
+            if (percentStatus == PERCENT_ABSENT_STATUS && windowChannel.fallBackToCtrl(requestedAction, requestedValue)) {
+                Log.i(TAG, "window fallback: $actionName status=$percentStatus symbol absent from catalog, " +
+                    "channel=CTRL stored, resending as CTRL")
+                logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "percent_absent_ctrl_fallback", entry.validated)
+                // Routed to CTRL now; a CTRL write has no percent status, so this recurses once.
+                return doWrite(requestedAction, requestedValue, verifyInto)
+            }
             return if (entry.validated) {
                 Log.w(TAG, "doWrite: action=$actionName helper.write returned false (validated)")
                 logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_fail", entry.validated)
@@ -304,25 +324,94 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         }
         if (windowCheck != null) verifyInto?.add(windowCheck)
 
+        // Hazard: an accepted write the car ignores (#412, Tang L) is judged on the turn signal
+        // mask. NonCancellable for the same reason as the window verdict above.
+        if (actionName in HAZARD_ACTIONS) {
+            return withContext(NonCancellable) {
+                hazardNotDone(actionName)?.let { (err, mask) ->
+                    logWrite(actionName, entry.dev, entry.writeFid, value, mask, false, "hazard_not_done", entry.validated)
+                    maybeReportValidatedFailure(actionName, err, entry)
+                    return@withContext Result.failure(err)
+                }
+                logSuccess(actionName, entry, value, readback)
+                verifyLate(actionName, entry, value)
+                Result.success(Unit)
+            }
+        }
+
         logSuccess(actionName, entry, value, readback)
         if (entry.readbackFid == null && windowCheck == null) verifyLate(actionName, entry, value)
         return Result.success(Unit)
     }
 
     /**
-     * One read of the written fid [LATE_VERIFY_MS] after a write that has no check of its own
-     * (#267: the hazard reported ok, the lamps stayed dark), as a trace line. Diagnostics only:
-     * fire-and-forget on [readbackScope], so it never delays the caller or a rule's next step,
-     * and its answer changes no verdict.
+     * One read [LATE_VERIFY_MS] after a write that has no check of its own (#267: the hazard
+     * reported ok, the lamps stayed dark), as a trace line. Reads the action's state fid from
+     * [LATE_VERIFY_STATE] where one is known (the write fids there are write-only and always
+     * answer -10011), else the written fid. Diagnostics only: fire-and-forget on
+     * [readbackScope], so it never delays the caller or a rule's next step, and its answer
+     * changes no verdict.
      */
     private suspend fun verifyLate(actionName: String, entry: WriteEntry, value: Int) {
         val cause = Trace.cause()
+        val state = LATE_VERIFY_STATE[actionName] ?: FidAddress(entry.dev, entry.writeFid)
         readbackScope.launch {
             delay(LATE_VERIFY_MS)
-            val got = runCatching { helper.read(entry.dev, entry.writeFid) }.getOrNull()
+            val got = runCatching { helper.read(state.device, state.fid) }.getOrNull()
             Trace.event(TraceArea.CAR, "verify", "action" to actionName, "want" to value,
                 "got" to (got?.toString() ?: "null"), "after_ms" to LATE_VERIFY_MS.toInt(), by = cause)
         }
+    }
+
+    /**
+     * Did an accepted hazard write leave the turn signal mask ([HAZARD_MASK]: 1 off, 2 left,
+     * 4 right, 6 hazard) where it was? Reads it every [HAZARD_WATCH_STEP_MS] for up to
+     * [HAZARD_WATCH_READS] reads and stops at the first other answer. Working cars show 6 within
+     * 0.2-0.35 s of hazard_on, and the mask blinks 6/1 while the hazard is on, so a step shorter
+     * than a lit or dark phase cannot miss the change.
+     *
+     * The failure (with the last mask) only when EVERY read answered the unchanged value: 1
+     * after hazard_on, 6 after hazard_off. A failed read, a sentinel or any other value is no
+     * evidence and keeps today's success, so a car whose mask is unreadable does not regress.
+     */
+    private suspend fun hazardNotDone(actionName: String): Pair<VehicleWriteError, Int>? {
+        val unchanged = if (actionName == "hazard_on") MASK_OFF else MASK_HAZARD
+        val seen = mutableListOf<String>()
+        var stayed = true
+        for (attempt in 1..HAZARD_WATCH_READS) {
+            delay(HAZARD_WATCH_STEP_MS)
+            val mask = try {
+                helper.read(HAZARD_MASK.device, HAZARD_MASK.fid)
+            } catch (e: Exception) {
+                Log.w(TAG, "hazard verify read fid=${HAZARD_MASK.fid} failed: ${e.message}")
+                null
+            }
+            seen += mask?.toString() ?: "null"
+            if (mask != unchanged.toLong()) {
+                stayed = false
+                break
+            }
+        }
+        Log.i(TAG, "hazard verify action=$actionName fid=${HAZARD_MASK.fid} masks=${seen.joinToString(",")} " +
+            "verdict=${if (stayed) "not_done" else "ok"}")
+        if (!stayed) return null
+        val ms = HAZARD_WATCH_READS * HAZARD_WATCH_STEP_MS
+        return VehicleWriteError.ReadbackMismatch(actionName, "turn signal mask stayed $unchanged for $ms ms") to unchanged
+    }
+
+    /**
+     * True when this firmware's own catalog is loaded and has no symbol for the percent fid of
+     * [entry] (#417: positions readable, percent write absent, CTRL works). One of the two signs
+     * for the CTRL fallback, the other is the car refusing the write with -10011: either alone
+     * proves nothing (a healthy unit can answer -10011 at a cold start, and a catalog that is
+     * not loaded says nothing about the car).
+     */
+    private fun percentSymbolAbsent(entry: WriteEntry): Boolean {
+        val symbol = WriteFidSymbols.byFid[entry.writeFid] ?: return false
+        val catalog = rearCatalog()?.takeIf { it.symbols.isNotEmpty() } ?: return false
+        if (catalog.fidOf(symbol) != null) return false
+        Log.i(TAG, "window percent: ${entry.actionName} symbol=$symbol absent from catalog, watching the write status")
+        return true
     }
 
     /**
@@ -982,6 +1071,26 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         private const val PERCENT_RESET_ATTEMPTS = 2
         private val STEERING_HEAT_ACTIONS = setOf("steering_heat_on", "steering_heat_off")
         private val HUD_ACTIONS = setOf("hud_on", "hud_off")
+
+        // ── Hazard result (#412) ───────────────────────────────────────────────
+        private val HAZARD_ACTIONS = setOf("hazard_on", "hazard_off")
+        /** Turn signal mask (FidMap turnSignal), the independent sign that the hazard is on. */
+        private val HAZARD_MASK = FidAddress(1004, 950009900)
+        private const val MASK_OFF = 1
+        private const val MASK_HAZARD = 6
+        private const val HAZARD_WATCH_STEP_MS = 250L
+        /** 6 reads x 250 ms: about 1.5 s, four times the slowest hazard_on seen on a working car. */
+        private const val HAZARD_WATCH_READS = 6
+        /** State fid read by [verifyLate] instead of a write-only fid. Rear logo: LIGHT_REAR_GLOW_LOGO_STATE. */
+        private val LATE_VERIFY_STATE: Map<String, FidAddress> = mapOf(
+            "hazard_on" to HAZARD_MASK,
+            "hazard_off" to HAZARD_MASK,
+            "rear_logo_light_on" to FidAddress(1004, 880803910),
+            "rear_logo_light_off" to FidAddress(1004, 880803910),
+        )
+
+        /** Window percent write refused: "fid not writable" (SentinelDecoder WRONG_DIRECTION). */
+        private const val PERCENT_ABSENT_STATUS = -10011
 
         // ── Window readback (write verdict) ────────────────────────────────────
         /** Per attempt; a pane that was commanded starts moving well inside two of these

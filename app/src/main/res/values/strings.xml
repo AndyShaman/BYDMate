@@ -538,6 +538,7 @@
     <string name="automation_action_media_play">Медиа: играть</string>
     <string name="automation_action_media_pause">Медиа: пауза</string>
     <string name="automation_action_media_key_hint">Сработает, если плеер уже запущен: чтобы его запустить, поставьте перед этим шагом «Запуск приложения».</string>
+    <string name="automation_action_hazard_on_hint">Выключается только действием «Аварийка: выключить». Добавьте его после паузы. Для заднего хода нужны два правила: «Передача = R» и «Передача не R».</string>
     <string name="automation_action_yandex_music">Яндекс.Музыка</string>
     <string name="automation_action_call">Звонок</string>
     <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
@@ -1595,6 +1596,10 @@
     <string name="settings_blindspot_header">Слепые зоны</string>
     <string name="settings_blindspot_threshold_title">Порог скорости</string>
     <string name="settings_blindspot_threshold_desc">Ниже этой скорости камера не показывается</string>
+    <string name="settings_blindspot_max_show_title">Убирать камеру через</string>
+    <string name="settings_blindspot_max_show_desc">Если поворотник горит долго, камера уйдёт с экрана через это время и вернётся при следующем включении поворотника. Рамка-предупреждение о машине в слепой зоне уйдёт вместе с ней.</string>
+    <string name="settings_blindspot_max_show_off">без лимита</string>
+    <string name="settings_blindspot_max_show_value">%d с</string>
     <string name="settings_blindspot_pip_width_title">Ширина окошка</string>
     <string name="settings_blindspot_pip_width_desc">Ширина окошка на главном экране в % от ширины экрана</string>
     <string name="settings_blindspot_rotate_title">Окно камеры вертикально</string>
@@ -1968,6 +1973,7 @@
     <string name="tg_report_field_trip_kwh">Энергия поездки</string>
     <string name="tg_report_field_trip_cost">Стоимость поездки</string>
     <string name="tg_report_field_temps">Температура</string>
+    <string name="tg_report_field_battery_temp">Температура батареи</string>
     <string name="tg_report_field_openings">Что открыто</string>
     <string name="tg_report_field_tires">Давление в шинах</string>
     <string name="tg_report_header_off">BYDMate: машина выключена в %1$s</string>
@@ -1989,6 +1995,8 @@
     <string name="tg_report_trip_cost">Стоимость %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">снаружи %1$+d°</string>
     <string name="tg_report_temp_inside">в салоне %1$+d°</string>
+    <string name="tg_report_battery_temp">Батарея %1$+d°</string>
+    <string name="tg_report_battery_temp_range">Батарея %1$+d° (от %2$+d° до %3$+d°)</string>
     <string name="tg_report_open_list">Открыто: %1$s</string>
     <string name="tg_report_all_closed">Всё закрыто</string>
     <string name="tg_report_open_door_fl">дверь водителя</string>
@@ -2022,6 +2030,7 @@
     <string name="tg_report_field_trip1_desc">Счётчик TRIP 1 с Главной: километры, время в пути и расход</string>
     <string name="tg_report_field_trip2_desc">Счётчик TRIP 2 с Главной: километры, время в пути и расход</string>
     <string name="tg_report_field_temps_desc">Снаружи и в салоне</string>
+    <string name="tg_report_field_battery_temp_desc">Средняя по батарее</string>
     <string name="tg_report_field_openings_desc">Двери, окна, люк, багажник, капот</string>
     <string name="tg_report_field_tires_desc">Все четыре колеса</string>
     <string name="settings_tg_report_off_title">Отчёт при выключении машины</string>

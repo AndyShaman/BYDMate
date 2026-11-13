@@ -53,6 +53,10 @@ class AvmCameraProbe(
     private val jarExists: (String) -> Boolean = { File(it).exists() },
     /** Public API, no optimized dir to provide; the app loader as parent keeps our own classes. */
     private val jarLoader: (String) -> ClassLoader = { PathClassLoader(it, AvmCameraProbe::class.java.classLoader) },
+    /** android.os.SystemProperties.get; throws rather than hiding a failed lookup. */
+    private val systemProperty: (String) -> String? = { name ->
+        Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as? String
+    },
 ) {
     private val _log = MutableStateFlow<List<String>>(emptyList())
     val log: StateFlow<List<String>> = _log.asStateFlow()
@@ -62,6 +66,9 @@ class AvmCameraProbe(
     /** Preview index → surface currently bound to the open camera; close() unbinds every entry. */
     private val bound = linkedMapOf<Int, Surface>()
     var cameraId: Int = -1; private set
+
+    /** Tag [cameraId] was found under; null until one answered. Read from Main by the windows. */
+    @Volatile var cameraTag: String? = null; private set
 
     /** Loader of the vendor jar the camera classes came from; null when they are on the class path. */
     private var cameraLoader: ClassLoader? = null
@@ -115,6 +122,13 @@ class AvmCameraProbe(
         } catch (e: Throwable) {
             note("discover failed: ${e.javaClass.simpleName}: ${e.message}")
         } finally {
+            // How the firmware itself describes its cameras, for the cars whose side views stay
+            // black (#409, #397); last, so the lookup lines above keep their order.
+            for (prop in CAMERA_PROPS) {
+                runCatching { systemProperty(prop) }
+                    .onSuccess { note("$prop=${it?.ifEmpty { "(empty)" } ?: "(none)"}") }
+                    .onFailure { note("$prop failed: $it") }
+            }
             discoverJournal = journal.toList()
         }
         return cameraId >= 0
@@ -138,6 +152,7 @@ class AvmCameraProbe(
         note("getCameraId($tag)=$id$suffix")
         if (id < 0 || cameraId >= 0) return false
         cameraId = id
+        cameraTag = tag
         runCatching {
             val w = info.getMethod("getDefaultPreviewWidth", Int::class.java).invoke(null, id)
             val h = info.getMethod("getDefaultPreviewHeight", Int::class.java).invoke(null, id)
@@ -311,6 +326,8 @@ class AvmCameraProbe(
 
     companion object {
         private val CAMERA_TAGS = listOf("pano_h", "pano_l", "apa", "byd_apa")
+        /** Camera layout properties the donor prints next to its own lookup. */
+        private val CAMERA_PROPS = listOf("vehicle.config.cam_sort", "vehicle.config.camInfo.avm")
         private const val TAG = "CameraProbe"
     }
 }

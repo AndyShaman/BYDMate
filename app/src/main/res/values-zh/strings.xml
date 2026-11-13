@@ -437,6 +437,7 @@
     <string name="automation_action_media_play">媒体：播放</string>
     <string name="automation_action_media_pause">媒体：暂停</string>
     <string name="automation_action_media_key_hint">仅在播放器已运行时生效：如需启动，请在此步骤前添加“启动应用”。</string>
+    <string name="automation_action_hazard_on_hint">只能通过“关闭双闪”动作关闭，请在等待之后添加该动作。倒车需要两条规则：“档位 = R”和“档位不等于 R”。</string>
     <string name="automation_action_yandex_music">Yandex 音乐</string>
     <string name="automation_action_call">拨打电话</string>
     <string name="automation_action_navigate">Yandex 导航路线</string>
@@ -1556,6 +1557,10 @@
     <string name="settings_blindspot_header">盲区</string>
     <string name="settings_blindspot_threshold_title">速度阈值</string>
     <string name="settings_blindspot_threshold_desc">低于该速度时不显示摄像头</string>
+    <string name="settings_blindspot_max_show_title">摄像头自动隐藏</string>
+    <string name="settings_blindspot_max_show_desc">转向灯长时间开着时，摄像头会在这段时间后从屏幕上消失，下次打开转向灯时再出现。盲区有车的提示边框也会一起消失。</string>
+    <string name="settings_blindspot_max_show_off">不限制</string>
+    <string name="settings_blindspot_max_show_value">%d 秒</string>
     <string name="settings_blindspot_pip_width_title">小窗宽度</string>
     <string name="settings_blindspot_pip_width_desc">主屏幕小窗的宽度，占屏幕宽度的百分比</string>
     <string name="settings_blindspot_rotate_title">竖向摄像头窗口</string>
@@ -1919,6 +1924,7 @@
     <string name="tg_report_field_trip_kwh">行程电量</string>
     <string name="tg_report_field_trip_cost">行程费用</string>
     <string name="tg_report_field_temps">温度</string>
+    <string name="tg_report_field_battery_temp">电池温度</string>
     <string name="tg_report_field_openings">未关闭项</string>
     <string name="tg_report_field_tires">胎压</string>
     <string name="tg_report_header_off">BYDMate：车辆于 %1$s 熄火</string>
@@ -1940,6 +1946,8 @@
     <string name="tg_report_trip_cost">费用 %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">车外 %1$+d°</string>
     <string name="tg_report_temp_inside">车内 %1$+d°</string>
+    <string name="tg_report_battery_temp">电池 %1$+d°</string>
+    <string name="tg_report_battery_temp_range">电池 %1$+d° (%2$+d° 至 %3$+d°)</string>
     <string name="tg_report_open_list">未关闭：%1$s</string>
     <string name="tg_report_all_closed">全部已关闭</string>
     <string name="tg_report_open_door_fl">主驾车门</string>
@@ -1973,6 +1981,7 @@
     <string name="tg_report_field_trip1_desc">首页的 TRIP 1 计数器：公里数、行驶时间和能耗</string>
     <string name="tg_report_field_trip2_desc">首页的 TRIP 2 计数器：公里数、行驶时间和能耗</string>
     <string name="tg_report_field_temps_desc">车外和车内</string>
+    <string name="tg_report_field_battery_temp_desc">电池平均温度</string>
     <string name="tg_report_field_openings_desc">车门、车窗、天窗、后备箱、引擎盖</string>
     <string name="tg_report_field_tires_desc">全部四个车轮</string>
     <string name="settings_tg_report_off_title">熄火时发送报告</string>

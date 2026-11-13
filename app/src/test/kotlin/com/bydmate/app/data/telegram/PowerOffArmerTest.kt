@@ -149,7 +149,8 @@ class PowerOffArmerTest {
         current = null
         advanceTimeBy(PowerOffArmer.REFRESH_MS * 2)
         coVerify(exactly = 0) { reporter.enqueue(any()) }
-        coVerify(exactly = 0) { reporter.drainOutbox(any()) }
+        // The tick's own drain only ends a hold of the app's reports (#413); no other drain comes from here.
+        coVerify(exactly = 0) { reporter.drainOutbox(neq(TelegramReporter.REASON_TICK)) }
         job.cancel()
     }
 }

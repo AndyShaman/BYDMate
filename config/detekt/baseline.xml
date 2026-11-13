@@ -75,7 +75,7 @@
     <ID>CyclomaticComplexMethod:EnergyDataReader.kt$EnergyDataReader$suspend fun diagnose(): String</ID>
     <ID>CyclomaticComplexMethod:FidCatalog.kt$FidCatalog.Companion$fun parse(dump: String): FidCatalog</ID>
     <ID>CyclomaticComplexMethod:FidResolver.kt$FidResolver$private fun judge(entry: FidEntry, word: Int): Verdict</ID>
-    <ID>CyclomaticComplexMethod:FidResolver.kt$FidResolver$suspend fun resolve( entries: List&lt;FidEntry&gt;, catalog: FidCatalog, probe: FidProbe, source: String, ): Outcome</ID>
+    <ID>CyclomaticComplexMethod:FidResolver.kt$FidResolver$suspend fun resolve( entries: List&lt;FidEntry&gt;, catalog: FidCatalog, probe: FidProbe, source: String, onlyWhereConstantFails: Boolean = false, ): Outcome</ID>
     <ID>CyclomaticComplexMethod:HelperBootstrap.kt$HelperBootstrap$private suspend fun ensureRunningLocked(): Boolean</ID>
     <ID>CyclomaticComplexMethod:HistoryImporter.kt$HistoryImporter$private suspend fun doSync(): ImportResult</ID>
     <ID>CyclomaticComplexMethod:HistoryImporter.kt$HistoryImporter$suspend fun cleanupDuplicates(): Int</ID>
@@ -234,7 +234,6 @@
     <ID>LongMethod:DashboardViewModel.kt$DashboardViewModel$private fun observeLiveData()</ID>
     <ID>LongMethod:DiagnosticDumpWriter.kt$DiagnosticDumpWriter$suspend fun write(file: File, viewModelScope: CoroutineScope)</ID>
     <ID>LongMethod:EnergyDataReader.kt$EnergyDataReader$suspend fun diagnose(): String</ID>
-    <ID>LongMethod:FidResolver.kt$FidResolver$suspend fun resolve( entries: List&lt;FidEntry&gt;, catalog: FidCatalog, probe: FidProbe, source: String, ): Outcome</ID>
     <ID>LongMethod:HelperBootstrap.kt$HelperBootstrap$private suspend fun ensureRunningLocked(): Boolean</ID>
     <ID>LongMethod:HelperDaemon.kt$&lt;no name provided&gt;$override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean</ID>
     <ID>LongMethod:HelperDaemon.kt$fun main(args: Array&lt;String&gt;)</ID>
@@ -281,7 +280,6 @@
     <ID>LongParameterList:AutomationEngine.kt$AutomationEngine$( triggers: List&lt;TriggerDef&gt;, data: DiParsData, location: Location?, places: Map&lt;Long, PlaceEntity&gt;, serviceStartActive: Boolean, networkAvailableEdge: Boolean )</ID>
     <ID>LongParameterList:AutomationEngineButtonPressTest.kt$AutomationEngineButtonPressTest$( id: Long, buttonId: Int, cooldown: Int = 0, requirePark: Boolean = false, fireOncePerTrip: Boolean = false, lastTriggeredAt: Long? = null, enabled: Boolean = true, )</ID>
     <ID>LongParameterList:AutomationEngineEdgeTest.kt$AutomationEngineEdgeTest$( id: Long, triggers: List&lt;TriggerDef&gt;, logic: String = "AND", cooldown: Int = 0, requirePark: Boolean = false, lastTriggeredAt: Long? = null, )</ID>
-    <ID>LongParameterList:AutoserviceChargingDetector.kt$AutoserviceChargingDetector$( private val client: AutoserviceClient, private val chargeRepo: ChargeRepository, private val batteryHealthRepo: BatteryHealthRepository, private val stateStore: ChargingStateStore, private val classifier: ChargingTypeClassifier, private val settings: SettingsRepository, private val costCalculator: CostCalculator, private val parsReader: ParsReader, private val journal: CatchUpJournal )</ID>
     <ID>LongParameterList:AutoserviceChargingDetectorTest.kt$AutoserviceChargingDetectorTest$( battery: BatteryReading?, charging: ChargingReading? = ChargingReading( gunConnectState = 1, chargingType = 1, chargeBatteryVoltV = 0, batteryType = 1, chargingCapacityKwh = null, bmsState = null, readAtMs = 0L ), prevSoc: Int? = null, prevCapacityKwh: Float? = null, prevMileageKm: Float? = null, prevTs: Long? = null, autoserviceAvailable: Boolean = true, homeTariff: Double = 0.20, dcTariff: Double = 0.73, diParsData: DiParsData? = null )</ID>
     <ID>LongParameterList:AutoserviceTransact.kt$( svc: IBinder, autoIface: String, tx: Int, dev: Int, fid: Int, value: Int, writeValue: Boolean )</ID>
     <ID>LongParameterList:BlindSpotPreferences.kt$BlindSpotPreferences.Companion$( displayW: Int, displayH: Int, shape: PipShape, leftX: Int, leftY: Int, rightRect: Rect, )</ID>

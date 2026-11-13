@@ -4,6 +4,8 @@ import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.nativestack.ParsReader
+import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
@@ -51,7 +53,7 @@ data class CatchUpResult(
  * clearly-real >=3% charge on a possibly-stale odometer.
  */
 @Singleton
-class AutoserviceChargingDetector @Inject constructor(
+class AutoserviceChargingDetector @Inject @Suppress("LongParameterList") constructor( // injected dependencies
     private val client: AutoserviceClient,
     private val chargeRepo: ChargeRepository,
     private val batteryHealthRepo: BatteryHealthRepository,
@@ -60,7 +62,9 @@ class AutoserviceChargingDetector @Inject constructor(
     private val settings: SettingsRepository,
     private val costCalculator: CostCalculator,
     private val parsReader: ParsReader,
-    private val journal: CatchUpJournal
+    private val journal: CatchUpJournal,
+    /** Car type for the DM-i anchor rule; null (tests built before it) behaves as UNKNOWN. */
+    private val vehicleKind: VehicleKindMonitor? = null,
 ) {
     companion object {
         const val MIN_DELTA_KWH = 0.5
@@ -173,9 +177,18 @@ class AutoserviceChargingDetector @Inject constructor(
      *         out — a charge happened that catch-up has not reconstructed (e.g.
      *         a stale autoservice read at wake resolved NO_DELTA). The caller
      *         should re-arm catch-up — audit 2026-06-11, lost sleep-charge on
-     *         Song.
+     *         Song. A DM-i hybrid whose SOC rose while the car was moving or the
+     *         engine ran was charged by the engine, not a plug (#426): the anchor
+     *         follows the SOC and nothing is re-armed — but only once [catchUpSettled]:
+     *         until the start-of-service catch-up has read the anchor, a plug charge
+     *         from the night may still be waiting in it, and the engine starting or
+     *         the car driving off at wake must not wipe it.
      */
-    suspend fun recordParkedAnchor(data: DiParsData, now: Long = System.currentTimeMillis()): Boolean {
+    suspend fun recordParkedAnchor(
+        data: DiParsData,
+        now: Long = System.currentTimeMillis(),
+        catchUpSettled: Boolean = true,
+    ): Boolean {
         val gun = data.chargeGunState
         val gunConnected = plugInserted(
             data.chargerConnectState, data.chargeConnectIndicator, gun
@@ -183,8 +196,26 @@ class AutoserviceChargingDetector @Inject constructor(
         if (gunConnected) return false                 // live charge — keep the start anchor
         val soc = data.soc?.takeIf { it in 0..100 } ?: return false
         return mutex.withLock {
-            val prevSoc = stateStore.load().socPercent
+            val prev = stateStore.load()
+            val prevSoc = prev.socPercent
             when {
+                prevSoc != null && soc > prevSoc && catchUpSettled && engineCharged(data, prev.mileageKm) -> {
+                    stateStore.save(
+                        socPercent = soc,
+                        mileageKm = data.mileage?.toFloat(),
+                        capacityKwh = null,
+                        ts = now
+                    )
+                    android.util.Log.i(
+                        TAG,
+                        "anchor followed engine charge soc=$prevSoc->$soc rpm=${data.engineRpm} " +
+                            "speed=${data.speed} km=${prev.mileageKm}->${data.mileage}"
+                    )
+                    // Constant payload: a drive of such ticks collapses into one (xN) line
+                    // instead of flushing the catch-up decisions out of the ring.
+                    logJournal(now, "ANCHOR_ENGINE_CHARGE")
+                    false
+                }
                 // Un-reconstructed charge — re-arm. Negative power means energy
                 // is flowing IN right now (live charge still in progress, e.g.
                 // Song reports gun=null while charging; also covers regen while
@@ -207,6 +238,19 @@ class AutoserviceChargingDetector @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * DM-i only: this tick says the car was not just standing on a plug — it moves, the engine
+     * turns, or the odometer is more than [ODOMETER_MOVED_EPSILON_KM] past the anchor. A hybrid
+     * parked with the engine off and the odometer at the anchor is not caught (overnight plug
+     * charge); EV and UNKNOWN never are.
+     */
+    private fun engineCharged(data: DiParsData, anchorMileageKm: Float?): Boolean {
+        if (vehicleKind?.kind?.value != VehicleKind.HYBRID) return false
+        val moved = anchorMileageKm != null && data.mileage != null &&
+            data.mileage - anchorMileageKm > ODOMETER_MOVED_EPSILON_KM
+        return (data.speed ?: 0) > 0 || (data.engineRpm ?: 0) > 0 || moved
     }
 
     /**

@@ -34,6 +34,9 @@ data class RoutedWrite(val actionName: String, val value: Int)
  * candidate is pending, where re-probing is what lets a healthy read clear it. A composite
  * command that fans out to four doors therefore probes once and routes all four the
  * same way.
+ *
+ * A firmware that passes the read probe but refuses the percent write is moved to CTRL by
+ * [fallBackToCtrl], on evidence the write path gathers (#417).
  */
 class WindowChannelRouter(
     private val helper: HelperClient,
@@ -66,6 +69,23 @@ class WindowChannelRouter(
     /** Channel already fixed for this car (persisted winner or a fresh probe verdict), without
      *  probing for one. UNKNOWN means "not decided", never "percent by default". */
     fun decidedChannel(): WindowChannel = decided() ?: WindowChannel.UNKNOWN
+
+    /**
+     * Moves the car to CTRL after a percent window write on a firmware that reads window
+     * positions but has no percent write (#417): the probe above sees the readable positions and fixes
+     * PERCENT, and the percent write is then refused. Fixes CTRL for this and every later
+     * window command, so [route] re-targets them. True when [route] now sends [actionName] /
+     * [value] to CTRL; false for anything that is not a percent window write in range, or when
+     * the store did not keep CTRL. The caller decides that the percent write is absent; nothing
+     * here reads the car.
+     */
+    fun fallBackToCtrl(actionName: String, value: Int): Boolean {
+        if (actionName.lowercase() !in CTRL_ACTIONS || value !in 0..100) return false
+        store.setWinner(WindowChannel.CTRL)
+        val fixed = decidedChannel() == WindowChannel.CTRL
+        Log.i(TAG, "window channel = CTRL (percent write refused, symbol absent from catalog) stored=$fixed")
+        return fixed
+    }
 
     private suspend fun channel(): WindowChannel {
         decided()?.let { return it }

@@ -443,9 +443,10 @@ class AdbRestoreManagerTest {
         // rerun happens only after the first one has finished restoring the port.
         assertEquals(listOf(1), system.settingsWrites)
         assertEquals(1, system.helperStarts)
-        // Restore probe (2 calls) plus the rerun, which finds the port already alive.
+        // Restore probe (2 calls) plus the rerun, which finds the port already alive and keeps
+        // the Restored status of this boot instead of replacing it with NotNeeded.
         assertEquals(3, system.classicCalls)
-        assertEquals(AdbRestoreState.NotNeeded, m.state.value)
+        assertTrue(m.state.value is AdbRestoreState.Restored)
     }
 
     @Test
@@ -594,9 +595,9 @@ class AdbRestoreManagerTest {
 
         // Three coalesced triggers collapse into ONE rerun: the first attempt probes the port
         // twice (initial + after tcpip), the single rerun adds one probe. Three reruns would
-        // have made it five.
+        // have made it five. The rerun keeps the Restored status of this boot.
         assertEquals(3, system.classicCalls)
-        assertEquals(AdbRestoreState.NotNeeded, m.state.value)
+        assertTrue(m.state.value is AdbRestoreState.Restored)
     }
 
     @Test

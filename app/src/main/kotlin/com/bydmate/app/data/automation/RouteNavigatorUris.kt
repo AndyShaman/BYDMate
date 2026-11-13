@@ -1,6 +1,7 @@
 package com.bydmate.app.data.automation
 
 import android.net.Uri
+import com.bydmate.app.navdata.NavPackages
 
 /**
  * Deep links of the map apps the `navigate` action can open (#190, #200, #305): Yandex Navigator
@@ -51,6 +52,17 @@ object RouteNavigatorUris {
         WAZE -> WAZE_PACKAGE
         else -> YANDEX_PACKAGE
     }
+
+    /**
+     * Packages «навигатор» launches, tried in order (#334, #416): the app chosen in «Навигатор для
+     * маршрутов» ([chosen] is the stored value), then the Yandex Navigator, so a chosen app that is
+     * not installed falls back the way routes do.
+     */
+    fun launchPackages(chosen: String?): List<String> = when (chosen) {
+        MAPS -> NavPackages.YANDEX_MAPS.toList()
+        DGIS, WAZE -> listOf(packageOf(chosen))
+        else -> emptyList()
+    } + YANDEX_PACKAGE
 
     /** Free-text search on the map ("найди кафе"). */
     fun search(navigator: String, query: String): String = when (normalize(navigator)) {

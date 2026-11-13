@@ -751,6 +751,7 @@ private fun BlindSpotCard() {
         mutableStateOf(prefs.getInt(
             BlindSpotPreferences.KEY_THRESHOLD_KMH, BlindSpotPreferences.DEFAULT_THRESHOLD_KMH))
     }
+    var maxShowSec by remember { mutableStateOf(BlindSpotPreferences(context).maxShowSec) }
     var pipWidthPct by remember {
         mutableStateOf(prefs.getInt(
             BlindSpotPreferences.KEY_PIP_WIDTH_PCT, BlindSpotPreferences.DEFAULT_PIP_WIDTH_PCT))
@@ -833,6 +834,28 @@ private fun BlindSpotCard() {
                     BlindSpotPreferences.KEY_THRESHOLD_KMH, BlindSpotPreferences.DEFAULT_THRESHOLD_KMH)
                 prefs.edit().putInt(BlindSpotPreferences.KEY_THRESHOLD_KMH, thresholdKmh).apply()
                 Trace.event(TraceArea.USER, "slider", "id" to "blindspot_threshold", "value" to thresholdKmh, "was" to was)
+            },
+        )
+        SettingDivider()
+        SettingSliderRow(
+            title = stringResource(R.string.settings_blindspot_max_show_title),
+            description = stringResource(R.string.settings_blindspot_max_show_desc),
+            value = maxShowSec.toFloat(),
+            onValueChange = { maxShowSec = it.roundToInt() },
+            valueRange = BlindSpotPreferences.MIN_MAX_SHOW_SEC.toFloat()..
+                BlindSpotPreferences.MAX_MAX_SHOW_SEC.toFloat(),
+            valueLabel = if (maxShowSec == 0) {
+                stringResource(R.string.settings_blindspot_max_show_off)
+            } else {
+                stringResource(R.string.settings_blindspot_max_show_value, maxShowSec)
+            },
+            steps = (BlindSpotPreferences.MAX_MAX_SHOW_SEC - BlindSpotPreferences.MIN_MAX_SHOW_SEC) / 5 - 1,
+            enabled = enabled,
+            onValueChangeFinished = {
+                val was = prefs.getInt(
+                    BlindSpotPreferences.KEY_MAX_SHOW_SEC, BlindSpotPreferences.DEFAULT_MAX_SHOW_SEC)
+                prefs.edit().putInt(BlindSpotPreferences.KEY_MAX_SHOW_SEC, maxShowSec).apply()
+                Trace.event(TraceArea.USER, "slider", "id" to "blindspot_max_show", "value" to maxShowSec, "was" to was)
             },
         )
         SettingDivider()

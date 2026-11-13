@@ -86,6 +86,8 @@ class SteeringWheelKeyService : AccessibilityService() {
             "streak" to prefs.getInt(com.bydmate.app.service.A11yRecoveryGate.KEY_FAIL_STREAK, 0),
             "service_running" to TrackingService.isRunning.value)
         com.bydmate.app.service.A11yRecoveryGate.markBound(prefs)  // ends the Android 10 recovery streak
+        // ADB restore: the wireless-debugging dialog may already be up from before this bind.
+        WifiDebuggingDialogAutoAllow.onServiceConnected(this, applicationContext)
         // Android 10 (DiLink 3.0/4.0) a11y recovery: the daemon force-stops our package and the
         // framework re-binds this service, which brings the process back without TrackingService.
         // The daemon also broadcasts RECOVER_START, but this path does not depend on it. Idempotent
@@ -300,7 +302,8 @@ class SteeringWheelKeyService : AccessibilityService() {
             // (new BSSID each time), and nobody but us can press Allow before ADB is back.
             if (WifiDebuggingDialogAutoAllow.isDialog(event.packageName, event.className)) {
                 WifiDebuggingDialogAutoAllow.onDialogShown(
-                    this, applicationContext, event, AdbRestorePreferencesImpl(applicationContext).isEnabled())
+                    this, applicationContext, event, AdbRestorePreferencesImpl(applicationContext).isEnabled(),
+                    pkg = event.packageName, cls = event.className)
             }
         }
     }
