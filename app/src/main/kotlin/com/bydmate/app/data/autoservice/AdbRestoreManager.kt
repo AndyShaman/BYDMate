@@ -1,6 +1,8 @@
 package com.bydmate.app.data.autoservice
 
 import android.util.Log
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -314,7 +316,12 @@ class AdbRestoreManager @Inject constructor(
             }
             // The grant suspended: a toggle flipped meanwhile must not be overwritten by NotNeeded.
             if (abandoned(gen)) return
-            transition(AdbRestoreState.NotNeeded, "classic port alive")
+            // Our own restore is what keeps the port alive: the later check must not hide it.
+            if (_state.value is AdbRestoreState.Restored) {
+                Log.i(TAG, "classic port alive, keeping ${_state.value}")
+            } else {
+                transition(AdbRestoreState.NotNeeded, "classic port alive")
+            }
             ensureAccessibilityForDialog(gen)
             return
         }
@@ -323,6 +330,7 @@ class AdbRestoreManager @Inject constructor(
             transition(AdbRestoreState.NeedsActivation, "no WRITE_SECURE_SETTINGS")
             return
         }
+        if (classicFirst(gen)) return
         val network = system.wifiNetwork()
         if (network == null) {
             transition(AdbRestoreState.WaitingWifi, "no wifi")
@@ -331,6 +339,46 @@ class AdbRestoreManager @Inject constructor(
 
         if (!enableWirelessDebugging(gen, network, force)) return
         restoreOverTls(gen)
+    }
+
+    /**
+     * Tries to bring the classic port back without any dialog: `adb_enabled=1` and the two BYD
+     * properties that ask the firmware for ADB over the network. Each is written only when it
+     * differs; the properties are usually refused to an app, which costs nothing. When anything
+     * actually changed, the port is polled briefly. True when the attempt is over here (restored,
+     * or abandoned); false to continue on the wireless path exactly as before.
+     */
+    private suspend fun classicFirst(gen: Int): Boolean {
+        var changed = false
+        val adbBefore = system.readAdbEnabled()
+        if (adbBefore == 0) {
+            if (abandoned(gen)) return true
+            val accepted = system.writeAdbEnabled(1)
+            val after = system.readAdbEnabled()
+            Log.i(TAG, "classic first: adb_enabled before=$adbBefore accepted=$accepted after=$after")
+            if (after == 1) changed = true
+        }
+        for ((key, wanted) in BYD_ADB_PROPS) {
+            val before = system.readBydAdbProp(key)
+            if (before == wanted) continue
+            if (abandoned(gen)) return true
+            val accepted = system.writeBydAdbProp(key, wanted)
+            val after = system.readBydAdbProp(key)
+            Log.i(TAG, "classic first: $key before=$before accepted=$accepted after=$after")
+            if (after == wanted) changed = true
+        }
+        if (!changed) return false
+        for (check in 1..CLASSIC_FIRST_POLLS) {
+            system.sleep(TCPIP_POLL_INTERVAL_MS)
+            if (abandoned(gen)) return true
+            if (system.classicConnect()) {
+                if (abandoned(gen)) return true
+                markRestored(gen, "port 5555 back without a dialog after $check check(s)")
+                return true
+            }
+        }
+        Log.i(TAG, "classic first: port 5555 still silent, going on to wireless debugging")
+        return false
     }
 
     /** With wireless debugging on: finds adbd's TLS port and asks it for `tcpip:5555`. */
@@ -500,10 +548,13 @@ class AdbRestoreManager @Inject constructor(
         val sameNetwork = prefs.lastWriteNetwork() == network
         val withinCooldown = now - prefs.lastWriteAtMs() < WRITE_COOLDOWN_MS
         if (!force && sameNetwork && withinCooldown) {
-            transition(AdbRestoreState.NeedsDialog, "write suppressed, cooldown for $network")
+            Log.d(TAG, "cooldown network=$network")
+            transition(AdbRestoreState.NeedsDialog, "write suppressed, cooldown for this network")
             return false
         }
 
+        if (abandoned(gen)) return false
+        ensureServiceBeforeDialog(gen)
         // Last check before the one side effect the user just asked us not to perform.
         if (abandoned(gen)) return false
         prefs.recordWrite(network, now)
@@ -521,9 +572,34 @@ class AdbRestoreManager @Inject constructor(
         return true
     }
 
+    /**
+     * The write below raises the dialog, and only our accessibility service can press it: it has to
+     * be bound before that. In-process first (needs no ADB), the daemon only when that fails and
+     * only once per process, like [ensureAccessibilityForDialog]. Never fatal: the write goes on.
+     */
+    private suspend fun ensureServiceBeforeDialog(gen: Int) {
+        if (system.isAccessibilityServiceBound()) return
+        var enabled = system.enableAccessibilityServiceInProcess()
+        Log.i(TAG, "a11y before dialog: in-process enabled=$enabled")
+        if (!enabled && !a11yEnableAttempted) {
+            if (abandoned(gen)) return
+            a11yEnableAttempted = true
+            enabled = runCatching { system.enableAccessibilityService() }
+                .onFailure { if (it is CancellationException) throw it }
+                .getOrDefault(false)
+            Log.i(TAG, "a11y before dialog: daemon enabled=$enabled")
+        }
+        if (!enabled) return
+        val bound = system.awaitAccessibilityServiceBound(A11Y_BIND_TIMEOUT_MS)
+        Log.i(TAG, "a11y before dialog: bound=$bound")
+    }
+
     private fun transition(next: AdbRestoreState, reason: String) {
         _state.value = next
         Log.i(TAG, "$next reason=$reason")
+        // The journal outlives logcat's ring, and the dump prints it.
+        Trace.event(TraceArea.APP, "adb-restore", "state" to next.javaClass.simpleName,
+            "reason" to reason, "cause" to (next as? AdbRestoreState.Failed)?.reason)
     }
 
     /** [transition], unless the attempt at [gen] has been abandoned meanwhile. */
@@ -549,6 +625,18 @@ class AdbRestoreManager @Inject constructor(
         const val WRITE_COOLDOWN_MS = 10 * 60 * 1000L
         const val TCPIP_POLL_TIMEOUT_MS = 15_000L
         const val TCPIP_POLL_INTERVAL_MS = 1_000L
+
+        /** Classic-first: port checks after `adb_enabled`/property writes, [TCPIP_POLL_INTERVAL_MS] apart. */
+        const val CLASSIC_FIRST_POLLS = 3
+
+        /** BYD properties that ask the firmware for ADB over the network, with the wanted values. */
+        val BYD_ADB_PROPS = listOf(
+            "persist.sys.adb.wiress.enable" to "true",
+            "sys.connect.adb.wiress" to "1",
+        )
+
+        /** How long the framework gets to bind our accessibility service after an enable. */
+        const val A11Y_BIND_TIMEOUT_MS = 3_000L
 
         /** Retry cadence after a NeedsDialog verdict; the last value repeats. */
         val RETRY_DELAYS_MS = listOf(2_000L, 5_000L, 10_000L, 15_000L)

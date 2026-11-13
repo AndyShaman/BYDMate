@@ -17,6 +17,7 @@ import android.view.accessibility.AccessibilityManager
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.helper.canonicalComponent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,31 @@ interface AdbRestoreSystem {
 
     /** Lists our accessibility service via the daemon (started first if needed); true on success. */
     suspend fun enableAccessibilityService(): Boolean
+
+    // The members below were added after fakes that cannot change; each default keeps such a fake
+    // on the path it had before them (no extra call, no extra write).
+
+    /**
+     * Lists our accessibility service in Settings.Secure from the app process itself (with
+     * WRITE_SECURE_SETTINGS), so it needs neither ADB nor the daemon; true when the setting reads
+     * back with it. Blocks for a short pause between its writes.
+     */
+    fun enableAccessibilityServiceInProcess(): Boolean = true
+
+    /** Polls [isAccessibilityServiceBound] for up to [timeoutMs]; the binding follows an enable asynchronously. */
+    suspend fun awaitAccessibilityServiceBound(timeoutMs: Long): Boolean = isAccessibilityServiceBound()
+
+    /** Settings.Global `adb_enabled`. */
+    fun readAdbEnabled(): Int = 1
+
+    /** Writes `adb_enabled`; false when the write itself was rejected. */
+    fun writeAdbEnabled(value: Int): Boolean = false
+
+    /** A system property, null when absent or unreadable. */
+    fun readBydAdbProp(key: String): String? = null
+
+    /** Sets a system property; false when refused (a normal app usually is). */
+    fun writeBydAdbProp(key: String, value: String): Boolean = false
 
     suspend fun sleep(ms: Long)
 
@@ -277,6 +303,66 @@ class AndroidAdbRestoreSystem @Inject constructor(
     override suspend fun enableAccessibilityService(): Boolean =
         helperBootstrap.ensureRunning() && helperClient.enableAccessibilityService()
 
+    /**
+     * In-process twin of the daemon's enable (A11yDaemon.enableAccessibilityService): write the
+     * list without our component, pause, write it back with it, then `accessibility_enabled=1`. The
+     * removal is what makes the framework bind a service that is listed but not running. Other
+     * apps share this list, so it is read-modify-write, and a failed read writes nothing:
+     * Settings.Secure.getString returns null on a failed call too, so null counts as a failure.
+     */
+    override fun enableAccessibilityServiceInProcess(): Boolean = runCatching {
+        val cr = context.contentResolver
+        val component = HelperBinderProtocol.ACCESSIBILITY_SERVICE_COMPONENT
+        val target = canonicalComponent(component)
+        val current = Settings.Secure.getString(cr, ENABLED_A11Y_SERVICES) ?: run {
+            Log.w(TAG, "a11y in-process: list unreadable, nothing written")
+            return@runCatching false
+        }
+        val others = current.split(':').filter { it.isNotEmpty() && canonicalComponent(it) != target }
+        if (!Settings.Secure.putString(cr, ENABLED_A11Y_SERVICES, others.joinToString(":"))) return@runCatching false
+        Thread.sleep(A11Y_REBIND_PAUSE_MS)
+        if (!Settings.Secure.putString(cr, ENABLED_A11Y_SERVICES, (others + component).joinToString(":"))) {
+            return@runCatching false
+        }
+        if (!Settings.Secure.putInt(cr, ACCESSIBILITY_ENABLED, 1)) return@runCatching false
+        val after = Settings.Secure.getString(cr, ENABLED_A11Y_SERVICES).orEmpty().split(':')
+        val listed = after.any { it.isNotEmpty() && canonicalComponent(it) == target }
+        val on = Settings.Secure.getInt(cr, ACCESSIBILITY_ENABLED, 0) == 1
+        Log.i(TAG, "a11y in-process: others=${others.size} listed=$listed accessibility_enabled=$on")
+        listed && on
+    }.onFailure { Log.w(TAG, "a11y in-process enable failed: ${it.message}") }.getOrDefault(false)
+
+    override suspend fun awaitAccessibilityServiceBound(timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            if (isAccessibilityServiceBound()) return true
+            if (System.currentTimeMillis() >= deadline) return false
+            delay(A11Y_BIND_POLL_MS)
+        }
+    }
+
+    override fun readAdbEnabled(): Int =
+        runCatching { Settings.Global.getInt(context.contentResolver, ADB_ENABLED, 0) }.getOrDefault(0)
+
+    override fun writeAdbEnabled(value: Int): Boolean =
+        runCatching { Settings.Global.putInt(context.contentResolver, ADB_ENABLED, value) }
+            .onFailure { Log.w(TAG, "write adb_enabled=$value failed: ${it.message}") }
+            .getOrDefault(false)
+
+    // Same reflection as tlsPortFromProperty; SystemProperties.get returns "" for an absent key.
+    override fun readBydAdbProp(key: String): String? = runCatching {
+        val getter = Class.forName("android.os.SystemProperties").getMethod("get", String::class.java)
+        (getter.invoke(null, key) as? String)?.takeIf { it.isNotEmpty() }
+    }.onFailure { Log.d(TAG, "read $key failed: ${it.message}") }.getOrNull()
+
+    // SystemProperties.set throws when SELinux or the property service refuses the caller.
+    override fun writeBydAdbProp(key: String, value: String): Boolean = runCatching {
+        Class.forName("android.os.SystemProperties")
+            .getMethod("set", String::class.java, String::class.java)
+            .invoke(null, key, value)
+        true
+    }.onFailure { Log.i(TAG, "set $key=$value refused: ${(it.cause ?: it).message}") }.getOrDefault(false)
+
     override suspend fun sleep(ms: Long) = delay(ms)
 
     override fun nowMs(): Long = System.currentTimeMillis()
@@ -286,6 +372,12 @@ class AndroidAdbRestoreSystem @Inject constructor(
     companion object {
         const val CLASSIC_PORT = 5555
         private const val ADB_WIFI_ENABLED = "adb_wifi_enabled"
+        private const val ADB_ENABLED = "adb_enabled"
+        private const val ENABLED_A11Y_SERVICES = "enabled_accessibility_services"
+        private const val ACCESSIBILITY_ENABLED = "accessibility_enabled"
+        // Same pause as the daemon's enable (OpenBYD uses 0.2 s).
+        private const val A11Y_REBIND_PAUSE_MS = 200L
+        private const val A11Y_BIND_POLL_MS = 200L
         private const val TLS_CONNECT_SERVICE = "_adb-tls-connect._tcp"
         private const val ADB_TLS_PORT_PROP = "service.adb.tls.port"
         // Wi-Fi is up but its identity is hidden (no location permission / masked BSSID) —
