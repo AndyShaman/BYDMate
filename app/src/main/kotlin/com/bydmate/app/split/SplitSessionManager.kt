@@ -47,8 +47,16 @@ private const val WINDOWING_FULLSCREEN = 1
 private const val WINDOWING_SPLIT_PRIMARY = 3
 private const val WINDOWING_SPLIT_SECONDARY = 4
 
-/** Android 12, DiLink 5.0: the oldest platform any split path has been seen working on (#385). */
-private const val MIN_SPLIT_SDK = 31
+/**
+ * Android 12, DiLink 5.0: from this level up a start is trusted as it always was. Below it
+ * (DiLink 3/4, Android 10) the split works on some cars and not on others (#385), so a start there
+ * is still attempted but its outcome is checked and remembered for the hint.
+ */
+private const val SPLIT_TRUSTED_SDK = 31
+
+/** Below [SPLIT_TRUSTED_SDK]: how long a native start is watched for the panes to enter split mode. */
+private const val NATIVE_CHECK_MS = 3_000L
+private const val NATIVE_CHECK_STEP_MS = 300L
 private val NATIVE_SPLIT_MODES = setOf(WINDOWING_SPLIT_PRIMARY, WINDOWING_SPLIT_SECONDARY)
 private const val DISPLAY_SPLIT = 0
 
@@ -311,9 +319,10 @@ class SplitSessionManager(
      */
     private val split37: Split37Engine? = null,
     /**
-     * Android API level of the head unit (#385). Below [MIN_SPLIT_SDK] (DiLink 3 and 4) no split
-     * path has ever worked, so [start] answers [SplitStartResult.FREEFORM_UNAVAILABLE] at once.
-     * The default keeps every start attempted, as in existing tests; production passes the real level.
+     * Android API level of the head unit (#385). Below [SPLIT_TRUSTED_SDK] (DiLink 3 and 4) every
+     * start is still attempted, but a native start is checked through the panes' windowing modes
+     * and a start that ends as «the car does not split» marks [freeformUnsupported] for this process.
+     * The default keeps the Android 12+ behaviour, as in existing tests; production passes the real level.
      */
     private val platformSdk: Int = Int.MAX_VALUE,
 ) {
@@ -546,10 +555,19 @@ class SplitSessionManager(
     }
 
     /**
-     * True when this firmware is proven to ignore the freeform flag (#139) — callers use it to
+     * Below [SPLIT_TRUSTED_SDK] only: the last start in this process that reached a verdict ended as
+     * «the car does not split» (freeform refused, or the native split was refuted). Cleared by a later
+     * start that worked. Never set on Android 12+, and never blocks an attempt — it only picks the hint.
+     * Written under [mutex], read lock-free by [freeformUnsupported].
+     */
+    @Volatile private var oldAndroidNoSplit = false
+
+    /**
+     * True when this firmware is proven to ignore the freeform flag (#139), or when on Android below
+     * 12 the last start in this process found that the car does not split (#385) — callers use it to
      * pick the hint text, since telling the user to reboot the car is wrong on such a head unit.
      */
-    fun freeformUnsupported(): Boolean = platformSdk < MIN_SPLIT_SDK || verdict?.unsupported() == true
+    fun freeformUnsupported(): Boolean = oldAndroidNoSplit || verdict?.unsupported() == true
 
     /**
      * True on "platformized" firmware (OTA V1.6), where the panes belong to the vehicle and the
@@ -645,12 +663,10 @@ class SplitSessionManager(
         scope.async {
             mutex.withLock {
                 if (!prefs.isFeatureEnabled()) return@withLock SplitStartResult.DISABLED
-                // #385: DiLink 3/4 (Android 10) — neither our freeform panes nor the firmware toggle
-                // split the screen there, and the native path used to report success regardless.
-                if (platformSdk < MIN_SPLIT_SDK) {
-                    journal.append("start ${pair.label()} unavailable: android sdk=$platformSdk")
-                    return@withLock SplitStartResult.FREEFORM_UNAVAILABLE
-                }
+                // #385: DiLink 3/4 (Android 10) split on some cars and not on others, so the start
+                // runs as on Android 12 and only its outcome is checked below.
+                val oldAndroid = platformSdk < SPLIT_TRUSTED_SDK
+                if (oldAndroid) journal.append("start ${pair.label()} android sdk=$platformSdk")
                 // Platformized firmware (OTA V1.6) has a real 3:7 split of its own and refuses our
                 // freeform layout, so the engine owns the whole session there. A null answer means
                 // the engine could not enter (outdated daemon, no split surface) — the paths below
@@ -665,6 +681,9 @@ class SplitSessionManager(
                 // sees the native split-screen windowing modes and ends it (W6-F3).
                 if (prefs.isNativeModeEnabled()) {
                     val launched = nativeLauncher?.launch(pair) ?: false
+                    // The native path used to report success whether or not the screen split (#385);
+                    // below Android 12 the result is checked, from Android 12 up it is trusted.
+                    if (launched && oldAndroid) return@withLock checkNativeSplitLocked(pair)
                     if (launched) prefs.saveLastPair(pair)
                     journal.append(
                         "start ${pair.label()} -> native " +
@@ -720,6 +739,13 @@ class SplitSessionManager(
                     "start ${pair.label()} -> $result paneType=$paneTypeLabel" +
                         if (started != null) " tasks narrow=${started.narrowTaskId} wide=${started.wideTaskId}" else ""
                 )
+                if (oldAndroid) {
+                    when (result) {
+                        SplitStartResult.OK -> oldAndroidNoSplit = false
+                        SplitStartResult.FREEFORM_UNAVAILABLE -> oldAndroidNoSplit = true
+                        else -> Unit
+                    }
+                }
                 if (result == SplitStartResult.OK) {
                     lastStartedPair = pair
                     // Fresh read AFTER startLocked completes: backdrop.show() can take up to 2 s
@@ -1291,6 +1317,50 @@ class SplitSessionManager(
         }
         journal.append("start $pane $pkg -> no task after launch (${lastAbsent ?: "no state"}, waited $reads reads)")
         return null
+    }
+
+    /**
+     * Below Android 12 only (#385): the native launcher answered OK, so watch the panes for up to
+     * [NATIVE_CHECK_MS] to see whether the screen really split. Must hold [mutex].
+     *
+     * - either pane in split mode 3/4 → confirmed: the pair is saved, OK;
+     * - after the whole window the wide pane is a live fullscreen task and the narrow one is not
+     *   in split mode → refuted: nothing saved, the car is marked as not splitting;
+     * - anything else (no answer, no task, another mode) → not verifiable: OK as in 4.0.2.
+     *   A null answer for the wide pane ends the check at once, so daemon timeouts do not pile up.
+     */
+    private suspend fun checkNativeSplitLocked(pair: SplitPair): SplitStartResult {
+        val line = "start ${pair.label()} -> native"
+        var waitedMs = 0L
+        while (true) {
+            val wide = helper.getTaskState(pair.widePkg)
+            if (wide == null) {
+                prefs.saveLastPair(pair)
+                journal.append("$line OK (unverified: wide=null after ${waitedMs}ms)")
+                return SplitStartResult.OK
+            }
+            val narrow = helper.getTaskState(pair.narrowPkg)
+            val seen = "wide ${wide.describe()} narrow ${narrow?.describe() ?: "null"} after ${waitedMs}ms"
+            val narrowSplit = narrow != null && narrow.windowingMode in NATIVE_SPLIT_MODES
+            if (wide.windowingMode in NATIVE_SPLIT_MODES || narrowSplit) {
+                oldAndroidNoSplit = false
+                prefs.saveLastPair(pair)
+                journal.append("$line OK (split confirmed: $seen)")
+                return SplitStartResult.OK
+            }
+            if (waitedMs >= NATIVE_CHECK_MS) {
+                if (wide.taskId != -1 && wide.windowingMode == WINDOWING_FULLSCREEN) {
+                    oldAndroidNoSplit = true
+                    journal.append("$line not confirmed: $seen")
+                    return SplitStartResult.FREEFORM_UNAVAILABLE
+                }
+                prefs.saveLastPair(pair)
+                journal.append("$line OK (unverified: $seen)")
+                return SplitStartResult.OK
+            }
+            delay(NATIVE_CHECK_STEP_MS)
+            waitedMs += NATIVE_CHECK_STEP_MS
+        }
     }
 
     /** Feeds one FREEFORM_UNAVAILABLE outcome to the verdict, journaling the latch transition. */

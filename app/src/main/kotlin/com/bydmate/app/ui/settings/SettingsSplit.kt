@@ -96,9 +96,6 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
     // Platformized firmware (OTA V1.6): the native 3:7 split is the only mechanism there, so the
     // screen states the fact instead of offering a choice that has one outcome.
     val split37Firmware = remember { Split37Engine.isPlatformizedFirmware() }
-    // #385: below Android 12 (DiLink 3 and 4) no split mechanism works, so neither the reboot
-    // advice nor the native mechanism is worth offering there.
-    val splitSdkUnavailable = remember { android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S }
     var clearStatus by remember { mutableStateOf<String?>(null) }
     // "?" badge on the section header; the text it toggles is the first block inside the card.
     var howToOpen by remember { mutableStateOf(false) }
@@ -183,9 +180,7 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
             // and point at the native mechanism, which does not depend on that flag. Both hints
             // are about freeform only, so the native mechanism — and a firmware that only has
             // the native one — hides them.
-            if (splitEnabled && splitSdkUnavailable) {
-                SettingHint(text = stringResource(R.string.split_freeform_unsupported_hint))
-            } else if (splitEnabled && !nativeMode && !split37Firmware &&
+            if (splitEnabled && !nativeMode && !split37Firmware &&
                 (splitFreeformUnsupported || splitRebootPending)) {
                 val hint = if (splitFreeformUnsupported) {
                     stringResource(R.string.split_freeform_unsupported_hint) + " " +
