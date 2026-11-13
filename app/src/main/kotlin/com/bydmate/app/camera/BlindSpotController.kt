@@ -337,6 +337,7 @@ class BlindSpotController @Inject constructor(
         if (fastLoop?.isActive == true) return
         val scope = serviceScope ?: return
         Log.i(TAG, "fast loop start")
+        showLimit.reset()
         telemetry.reset(SystemClock.elapsedRealtime())
         telemetryLost = false
         fastLoop = scope.launch(Dispatchers.Main) {

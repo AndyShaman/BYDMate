@@ -88,6 +88,21 @@ class WifiDebuggingDialogDecisionTest {
     }
 
     @Test
+    fun `A5 a known BSSID inside a key fingerprint is not the wireless dialog`() {
+        // The six pairs of the network address may also sit inside a longer chain.
+        val usb = "Allow USB debugging? The computer's RSA key fingerprint is: " +
+            "00:11:$bssid:22:33:44:55:66:77:88:99 Always allow from this computer"
+        assertSkipped(decide(windowText = usb), "lone network address")
+    }
+
+    @Test
+    fun `A5 a window with two network addresses is never pressed`() {
+        val two = "$dialogText 0A:1B:2C:3D:4E:5F"
+        assertSkipped(decide(windowText = two), "lone network address")
+        assertSkipped(decide(windowText = two, currentBssid = null), "lone network address")
+    }
+
+    @Test
     fun `A5 a known BSSID still has to be the one in the window`() {
         assertSkipped(decide(currentBssid = "02:00:00:11:22:33"), "bssid")
     }

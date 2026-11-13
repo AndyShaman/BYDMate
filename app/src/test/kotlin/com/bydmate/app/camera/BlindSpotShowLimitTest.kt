@@ -75,6 +75,16 @@ class BlindSpotShowLimitTest {
         assertEquals(L, limit.apply(L, L, 51_000L, 10))
     }
 
+    @Test fun `reset forgets a cut show and its timer`() {
+        val limit = BlindSpotShowLimit()
+        limit.apply(L, L, 0L, 10)
+        assertEquals(N, limit.apply(L, L, 10_000L, 10))
+        limit.reset()
+        assertEquals(L, limit.apply(L, L, 60_000L, 10))
+        assertEquals(L, limit.apply(L, L, 69_000L, 10))
+        assertEquals(N, limit.apply(L, L, 70_000L, 10))
+    }
+
     @Test fun `nothing decided stays hidden`() {
         val limit = BlindSpotShowLimit()
         for (t in 0L..30_000L step 5_000L) {

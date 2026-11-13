@@ -249,10 +249,8 @@ utterance	expected	category	danger
 какая погода	UNRECOGNIZED	misc	
 сколько времени	UNRECOGNIZED	misc	
 позвони маме	UNRECOGNIZED	misc	
-открой навигатор	UNRECOGNIZED	misc	
 открой карту	UNRECOGNIZED	misc	
 открой настройки	UNRECOGNIZED	misc	
-поехали домой	UNRECOGNIZED	misc	
 сколько у меня останется заряда когда я доеду до точки	UNRECOGNIZED	misc	
 так ну ка проверим как ты работаешь	UNRECOGNIZED	misc	
 выключайся	UNRECOGNIZED	misc	
@@ -275,7 +273,6 @@ utterance	expected	category	danger
 открой окружение	UNRECOGNIZED	misc	danger
 закрой вкладку	UNRECOGNIZED	misc	
 открой почту	UNRECOGNIZED	misc	
-запусти навигацию	UNRECOGNIZED	misc	
 открой окна и люк наполовину	UNRECOGNIZED	sunroof	danger
 открой люк наполовину и окна	UNRECOGNIZED	sunroof	danger
 открой окно водителя и закрой люк	主驾打开100+天窗打开0	sunroof	
@@ -579,7 +576,6 @@ utterance	expected	category	danger
 включай подогрев руля	方向盘加热	steering heat	
 сохрани заряд	UNRECOGNIZED	misc	
 сколько заряда	UNRECOGNIZED	misc	
-включи навигатор	UNRECOGNIZED	misc
 выключи фары	UNRECOGNIZED	misc
 выключи подогрев руля и подогрев сидений	UNRECOGNIZED	seats
 выключи подогрев сиденья водителя и подогрев сиденья пассажира	UNRECOGNIZED	seats

@@ -38,7 +38,9 @@ class ReadableOnTick {
         mileageHevKm = hev
         mileageEvKm = data.mileageEvKm?.toDouble()
         odometerKm = data.mileage
-        totalElecConsumption = data.totalElecConsumption
+        // Kept when this tick has none: at power-off the BMS counter can go silent a tick before
+        // the fuel counters, and the trip would close without its kWh.
+        data.totalElecConsumption?.let { totalElecConsumption = it }
         return true
     }
 

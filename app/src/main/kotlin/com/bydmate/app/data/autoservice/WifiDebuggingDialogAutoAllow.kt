@@ -110,14 +110,16 @@ object WifiDebuggingDialogAutoAllow {
             else Decision.Skip("bssid unknown, no lone network address in window")
         }
         if (windowText?.contains(bssid, ignoreCase = true) != true) return Decision.Skip("bssid not in window")
-        return Decision.Press
+        // The same six pairs can sit inside a key fingerprint: the text check holds here too.
+        return if (hasLoneNetworkAddress(windowText)) Decision.Press
+        else Decision.Skip("bssid in window, but no lone network address")
     }
 
-    /** True when [text] holds a six-pair address and no longer colon-separated hex chain (a key fingerprint). */
+    /** True when [text] holds exactly one six-pair address and no longer colon-separated hex chain (a key fingerprint). */
     private fun hasLoneNetworkAddress(text: CharSequence?): Boolean {
         if (text == null) return false
         val chains = HEX_CHAIN.findAll(text).map { it.value.count { c -> c == ':' } + 1 }.toList()
-        return chains.any { it == MAC_PAIRS } && chains.none { it > MAC_PAIRS }
+        return chains.count { it == MAC_PAIRS } == 1 && chains.none { it > MAC_PAIRS }
     }
 
     /**

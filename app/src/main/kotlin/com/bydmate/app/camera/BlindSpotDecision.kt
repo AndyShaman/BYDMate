@@ -268,6 +268,14 @@ class BlindSpotShowLimit {
         return if (expired) BlindSpotSide.NONE else decided
     }
 
+    /** A new watch starts clean: what the turn signal did while nobody looked is unknown. */
+    fun reset() {
+        side = BlindSpotSide.NONE
+        since = 0L
+        lastSignal = BlindSpotSide.NONE
+        expired = false
+    }
+
     private companion object {
         const val MS_PER_SEC = 1_000L
     }
