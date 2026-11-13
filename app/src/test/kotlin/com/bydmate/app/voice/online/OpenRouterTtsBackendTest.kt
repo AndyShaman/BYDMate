@@ -33,7 +33,7 @@ class OpenRouterTtsBackendTest {
         server = MockWebServer(); server.start()
         backend = OpenRouterTtsBackend(
             id = "gemini",
-            model = "google/gemini-3.1-flash-tts-preview",
+            model = "google/gemini-3.8-flash-tts",
             maleVoice = "Charon",
             femaleVoice = "Kore",
             http = OkHttpClient(),
@@ -116,7 +116,7 @@ class OpenRouterTtsBackendTest {
         assertEquals("/api/v1/audio/speech", req.path)
         assertEquals("Bearer sk-abc", req.getHeader("Authorization"))
         val sent = JSONObject(req.body.readUtf8())
-        assertEquals("google/gemini-3.1-flash-tts-preview", sent.getString("model"))
+        assertEquals("google/gemini-3.8-flash-tts", sent.getString("model"))
         assertEquals("привет", sent.getString("input"))
         assertEquals("Charon", sent.getString("voice"))
         assertEquals("pcm", sent.getString("response_format"))

@@ -71,6 +71,9 @@ class OpenRouterTtsBackend(
                 if (bytes == null || bytes.size < MIN_AUDIO_BYTES) {
                     throw IOException("OpenRouter TTS: empty audio (${bytes?.size ?: 0} bytes)")
                 }
+                // "pcm" normally comes back headerless, but the provider may wrap it in a WAV
+                // container; a RIFF header played as samples is a click at the wrong rate.
+                if (isWav(bytes)) return@use WavCodec.decodeWav(bytes)
                 val rate = RATE_REGEX.find(resp.header("Content-Type") ?: "")
                     ?.groupValues?.get(1)?.toIntOrNull() ?: DEFAULT_PCM_RATE
                 WavCodec.decodePcm16(bytes, rate)
@@ -83,7 +86,13 @@ class OpenRouterTtsBackend(
         private const val MIN_AUDIO_BYTES = 256
         private const val DEFAULT_PCM_RATE = 24_000
 
-        // Preview/beta OpenRouter model slug -- verify against openrouter.ai/models on first on-car smoke.
-        const val GEMINI_MODEL = "google/gemini-3.1-flash-tts-preview"
+        // Successor of gemini-3.1-flash-tts-preview, which Google retires on 2026-11-17 (#423).
+        // Same endpoint and voices; listed at openrouter.ai/api/v1/models?output_modalities=speech.
+        const val GEMINI_MODEL = "google/gemini-3.8-flash-tts"
+
+        private fun isWav(bytes: ByteArray): Boolean =
+            bytes.size >= 12 &&
+                String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+                String(bytes, 8, 4, Charsets.US_ASCII) == "WAVE"
     }
 }
