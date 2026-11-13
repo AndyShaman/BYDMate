@@ -93,9 +93,13 @@ internal object OffReport {
     const val PENDING_CONNECT_MS = 3_000
     const val PENDING_READ_MS = 5_000
 
-    /** After a pass that met no network, arms do not start another one for this long (doubling). */
+    /**
+     * After a pass that met no network, arms do not start another one for this long (doubling). The
+     * cap stays under the app's hold ([com.bydmate.app.data.telegram.TelegramReporter.POWER_OFF_FIRST_CAP_MS]),
+     * so a network that comes back mid-drive is noticed while the app's reports still wait (#413).
+     */
     const val PENDING_BACKOFF_FIRST_MS = 30_000L
-    const val PENDING_BACKOFF_MAX_MS = 15 * 60_000L
+    const val PENDING_BACKOFF_MAX_MS = 4 * 60_000L
 
     private const val PENDING_DIR = "/data/local/tmp/bydmate_offreport"
     private const val TELEGRAM_HOST = "api.telegram.org"

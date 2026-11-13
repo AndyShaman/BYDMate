@@ -25,7 +25,8 @@ import javax.inject.Singleton
  * (each arm also lets the daemon deliver what is pending). When the report is switched off or the
  * bot disconnected, the daemon is disarmed (it drops the pending reports too), retried every tick
  * until it confirms. The first tick of a process disarms too when the report is off: the daemon may
- * hold a report of the last one.
+ * hold a report of the last one. Each tick then drains the app's outbox, which ends its hold for the
+ * daemon's pending reports (#413) within a tick of their delivery or of the hold's cap.
  *
  * Log tag `TgReport`; ids, lengths and states only, never the token, the chat or the text.
  */
@@ -63,6 +64,7 @@ class PowerOffArmer @Inject constructor(
 
     /** The helper bootstrap ran (whatever its result): the loop may start. */
     fun bootstrapAttempted() {
+        state.bootstrapAttempted = true
         bootstrapped.complete(Unit)
     }
 
@@ -73,6 +75,7 @@ class PowerOffArmer @Inject constructor(
             launch { settingsChanges().collect { pokes.trySend(Unit) } }
             while (true) {
                 guarded("refresh") { refresh() }
+                guarded("drain") { reporter.drainOutbox(TelegramReporter.REASON_TICK) }
                 withTimeoutOrNull(REFRESH_MS) { pokes.receive() }
             }
         }

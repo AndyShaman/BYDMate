@@ -22,6 +22,9 @@ class PowerOffArmState @Inject constructor(private val helper: HelperClient) {
     /** `ok` (the daemon took the last arm), `outdated` (alive, but without the verb), `-` (not reached). */
     @Volatile var daemon: String = DAEMON_UNKNOWN
 
+    /** The helper bootstrap ran in this process (whatever its result): until then the daemon is unknown. */
+    @Volatile var bootstrapAttempted: Boolean = false
+
     /** The daemon's pending count, last delivery outcome and listener; null when it does not answer. */
     suspend fun daemonStatus(): OffReportStatus? = helper.offReportStatus("")
 
