@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.database.sqlite.SQLiteException
 import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Environment
 import android.os.SystemClock
 import android.util.Log
@@ -149,6 +151,11 @@ data class RuleImportDraft(
     val token: Long = 0,
     val saving: Boolean = false,
 )
+
+/** A share file name `bydmate_rule_*.json`, in any letter case: «Открыть с помощью» opens only these. */
+fun isRuleFileName(name: String?): Boolean =
+    name != null && name.startsWith(RuleShareFiles.FILE_PREFIX, ignoreCase = true) &&
+        name.endsWith(RuleShareFiles.FILE_SUFFIX, ignoreCase = true)
 
 data class AutomationUiState(
     val rules: List<RuleEntity> = emptyList(),
@@ -836,42 +843,88 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
      * say why it cannot be imported. A newer tap or [closeImport] cancels a read still running,
      * so only the last pick can open a preview.
      */
-    fun pickImportFile(file: File) {
-        importJob?.cancel()
-        val places = _uiState.value.places
-        importJob = viewModelScope.launch {
-            val lc = context.appLocalizedContext()
-            val callLabel = lc.getString(R.string.auto_act_call)
-            val parsed = try {
-                withContext(ioDispatcher) {
-                    RuleShareFiles.readLimited(file)?.let { RuleShare.parse(it, callLabel) } ?: RuleParseResult.Invalid
-                }
-            } catch (e: IOException) {
-                Log.w("AutomationViewModel", "import: cannot read ${file.name}", e)
-                RuleParseResult.Invalid
-            }
-            when (parsed) {
-                is RuleParseResult.Ok -> {
-                    // A file from before the PowerState condition was removed: converted like a saved rule.
-                    val triggers = PowerStateRuleMigration.convert(
-                        parsed.rule.triggerLogic, parsed.rule.triggers, PowerStateRuleMigration.labels(context),
-                        driveIsGear = PowerStateRuleMigration.isSunshadeTemplate(parsed.rule.name),
-                    )
-                    if (triggers == null) {
-                        _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_power_off_only)) }
-                        return@launch
-                    }
-                    val rule = parsed.rule.copy(triggers = triggers)
-                    val draft = withContext(ioDispatcher) { importDraft(rule, places, lc) }
-                        .copy(token = ++draftToken, error = importProblem(rule)?.text(lc))
-                    _uiState.update { it.copy(importFiles = null, importError = null, importDraft = draft) }
-                }
-                RuleParseResult.NewerVersion ->
-                    _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_newer_version)) }
-                RuleParseResult.Invalid ->
-                    _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_invalid)) }
-            }
+    fun pickImportFile(file: File) = launchImport { importFrom(file.name) { RuleShareFiles.readLimited(file) } }
+
+    /**
+     * «Открыть с помощью» → BYDMate on a share file in a file manager: the same read, parse and
+     * preview as a file picked in step 1, so nothing is added without «Добавить». A name other
+     * than `bydmate_rule_*.json` or a file that cannot be opened is refused in step 1, over the
+     * Download list.
+     */
+    fun openRuleFile(uri: Uri) = launchImport {
+        val name = withContext(ioDispatcher) { displayName(uri) }
+        if (name == null || !isRuleFileName(name)) {
+            Log.w("AutomationViewModel", "import: not a rule file: $name")
+            refuseImport(context.appLocalizedContext().getString(R.string.automation_import_invalid))
+            return@launchImport
         }
+        importFrom(name) {
+            val input = try {
+                context.contentResolver.openInputStream(uri)
+            } catch (e: SecurityException) {
+                throw IOException("no access to $uri", e)
+            } ?: throw IOException("cannot open $uri")
+            input.use { RuleShareFiles.readLimited(it) }
+        }
+    }
+
+    /** The file name a file manager shows for [uri]: its display name, else the last path part. */
+    private fun displayName(uri: Uri): String? {
+        val shown = if (uri.scheme != "content") null else runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null
+            }
+        }.getOrNull()
+        return shown ?: uri.lastPathSegment?.substringAfterLast('/')
+    }
+
+    /** Runs one import read; a newer one or [closeImport] cancels it. */
+    private fun launchImport(block: suspend () -> Unit) {
+        importJob?.cancel()
+        importJob = viewModelScope.launch { block() }
+    }
+
+    /** Reads the file [name] with [read] off the main thread and opens its preview, see [pickImportFile]. */
+    private suspend fun importFrom(name: String, read: () -> String?) {
+        val places = _uiState.value.places
+        val lc = context.appLocalizedContext()
+        val callLabel = lc.getString(R.string.auto_act_call)
+        val parsed = try {
+            withContext(ioDispatcher) {
+                read()?.let { RuleShare.parse(it, callLabel) } ?: RuleParseResult.Invalid
+            }
+        } catch (e: IOException) {
+            Log.w("AutomationViewModel", "import: cannot read $name", e)
+            refuseImport(lc.getString(R.string.automation_import_open_failed))
+            return
+        }
+        when (parsed) {
+            is RuleParseResult.Ok -> {
+                // A file from before the PowerState condition was removed: converted like a saved rule.
+                val triggers = PowerStateRuleMigration.convert(
+                    parsed.rule.triggerLogic, parsed.rule.triggers, PowerStateRuleMigration.labels(context),
+                    driveIsGear = PowerStateRuleMigration.isSunshadeTemplate(parsed.rule.name),
+                )
+                if (triggers == null) {
+                    refuseImport(lc.getString(R.string.automation_import_power_off_only))
+                    return
+                }
+                val rule = parsed.rule.copy(triggers = triggers)
+                val draft = withContext(ioDispatcher) { importDraft(rule, places, lc) }
+                    .copy(token = ++draftToken, error = importProblem(rule)?.text(lc))
+                _uiState.update { it.copy(importFiles = null, importError = null, importDraft = draft) }
+            }
+            RuleParseResult.NewerVersion -> refuseImport(lc.getString(R.string.automation_import_newer_version))
+            RuleParseResult.Invalid -> refuseImport(lc.getString(R.string.automation_import_invalid))
+        }
+    }
+
+    /** Why the file cannot be imported, under the step 1 list; a file opened from a file manager
+     *  had no list open, so the Download one comes up with it. */
+    private suspend fun refuseImport(message: String) {
+        val files = _uiState.value.importFiles
+            ?: withContext(ioDispatcher) { RuleShareFiles.listRuleFiles(downloadsDir()) }
+        _uiState.update { it.copy(importFiles = files, importError = message, importDraft = null) }
     }
 
     /** [rule] linked to [places] by name, with its preview lines. */

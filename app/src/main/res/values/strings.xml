@@ -1865,6 +1865,7 @@
     <string name="automation_import_bad_action">Действие %1$d в файле записано неверно, такую автоматизацию не добавить</string>
     <string name="automation_import_too_many_actions">В файле больше %1$d действий, такую автоматизацию не добавить</string>
     <string name="automation_import_newer_version">Автоматизация из более новой версии, обновите приложение</string>
+    <string name="automation_import_open_failed">Не удалось открыть файл. Сохраните его в папку Download и выберите в этом списке</string>
     <string name="automation_import_power_off_only">Эта автоматизация могла сработать только на выключенной машине, такого условия больше нет</string>
     <string name="automation_import_preview_title">Проверьте автоматизацию</string>
     <string name="automation_import_conditions">Условия</string>

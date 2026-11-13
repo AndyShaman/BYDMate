@@ -2,9 +2,11 @@ package com.bydmate.app
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -43,6 +45,10 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var updateChecker: UpdateChecker
     private val postRestoreViewModel: PostRestoreViewModel by viewModels()
 
+    // «Открыть с помощью» on a rule file: held until the Automation tab takes it into its import.
+    // Read in onCreate only on a fresh start: a recreated activity has already handed it on.
+    private var ruleFile by mutableStateOf<Uri?>(null)
+
     companion object {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
@@ -66,6 +72,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestPermissionsIfNeeded()
+        if (savedInstanceState == null) ruleFile = ruleFileOf(intent)
 
         setContent {
             val thresholds by produceState(initialValue = ConsumptionThresholds.Default) {
@@ -121,15 +128,23 @@ class MainActivity : AppCompatActivity() {
                     LocalConfiguration provides localizedConfig,
                     LocalConsumptionThresholds provides thresholds,
                 ) {
-                    AppNavigation(
-                        settingsRepository = settingsRepository,
-                        updateChecker = updateChecker,
-                    )
+                    AppNavigation(settingsRepository, updateChecker, ruleFile) { ruleFile = null }
                     PostRestoreDialog(postRestoreViewModel)
                 }
             }
         }
     }
+
+    // singleTop: a file opened while BYDMate is already on top of its task arrives here.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        ruleFileOf(intent)?.let { ruleFile = it }
+    }
+
+    /** The file of a VIEW intent: the manifest lets only `bydmate_rule_*.json` paths through. */
+    private fun ruleFileOf(intent: Intent?): Uri? =
+        intent?.takeIf { it.action == Intent.ACTION_VIEW }?.data
 
     private fun requestPermissionsIfNeeded() {
         val permissions = mutableListOf<String>()

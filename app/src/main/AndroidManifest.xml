@@ -93,6 +93,28 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- «Открыть с помощью» on a rule share file bydmate_rule_*.json in a file manager; the
+                 path pattern keeps BYDMate off other files and the app checks the name again.
+                 Two filters: an intent with a MIME type matches only a filter that names one, an
+                 intent without one only a filter that names none. pathPattern needs a host, and
+                 "*" also matches the empty host of file:///. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*bydmate_rule_.*\\.json" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*bydmate_rule_.*\\.json" />
+            </intent-filter>
         </activity>
 
         <!-- Split-screen backdrop: fullscreen NavyDark activity, lives while a split session
