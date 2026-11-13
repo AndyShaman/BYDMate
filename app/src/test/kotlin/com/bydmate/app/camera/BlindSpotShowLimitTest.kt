@@ -3,6 +3,7 @@ package com.bydmate.app.camera
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+@Suppress("VariableNaming", "PrivatePropertyName") // L / R / N keep the case tables readable
 class BlindSpotShowLimitTest {
 
     private val L = BlindSpotSide.LEFT
