@@ -219,6 +219,8 @@ What stays in the file: the URL itself, notification and phrase texts, agent que
 4. If you do not have the place or contact used in the rule, pick your own with the **"Choose place"** and **"Choose contact"** buttons.
 5. Tap **"Add"**. The rule is added turned off by default; the "Turn on right away" checkbox turns it on immediately.
 
+A rule file can also be opened straight from a file manager: "Open with" → BYDMate. The same preview window opens.
+
 A rule with a URL whose address needs to be re-entered is added turned off only. If key-like parameters were stripped from the URL, the window asks you to check the address. The app rejects files with excessive nesting or very long strings.
 
 ---
@@ -318,7 +320,7 @@ With the turn signal on, BYDMate shows the side camera picture by itself: the le
 
 <img src="docs/screenshots/settings-blindspot-en.jpg" alt="Settings → Display → Blind spots" width="800">
 
-Enable it in **Settings → Display**, "Blind spots" section (off by default). The same place has the speed threshold below which the camera does not show, the window width, and its position: the "Adjust position" button shows an empty window you drag with a finger to where the camera should be. If the left camera on the cluster gets in the way, turn on "Both cameras on the main screen" there too: both pictures show on the tablet, the cluster is left alone. The left window mirrors the right one by default, and the "Left camera position" button under the toggle gives it its own spot. The "Vertical camera window" toggle turns the window vertical and rotates the picture 90 degrees, like a mirror: if the picture ends up facing the wrong way after turning it on, open an issue. Requires a car equipped with a surround-view system. On some cars with DiLink 4.0 the firmware does not let apps access the cameras, the feature does not work there.
+Enable it in **Settings → Display**, "Blind spots" section (off by default). The same place has the speed threshold below which the camera does not show, the window width, and its position: the "Adjust position" button shows an empty window you drag with a finger to where the camera should be. The "Hide the camera after" slider (5 to 60 seconds, "no limit" by default) is for a turn signal that stays on for a long time: the camera leaves the screen after that time and comes back the next time the turn signal goes on, and the warning frame leaves with it. If the left camera on the cluster gets in the way, turn on "Both cameras on the main screen" there too: both pictures show on the tablet, the cluster is left alone. The left window mirrors the right one by default, and the "Left camera position" button under the toggle gives it its own spot. The "Vertical camera window" toggle turns the window vertical and rotates the picture 90 degrees, like a mirror: if the picture ends up facing the wrong way after turning it on, open an issue. Requires a car equipped with a surround-view system. On some cars with DiLink 4.0 the firmware does not let apps access the cameras, the feature does not work there.
 
 ---
 
@@ -413,7 +415,7 @@ Safety: window opening is blocked above 120 km/h, the sunroof above 80 km/h, doo
 
 ### Quick Commands Without the Agent and Without Internet
 
-Frequent commands run instantly, without the language model and without the network. For this, the app has a fixed list of Russian phrases: windows and sunroof, seat heating and ventilation, steering wheel heating, mirrors, climate, fan, volume, locks, trunk, and lights.
+Frequent commands run instantly, without the language model and without the network. For this, the app has a fixed list of Russian phrases: windows and sunroof, seat heating and ventilation, steering wheel heating, mirrors, climate, fan, volume, locks, trunk, lights, and navigation.
 
 How it works:
 
@@ -438,6 +440,8 @@ Examples from the list. Full list with wording variants: [docs/VOICE_COMMANDS.md
 | "Поставь температуру 22" (Set the temperature to 22) | climate set to 22 degrees |
 | "Громкость 20" (Volume 20) | media volume set to 20 |
 | "Включи Яндекс Музыку", "Яндекс Музыка" (Turn on Yandex Music, Yandex Music) | starts "My Wave" in Yandex Music |
+| "Поехали домой", "Маршрут на работу" (Let's go home, Route to work) | a route to the BYDMate Place "Дом" (Home) or "Работа" (Work), or, without one, to the home or work saved in the navigator |
+| "Открой навигатор", "Навигация" (Open the navigator, Navigation) | opens the navigator chosen for routes |
 | "Запри машину" (Lock the car) | doors lock |
 
 The English offline commands were removed, the list is Russian only. The app's interface language does not affect this: the offline commands and the agent work regardless of the app's language.
@@ -807,8 +811,8 @@ SoH and automatic charge logging on Leopard 3 work automatically, there is nothi
 
 Six cards, three per row. You can change their order: hold a card and drag it.
 
-- **Battery · now**: charge (SoC), remaining energy in kWh as the battery itself estimates it, SoH, battery temperature, traction battery voltage, power at the motors, how much the battery is giving out right now and how many percent of charge per hour that eats, the 12V system, insulation resistance.
-- **Motors and inverters**: front and rear separately. Motor and inverter temperatures on a scale, rpm, accelerator and brake pedal, power.
+- **Battery · now**: charge (SoC), remaining energy in kWh as the battery itself estimates it, SoH, battery temperature, traction battery voltage, how much the battery is giving out right now and how many percent of charge per hour that eats, the 12V system, insulation resistance.
+- **Motors and inverters**: power at the motors on top, then front and rear separately. Motor and inverter temperatures on a scale, rpm, accelerator and brake pedal, power.
 - **BMS limits**: the charge and discharge power the battery controller (BMS) allows right now and how much power the battery can give. Below are the cells: the weakest, the strongest and the difference between them.
 - **Battery · history**: when the last full charge to 100 % and the last calibration happened, mileage by battery data, how much energy has passed through the battery in total, the number of full cycles (with the numbers it is figured from), average charge since the last charge and over all time.
 - **Car status**: how much the A/C compressor draws, whether climate is on, cabin and outside temperature. Below are the pressure and temperature of each tyre on a picture of the car. If the car has a PM2.5 sensor, it is shown too.
@@ -978,7 +982,7 @@ On DiLink firmware from summer 2026 ("2606" builds), the ADB port closes at ever
 Things to know:
 
 - **Wi-Fi in the car must be on and connected to a network** (home, a phone's hotspot, any). Without Wi-Fi, Android does not let you turn on wireless debugging, and there is no way around this.
-- The first time you connect **on each new network**, a system dialog appears, "Allow wireless debugging on this network?". When the restore toggle is on, the app confirms it by itself through its accessibility service: on a phone's hotspot the network changes every time it is turned on, and "Always allow on this network" does not help there. If BYDMate's accessibility service is off, check "Always allow on this network" and tap ALLOW.
+- With the toggle on, the app first tries to switch regular ADB back on by itself, without any dialog. If that does not work and the "Allow wireless debugging on this network?" dialog appears, the app taps it by itself, but only after its own attempt and only in the wireless debugging dialog for the network the car is connected to. Nothing has to be switched on for this, location included. If the dialog stays on screen anyway, check "Always allow on this network" and tap ALLOW.
 - Once, while ADB still works, the app grants itself the `WRITE_SECURE_SETTINGS` system permission (a single command over ADB). Without it, wireless debugging cannot be turned on: the status line shows "Activation needed".
 - After booting, the app keeps retrying by itself as long as Wi-Fi is connected, and reacts to the screen unlocking. ADB usually comes back 10 to 30 seconds after the car connects to Wi-Fi. It works best if the phone's hotspot is already on by the time the car starts.
 - If ADB on your firmware survives a reboot anyway, there is no need to turn the toggle on: the status line shows "Not needed".
