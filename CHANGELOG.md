@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-11-13
+
 ### Новое
 - Отчёт в Telegram: новая галочка «Температура батареи». Отдельной строкой под температурой снаружи и в салоне пишется средняя температура батареи, а если машина отдаёт самую низкую и самую высокую, то и они, например «Батарея +23° (от +21° до +25°)» (#414).
 - Камера слепых зон: новый ползунок «Убирать камеру через», от 5 до 60 секунд. Если поворотник горит долго, камера уйдёт с экрана через это время и вернётся при следующем включении поворотника; рамка-предупреждение уходит вместе с ней. По умолчанию «без лимита», как раньше.
@@ -1559,7 +1561,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.3.2...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.4.0...HEAD
+[4.4.0]: https://github.com/AndyShaman/BYDMate/compare/v4.3.2...v4.4.0
 [4.3.2]: https://github.com/AndyShaman/BYDMate/compare/v4.3.1...v4.3.2
 [4.3.1]: https://github.com/AndyShaman/BYDMate/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/AndyShaman/BYDMate/compare/v4.2.0...v4.3.0
