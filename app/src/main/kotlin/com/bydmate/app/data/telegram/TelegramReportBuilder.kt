@@ -55,7 +55,7 @@ data class MapPoint(val latitude: Double, val longitude: Double) {
  *
  * Layout (approved 2026-09-27, the odometer 2026-09-28, TRIP 1/2 2026-10-01): blocks split by one
  * empty line, each only when it has something: the bold header; the user's own text; the car
- * (🔋 charge and range, 🧭 odometer, 🌡 temperatures, 🛞 tires, 🔒 all closed); 🚗 the trip, its
+ * (🔋 charge and range, 🧭 odometer, 🌡 temperatures, 🌡 battery temperature, 🛞 tires, 🔒 all closed); 🚗 the trip, its
  * numbers indented below the title, then its time, energy and cost when those items are chosen;
  * 🔁 the dashboard counter TRIP 1, then 🔁 TRIP 2, each laid out like the trip; ⚠️ what is open; 📍 the map link, always last.
  */
@@ -158,6 +158,7 @@ object TelegramReportBuilder {
             chargeLine(found[ReportField.SOC], found[ReportField.RANGE], Locale.forLanguageTag(lang)),
             found[ReportField.ODOMETER]?.html,
             found[ReportField.TEMPS]?.html,
+            found[ReportField.BATTERY_TEMP]?.html,
             found[ReportField.TIRES]?.html,
             openings?.takeIf { !it.alert }?.html,
         )
@@ -212,6 +213,7 @@ object TelegramReportBuilder {
             ReportField.ODOMETER -> odometerLine(d?.mileage, strings)
             ReportField.TRIP1, ReportField.TRIP2 -> counterBlock(field, inputs, strings)
             ReportField.TEMPS -> d?.let { tempsLine(it, strings, locale) }?.let { "🌡 ${escape(it)}" }
+            ReportField.BATTERY_TEMP -> batteryTempLine(d, strings)
             ReportField.TIRES -> d?.let { tiresLine(it, strings, locale) }?.let { "🛞 ${escape(it)}" }
             ReportField.LOCATION -> locationLine(inputs, lang, strings)
             ReportField.TRIP, ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST,
@@ -263,6 +265,16 @@ object TelegramReportBuilder {
         ),
         locale,
     )
+
+    /** «🌡 Батарея +23° (от +21° до +25°)», the range only when min and max are both known and differ. */
+    private fun batteryTempLine(d: DiParsData?, strings: ReportStrings): String? {
+        val avg = d?.avgBatTemp ?: return null
+        val min = d.minBatTemp
+        val max = d.maxBatTemp
+        val line = if (min != null && max != null && min != max) text(strings, R.string.tg_report_battery_temp_range, avg, min, max)
+        else text(strings, R.string.tg_report_battery_temp, avg)
+        return "🌡 ${escape(line)}"
+    }
 
     /** «заряд 64%» + «запас 312 км» -> «Заряд 64%, запас 312 км»; null when there is no part. */
     private fun sentence(parts: List<String>, locale: Locale): String? =

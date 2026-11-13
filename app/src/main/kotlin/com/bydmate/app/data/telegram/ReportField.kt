@@ -19,6 +19,7 @@ enum class ReportField(val id: String, val labelRes: Int, val descRes: Int) {
     TRIP1("trip1", R.string.dashboard_trip1_label, R.string.tg_report_field_trip1_desc),
     TRIP2("trip2", R.string.dashboard_trip2_label, R.string.tg_report_field_trip2_desc),
     TEMPS("temps", R.string.tg_report_field_temps, R.string.tg_report_field_temps_desc),
+    BATTERY_TEMP("battery_temp", R.string.tg_report_field_battery_temp, R.string.tg_report_field_battery_temp_desc),
     OPENINGS("openings", R.string.tg_report_field_openings, R.string.tg_report_field_openings_desc),
     TIRES("tires", R.string.tg_report_field_tires, R.string.tg_report_field_tires_desc);
 

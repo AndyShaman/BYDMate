@@ -1920,6 +1920,7 @@
     <string name="tg_report_field_trip_kwh">行程电量</string>
     <string name="tg_report_field_trip_cost">行程费用</string>
     <string name="tg_report_field_temps">温度</string>
+    <string name="tg_report_field_battery_temp">电池温度</string>
     <string name="tg_report_field_openings">未关闭项</string>
     <string name="tg_report_field_tires">胎压</string>
     <string name="tg_report_header_off">BYDMate：车辆于 %1$s 熄火</string>
@@ -1941,6 +1942,8 @@
     <string name="tg_report_trip_cost">费用 %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">车外 %1$+d°</string>
     <string name="tg_report_temp_inside">车内 %1$+d°</string>
+    <string name="tg_report_battery_temp">电池 %1$+d°</string>
+    <string name="tg_report_battery_temp_range">电池 %1$+d° (%2$+d° 至 %3$+d°)</string>
     <string name="tg_report_open_list">未关闭：%1$s</string>
     <string name="tg_report_all_closed">全部已关闭</string>
     <string name="tg_report_open_door_fl">主驾车门</string>
@@ -1974,6 +1977,7 @@
     <string name="tg_report_field_trip1_desc">首页的 TRIP 1 计数器：公里数、行驶时间和能耗</string>
     <string name="tg_report_field_trip2_desc">首页的 TRIP 2 计数器：公里数、行驶时间和能耗</string>
     <string name="tg_report_field_temps_desc">车外和车内</string>
+    <string name="tg_report_field_battery_temp_desc">电池平均温度</string>
     <string name="tg_report_field_openings_desc">车门、车窗、天窗、后备箱、引擎盖</string>
     <string name="tg_report_field_tires_desc">全部四个车轮</string>
     <string name="settings_tg_report_off_title">熄火时发送报告</string>

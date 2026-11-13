@@ -1810,6 +1810,7 @@
     <string name="tg_report_field_trip_kwh">Trip energy</string>
     <string name="tg_report_field_trip_cost">Trip cost</string>
     <string name="tg_report_field_temps">Temperature</string>
+    <string name="tg_report_field_battery_temp">Battery temperature</string>
     <string name="tg_report_field_openings">What is open</string>
     <string name="tg_report_field_tires">Tire pressure</string>
     <string name="tg_report_header_off">BYDMate: car turned off at %1$s</string>
@@ -1831,6 +1832,8 @@
     <string name="tg_report_trip_cost">Cost %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">outside %1$+d°</string>
     <string name="tg_report_temp_inside">cabin %1$+d°</string>
+    <string name="tg_report_battery_temp">Battery %1$+d°</string>
+    <string name="tg_report_battery_temp_range">Battery %1$+d° (%2$+d° to %3$+d°)</string>
     <string name="tg_report_open_list">Open: %1$s</string>
     <string name="tg_report_all_closed">Everything is closed</string>
     <string name="tg_report_open_door_fl">driver door</string>
@@ -1864,6 +1867,7 @@
     <string name="tg_report_field_trip1_desc">TRIP 1 counter from the Dashboard: kilometers, driving time and consumption</string>
     <string name="tg_report_field_trip2_desc">TRIP 2 counter from the Dashboard: kilometers, driving time and consumption</string>
     <string name="tg_report_field_temps_desc">Outside and in the cabin</string>
+    <string name="tg_report_field_battery_temp_desc">Battery average</string>
     <string name="tg_report_field_openings_desc">Doors, windows, sunroof, trunk, hood</string>
     <string name="tg_report_field_tires_desc">All four wheels</string>
     <string name="settings_tg_report_off_title">Report when the car is turned off</string>

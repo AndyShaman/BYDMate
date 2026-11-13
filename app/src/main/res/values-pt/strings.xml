@@ -1806,6 +1806,7 @@
     <string name="tg_report_field_trip_kwh">Energia da viagem</string>
     <string name="tg_report_field_trip_cost">Custo da viagem</string>
     <string name="tg_report_field_temps">Temperatura</string>
+    <string name="tg_report_field_battery_temp">Temperatura da bateria</string>
     <string name="tg_report_field_openings">O que está aberto</string>
     <string name="tg_report_field_tires">Pressão dos pneus</string>
     <string name="tg_report_header_off">BYDMate: carro desligado às %1$s</string>
@@ -1827,6 +1828,8 @@
     <string name="tg_report_trip_cost">Custo %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">lado de fora %1$+d°</string>
     <string name="tg_report_temp_inside">cabine %1$+d°</string>
+    <string name="tg_report_battery_temp">Bateria %1$+d°</string>
+    <string name="tg_report_battery_temp_range">Bateria %1$+d° (de %2$+d° a %3$+d°)</string>
     <string name="tg_report_open_list">Aberto: %1$s</string>
     <string name="tg_report_all_closed">Tudo fechado</string>
     <string name="tg_report_open_door_fl">porta do motorista</string>
@@ -1860,6 +1863,7 @@
     <string name="tg_report_field_trip1_desc">Contador TRIP 1 do Painel: quilômetros, tempo de viagem e consumo</string>
     <string name="tg_report_field_trip2_desc">Contador TRIP 2 do Painel: quilômetros, tempo de viagem e consumo</string>
     <string name="tg_report_field_temps_desc">Lado de fora e na cabine</string>
+    <string name="tg_report_field_battery_temp_desc">Média da bateria</string>
     <string name="tg_report_field_openings_desc">Portas, janelas, teto solar, porta-malas, capô</string>
     <string name="tg_report_field_tires_desc">As quatro rodas</string>
     <string name="settings_tg_report_off_title">Relatório ao desligar o carro</string>

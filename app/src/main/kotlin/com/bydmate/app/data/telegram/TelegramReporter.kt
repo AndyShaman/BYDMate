@@ -116,10 +116,10 @@ class TelegramReporter @Inject constructor(
     private val fuelCache = ConcurrentHashMap<Int, FuelEntry>()
 
     /**
-     * Bumped by every [drainOutbox] call. [deliver] reads it before sending: if it moved while the
-     * send was in flight, a network-regain or after-send drain ran and found the queue empty
-     * (the failed report was not enqueued yet), so it runs [drainOutbox] once more itself instead
-     * of leaving the report stuck until the next trigger.
+     * Bumped by [drainOutbox] each time it reads the outbox. [deliver] takes it before it decides to
+     * send: if it moved by the time the report is in the outbox, a drain read the queue without it,
+     * so [deliver] runs [drainOutbox] once more instead of leaving the report stuck until the next
+     * trigger.
      */
     private val drainGeneration = AtomicInteger(0)
 
@@ -166,8 +166,8 @@ class TelegramReporter @Inject constructor(
      * was disconnected or whose chat changed is dropped, so it never lands in someone else's chat.
      */
     suspend fun drainOutbox(reason: String) {
-        drainGeneration.incrementAndGet()
         outboxMutex.withLock {
+            drainGeneration.incrementAndGet()
             var queue = loadOutbox()
             if (queue.isEmpty()) return
             Log.i(TAG, "outbox drain reason=$reason size=${queue.size}")
@@ -247,8 +247,18 @@ class TelegramReporter @Inject constructor(
         )
     }
 
+    /**
+     * Older reports first: the outbox is drained before the fresh report goes out, and a report that
+     * still has older ones waiting goes behind them instead of overtaking them (#413).
+     */
     private suspend fun deliver(id: String, config: TgBackupConfig, chatId: Long, text: String, builtAtMs: Long): SendResult {
-        val generationBeforeSend = drainGeneration.get()
+        drainOutbox("before_send")
+        val generation = drainGeneration.get()
+        val waiting = outboxSize()
+        if (waiting > 0) {
+            Log.i(TAG, "send id=$id behind=$waiting -> outbox")
+            return queue(OutboxEntry(id, chatId, builtAtMs, text), generation)
+        }
         val failure = sink.sendMessage(config.token, chatId, text, PARSE_MODE, linkPreview = false).exceptionOrNull()
         return when {
             failure == null -> {
@@ -259,17 +269,23 @@ class TelegramReporter @Inject constructor(
             }
             isTransient(failure) -> {
                 Log.w(TAG, "send id=$id rc=${errorKey(failure)} -> outbox")
-                enqueue(OutboxEntry(id, chatId, builtAtMs, text))
-                // A drain that ran while the send was in flight found this report not queued yet
-                // (see drainGeneration doc): run it once more so it is not stuck until the next trigger.
-                if (drainGeneration.get() != generationBeforeSend) drainOutbox("late_edge")
-                SendResult.Queued
+                queue(OutboxEntry(id, chatId, builtAtMs, text), generation)
             }
             else -> {
                 Log.w(TAG, "send id=$id rc=${errorKey(failure)} permanent")
                 SendResult.Failed(errorKey(failure))
             }
         }
+    }
+
+    /**
+     * Puts [entry] in the outbox; when a drain read the outbox after [generation] was taken, it missed
+     * [entry] (see [drainGeneration]), so drain once more rather than leave it to the next trigger.
+     */
+    private suspend fun queue(entry: OutboxEntry, generation: Int): SendResult {
+        enqueue(entry)
+        if (drainGeneration.get() != generation) drainOutbox("late_edge")
+        return SendResult.Queued
     }
 
     /**
