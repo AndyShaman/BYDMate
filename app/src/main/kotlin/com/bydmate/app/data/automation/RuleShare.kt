@@ -9,7 +9,6 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
-import java.io.InputStream
 import java.net.URI
 import java.net.URLDecoder
 import java.text.Normalizer
@@ -578,17 +577,16 @@ object RuleShareFiles {
      * The text of [file], or null when it is bigger than [MAX_FILE_BYTES]. The limit is checked
      * while reading, so a file that grows meanwhile cannot slip past it.
      */
-    fun readLimited(file: File): String? = file.inputStream().use { readLimited(it) }
-
-    /** The same for a stream (a file opened from a file manager); the caller closes [input]. */
-    fun readLimited(input: InputStream): String? {
+    fun readLimited(file: File): String? {
         val out = ByteArrayOutputStream()
-        val buffer = ByteArray(8 * 1024)
-        while (true) {
-            val n = input.read(buffer)
-            if (n < 0) break
-            out.write(buffer, 0, n)
-            if (out.size() > MAX_FILE_BYTES) return null
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                out.write(buffer, 0, n)
+                if (out.size() > MAX_FILE_BYTES) return null
+            }
         }
         return out.toString(Charsets.UTF_8.name())
     }

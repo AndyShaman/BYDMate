@@ -219,8 +219,6 @@ What stays in the file: the URL itself, notification and phrase texts, agent que
 4. If you do not have the place or contact used in the rule, pick your own with the **"Choose place"** and **"Choose contact"** buttons.
 5. Tap **"Add"**. The rule is added turned off by default; the "Turn on right away" checkbox turns it on immediately.
 
-A rule file can also be opened straight from a file manager: "Open with" → BYDMate. The same preview window opens.
-
 A rule with a URL whose address needs to be re-entered is added turned off only. If key-like parameters were stripped from the URL, the window asks you to check the address. The app rejects files with excessive nesting or very long strings.
 
 ---

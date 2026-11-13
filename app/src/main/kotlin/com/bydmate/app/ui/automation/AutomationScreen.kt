@@ -1,6 +1,5 @@
 package com.bydmate.app.ui.automation
 
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,18 +62,9 @@ import com.bydmate.app.ui.theme.*
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun AutomationScreen(
-    /** A rule file opened from a file manager: imported through the usual preview, then taken. */
-    ruleFile: Uri? = null,
-    onRuleFileTaken: () -> Unit = {},
     viewModel: AutomationViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(ruleFile) {
-        if (ruleFile != null) {
-            viewModel.openRuleFile(ruleFile)
-            onRuleFileTaken()
-        }
-    }
     var showPlaces by rememberSaveable { mutableStateOf(false) }
     val filtered = remember(state.rules, state.filter) {
         when (state.filter) {

@@ -1706,7 +1706,6 @@
     <string name="automation_import_bad_action">Action %1$d in the file is written incorrectly, this automation cannot be added</string>
     <string name="automation_import_too_many_actions">The file has more than %1$d actions, this automation cannot be added</string>
     <string name="automation_import_newer_version">This automation comes from a newer version, please update the app</string>
-    <string name="automation_import_open_failed">Could not open the file. Save it to the Download folder and pick it in this list</string>
     <string name="automation_import_power_off_only">This automation could only fire with the car off, and that condition no longer exists</string>
     <string name="automation_import_preview_title">Check the automation</string>
     <string name="automation_import_conditions">Conditions</string>

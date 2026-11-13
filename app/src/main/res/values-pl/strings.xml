@@ -1851,7 +1851,6 @@
     <string name="automation_import_bad_action">Działanie %1$d w pliku jest zapisane niepoprawnie, tej automatyzacji nie można dodać</string>
     <string name="automation_import_too_many_actions">Plik zawiera więcej niż %1$d działań, tej automatyzacji nie można dodać</string>
     <string name="automation_import_newer_version">Automatyzacja z nowszej wersji, zaktualizuj aplikację</string>
-    <string name="automation_import_open_failed">Nie udało się otworzyć pliku. Zapisz go w folderze Download i wybierz na tej liście</string>
     <string name="automation_import_power_off_only">Ta automatyzacja mogła zadziałać tylko przy wyłączonym samochodzie, takiego warunku już nie ma</string>
     <string name="automation_import_preview_title">Sprawdź automatyzację</string>
     <string name="automation_import_conditions">Warunki</string>

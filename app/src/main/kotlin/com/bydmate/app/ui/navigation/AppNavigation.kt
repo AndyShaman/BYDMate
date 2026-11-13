@@ -1,7 +1,6 @@
 package com.bydmate.app.ui.navigation
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -99,10 +98,7 @@ enum class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
 @Composable
 fun AppNavigation(
     settingsRepository: SettingsRepository,
-    updateChecker: UpdateChecker,
-    /** A rule file opened from a file manager, until the Automation tab takes it. */
-    ruleFile: Uri? = null,
-    onRuleFileTaken: () -> Unit = {},
+    updateChecker: UpdateChecker
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -213,18 +209,6 @@ fun AppNavigation(
     }
 
     val isWelcome = currentDestination?.route == "welcome"
-    // A rule file opened from a file manager goes to the Automation tab, which imports it; during
-    // the first-run wizard it waits until the wizard is done. A null destination: no graph yet.
-    LaunchedEffect(ruleFile, currentDestination == null, isWelcome) {
-        if (ruleFile == null || currentDestination == null || isWelcome) return@LaunchedEffect
-        navController.navigate(Screen.Automation.route) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
-            }
-            launchSingleTop = true
-            restoreState = true
-        }
-    }
     // Grows past NavBarHeight only once a large text size makes the label too tall for it.
     // The bar pads itself by its bottom window inset inside this height, so the inset is added on top.
     val density = LocalDensity.current
@@ -333,9 +317,7 @@ fun AppNavigation(
             composable(Screen.Charges.route) {
                 ChargesScreen()
             }
-            composable(Screen.Automation.route) {
-                AutomationScreen(ruleFile = ruleFile, onRuleFileTaken = onRuleFileTaken)
-            }
+            composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToAgentChat = { navController.navigate("agent_chat") },
