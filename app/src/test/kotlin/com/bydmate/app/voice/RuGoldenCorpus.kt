@@ -34,6 +34,8 @@ object RuGoldenCorpus {
         is ParseResult.Volume -> "VOL:" + result.payload
         is ParseResult.Ask -> "ASK:" + result.question.id
         ParseResult.Music -> "MUSIC"
+        is ParseResult.Navigate -> "NAVIGATE:" + result.shortcut
+        ParseResult.OpenNavigator -> "OPEN_NAVIGATOR"
         ParseResult.Unrecognized -> UNRECOGNIZED
     }
 

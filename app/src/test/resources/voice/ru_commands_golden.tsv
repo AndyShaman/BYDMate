@@ -680,3 +680,27 @@ utterance	expected	category	danger
 включи обдув в ноги и на стекло	吹脚除霜	climate	
 включи обдув на стекло	除霜	climate	
 обдув на лобовое стекло	除霜	climate	
+поехали домой	NAVIGATE:home	navigation	
+едем домой	NAVIGATE:home	navigation	
+маршрут домой	NAVIGATE:home	navigation	
+проложи маршрут домой	NAVIGATE:home	navigation	
+построй маршрут домой	NAVIGATE:home	navigation	
+поехали на работу	NAVIGATE:work	navigation	
+едем на работу	NAVIGATE:work	navigation	
+маршрут на работу	NAVIGATE:work	navigation	
+проложи маршрут на работу	NAVIGATE:work	navigation	
+построй маршрут на работу	NAVIGATE:work	navigation	
+навигация	OPEN_NAVIGATOR	navigation	
+открой навигацию	OPEN_NAVIGATOR	navigation	
+запусти навигацию	OPEN_NAVIGATOR	navigation	
+включи навигацию	OPEN_NAVIGATOR	navigation	
+открой навигатор	OPEN_NAVIGATOR	navigation	
+запусти навигатор	OPEN_NAVIGATOR	navigation	
+включи навигатор	OPEN_NAVIGATOR	navigation	
+поехали	UNRECOGNIZED	navigation	
+домой	UNRECOGNIZED	navigation	
+работа	UNRECOGNIZED	navigation	
+включи музыку	UNRECOGNIZED	navigation	
+запусти радио	UNRECOGNIZED	navigation	
+поехали в магазин	UNRECOGNIZED	navigation	
+маршрут	UNRECOGNIZED	navigation	
