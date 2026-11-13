@@ -75,3 +75,11 @@ internal fun voltage12vColor(v: Double?): Color = when {
     v < BatteryThresholds.V12_WARN -> SocYellow
     else -> AccentGreen
 }
+
+/** Battery temperature, the same rule as the home screen: cold or warm yellow, overheated red. */
+internal fun batTempColor(tempC: Int?): Color = when (tempC?.let { BatteryThresholds.batTempSeverity(it) }) {
+    null -> TextPrimary
+    2 -> SocRed
+    1 -> SocYellow
+    else -> AccentGreen
+}

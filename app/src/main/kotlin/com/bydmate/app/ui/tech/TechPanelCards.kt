@@ -59,6 +59,7 @@ internal fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, m
         TechRow(
             stringResource(R.string.battery_health_bat_temp_label),
             state.batTemp?.let { stringResource(R.string.tech_value_temp, it) } ?: DASH,
+            valueColor = batTempColor(state.batTemp),
         )
         TechRow(
             stringResource(R.string.tech_label_hv_voltage),

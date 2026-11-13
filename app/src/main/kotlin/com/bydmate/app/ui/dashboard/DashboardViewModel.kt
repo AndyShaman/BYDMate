@@ -566,9 +566,11 @@ class DashboardViewModel @Inject constructor(
             Math.round((maxV!! - minV!!) * 1000.0) / 1000.0 else null
         val temp = data?.avgBatTemp ?: current.avgBatTemp
         if (!hasCellData && temp == null) return current.batteryHealthStatus
+        // Cold is a warning at most (BatteryThresholds): 4 degrees on a winter morning is no fault.
+        val tempSeverity = temp?.let { BatteryThresholds.batTempSeverity(it) } ?: 0
         return when {
-            (delta != null && delta >= 0.090) || (temp != null && (temp < 5 || temp > 50)) -> "critical"
-            (delta != null && delta >= 0.050) || (temp != null && (temp < 5 || temp > 45)) -> "warning"
+            (delta != null && delta >= 0.090) || tempSeverity == 2 -> "critical"
+            (delta != null && delta >= 0.050) || tempSeverity == 1 -> "warning"
             else -> "ok"
         }
     }
