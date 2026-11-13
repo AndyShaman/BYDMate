@@ -11,6 +11,7 @@ import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.helper.HelperBinderProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -165,6 +166,29 @@ class FidCatalogManager @Inject constructor(
         FidAddresses.install(outcome.table)
         resolved = true
         Log.i(TAG, "fid resolve: ${outcome.table.summary()}")
+        resolveHybrid(catalog, "$source $fingerprint")
+    }
+
+    /**
+     * DM-i set (#394), after the main table is in: a field moves to its catalog address only
+     * where the compiled one answers an error. Anything going wrong here keeps the hybrid
+     * constants and never touches the main install.
+     */
+    @Suppress("TooGenericExceptionCaught") // a hybrid failure must not fail the main resolution
+    private suspend fun resolveHybrid(catalog: FidCatalog, source: String) {
+        try {
+            val outcome = FidResolver.resolve(FidMap.hybrid, catalog, probe, source, onlyWhereConstantFails = true)
+            if (outcome.probeTransportDead) {
+                Log.w(TAG, "fid resolve hybrid: probe transport silent, staying on constants")
+                return
+            }
+            FidAddresses.installHybrid(outcome.table)
+            Log.i(TAG, "fid resolve hybrid: ${outcome.table.summary()}")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "fid resolve hybrid: failed (${e.message}), staying on constants")
+        }
     }
 
     /**
@@ -212,7 +236,7 @@ class FidCatalogManager @Inject constructor(
     }
 
     /**
-     * Persists the symbols this app can use (READ entries, the WRITE symbols the dump prints,
+     * Persists the symbols this app can use (READ entries with the hybrid set, the WRITE symbols the dump prints,
      * the ADAS states the push channel confirms, the cluster music card's write fids and the rear seat heat symbols) and the whole device table. Keeping only those turns a ~700 KB dump into a few
      * KB; the original symbol count travels in the header so the log stays honest about what
      * the firmware reported.
@@ -221,7 +245,7 @@ class FidCatalogManager @Inject constructor(
         try {
             val adas = PushStateTrace.ADAS_STATES.map { it.symbol }
             val wanted = (
-                FidMap.all.mapNotNull { it.symbol } + WriteFidSymbols.byFid.values + adas +
+                (FidMap.all + FidMap.hybrid).mapNotNull { it.symbol } + WriteFidSymbols.byFid.values + adas +
                     com.bydmate.app.media.ClusterMusicFids.SYMBOLS + com.bydmate.app.data.vehicle.RearSeatHeat.SYMBOLS
             ).toSortedSet()
             val body = buildString {

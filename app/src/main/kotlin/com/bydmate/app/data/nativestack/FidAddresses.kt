@@ -18,13 +18,23 @@ object FidAddresses {
     var table: ResolvedFidTable = FidResolver.constants(FidMap.all)
         private set
 
+    /** Addresses of [FidMap.hybrid], resolved apart from [table] so the EV reads never move with it. */
+    @Volatile
+    var hybrid: ResolvedFidTable = FidResolver.constants(FidMap.hybrid)
+        private set
+
     fun install(resolved: ResolvedFidTable) {
         table = resolved
+    }
+
+    fun installHybrid(resolved: ResolvedFidTable) {
+        hybrid = resolved
     }
 
     /** Back to the compiled constants. For tests. */
     fun resetToConstants() {
         table = FidResolver.constants(FidMap.all)
+        hybrid = FidResolver.constants(FidMap.hybrid)
     }
 
     fun of(field: String): FidAddress = table.address(field)
