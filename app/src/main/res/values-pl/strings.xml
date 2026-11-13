@@ -538,6 +538,7 @@
     <string name="automation_action_media_play">Multimedia: odtwórz</string>
     <string name="automation_action_media_pause">Multimedia: pauza</string>
     <string name="automation_action_media_key_hint">Działa, gdy odtwarzacz jest już uruchomiony: aby go uruchomić, dodaj przed tym krokiem „Uruchomienie aplikacji”.</string>
+    <string name="automation_action_hazard_on_hint">Wyłącza się tylko akcją „Awaryjne: wyłącz”. Dodaj ją po pauzie. Bieg wsteczny wymaga dwóch reguł: „Bieg = R” i „Bieg nie R”.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Połączenie</string>
     <string name="automation_action_navigate">Trasa w Yandex Nawigatorze</string>

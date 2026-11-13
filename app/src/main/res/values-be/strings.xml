@@ -538,6 +538,7 @@
     <string name="automation_action_media_play">Медыя: прайграць</string>
     <string name="automation_action_media_pause">Медыя: паўза</string>
     <string name="automation_action_media_key_hint">Спрацуе, калі плэер ужо запушчаны: каб яго запусціць, пастаўце перад гэтым крокам «Запуск праграмы».</string>
+    <string name="automation_action_hazard_on_hint">Выключаецца толькі дзеяннем «Аварыйка: выключыць». Дадайце яго пасля паўзы. Для задняга ходу патрэбныя два правілы: «Перадача = R» і «Перадача не R».</string>
     <string name="automation_action_yandex_music">Яндэкс.Музыка</string>
     <string name="automation_action_call">Званок</string>
     <string name="automation_action_navigate">Маршрут у Я.Навігатары</string>

@@ -437,6 +437,7 @@
     <string name="automation_action_media_play">媒体：播放</string>
     <string name="automation_action_media_pause">媒体：暂停</string>
     <string name="automation_action_media_key_hint">仅在播放器已运行时生效：如需启动，请在此步骤前添加“启动应用”。</string>
+    <string name="automation_action_hazard_on_hint">只能通过“关闭双闪”动作关闭，请在等待之后添加该动作。倒车需要两条规则：“档位 = R”和“档位不等于 R”。</string>
     <string name="automation_action_yandex_music">Yandex 音乐</string>
     <string name="automation_action_call">拨打电话</string>
     <string name="automation_action_navigate">Yandex 导航路线</string>

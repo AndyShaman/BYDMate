@@ -202,14 +202,27 @@ private fun ParamActionControls(
     val lc = context.appLocalizedContext()
     val rearSeats = LocalRearSeats.current
     val entries = remember(lc, rearSeats) { catalogEntries(lc, rearSeats) }
-    CatalogDropdown(
+    @Composable
+    fun dropdown(m: Modifier) = CatalogDropdown(
         selected = paramSelectedText(action, context),
         items = entries.map { it.label },
         categories = entries.map { lc.getString(it.categoryRes) },
-        modifier = modifier,
+        modifier = m,
         onSelect = { idx -> onUpdate(entries[idx].make(context)) }
     )
+    // The hazard stays on until something turns it off (#412): say so under the step.
+    if (action.command != HAZARD_ON_COMMAND) return dropdown(modifier)
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        dropdown(Modifier.fillMaxWidth())
+        Text(
+            text = stringResource(R.string.automation_action_hazard_on_hint),
+            fontSize = 14.sp,
+            color = TextSecondary
+        )
+    }
 }
+
+private const val HAZARD_ON_COMMAND = "双闪打开"
 
 /** A graded command («Температура: 22 °C»): the catalog dropdown and its level controls in one line. */
 @Composable

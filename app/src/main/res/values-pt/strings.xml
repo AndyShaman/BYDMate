@@ -477,6 +477,7 @@
     <string name="automation_action_media_play">Mídia: tocar</string>
     <string name="automation_action_media_pause">Mídia: pausar</string>
     <string name="automation_action_media_key_hint">Funciona quando um player já está aberto: para abri-lo, coloque “Abrir aplicativo” antes desta etapa.</string>
+    <string name="automation_action_hazard_on_hint">Desliga apenas com a ação “Pisca-alerta: desligar”. Adicione-a depois de uma pausa. A marcha à ré precisa de duas regras: “Marcha = R” e “Marcha não R”.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Ligar</string>
     <string name="automation_action_navigate">Rota no Y.Navigator</string>

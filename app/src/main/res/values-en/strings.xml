@@ -483,6 +483,7 @@
     <string name="automation_action_media_play">Media: play</string>
     <string name="automation_action_media_pause">Media: pause</string>
     <string name="automation_action_media_key_hint">Works when a player is already running: to start one, put “Launch app” before this step.</string>
+    <string name="automation_action_hazard_on_hint">Turns off only with the action “Hazard lights: off”. Add it after a wait. Reverse needs two rules: “Gear = R” and “Gear not R”.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Call</string>
     <string name="automation_action_navigate">Route in Y.Navigator</string>

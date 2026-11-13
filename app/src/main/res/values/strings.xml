@@ -538,6 +538,7 @@
     <string name="automation_action_media_play">Медиа: играть</string>
     <string name="automation_action_media_pause">Медиа: пауза</string>
     <string name="automation_action_media_key_hint">Сработает, если плеер уже запущен: чтобы его запустить, поставьте перед этим шагом «Запуск приложения».</string>
+    <string name="automation_action_hazard_on_hint">Выключается только действием «Аварийка: выключить». Добавьте его после паузы. Для заднего хода нужны два правила: «Передача = R» и «Передача не R».</string>
     <string name="automation_action_yandex_music">Яндекс.Музыка</string>
     <string name="automation_action_call">Звонок</string>
     <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
