@@ -131,6 +131,17 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         const val SPOILER_STATUS_FID = 1200619531
         /** Spoiler position (tx=5), raw; diagnostics only. */
         const val SPOILER_POSITION_FID = 1200619536
+        /**
+         * The car's own "not now" states (tx=5), read before the command as the BYD voice
+         * assistant does: repair mode (1 = on), the spoiler's warning (1 speed too high,
+         * 2 not initialised, 3 tailgate opening, 4 special mode) and motor protection (1 = on).
+         */
+        const val SPOILER_REPAIR_FID = 1200619598
+        const val SPOILER_WARNING_FID = 1200619557
+        const val SPOILER_THERMAL_FID = 1200619544
+        /** ADAS_DNP_STATE on the ADAS device (dev=1038): 4, 6 and 8 = the navigation pilot drives. */
+        const val SPOILER_PILOT_DEV = 1038
+        const val SPOILER_PILOT_FID = 700448800
 
         /**
          * Carve-outs that open only some values of their fid: an entry on such a fid must be a

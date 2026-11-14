@@ -55,7 +55,8 @@ sealed class VehicleWriteError(
     /**
      * The car's own state forbids the command right now. Raised by DriveModeChannel (no drive
      * mode change while the car holds the emergency flotation mode), BatteryPreheatChannel
-     * (a charge gun is connected) and SpoilerChannel (anti-pinch stopped the spoiler);
+     * (a charge gun is connected) and SpoilerChannel (anti-pinch stopped the spoiler, or the car's
+     * own state holds it: repair mode, a spoiler warning, motor protection, the navigation pilot);
      * ActionDispatcher words it per action.
      */
     class StateBlocked(action: String, details: String) : VehicleWriteError(action, details)

@@ -1226,6 +1226,7 @@
     <string name="auto_act_spoiler_down">Spojler: opuść</string>
     <string name="spoiler_not_equipped">Ten samochód nie ma elektrycznego spojlera</string>
     <string name="spoiler_anti_pinch">Spojler się zatrzymał: zadziałała ochrona przed przytrzaśnięciem</string>
+    <string name="spoiler_blocked">Samochód nie pozwala teraz poruszyć spojlerem</string>
     <string name="rear_seat_heat_not_equipped">Ten samochód nie ma podgrzewania tylnych foteli</string>
     <string name="auto_act_battery_preheat_on">Podgrzewanie baterii: włącz</string>
     <string name="auto_act_battery_preheat_off">Podgrzewanie baterii: wyłącz</string>

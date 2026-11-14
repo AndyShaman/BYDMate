@@ -66,7 +66,11 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
 
     private val spoilerChannel = SpoilerChannel(
         SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
-        SpoilerReader { fid -> helper.read(WriteAllowlist.SPOILER_DEV, fid)?.toInt() },
+        SpoilerReader { fid ->
+            // Every spoiler fid is on the Setting device; only the pilot state is on the ADAS one.
+            val dev = if (fid == WriteAllowlist.SPOILER_PILOT_FID) WriteAllowlist.SPOILER_PILOT_DEV else WriteAllowlist.SPOILER_DEV
+            helper.read(dev, fid)?.toInt()
+        },
     )
 
     private val rearSeatHeatChannel = RearSeatHeatChannel(
@@ -495,7 +499,8 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             SpoilerChannel.Result.OK -> Result.success(Unit)
             SpoilerChannel.Result.NOT_EQUIPPED -> Result.failure(VehicleWriteError.NotEquipped(action))
             SpoilerChannel.Result.NO_EFFECT -> Result.failure(VehicleWriteError.Unsupported(action))
-            SpoilerChannel.Result.ANTI_PINCH -> Result.failure(VehicleWriteError.StateBlocked(action, "anti-pinch"))
+            SpoilerChannel.Result.BLOCKED, SpoilerChannel.Result.ANTI_PINCH ->
+                Result.failure(VehicleWriteError.StateBlocked(action, outcome.verdict))
             SpoilerChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
             SpoilerChannel.Result.UNCONFIRMED ->

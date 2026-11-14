@@ -6,10 +6,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Raw value of a dev=1023 spoiler fid, sentinels kept. Null means the read did not complete. */
+/** Raw value of a spoiler fid (or of the pilot state), sentinels kept. Null means the read did not complete. */
 fun interface SpoilerReader {
     suspend fun read(fid: Int): Int?
 }
+
+/** The verdict of a spoiler the anti-pinch stopped; ActionDispatcher words it apart from a refusal. */
+internal const val SPOILER_ANTI_PINCH = "anti-pinch"
 
 /**
  * Electric spoiler up/down (#383), the BYD voice assistant's command (1 = up, 2 = down). Not
@@ -17,6 +20,9 @@ fun interface SpoilerReader {
  * status feedback decides:
  *  - config read failed or a read error → UNREACHABLE, nothing written
  *  - config not 2                       → NOT_EQUIPPED, nothing written (65535 on a car without one)
+ *  - repair mode, a spoiler warning, motor protection or the navigation pilot → BLOCKED, nothing
+ *    written: the values the voice assistant refuses on (GetAllError). A check that does not
+ *    read, or reads anything else, does not hold the command, as in BYD's code.
  *  - up: status 2 or 5, down: 3 or 6    → OK (moving or already there)
  *  - status 4                           → ANTI_PINCH, at once and without a retry
  *  - status still as before the write   → NO_EFFECT
@@ -28,11 +34,11 @@ class SpoilerChannel(
     private val writer: SeatWriter,
     private val reader: SpoilerReader,
 ) {
-    enum class Result { OK, NOT_EQUIPPED, NO_EFFECT, ANTI_PINCH, UNREACHABLE, UNCONFIRMED }
+    enum class Result { OK, NOT_EQUIPPED, BLOCKED, NO_EFFECT, ANTI_PINCH, UNREACHABLE, UNCONFIRMED }
 
     /**
-     * [verdict] ends the channel's log line (OK, no spoiler, config unreadable, unreachable,
-     * anti-pinch, no effect, unconfirmed read=<v>); [written] says whether the command was written;
+     * [verdict] ends the channel's log line (OK, no spoiler, config unreadable, blocked <check>=<v>,
+     * unreachable, anti-pinch, no effect, unconfirmed read=<v>); [written] says whether the command was written;
      * [state] is the last status read (null when the read failed or never happened).
      */
     data class Outcome(val result: Result, val verdict: String, val written: Boolean, val state: Int?)
@@ -45,12 +51,19 @@ class SpoilerChannel(
         val want = if (up) "up" else "down"
         val config = read(WriteAllowlist.SPOILER_CONFIG_FID)
         if (config != CONFIG_FITTED) return refused(want, config)
+        val checks = CHECKS.map { it to read(it.fid) }
+        val seen = checks.joinToString(",") { (check, value) -> "${check.label}=${render(value)}" }
+        checks.firstOrNull { (check, value) -> value in check.refuseOn }?.let { (check, value) ->
+            val verdict = "blocked ${check.label}=$value"
+            Log.i(TAG, "Spoiler: want=$want config=$config checks=[$seen] -> $verdict, nothing written")
+            return Outcome(Result.BLOCKED, verdict, false, null)
+        }
         val before = read(WriteAllowlist.SPOILER_STATUS_FID)
         val status = if (up) writer.write("spoiler_up", CMD_UP) else writer.write("spoiler_down", CMD_DOWN)
         val after = mutableListOf<Int?>()
         fun log(verdict: String) = Log.i(
             TAG,
-            "Spoiler: want=$want config=$config before=${render(before)} status=$status " +
+            "Spoiler: want=$want config=$config checks=[$seen] before=${render(before)} status=$status " +
                 "after=[${after.joinToString(",") { render(it) }}] -> $verdict",
         )
         if (status == WriteOutcome.TRANSIENT) {
@@ -64,7 +77,7 @@ class SpoilerChannel(
             after += value
             val outcome = when (value) {
                 in done -> Outcome(Result.OK, "OK", true, value)
-                STATE_ANTI_PINCH -> Outcome(Result.ANTI_PINCH, "anti-pinch", true, value)
+                STATE_ANTI_PINCH -> Outcome(Result.ANTI_PINCH, SPOILER_ANTI_PINCH, true, value)
                 else -> null
             }
             if (outcome != null) {
@@ -98,8 +111,17 @@ class SpoilerChannel(
     private suspend fun read(fid: Int): Int? =
         readGuarded({ Log.w(TAG, "Spoiler: read fid=$fid failed: ${it.message}") }) { reader.read(fid) }
 
+    /** One of the car's own states the voice assistant refuses on, and the values that refuse. */
+    private class Check(val label: String, val fid: Int, val refuseOn: Set<Int>)
+
     private companion object {
         const val TAG = "SpoilerChannel"
+        val CHECKS = listOf(
+            Check("repair", WriteAllowlist.SPOILER_REPAIR_FID, setOf(1)),
+            Check("warning", WriteAllowlist.SPOILER_WARNING_FID, setOf(1, 2, 3, 4)),
+            Check("thermal", WriteAllowlist.SPOILER_THERMAL_FID, setOf(1)),
+            Check("pilot", WriteAllowlist.SPOILER_PILOT_FID, setOf(4, 6, 8)),
+        )
         const val CONFIG_FITTED = 2
         const val CMD_UP = 1
         const val CMD_DOWN = 2
