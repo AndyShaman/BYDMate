@@ -135,6 +135,17 @@ class TripRecorderActiveTest {
         assertEquals(72.9 * 0.10, captured.captured.kwhConsumed!!, 0.001)
     }
 
+    @Test fun `a counter jump with no SOC at the end leaves the trip without kWh`() = runTest {
+        // After a power reset the SOC read can be missing on the closing tick: an estimate from
+        // one reading would be the whole 80 % of the pack.
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0, totalElecConsumption = 259.0))
+        rec.consume(diParsData(powerState = 1, soc = null, mileage = 100.2, totalElecConsumption = 54559.0))
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        assertNull(captured.captured.kwhConsumed)
+    }
+
     @Test fun `a high but possible counter delta on a short trip is kept`() = runTest {
         // Hours parked with the heater on, then a short drive: only the absolute ceiling applies
         // to the recorder's own counter, never the per-100 one.

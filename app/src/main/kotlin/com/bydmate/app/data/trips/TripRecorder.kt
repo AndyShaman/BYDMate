@@ -135,7 +135,9 @@ class TripRecorder @Inject @Suppress("LongParameterList") constructor( // inject
             }
         }
         if (kind() == VehicleKind.HYBRID) return null
-        val socDelta = (startSoc ?: 0) - (endSoc ?: 0)
+        // An estimate needs both readings: a missing one is not 0 %.
+        if (startSoc == null || endSoc == null) return null
+        val socDelta = startSoc - endSoc
         return if (socDelta > 0) socDelta / 100.0 * cap else null
     }
 
