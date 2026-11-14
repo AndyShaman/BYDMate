@@ -139,6 +139,12 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         const val SPOILER_REPAIR_FID = 1200619598
         const val SPOILER_WARNING_FID = 1200619557
         const val SPOILER_THERMAL_FID = 1200619544
+        /**
+         * The spoiler's own mode (tx=5): 2 = automatic (the car raises it at speed), 1 = manual.
+         * The voice assistant tells the driver to say "raise/lower" to leave the automatic mode,
+         * so the command is expected to switch it to manual. Logged only.
+         */
+        const val SPOILER_AUTO_MODE_FID = 1200619594
         /** ADAS_DNP_STATE on the ADAS device (dev=1038): 4, 6 and 8 = the navigation pilot drives. */
         const val SPOILER_PILOT_DEV = 1038
         const val SPOILER_PILOT_FID = 700448800

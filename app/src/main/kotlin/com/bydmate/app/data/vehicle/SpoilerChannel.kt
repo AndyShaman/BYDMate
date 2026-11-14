@@ -27,6 +27,8 @@ internal const val SPOILER_ANTI_PINCH = "anti-pinch"
  *  - status 4                           → ANTI_PINCH, at once and without a retry
  *  - status still as before the write   → NO_EFFECT
  *  - a failed read or any other value   → UNCONFIRMED
+ * The car's automatic mode is read before and after for the log only: the command is expected to
+ * switch the spoiler to manual, and the first owner's log has to show whether it does.
  * One write per attempt; a TRANSIENT write (daemon down, car off) ends it without reading.
  * Commands run one at a time under [mutex], so the next one reads the real status.
  */
@@ -59,12 +61,15 @@ class SpoilerChannel(
             return Outcome(Result.BLOCKED, verdict, false, null)
         }
         val before = read(WriteAllowlist.SPOILER_STATUS_FID)
+        val autoBefore = read(WriteAllowlist.SPOILER_AUTO_MODE_FID)
         val status = if (up) writer.write("spoiler_up", CMD_UP) else writer.write("spoiler_down", CMD_DOWN)
         val after = mutableListOf<Int?>()
-        fun log(verdict: String) = Log.i(
+        // auto: the car's automatic mode before and after (2 = automatic, 1 = manual).
+        suspend fun log(verdict: String) = Log.i(
             TAG,
             "Spoiler: want=$want config=$config checks=[$seen] before=${render(before)} status=$status " +
-                "after=[${after.joinToString(",") { render(it) }}] -> $verdict",
+                "after=[${after.joinToString(",") { render(it) }}] " +
+                "auto=${render(autoBefore)}->${render(read(WriteAllowlist.SPOILER_AUTO_MODE_FID))} -> $verdict",
         )
         if (status == WriteOutcome.TRANSIENT) {
             log("unreachable")
@@ -85,16 +90,18 @@ class SpoilerChannel(
                 return outcome
             }
         }
-        val state = after.last()
-        // A failed read on both sides proves nothing, so it stays unconfirmed.
-        val outcome = if (state != null && state == before) {
+        val outcome = unsettled(before, after.last())
+        log(outcome.verdict)
+        return outcome
+    }
+
+    /** The readback gave no verdict. A failed read or the same error code on both sides proves nothing. */
+    private fun unsettled(before: Int?, state: Int?): Outcome =
+        if (state != null && SentinelDecoder.decodeInt(state) != null && state == before) {
             Outcome(Result.NO_EFFECT, "no effect", true, state)
         } else {
             Outcome(Result.UNCONFIRMED, "unconfirmed read=${render(state)}", true, state)
         }
-        log(outcome.verdict)
-        return outcome
-    }
 
     /** The exit without a write: the config read failed, or no electric spoiler is fitted. */
     private fun refused(want: String, config: Int?): Outcome {

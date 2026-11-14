@@ -109,10 +109,11 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
                 collected.set(collected.get().copy(hud = hud))
                 val hudSwitch = runCatching { helper.readBatch(HudDiagnostics.switchBatchItems()) }.getOrNull()
                 collected.set(collected.get().copy(hudSwitch = hudSwitch))
-                val spoiler = runCatching { helper.readBatch(SpoilerDiagnostics.batchItems()) }.getOrNull()
-                collected.set(collected.get().copy(spoiler = spoiler))
                 val batteryPreheat = runCatching { helper.readBatch(BatteryPreheatDiagnostics.batchItems()) }.getOrNull()
                 collected.set(collected.get().copy(batteryPreheat = batteryPreheat))
+                // Read last: the budget is shared, and the older rows must not lose their time to it.
+                val spoiler = runCatching { helper.readBatch(SpoilerDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(spoiler = spoiler))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
