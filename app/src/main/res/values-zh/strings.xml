@@ -1152,9 +1152,11 @@
     <string name="hud_not_equipped">这辆车没有抬头显示</string>
     <string name="auto_act_spoiler_up">升起尾翼</string>
     <string name="auto_act_spoiler_down">降下尾翼</string>
+    <string name="auto_act_spoiler_auto">尾翼自动模式</string>
     <string name="spoiler_not_equipped">这辆车没有电动尾翼</string>
     <string name="spoiler_anti_pinch">尾翼已停止：防夹保护已触发</string>
     <string name="spoiler_blocked">车辆当前不允许调整尾翼</string>
+    <string name="spoiler_standing">尾翼已升起且车辆静止。请确认尾翼周围无人后在车机屏幕上操作</string>
     <string name="rear_seat_heat_not_equipped">这辆车没有后排座椅加热</string>
     <string name="auto_act_battery_preheat_on">打开电池预热</string>
     <string name="auto_act_battery_preheat_off">关闭电池预热</string>

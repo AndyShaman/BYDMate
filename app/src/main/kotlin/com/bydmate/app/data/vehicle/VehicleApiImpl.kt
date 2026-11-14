@@ -66,6 +66,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
 
     private val spoilerChannel = SpoilerChannel(
         SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
+        speed = { guardSpeedKmh { dev, fid -> autoservice.getFloat(dev, fid) } },
         SpoilerReader { fid ->
             // Every spoiler fid is on the Setting device; only the pilot state is on the ADAS one.
             val dev = if (fid == WriteAllowlist.SPOILER_PILOT_FID) WriteAllowlist.SPOILER_PILOT_DEV else WriteAllowlist.SPOILER_DEV
@@ -484,12 +485,12 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     }
 
     /**
-     * Spoiler up/down through its channel (#383), as the Result dispatch returns. Like the HUD
+     * Spoiler up/down and automatic mode on through their channel (#383), as the Result dispatch returns. Like the HUD
      * verdict row: dev = 1023 when the command was written (0 = nothing written), readback = the
      * last status read, error = "verdict=<label>" (also on success).
      */
     private suspend fun spoiler(action: String): Result<Unit> {
-        val outcome = spoilerChannel.actuate(up = action == "spoiler_up")
+        val outcome = if (action == "spoiler_auto_on") spoilerChannel.autoOn() else spoilerChannel.actuate(up = action == "spoiler_up")
         val entry = allowlist.find(action)
         logWrite(
             action, if (outcome.written) WriteAllowlist.SPOILER_DEV else 0, entry?.writeFid ?: -1, entry?.valueMin ?: -1,
@@ -1106,7 +1107,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         private const val PERCENT_RESET_ATTEMPTS = 2
         private val STEERING_HEAT_ACTIONS = setOf("steering_heat_on", "steering_heat_off")
         private val HUD_ACTIONS = setOf("hud_on", "hud_off")
-        private val SPOILER_ACTIONS = setOf("spoiler_up", "spoiler_down")
+        private val SPOILER_ACTIONS = setOf("spoiler_up", "spoiler_down", "spoiler_auto_on")
 
         // ── Hazard result (#412) ───────────────────────────────────────────────
         private val HAZARD_ACTIONS = setOf("hazard_on", "hazard_off")

@@ -32,6 +32,7 @@ import com.bydmate.app.data.vehicle.DriveMode
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.RearSeatHeat
 import com.bydmate.app.data.vehicle.SPOILER_ANTI_PINCH
+import com.bydmate.app.data.vehicle.SPOILER_STANDING
 import com.bydmate.app.data.vehicle.ScreenBacklightReply
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.vehicle.VehicleWriteError
@@ -383,9 +384,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             err is VehicleWriteError && DriveMode.ofAction(err.action) != null -> driveModeFailureReason(err, strings)
             err is VehicleWriteError && err.action.startsWith("battery_preheat_") -> batteryPreheatFailureReason(err, strings)
             err is VehicleWriteError.NotEquipped -> strings.get(notEquippedText(err.action))
-            err is VehicleWriteError.StateBlocked && err.action.startsWith("spoiler_") -> strings.get(
-                if (err.details == SPOILER_ANTI_PINCH) R.string.spoiler_anti_pinch else R.string.spoiler_blocked,
-            )
+            err is VehicleWriteError.StateBlocked && err.action.startsWith("spoiler_") ->
+                strings.get(spoilerBlockedText(err.details))
             err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
                 stuckWindowsReason(err.stuckPanes, strings)
             else -> strings.get(writeErrorText(err))
@@ -441,6 +441,13 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             is VehicleWriteError.StateBlocked -> strings.get(R.string.battery_preheat_gun_connected)
             is VehicleWriteError.NotNeeded -> strings.get(R.string.battery_preheat_not_needed)
             else -> strings.get(writeErrorText(err))
+        }
+
+        /** Why the car holds a spoiler command: anti-pinch, the standstill guard, or its own refusal. */
+        private fun spoilerBlockedText(details: String): Int = when {
+            details == SPOILER_ANTI_PINCH -> R.string.spoiler_anti_pinch
+            details.startsWith(SPOILER_STANDING) -> R.string.spoiler_standing
+            else -> R.string.spoiler_blocked
         }
 
         /** Each channel that reports NotEquipped names its own function; steering heat is the rest. */

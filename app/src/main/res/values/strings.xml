@@ -1228,9 +1228,11 @@
     <string name="hud_not_equipped">На этой машине нет HUD</string>
     <string name="auto_act_spoiler_up">Спойлер: поднять</string>
     <string name="auto_act_spoiler_down">Спойлер: опустить</string>
+    <string name="auto_act_spoiler_auto">Спойлер: включить авторежим</string>
     <string name="spoiler_not_equipped">На этой машине нет электрического спойлера</string>
     <string name="spoiler_anti_pinch">Спойлер остановился: сработала защита от защемления</string>
     <string name="spoiler_blocked">Машина сейчас не разрешает двигать спойлер</string>
+    <string name="spoiler_standing">Спойлер поднят, а машина стоит. Убедитесь, что рядом никого нет, и сделайте это с экрана машины</string>
     <string name="rear_seat_heat_not_equipped">На этой машине нет подогрева задних сидений</string>
     <string name="auto_act_battery_preheat_on">Подогрев батареи: включить</string>
     <string name="auto_act_battery_preheat_off">Подогрев батареи: выключить</string>

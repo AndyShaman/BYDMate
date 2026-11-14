@@ -174,6 +174,7 @@ object CommandTranslator {
         // VehicleApiImpl routes both through SpoilerChannel (spoiler presence check + status readback).
         "打开尾翼" to Resolved("spoiler_up",   1),
         "关闭尾翼" to Resolved("spoiler_down", 2),
+        "尾翼自动模式" to Resolved("spoiler_auto_on", 1),
 
         // ── Battery warm-up (#311) ── CANDIDATE (dev=1009 carve-out, 1=on / 2=off) ──
         // VehicleApiImpl routes both through BatteryPreheatChannel (the stock toggle's checks +

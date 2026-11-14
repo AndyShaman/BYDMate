@@ -89,6 +89,12 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // command (autovoice ElectricTailApiImpl, #383). Only 1 (up) and 2 (down) pass, see
             // [RESTRICTED_VALUES]. Carve-out approved by the owner 2026-11-14, unvalidated.
             SPOILER_DEV to SPOILER_CMD_FID,
+            // SETTING_ELECTRIC_TAIL_AUTOMATIC_MODE_SET — the voice assistant's "automatic mode on"
+            // (SetElectricTailAutomaticModeSwitch(1), #383). The number is the one the catalogs of
+            // four Song L owners give for that name; the settings service's own table (dicarserver
+            // Setting.java) says 0x4C110046 for it, and that fid stays banned. Only 1 passes.
+            // Carve-out approved by the owner 2026-11-14, unvalidated.
+            SPOILER_DEV to SPOILER_AUTO_SET_FID,
         )
 
         /** Drive mode: written and read back on the Setting device (dev=1023). */
@@ -125,11 +131,13 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         /** Electric spoiler (#383): commanded on the Setting device (dev=1023), 1 = up, 2 = down. */
         const val SPOILER_DEV = 1023
         const val SPOILER_CMD_FID = 1276182582
+        /** Automatic mode on: 1. The voice assistant has no "off": a raise/lower command leaves the mode. */
+        const val SPOILER_AUTO_SET_FID = 1276182596
         /** Spoiler config (tx=5): 2 = an electric spoiler is fitted. */
         const val SPOILER_CONFIG_FID = 1200619534
         /** Spoiler status (tx=5): 2/5 opening/opened, 3/6 closing/closed, 4 anti-pinch. */
         const val SPOILER_STATUS_FID = 1200619531
-        /** Spoiler position (tx=5), raw; diagnostics only. */
+        /** Spoiler position (tx=5), 0..100; above 10 is raised for the standstill guard. */
         const val SPOILER_POSITION_FID = 1200619536
         /**
          * The car's own "not now" states (tx=5), read before the command as the BYD voice
@@ -142,7 +150,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         /**
          * The spoiler's own mode (tx=5): 2 = automatic (the car raises it at speed), 1 = manual.
          * The voice assistant tells the driver to say "raise/lower" to leave the automatic mode,
-         * so the command is expected to switch it to manual. Logged only.
+         * so the command is expected to switch it to manual. The readback of "automatic mode on".
          */
         const val SPOILER_AUTO_MODE_FID = 1200619594
         /** ADAS_DNP_STATE on the ADAS device (dev=1038): 4, 6 and 8 = the navigation pilot drives. */
@@ -159,6 +167,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             (HUD_DEV to HUD_SWITCH_FID) to setOf(1, 2),
             (BATTERY_PREHEAT_DEV to BATTERY_PREHEAT_SET_FID) to setOf(1, 2),
             (SPOILER_DEV to SPOILER_CMD_FID) to setOf(1, 2),
+            (SPOILER_DEV to SPOILER_AUTO_SET_FID) to setOf(1),
         )
 
         /** False when [entry] sits on a [RESTRICTED_VALUES] fid with a value outside its set. */
@@ -418,6 +427,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // [SpoilerChannel] checks that an electric spoiler is fitted and reads the status back itself.
             WriteEntry("spoiler_up",   1023, 1276182582, null, 1, 1, "body", false, "byd-sdk autovoice ElectricTailApiImpl (#383)"),
             WriteEntry("spoiler_down", 1023, 1276182582, null, 2, 2, "body", false, "byd-sdk autovoice ElectricTailApiImpl (#383)"),
+            WriteEntry("spoiler_auto_on", 1023, 1276182596, null, 1, 1, "body", false, "byd-sdk autovoice ElectricTailApiImpl (#383)"),
             // Battery warm-up (#311) — dev=1009 carve-out, 1=on, 2=off, the stock toggle's write.
             // No readbackFid: [BatteryPreheatChannel] runs the stock checks (function fitted, no
             // charge gun, the car's permit) and reads the status back itself. Not tried on a car:

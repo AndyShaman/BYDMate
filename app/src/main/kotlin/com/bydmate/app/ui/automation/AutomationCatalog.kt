@@ -224,6 +224,7 @@ val ACTION_COMMANDS = listOf(
         ActionOption("", R.string.toggle_target_front_trunk, R.string.auto_cat_body, toggleTarget = ActionDispatcher.TOGGLE_FRONT_TRUNK),
         ActionOption("打开尾翼", R.string.auto_act_spoiler_up, R.string.auto_cat_body),
         ActionOption("关闭尾翼", R.string.auto_act_spoiler_down, R.string.auto_cat_body),
+        ActionOption("尾翼自动模式", R.string.auto_act_spoiler_auto, R.string.auto_cat_body),
         ActionOption("冰箱制冷", R.string.auto_act_fridge_cool, R.string.auto_cat_fridge),
         ActionOption("冰箱制热", R.string.auto_act_fridge_heat, R.string.auto_cat_fridge),
         ActionOption("冰箱关闭", R.string.auto_act_fridge_off, R.string.auto_cat_fridge),

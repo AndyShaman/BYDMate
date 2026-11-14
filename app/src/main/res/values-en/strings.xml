@@ -1079,9 +1079,11 @@
     <string name="hud_not_equipped">This car has no HUD</string>
     <string name="auto_act_spoiler_up">Spoiler: raise</string>
     <string name="auto_act_spoiler_down">Spoiler: lower</string>
+    <string name="auto_act_spoiler_auto">Spoiler: automatic mode on</string>
     <string name="spoiler_not_equipped">This car has no electric spoiler</string>
     <string name="spoiler_anti_pinch">The spoiler stopped: anti-pinch protection kicked in</string>
     <string name="spoiler_blocked">The car does not allow moving the spoiler right now</string>
+    <string name="spoiler_standing">The spoiler is raised and the car is standing. Check that nobody is near it and do this on the car\'s screen</string>
     <string name="rear_seat_heat_not_equipped">This car has no rear seat heating</string>
     <string name="auto_act_battery_preheat_on">Battery warm-up: on</string>
     <string name="auto_act_battery_preheat_off">Battery warm-up: off</string>
