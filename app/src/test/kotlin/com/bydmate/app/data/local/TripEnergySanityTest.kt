@@ -80,6 +80,13 @@ class TripEnergySanityTest {
         assertNull(TripEnergySanity.kwhFor(54681.2, tripKm = 38.2, socStart = 92, socEnd = 84, capacityKwh = 0.0))
     }
 
+    @Test fun `an estimate above the ceiling is dropped, not stored`() {
+        // Capacity typed as 729 instead of 72,9: 90 -> 20 % would be 510,3 kWh.
+        assertNull(TripEnergySanity.kwhFor(54300.0, 10.0, socStart = 90, socEnd = 20, capacityKwh = 729.0))
+        assertNull(TripEnergySanity.socEstimate(90, 20, 729.0))
+        assertEquals(51.03, TripEnergySanity.socEstimate(90, 20, 72.9)!!, 1e-9)
+    }
+
     @Test fun `only the absolute ceiling judges a zero-km record`() {
         assertTrue(TripEnergySanity.isPlausible(TripEnergySanity.MAX_KWH_PER_TRIP, tripKm = 0.0))
         assertFalse(TripEnergySanity.isPlausible(TripEnergySanity.MAX_KWH_PER_TRIP + 0.1, tripKm = 0.0))

@@ -59,10 +59,18 @@ object TripEnergySanity {
         capacityKwh: Double,
     ): Double? {
         if (isPlausible(electricityKwh, tripKm)) return electricityKwh
-        if (capacityKwh > 0.0 && socStart != null && socEnd != null && socStart > socEnd) {
-            return (socStart - socEnd) / 100.0 * capacityKwh
-        }
-        return null
+        return socEstimate(socStart, socEnd, capacityKwh)
+    }
+
+    /**
+     * kWh a SOC drop is worth, or null: both readings must be known, SOC must have dropped and
+     * the capacity be set. An estimate above [MAX_KWH_PER_TRIP] can only come from a mistyped
+     * capacity and is dropped like any other impossible value.
+     */
+    fun socEstimate(socStart: Int?, socEnd: Int?, capacityKwh: Double): Double? {
+        if (socStart == null || socEnd == null || socStart <= socEnd) return null
+        if (capacityKwh <= 0.0) return null
+        return ((socStart - socEnd) / 100.0 * capacityKwh).takeIf { it <= MAX_KWH_PER_TRIP }
     }
 
     /** Consumption per 100 km for a (possibly dropped) kWh value. */
