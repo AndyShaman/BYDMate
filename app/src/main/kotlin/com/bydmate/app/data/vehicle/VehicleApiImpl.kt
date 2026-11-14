@@ -67,11 +67,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     private val spoilerChannel = SpoilerChannel(
         GuardedWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
         speed = { guardSpeedKmh { dev, fid -> autoservice.getFloat(dev, fid) } },
-        SpoilerReader { fid ->
-            // Every spoiler fid is on the Setting device; only the pilot state is on the ADAS one.
-            val dev = if (fid == WriteAllowlist.SPOILER_PILOT_FID) WriteAllowlist.SPOILER_PILOT_DEV else WriteAllowlist.SPOILER_DEV
-            helper.read(dev, fid)?.toInt()
-        },
+        SpoilerReader { fid -> helper.read(spoilerDev(fid), fid)?.toInt() },
     )
 
     private val rearSeatHeatChannel = RearSeatHeatChannel(

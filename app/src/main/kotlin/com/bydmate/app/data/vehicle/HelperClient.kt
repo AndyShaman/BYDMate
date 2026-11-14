@@ -283,6 +283,11 @@ fun interface LockedReader {
     /** tx=7 (getFloat bits) read of [dev]/[fid]; null on any failure or sentinel bits — decoded
      *  exactly like NativeParsReader decodes a tx=7 batch reply. */
     suspend fun readFloat(dev: Int, fid: Int): Float?
+
+    /** tx=5 (getInt) read of [dev]/[fid]: the raw value with error codes kept, as
+     *  [HelperClient.read] gives it; null when the read failed. A reader that serves only the
+     *  speed (a test fake) reads nothing here. */
+    suspend fun readInt(dev: Int, fid: Int): Int? = null
 }
 
 /**
@@ -713,7 +718,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     /** Bound to [transactBodyUnlocked] (never [readBatch]) so a guard's beforeSend can read a
      *  live value through the daemon without re-taking the mutex it is already running inside. */
-    private val lockedReader = LockedReader { dev, fid -> readFloatLocked(dev, fid) }
+    private val lockedReader = object : LockedReader {
+        override suspend fun readFloat(dev: Int, fid: Int): Float? =
+            readLocked(tx = 7, dev, fid)?.let(SentinelDecoder::parseFloatFromShellInt) // 7 = getFloat bits
+        override suspend fun readInt(dev: Int, fid: Int): Int? = readLocked(tx = 5, dev, fid)
+    }
 
     /** Intermediate holder for one TX_DUMP_FIDS chunk reply (chunked transport, Q4). */
     private data class DumpChunkReply(val status: Int, val totalLength: Int, val bytes: ByteArray?)
@@ -1459,28 +1468,27 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
      * [LockedReader]'s implementation: a single-item TX_READ_BATCH round-trip, same wire format
      * [readBatch] uses, but through [transactBodyUnlocked] directly — [readBatch] goes through
      * [transactParsed], which would try to re-take [mutex] and deadlock, since this only ever
-     * runs from inside a beforeSend guard that is already holding it. Decoded exactly like
-     * NativeParsReader decodes a tx=7 batch reply: sentinel bits -> null.
+     * runs from inside a beforeSend guard that is already holding it. Returns the raw word of
+     * an accepted read; the float side decodes it exactly like NativeParsReader decodes a tx=7
+     * batch reply: sentinel bits -> null.
      *
      * This read is a synchronous binder transact exactly like every other helper call made under
      * this mutex, including the write that follows it; [withTimeoutOrNull] cannot interrupt a
      * blocked `binder.transact`, so a hung daemon/autoservice holds the mutex here the same way it
      * would during the write itself. Accepted (2026-09-27, review round 5), not a new failure class.
      */
-    private suspend fun readFloatLocked(dev: Int, fid: Int): Float? {
-        val item = BatchReadItem(tx = 7, dev = dev, fid = fid) // 7 = getFloat bits
-        return transactBodyUnlocked(HelperBinderProtocol.TX_READ_BATCH, { p ->
+    private suspend fun readLocked(tx: Int, dev: Int, fid: Int): Int? =
+        transactBodyUnlocked(HelperBinderProtocol.TX_READ_BATCH, { p ->
             p.writeInt(1)
-            p.writeInt(item.tx); p.writeInt(item.dev); p.writeInt(item.fid)
+            p.writeInt(tx); p.writeInt(dev); p.writeInt(fid)
         }) { reply ->
             if (reply.dataAvail() < 4 || reply.readInt() != 1 || reply.dataAvail() < 8) {
                 return@transactBodyUnlocked null
             }
             val status = reply.readInt()
             val word = reply.readInt()
-            if (status != 0) null else SentinelDecoder.parseFloatFromShellInt(word)
+            if (readAccepted(status)) word else null
         }
-    }
 
     /** (status, value) wrapper used by read/write/ping. */
     private suspend fun transact(code: Int, writeArgs: (Parcel) -> Unit): Pair<Int, Int>? =

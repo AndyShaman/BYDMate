@@ -12,6 +12,10 @@ fun interface SpoilerReader {
     suspend fun read(fid: Int): Int?
 }
 
+/** The device a spoiler fid is read on: the Setting device, except the pilot state on the ADAS one. */
+internal fun spoilerDev(fid: Int): Int =
+    if (fid == WriteAllowlist.SPOILER_PILOT_FID) WriteAllowlist.SPOILER_PILOT_DEV else WriteAllowlist.SPOILER_DEV
+
 /** The verdict of a spoiler the anti-pinch stopped; ActionDispatcher words it apart from a refusal. */
 internal const val SPOILER_ANTI_PINCH = "anti-pinch"
 
@@ -30,9 +34,10 @@ internal const val SPOILER_STANDING = "blocked standing"
  *  - down or automatic mode with the spoiler raised and the car standing → BLOCKED, nothing
  *    written: the assistant does not lower it there by voice, it asks the driver to look around
  *    and tap (GetAutomaticTailCloseStatus). An unknown speed does not prove the car is moving.
- *    The speed is checked twice: before the write, and again in the writer's beforeSend guard,
- *    inside the helper's transport lock right before the transact, because the car can stop
- *    while the write waits for its audit row and for that lock.
+ * The refusals and the standstill guard are checked twice: before the write, and again in the
+ * writer's beforeSend guard, read through the helper's transport lock right before the transact.
+ * The write waits for its audit row and for that lock, and in that time the car can stop, a
+ * tailgate can start to open, a spoiler raised a moment ago can pass position 10.
  *  - up: status 2 or 5, down: 3 or 6    → OK (moving or already there)
  *  - status 4                           → ANTI_PINCH, at once and without a retry
  *  - status still as before the write   → NO_EFFECT
@@ -61,6 +66,7 @@ class SpoilerChannel(
     data class Outcome(val result: Result, val verdict: String, val written: Boolean, val state: Int?)
 
     private val mutex = Mutex()
+    private val first = Checks({ read(it) }, speed)
 
     suspend fun actuate(up: Boolean): Outcome = mutex.withLock { move(if (up) Move.UP else Move.DOWN) }
 
@@ -70,11 +76,12 @@ class SpoilerChannel(
         val entry = enter(move.want)
         entry.stop?.let { return it }
         val before = read(WriteAllowlist.SPOILER_STATUS_FID)
-        val guard = Standstill(if (move == Move.DOWN) raised(before) else null)
-        guard.holds(speed)?.let { return blocked(entry.head, it) }
+        val guarded = move == Move.DOWN
+        if (guarded) first.standing(before)?.let { return blocked(entry.head, it) }
         val autoBefore = read(WriteAllowlist.SPOILER_AUTO_MODE_FID)
-        val status = writer.write(move.action, move.value, guard::lastCheck)
-        guard.held?.let { return blocked(entry.head, it) }
+        var held: String? = null
+        val status = writer.write(move.action, move.value) { locked -> lastCheck(locked, guarded).also { held = it } == null }
+        held?.let { return blocked("${entry.head} at-send", it) }
         val after = mutableListOf<Int?>()
         // auto: the car's automatic mode before and after (2 = automatic, 1 = manual).
         suspend fun log(verdict: String) = Log.i(
@@ -106,10 +113,10 @@ class SpoilerChannel(
             return Outcome(Result.OK, "OK", false, before)
         }
         // Automatic mode lowers a raised spoiler when the car stands, so the same guard holds it.
-        val guard = Standstill(raised(read(WriteAllowlist.SPOILER_STATUS_FID)))
-        guard.holds(speed)?.let { return blocked(entry.head, it) }
-        val status = writer.write("spoiler_auto_on", CMD_AUTO_ON, guard::lastCheck)
-        guard.held?.let { return blocked(entry.head, it) }
+        first.standing(read(WriteAllowlist.SPOILER_STATUS_FID))?.let { return blocked(entry.head, it) }
+        var held: String? = null
+        val status = writer.write("spoiler_auto_on", CMD_AUTO_ON) { locked -> lastCheck(locked, true).also { held = it } == null }
+        held?.let { return blocked("${entry.head} at-send", it) }
         val after = mutableListOf<Int?>()
         fun log(verdict: String) = Log.i(
             TAG,
@@ -133,46 +140,26 @@ class SpoilerChannel(
     private suspend fun enter(want: String): Entry {
         val config = read(WriteAllowlist.SPOILER_CONFIG_FID)
         if (config != CONFIG_FITTED) return Entry(refused(want, config), "")
-        val checks = CHECKS.map { it to read(it.fid) }
-        val seen = checks.joinToString(",") { (check, value) -> "${check.label}=${render(value)}" }
-        val head = "Spoiler: want=$want config=$config checks=[$seen]"
-        val hit = checks.firstOrNull { (check, value) -> value in check.refuseOn }
-        return Entry(hit?.let { (check, value) -> blocked(head, "blocked ${check.label}=$value") }, head)
+        val refusal = first.refusal()
+        val head = "Spoiler: want=$want config=$config checks=[${refusal.seen}]"
+        return Entry(refusal.verdict?.let { blocked(head, it) }, head)
+    }
+
+    /**
+     * The writer's beforeSend guard: the car's refusals and, for a [guarded] command, the
+     * standstill guard once more, read through the transport's own lock right before the transact.
+     * The verdict that holds the command, or null. A read the transport cuts off for taking too
+     * long ends the write as unreachable.
+     */
+    private suspend fun lastCheck(locked: LockedReader, guarded: Boolean): String? {
+        val readLocked: suspend (Int) -> Int? = { fid -> read(fid) { locked.readInt(spoilerDev(fid), fid) } }
+        val last = Checks(readLocked) { lockedGuardSpeedKmh(locked) }
+        return last.refusal().verdict ?: if (guarded) last.standing(readLocked(WriteAllowlist.SPOILER_STATUS_FID)) else null
     }
 
     private fun blocked(head: String, verdict: String): Outcome {
         Log.i(TAG, "$head -> $verdict, nothing written")
         return Outcome(Result.BLOCKED, verdict, false, null)
-    }
-
-    /**
-     * The position the standstill guard works on, or null when it has nothing to hold: the spoiler
-     * is closing already, is not raised (position up to 10), or its position does not read, which
-     * does not hold the command in BYD's code either.
-     */
-    private suspend fun raised(status: Int?): Int? {
-        if (status == STATE_CLOSING) return null
-        return read(WriteAllowlist.SPOILER_POSITION_FID)?.let(SentinelDecoder::decodeInt)?.takeIf { it > RAISED_ABOVE }
-    }
-
-    /** The standstill guard of one attempt; [position] is null when there is nothing to hold. */
-    private class Standstill(private val position: Int?) {
-        /** Why the last check held the command; null when it let it through. */
-        var held: String? = null
-            private set
-
-        /** The verdict when the spoiler is raised and the car stands or its speed is unknown, else null. */
-        suspend fun holds(speed: suspend () -> Int?): String? {
-            if (position == null) return null
-            // Set before the read: one the transport cuts off for taking too long is an unknown speed.
-            held = "$SPOILER_STANDING position=$position speed=?"
-            val kmh = runCatching { speed() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
-            held = if (kmh != null && kmh > STANDING_MAX_KMH) null else "$SPOILER_STANDING position=$position speed=${kmh ?: "?"}"
-            return held
-        }
-
-        /** The writer's beforeSend guard: the speed once more, through the transport's own reader. */
-        suspend fun lastCheck(locked: LockedReader): Boolean = holds { lockedGuardSpeedKmh(locked) } == null
     }
 
     /** Up to [READBACK_ATTEMPTS] reads of [fid] into [after]; the first one [settle] gives a verdict on ends it. */
@@ -198,8 +185,40 @@ class SpoilerChannel(
     }
 
     /** A throwing read is a failed read, not a verdict. */
-    private suspend fun read(fid: Int): Int? =
-        readGuarded({ Log.w(TAG, "Spoiler: read fid=$fid failed: ${it.message}") }) { reader.read(fid) }
+    private suspend fun read(fid: Int, source: suspend () -> Int? = { reader.read(fid) }): Int? =
+        readGuarded({ Log.w(TAG, "Spoiler: read fid=$fid failed: ${it.message}") }) { source() }
+
+    /** The car's refusal checks as read, for the log, and the verdict of the first that refuses. */
+    private class Refusal(val seen: String, val verdict: String?)
+
+    /**
+     * What holds a command, over one way of reading the car: the channel's own reader for the
+     * first check, the transport's locked reader for the last one.
+     */
+    private class Checks(private val read: suspend (Int) -> Int?, private val speed: suspend () -> Int?) {
+        suspend fun refusal(): Refusal {
+            val checks = CHECKS.map { it to read(it.fid) }
+            val hit = checks.firstOrNull { (check, value) -> value in check.refuseOn }
+            return Refusal(
+                checks.joinToString(",") { (check, value) -> "${check.label}=${render(value)}" },
+                hit?.let { (check, value) -> "blocked ${check.label}=$value" },
+            )
+        }
+
+        /**
+         * The standstill guard's verdict, or null when it does not hold the command: the spoiler is
+         * raised (position above 10), not closing already, and the car stands or its speed is unknown.
+         * An unreadable position does not hold it, as in BYD's code.
+         */
+        suspend fun standing(status: Int?): String? {
+            if (status == STATE_CLOSING) return null
+            val position = read(WriteAllowlist.SPOILER_POSITION_FID)?.let(SentinelDecoder::decodeInt) ?: return null
+            if (position <= RAISED_ABOVE) return null
+            val kmh = runCatching { speed() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+            if (kmh != null && kmh > STANDING_MAX_KMH) return null
+            return "$SPOILER_STANDING position=$position speed=${kmh ?: "?"}"
+        }
+    }
 
     /**
      * The command of one direction and the statuses that confirm it: opening or opened, closing or
