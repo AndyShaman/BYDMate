@@ -28,7 +28,10 @@ enum class CatchUpOutcome {
 data class CatchUpResult(
     val outcome: CatchUpOutcome,
     val chargeId: Long? = null,
-    val deltaKwh: Double? = null
+    val deltaKwh: Double? = null,
+    /** SESSION_CREATED only: the odometer of the anchor the charge was measured from,
+     *  i.e. where the car stood when the charge began. */
+    val anchorMileageKm: Float? = null
 )
 
 /**
@@ -551,7 +554,7 @@ class AutoserviceChargingDetector @Inject @Suppress("LongParameterList") constru
                 "SESSION_CREATED kwh=${"%.2f".format(delta)} src=$detectionSource " +
                     "type=$type soc=$socStart->$socEnd km=$kmNow prev_km=$kmPrev plug=$plugInfo"
             )
-            return CatchUpResult(CatchUpOutcome.SESSION_CREATED, chargeId, delta)
+            return CatchUpResult(CatchUpOutcome.SESSION_CREATED, chargeId, delta, prev.mileageKm)
         } catch (e: Exception) {
             android.util.Log.w(TAG, "runCatchUp: failed: ${e.message}", e)
             logJournal(now, "ERROR ${e.message}")

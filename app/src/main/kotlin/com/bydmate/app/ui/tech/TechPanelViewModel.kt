@@ -127,6 +127,8 @@ class TechPanelViewModel @Inject constructor(
                             soc = data?.soc,
                             remainKwh = remainKwhForDisplay(data?.batteryRemainKwh, data?.soc),
                             batTemp = data?.avgBatTemp,
+                            batTempMin = data?.minBatTemp,
+                            batTempMax = data?.maxBatTemp,
                             hvVoltage = data?.hvVoltage,
                             powerKw = data?.power,
                             batteryPowerW = data?.batteryPowerW,

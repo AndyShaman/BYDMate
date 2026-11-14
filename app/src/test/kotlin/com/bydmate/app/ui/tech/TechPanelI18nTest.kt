@@ -41,6 +41,8 @@ class TechPanelI18nTest {
         assertEquals("576 Вт", get("ru", R.string.tech_value_watt, 576))
         assertEquals("2,00 %/ч", get("ru", R.string.tech_value_percent_per_hour, 2.0))
         assertEquals("2.00 %/h", get("en", R.string.tech_value_percent_per_hour, 2.0))
+        assertEquals("23°C (21…25)", get("ru", R.string.tech_value_temp_range, 23, 21, 25))
+        assertEquals("-3°C (-5…-1)", get("en", R.string.tech_value_temp_range, -3, -5, -1))
     }
 
     /** All ten hints must be present and non-Russian in en/zh. */

@@ -1071,6 +1071,13 @@
     <string name="auto_act_hud_on">HUD: ligar</string>
     <string name="auto_act_hud_off">HUD: desligar</string>
     <string name="hud_not_equipped">Este carro não tem HUD</string>
+    <string name="auto_act_spoiler_up">Spoiler: levantar</string>
+    <string name="auto_act_spoiler_down">Spoiler: baixar</string>
+    <string name="auto_act_spoiler_auto">Spoiler: ligar modo automático</string>
+    <string name="spoiler_not_equipped">Este carro não tem spoiler elétrico</string>
+    <string name="spoiler_anti_pinch">O spoiler parou: a proteção antiesmagamento foi acionada</string>
+    <string name="spoiler_blocked">O carro não permite mover o spoiler agora</string>
+    <string name="spoiler_standing">O spoiler está levantado e o carro está parado. Verifique que não há ninguém por perto e faça isto no ecrã do carro</string>
     <string name="rear_seat_heat_not_equipped">Este carro não tem aquecimento dos bancos traseiros</string>
     <string name="auto_act_battery_preheat_on">Aquecimento da bateria: ligar</string>
     <string name="auto_act_battery_preheat_off">Aquecimento da bateria: desligar</string>
@@ -1621,13 +1628,14 @@
     <string name="tech_value_percent_per_hour">%1$.2f %%/h</string>
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
+    <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Saúde da bateria segundo a estimativa do próprio carro: quanta capacidade resta em relação à bateria nova. 100% num carro novo, desce lentamente com os anos. É um valor à parte, não está ligado por fórmula a “Restante”, não é preciso compará-los entre si.</string>
     <string name="tech_hint_remain_kwh" formatted="false">Quanta energia resta, segundo a estimativa da própria bateria. Ela tem em conta o desgaste, por isso o valor é menor do que a percentagem de carga multiplicada pela capacidade de fábrica. É mais preciso logo após carregar até 100%. O ecrã pode manter 100% enquanto a bateria já forneceu os primeiros quilowatts-hora, por isso no topo da escala a energia restante e a percentagem afastam-se mais.</string>
     <string name="tech_hint_hv_voltage">Tensão da bateria de tração. Sobe ao carregar e desce à medida que descarrega, neste carro cerca de 450…560 V. Por si só diz pouco, é útil junto com a potência.</string>
-    <string name="tech_hint_motor_power">Potência nos motores elétricos agora: quanto o carro está a entregar às rodas ou a receber delas durante a regeneração. Zero quando parado. O valor é calculado pelo próprio carro.</string>
+    <string name="tech_hint_motor_power">Potência total do carro agora. Positivo: o carro está a gastar energia. Negativo: a bateria está a recebê-la, na regeneração ou no carregamento. O valor é calculado pelo próprio carro.</string>
     <string name="tech_hint_power">Quanta energia a bateria está a entregar agora. Positivo: o carro está a gastar (aceleração, climatização). Negativo: a bateria está a receber energia, seja regeneração ao travar seja carregamento num carregador. Segundo número: a que velocidade a carga está a esgotar-se, por cento à hora. Quando parado é o consumo da eletrónica de bordo.</string>
     <string name="tech_hint_12v">Tensão da bateria normal de 12 volts que alimenta a eletrónica. Com o carro ligado fica entre 13…14,5 V. Se estacionado ficar abaixo de 12 V, a bateria está a enfraquecer.</string>
     <string name="tech_hint_insulation">Resistência entre a bateria de alta tensão e a carroçaria. Quanto maior, melhor: o normal são alguns megaohms. Se descer para 0,5 MΩ ou menos, há isolamento danificado nalgum ponto, é hora de ir à oficina.</string>

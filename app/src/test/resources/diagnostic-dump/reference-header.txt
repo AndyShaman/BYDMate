@@ -160,6 +160,7 @@ hud_navi_gate:
 dynamic_navi_function_set[dev=1023 fid=1276174394]=0
 dynamic_navi_function_status[dev=1023 fid=951058472]=1
 hud_switch: status[dev=1023 fid=951058460]=0 config[dev=1023 fid=951058453]=1
+spoiler: config[dev=1023 fid=1200619534]=0 status[dev=1023 fid=1200619531]=1 position[dev=1023 fid=1200619536]=2
 battery_preheat: config[dev=1009 fid=879755304]=0 permit[dev=1009 fid=1151336468]=1 status[dev=1009 fid=879755302]=2 gun[dev=1009 fid=876609586]=0 heat_power[dev=1009 fid=584067131]=1 hev[dev=1014 fid=1246773264]=2 fuel[dev=1014 fid=1246785600]=0 type=err
 transport: none
 broadcast_last_reject: (none)

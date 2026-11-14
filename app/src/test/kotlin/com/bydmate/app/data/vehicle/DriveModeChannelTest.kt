@@ -18,14 +18,14 @@ class DriveModeChannelTest {
     private val reads = mutableListOf<Int>()
 
     // The guard's LockedReader, separate from the `speed` closure below (real code no longer
-    // shares them, see terrainSpeedGuard/readGuardSpeed): mirrors the same `kmh`, since both
+    // shares them, see terrainSpeedGuard/lockedGuardSpeedKmh): mirrors the same `kmh`, since both
     // paths read the same physical speed fid, just through different channels.
     private val guardReader = LockedReader { _, _ -> kmh?.toFloat() }
 
     // beforeSend is called the way VehicleApiImpl.doWriteOutcome calls it: right before the
     // "helper" write, so a false return skips the write and reports TRANSIENT.
     private val channel = DriveModeChannel(
-        DriveModeWriter { name, value, beforeSend ->
+        GuardedWriter { name, value, beforeSend ->
             if (!beforeSend(guardReader)) WriteOutcome.TRANSIENT else { writes += name to value; status }
         },
         DriveModeReader { fid ->
@@ -165,7 +165,7 @@ class DriveModeChannelTest {
         val localWrites = mutableListOf<Pair<String, Int>>()
         val localReads = mutableListOf<Int>()
         val localChannel = DriveModeChannel(
-            DriveModeWriter { name, value, beforeSend ->
+            GuardedWriter { name, value, beforeSend ->
                 if (!beforeSend(LockedReader { _, _ -> guardKmh })) WriteOutcome.TRANSIENT
                 else { localWrites += name to value; WriteOutcome.REAL }
             },

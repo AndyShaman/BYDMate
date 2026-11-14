@@ -1222,6 +1222,13 @@
     <string name="auto_act_hud_on">HUD: уключыць</string>
     <string name="auto_act_hud_off">HUD: выключыць</string>
     <string name="hud_not_equipped">На гэтай машыне няма HUD</string>
+    <string name="auto_act_spoiler_up">Спойлер: падняць</string>
+    <string name="auto_act_spoiler_down">Спойлер: апусціць</string>
+    <string name="auto_act_spoiler_auto">Спойлер: уключыць аўтарэжым</string>
+    <string name="spoiler_not_equipped">На гэтай машыне няма электрычнага спойлера</string>
+    <string name="spoiler_anti_pinch">Спойлер спыніўся: спрацавала абарона ад заціскання</string>
+    <string name="spoiler_blocked">Машына зараз не дазваляе рухаць спойлер</string>
+    <string name="spoiler_standing">Спойлер падняты, а машына стаіць. Пераканайцеся, што побач нікога няма, і зрабіце гэта з экрана машыны</string>
     <string name="rear_seat_heat_not_equipped">На гэтай машыне няма падагрэву задніх сядзенняў</string>
     <string name="auto_act_battery_preheat_on">Падагрэў батарэі: уключыць</string>
     <string name="auto_act_battery_preheat_off">Падагрэў батарэі: выключыць</string>
@@ -1770,13 +1777,14 @@
     <string name="tech_value_percent_per_hour">%1$.2f %%/гадз</string>
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
+    <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f бар</string>
     <string name="tech_value_cell_scale">%1$.2f В</string>
     <string name="tech_hint_soh" formatted="false">Здароўе батарэі паводле ацэнкі самой машыны: колькі ёмістасці засталося ад новай. 100% у новай машыны, павольна зніжаецца з гадамі. Гэта асобная лічба, з «Астаткам» яна формулай не звязана, параўноўваць іх паміж сабой не трэба.</string>
     <string name="tech_hint_remain_kwh" formatted="false">Колькі энергіі засталося паводле ацэнкі самой батарэі. Яна ўлічвае знос, таму лічба меншая, чым працэнт зарада, памножаны на завадскую ёмістасць. Найдакладней адразу пасля зарадкі да 100%. На экране можа заставацца 100%, пакуль батарэя ўжо аддала першыя кілават-гадзіны, таму ў самым версе шкалы астатак і працэнт разыходзяцца мацней.</string>
     <string name="tech_hint_hv_voltage">Напруга цягавай батарэі. Расце пры зарадцы і падае па меры разрадкі, у гэтай машыны прыкладна 450…560 В. Сама па сабе ні пра што не гаворыць, карысна разам з магутнасцю.</string>
-    <string name="tech_hint_motor_power">Магутнасць на электраматорах прама зараз: столькі машына аддае на колы або забірае з іх пры рэкуперацыі. На прыпынку 0. Значэнне лічыць сама машына.</string>
+    <string name="tech_hint_motor_power">Агульная магутнасць машыны прама зараз. Плюс: машына траціць энергію. Мінус: батарэя яе прымае: пры рэкуперацыі або на зарадцы. Значэнне лічыць сама машына.</string>
     <string name="tech_hint_power">Колькі энергіі батарэя аддае прама зараз. Плюс: машына траціць (разгон, клімат). Мінус: батарэя прымае энергію: рэкуперацыя пры тармажэнні ці зарадка ад станцыі. Другая лічба: з якой хуткасцю сыходзіць зарад, працэнтаў за гадзіну. На прыпынку гэта расход бартавой электронікі.</string>
     <string name="tech_hint_12v">Напруга звычайнага 12-вольтавага акумулятара, які сілкуе электроніку. На заведзенай машыне 13…14,5 В. Калі на стаянцы ніжэй за 12 В, акумулятар слабее.</string>
     <string name="tech_hint_insulation">Супраціў паміж высакавольтнай батарэяй і кузавам. Чым больш, тым лепш: норма адзінкі мегаом. Падае да 0,5 МОм і ніжэй: дзесьці пашкоджана ізаляцыя, пара на сэрвіс.</string>

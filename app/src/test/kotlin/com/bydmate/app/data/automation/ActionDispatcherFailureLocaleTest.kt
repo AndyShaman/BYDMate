@@ -156,6 +156,24 @@ class ActionDispatcherFailureLocaleTest {
         assertReason("no HUD", off) { t(R.string.hud_not_equipped) }
     }
 
+    // ── Spoiler (#383) ─────────────────────────────────────────────────────────
+
+    @Test fun `a refused spoiler names the reason in the app language`() = runTest {
+        val up = ActionDef(command = "打开尾翼", displayName = "x", kind = "param")
+        val cases = listOf(
+            // Without its own line a car with no spoiler would be told it has no steering heat.
+            VehicleWriteError.NotEquipped("spoiler_up") to R.string.spoiler_not_equipped,
+            VehicleWriteError.StateBlocked("spoiler_up", "anti-pinch") to R.string.spoiler_anti_pinch,
+            VehicleWriteError.StateBlocked("spoiler_up", "blocked warning=1") to R.string.spoiler_blocked,
+            VehicleWriteError.StateBlocked("spoiler_down", "blocked standing position=100 speed=0") to
+                R.string.spoiler_standing,
+        )
+        for ((err, id) in cases) {
+            coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)
+            assertReason(err.toString(), up) { t(id) }
+        }
+    }
+
     // ── Battery warm-up (#311) ─────────────────────────────────────────────────
 
     @Test fun `a refused battery warm-up names the reason in the app language`() = runTest {

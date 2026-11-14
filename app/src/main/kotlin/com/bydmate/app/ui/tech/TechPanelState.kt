@@ -35,6 +35,9 @@ data class TechPanelUiState(
     val remainKwh: Double? = null,
     val soh: Float? = null,
     val batTemp: Int? = null,
+    /** Coldest and warmest spot of the pack, °C; null on cars that report only the average. */
+    val batTempMin: Int? = null,
+    val batTempMax: Int? = null,
     val hvVoltage: Int? = null,
     val powerKw: Double? = null,
     val batteryPowerW: Double? = null,
@@ -181,6 +184,15 @@ data class TechPanelUiState(
         get() = if (batteryPowerW != null && batteryCapacityKwh != null && batteryCapacityKwh > 0.0) {
             batteryPowerW / (batteryCapacityKwh * 10.0)
         } else null
+
+    /** Min to max next to the average, as in the Telegram report: only when both are known and differ. */
+    val batTempRange: Pair<Int, Int>?
+        get() {
+            if (batTemp == null) return null
+            val min = batTempMin ?: return null
+            val max = batTempMax ?: return null
+            return if (min != max) min to max else null
+        }
 
     val showBatteryNow: Boolean
         get() = anyOf(

@@ -1222,6 +1222,13 @@
     <string name="auto_act_hud_on">HUD: włącz</string>
     <string name="auto_act_hud_off">HUD: wyłącz</string>
     <string name="hud_not_equipped">Ten samochód nie ma HUD</string>
+    <string name="auto_act_spoiler_up">Spojler: podnieś</string>
+    <string name="auto_act_spoiler_down">Spojler: opuść</string>
+    <string name="auto_act_spoiler_auto">Spojler: włącz tryb automatyczny</string>
+    <string name="spoiler_not_equipped">Ten samochód nie ma elektrycznego spojlera</string>
+    <string name="spoiler_anti_pinch">Spojler się zatrzymał: zadziałała ochrona przed przytrzaśnięciem</string>
+    <string name="spoiler_blocked">Samochód nie pozwala teraz poruszyć spojlerem</string>
+    <string name="spoiler_standing">Spojler jest podniesiony, a samochód stoi. Upewnij się, że nikogo nie ma w pobliżu, i zrób to z ekranu samochodu</string>
     <string name="rear_seat_heat_not_equipped">Ten samochód nie ma podgrzewania tylnych foteli</string>
     <string name="auto_act_battery_preheat_on">Podgrzewanie baterii: włącz</string>
     <string name="auto_act_battery_preheat_off">Podgrzewanie baterii: wyłącz</string>
@@ -1770,13 +1777,14 @@
     <string name="tech_value_percent_per_hour">%1$.2f %%/h</string>
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
+    <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Kondycja akumulatora według oceny samego samochodu: ile pojemności zostało w porównaniu z nowym. 100% w nowym samochodzie, powoli spada z latami. To osobna liczba, nie jest powiązana wzorem z „Pozostało”, nie trzeba ich ze sobą porównywać.</string>
     <string name="tech_hint_remain_kwh" formatted="false">Ile energii zostało według oceny samego akumulatora. Uwzględnia on zużycie, dlatego ta liczba jest mniejsza niż procent naładowania pomnożony przez pojemność fabryczną. Najdokładniejsza jest zaraz po naładowaniu do 100%. Ekran może pokazywać 100%, gdy akumulator oddał już pierwsze kilowatogodziny, dlatego na samej górze skali różnica między tymi dwiema ocenami jest większa.</string>
     <string name="tech_hint_hv_voltage">Napięcie akumulatora trakcyjnego. Rośnie podczas ładowania i spada w miarę rozładowania, w tym samochodzie około 450…560 V. Samo w sobie niewiele mówi, przydaje się razem z mocą.</string>
-    <string name="tech_hint_motor_power">Moc na silnikach elektrycznych w tej chwili: tyle samochód oddaje na koła albo odbiera z nich podczas rekuperacji. Na postoju 0. Wartość wylicza sam samochód.</string>
+    <string name="tech_hint_motor_power">Całkowita moc samochodu w tej chwili. Plus: samochód zużywa energię. Minus: akumulator ją przyjmuje: podczas rekuperacji albo ładowania. Wartość wylicza sam samochód.</string>
     <string name="tech_hint_power">Ile energii akumulator oddaje w tej chwili. Plus: samochód zużywa (przyspieszanie, klimatyzacja). Minus: akumulator przyjmuje energię: rekuperacja przy hamowaniu albo ładowanie ze stacji. Druga liczba: jak szybko ubywa ładunku, procent na godzinę. Na postoju to zużycie przez elektronikę pokładową.</string>
     <string name="tech_hint_12v">Napięcie zwykłego akumulatora 12 V, który zasila elektronikę. Przy uruchomionym samochodzie 13…14,5 V. Jeśli na postoju spada poniżej 12 V, akumulator słabnie.</string>
     <string name="tech_hint_insulation">Rezystancja między akumulatorem wysokiego napięcia a nadwoziem. Im większa, tym lepiej: normą są pojedyncze megaomy. Spadek do 0,5 MΩ i niżej oznacza uszkodzoną gdzieś izolację, czas do serwisu.</string>

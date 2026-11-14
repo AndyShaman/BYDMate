@@ -1150,6 +1150,13 @@
     <string name="auto_act_hud_on">打开抬头显示</string>
     <string name="auto_act_hud_off">关闭抬头显示</string>
     <string name="hud_not_equipped">这辆车没有抬头显示</string>
+    <string name="auto_act_spoiler_up">升起尾翼</string>
+    <string name="auto_act_spoiler_down">降下尾翼</string>
+    <string name="auto_act_spoiler_auto">尾翼自动模式</string>
+    <string name="spoiler_not_equipped">这辆车没有电动尾翼</string>
+    <string name="spoiler_anti_pinch">尾翼已停止：防夹保护已触发</string>
+    <string name="spoiler_blocked">车辆当前不允许调整尾翼</string>
+    <string name="spoiler_standing">尾翼已升起且车辆静止。请确认尾翼周围无人后在车机屏幕上操作</string>
     <string name="rear_seat_heat_not_equipped">这辆车没有后排座椅加热</string>
     <string name="auto_act_battery_preheat_on">打开电池预热</string>
     <string name="auto_act_battery_preheat_off">关闭电池预热</string>
@@ -1735,13 +1742,14 @@
     <string name="tech_value_percent_per_hour">%1$.2f %%/小时</string>
     <string name="tech_value_deg">%1$d°</string>
     <string name="tech_value_temp">%1$d°C</string>
+    <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">电池健康度，由车辆自己估算：相比新电池还剩多少容量。新车为 100%，随着年份缓慢下降。这是一个独立的数值，与“剩余电量”没有公式上的关系，不需要互相比较。</string>
     <string name="tech_hint_remain_kwh" formatted="false">剩余电量由电池自己估算。它考虑了电池损耗，所以这个数字小于电量百分比乘以出厂容量。刚充至 100% 时，估算最准确。屏幕可能一直显示 100%，而电池其实已经放出了最初的几千瓦时，所以在电量最高的一段，剩余电量和百分比相差更大。</string>
     <string name="tech_hint_hv_voltage">动力电池的电压。充电时升高，放电时降低，这台车大约在 450…560 V。单看意义不大，结合功率一起看才有用。</string>
-    <string name="tech_hint_motor_power">此刻电机的功率：车辆向车轮输出多少动力，或在能量回收时从车轮回收多少。停车时为 0。该数值由车辆自己计算。</string>
+    <string name="tech_hint_motor_power">车辆此刻的总功率。正值：车辆在消耗能量。负值：电池在吸收能量，可能是能量回收，也可能是充电。该数值由车辆自己计算。</string>
     <string name="tech_hint_power">电池此刻输出多少能量。正值：车辆在消耗（加速、空调）。负值：电池在吸收能量，可能是制动能量回收，也可能是在充电桩充电。第二个数值：电量下降的速度，每小时百分比。停车时代表车载电子设备的耗电。</string>
     <string name="tech_hint_12v">为电子设备供电的普通 12 伏蓄电池电压。车辆启动时为 13…14,5 V。停车时低于 12 V，说明蓄电池在变弱。</string>
     <string name="tech_hint_insulation">高压电池与车身之间的绝缘电阻。数值越大越好：正常为几兆欧。若降到 0,5 MΩ 及以下，说明某处绝缘受损，该去维修了。</string>

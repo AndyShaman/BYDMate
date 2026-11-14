@@ -56,6 +56,7 @@ object BackupParts {
         SettingsRepository.KEY_CONSUMPTION_RECALC_DONE,
         SettingsRepository.KEY_IDLE_DRAIN_V2_CLEANUP,
         SettingsRepository.KEY_ENERGY_KWH_SANITY_DONE,
+        SettingsRepository.KEY_NATIVE_KWH_SANITY_DONE,
         SettingsRepository.KEY_MIGRATION_V2_4_17,
         SettingsRepository.KEY_INSIGHT_CACHE_V2_MIGRATION_DONE,
         SettingsRepository.KEY_MIGRATION_V281_DATA_SOURCE,

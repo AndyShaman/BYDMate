@@ -111,6 +111,9 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
                 collected.set(collected.get().copy(hudSwitch = hudSwitch))
                 val batteryPreheat = runCatching { helper.readBatch(BatteryPreheatDiagnostics.batchItems()) }.getOrNull()
                 collected.set(collected.get().copy(batteryPreheat = batteryPreheat))
+                // Read last: the budget is shared, and the older rows must not lose their time to it.
+                val spoiler = runCatching { helper.readBatch(SpoilerDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(spoiler = spoiler))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
@@ -125,6 +128,7 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
         val windows: List<Pair<Int, Int>>? = null,
         val hud: List<Pair<Int, Int>>? = null,
         val hudSwitch: List<Pair<Int, Int>>? = null,
+        val spoiler: List<Pair<Int, Int>>? = null,
         val batteryPreheat: List<Pair<Int, Int>>? = null,
     )
 
@@ -764,6 +768,8 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
                 HudDiagnostics.format(helperDiag.hud).forEach { appendLine(it) }
                 // The HUD master switch (#292) and the HUD type, read only.
                 appendLine(HudDiagnostics.switchLine(helperDiag.hudSwitch))
+                // The electric spoiler (#383): fitted or not, status and position, read only.
+                appendLine(SpoilerDiagnostics.line(helperDiag.spoiler))
                 // The battery warm-up (#311): fitted or not, and whether the car permits it now, read only.
                 appendLine(BatteryPreheatDiagnostics.line(helperDiag.batteryPreheat))
                 // How the daemon is reachable: a registered service name, or the Binder it

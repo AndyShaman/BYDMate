@@ -170,6 +170,12 @@ object CommandTranslator {
         "打开抬头显示" to Resolved("hud_on",  1),
         "关闭抬头显示" to Resolved("hud_off", 2),
 
+        // ── Spoiler up/down (#383) ── CANDIDATE (dev=1023 carve-out, 1=up / 2=down) ──
+        // VehicleApiImpl routes both through SpoilerChannel (spoiler presence check + status readback).
+        "打开尾翼" to Resolved("spoiler_up",   1),
+        "关闭尾翼" to Resolved("spoiler_down", 2),
+        "尾翼自动模式" to Resolved("spoiler_auto_on", 1),
+
         // ── Battery warm-up (#311) ── CANDIDATE (dev=1009 carve-out, 1=on / 2=off) ──
         // VehicleApiImpl routes both through BatteryPreheatChannel (the stock toggle's checks +
         // status readback).

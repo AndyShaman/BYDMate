@@ -1636,7 +1636,12 @@ class TrackingService : Service(), LocationListener {
                 Log.w(TAG, "TripAutoReset: charge#$chargeId not found")
                 return
             }
-            tripCounterResets.applyAfterCharge(charge, wholeSession)
+            // Odometer at the charge's anchor minus the session's start odometer: what this
+            // session drove before the charge began.
+            val kmBeforeCharge = result.anchorMileageKm?.let { anchor ->
+                sessionStartMileageKm?.let { start -> anchor - start }
+            }
+            tripCounterResets.applyAfterCharge(charge, wholeSession, kmBeforeCharge)
         } catch (e: Exception) {
             Log.w(TAG, "TripAutoReset failed: ${e.message}")
         }

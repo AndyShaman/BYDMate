@@ -64,6 +64,12 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         HudReader { fid -> helper.read(WriteAllowlist.HUD_DEV, fid)?.toInt() },
     )
 
+    private val spoilerChannel = SpoilerChannel(
+        GuardedWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
+        speed = { guardSpeedKmh { dev, fid -> autoservice.getFloat(dev, fid) } },
+        SpoilerReader { fid -> helper.read(spoilerDev(fid), fid)?.toInt() },
+    )
+
     private val rearSeatHeatChannel = RearSeatHeatChannel(
         SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
         RearSeatReader { fid -> helper.read(RearSeatHeat.READ_DEV, fid)?.toInt() },
@@ -77,7 +83,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     )
 
     private val driveModeChannel = DriveModeChannel(
-        DriveModeWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
+        GuardedWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
         DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
         speed = { guardSpeedKmh { dev, fid -> autoservice.getFloat(dev, fid) } },
     )
@@ -421,6 +427,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     private suspend fun channelWrite(action: String): Result<Unit>? = when {
         action in STEERING_HEAT_ACTIONS -> withContext(NonCancellable) { steeringHeat(action) }
         action in HUD_ACTIONS -> withContext(NonCancellable) { hudSwitch(action) }
+        action in SPOILER_ACTIONS -> withContext(NonCancellable) { spoiler(action) }
         action in BatteryPreheatChannel.ACTIONS ->
             withContext(NonCancellable) { batteryPreheatChannel.dispatch(action, readbackScope) }
         else -> DriveMode.ofAction(action)?.let { mode -> withContext(NonCancellable) { driveMode(mode) } }
@@ -469,6 +476,31 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             HudSwitchChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
             HudSwitchChannel.Result.UNCONFIRMED ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+        }
+    }
+
+    /**
+     * Spoiler up/down and automatic mode on through their channel (#383), as the Result dispatch returns. Like the HUD
+     * verdict row: dev = 1023 when the command was written (0 = nothing written), readback = the
+     * last status read, error = "verdict=<label>" (also on success).
+     */
+    private suspend fun spoiler(action: String): Result<Unit> {
+        val outcome = if (action == "spoiler_auto_on") spoilerChannel.autoOn() else spoilerChannel.actuate(up = action == "spoiler_up")
+        val entry = allowlist.find(action)
+        logWrite(
+            action, if (outcome.written) WriteAllowlist.SPOILER_DEV else 0, entry?.writeFid ?: -1, entry?.valueMin ?: -1,
+            outcome.state, outcome.result == SpoilerChannel.Result.OK, "verdict=${outcome.verdict}", validated = false,
+        )
+        return when (outcome.result) {
+            SpoilerChannel.Result.OK -> Result.success(Unit)
+            SpoilerChannel.Result.NOT_EQUIPPED -> Result.failure(VehicleWriteError.NotEquipped(action))
+            SpoilerChannel.Result.NO_EFFECT -> Result.failure(VehicleWriteError.Unsupported(action))
+            SpoilerChannel.Result.BLOCKED, SpoilerChannel.Result.ANTI_PINCH ->
+                Result.failure(VehicleWriteError.StateBlocked(action, outcome.verdict))
+            SpoilerChannel.Result.UNREACHABLE ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
+            SpoilerChannel.Result.UNCONFIRMED ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
         }
     }
@@ -1071,6 +1103,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         private const val PERCENT_RESET_ATTEMPTS = 2
         private val STEERING_HEAT_ACTIONS = setOf("steering_heat_on", "steering_heat_off")
         private val HUD_ACTIONS = setOf("hud_on", "hud_off")
+        private val SPOILER_ACTIONS = setOf("spoiler_up", "spoiler_down", "spoiler_auto_on")
 
         // ── Hazard result (#412) ───────────────────────────────────────────────
         private val HAZARD_ACTIONS = setOf("hazard_on", "hazard_off")

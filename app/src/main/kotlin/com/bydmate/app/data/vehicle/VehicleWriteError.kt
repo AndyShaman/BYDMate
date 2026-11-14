@@ -45,7 +45,8 @@ sealed class VehicleWriteError(
     /**
      * The car reports the function as absent (state 0; 65535 = no CAN link is not). Raised by
      * SteeringHeatChannel, DriveModeChannel (support flag != 0), HudSwitchChannel (no HUD
-     * config) and BatteryPreheatChannel (function config != 0); ActionDispatcher words it
+     * config), BatteryPreheatChannel (function config != 0) and SpoilerChannel (config != 2);
+     * ActionDispatcher words it
      * per action, so a new producer must extend that mapping.
      */
     class NotEquipped(action: String, details: String = "function absent on this car")
@@ -53,8 +54,11 @@ sealed class VehicleWriteError(
 
     /**
      * The car's own state forbids the command right now. Raised by DriveModeChannel (no drive
-     * mode change while the car holds the emergency flotation mode) and BatteryPreheatChannel
-     * (a charge gun is connected); ActionDispatcher words it per action.
+     * mode change while the car holds the emergency flotation mode), BatteryPreheatChannel
+     * (a charge gun is connected) and SpoilerChannel (anti-pinch stopped the spoiler, or the car's
+     * own state holds it: repair mode, a spoiler warning, motor protection, the navigation pilot,
+     * a raised spoiler in a standing car);
+     * ActionDispatcher words it per action.
      */
     class StateBlocked(action: String, details: String) : VehicleWriteError(action, details)
 
