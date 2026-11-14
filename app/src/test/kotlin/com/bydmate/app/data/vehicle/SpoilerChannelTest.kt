@@ -11,6 +11,8 @@ class SpoilerChannelTest {
     private val writes = mutableListOf<Pair<String, Int>>()
     private val reads = mutableListOf<Int>()
     private var writeOutcome = WriteOutcome.REAL
+    /** Values of the car's own "not now" fids; a fid not listed here fails to read. */
+    private val checks = mutableMapOf<Int, Int?>()
     private val writer = SeatWriter { name, value -> writes += name to value; writeOutcome }
 
     private fun channel(config: Int?, vararg status: Int?, throwOnConfig: Boolean = false): SpoilerChannel {
@@ -20,7 +22,7 @@ class SpoilerChannelTest {
             when (fid) {
                 WriteAllowlist.SPOILER_CONFIG_FID -> if (throwOnConfig) error("boom") else config
                 WriteAllowlist.SPOILER_STATUS_FID -> queue.removeFirstOrNull()
-                else -> error("unexpected fid $fid")
+                else -> if (fid in checks) checks[fid] else error("unexpected fid $fid")
             }
         }
     }
@@ -41,6 +43,46 @@ class SpoilerChannelTest {
         assertEquals(SpoilerChannel.Result.UNREACHABLE, channel(-10011).actuate(true).result)
         assertEquals(SpoilerChannel.Result.UNREACHABLE, channel(2, throwOnConfig = true).actuate(true).result)
         assertTrue(writes.isEmpty())
+    }
+
+    // The BYD voice assistant refuses the same command on these values (ElectricTailApiImpl.GetAllError).
+    @Test fun `repair mode, a spoiler warning, motor protection and the navigation pilot refuse without a write`() = runTest {
+        val refusals = listOf(
+            WriteAllowlist.SPOILER_REPAIR_FID to 1,
+            WriteAllowlist.SPOILER_WARNING_FID to 1, // speed too high
+            WriteAllowlist.SPOILER_WARNING_FID to 2,
+            WriteAllowlist.SPOILER_WARNING_FID to 3,
+            WriteAllowlist.SPOILER_WARNING_FID to 4,
+            WriteAllowlist.SPOILER_THERMAL_FID to 1,
+            WriteAllowlist.SPOILER_PILOT_FID to 4,
+            WriteAllowlist.SPOILER_PILOT_FID to 6,
+            WriteAllowlist.SPOILER_PILOT_FID to 8,
+        )
+        for ((fid, value) in refusals) {
+            checks.clear()
+            checks[fid] = value
+            val out = channel(2, 6, 2).actuate(up = true)
+            assertEquals("fid=$fid value=$value", SpoilerChannel.Result.BLOCKED, out.result)
+            assertFalse(out.written)
+        }
+        assertTrue(writes.isEmpty())
+    }
+
+    @Test fun `clear checks and checks that fail to read do not hold the command`() = runTest {
+        val clear = mapOf(
+            WriteAllowlist.SPOILER_REPAIR_FID to 0, WriteAllowlist.SPOILER_WARNING_FID to 0,
+            WriteAllowlist.SPOILER_THERMAL_FID to 0, WriteAllowlist.SPOILER_PILOT_FID to 5,
+        )
+        // 65535 and -10011 are how a fid the car does not serve answers: BYD's code sends then too.
+        val unserved = clear.keys.associateWith { 65535 }
+        val failed = clear.keys.associateWith<Int, Int?> { null }
+        for (values in listOf(clear, unserved, failed, mapOf(WriteAllowlist.SPOILER_WARNING_FID to -10011))) {
+            checks.clear()
+            checks.putAll(values)
+            writes.clear()
+            assertEquals("$values", SpoilerChannel.Result.OK, channel(2, 6, 2).actuate(up = true).result)
+            assertEquals(listOf("spoiler_up" to 1), writes)
+        }
     }
 
     @Test fun `up writes once and succeeds when the spoiler starts opening`() = runTest {

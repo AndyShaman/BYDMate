@@ -164,6 +164,7 @@ class ActionDispatcherFailureLocaleTest {
             // Without its own line a car with no spoiler would be told it has no steering heat.
             VehicleWriteError.NotEquipped("spoiler_up") to R.string.spoiler_not_equipped,
             VehicleWriteError.StateBlocked("spoiler_up", "anti-pinch") to R.string.spoiler_anti_pinch,
+            VehicleWriteError.StateBlocked("spoiler_up", "blocked warning=1") to R.string.spoiler_blocked,
         )
         for ((err, id) in cases) {
             coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)

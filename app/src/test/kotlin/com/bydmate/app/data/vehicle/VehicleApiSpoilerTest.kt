@@ -52,6 +52,24 @@ class VehicleApiSpoilerTest {
         coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
     }
 
+    @Test fun `a spoiler warning fails with StateBlocked and writes nothing`() = runTest {
+        coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+        coEvery { helper.read(1023, 1200619557, any()) } returns 1L
+        val err = impl.dispatch("打开尾翼").exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.StateBlocked)
+        assertEquals("verdict=blocked warning=1", verdictRow().error)
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+    }
+
+    // The pilot state lives on the ADAS device, not on the Setting device the spoiler fids are on.
+    @Test fun `an active navigation pilot is read on dev 1038 and blocks the command`() = runTest {
+        coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+        coEvery { helper.read(1038, 700448800, any()) } returns 6L
+        val err = impl.dispatch("关闭尾翼").exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.StateBlocked)
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+    }
+
     @Test fun `anti-pinch fails with StateBlocked`() = runTest {
         coEvery { helper.read(1023, 1200619534, any()) } returns 2L
         coEvery { helper.writeStatus(1023, 1276182582, 2) } returns 1
