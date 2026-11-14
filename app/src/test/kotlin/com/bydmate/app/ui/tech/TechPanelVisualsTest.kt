@@ -26,6 +26,16 @@ class TechPanelVisualsTest {
         assertEquals(4.10, hi, 1e-9)
     }
 
+    // --- battery temperature range ---
+
+    @Test
+    fun `battery temperature range shows only when the car reports two different ends`() {
+        assertEquals(21 to 25, TechPanelUiState(batTemp = 23, batTempMin = 21, batTempMax = 25).batTempRange)
+        assertNull("one sensor value: nothing to add", TechPanelUiState(batTemp = 23, batTempMin = 23, batTempMax = 23).batTempRange)
+        assertNull("the car gives no maximum", TechPanelUiState(batTemp = 23, batTempMin = 21).batTempRange)
+        assertNull("no average: the row is a dash", TechPanelUiState(batTempMin = 21, batTempMax = 25).batTempRange)
+    }
+
     // --- temperature zones ---
 
     @Test

@@ -58,7 +58,11 @@ internal fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, m
         )
         TechRow(
             stringResource(R.string.battery_health_bat_temp_label),
-            state.batTemp?.let { stringResource(R.string.tech_value_temp, it) } ?: DASH,
+            state.batTemp?.let { avg ->
+                state.batTempRange
+                    ?.let { (min, max) -> stringResource(R.string.tech_value_temp_range, avg, min, max) }
+                    ?: stringResource(R.string.tech_value_temp, avg)
+            } ?: DASH,
             valueColor = batTempColor(state.batTemp),
         )
         TechRow(
