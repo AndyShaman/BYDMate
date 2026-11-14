@@ -30,6 +30,8 @@ class VehicleApiSpoilerTest {
     private val audit = mutableListOf<VehicleWriteLogEntity>()
     private val dao = mockk<VehicleWriteLogDao> { coEvery { insert(capture(audit)) } returns Unit }
     private val autoservice = mockk<AutoserviceClient>(relaxed = true)
+    /** The speed the helper's own reader gives the last check before the send. */
+    private var lockedKmh: Float? = 50f
     private val impl = VehicleApiImpl(
         autoservice, helper, allowlist,
         dao, seatStore, windowStore,
@@ -37,20 +39,27 @@ class VehicleApiSpoilerTest {
 
     private fun verdictRow() = audit.single { it.error?.startsWith("verdict=") == true }
 
+    /** The helper as HelperClientImpl behaves: the guard runs first, a refusal throws and nothing is sent. */
+    private fun accepts(fid: Int, value: Int) = coEvery { helper.writeStatus(1023, fid, value, any()) } coAnswers {
+        val guard = arg<(suspend (LockedReader) -> Boolean)?>(3)
+        val locked = LockedReader { dev, speedFid -> if (dev == 1013 && speedFid == SPEED_FID) lockedKmh else null }
+        if (guard == null || guard(locked)) 1 else throw WriteGuardRefused()
+    }
+
     @Test fun `up writes 1 and succeeds when the spoiler starts opening`() = runTest {
         coEvery { helper.read(1023, 1200619534, any()) } returns 2L
-        coEvery { helper.writeStatus(1023, 1276182582, 1) } returns 1
+        accepts(1276182582, 1)
         coEvery { helper.read(1023, 1200619531, any()) } returnsMany listOf(6L, 2L)
         assertTrue(impl.dispatch("打开尾翼").isSuccess)
         assertEquals("verdict=OK", verdictRow().error)
-        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182582, 1) }
+        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182582, 1, any()) }
     }
 
     @Test fun `a car without a spoiler fails with NotEquipped and writes nothing`() = runTest {
         coEvery { helper.read(1023, 1200619534, any()) } returns 1L
         val err = impl.dispatch("打开尾翼").exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.NotEquipped)
-        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any(), any()) }
     }
 
     // Literal addresses on purpose: a wrong fid number in a constant must fail here. The pilot
@@ -71,17 +80,17 @@ class VehicleApiSpoilerTest {
             val err = impl.dispatch("打开尾翼").exceptionOrNull()
             assertTrue("$verdict got $err", err is VehicleWriteError.StateBlocked)
             assertEquals(verdict, verdictRow().error)
-            coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+            coVerify(exactly = 0) { helper.writeStatus(any(), any(), any(), any()) }
         }
     }
 
     @Test fun `auto mode on writes 1 to its own fid and is confirmed by the mode status`() = runTest {
         coEvery { helper.read(1023, 1200619534, any()) } returns 2L
         coEvery { helper.read(1023, 1200619594, any()) } returnsMany listOf(1L, 2L)
-        coEvery { helper.writeStatus(1023, 1276182596, 1) } returns 1
+        accepts(1276182596, 1)
         assertTrue(impl.dispatch("尾翼自动模式").isSuccess)
         assertEquals("verdict=OK", verdictRow().error)
-        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182596, 1) }
+        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182596, 1, any()) }
     }
 
     @Test fun `the auto mode entry is one value on the fid the voice assistant uses`() {
@@ -93,6 +102,21 @@ class VehicleApiSpoilerTest {
         assertTrue(WriteAllowlist.isBanned(1023, 1276182598))
     }
 
+    @Test fun `no other auto mode value opens up, whatever the source`() {
+        val fixture = """
+            {
+              "auto_any": { "featureId": 1276182596, "deviceType": 1023 },
+              "auto_zero": { "featureId": 1276182596, "deviceType": 1023, "value": 0 },
+              "auto_two": { "featureId": 1276182596, "deviceType": 1023, "value": 2 },
+              "auto_range": { "featureId": 1276182596, "deviceType": 1023, "valueMin": 1, "valueMax": 2 }
+            }
+        """.trimIndent()
+        val al = WriteAllowlist.loadProduction { fixture }
+        for (name in listOf("auto_any", "auto_zero", "auto_two", "auto_range")) assertEquals(name, null, al.find(name))
+        val values = al.allEntries().filter { it.dev == 1023 && it.writeFid == 1276182596 }.map { it.valueMin }
+        assertEquals(listOf(1), values)
+    }
+
     @Test fun `a raised spoiler in a standing car is not lowered`() = runTest {
         coEvery { helper.read(1023, 1200619534, any()) } returns 2L
         coEvery { helper.read(1023, 1200619531, any()) } returns 5L
@@ -101,15 +125,52 @@ class VehicleApiSpoilerTest {
         val err = impl.dispatch("关闭尾翼").exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.StateBlocked)
         assertTrue(verdictRow().error, verdictRow().error!!.startsWith("verdict=blocked standing"))
-        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any(), any()) }
+    }
+
+    // Any other address reads 0 here (a standing car), so a wrong speed address refuses the command.
+    @Test fun `a raised spoiler in a moving car is lowered, the speed read at its own address`() = runTest {
+        coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+        coEvery { helper.read(1023, 1200619531, any()) } returnsMany listOf(5L, 3L)
+        coEvery { helper.read(1023, 1200619536, any()) } returns 100L
+        coEvery { autoservice.getFloat(any(), any()) } returns 0f
+        coEvery { autoservice.getFloat(1013, SPEED_FID) } returns 50f
+        accepts(1276182582, 2)
+        assertTrue(impl.dispatch("关闭尾翼").isSuccess)
+        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182582, 2, any()) }
+    }
+
+    // The first check passes at 50 km/h; by the send the car stands. The helper's guard, run
+    // right before the transact, has to refuse: nothing is sent and the driver gets the standstill text.
+    @Test fun `a car that stopped before the send is not sent the command`() = runTest {
+        for ((command, fid, value) in listOf(Triple("关闭尾翼", 1276182582, 2), Triple("尾翼自动模式", 1276182596, 1))) {
+            audit.clear()
+            io.mockk.clearMocks(helper)
+            coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+            coEvery { helper.read(1023, 1200619531, any()) } returns 5L
+            coEvery { helper.read(1023, 1200619536, any()) } returns 100L
+            coEvery { helper.read(1023, 1200619594, any()) } returns 1L
+            coEvery { autoservice.getFloat(1013, SPEED_FID) } returns 50f
+            lockedKmh = 0f
+            accepts(fid, value)
+            val err = impl.dispatch(command).exceptionOrNull()
+            assertTrue("$command got $err", err is VehicleWriteError.StateBlocked)
+            assertEquals("verdict=blocked standing position=100 speed=0", verdictRow().error)
+            assertTrue(command, audit.any { it.error == "pre_send_refused" })
+        }
     }
 
     @Test fun `anti-pinch fails with StateBlocked`() = runTest {
         coEvery { helper.read(1023, 1200619534, any()) } returns 2L
-        coEvery { helper.writeStatus(1023, 1276182582, 2) } returns 1
+        accepts(1276182582, 2)
         coEvery { helper.read(1023, 1200619531, any()) } returnsMany listOf(5L, 4L)
         val err = impl.dispatch("关闭尾翼").exceptionOrNull()
         assertTrue("got $err", err is VehicleWriteError.StateBlocked)
-        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182582, 2) }
+        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182582, 2, any()) }
+    }
+
+    private companion object {
+        /** Speed.SPEED_AUTO_SPEED on the speed device (1013), literal on purpose. */
+        const val SPEED_FID = -1807745016
     }
 }

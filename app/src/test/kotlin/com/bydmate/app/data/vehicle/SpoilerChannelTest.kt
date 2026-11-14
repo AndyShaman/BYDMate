@@ -17,7 +17,15 @@ class SpoilerChannelTest {
     private val auto = ArrayDeque<Int?>()
     /** Moving by default, so the standstill guard stays out of the tests that are not about it. */
     private var speedKmh: Int? = 50
-    private val writer = SeatWriter { name, value -> writes += name to value; writeOutcome }
+    /** The speed the last check sees through the transport's own reader; by default the same car speed. */
+    private var lockedSpeed: suspend () -> Float? = { speedKmh?.toFloat() }
+    private var lockedReads = 0
+    // beforeSend is called the way VehicleApiImpl.doWriteOutcome ends up calling it: right before
+    // the send, so a false return skips the write and reports TRANSIENT.
+    private val writer = GuardedWriter { name, value, beforeSend ->
+        val pass = beforeSend(LockedReader { _, _ -> lockedReads++; lockedSpeed() })
+        if (pass) { writes += name to value; writeOutcome } else WriteOutcome.TRANSIENT
+    }
 
     private fun channel(config: Int?, vararg status: Int?, throwOnConfig: Boolean = false): SpoilerChannel {
         val queue = ArrayDeque(status.toList())
@@ -33,6 +41,7 @@ class SpoilerChannelTest {
     }
 
     private fun statusReads() = reads.count { it == WriteAllowlist.SPOILER_STATUS_FID }
+    private fun modeReads() = reads.count { it == WriteAllowlist.SPOILER_AUTO_MODE_FID }
 
     @Test fun `no spoiler config values are not equipped and write nothing`() = runTest {
         for (config in listOf(0, 1, 3, 65535)) {
@@ -179,6 +188,73 @@ class SpoilerChannelTest {
         speedKmh = 0
         assertEquals(SpoilerChannel.Result.OK, channel(2, 6, 2).actuate(up = true).result)
         assertEquals(listOf("spoiler_up" to 1), writes)
+        assertEquals(0, lockedReads)
+    }
+
+    @Test fun `position 11 is raised, and a speed read that throws is an unknown speed`() = runTest {
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 11
+        speedKmh = 0
+        assertEquals(SpoilerChannel.Result.BLOCKED, channel(2, 5, 3).actuate(up = false).result)
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 100
+        val throwing = SpoilerChannel(writer, speed = { error("speed read failed") }) { fid ->
+            when (fid) {
+                WriteAllowlist.SPOILER_CONFIG_FID -> 2
+                WriteAllowlist.SPOILER_STATUS_FID -> 5
+                else -> checks[fid]
+            }
+        }
+        val out = throwing.actuate(up = false)
+        assertEquals(SpoilerChannel.Result.BLOCKED, out.result)
+        assertTrue(out.verdict, out.verdict.startsWith(SPOILER_STANDING))
+        assertTrue(writes.isEmpty())
+    }
+
+    @Test fun `an unreadable position does not hold the command in a standing car`() = runTest {
+        speedKmh = 0
+        for (position in listOf(null, 65535, -10011)) {
+            checks[WriteAllowlist.SPOILER_POSITION_FID] = position
+            writes.clear()
+            assertEquals("position=$position", SpoilerChannel.Result.OK, channel(2, 5, 3).actuate(up = false).result)
+            assertEquals(listOf("spoiler_down" to 2), writes)
+        }
+        assertEquals(0, lockedReads) // nothing to guard: the last check does not read the speed either
+    }
+
+    // ── The last check, right before the send: the car may have stopped since the first one ──
+
+    @Test fun `a car that stopped after the first check is caught by the last one, down and auto on`() = runTest {
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 100
+        speedKmh = 4 // the first check sees a moving car
+        val atTheSend = listOf<suspend () -> Float?>({ 0f }, { 3f }, { null }, { error("locked read failed") })
+        for ((i, speed) in atTheSend.withIndex()) {
+            lockedSpeed = speed
+            val down = channel(2, 5, 3).actuate(up = false)
+            assertEquals("down #$i", SpoilerChannel.Result.BLOCKED, down.result)
+            assertTrue(down.verdict, down.verdict.startsWith(SPOILER_STANDING))
+            assertFalse(down.written)
+            auto.add(1)
+            val mode = channel(2, 5).autoOn()
+            assertEquals("auto #$i", SpoilerChannel.Result.BLOCKED, mode.result)
+            assertTrue(mode.verdict, mode.verdict.startsWith(SPOILER_STANDING))
+        }
+        assertTrue(writes.isEmpty())
+    }
+
+    @Test fun `a refused last check is not read back`() = runTest {
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 100
+        speedKmh = 4
+        lockedSpeed = { 0f }
+        channel(2, 5, 3).actuate(up = false)
+        assertEquals(1, statusReads()) // only the "before" read
+    }
+
+    @Test fun `a car still moving at the last check gets the command`() = runTest {
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 100
+        speedKmh = 4
+        lockedSpeed = { 3.1f } // rounded up, as the first check does
+        assertEquals(SpoilerChannel.Result.OK, channel(2, 5, 3).actuate(up = false).result)
+        assertEquals(listOf("spoiler_down" to 2), writes)
+        assertEquals(1, lockedReads)
     }
 
     // ── Automatic mode on (fid 1276182596 = 1), read back on the mode status (2 = automatic) ──
@@ -192,9 +268,12 @@ class SpoilerChannelTest {
         assertTrue(out.written)
     }
 
+    // Already automatic comes before the standstill guard: a raised spoiler in a standing car is still OK.
     @Test fun `auto on with the mode already automatic is ok without a write`() = runTest {
         auto.add(2)
-        val out = channel(2, 6).autoOn()
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 100
+        speedKmh = 0
+        val out = channel(2, 5).autoOn()
         assertEquals(SpoilerChannel.Result.OK, out.result)
         assertFalse(out.written)
         assertTrue(writes.isEmpty())
@@ -225,6 +304,7 @@ class SpoilerChannelTest {
         val out = channel(2, 6).autoOn()
         assertEquals(SpoilerChannel.Result.NO_EFFECT, out.result)
         assertEquals(1, writes.size)
+        assertEquals(6, modeReads() - 1) // minus the "before" read
     }
 
     @Test fun `auto on with an unreadable mode after the write is unconfirmed`() = runTest {
@@ -241,6 +321,7 @@ class SpoilerChannelTest {
         assertEquals(SpoilerChannel.Result.UNREACHABLE, out.result)
         assertFalse(out.written)
         assertEquals(1, writes.size)
+        assertEquals(1, modeReads()) // only the "before" read
     }
 
     @Test fun `a transient write is unreachable and not read back`() = runTest {
