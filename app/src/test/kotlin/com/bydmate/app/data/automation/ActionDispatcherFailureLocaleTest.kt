@@ -165,6 +165,8 @@ class ActionDispatcherFailureLocaleTest {
             VehicleWriteError.NotEquipped("spoiler_up") to R.string.spoiler_not_equipped,
             VehicleWriteError.StateBlocked("spoiler_up", "anti-pinch") to R.string.spoiler_anti_pinch,
             VehicleWriteError.StateBlocked("spoiler_up", "blocked warning=1") to R.string.spoiler_blocked,
+            VehicleWriteError.StateBlocked("spoiler_down", "blocked standing position=100 speed=0") to
+                R.string.spoiler_standing,
         )
         for ((err, id) in cases) {
             coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)

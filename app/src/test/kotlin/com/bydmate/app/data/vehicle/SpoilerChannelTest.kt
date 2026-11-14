@@ -13,15 +13,20 @@ class SpoilerChannelTest {
     private var writeOutcome = WriteOutcome.REAL
     /** Values of the car's own "not now" fids; a fid not listed here fails to read. */
     private val checks = mutableMapOf<Int, Int?>()
+    /** The automatic-mode status, read by read; empty = the read fails. */
+    private val auto = ArrayDeque<Int?>()
+    /** Moving by default, so the standstill guard stays out of the tests that are not about it. */
+    private var speedKmh: Int? = 50
     private val writer = SeatWriter { name, value -> writes += name to value; writeOutcome }
 
     private fun channel(config: Int?, vararg status: Int?, throwOnConfig: Boolean = false): SpoilerChannel {
         val queue = ArrayDeque(status.toList())
-        return SpoilerChannel(writer) { fid ->
+        return SpoilerChannel(writer, speed = { speedKmh }) { fid ->
             reads += fid
             when (fid) {
                 WriteAllowlist.SPOILER_CONFIG_FID -> if (throwOnConfig) error("boom") else config
                 WriteAllowlist.SPOILER_STATUS_FID -> queue.removeFirstOrNull()
+                WriteAllowlist.SPOILER_AUTO_MODE_FID -> if (auto.isEmpty()) error("auto mode unread") else auto.removeFirst()
                 else -> if (fid in checks) checks[fid] else error("unexpected fid $fid")
             }
         }
@@ -139,6 +144,102 @@ class SpoilerChannelTest {
     @Test fun `failed status reads after the write are unconfirmed`() = runTest {
         val out = channel(2, 6).actuate(up = true) // queue empty after "before": every read is null
         assertEquals(SpoilerChannel.Result.UNCONFIRMED, out.result)
+        assertEquals(1, writes.size)
+    }
+
+    // ── Standstill guard: BYD's assistant will not lower a raised spoiler in a standing car by
+    // voice, it asks the driver to look around and tap (GetAutomaticTailCloseStatus) ──────────
+
+    @Test fun `down on a raised spoiler in a standing car is refused without a write`() = runTest {
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 100
+        for (speed in listOf(0, 3, null)) { // an unknown speed does not prove the car is moving
+            speedKmh = speed
+            val out = channel(2, 5, 3).actuate(up = false)
+            assertEquals("speed=$speed", SpoilerChannel.Result.BLOCKED, out.result)
+            assertTrue(out.verdict, out.verdict.startsWith(SPOILER_STANDING))
+            assertFalse(out.written)
+        }
+        assertTrue(writes.isEmpty())
+    }
+
+    @Test fun `down is sent while driving, when the spoiler is down, or when it is already closing`() = runTest {
+        // position, speed, status before the write
+        for ((position, speed, before) in listOf(Triple(100, 4, 5), Triple(10, 0, 6), Triple(100, 0, 3))) {
+            checks[WriteAllowlist.SPOILER_POSITION_FID] = position
+            speedKmh = speed
+            writes.clear()
+            val out = channel(2, before, 3).actuate(up = false)
+            assertEquals("position=$position speed=$speed before=$before", SpoilerChannel.Result.OK, out.result)
+            assertEquals(listOf("spoiler_down" to 2), writes)
+        }
+    }
+
+    @Test fun `up is never held by the standstill guard`() = runTest {
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 100
+        speedKmh = 0
+        assertEquals(SpoilerChannel.Result.OK, channel(2, 6, 2).actuate(up = true).result)
+        assertEquals(listOf("spoiler_up" to 1), writes)
+    }
+
+    // ── Automatic mode on (fid 1276182596 = 1), read back on the mode status (2 = automatic) ──
+
+    @Test fun `auto on writes 1 once and succeeds when the mode reads automatic`() = runTest {
+        auto.addAll(listOf(1, 1, 2))
+        val out = channel(2, 6).autoOn()
+        assertEquals(SpoilerChannel.Result.OK, out.result)
+        assertEquals(listOf("spoiler_auto_on" to 1), writes)
+        assertEquals(2, out.state)
+        assertTrue(out.written)
+    }
+
+    @Test fun `auto on with the mode already automatic is ok without a write`() = runTest {
+        auto.add(2)
+        val out = channel(2, 6).autoOn()
+        assertEquals(SpoilerChannel.Result.OK, out.result)
+        assertFalse(out.written)
+        assertTrue(writes.isEmpty())
+    }
+
+    // Automatic mode lowers a raised spoiler at standstill, so the same guard holds it.
+    @Test fun `auto on with a raised spoiler in a standing car is refused without a write`() = runTest {
+        auto.add(1)
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 100
+        speedKmh = 0
+        val out = channel(2, 5).autoOn()
+        assertEquals(SpoilerChannel.Result.BLOCKED, out.result)
+        assertTrue(out.verdict, out.verdict.startsWith(SPOILER_STANDING))
+        assertTrue(writes.isEmpty())
+    }
+
+    @Test fun `auto on writes nothing without a spoiler or on the car's own refusal`() = runTest {
+        auto.add(1)
+        assertEquals(SpoilerChannel.Result.NOT_EQUIPPED, channel(1).autoOn().result)
+        assertEquals(SpoilerChannel.Result.UNREACHABLE, channel(null).autoOn().result)
+        checks[WriteAllowlist.SPOILER_WARNING_FID] = 1
+        assertEquals(SpoilerChannel.Result.BLOCKED, channel(2, 6).autoOn().result)
+        assertTrue(writes.isEmpty())
+    }
+
+    @Test fun `auto on that leaves the mode manual is no effect after one write`() = runTest {
+        auto.addAll(listOf(1, 1, 1, 1, 1, 1, 1))
+        val out = channel(2, 6).autoOn()
+        assertEquals(SpoilerChannel.Result.NO_EFFECT, out.result)
+        assertEquals(1, writes.size)
+    }
+
+    @Test fun `auto on with an unreadable mode after the write is unconfirmed`() = runTest {
+        auto.add(1) // every later read fails
+        val out = channel(2, 6).autoOn()
+        assertEquals(SpoilerChannel.Result.UNCONFIRMED, out.result)
+        assertEquals(1, writes.size)
+    }
+
+    @Test fun `a transient auto on write is unreachable`() = runTest {
+        writeOutcome = WriteOutcome.TRANSIENT
+        auto.addAll(listOf(1, 2))
+        val out = channel(2, 6).autoOn()
+        assertEquals(SpoilerChannel.Result.UNREACHABLE, out.result)
+        assertFalse(out.written)
         assertEquals(1, writes.size)
     }
 

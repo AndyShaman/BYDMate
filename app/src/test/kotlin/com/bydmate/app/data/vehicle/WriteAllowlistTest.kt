@@ -543,7 +543,7 @@ class WriteAllowlistTest {
         assertTrue(WriteAllowlist.isBanned(1006, 734003229))
         assertTrue(WriteAllowlist.isBanned(1006, 555745294))
         val dev1023 = WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS.filter { it.first == 1023 }.map { it.second }.toSet()
-        assertEquals(setOf(1330643002, 1069547536, 850427920, 850427928, 944767029, 1276260400, 1276174371, 1276182582), dev1023)
+        assertEquals(setOf(1330643002, 1069547536, 850427920, 850427928, 944767029, 1276260400, 1276174371, 1276182582, 1276182596), dev1023)
     }
 
     @Test fun `drive mode entries are single allowed values, rock unvalidated`() {

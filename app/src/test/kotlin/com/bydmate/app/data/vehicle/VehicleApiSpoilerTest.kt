@@ -29,8 +29,9 @@ class VehicleApiSpoilerTest {
     }
     private val audit = mutableListOf<VehicleWriteLogEntity>()
     private val dao = mockk<VehicleWriteLogDao> { coEvery { insert(capture(audit)) } returns Unit }
+    private val autoservice = mockk<AutoserviceClient>(relaxed = true)
     private val impl = VehicleApiImpl(
-        mockk<AutoserviceClient>(relaxed = true), helper, allowlist,
+        autoservice, helper, allowlist,
         dao, seatStore, windowStore,
     )
 
@@ -72,6 +73,35 @@ class VehicleApiSpoilerTest {
             assertEquals(verdict, verdictRow().error)
             coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
         }
+    }
+
+    @Test fun `auto mode on writes 1 to its own fid and is confirmed by the mode status`() = runTest {
+        coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+        coEvery { helper.read(1023, 1200619594, any()) } returnsMany listOf(1L, 2L)
+        coEvery { helper.writeStatus(1023, 1276182596, 1) } returns 1
+        assertTrue(impl.dispatch("尾翼自动模式").isSuccess)
+        assertEquals("verdict=OK", verdictRow().error)
+        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182596, 1) }
+    }
+
+    @Test fun `the auto mode entry is one value on the fid the voice assistant uses`() {
+        val entry = allowlist.find("spoiler_auto_on")!!
+        assertEquals(listOf(1023, 1276182596, 1, 1), listOf(entry.dev, entry.writeFid, entry.valueMin, entry.valueMax))
+        assertEquals(false, entry.validated)
+        assertEquals(false, WriteAllowlist.isBanned(1023, 1276182596))
+        // The settings service's table names 0x4C110046 for the same switch; it stays closed.
+        assertTrue(WriteAllowlist.isBanned(1023, 1276182598))
+    }
+
+    @Test fun `a raised spoiler in a standing car is not lowered`() = runTest {
+        coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+        coEvery { helper.read(1023, 1200619531, any()) } returns 5L
+        coEvery { helper.read(1023, 1200619536, any()) } returns 100L
+        coEvery { autoservice.getFloat(any(), any()) } returns 0f
+        val err = impl.dispatch("关闭尾翼").exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.StateBlocked)
+        assertTrue(verdictRow().error, verdictRow().error!!.startsWith("verdict=blocked standing"))
+        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
     }
 
     @Test fun `anti-pinch fails with StateBlocked`() = runTest {

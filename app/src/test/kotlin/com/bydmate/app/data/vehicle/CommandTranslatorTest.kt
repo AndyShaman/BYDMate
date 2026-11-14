@@ -74,6 +74,7 @@ class CommandTranslatorTest {
         Triple("关闭抬头显示", "hud_off", 2),
         Triple("打开尾翼", "spoiler_up", 1),
         Triple("关闭尾翼", "spoiler_down", 2),
+        Triple("尾翼自动模式", "spoiler_auto_on", 1),
         Triple("打开电池预热", "battery_preheat_on", 1), // stock toggle values
         Triple("关闭电池预热", "battery_preheat_off", 2),
         Triple("ECO模式", "drive_mode_eco", 2), // the old D+ ECO string, with or without its prefix
