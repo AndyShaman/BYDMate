@@ -341,6 +341,40 @@ class HelperClientWriteGuardTest {
             }
         }
 
+    /** Replies to a single-item TX_READ_BATCH with [status] and [word]; keeps the item it was asked for. */
+    private class IntReadFake(private val status: Int, private val word: Int) : FakeIBinder() {
+        var asked: List<Int> = emptyList()
+        override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            if (code == HelperBinderProtocol.TX_READ_BATCH) {
+                data.setDataPosition(0)
+                data.enforceInterface(HelperBinderProtocol.DESCRIPTOR)
+                asked = List(4) { data.readInt() } // count, tx, dev, fid
+                reply!!.writeInt(1); reply.writeInt(status); reply.writeInt(word)
+            } else {
+                reply!!.writeInt(1); reply.writeInt(0)
+            }
+            reply.setDataPosition(0)
+            return true
+        }
+    }
+
+    // The spoiler's last check reads the car's int states (status, position, refusals) under the lock.
+    @Test
+    fun `the guard's reader reads an int with tx 5 and keeps an error code as the plain read does`() = runBlocking {
+        withTimeout(TEST_TIMEOUT_MS) {
+            for ((status, word, expected) in listOf(Triple(0, 100, 100), Triple(0, 65535, 65535), Triple(-1, 7, null))) {
+                val fake = IntReadFake(status, word)
+                var read: Int? = -42
+                clientWith(fake).writeStatus(dev = 1023, fid = 1276182582, value = 2) { reader ->
+                    read = reader.readInt(1038, 700448800)
+                    true
+                }
+                assertEquals("status=$status word=$word", expected, read)
+                assertEquals(listOf(1, 5, 1038, 700448800), fake.asked)
+            }
+        }
+    }
+
     @Test
     fun `a sentinel speed from the batch read is refused, not treated as a real value`() = runBlocking {
         withTimeout(TEST_TIMEOUT_MS) {

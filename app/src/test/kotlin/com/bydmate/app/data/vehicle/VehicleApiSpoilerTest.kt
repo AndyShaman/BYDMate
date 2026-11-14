@@ -32,6 +32,8 @@ class VehicleApiSpoilerTest {
     private val autoservice = mockk<AutoserviceClient>(relaxed = true)
     /** The speed the helper's own reader gives the last check before the send. */
     private var lockedKmh: Float? = 50f
+    /** What the helper's own reader gives the last check for (dev, fid); not listed = the read fails. */
+    private val lockedInts = mutableMapOf<Pair<Int, Int>, Int>()
     private val impl = VehicleApiImpl(
         autoservice, helper, allowlist,
         dao, seatStore, windowStore,
@@ -42,7 +44,10 @@ class VehicleApiSpoilerTest {
     /** The helper as HelperClientImpl behaves: the guard runs first, a refusal throws and nothing is sent. */
     private fun accepts(fid: Int, value: Int) = coEvery { helper.writeStatus(1023, fid, value, any()) } coAnswers {
         val guard = arg<(suspend (LockedReader) -> Boolean)?>(3)
-        val locked = LockedReader { dev, speedFid -> if (dev == 1013 && speedFid == SPEED_FID) lockedKmh else null }
+        val locked = object : LockedReader {
+            override suspend fun readFloat(dev: Int, fid: Int) = if (dev == 1013 && fid == SPEED_FID) lockedKmh else null
+            override suspend fun readInt(dev: Int, fid: Int) = lockedInts[dev to fid]
+        }
         if (guard == null || guard(locked)) 1 else throw WriteGuardRefused()
     }
 
@@ -135,6 +140,7 @@ class VehicleApiSpoilerTest {
         coEvery { helper.read(1023, 1200619536, any()) } returns 100L
         coEvery { autoservice.getFloat(any(), any()) } returns 0f
         coEvery { autoservice.getFloat(1013, SPEED_FID) } returns 50f
+        lockedInts += mapOf((1023 to 1200619531) to 5, (1023 to 1200619536) to 100) // raised at the send too
         accepts(1276182582, 2)
         assertTrue(impl.dispatch("关闭尾翼").isSuccess)
         coVerify(exactly = 1) { helper.writeStatus(1023, 1276182582, 2, any()) }
@@ -151,12 +157,35 @@ class VehicleApiSpoilerTest {
             coEvery { helper.read(1023, 1200619536, any()) } returns 100L
             coEvery { helper.read(1023, 1200619594, any()) } returns 1L
             coEvery { autoservice.getFloat(1013, SPEED_FID) } returns 50f
+            lockedInts += mapOf((1023 to 1200619531) to 5, (1023 to 1200619536) to 100)
             lockedKmh = 0f
             accepts(fid, value)
             val err = impl.dispatch(command).exceptionOrNull()
             assertTrue("$command got $err", err is VehicleWriteError.StateBlocked)
             assertEquals("verdict=blocked standing position=100 speed=0", verdictRow().error)
             assertTrue(command, audit.any { it.error == "pre_send_refused" })
+        }
+    }
+
+    // Literal addresses again: under the transport's lock the pilot state is still on device 1038.
+    @Test fun `a refusal that appears before the send is read at its own address and holds the command`() = runTest {
+        val refusals = listOf(
+            (1023 to 1200619598) to "verdict=blocked repair=1",
+            (1023 to 1200619557) to "verdict=blocked warning=1",
+            (1023 to 1200619544) to "verdict=blocked thermal=1",
+            (1038 to 700448800) to "verdict=blocked pilot=4",
+        )
+        for ((address, verdict) in refusals) {
+            audit.clear()
+            lockedInts.clear()
+            io.mockk.clearMocks(helper)
+            coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+            lockedInts[address] = if (address.first == 1038) 4 else 1
+            accepts(1276182582, 1)
+            val err = impl.dispatch("打开尾翼").exceptionOrNull()
+            assertTrue("$verdict got $err", err is VehicleWriteError.StateBlocked)
+            assertEquals(verdict, verdictRow().error)
+            assertTrue(verdict, audit.any { it.error == "pre_send_refused" })
         }
     }
 

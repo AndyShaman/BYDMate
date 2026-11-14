@@ -20,11 +20,21 @@ class SpoilerChannelTest {
     /** The speed the last check sees through the transport's own reader; by default the same car speed. */
     private var lockedSpeed: suspend () -> Float? = { speedKmh?.toFloat() }
     private var lockedReads = 0
+    /** What the last check reads differently from the first; a fid not listed reads the same car. */
+    private val lockedInts = mutableMapOf<Int, Int?>()
+    private var lastStatus: Int? = null
+    private val locked = object : LockedReader {
+        override suspend fun readFloat(dev: Int, fid: Int): Float? { lockedReads++; return lockedSpeed() }
+        override suspend fun readInt(dev: Int, fid: Int): Int? = when {
+            fid in lockedInts -> lockedInts[fid]
+            fid == WriteAllowlist.SPOILER_STATUS_FID -> lastStatus
+            else -> checks[fid]
+        }
+    }
     // beforeSend is called the way VehicleApiImpl.doWriteOutcome ends up calling it: right before
     // the send, so a false return skips the write and reports TRANSIENT.
     private val writer = GuardedWriter { name, value, beforeSend ->
-        val pass = beforeSend(LockedReader { _, _ -> lockedReads++; lockedSpeed() })
-        if (pass) { writes += name to value; writeOutcome } else WriteOutcome.TRANSIENT
+        if (beforeSend(locked)) { writes += name to value; writeOutcome } else WriteOutcome.TRANSIENT
     }
 
     private fun channel(config: Int?, vararg status: Int?, throwOnConfig: Boolean = false): SpoilerChannel {
@@ -33,7 +43,7 @@ class SpoilerChannelTest {
             reads += fid
             when (fid) {
                 WriteAllowlist.SPOILER_CONFIG_FID -> if (throwOnConfig) error("boom") else config
-                WriteAllowlist.SPOILER_STATUS_FID -> queue.removeFirstOrNull()
+                WriteAllowlist.SPOILER_STATUS_FID -> queue.removeFirstOrNull().also { lastStatus = it }
                 WriteAllowlist.SPOILER_AUTO_MODE_FID -> if (auto.isEmpty()) error("auto mode unread") else auto.removeFirst()
                 else -> if (fid in checks) checks[fid] else error("unexpected fid $fid")
             }
@@ -236,6 +246,36 @@ class SpoilerChannelTest {
             val mode = channel(2, 5).autoOn()
             assertEquals("auto #$i", SpoilerChannel.Result.BLOCKED, mode.result)
             assertTrue(mode.verdict, mode.verdict.startsWith(SPOILER_STANDING))
+        }
+        assertTrue(writes.isEmpty())
+    }
+
+    // The first check passes; while the write waits for its audit row and the transport, the car changes its mind.
+    @Test fun `a refusal the car raises after the first check holds every command at the send`() = runTest {
+        lockedInts[WriteAllowlist.SPOILER_WARNING_FID] = 3 // the tailgate started to open
+        val up = channel(2, 6, 2).actuate(up = true)
+        val down = channel(2, 5, 3).actuate(up = false)
+        auto.add(1)
+        val mode = channel(2, 6).autoOn()
+        for (out in listOf(up, down, mode)) {
+            assertEquals(SpoilerChannel.Result.BLOCKED, out.result)
+            assertEquals("blocked warning=3", out.verdict)
+            assertFalse(out.written)
+        }
+        assertTrue(writes.isEmpty())
+    }
+
+    // A raise accepted a moment ago keeps moving the spoiler: not raised at the first check, raised at the send.
+    @Test fun `a spoiler that rose after the first check is held at the send in a standing car`() = runTest {
+        speedKmh = 0
+        checks[WriteAllowlist.SPOILER_POSITION_FID] = 10
+        lockedInts[WriteAllowlist.SPOILER_POSITION_FID] = 60
+        val down = channel(2, 2, 3).actuate(up = false)
+        auto.add(1)
+        val mode = channel(2, 2).autoOn()
+        for (out in listOf(down, mode)) {
+            assertEquals(SpoilerChannel.Result.BLOCKED, out.result)
+            assertTrue(out.verdict, out.verdict.startsWith(SPOILER_STANDING))
         }
         assertTrue(writes.isEmpty())
     }
