@@ -1222,6 +1222,10 @@
     <string name="auto_act_hud_on">HUD: уключыць</string>
     <string name="auto_act_hud_off">HUD: выключыць</string>
     <string name="hud_not_equipped">На гэтай машыне няма HUD</string>
+    <string name="auto_act_spoiler_up">Спойлер: падняць</string>
+    <string name="auto_act_spoiler_down">Спойлер: апусціць</string>
+    <string name="spoiler_not_equipped">На гэтай машыне няма электрычнага спойлера</string>
+    <string name="spoiler_anti_pinch">Спойлер спыніўся: спрацавала абарона ад заціскання</string>
     <string name="rear_seat_heat_not_equipped">На гэтай машыне няма падагрэву задніх сядзенняў</string>
     <string name="auto_act_battery_preheat_on">Падагрэў батарэі: уключыць</string>
     <string name="auto_act_battery_preheat_off">Падагрэў батарэі: выключыць</string>

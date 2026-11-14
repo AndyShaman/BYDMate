@@ -1222,6 +1222,10 @@
     <string name="auto_act_hud_on">HUD: włącz</string>
     <string name="auto_act_hud_off">HUD: wyłącz</string>
     <string name="hud_not_equipped">Ten samochód nie ma HUD</string>
+    <string name="auto_act_spoiler_up">Spojler: podnieś</string>
+    <string name="auto_act_spoiler_down">Spojler: opuść</string>
+    <string name="spoiler_not_equipped">Ten samochód nie ma elektrycznego spojlera</string>
+    <string name="spoiler_anti_pinch">Spojler się zatrzymał: zadziałała ochrona przed przytrzaśnięciem</string>
     <string name="rear_seat_heat_not_equipped">Ten samochód nie ma podgrzewania tylnych foteli</string>
     <string name="auto_act_battery_preheat_on">Podgrzewanie baterii: włącz</string>
     <string name="auto_act_battery_preheat_off">Podgrzewanie baterii: wyłącz</string>

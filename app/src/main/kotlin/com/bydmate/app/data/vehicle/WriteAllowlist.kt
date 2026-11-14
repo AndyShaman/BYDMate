@@ -85,6 +85,10 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // #311). Only 1 (on) and 2 (off) pass, see [RESTRICTED_VALUES]; the rest of the
             // charging device stays banned. Carve-out approved by the owner 2026-10-10.
             BATTERY_PREHEAT_DEV to BATTERY_PREHEAT_SET_FID,
+            // SETTING_ELECTRIC_TAIL_VOICE_SWITCH_ORDER_SET — the BYD voice assistant's spoiler
+            // command (autovoice ElectricTailApiImpl, #383). Only 1 (up) and 2 (down) pass, see
+            // [RESTRICTED_VALUES]. Carve-out approved by the owner 2026-11-14, unvalidated.
+            SPOILER_DEV to SPOILER_CMD_FID,
         )
 
         /** Drive mode: written and read back on the Setting device (dev=1023). */
@@ -118,6 +122,16 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         /** CHARGING_CURRENT_BATTERY_HEATING_POWER (tx=5), raw; diagnostics only. */
         const val BATTERY_HEATING_POWER_FID = 584067131
 
+        /** Electric spoiler (#383): commanded on the Setting device (dev=1023), 1 = up, 2 = down. */
+        const val SPOILER_DEV = 1023
+        const val SPOILER_CMD_FID = 1276182582
+        /** Spoiler config (tx=5): 2 = an electric spoiler is fitted. */
+        const val SPOILER_CONFIG_FID = 1200619534
+        /** Spoiler status (tx=5): 2/5 opening/opened, 3/6 closing/closed, 4 anti-pinch. */
+        const val SPOILER_STATUS_FID = 1200619531
+        /** Spoiler position (tx=5), raw; diagnostics only. */
+        const val SPOILER_POSITION_FID = 1200619536
+
         /**
          * Carve-outs that open only some values of their fid: an entry on such a fid must be a
          * single value from the set, anything else is dropped at load like a banned dev. The drive
@@ -127,6 +141,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             (DRIVE_MODE_DEV to DRIVE_MODE_WRITE_FID) to DriveMode.entries.map { it.value }.toSet(),
             (HUD_DEV to HUD_SWITCH_FID) to setOf(1, 2),
             (BATTERY_PREHEAT_DEV to BATTERY_PREHEAT_SET_FID) to setOf(1, 2),
+            (SPOILER_DEV to SPOILER_CMD_FID) to setOf(1, 2),
         )
 
         /** False when [entry] sits on a [RESTRICTED_VALUES] fid with a value outside its set. */
@@ -382,6 +397,10 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // that a HUD is fitted and reads the status back itself.
             WriteEntry("hud_on",  1023, 1276174371, null, 1, 1, "hud", false, "byd-sdk carsetting HudSwitchModel + autovoice"),
             WriteEntry("hud_off", 1023, 1276174371, null, 2, 2, "hud", false, "byd-sdk carsetting HudSwitchModel + autovoice"),
+            // Spoiler up/down (#383) — dev=1023 carve-out, 1=up, 2=down. No readbackFid:
+            // [SpoilerChannel] checks that an electric spoiler is fitted and reads the status back itself.
+            WriteEntry("spoiler_up",   1023, 1276182582, null, 1, 1, "body", false, "byd-sdk autovoice ElectricTailApiImpl (#383)"),
+            WriteEntry("spoiler_down", 1023, 1276182582, null, 2, 2, "body", false, "byd-sdk autovoice ElectricTailApiImpl (#383)"),
             // Battery warm-up (#311) — dev=1009 carve-out, 1=on, 2=off, the stock toggle's write.
             // No readbackFid: [BatteryPreheatChannel] runs the stock checks (function fitted, no
             // charge gun, the car's permit) and reads the status back itself. Not tried on a car:

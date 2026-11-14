@@ -1071,6 +1071,10 @@
     <string name="auto_act_hud_on">HUD: ligar</string>
     <string name="auto_act_hud_off">HUD: desligar</string>
     <string name="hud_not_equipped">Este carro não tem HUD</string>
+    <string name="auto_act_spoiler_up">Spoiler: levantar</string>
+    <string name="auto_act_spoiler_down">Spoiler: baixar</string>
+    <string name="spoiler_not_equipped">Este carro não tem spoiler elétrico</string>
+    <string name="spoiler_anti_pinch">O spoiler parou: a proteção antiesmagamento foi acionada</string>
     <string name="rear_seat_heat_not_equipped">Este carro não tem aquecimento dos bancos traseiros</string>
     <string name="auto_act_battery_preheat_on">Aquecimento da bateria: ligar</string>
     <string name="auto_act_battery_preheat_off">Aquecimento da bateria: desligar</string>

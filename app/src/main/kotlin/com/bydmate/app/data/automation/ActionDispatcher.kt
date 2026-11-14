@@ -375,16 +375,14 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
 
         /** Why a param dispatch failed, as the step reason, always in the app language. Besides
-         *  drive mode and the battery warm-up, the steering heat and HUD channels report
-         *  NotEquipped. The raw error (`value=-10011 sentinel returned` and the like) stays in
-         *  the log only. */
+         *  drive mode and the battery warm-up, the steering heat, HUD, rear seat heat and spoiler
+         *  channels report NotEquipped; the spoiler also reports StateBlocked. The raw error
+         *  (`value=-10011 sentinel returned` and the like) stays in the log only. */
         internal fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when {
             err is VehicleWriteError && DriveMode.ofAction(err.action) != null -> driveModeFailureReason(err, strings)
             err is VehicleWriteError && err.action.startsWith("battery_preheat_") -> batteryPreheatFailureReason(err, strings)
-            err is VehicleWriteError.NotEquipped && err.action.startsWith("hud_") -> strings.get(R.string.hud_not_equipped)
-            err is VehicleWriteError.NotEquipped && err.action in RearSeatHeat.ACTIONS ->
-                strings.get(R.string.rear_seat_heat_not_equipped)
-            err is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
+            err is VehicleWriteError.NotEquipped -> strings.get(notEquippedText(err.action))
+            err is VehicleWriteError.StateBlocked && err.action.startsWith("spoiler_") -> strings.get(R.string.spoiler_anti_pinch)
             err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
                 stuckWindowsReason(err.stuckPanes, strings)
             else -> strings.get(writeErrorText(err))
@@ -440,6 +438,14 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             is VehicleWriteError.StateBlocked -> strings.get(R.string.battery_preheat_gun_connected)
             is VehicleWriteError.NotNeeded -> strings.get(R.string.battery_preheat_not_needed)
             else -> strings.get(writeErrorText(err))
+        }
+
+        /** Each channel that reports NotEquipped names its own function; steering heat is the rest. */
+        private fun notEquippedText(action: String): Int = when {
+            action.startsWith("hud_") -> R.string.hud_not_equipped
+            action.startsWith("spoiler_") -> R.string.spoiler_not_equipped
+            action in RearSeatHeat.ACTIONS -> R.string.rear_seat_heat_not_equipped
+            else -> R.string.steering_heat_not_equipped
         }
 
         /** «окно водителя не сдвинулось…» for one pane, «не сдвинулись с места: …» for several. */
