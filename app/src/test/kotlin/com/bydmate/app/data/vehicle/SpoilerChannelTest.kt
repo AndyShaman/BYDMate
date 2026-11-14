@@ -30,7 +30,7 @@ class SpoilerChannelTest {
     private fun statusReads() = reads.count { it == WriteAllowlist.SPOILER_STATUS_FID }
 
     @Test fun `no spoiler config values are not equipped and write nothing`() = runTest {
-        for (config in listOf(1, 3, 65535)) {
+        for (config in listOf(0, 1, 3, 65535)) {
             val out = channel(config).actuate(up = true)
             assertEquals("config=$config", SpoilerChannel.Result.NOT_EQUIPPED, out.result)
             assertFalse(out.written)
@@ -75,8 +75,13 @@ class SpoilerChannelTest {
         )
         // 65535 and -10011 are how a fid the car does not serve answers: BYD's code sends then too.
         val unserved = clear.keys.associateWith { 65535 }
+        // Only the values BYD names refuse; a neighbour value is not a refusal.
+        val other = mapOf(
+            WriteAllowlist.SPOILER_REPAIR_FID to 2, WriteAllowlist.SPOILER_WARNING_FID to 5,
+            WriteAllowlist.SPOILER_THERMAL_FID to 2, WriteAllowlist.SPOILER_PILOT_FID to 7,
+        )
         val failed = clear.keys.associateWith<Int, Int?> { null }
-        for (values in listOf(clear, unserved, failed, mapOf(WriteAllowlist.SPOILER_WARNING_FID to -10011))) {
+        for (values in listOf(clear, unserved, other, failed, mapOf(WriteAllowlist.SPOILER_WARNING_FID to -10011))) {
             checks.clear()
             checks.putAll(values)
             writes.clear()
@@ -105,6 +110,18 @@ class SpoilerChannelTest {
         assertEquals(listOf("spoiler_down" to 2), writes)
     }
 
+    @Test fun `down on an already closed spoiler is ok`() = runTest {
+        assertEquals(SpoilerChannel.Result.OK, channel(2, 6, 6).actuate(up = false).result)
+    }
+
+    // The same error code before and after says nothing about the spoiler: not "no effect".
+    @Test fun `a status that reads the same error code throughout is unconfirmed`() = runTest {
+        for (code in listOf(65535, -10011)) {
+            val out = channel(2, code, code, code, code, code, code, code).actuate(up = true)
+            assertEquals("code=$code", SpoilerChannel.Result.UNCONFIRMED, out.result)
+        }
+    }
+
     @Test fun `a status that never changes is no effect after six reads and one write`() = runTest {
         val out = channel(2, 6, 6, 6, 6, 6, 6, 6).actuate(up = true)
         assertEquals(SpoilerChannel.Result.NO_EFFECT, out.result)
@@ -130,6 +147,7 @@ class SpoilerChannelTest {
         val out = channel(2, 6, 2).actuate(up = true)
         assertEquals(SpoilerChannel.Result.UNREACHABLE, out.result)
         assertFalse(out.written)
+        assertEquals(1, writes.size)
         assertEquals(1, statusReads()) // only the "before" read
     }
 }

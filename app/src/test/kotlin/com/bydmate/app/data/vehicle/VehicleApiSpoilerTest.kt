@@ -52,22 +52,26 @@ class VehicleApiSpoilerTest {
         coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
     }
 
-    @Test fun `a spoiler warning fails with StateBlocked and writes nothing`() = runTest {
-        coEvery { helper.read(1023, 1200619534, any()) } returns 2L
-        coEvery { helper.read(1023, 1200619557, any()) } returns 1L
-        val err = impl.dispatch("打开尾翼").exceptionOrNull()
-        assertTrue("got $err", err is VehicleWriteError.StateBlocked)
-        assertEquals("verdict=blocked warning=1", verdictRow().error)
-        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
-    }
-
-    // The pilot state lives on the ADAS device, not on the Setting device the spoiler fids are on.
-    @Test fun `an active navigation pilot is read on dev 1038 and blocks the command`() = runTest {
-        coEvery { helper.read(1023, 1200619534, any()) } returns 2L
-        coEvery { helper.read(1038, 700448800, any()) } returns 6L
-        val err = impl.dispatch("关闭尾翼").exceptionOrNull()
-        assertTrue("got $err", err is VehicleWriteError.StateBlocked)
-        coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+    // Literal addresses on purpose: a wrong fid number in a constant must fail here. The pilot
+    // state lives on the ADAS device (1038), the rest on the Setting device (1023).
+    @Test fun `each of the car's refusals is read at its own address and blocks the command`() = runTest {
+        val refusals = listOf(
+            Triple(1023, 1200619598, 1L) to "verdict=blocked repair=1",
+            Triple(1023, 1200619557, 1L) to "verdict=blocked warning=1",
+            Triple(1023, 1200619544, 1L) to "verdict=blocked thermal=1",
+            Triple(1038, 700448800, 6L) to "verdict=blocked pilot=6",
+        )
+        for ((read, verdict) in refusals) {
+            val (dev, fid, value) = read
+            audit.clear()
+            io.mockk.clearMocks(helper)
+            coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+            coEvery { helper.read(dev, fid, any()) } returns value
+            val err = impl.dispatch("打开尾翼").exceptionOrNull()
+            assertTrue("$verdict got $err", err is VehicleWriteError.StateBlocked)
+            assertEquals(verdict, verdictRow().error)
+            coVerify(exactly = 0) { helper.writeStatus(any(), any(), any()) }
+        }
     }
 
     @Test fun `anti-pinch fails with StateBlocked`() = runTest {
