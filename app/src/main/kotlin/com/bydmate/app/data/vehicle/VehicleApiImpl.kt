@@ -65,7 +65,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     )
 
     private val spoilerChannel = SpoilerChannel(
-        SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
+        GuardedWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
         speed = { guardSpeedKmh { dev, fid -> autoservice.getFloat(dev, fid) } },
         SpoilerReader { fid ->
             // Every spoiler fid is on the Setting device; only the pilot state is on the ADAS one.
@@ -87,7 +87,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     )
 
     private val driveModeChannel = DriveModeChannel(
-        DriveModeWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
+        GuardedWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
         DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
         speed = { guardSpeedKmh { dev, fid -> autoservice.getFloat(dev, fid) } },
     )
