@@ -481,10 +481,14 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
      * kWh value becomes the SOC-delta estimate, or is cleared when SOC is unknown. Cost is
      * dropped so calculateMissingCosts() recomputes it. Idle drains keep their parking window
      * (the hours statistics live off the timestamps) and only lose the impossible kWh.
-     * Runs once, sets the sanity flag.
+     * Two passes, each run once under its own flag: BYD's own records with the full bound, and
+     * the trips TripRecorder stored before it had the absolute ceiling (#428), with that ceiling
+     * only, as TripRecorder applies it.
      */
     suspend fun repairImplausibleKwh(): Int {
-        if (settingsRepository.isEnergyKwhSanityDone()) return 0
+        val energyPending = !settingsRepository.isEnergyKwhSanityDone()
+        val nativePending = !settingsRepository.isNativeKwhSanityDone()
+        if (!energyPending && !nativePending) return 0
 
         return try {
             val allTrips = tripDao.getAllSnapshot()
@@ -493,13 +497,15 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
             var examined = 0
 
             for (trip in allTrips) {
-                // Only BYD's own records: a NATIVE_POLLING trip carries TripRecorder's own
-                // counter delta, which this bound knows nothing about.
-                if (trip.source != TripSource.ENERGYDATA) continue
+                // A NATIVE_POLLING trip carries TripRecorder's own counter delta: the per-100
+                // rule is not for it (km = null leaves the absolute ceiling only).
+                val native = trip.source == TripSource.NATIVE_POLLING
+                val pending = if (native) nativePending else trip.source == TripSource.ENERGYDATA && energyPending
+                if (!pending) continue
                 examined++
                 val raw = trip.kwhConsumed ?: continue
                 val sane = saneKwh(
-                    trip.bydId, raw, trip.distanceKm, trip.socStart, trip.socEnd, capacity)
+                    trip.bydId, raw, trip.distanceKm.takeUnless { native }, trip.socStart, trip.socEnd, capacity)
                 if (sane == raw) continue
                 tripRepository.updateTrip(trip.copy(
                     kwhConsumed = sane,
@@ -509,22 +515,29 @@ class HistoryImporter @Inject @Suppress("LongParameterList") constructor( // Hil
                 repaired++
             }
 
-            var repairedIdle = 0
-            for (drain in idleDrainDao.getAll()) {
-                val raw = drain.kwhConsumed ?: continue
-                if (TripEnergySanity.isPlausible(raw, 0.0)) continue
-                Log.w(TAG, "energydata kwh implausible: id=${drain.id} kwh=$raw km=0 -> cleared (idle)")
-                idleDrainDao.update(drain.copy(kwhConsumed = null))
-                repairedIdle++
-            }
-
-            settingsRepository.setEnergyKwhSanityDone()
-            Log.i(TAG, "energydata kwh sanity: repaired $repaired/$examined trips, $repairedIdle idle")
+            val repairedIdle = if (energyPending) clearImplausibleIdleKwh() else 0
+            if (energyPending) settingsRepository.setEnergyKwhSanityDone()
+            if (nativePending) settingsRepository.setNativeKwhSanityDone()
+            Log.i(TAG, "kwh sanity (energydata=$energyPending native=$nativePending): " +
+                "repaired $repaired/$examined trips, $repairedIdle idle")
             repaired
         } catch (e: Exception) {
             Log.e(TAG, "energydata kwh sanity failed", e)
             0
         }
+    }
+
+    /** Idle drains keep their parking window and only lose an impossible kWh. */
+    private suspend fun clearImplausibleIdleKwh(): Int {
+        var cleared = 0
+        for (drain in idleDrainDao.getAll()) {
+            val raw = drain.kwhConsumed ?: continue
+            if (TripEnergySanity.isPlausible(raw, 0.0)) continue
+            Log.w(TAG, "energydata kwh implausible: id=${drain.id} kwh=$raw km=0 -> cleared (idle)")
+            idleDrainDao.update(drain.copy(kwhConsumed = null))
+            cleared++
+        }
+        return cleared
     }
 
     /**

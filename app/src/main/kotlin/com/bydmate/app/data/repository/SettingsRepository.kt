@@ -52,6 +52,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
         /** One-time repair of trips holding an impossible energydata kWh value. */
         const val KEY_ENERGY_KWH_SANITY_DONE = "energydata_kwh_sanity_v1_done"
+        /** The same repair for trips TripRecorder stored before it had the ceiling (#428). */
+        const val KEY_NATIVE_KWH_SANITY_DONE = "native_kwh_sanity_v1_done"
         /** DriveMode trigger value "0" (old "NORMAL") rewritten to the real NORMAL code "3". */
         const val KEY_DRIVEMODE_RULE_MIGRATION = "drivemode_rule_migration_v2"
         /** Trunk trigger value "0" (old "closed") rewritten to the real closed code "2". */
@@ -370,6 +372,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setEnergyKwhSanityDone() =
         setString(KEY_ENERGY_KWH_SANITY_DONE, "true")
+
+    suspend fun isNativeKwhSanityDone(): Boolean =
+        getString(KEY_NATIVE_KWH_SANITY_DONE, "false") == "true"
+
+    suspend fun setNativeKwhSanityDone() =
+        setString(KEY_NATIVE_KWH_SANITY_DONE, "true")
 
     suspend fun getMapTileSource(): String =
         getString(KEY_MAP_TILE_SOURCE, DEFAULT_MAP_TILE_SOURCE)

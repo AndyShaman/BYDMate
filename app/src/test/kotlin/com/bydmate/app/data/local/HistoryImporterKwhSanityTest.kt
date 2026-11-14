@@ -6,6 +6,7 @@ import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.data.trips.TripSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -105,15 +106,16 @@ class HistoryImporterKwhSanityTest {
         coVerify(exactly = 0) { tripRepository.updateTrip(any()) }
     }
 
-    @Test fun `repair leaves a natively recorded trip alone`() = runTest {
-        // TripRecorder writes its own counter delta on cars without energydata; this bound
-        // knows nothing about it, and the SOC pair there may legitimately be unchanged.
-        // 60 kWh on 10 km = 600 per 100: without the source gate it would be dropped to null.
+    @Test fun `repair leaves a possible natively recorded value alone`() = runTest {
+        // TripRecorder writes its own counter delta on cars without energydata, and the SOC pair
+        // there may legitimately be unchanged. 60 kWh on 10 km = 600 per 100: the per-100 rule is
+        // not for these trips, only the absolute ceiling is.
         val native = poisoned.copy(
             id = 9L, kwhConsumed = 60.0, distanceKm = 10.0, socStart = null, socEnd = null,
-            source = "NATIVE_POLLING", bydId = null,
+            source = TripSource.NATIVE_POLLING, bydId = null,
         )
         coEvery { settingsRepository.isEnergyKwhSanityDone() } returns false
+        coEvery { settingsRepository.isNativeKwhSanityDone() } returns false
         coEvery { settingsRepository.getBatteryCapacity() } returns 60.0
         coEvery { tripDao.getAllSnapshot() } returns listOf(native)
 
@@ -121,8 +123,35 @@ class HistoryImporterKwhSanityTest {
         coVerify(exactly = 0) { tripRepository.updateTrip(any()) }
     }
 
-    @Test fun `repair is a no-op once the flag is set`() = runTest {
+    // #428: the trip TripRecorder stored before it had the ceiling. 0,2 km, SOC 45 -> 96.
+    private val poisonedNative = poisoned.copy(
+        id = 10L, kwhConsumed = 54300.0, kwhPer100km = 27150399.0, distanceKm = 0.2,
+        socStart = 45, socEnd = 96, source = TripSource.NATIVE_POLLING, bydId = null,
+    )
+
+    @Test fun `repair clears an impossible natively recorded value on an install already repaired once`() = runTest {
         coEvery { settingsRepository.isEnergyKwhSanityDone() } returns true
+        coEvery { settingsRepository.isNativeKwhSanityDone() } returns false
+        coEvery { settingsRepository.getBatteryCapacity() } returns 60.0
+        // The energydata record is out of this pass: its own one already ran.
+        coEvery { tripDao.getAllSnapshot() } returns listOf(poisoned, poisonedNative)
+
+        val updated = slot<TripEntity>()
+        assertEquals(1, importer().repairImplausibleKwh())
+
+        coVerify(exactly = 1) { tripRepository.updateTrip(capture(updated)) }
+        assertEquals(10L, updated.captured.id)
+        assertNull("SOC rose on the charger: no estimate either", updated.captured.kwhConsumed)
+        assertNull(updated.captured.kwhPer100km)
+        assertNull(updated.captured.cost)
+        coVerify(exactly = 1) { settingsRepository.setNativeKwhSanityDone() }
+        coVerify(exactly = 0) { settingsRepository.setEnergyKwhSanityDone() }
+        coVerify(exactly = 0) { idleDrainDao.getAll() }
+    }
+
+    @Test fun `repair is a no-op once both flags are set`() = runTest {
+        coEvery { settingsRepository.isEnergyKwhSanityDone() } returns true
+        coEvery { settingsRepository.isNativeKwhSanityDone() } returns true
 
         assertEquals(0, importer().repairImplausibleKwh())
         coVerify(exactly = 0) { tripDao.getAllSnapshot() }
