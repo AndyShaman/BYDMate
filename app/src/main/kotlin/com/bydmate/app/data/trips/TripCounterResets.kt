@@ -80,24 +80,40 @@ class TripCounterResets @Inject constructor(
     }
 
     /** Applies each counter's auto-reset mode to a just-recorded [charge] (#235).
-     *  [wholeSession] = the charge was found by catch-up (service start or tick retry),
-     *  so the current session is entirely post-charge; false = live gun-disconnect edge,
-     *  where the session may have started before the charge (manual-reset semantics). */
-    suspend fun applyAfterCharge(charge: ChargeEntity, wholeSession: Boolean) {
+     *  [wholeSession] = the charge was found by catch-up (service start or tick retry);
+     *  false = live gun-disconnect edge, where the session may have started before the
+     *  charge (manual-reset semantics).
+     *  [sessionKmBeforeCharge] = how far the live session had driven when the charge began,
+     *  null when unknown. A catch-up charge is whole-session only while that is under
+     *  [DROVE_BEFORE_CHARGE_KM]: a car that drove to the charger and stayed on (its gun fid
+     *  silent, so no gun edge) has the drive in the same session, and that drive is not
+     *  post-charge. */
+    suspend fun applyAfterCharge(charge: ChargeEntity, wholeSession: Boolean, sessionKmBeforeCharge: Double?) {
         val now = System.currentTimeMillis()
+        val droveBefore = (sessionKmBeforeCharge ?: 0.0) >= DROVE_BEFORE_CHARGE_KM
+        val whole = wholeSession && !droveBefore
+        val origin = when {
+            !wholeSession -> "gun_edge"
+            droveBefore -> "catchup_mid_session"
+            else -> "catchup"
+        }
         for (n in 1..2) {
             val mode = settings.getTripAutoResetMode(n)
             val decision = mode.shouldReset(charge)
             Log.i(TAG, "TripAutoReset: trip$n mode=${mode.key} charge#${charge.id} type=${charge.type} " +
-                "soc=${charge.socStart}->${charge.socEnd} origin=${if (wholeSession) "catchup" else "gun_edge"} " +
-                "-> ${if (decision) "reset" else "skip"}")
+                "soc=${charge.socStart}->${charge.socEnd} origin=$origin " +
+                "km_before_charge=${sessionKmBeforeCharge ?: "?"} -> ${if (decision) "reset" else "skip"}")
             if (decision) {
-                if (wholeSession) resetWholeSession(n, now) else reset(n, now)
+                if (whole) resetWholeSession(n, now) else reset(n, now)
             }
         }
     }
 
     private companion object {
         const val TAG = "TripCounterResets"
+
+        /** Same margin the charge detector uses for "the odometer moved": two reads of one
+         *  place can differ by rounding. */
+        const val DROVE_BEFORE_CHARGE_KM = 1.0
     }
 }

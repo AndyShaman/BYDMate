@@ -75,7 +75,7 @@ class TripCounterResetsTest {
         resets.load()
         val before2 = resets.state(2).value
 
-        resets.applyAfterCharge(acCharge, wholeSession = true)
+        resets.applyAfterCharge(acCharge, wholeSession = true, sessionKmBeforeCharge = null)
 
         assertNotEquals(0L, resets.state(1).value!!.resetTs)
         assertEquals(settings.getTripResetState(1), resets.state(1).value)
@@ -89,7 +89,7 @@ class TripCounterResetsTest {
         val before1 = resets.state(1).value
         val before2 = resets.state(2).value
 
-        resets.applyAfterCharge(acCharge, wholeSession = true)
+        resets.applyAfterCharge(acCharge, wholeSession = true, sessionKmBeforeCharge = null)
 
         assertEquals(before1, resets.state(1).value)
         assertEquals(before2, resets.state(2).value)
@@ -99,7 +99,7 @@ class TripCounterResetsTest {
         settings.setTripAutoResetMode(2, TripAutoResetMode.AC)
         val resets = TripCounterResets(settings)
 
-        resets.applyAfterCharge(acCharge, wholeSession = true)
+        resets.applyAfterCharge(acCharge, wholeSession = true, sessionKmBeforeCharge = null)
 
         val anchor = settings.getTripResetState(2)
         assertFalse(anchor.excludeStraddling)
@@ -109,12 +109,37 @@ class TripCounterResetsTest {
         assertEquals(anchor, resets.state(2).value)
     }
 
+    // Song 2025, 2026-11-14: 9,3 km to the charger, the car stayed on while charging. The gun fid
+    // is silent on that car, so the charge is found by catch-up; the 9,3 km landed in TRIP 2.
+    @Test fun `applyAfterCharge from catch-up in a session that drove to the charger writes the manual anchor`() = runTest {
+        settings.setTripAutoResetMode(2, TripAutoResetMode.ANY)
+        val resets = TripCounterResets(settings)
+
+        resets.applyAfterCharge(acCharge, wholeSession = true, sessionKmBeforeCharge = 9.3)
+
+        // No running service in tests: the manual reset degrades to exclusion, the whole-session
+        // anchor never does. That difference is what tells the two paths apart here.
+        val anchor = settings.getTripResetState(2)
+        assertTrue(anchor.excludeStraddling)
+        assertEquals(anchor, resets.state(2).value)
+    }
+
+    @Test fun `applyAfterCharge from catch-up keeps the whole session when it stood at the charger from its start`() = runTest {
+        settings.setTripAutoResetMode(2, TripAutoResetMode.ANY)
+        val resets = TripCounterResets(settings)
+
+        // Two odometer reads of one place can differ by rounding: under 1 km is not a drive.
+        resets.applyAfterCharge(acCharge, wholeSession = true, sessionKmBeforeCharge = 0.4)
+
+        assertFalse(settings.getTripResetState(2).excludeStraddling)
+    }
+
     @Test fun `applyAfterCharge from the gun edge with no live session writes the manual anchor`() = runTest {
         settings.setTripAutoResetMode(1, TripAutoResetMode.ANY)
         val resets = TripCounterResets(settings)
 
         // TrackingService.sessionStartedAt is null in tests: manual reset degrades to exclusion.
-        resets.applyAfterCharge(acCharge, wholeSession = false)
+        resets.applyAfterCharge(acCharge, wholeSession = false, sessionKmBeforeCharge = null)
 
         val anchor = settings.getTripResetState(1)
         assertTrue(anchor.excludeStraddling)

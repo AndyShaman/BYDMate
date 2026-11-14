@@ -284,6 +284,22 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
+    fun `a created session reports the odometer the charge began at`() = runTest {
+        val setup = build(
+            battery = battery(soc = 91f, mileage = 2100f),
+            charging = charging(capKwh = 8.0f),
+            prevSoc = 80,
+            prevCapacityKwh = 0.0f,
+            prevMileageKm = 2100f
+        )
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        assertEquals(2100f, result.anchorMileageKm!!, 0.001f)
+    }
+
+    @Test
     fun `gate B SOC up and cap counter reset to current`() = runTest {
         // prevCap=8.0 (last session), currentCap=6.0 → delta=-2.0 (BMS reset)
         // Gate A skipped; Gate B uses currentCap=6.0 (in range)
