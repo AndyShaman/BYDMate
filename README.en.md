@@ -450,11 +450,12 @@ The catalog has over 100 commands. The agent picks from the app's closed list of
 | Seat ventilation | driver and passenger, levels 1-5 and off |
 | Mirrors | mirror and rear window heating on/off |
 | Steering wheel | heating on/off, on cars with steering wheel heating |
-| Lights | cabin dome light, ambient lighting, daytime running lights: on, off |
+| Lights | cabin dome light, ambient lighting, daytime running lights, rear logo light: on, off |
 | Locks | lock, unlock |
 | Sunroof and shade | sunroof: open, close, halfway, tilt to vent, comfort position, stop; shade: open, close, halfway, stop |
 | Trunk | open, close |
 | Front trunk | open, close |
+| Spoiler | raise, lower, turn on auto mode; on cars with a spoiler. While the car stands still with the spoiler up, it cannot be lowered and auto mode cannot be turned on |
 | Fridge | cooling from -6 to +6, heating from 35 to 50, off |
 | Hazard lights | on, off |
 | Drive mode | ECO, Normal, Sport; Snow, Sand, Mud, Mountain, Rock and the smart mode only below 15 km/h |
@@ -465,7 +466,7 @@ Safety: window opening is blocked above 120 km/h, the sunroof above 80 km/h, doo
 
 ### Quick Commands Without the Agent and Without Internet
 
-Frequent commands run instantly, without the language model and without the network. For this, the app has a fixed list of Russian phrases: windows and sunroof, seat heating and ventilation, steering wheel heating, mirrors, climate, fan, volume, locks, trunk, lights, and navigation.
+Frequent commands run instantly, without the language model and without the network. For this, the app has a fixed list of Russian phrases: windows and sunroof, seat heating and ventilation, steering wheel heating, mirrors, climate, fan, volume, locks, trunk, spoiler, lights, and navigation.
 
 How it works:
 
@@ -523,7 +524,7 @@ Offline voices (work without internet, downloaded one at a time):
 
 Mark and Sofia (the Supertonic engine) sound noticeably more natural than the standard voices, but weigh more and share one download: once you get either one, you cannot get the other without a separate download. Speed and intonation liveliness are set with sliders, with a "Play a sample" button next to them.
 
-Online voices (optional, sound more natural): Gemini and OpenAI through the OpenRouter key, MiniMax through its own key (three connection methods: the official API, fal.run, replicate). There is no offline fallback: if the online voice does not answer or fails, the reply stays as text in the pill but is not spoken.
+Online voices (optional, sound more natural): Gemini and OpenAI through the OpenRouter key, MiniMax through its own key (three connection methods: the official API, fal.run, replicate). If the online voice does not answer, the reply is spoken with the local voice, and the reason is shown on the screen.
 
 About volume: agent replies go through BYD's own voice channel (the same one native prompts use), its volume is set by the car's system voice setting. The "turn it up" command changes the music volume, not the agent's voice. If the agent sounds too quiet or too loud, adjust the system voice volume.
 
