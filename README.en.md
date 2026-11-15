@@ -21,7 +21,7 @@ Split screen 1/3 and 2/3, navigation on the instrument cluster, Yandex Navigator
 
 Tested on Leopard 3 (Fangchengbao Tai 3), with support for Sea Lion 07, Song, Atto 3, Seal, Han and the DM-i and DM-o hybrids (Song Pro DM-i, Leopard 5, Leopard 8, Sealion 06). DiLink 3.0, 4.0, 5.0, 5.1, and firmware with the new UI7 interface (OTA V1.6).
 
-[Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [Voice AI Agent](#voice-ai-agent) | [Car](#the-car-screen) | [Diagnostics](#diagnostics-module-faults) | [AI Insights](#ai-insights) | [ABRP](#abrp-live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Releases](https://github.com/AndyShaman/BYDMate/releases) | [Sponsor](SUPPORT.md)
+[Safety](#safety-do-no-harm) | [Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [Voice AI Agent](#voice-ai-agent) | [Car](#the-car-screen) | [Diagnostics](#diagnostics-module-faults) | [AI Insights](#ai-insights) | [ABRP](#abrp-live-telemetry) | [Install](#install) | [Build](#build-from-source) | [What's new](CHANGELOG.md) | [Releases](https://github.com/AndyShaman/BYDMate/releases) | [Sponsor](SUPPORT.md)
 
 </div>
 
@@ -35,19 +35,45 @@ All core features (trips, charges, automations, local insights, offline voice ag
 
 ---
 
-## What's New
+## Safety: Do No Harm
 
-The main changes in version 4.1.0.
+The main rule of BYDMate is: do no harm. It matters more than any feature.
 
-**Module fault codes with descriptions.** The "Car" screen has a new "Diagnostics" card. The "Scan" button reads fault codes from the car's modules, only in P and only when you press it, and changes nothing in the car. Codes are written the same way as in BYD manuals and service scanners, grouped by module, with a description from BYD diagnostic manuals next to each one, no internet needed. You can send the codes to yourself in Telegram. The same card shows cluster warnings and the time left until the next service. Tested on Leopard 3. Details in [Diagnostics: Module Faults](#diagnostics-module-faults).
+**What the app does not touch.** Brakes, steering, cruise control, driver assistance (ADAS) and airbags. The app has no commands for them. These systems work on their own, as they did from the factory, with or without BYDMate.
 
-**"Car status" card.** Climate and tires now share one card. The tires are drawn on a picture of the car, each wheel with its own pressure and temperature. If the car has a PM2.5 sensor, the cabin and outside air quality shows there too.
+**What the app controls.** The things the driver controls from the car's screen: windows, sunroof and shade, locks, trunks, climate, seats, steering wheel heating, lights and hazard lights, mirrors, fridge, drive mode, spoiler, battery preheating, sentry mode, HUD. And functions of the head unit itself: Wi-Fi hotspot, screen backlight, volume, launching and closing apps. A command goes to the car only if it is in a closed list inside the app. A command that is not on the list does not run, and the app says so.
 
-**Rear seat heating in automation.** Left and right separately, off, 1 or 2. The actions show only on cars that report having rear seat heating.
+**What is limited.**
 
-**Fixes.** Two short trips in a row no longer merge into one. Yandex Navigator turn arrows are back on the cluster of the Han 2022 and similar cars. Pressing the volume wheel pauses music on DiLink 3 and 4 as well. With the "By charges" tariff, the current trip is priced at the cost of the energy in the battery, not at the home tariff.
+- Windows do not open above 120 km/h, the sunroof above 80 km/h.
+- Doors do not unlock above 30 km/h.
+- The front trunk opens only while the car is standing still.
+- Off-road modes (Snow, Sand, Mud, Mountain, Rock and the smart mode) turn on only below 15 km/h.
+- If the app does not know the speed, a rule, the voice agent and a quick voice command will not run any of these actions.
+- A rule or the agent cannot turn off the car's power, send a CAN bus command or a shell command: such commands are blocked.
+- Module fault codes are read and erased only in P and only when you press the button.
 
-The full list of changes is in the [CHANGELOG](CHANGELOG.md).
+The limits are the same for automation, the voice agent and quick voice commands. One exception: the green icon next to a single command in the rule editor, see "Test run" in [Automation](#automation).
+
+**What the app asks about first.** Before unlocking the doors, opening the rear trunk, turning off sentry mode or making a call, the voice agent shows a "Cancel / Run" window and waits for your answer. If display over other apps is not allowed, there is nowhere to show the window, and the agent will not run such an action. In an automation rule the same window is turned on with the "Ask before running" setting; a rule with such actions that the agent built itself is created with this setting on. Quick voice commands without the agent ("открой машину" - unlock the car, "открой багажник" - open the trunk) run right away, without the window, with the same speed limits.
+
+**What the app changes in the car's system and how to undo it.** Each setting in the table works only when you turned it on yourself, or the feature it belongs to. Before uninstalling BYDMate, turn off everything you turned on from this table: after the uninstall the app can no longer restore anything.
+
+| What you turned on | What changes | How to undo it |
+|---|---|---|
+| The "Extended" cluster output mode, split screen | a system window-mode setting | switch the mode to "Factory", turn off split screen and reboot the head unit. On cars where only "Extended" works, the app cannot turn it off, see below |
+| "Auto-switch the cluster" (works for projection to cluster and for blind-spot cameras shown on the cluster) | the cluster switches to projection mode by itself | turn the toggle off if ADAS or the stock widget disappears from the cluster |
+| HUD, methods 2 and 3 | the car's navigation mode is on while a route runs | end the route or turn off the windshield output |
+| "Disable built-in voice assistant" | the stock BYD assistant is disabled, and the Shortcuts app (quick commands) disappears with it | turn the toggle off and reboot the head unit. Do this before uninstalling BYDMate |
+| "Restore ADB after a reboot" | after a reboot the app turns on ADB debugging, wireless debugging and its own accessibility service, which presses the wireless debugging permission window | turn the toggle off: wireless debugging turns off. Regular ADB debugging and the accessibility service stay on |
+| "Steering wheel volume knob" | pressing the knob pauses the music | turn the toggle off |
+| "Don't change the time zone from the network" | the car stops changing the time zone by itself | turn the toggle off |
+| "BYD cloud over Wi-Fi" | the car's settings for the link to the BYD cloud | turn the toggle off, the previous settings come back |
+| The "Car interface language" button (UI7 only) | the firmware itself changes the language. For some owners, auto-parking stops working in Russian | switch back to English with the same button |
+
+**What cannot be undone.** Erased module fault codes. That is why erasing is manual only, only in P, no later than 10 minutes after a scan, and through a confirmation window. Details in [Diagnostics: Module Faults](#diagnostics-module-faults). And one system setting: on cars where projection to cluster works only in "Extended" mode, the window-mode setting stays on even after projection to cluster is turned off, and the app cannot turn it off.
+
+**What the app does not do by itself.** It does not scan the modules or erase faults without your press. Cloud features stay off until you enter your own key or token. What goes to the internet and where is listed in [Data & Network](#data--network).
 
 ---
 
@@ -60,8 +86,8 @@ The full list of changes is in the [CHANGELOG](CHANGELOG.md).
 | **Charge** | Charges | Automatic AC/DC logging, period and lifetime stats, manual add and edit |
 | **AI** | Insights | Driving analysis: on-device rules, no internet |
 | **TRIP** | TRIP 1/2 counters | Distance, consumption, time, and cost since the last reset (like in the car); long-press to reset, tap for details |
-| **Bat** | Battery health and "Car" | Card: SoH (Leopard 3, DiLink 3.0), temperature, 12V, cell balance, insulation. Tap opens the "Car" screen with live battery, motor, climate, and tire parameters, including the front/rear power split in percent |
-| **DTC** | Module faults | "Diagnostics" card on the "Car" screen: fault codes from the car's modules with descriptions from BYD manuals, cluster warnings, time until the next service. Scanning only in P and only on a press, it changes nothing in the car |
+| **Bat** | Battery health and "Car" | Card: SoH (Leopard 3, DiLink 3.0), temperature, 12V, cell balance, insulation. The "Car" tab (a tap on the card opens it too) with live battery, motor, climate, and tire parameters, including the front/rear power split in percent |
+| **DTC** | Module faults | "Diagnostics" card on the "Car" screen: fault codes from the car's modules with descriptions from BYD manuals, cluster warnings, time until the next service. Scanning only in P and only on a press, it changes nothing in the car. You can erase the codes by hand, this cannot be undone |
 | **DM-i** | Hybrids | The app detects a hybrid from the car's own counters. Battery and fuel range from the car, a «Fuel» card (tank, range, rpm, engine and battery mileage), litres and engine kilometres per trip from the car's counter, litre price per tariff period. Nothing changes on EVs |
 | **Map** | Route map | osmdroid (OpenStreetMap) in trip details |
 | **Rules** | Automation | WHEN→THEN rules: parameter triggers → vehicle control commands |
@@ -69,7 +95,7 @@ The full list of changes is in the [CHANGELOG](CHANGELOG.md).
 | **HUD** | Windshield projection | Maneuvers, distance, and the speed limit sign from Yandex Navigator on the factory head-up display |
 | **Split** | Split screen | Two apps at once: BYDMate windows in a 1/3 and 2/3 layout, or the firmware's own split |
 | **Cam** | Blind-spot cameras | The camera of the matching side while the turn signal is on: on the cluster or in a small window on the screen |
-| **Voice** | Voice agent | Russian offline assistant: on-device speech recognition, AI agent (32 tools), neural TTS |
+| **Voice** | Voice agent | Russian offline assistant: on-device speech recognition, AI agent (over 30 tools), neural TTS |
 | **Widget** | Floating widget | 7 fields over other apps: SOC, range, consumption + trend, time, cabin t°, battery t°, 12V; on a hybrid the fuel range and tank level replace consumption |
 | **Auto** | Autostart | WorkManager, starts on boot |
 | **Backup** | Configuration backup | Trips, charges, settings, and keys in one archive in Download, restore by parts, scheduled auto-save with a copy in your Telegram bot |
@@ -98,7 +124,7 @@ Below the ring: an AI insight, a small battery health card (SoH on Leopard 3 and
 
 <img src="docs/screenshots/tech-screen-en.jpg" alt="The Car screen" width="800">
 
-*Battery, motors, BMS limits, cells, battery history, climate, tyres, diagnostics. Opens with a tap on the battery card on the Dashboard*
+*Battery, motors, BMS limits, cells, battery history, climate, tyres, diagnostics. Opens from the "Car" tab or with a tap on the battery card on the Dashboard*
 
 **Trips**
 
@@ -109,6 +135,8 @@ Below the ring: an AI insight, a small battery health card (SoH on Leopard 3 and
 The **"Temperature"** chip above the list opens the "Consumption and Temperature" screen: a dot for every trip longer than 5 km, a median line over 5-degree bands, medians for cold (below 0 °C), mid-season (0 to 15 °C), and warm (above 15 °C), and a note on how many percent higher consumption is in the cold. Trips under 5 km never make it into the chart, warm-up eats up everything there. It takes 8 trips with temperature data and a spread of at least 15 °C, otherwise the screen honestly says what is missing.
 
 The trip window shows the odometer at the start and finish, time in motion, cost per 100 km, the charge change in percent, and the outside temperature at the start and end. The odometer is recorded only for trips after the update.
+
+Under the map in the trip window there is a chart. Slide a finger along it, and a dot on the map shows where you were, with the speed and consumption at that spot. The "Speed" / "Consumption" switch colors the track, and the chart shows speed or battery power. There is also altitude, a stretch of the trip with its own stats, a "Play" button and a direction arrow. Consumption at a point is figured from the battery, so it exists only for trips recorded since version 4.3. Route points are kept in full for 30 days, after that one point per 5 seconds remains.
 
 On a hybrid the list has an “l” column. In the “/100” column a trip with petrol shows litres per 100 km with an “l” mark and no color, an electric trip shows kWh/100 with color as before. Litres are the difference of the car's fuel counter at the trip boundaries, in 0.1 l steps; if one of the boundaries has no snapshot, a dash is shown, and someone else's petrol is never put on the trip. In the trip window litres, engine and battery kilometres and fuel cost are separate rows.
 
@@ -149,18 +177,19 @@ Examples:
 
 | | Description |
 |---|-------------|
-| **Triggers** | SOC, speed, temperature, turn signal, gear, doors, windows, sunroof, trunks, tire pressure, drive mode, geofence places, time of day, exact time and a time range with weekdays, steering-wheel key, widget tap, voice phrase, service start, internet available, and more. Turn signals, gear, doors, windows, trunks, and blind-spot sensors reach the app the moment they happen, not by polling |
-| **Commands** | Windows (including individual driver and passenger), climate, lights, locks, sunroof, mirrors, all directly through the car's system interface. Steering wheel heating on cars that have it |
-| **17 action kinds** | Vehicle command, notification, app launch, phone call, route in Yandex Navigator, open URL, Yandex Music, play a YouTube video, pause, media volume, sentry mode, Wi-Fi hotspot, speak text, agent query, BYDMate home screen, projection to cluster, split screen (start, close, toggle). Vehicle commands, sentry mode, and projection to cluster also have a "Toggle" option |
+| **Triggers** | SOC, speed, temperature, turn signal, gear, doors, windows, sunroof, trunks, tire pressure, drive mode, geofence places, time of day, exact time and a time range with weekdays, steering-wheel key, widget tap, voice phrase, service start, internet available, seat belts and seat occupancy, rain, key fob battery, headlights and ambient light, charging status, climate, and more. Turn signals, gear, doors, windows, trunks, and blind-spot sensors reach the app the moment they happen, not by polling |
+| **Vehicle commands** | Sections in the picker: Windows (all, front, rear, and each one separately), Climate (including airflow direction, recirculation and windshield airflow), Seats, Sunroof (sunroof and shade), Locks, Body (trunks and spoiler), Light (cabin, ambient, DRL, hazard lights, rear logo light, HUD), Mirrors, Drive mode, Fridge. Steering wheel heating and rear seat heating on cars that have them. Battery preheating is not in the picker: add any vehicle command and choose battery preheating in its dropdown |
+| **Other actions** | Besides vehicle commands, the picker has these sections. **Messages**: notification, speak text, ask the agent, send a Telegram report. **Apps**: launch app, close app, Yandex Music, media play and pause, call, route in Yandex Navigator, open URL. **Screen**: projection to cluster, split screen (start, close, toggle). **System**: sentry mode, Wi-Fi hotspot, center screen off and on, media volume. **Wait** between actions, up to 24 hours. Vehicle commands, sentry mode, and projection to cluster also have a "Toggle" option. Rules built by the voice agent can have two more actions: a YouTube video and the BYDMate home screen, they are not in the picker |
 | **Edge trigger** | Fires only on a false→true transition (not every 3 seconds) |
 | **Cooldown** | Configurable delay between firings |
-| **Overlay confirmation** | A "Cancel / Run" popup before the action. 15-second timeout, then auto-cancel |
-| **Safety** | Windows do not open above 120 km/h, the sunroof above 80 km/h, doors do not unlock above 30 km/h, CAN/SHELL commands are blocked |
+| **Ask before running** | A "Cancel / Run" popup before the action, with no answer in 15 seconds the action is canceled. If drawing over other apps is not allowed, the question comes as a notification and waits 30 seconds |
+| **Safety** | Windows do not open above 120 km/h, the sunroof above 80 km/h, doors do not unlock above 30 km/h, the front trunk opens only while the car is standing still, off-road modes turn on only below 15 km/h. If the speed is unknown, a rule does not run these actions. A rule cannot turn off the power, send a CAN bus command or a shell command. Details in [Safety: Do No Harm](#safety-do-no-harm) |
 | **Log** | Full trigger history with outcomes |
-| **Templates** | 6 ready-made rules for a quick start |
-| **Run now** | Run a rule manually from the editor, bypassing triggers and cooldown |
+| **Templates** | 8 ready-made rules for a quick start, two of them about the Telegram report. All are added turned off |
+| **How many rules** | Up to 50 |
+| **Test run** | A button in the editor: runs all the rule's actions right away, bypassing triggers and cooldown. A single vehicle command has a green arrow icon that runs only that command. The icon checks the speed against the last data from the car; if there is no data or it is stale (the app's service is stopped), the command can go out without a speed check, so press it only while the car is standing still |
 
-**"Toggle" is a third option next to the action itself, not a separate item.** In the command list, under the "open / close" pair there is a line like "Trunk: toggle", and sentry mode and projection to cluster gained a "Toggle" button next to "Enable" and "Disable".
+**"Toggle" is a third option next to the action itself, there is no separate item for it.** In the command list, under the "open / close" pair there is a line like "Trunk: toggle", and sentry mode and projection to cluster gained a "Toggle" button next to "Enable" and "Disable".
 
 Toggle works for: trunk, front trunk, sunroof, locks, hazard lights, climate, driver and passenger seat heating and ventilation, steering wheel heating, projection to cluster, and sentry mode. The state comes from the car: whatever is open closes, whatever is off turns on. A seat that is currently running turns off, and one that is off returns to the level you last set (level 3 by default). If the car does not report the state, the action honestly declines and says so instead of guessing.
 
@@ -176,11 +205,21 @@ Rules created in earlier versions keep working and open for editing as before, n
 
 **Steering wheel heating.** The "Steering wheel heating" action turns heating on, off, and toggles it. The result is checked against the car's state, and on a car without steering wheel heating the action honestly says it is not there. On a car that has it, the command is not yet field-confirmed, we are waiting for reports.
 
+**Rear seat heating.** Left and right separately: off, 1 or 2. The actions show only on cars that report having this heating.
+
+**Spoiler.** The "Spoiler: raise", "Spoiler: lower" and "Spoiler: automatic mode on" actions are in the "Body" section and work only on a car with a spoiler. On a standing car with the spoiler raised, the app does not lower it and does not turn on the automatic mode: the stock BYD voice assistant behaves the same way. The command is also not sent when the car itself forbids it: spoiler repair mode, a spoiler warning, motor protection, or navigation pilot on.
+
+**Battery warm-up.** The action does not turn on warm-up if the charging cable is connected, if the car itself decides warm-up is not needed (the battery is warm), or if the car is a hybrid.
+
+**Sentry mode.** The action turns BYD's sentry mode on or off directly through the system setting, without the stock app's confirmation dialog.
+
+**Close app.** The app closes completely: a route or music in it that is not saved will be lost.
+
 ### Logic
 
 - **AND**: every condition must hold
 - **OR**: any one condition is enough
-- **Park only**: the rule fires only when the car is in Park
+- **Only in Park (P)**: the rule fires only when the car is in Park
 
 ### Checking a Condition Every Time the Car Is Turned On
 
@@ -237,7 +276,7 @@ The right star turns on the projection by default. You can reassign the button, 
 
 ### Enabling
 
-Open **Settings → Display** and turn on the "Cluster projection" toggle. The app enables the needed service itself (this requires the ADB activation done during install, see "Install") and switches the cluster into projection mode by itself: that is what the "Auto-switch the cluster" toggle does, on by default. Nothing needs to be set up by hand on the head unit.
+Open **Settings → Display** and in the "Cluster projection" card turn on the "Projection to cluster via wheel button" toggle. The app enables the needed service itself (this requires the ADB activation done during install, see "Install") and switches the cluster into projection mode by itself: that is what the "Auto-switch the cluster" toggle does, on by default. Nothing needs to be set up by hand on the head unit.
 
 After that, a short press of the chosen steering-wheel button (right star by default) moves the chosen app to the cluster and back.
 
@@ -253,7 +292,7 @@ In **Settings → Display**, next to the projection toggle, you choose the clust
 
 **"Extended".** The navigator launches as a separate window right on the cluster display, so the voice agent and the HUD see the route during projection. To do this, the app turns on a system window-mode setting (enable_freeform_support). The mode turns on only through a dialog that explains it, and after turning it on you need a one-time head-unit reboot (long-press the volume wheel). The new mode applies the next time you project.
 
-On some firmware (DiLink 4.0, Song Plus 2021, and similar) the cluster screen is hidden from apps, and "Factory" mode cannot work there: the app finds the cluster through a service channel by itself and projects the navigator in "Extended" mode regardless of what you picked. This is confirmed on a car with DiLink 4.0. In this mode, the "Scale" slider in the "Cluster window size" setting does not work.
+On some firmware (DiLink 4.0, Song Plus 2021, and similar) the cluster screen is hidden from apps, and "Factory" mode cannot work there: the app finds the cluster through a service channel by itself and projects the navigator in "Extended" mode. There is no choice there: the "Cluster output mode" line says "Only “Extended” works on this car". This is confirmed on a car with DiLink 4.0. On these cars the system window-mode setting turns on by itself, without choosing a mode, and stays on even after projection to cluster is turned off: you cannot go back to "Factory" there, and the app cannot turn this setting off. In this mode, the "Scale" slider in the "Cluster window" setting does not work.
 
 **How to restore factory settings.** Switch the mode back to "Factory": the app immediately restores the system setting to its factory value, and rebooting DiLink completes the rollback. After that the system is in the same state as before BYDMate was installed.
 
@@ -263,15 +302,15 @@ If you used the projection in versions before 3.7, updating keeps the old behavi
 
 ### Choosing the Button
 
-The right star on the wheel turns on the projection by default. If your car does not have this button or another one is more convenient, tap "Change" under the toggle and press the button you want on the wheel, the app remembers it. You can assign any steering-wheel button the system can see. System buttons (volume, power, and so on), the 360 view, and the cluster carousel cannot be assigned.
+The right star on the wheel turns on the projection by default. If your car does not have this button or another one is more convenient, tap the "Trigger button" line under the toggle and press the button you want on the wheel, the app remembers it. You can assign any steering-wheel button the system can see. System buttons (volume, power, and so on), the 360 view, and the cluster carousel cannot be assigned.
 
 ### Which App to Project
 
-Yandex Navigator projects to the cluster by default. Below the enable toggle there is an app picker: you can choose any installed app (another navigator, a media player, and so on). The new choice applies the next time you press the button.
+Yandex Navigator projects to the cluster by default. Below the enable toggle there is the "App on cluster" line: you can choose any installed app (another navigator, a media player, and so on). The new choice applies the next time you press the button.
 
 ### Window Size and Position
 
-**Settings → Display → "Cluster window size"** has five sliders. If the projection already fills the whole cluster on your car (Leopard 3, for example), there is nothing to adjust: the defaults give the same full-screen behavior as before.
+**Settings → Display → "Cluster window"** has five sliders. If the projection already fills the whole cluster on your car (Leopard 3, for example), there is nothing to adjust: the defaults give the same full-screen behavior as before.
 
 - **Width** and **Height** (20-100%): the window size as a percentage of the cluster. A smaller window frees up space, and the native cluster shows through around it.
 - **Horizontal offset** (0-100%): window position: 0 = left edge, 50 = center, 100 = right edge. Only applies when width is below 100%.
@@ -279,6 +318,10 @@ Yandex Navigator projects to the cluster by default. Below the enable toggle the
 - **Scale** (50-150%): the size of the projected app's interface, the lower the value, the smaller the text and the more of the map fits in the window.
 
 Changes apply right away, during the projection itself: move a slider and watch the cluster.
+
+### Track on the Cluster
+
+The "Track on the cluster" toggle in **Settings → Display** shows the title and artist on the cluster music card for players the stock firmware skips: Yandex Navigator (Alice), Yandex Music, Spotify, internet radio and others. The firmware fills in the stock players and Bluetooth by itself.
 
 ### Cars With a Mini Cluster Window (Sea Lion 07 and Similar)
 
@@ -294,7 +337,7 @@ You cannot make the window fill the whole cluster on these cars: the display zon
 
 ### Under the Hood
 
-The projection runs in one of the two modes described above. In "Factory" mode, BYDMate creates a virtual display and mirrors the chosen app into it, without changing any system settings. In "Extended" mode, the app launches as a separate window right on the instrument-cluster display, so the voice agent and the HUD see the route during projection. To catch steering-wheel button presses, the app turns on its own accessibility service. It runs only while the toggle is on, and it exists solely for the chosen button. It does not change the firmware or the car itself, and it is fully reversible.
+The projection runs in one of the two modes described above. In "Factory" mode, BYDMate creates a virtual display and mirrors the chosen app into it, without changing any system settings. In "Extended" mode, the app launches as a separate window right on the instrument-cluster display, so the voice agent and the HUD see the route during projection. To catch steering-wheel button presses, the app turns on its own accessibility service. It catches the steering-wheel button only while the toggle is on. Two more features need the same service: "Restore ADB after a reboot" (it presses the wireless debugging permission window) and route building by the voice agent while split screen is on. It does not change the firmware or the car itself.
 
 ---
 
@@ -302,11 +345,11 @@ The projection runs in one of the two modes described above. In "Factory" mode, 
 
 If the car has a factory head-up display, BYDMate draws Yandex Navigator guidance on the windshield: the maneuver icon, the distance to it, the street name and the arrival time. A separate toggle adds the speed limit sign, sent as a number. While the Navigator warns about a speed camera, the camera icon and the distance to it replace the maneuver arrow. Guidance keeps running even when the Navigator is minimized or projected to the cluster; Yandex Maps works as a guidance source alongside the Navigator.
 
-Enable it in **Settings → Display**, section "HUD (head-up display)": the "Navigation on HUD" toggle and, separately, "Speed sign under the arrow". The way of drawing on the glass is chosen there too: Way 1 is the default, Ways 2 and 3 are for cars where the glass is empty in Way 1. Guidance travels over the HUD's own factory channel, so a car equipped with a head-up display is required. If the car has no such channel, the app says so in Settings and does not enable the feature.
+Enable it in **Settings → Display**, the "Windshield projection (HUD)" card: the toggle on the card itself and, separately, "Speed sign under the arrow". In the same card, the "Glass output method" line picks the method: Method 1 is the default, Methods 2 and 3 are for cars where the glass is empty in Method 1. Guidance travels over the HUD's own factory channel, so a car equipped with a head-up display is required. If the car has no head-up display, the app says so in the card. On some of these cars, with the toggle on, the hints go to the stock navigation card on the cluster, and the status says so: "This car has no HUD: hints go to the stock navigation card on the cluster". Where there is no such path either, the feature does not turn on.
 
-**What the app changes in the car.** In Way 1, nothing: hints go over the HUD's own channel. In Ways 2 and 3, while "Navigation on HUD" is on and the navigator is guiding a route, BYDMate turns on the car's navigation mode and writes the arrow, the meters and the street to the navigation card on the cluster. In Way 3 the remaining time and distance to the end of the route and the arrival time go there too. Once the route ends, the way is changed or the toggle is off, everything returns to how it was. With the toggle off, the app does not touch anything in the car.
+**What the app changes in the car.** In Method 1, nothing: hints go over the HUD's own channel. In Methods 2 and 3, while the windshield output is on and the navigator is guiding a route, BYDMate turns on the car's navigation mode and writes the arrow, the meters and the street to the navigation card on the cluster. In Method 3 the remaining time and distance to the end of the route and the arrival time go there too. Once the route ends, the method is changed or the toggle is off, everything returns to how it was. With the toggle off, the app does not touch anything in the car.
 
-**If nothing shows up on the glass.** Open **Settings → Service & Data**, "Data" section, and tap **"Start"** next to the "HUD check" line. The car needs to be parked, with no route running in the navigator. The check takes about two minutes and shows the numbers 111, 222, 333 and 444 on the glass one after another, each by its own way. At the end it asks which number you saw and sets the right way itself. If the glass showed nothing, record a log with the log recording button and send it in a GitHub issue along with your car model.
+**If nothing shows up on the glass.** Open **Settings → Display**, the "Windshield projection (HUD)" card, and tap **"Start"** in the "HUD check" line. The car needs to be parked, with no route running in the navigator. The check takes about a minute and a half and shows the numbers 111, 222, 333 and 444 on the glass one after another: 111 is Method 1, 222 and 333 are Method 2, 444 is Method 3. At the end it asks which number you saw and sets the right method itself. If the glass showed nothing, record a log with the log recording button and send it in a GitHub issue along with your car model.
 
 **Which navigator.** The maneuver arrow comes from Yandex Navigator 31.0.2 or newer. Older versions (24.5.1) give only the distance and the street, without the arrow. Yandex Maps gives the arrow intermittently, so use Navigator for the HUD and the cluster.
 
@@ -318,13 +361,13 @@ With the turn signal on, BYDMate shows the side camera picture by itself: the le
 
 <img src="docs/screenshots/settings-blindspot-en.jpg" alt="Settings → Display → Blind spots" width="800">
 
-Enable it in **Settings → Display**, "Blind spots" section (off by default). The same place has the speed threshold below which the camera does not show, the window width, and its position: the "Adjust position" button shows an empty window you drag with a finger to where the camera should be. The "Hide the camera after" slider (5 to 60 seconds, "no limit" by default) is for a turn signal that stays on for a long time: the camera leaves the screen after that time and comes back the next time the turn signal goes on, and the warning frame leaves with it. If the left camera on the cluster gets in the way, turn on "Both cameras on the main screen" there too: both pictures show on the tablet, the cluster is left alone. The left window mirrors the right one by default, and the "Left camera position" button under the toggle gives it its own spot. The "Vertical camera window" toggle turns the window vertical and rotates the picture 90 degrees, like a mirror: if the picture ends up facing the wrong way after turning it on, open an issue. Requires a car equipped with a surround-view system. On some cars with DiLink 4.0 the firmware does not let apps access the cameras, the feature does not work there.
+Enable it in **Settings → Display**, "Blind spots" section (off by default). The same place has the speed threshold below which the camera does not show, the window width, and its position: the "Adjust position" button shows an empty window you drag with a finger to where the camera should be. The "Hide the camera after" slider (5 to 60 seconds, "no limit" by default) is for a turn signal that stays on for a long time: the camera leaves the screen after that time and comes back the next time the turn signal goes on, and the warning frame leaves with it. If the left camera on the cluster gets in the way, turn on "Both cameras on the main screen" there too: both pictures show on the tablet, the cluster is left alone. The opposite option is "Both cameras on the instrument cluster": the left and right cameras show on the cluster, and the main screen stays free. The orange frame is turned on with the "Highlight when an object is in the blind spot" toggle. The left window mirrors the right one by default, and the "Left camera position" button under the toggle gives it its own spot. The "Vertical camera window" toggle turns the window vertical and rotates the picture 90 degrees, like a mirror: if the picture ends up facing the wrong way after turning it on, open an issue. Requires a car equipped with a surround-view system. On some cars with DiLink 4.0 the firmware does not let apps access the cameras, the feature does not work there.
 
 ---
 
 ## Voice AI Agent
 
-A full Russian voice assistant built into BYDMate. Speech is recognized right on the head unit, with no internet: the GigaAM v3 neural network listens and understands Russian. Simple commands run instantly through local parsing, the AI agent handles everything else: a language model with 32 tools that reads the car's data itself, controls body functions, builds routes, runs automations, and answers by voice.
+A full Russian voice assistant built into BYDMate. Speech is recognized right on the head unit, with no internet: the GigaAM v3 neural network listens and understands Russian. Simple commands run instantly through local parsing, the AI agent handles everything else: a language model with a set of tools (over 30 of them) that reads the car's data itself, controls body functions, builds routes, runs automations, and answers by voice.
 
 ### Why Russian, and Only Russian
 
@@ -332,13 +375,13 @@ The stock BYD voice assistant already works natively in English and Chinese. Bui
 
 ### How to Enable It
 
-1. **Settings → Voice agent**: turn on the **"Voice AI agent"** toggle. *What should happen:* fields for the agent's name, personality, and gender appear below.
+1. **Settings → Voice agent**: turn on the **"Voice AI agent"** toggle. *What should happen:* the "Agent name", "Personality" and "Agent gender" fields appear below.
 2. Set a language model key: **Settings → Integrations → AI connections**. We recommend OpenRouter (sign up at openrouter.ai, paid, fractions of a cent per question) with a fast model such as Gemini Flash. There is a free option, z.ai with the glm-4.7-flash model, but it answers noticeably slower. A third option: your own OpenAI-compatible server. *What should happen:* the connection gets a mark that the key is set. You can set up two connections: if the main one fails, the agent switches to the second one by itself.
-3. Go back to **Voice agent**, "Agent" section, and tap **"Test model"**. *What should happen:* the model name, response time, and a short phrase from the agent appear under the button. If the button is gray, the key was not saved: check it in Integrations. The **"Agent chat (debug)"** button next to it lets you check text replies even before using the microphone.
+3. Go back to **Voice agent** and in the "Testing & debugging" line tap **"Test model"**. *What should happen:* the model name, response time, and a short phrase from the agent appear under the button. If the button is gray, the key was not saved: check it in Integrations. The **"Agent chat (debug)"** button next to it lets you check text replies even before using the microphone.
 4. In the **"Speech recognition"** section tap **"Download (226 MB)"**, preferably over Wi-Fi. *What should happen:* a download percentage appears, and at the end the line changes to **"Model ready"**.
 5. In the **"Button and microphone"** section turn on the **"Voice commands"** toggle and grant the microphone. *What should happen:* the current steering-wheel button shows up below. On Leopard 3 it is already assigned, on other cars tap **"Assign button"** and press a button on the wheel once.
 6. Press the wheel button and say "Сколько заряда?" (How much charge is left?). *What should happen:* a "Listening" pill appears, a short beep follows the phrase, and an answer comes a second or two later.
-7. TTS is optional: in the **"Agent replies"** section, turn on the toggle and download a voice (a regular one is 18-21 MB, or the improved Mark or Sofia share a 145 MB download). *What should happen:* the agent starts answering out loud; without TTS the answer stays as text on the screen.
+7. TTS is optional: in the **"Agent replies"** section, turn on the "Speak agent replies aloud" toggle and download a voice (a regular one is 18-21 MB, or the improved Mark or Sofia share a 145 MB download). *What should happen:* the agent starts answering out loud; without TTS the answer stays as text on the screen.
 
 <img src="docs/screenshots/settings-voice.jpg" alt="Settings → Voice agent: agent, name, personality, voice" width="800">
 
@@ -352,11 +395,11 @@ The stock BYD voice assistant already works natively in English and Chinese. Bui
 
 ### What the Agent Can Do
 
-The agent has 32 tools. Example phrases:
+The agent has over 30 tools. Example phrases:
 
 **Car and climate**
 - "Сколько заряда?" (How much charge is left?), "Какая температура за бортом?" (What's the temperature outside?), "Какой запас хода?" (What's my range?) (live vehicle status)
-- "Открой окна" (Open the windows), "Включи подогрев сиденья" (Turn on seat heating), "Поставь климат на 22" (Set the climate to 22) (full catalog of 110 commands, see below)
+- "Открой окна" (Open the windows), "Включи подогрев сиденья" (Turn on seat heating), "Поставь климат на 22" (Set the climate to 22) (the catalog has over 100 commands, see below)
 - "Сделай музыку громче" (Turn the music up), "Потише" (Quieter) (media volume)
 
 **Trips, charges, statistics**
@@ -388,28 +431,37 @@ The agent has 32 tools. Example phrases:
 - "Какая погода?" (What's the weather?), "Какая погода в Москве завтра?" (What's the weather in Moscow tomorrow?)
 - "Поищи в интернете, когда выйдет обновление DiLink" (Search the web for when the DiLink update comes out)
 
-### Vehicle Control: A Catalog of 110 Commands
+**Calls, sentry and system**
+- "Позвони Ивану" (Call Ivan) (calls a contact from the phone book by name, needs contacts access: Settings → Voice agent → "Contacts access"). Before the call the agent shows a confirmation window
+- "Где я?" (Where am I?) (the nearest towns and the distance to them)
+- "Поставь на охрану" (Arm the car), "Сними с охраны" (Disarm the car) (BYD sentry mode). Before disarming the agent shows a confirmation window
+- "Включи точку доступа" (Turn on the hotspot), "Выключи раздачу" (Turn off internet sharing) (sharing the internet from the car)
+- "Погаси экран" (Turn off the screen), "Включи экран" (Turn on the screen) (only the center screen backlight goes off, music and apps keep running, a touch lights the screen up again)
+
+### Vehicle Control: Command Catalog
+
+The catalog has over 100 commands. The agent picks from the app's closed list of commands and cannot send an arbitrary command to the car.
 
 | Group | What's available |
 |--------|--------------|
 | Windows | all, front, rear, driver, passenger, rear left and rear right; open, close, halfway, vent, per group and per individual window |
-| Climate | on, off, temperature from 16 to 33 |
+| Climate | on, off, auto mode, temperature from 16 to 33, fan speed from 1 to 7, airflow direction (face, feet, windshield), recirculation, windshield airflow |
 | Seat heating | driver and passenger, levels 1-5 and off |
 | Seat ventilation | driver and passenger, levels 1-5 and off |
-| Mirrors | heating on/off |
+| Mirrors | mirror and rear window heating on/off |
 | Steering wheel | heating on/off, on cars with steering wheel heating |
-| Lights | cabin, ambient, and other modes (6 commands) |
+| Lights | cabin dome light, ambient lighting, daytime running lights: on, off |
 | Locks | lock, unlock |
-| Sunroof and shade | open, close, intermediate positions |
+| Sunroof and shade | sunroof: open, close, halfway, tilt to vent, comfort position, stop; shade: open, close, halfway, stop |
 | Trunk | open, close |
 | Front trunk | open, close |
 | Fridge | cooling from -6 to +6, heating from 35 to 50, off |
 | Hazard lights | on, off |
 | Drive mode | ECO, Normal, Sport; Snow, Sand, Mud, Mountain, Rock and the smart mode only below 15 km/h |
 | HUD | windshield projection: on, off |
-| Battery preheating | on, off |
+| Battery preheating | on, off. Does not turn on with the charging cable connected, on a warm battery, or on a hybrid |
 
-Safety: window opening is blocked above 120 km/h, the sunroof above 80 km/h, door unlocking above 30 km/h; the front trunk only opens while the car is parked.
+Safety: window opening is blocked above 120 km/h, the sunroof above 80 km/h, door unlocking above 30 km/h; the front trunk only opens while the car is parked. If the speed is unknown, the agent does not run these actions. Before unlocking the doors, opening the rear trunk, disarming sentry mode and making a call, the agent shows a "Cancel / Run" window on the screen and waits for an answer: without one the action does not run. All the rules are in [Safety: Do No Harm](#safety-do-no-harm).
 
 ### Quick Commands Without the Agent and Without Internet
 
@@ -483,11 +535,17 @@ The agent works in three steps, and delay builds up at each one.
 2. **Understanding the phrase.** Phrases from the built-in list run almost instantly. Everything else goes to the language model: however long it thinks, plus the ping to the provider. This is the main source of delay. Gemini Flash through OpenRouter answers in a fraction of a second, the free glm-4.7-flash is noticeably slower.
 3. **Speaking the answer.** Offline voices are light and fast, but still take some time. Online voices are slower: they depend on ping too.
 
-If you need maximum speed, turn off the "Agent replies" toggle. There will be no TTS, the reply stays as text on the screen, and only the first two steps run. Quick commands run without internet either way.
+If you need maximum speed, turn off the "Speak agent replies aloud" toggle. There will be no TTS, the reply stays as text on the screen, and only the first two steps run. Quick commands run without internet either way.
+
+### More Settings
+
+- **"Close the agent after a completed command"** ("Button and microphone" section): after a completed command or answer the agent closes by itself. If the agent asked a question, it waits for the answer.
+- **"Own phrases for commands"**: your own words for the built-in offline commands. Your phrase works only when said in full, and then it wins over the built-in command.
+- **"Contacts access"**: needed to call a contact by name.
 
 ### Agent Personality
 
-In Settings you pick one of three response personalities (Navigator by default) and the agent's gender (male or female), which shapes the wording and spoken lines. The interrupt name is also set there.
+In Settings you pick one of three response personalities (Navigator by default) and the agent gender (male or female), which shapes the wording and spoken lines. The interrupt name is also set there.
 
 ### Privacy
 
@@ -498,7 +556,7 @@ In Settings you pick one of three response personalities (Navigator by default) 
 
 ### Turning Off BYD's Built-In Assistant
 
-At the bottom of the "Voice agent" section there is a toggle that disables BYD's built-in voice assistant, so it does not wake up alongside the agent. Fully reversible, applies after the car restarts (both turning it on and off). Off by default.
+At the bottom of the "Voice agent" section there is the "Disable built-in voice assistant" toggle: it disables BYD's built-in voice assistant, so it does not wake up alongside the agent. The Shortcuts app (quick commands) disappears together with the assistant, it is part of it. Fully reversible: turn the toggle off and reboot the head unit, both come back. Applies after a reboot (both turning it on and off). Off by default.
 
 The stock assistant is disabled in the car's system, so turn this toggle off before uninstalling BYDMate, otherwise the stock assistant stays disabled. How to bring the stock assistant back if BYDMate is already uninstalled: install BYDMate again, turn the toggle off, and restart the head unit.
 
@@ -530,14 +588,14 @@ Seven fields across 3 rows. Colors: icons gray, values white. The frame and SOC%
 - 🚗 **Cabin temperature**: °C
 
 **Center row** (large, key values):
-- **SOC %** (18sp bold, colored): traction battery charge. Green above 50%, yellow 20-50%, red below 20%
+- **SOC %** (18sp bold, colored): traction battery charge. Green from 20%, yellow below 20%, red below 10%
 - **~N km** (28sp white): estimated range, `SOC × battery capacity ÷ baseline consumption × 100`. The tilde marks it as an estimate, not the onboard computer's reading. More on how baseline consumption is figured is below, in "Range"
 - **On a hybrid**: `~N km` is the car's own battery range, not our calculation; the fuel range from the car stands instead of consumption, and the tank level is shown in the top row.
 - **X.X ↓** (18sp, colored by trend): **current trip consumption**, kWh/100km, with a trend arrow (see below)
 
 **Bottom row** (small, 13sp):
 - 🔋 **Battery temperature**: °C
-- ⚡ **12V**: onboard network voltage, V. Normal 12.5-14.7 V, below 12.0 V is yellow, below 11.7 V is red
+- ⚡ **12V**: onboard network voltage, V. Below 12.5 V the widget frame is yellow, below 12.0 V red; the number itself stays white
 
 ### Consumption and the Trend Arrow (Right Block)
 
@@ -557,7 +615,7 @@ This is the automatic calculation. If it does not suit you, **Settings → Car a
 - **→ white** (straight): within your usual range
 - **↑ yellow**: consumption higher than usual
 
-The arrow does not jump around at every red light, there is some inertia built in: for the arrow to change color, consumption has to clearly differ from your usual and hold that way for at least a minute.
+The arrow does not jump around at every red light, there is some inertia built in: for the arrow to change color, consumption has to clearly differ from your usual and hold that way for half a minute.
 
 **What counts as a "trip"** for this number: one ignition cycle, from on to off. A standstill with the AC running inside the trip is accounted for naturally, the extra kWh land in the shared denominator. Short blips (a red light, a reconnect) do not split a trip into two. If DiLink kills the app in the middle of a highway drive, after a restart the count continues from the real ignition-on moment, not from zero.
 
@@ -566,7 +624,13 @@ The arrow does not jump around at every red light, there is some inertia built i
 - **Regular tap**: open BYDMate
 - **Long tap (1.5 sec)**: hide until BYDMate opens next
 - **Drag to the trash**: turn off completely
-- Enable, transparency, and position reset: in **Settings → Widget**
+
+Everything else is in **Settings → Widget**:
+
+- **"Show SOC widget"**: turns the widget on and off. Next to it are "Opacity", "Size" and "Reset position".
+- **"Tap zoning"**: a tap on the left third of the widget opens the chosen app or split screen (the "Left tap action" item), a tap on the rest opens BYDMate. Off by default; the default app on the left is Yandex Navigator.
+- **"Widget buttons"**: off by default. When on, a single tap slides out a button panel, and BYDMate opens with a double tap. A button runs an automation rule with the "Button press" trigger; if there is no rule for the button, the app says so. You pick the button icon in the rule itself.
+- **"Hide over YouTube"**, **"Show only on the home screen"**, **"Hide in apps"**: when the button panel hides by itself.
 
 ---
 
@@ -764,6 +828,26 @@ Errors show up right under the button: a wrong token, no network, the code has n
 
 The archive is not encrypted. The bot and the chat should be yours alone. If the bot is already connected to a webhook or another program, Telegram will not deliver the code message to the app: turn off the webhook.
 
+### Telegram Report When the Car Is Turned Off
+
+The same bot can send a short report every time you turn off the car. Handy for seeing where it is parked, how much charge is left, and whether everything is closed.
+
+It is turned on in the same **"Telegram bot"** block: the **"Report when the car is turned off"** switch. Below it, checkboxes pick what goes into the report:
+
+- **Location on the map**: an "Open on the map" link at the end of the message;
+- **Charge** and **Range**, as on the Dashboard;
+- **Odometer**: the car's total distance;
+- **Trip**: kilometers, consumption and driving time of the last trip. Separate checkboxes are **Trip time** (when it started and ended), **Trip energy** (how many kWh were used) and **Trip cost** (at your tariff);
+- **TRIP 1** and **TRIP 2**: the Dashboard counters, each with its own checkbox. A counter that was never reset is marked "all time";
+- **Temperature**: outside and in the cabin;
+- **Battery temperature**: the average battery temperature on its own line, plus the lowest and highest if the car reports them;
+- **What is open**: doors, windows, sunroof, trunk, hood. If everything is closed, the report says so;
+- **Tire pressure**: all four wheels.
+
+The report goes out in the first seconds after you turn the car off, over the car's mobile internet. If there is no connection, it arrives the next time the car is turned on, with a note on when the data was recorded. Reports that waited for the network arrive in order: car turn-off reports first.
+
+The same report can be sent from an automation: the **"Send a Telegram report"** action. It has its own set of items and, if you want, your own text under the title. For example, a rule for "entering the Home zone" can send the charge and what is open.
+
 ---
 
 ## Battery Health (SoH)
@@ -772,9 +856,9 @@ SoH (State of Health) is the percentage "health" of the traction battery, calcul
 
 On **BYD Leopard 3 (Fangchengbao Tai 3)** BYDMate reads this value directly from the onboard system and shows it in the battery card on Home. This is the **real SoH from the car**, not an estimate from the SoC difference: BYDMate simply reads what the car writes about itself.
 
-On other BYD models, access to this value is not yet confirmed, so SoH does not show there. The rest of the card (battery temperature, 12V, cell balance, insulation resistance) works on every supported model.
+SoH is confirmed on Leopard 3 and on DiLink 3.0 (Yuan UP). On other BYD models, access to this value is not yet confirmed, and the card has no SoH field. The rest of the card (battery temperature, 12V, cell balance, insulation resistance) works on every supported model.
 
-Tapping the card opens the **"Car"** screen with detailed battery, motor, climate and tyre data plus diagnostics, see [The "Car" Screen](#the-car-screen).
+Tapping the card opens the **"Car"** tab with detailed battery, motor, climate and tyre data plus diagnostics, see [The "Car" Screen](#the-car-screen).
 
 If SoH is available on your car and you want to help add support, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your model and year.
 
@@ -787,7 +871,7 @@ SoH and automatic charge logging on Leopard 3 work automatically, there is nothi
 1. Make sure ADB debugging is active (see the "Install" section).
 2. SoH shows up in the battery card on Home, and charges start logging automatically with real kWh values.
 
-> These features are confirmed on Leopard 3. On other BYD models access to this data is not confirmed, so SoH and precise charge power may not show up, but the rest of BYDMate works as usual.
+> These features are confirmed on Leopard 3, and SoH is also confirmed on DiLink 3.0 (Yuan UP). On other BYD models access to this data is not confirmed: SoH and precise charge power may not show up, the rest of BYDMate works as usual.
 
 ---
 
@@ -797,9 +881,10 @@ SoH and automatic charge logging on Leopard 3 work automatically, there is nothi
 
 ### How to Open It
 
-1. Open the **"Dashboard"** tab.
-2. Tap the battery card: the row with SoH, battery temperature, 12V system, cell delta and insulation. It has a yellow outline in the picture.
-3. The **"Car"** screen opens. The arrow in the top left corner takes you back.
+There are two ways:
+
+- the **"Car"** tab in the bottom bar, the second one after "Dashboard";
+- on the **"Dashboard"** tab, tap the battery card: the row with SoH, battery temperature, 12V system, cell delta and insulation. It has a yellow outline in the picture. The same "Car" tab opens.
 
 <img src="docs/screenshots/tech-entry-en.jpg" alt="Dashboard: the battery card that opens Car" width="400">
 
@@ -823,7 +908,7 @@ Hybrids get a seventh card, **"Fuel"**.
 - Parameters have a **"?"** badge next to them. Tap it for a plain-language tip: what the number means and what value is normal.
 - If the car does not report a parameter, the line shows "-". A card with no data is hidden.
 - The set of parameters depends on the model. Everything on the screen is tested on Leopard 3; on other cars some lines may be empty.
-- The screen only reads data and changes nothing in the car. It needs active wireless ADB debugging, like the rest of the car data (see "Install").
+- The screen only reads data and changes nothing in the car. One exception: erasing fault codes in the "Diagnostics" card, which is done only by hand (see the section below). It needs active wireless ADB debugging, like the rest of the car data (see "Install").
 
 ---
 
@@ -837,7 +922,7 @@ The screenshots show the app in Russian; in English the labels are the ones quot
 
 ### Where to find it
 
-Dashboard → tap the battery card → the **"Car"** screen → the **"Diagnostics"** card. The card has three parts:
+The **"Car"** tab (or Dashboard → tap the battery card) → the **"Diagnostics"** card. The card has three parts:
 
 - **Cluster warnings**: what the car itself shows on the instrument cluster. "none" means the cluster shows nothing right now.
 - **Next service**: days and km left until the scheduled service. The row shows only if the service reminder is on in the car. On Leopard 3 it is turned on in the car settings: Vehicle → Maintenance → Maintenance Interval or Maintenance Mileage.
@@ -876,7 +961,7 @@ The **"Send to Telegram"** button in the window sends the codes with their descr
 ### Good to know
 
 - **Scanning only reads.** It changes nothing in the car, does not erase faults and does not change module settings. The app sends the modules read requests only.
-- **Faults can be erased, the feature is experimental.** "Erase all" in the window or "erase ›" next to one module, on P only and only after a fresh scan. After the erase the app re-reads the modules and shows the result for each. A fault that is present right now comes back at once while its cause remains. You erase at your own risk; if you are going to a service, send the codes to Telegram first.
+- **Faults can be erased, the feature is experimental.** "Erase all" in the window or "erase ›" next to one module. It works only in P and no later than 10 minutes after the scan: if more time has passed, the app asks you to scan again. Before erasing, the app asks for confirmation. Erased codes cannot be brought back, this is the only BYDMate action that cannot be undone. The app never erases codes by itself. After the erase the app re-reads the modules and shows the result for each. A fault that is present right now comes back at once while its cause remains. You erase at your own risk; if you are going to a service, send the codes to Telegram first.
 - **This is not a repair or a diagnosis.** A code says what a module noticed, not what broke or what to replace. The service decides: show them the codes.
 - **Tested only on Leopard 3** (Fangchengbao Tai 3). On other BYD models the scan may not work and show "Not available on this car", fewer modules may answer, and module names will show as addresses. If you have another model, tell us in an [Issue](https://github.com/AndyShaman/BYDMate/issues) what the scan showed and attach a log recording.
 - **Only in P and only on a press.** We chose not to query the car's modules while driving.
@@ -944,15 +1029,17 @@ autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 | Voice agent (LLM) | OpenRouter / z.ai / your own server | command text, vehicle state (SOC, climate, etc.), GPS coordinates for navigation requests | only after setting up a provider |
 | Agent web search | Exa / z.ai / OpenRouter | search query text | a key is entered and the agent called the tool |
 | Weather (agent) | Open-Meteo | GPS coordinates or a place name (geocoding) | the agent called the tool |
-| Charging stations (agent) | Overpass (overpass-api.de / maps.mail.ru) | GPS coordinates | the agent called the tool |
+| Charging stations (agent) | Overpass (overpass-api.de, overpass.openstreetmap.fr); for Belarus also beta.by and Malanka | GPS coordinates go to Overpass; from beta.by and Malanka the common station list is downloaded, coordinates do not go there | the agent called the tool |
+| "Where am I" (agent) | Overpass; if it does not answer, Nominatim (nominatim.openstreetmap.org) | GPS coordinates | the agent called the tool |
 | Online TTS voices | MiniMax / fal.ai / Replicate / OpenRouter | text of the spoken reply | only if an online voice is chosen |
 | Map in trip details | OpenStreetMap tile servers (or Amap, if chosen in Settings) | coordinates of the visible map area | when the trip map or the places editor is opened |
-| Update check | GitHub API | nothing (fetches the release list, version comparison is local) | automatically |
-| ABRP live telemetry | abetterrouteplanner.com | SOC, power, speed, temperatures, odometer, tire pressure, charging status, battery capacity, SoH, kWh of the current charging session, car model (coordinates only with a separate toggle, for following the car from a phone) | only after entering a token |
-| Configuration copies to Telegram | api.telegram.org, your bot | the configuration archive with the chosen parts, and a message when the bot connects | only after connecting a bot |
+| Update check | GitHub API | nothing about you or the car: a request for the release list, versions are compared on the device. The update file is downloaded from GitHub only with the "Download and install" button | when the app is opened, at most once every 10 minutes; turned off with the "Check for updates" toggle in Settings → Application |
+| Internet check | Yandex and Quad9 DNS servers (77.88.8.8, 77.88.8.1, 9.9.9.9, port 53) | nothing, only a connection attempt | when the car gets a network; needed for the "internet available" automation trigger and for Telegram reports that waited for the network |
+| ABRP live telemetry | api.iternio.com (the ABRP server) | SOC, power, speed, temperatures, odometer, tire pressure, charging status, battery capacity, SoH, kWh of the current charging session, car model (coordinates only with a separate toggle, for following the car from a phone) | only after entering a token |
+| Telegram bot | api.telegram.org, your bot | configuration copies with the chosen parts; the report when the car is turned off and reports from automations (with a map link, if "Location on the map" is checked); fault codes with the "Send to Telegram" button; the recorded log, if "Send the recorded log to Telegram" is on | only after connecting a bot |
 | Telemetry webhook | Settings → Integrations → Webhook | the same JSON as ABRP, POST to your URL every 1/8/30 s (driving/charging/parked); coordinates only with a separate toggle | off by default |
 
-Without any keys entered, only the update check (GitHub) and map tiles when viewing a trip route leave the device, along with voice model downloads on your explicit request (github.com). API keys are stored locally in the app's database and are never sent anywhere except the provider itself.
+Without any keys entered and without a connected bot, these leave the device: the update check (GitHub), map tiles when viewing a trip route, the internet check, and voice model downloads on your button press (github.com). API keys are stored locally in the app's database and are never sent anywhere except the provider itself.
 
 ---
 
@@ -968,14 +1055,14 @@ Enabled ADB debugging is needed for everything that reads or writes vehicle para
 
 These features turn on automatically, no separate switch is needed. The first time BYDMate starts, DiLink shows the "Allow ADB debugging" dialog once, tap **Allow** and check **"Always allow from this computer"** so it does not ask again.
 
-- **DiLink 3 / 4**: you can enable ADB yourself: install [BydDevelopmentTools](https://disk.yandex.by/d/e3gEnY9P2Y9_fQ), go to *Settings → Version Management*, tap *Reset to factory default* 10 times, then turn on *Debug Mode when USB is Connected* and *Wireless adb debug switch*. On updated DiLink 3/4 firmware ADB may be locked the same way as on DiLink 5, then follow the path below.
-- **DiLink 5.0**: ADB debugging is **locked** and can only be unlocked remotely, from China. This can be done through sellers on **TaoBao** (search for `DiLink 5.0`, about 40 CNY inside China or about 80 CNY from outside, paid via AliPay). The seller remotely opens the engineering menu using a QR code you send them, after which ADB turns on as usual.
+- **DiLink 3 / 4**: you can enable ADB yourself with the BydDevelopmentTools engineering app: go to *Settings → Version Management*, tap *Reset to factory default* 10 times, then turn on *Debug Mode when USB is Connected* and *Wireless adb debug switch*. On updated DiLink 3/4 firmware ADB may be locked the same way as on DiLink 5, then follow the path below.
+- **DiLink 5.0**: ADB debugging is **locked** and can only be unlocked remotely: the engineering menu is opened using a QR code from the car's screen, after which ADB turns on as usual.
 
   Step-by-step guide: [PDF guide (Russian)](docs/guides/dilink5-adb-activation-ru.pdf), included in the repository.
 
 #### ADB Turns Off After Every Reboot
 
-On DiLink firmware from summer 2026 ("2606" builds), the ADB port closes at every head-unit reboot, and every vehicle control feature stops working until ADB is turned on by hand. For these cars, **Settings → Car System** has a **"Restore ADB after a reboot"** toggle (off by default): the app brings ADB back up through Android's own built-in wireless debugging. A "?" badge next to the toggle has a detailed explanation, and there is a status line under it.
+On DiLink firmware from summer 2026 ("2606" builds), the ADB port closes at every head-unit reboot, and every vehicle control feature stops working until ADB is turned on by hand. For these cars, **Settings → Service & Data → Car system** has a **"Restore ADB after a reboot"** toggle (off by default): the app brings ADB back up through Android's own built-in wireless debugging. A "?" badge next to the toggle has a detailed explanation, and there is a status line under it.
 
 Things to know:
 
@@ -985,6 +1072,7 @@ Things to know:
 - After booting, the app keeps retrying by itself as long as Wi-Fi is connected, and reacts to the screen unlocking. ADB usually comes back 10 to 30 seconds after the car connects to Wi-Fi. It works best if the phone's hotspot is already on by the time the car starts.
 - If ADB on your firmware survives a reboot anyway, there is no need to turn the toggle on: the status line shows "Not needed".
 - Confirmed on DiLink 5.0 (Song L) with August 2026 firmware.
+- Head units with Android 10 do not have this method: the status line shows "Not available on Android 10".
 
 ### 2. DiPlus (D+) Is No Longer Needed
 
@@ -1000,10 +1088,9 @@ If you used earlier versions and installed D+, you can remove it from DiLink onc
 
 ### 4. First Launch
 
-1. Open BYDMate, the setup wizard appears
-2. Grant **location** and **storage** permissions. As you turn features on, the app asks for more: microphone for the voice agent, camera for blind-spot cameras, contacts for calling by name, drawing over other apps for the widget and notifications, and usage access to detect the active app. BYDMate's persistent notification in the shade cannot be removed (Android requires it to run in the background), but it can be made silent: Settings → Service & Data → "Silent tracking notification".
+1. Open BYDMate, a first-run wizard with four steps appears: app language, battery and tariffs, ADB check, autostart.
+2. Grant **location** and **storage** permissions. As you turn features on, the app asks for more: microphone for the voice agent, camera for blind-spot cameras, contacts for calling by name, drawing over other apps for the widget and notifications, and usage access to detect the active app. The app grants itself notification access over ADB: with it, the app learns which music is playing (track on the cluster) and reads turn hints from the Yandex Navigator and Yandex Maps notification (HUD). BYDMate does not read or store notifications from other apps. BYDMate's persistent notification in the shade cannot be removed (Android requires it to run in the background), but it can be made silent: Settings → Service & Data → "Quiet tracking notification".
 3. Set your **electricity tariffs** (for figuring trip cost). You can change them retroactively later, see [Tariffs and Cost](#tariffs-and-cost)
-4. In Automation, the "Sentry mode" action type is available: it turns BYD's sentry mode (Centuri/Sentry) on or off directly through the system setting, skipping the stock app's confirmation dialog
 
 ### 5. Background Work
 
@@ -1019,16 +1106,27 @@ In **Settings** you can change:
 - **Battery capacity**: 72.9 kWh by default (Leopard 3)
 - **Tariffs and periods**: home (AC) and fast-charging (DC) prices, losses, the trip cost rule, and currency. Details in [Tariffs and Cost](#tariffs-and-cost)
 - **Consumption thresholds**: the bounds for color coding (green/yellow/red)
+- **Charging connector** (Settings → Car and battery): the voice agent looks for chargers with this connector.
+- **Units and currency** (Settings → Application): "Distance" in kilometers or miles, and "Currency".
+- **Map tile source** (Settings → Application): OpenStreetMap or Amap for the map in the trip window.
+- **Updates** (Settings → Application): the "Check for updates" toggle and the "Check for updates now" button. The app offers a new version, but downloads and installs it only with your "Download and install" button.
+- **Language** and **Text size** (Settings → Application).
+- **Autostart** (Settings → Service & Data): BYDMate starts together with the car. If autostart stopped working after a firmware update, the "Autostart setting" button opens the system setting where you turn it on.
+- **Reset seat channel** (Settings → Service & Data → Data): if seat heating or ventilation does not work after changing cars.
+- **Reset trip source detection** (same place): if trips are not recorded. The app checks again whether the car keeps its own trip database and turns on its own recording if needed.
+- **Send the recorded log to Telegram** (same place): after log recording stops, the file goes to your bot.
 
 ---
 
 ## Vehicle System
 
-**Settings → Service & Data → Car System** has items that change the car's own behavior, not the app's.
+**Settings → Service & Data → Car system** has items that change the car's own behavior, not the app's.
 
 **Steering wheel volume knob.** A toggle that makes a press pause and resume playback instead of switching the audio source. Needed after a firmware update that made the press switch the source. Off by default.
 
-**BYD cloud over Wi-Fi.** Connects the car to the BYD cloud over Wi-Fi, so the BYD phone app sees the car, over-the-air updates arrive and the NFC key works. Cars on the new BYD servers need a Chinese VPN: the server only lets in connections from a Chinese address. A VPN on the router the car connects to is best, because it does not depend on the head unit. The other option is a VPN app on the head unit itself, for example [SpeedCN](https://speedcn.in/download); it works only while the head unit is on. Needs ADB. If the car has its own mobile data, the setting changes nothing; switching it off returns the previous connection settings.
+**BYD cloud over Wi-Fi.** Connects the car to the BYD cloud over Wi-Fi, so the BYD phone app sees the car, over-the-air updates arrive and the NFC key works. Cars on the new BYD servers need a Chinese VPN: the server only lets in connections from a Chinese address. A VPN on the router the car connects to is best, because it does not depend on the head unit. The other option is a VPN app on the head unit itself, it works only while the head unit is on. Needs ADB. If the car has its own mobile data, the setting changes nothing; switching it off returns the previous connection settings.
+
+**Don't change the time zone from the network.** For cars near a border, where the time zone keeps resetting to Beijing time. First pick the right time zone in the car settings, then turn on the toggle: the app turns off the system's automatic time zone from the network. Off by default. When the toggle is turned off, the previous value of the system setting comes back.
 
 **Car interface language.** UI7 firmware only. The button opens BYD's hidden stock dialog with the full list of languages, including Russian, Ukrainian, and Polish. The firmware itself changes the language, the app writes nothing. For some owners, auto-parking stops working in Russian, then switch back to English with the same button.
 
@@ -1068,8 +1166,8 @@ Whatever matters most goes in the title. The first rule to fire with the highest
 
 | Priority | Condition | Example title |
 |-----------|---------|------------------|
-| 90 | 12V under 11.8 V | "12V critically low" |
-| 85 | Cell spread over 50 mV | "Large cell spread" |
+| 90 | 12V under 12.0 V | "12V critically low" |
+| 85 | Cell spread of 90 mV or more | "Large cell spread" |
 | 80 | Consumption up over 15% vs. last week | "Consumption up 15% this week" |
 | 78 | Night drain of 4+ kWh and 35%+ of idle | "Night idle drain" |
 | 70 | Consumption up over 5% | "Consumption up 8% this week" |
@@ -1087,8 +1185,8 @@ A set of rules is checked in parallel, and the **top 5** by priority land in the
 | Heavy DC use | 2+ DC sessions, DC over AC × 1.5 |
 | Short trips | 40%+ of trips are under 5 km |
 | Idle with the motor running | 2+ kWh while parked |
-| 12V low / falling | 11.8-12.4 V, or a downward weekly trend |
-| Cell spread | 31-50 mV |
+| 12V low / falling | 12.0 to 12.5 V, or a downward weekly trend |
+| Cell spread | 50-89 mV |
 | Winter plus higher consumption | 5 °C or below and consumption rose |
 | Best vs. worst trip | Spread of 5+ kWh/100 |
 | Consumption improved | Down over 5% vs. last week |
@@ -1127,10 +1225,10 @@ ABRP uses a "Generic Live Data Token", a separate token for each car in the gara
 
 ### Setup in BYDMate
 
-1. **Settings → Integrations** → the **"ABRP: telemetry"** block.
+1. **Settings → Integrations** → the **"ABRP - telemetry"** block.
 2. Paste the token you got into the **"Live data token from ABRP"** field.
 3. There is nothing else to set up: the send interval picks itself, once a second while driving, every 8 seconds while charging, every 30 seconds while parked. The old "interval" and "model code" fields from earlier versions are gone.
-4. Tap **"Save ABRP"**, then turn on the **"Live data → A Better Route Planner"** toggle. Without a saved token the toggle stays off and unusable.
+4. Tap **"Save ABRP"**, then turn on the **"Live data -> A Better Route Planner"** toggle. Without a saved token the toggle stays off and unusable.
 5. The ABRP app on DiLink (or a browser on your phone) will now see live SOC, power, temperatures, and charge.
 
 ### What Is Sent
@@ -1148,7 +1246,7 @@ Only aggregated vehicle figures, no identifiers:
 - **Tire pressures**: pressure in all 4 tires
 - **is_charging / is_parked**: state flags
 - **is_dcfc / kwh_charged**: charging station type (DC vs. AC) and the kWh in the current session
-- **soh**: real battery SoH (Leopard 3)
+- **soh**: real battery SoH, if the car reports it (confirmed on Leopard 3 and on DiLink 3.0, Yuan UP)
 
 ### What Is NOT Sent
 
@@ -1165,11 +1263,11 @@ The same JSON that goes to ABRP can be POSTed to your own address: Home Assistan
 
 **Setup**
 
-1. **Settings → Integrations** → the **"Webhook: telemetry"** block.
+1. **Settings → Integrations** → the **"Webhook - telemetry"** block.
 2. **URL**: `https://` only. Plain `http://` will not work (Android blocks unencrypted traffic, it is allowed only for `localhost`). If your server has no certificate, put Caddy or nginx with Let's Encrypt in front of it, or use a tunnel like Cloudflare Tunnel.
 3. **Secret** (optional): a string sent in the `Authorization: Bearer <secret>` header. It lets your server tell your car apart from someone else's requests.
 4. **"Send coordinates to the webhook"**: off by default. Turn it on only if the server is yours: `lat`, `lon`, `heading` are added to the JSON.
-5. Tap **"Save webhook"**, then turn on the **"Live data → your own server"** toggle.
+5. Tap **"Save webhook"**, then turn on the **"Live data -> your own server"** toggle.
 
 **What Arrives**
 
