@@ -40,7 +40,6 @@ class TtsRouterOfflineFallbackTest {
             return true
         }
         override fun stop() { stopCalls++ }
-        override fun warmUp() {}
         override val speaking: StateFlow<Boolean> = MutableStateFlow(false)
         override fun playPcm(samples: FloatArray, sampleRate: Int): Boolean {
             playPcmCalls += samples to sampleRate
@@ -76,13 +75,12 @@ class TtsRouterOfflineFallbackTest {
         override suspend fun configured() = true
     }
 
-    /** Succeeds for the first call, throws from the second on. */
+    /** Succeeds for the sentence "one" only. Keyed by text, not by call order: the router
+     *  synthesizes ahead of playback, so the order requests reach the backend is not fixed. */
     private class FlakyBackend : OnlineTtsBackend {
         override val id = "gemini"
-        private var calls = 0
         override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
-            calls++
-            if (calls >= 2) throw IOException("synthesis failed")
+            if (text != "one") throw IOException("synthesis failed")
             return TtsPcm(floatArrayOf(0.1f), 16_000)
         }
         override suspend fun configured() = true
@@ -197,14 +195,16 @@ class TtsRouterOfflineFallbackTest {
         val backend = ThrowingBackend()
         val delegate = FakeTtsEngine()
         val r = router(delegate, backend, testScope())
-        playAll(r.startQueue()!!, "one", "two", "three")
-        assertEquals(listOf("one", "two", "three"), delegate.queueEnqueued.toList())
+        val reply = listOf("one", "two", "three", "four", "five", "six")
+        playAll(r.startQueue()!!, *reply.toTypedArray())
+        assertEquals(reply, delegate.queueEnqueued.toList())
         assertTrue(delegate.queueFinished)
         assertTrue(delegate.playPcmCalls.isEmpty())
         assertEquals(1, failures.size)
         assertTrue(failures[0].spokenOffline)
-        // After the first failure no further online requests start (one sentence may be prefetched).
-        assertTrue("synthesize calls: ${backend.synthCalls}", backend.synthCalls <= 2)
+        // After the first failure no further online requests start. Up to three may already be
+        // in flight by then (one awaited by the player, one buffered, one being handed over).
+        assertTrue("synthesize calls: ${backend.synthCalls}", backend.synthCalls <= 3)
     }
 
     // G

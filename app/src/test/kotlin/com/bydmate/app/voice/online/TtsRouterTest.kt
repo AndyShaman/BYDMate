@@ -90,19 +90,6 @@ class TtsRouterTest {
         override suspend fun configured(): Boolean = configuredValue
     }
 
-    /** Fails only from the [failFrom]-th call onward (1-indexed) -- lets a queue test drive
-     *  "first sentence succeeds, second fails". */
-    private class FlakyBackend(private val failFrom: Int) : OnlineTtsBackend {
-        override val id: String = "gemini"
-        private var calls = 0
-        override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
-            calls++
-            if (calls >= failFrom) throw RuntimeException("synthesis failed")
-            return TtsPcm(floatArrayOf(0.1f), 16_000)
-        }
-        override suspend fun configured(): Boolean = true
-    }
-
     /** Counts synth and prewarm calls; synthesis always succeeds. */
     private class CountingBackend(override val id: String = "minimax") : OnlineTtsBackend {
         val synthesized = java.util.Collections.synchronizedList(mutableListOf<Pair<String, TtsGender>>())
