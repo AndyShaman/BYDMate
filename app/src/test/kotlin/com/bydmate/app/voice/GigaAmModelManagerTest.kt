@@ -431,6 +431,8 @@ class GigaAmModelManagerTest {
         val result = m.download { phase, pct -> ticks += phase to pct }
 
         assertTrue(result.isSuccess)
+        // Published with the known-good hashes a tripped load guard checks against.
+        assertEquals(GigaAmModelManager.Integrity.INTACT, m.verifyIntegrity())
         // Every phase is represented, in order, and the bar never goes backwards.
         assertEquals(
             listOf(
