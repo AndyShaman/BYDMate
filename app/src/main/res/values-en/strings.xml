@@ -1292,7 +1292,7 @@
     <string name="tts_online_failed_policy">The online voice is unavailable: the request was refused by the privacy settings of your OpenRouter account (openrouter.ai/settings/privacy).</string>
     <string name="tts_online_failed_other">The online voice did not answer.</string>
     <string name="tts_online_failed_spoken_local">Answering with the local voice.</string>
-    <string name="tts_online_failed_silent">The local voice is not downloaded, the answer is on screen only.</string>
+    <string name="tts_online_failed_silent">The local voice is unavailable, the answer is on screen only.</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Keys for online voices</string>

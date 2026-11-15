@@ -6,6 +6,7 @@ import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -27,8 +28,9 @@ import java.util.concurrent.LinkedBlockingQueue
 
 /** Wraps an offline [TtsEngine] (the Sherpa/Piper voice) and, when an online source is selected,
  *  speaks through a cloud [OnlineTtsBackend]. If the online backend fails or times out, the rest of
- *  the reply is spoken by the offline engine (silent only when its model is not downloaded; the
- *  text stays visible in the orb dialog) and [onOnlineFailure] hears about it once per reply. The
+ *  the reply is spoken by the offline engine (silent only when it is unavailable, e.g. its model
+ *  is not downloaded; the text stays visible in the orb dialog) and [onOnlineFailure] hears about
+ *  it once per reply. The
  *  offline engine is always the delegate for stop/speaking/audible/reload, so barge-in and the
  *  mic-mute machinery stay exactly as they are today regardless of which source spoke. */
 class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambdas plus test seams
@@ -272,9 +274,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     internal fun phraseCacheSizeForTest(): Int = synchronized(phraseCache) { phraseCache.size }
 
     /** Streams one sentence into [chunks] (the engine plays them as they arrive); the end marker
-     *  always follows, whatever happens. A failure before the first chunk is retried as one
-     *  whole-sentence synthesis; after audio started there is no retry. Null = the sentence was
-     *  delivered completely. */
+     *  is put by the caller. A failure before the first chunk is retried as one whole-sentence
+     *  synthesis; after audio started there is no retry. Null = the sentence was delivered
+     *  completely. */
     private suspend fun streamSentence(
         backend: OnlineTtsBackend,
         text: String,
@@ -289,36 +291,32 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         // Computed before the stream starts, like synthesizeOnline's key; cacheIfKeyStable
         // recomputes it after and only caches if the two agree (see its comment).
         val keyBefore = kept?.let { phraseKey(backend, gender, text) }
-        try {
-            val error = catchingWithTimeout {
-                backend.synthesizeStream(text, gender) { samples ->
-                    if (samples.isNotEmpty()) {
-                        if (count == 0) firstChunkMs = elapsedMs(startNs)
-                        count++
-                        kept?.add(samples)
-                        chunks.put(samples)
-                    }
+        val error = catchingWithTimeout {
+            backend.synthesizeStream(text, gender) { samples ->
+                if (samples.isNotEmpty()) {
+                    if (count == 0) firstChunkMs = elapsedMs(startNs)
+                    count++
+                    kept?.add(samples)
+                    chunks.put(samples)
                 }
-            }.exceptionOrNull()
-            if (error != null) Log.w(TAG, "online tts stream failed for '${backend.id}'", error)
-            val ok = error == null
-            val totalMs = elapsedMs(startNs)
-            Log.i(
-                TAG,
-                "online stream: backend=${backend.id} chars=${text.length} first_chunk_ms=$firstChunkMs " +
-                    "total_ms=$totalMs chunks=$count ok=$ok",
-            )
-            traceTts(backend, "stream", ok, firstChunkMs, totalMs)
-            if (ok && kept != null && keyBefore != null) {
-                cacheIfKeyStable(backend, gender, text, keyBefore, TtsPcm(mergeChunks(kept), sampleRate))
             }
-            return when {
-                error == null -> null
-                count > 0 -> SentenceFailure(error, heard = true)
-                else -> wholeRetry(backend, text, sampleRate, chunks, error)
-            }
-        } finally {
-            chunks.put(END_OF_STREAM)
+        }.exceptionOrNull()
+        if (error != null) Log.w(TAG, "online tts stream failed for '${backend.id}'", error)
+        val ok = error == null
+        val totalMs = elapsedMs(startNs)
+        Log.i(
+            TAG,
+            "online stream: backend=${backend.id} chars=${text.length} first_chunk_ms=$firstChunkMs " +
+                "total_ms=$totalMs chunks=$count ok=$ok",
+        )
+        traceTts(backend, "stream", ok, firstChunkMs, totalMs)
+        if (ok && kept != null && keyBefore != null) {
+            cacheIfKeyStable(backend, gender, text, keyBefore, TtsPcm(mergeChunks(kept), sampleRate))
+        }
+        return when {
+            error == null -> null
+            count > 0 -> SentenceFailure(error, heard = true)
+            else -> wholeRetry(backend, text, sampleRate, chunks, error)
         }
     }
 
@@ -387,7 +385,8 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         @Volatile private var superseded = false
         // Set by a sentence's synthesis the moment it fails: later sentences skip the network.
         @Volatile private var onlineFailed = false
-        // Player-confined, except awaitPlayed() which reads [offline] after joining the player.
+        // Player-confined; [offline] is written under the monitor (cancel() reads it there) and
+        // read by awaitPlayed() after joining the player.
         private var fellBack = false
         private var silenced = false
         private var offline: TtsEngine.SpeechQueue? = null
@@ -409,8 +408,17 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
                 })
             } else {
                 val chunks = LinkedBlockingQueue<FloatArray>()
-                StreamedSentence(text, chunks, rate, async {
-                    streamSentence(backend, text, gender, rate, chunks).also { if (it != null) onlineFailed = true }
+                val outcome = CompletableDeferred<SentenceFailure?>()
+                // The outcome is published BEFORE the end marker, so a player that read the marker
+                // always finds it; the marker follows whatever happens.
+                StreamedSentence(text, chunks, rate, outcome, launch {
+                    try {
+                        val failure = streamSentence(backend, text, gender, rate, chunks)
+                        if (failure != null) onlineFailed = true
+                        outcome.complete(failure)
+                    } finally {
+                        chunks.put(END_OF_STREAM)
+                    }
                 })
             }
         }
@@ -452,13 +460,19 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         private suspend fun playStreamed(sentence: StreamedSentence): SentenceFailure? {
             currentCoroutineContext().ensureActive() // see speakOnline
             val played = delegate.playPcmStream(sentence.chunks, sentence.sampleRate)
-            // The end marker follows the stream job's end, so its outcome is known here; a player
-            // that gave up earlier (dead route, stalled stream) cancels the job still running.
-            if (!played && sentence.job.isActive) sentence.job.cancel()
+            // The outcome is published before the end marker, so a player that read the marker
+            // finds it; one that gave up earlier (dead route, stalled stream) finds none and
+            // cancels the stream still running.
+            if (!played && !sentence.outcome.isCompleted) sentence.job.cancel()
             sentence.job.join()
-            val failure = if (sentence.job.isCancelled) null else sentence.job.await()
+            val failure = if (sentence.outcome.isCompleted) sentence.outcome.await() else null
             Log.i(TAG, "online pcm stream: rate=${sentence.sampleRate} played=$played streamed=${failure == null}")
-            if (failure == null && !played) silenced = true
+            // Not played with nothing heard is the empty stream of a failed synthesis; otherwise
+            // the audio device refused it: a playback failure, silent as before.
+            if (!played && failure?.heard != false) {
+                silenced = true
+                return null
+            }
             return failure
         }
 
@@ -466,9 +480,8 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
             fellBack = true
             onlineFailed = true
             val queue = synchronized(this) {
-                if (superseded || !delegate.isReady()) null else delegate.startQueue()
+                (if (superseded || !delegate.isReady()) null else delegate.startQueue()).also { offline = it }
             }
-            offline = queue
             reportOnlineFailure(backend, failure.cause, spokenOffline = queue != null)
         }
 
@@ -491,15 +504,20 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
             offline?.awaitPlayed()
         }
 
-        /** stop() on the router cancels the whole queue: both coroutines are torn down
+        /** stop() or a newer reply cancels the whole queue: both coroutines are torn down
          *  immediately (even mid-synthesis), nothing more reaches the offline queue and further
-         *  enqueue() calls are rejected. */
+         *  enqueue() calls are rejected. Speech already handed to the offline voice is cut too;
+         *  a queue that never fell back leaves the delegate alone, as before. */
         fun cancel() {
-            synchronized(this) { superseded = true }
+            val handedOff = synchronized(this) {
+                superseded = true
+                offline != null
+            }
             synthJob.cancel()
             playJob.cancel()
             pending.close()
             synthesized.close()
+            if (handedOff) delegate.stop()
         }
     }
 
@@ -519,7 +537,8 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         override val text: String,
         val chunks: BlockingQueue<FloatArray>,
         val sampleRate: Int,
-        val job: Deferred<SentenceFailure?>,
+        val outcome: CompletableDeferred<SentenceFailure?>,
+        val job: Job,
     ) : QueuedSentence {
         override val synthesis: Job get() = job
     }

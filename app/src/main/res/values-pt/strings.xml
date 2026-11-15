@@ -1271,7 +1271,7 @@
     <string name="tts_online_failed_policy">A voz online não está disponível: o pedido foi recusado pelas configurações de privacidade da sua conta OpenRouter (openrouter.ai/settings/privacy).</string>
     <string name="tts_online_failed_other">A voz online não respondeu.</string>
     <string name="tts_online_failed_spoken_local">Respondendo com a voz local.</string>
-    <string name="tts_online_failed_silent">A voz local não foi baixada, a resposta está só na tela.</string>
+    <string name="tts_online_failed_silent">A voz local não está disponível, a resposta está só na tela.</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Chaves para vozes online</string>
