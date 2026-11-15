@@ -36,6 +36,9 @@ internal interface VadHandle {
     fun front(): FloatArray
     fun frontWithStart(): Pair<Long, FloatArray> = 0L to front()
     fun pop()
+    /** Ends the speech segment in progress now, as if silence had followed (road noise, see
+     *  NoiseEndpointer). Default no-op so test fakes need not implement it. */
+    fun flush() {}
     fun close()
 }
 
@@ -89,7 +92,44 @@ private class RealVadHandle(modelManager: GigaAmModelManager) : VadHandle {
     override fun front(): FloatArray = vad.front().samples
     override fun frontWithStart(): Pair<Long, FloatArray> = vad.front().let { it.start.toLong() to it.samples }
     override fun pop() = vad.pop()
+    override fun flush() = vad.flush()
     override fun close() = vad.release()
+}
+
+/**
+ * Road noise can hold the VAD in "speech" past the end of a phrase ([NoiseEndpointer]); this ends
+ * it by loudness against the cabin's own noise floor (quiet cabin: no change) and keeps the
+ * counters of one collection for its `vad-summary` line: whether the VAD heard speech, how much,
+ * and whether the noise floor had to end phrases. Speech and no segment is the road-noise case.
+ */
+private class NoiseGate {
+    private val endpointer = NoiseEndpointer()
+    private var heardMs = 0L
+    private var speechMs = 0L
+    private var segments = 0
+    private var flushes = 0
+
+    /** True when the phrase must be ended now: the caller flushes the VAD. */
+    fun endsPhrase(frame: ShortArray, inSpeech: Boolean): Boolean {
+        val frameMs = frame.size * 1000L / GigaAmAsrEngine.SAMPLE_RATE
+        heardMs += frameMs
+        if (inSpeech) speechMs += frameMs
+        if (endpointer.onFrame(NoiseEndpointer.rms(frame), frameMs, inSpeech) != NoiseEndpointer.Decision.FLUSH) return false
+        flushes++
+        Log.i("VoiceController", "vad end by noise floor: floor=${endpointer.floor.toInt()} loud_ms=${endpointer.lastLoudMs}")
+        Trace.event(TraceArea.VOICE, "vad-endpoint", "floor" to endpointer.floor.toInt(), "loud_ms" to endpointer.lastLoudMs)
+        return true
+    }
+
+    fun onSegment() {
+        segments++
+    }
+
+    fun summary() {
+        Trace.event(TraceArea.VOICE, "vad-summary", "heard_ms" to heardMs, "speech_ms" to speechMs,
+            "segments" to segments, "noise_flushes" to flushes, "floor" to endpointer.floor.toInt(),
+            "noisy" to endpointer.noisy)
+    }
 }
 
 /** GigaAM v3 Russian nemo-CTC recognizer segmented by a silero VAD, for the continuous voice
@@ -230,6 +270,7 @@ internal class GigaAmAsrEngine @Suppress("LongParameterList") constructor(
         val vadStartNs = System.nanoTime()
         val spare = if (warmVad) takeSpareVad() else null
         val vad = spare ?: buildVad()   // recognizer is cached -- no paired close needed on this throw path
+        val noise = NoiseGate()
         try {
             // One line per session on every car: how long the session waited for its VAD, so a
             // normal drive shows whether newer head units need the spare too. Milliseconds only.
@@ -244,7 +285,9 @@ internal class GigaAmAsrEngine @Suppress("LongParameterList") constructor(
                 val frame = FloatArray(shorts.size) { i -> shorts[i] / 32768f }
                 vad.acceptWaveform(frame)
                 preRoll?.append(frame)
-                if (vad.isSpeechDetected()) {
+                val inSpeech = vad.isSpeechDetected()
+                if (noise.endsPhrase(shorts, inSpeech)) vad.flush()
+                if (inSpeech) {
                     if (!speaking) {
                         preRoll?.speechStart()
                         speaking = true
@@ -263,10 +306,12 @@ internal class GigaAmAsrEngine @Suppress("LongParameterList") constructor(
                     vad.pop()
                     speaking = false
                     val text = recognizer.decode(segment)
+                    noise.onSegment()
                     if (text.isNotBlank()) emit(ContinuousAsrEvent.Utterance(text))
                 }
             }
         } finally {
+            noise.summary()
             vad.close()   // recognizer intentionally NOT closed: cached for the next session
         }
     }
