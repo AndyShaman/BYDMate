@@ -392,7 +392,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
 
         private fun writeErrorText(err: Throwable?): Int = when (err) {
-            is VehicleWriteError.Sentinel -> R.string.auto_err_not_confirmed
+            is VehicleWriteError.Unconfirmed -> R.string.auto_err_not_confirmed
             is VehicleWriteError.AllowlistMiss -> R.string.auto_err_not_supported
             is VehicleWriteError.OutOfRange -> R.string.auto_err_out_of_range
             is VehicleWriteError.HelperUnreachable -> R.string.auto_err_unreachable
