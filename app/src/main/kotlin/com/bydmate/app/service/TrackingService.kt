@@ -604,7 +604,7 @@ class TrackingService : Service(), LocationListener {
         if (restored != null) {
             val nowMs = System.currentTimeMillis()
             if (restored.isStale(nowMs, SESSION_IDLE_CLOSE_MS)) {
-                // Process was killed inside the 30-sec grace window before idle-close
+                // Process was killed inside the SESSION_IDLE_CLOSE_MS window before idle-close
                 // could fire. Without this guard the next start would render
                 // (now - old sessionStartedAt) as "11 ч 43 мин" trip time.
                 val idleFor = (nowMs - restored.lastActiveTs) / 1000

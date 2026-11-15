@@ -453,7 +453,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             SteeringHeatChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "helper write not accepted"))
             SteeringHeatChannel.Result.UNCONFIRMED ->
-                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+                Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed (${outcome.verdict})"))
         }
     }
 
@@ -476,7 +476,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             HudSwitchChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
             HudSwitchChannel.Result.UNCONFIRMED ->
-                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+                Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed (${outcome.verdict})"))
         }
     }
 
@@ -501,7 +501,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             SpoilerChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
             SpoilerChannel.Result.UNCONFIRMED ->
-                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+                Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed (${outcome.verdict})"))
         }
     }
 
@@ -525,7 +525,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             RearSeatHeatChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
             RearSeatHeatChannel.Result.UNCONFIRMED ->
-                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+                Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed (${outcome.verdict})"))
         }
     }
 

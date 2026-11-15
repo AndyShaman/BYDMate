@@ -78,7 +78,7 @@ class BatteryPreheatChannel(
             Result.NO_EFFECT -> kotlin.Result.failure(VehicleWriteError.ReadbackMismatch(action, verdict))
             Result.UNREACHABLE -> kotlin.Result.failure(VehicleWriteError.HelperUnreachable(action, verdict))
             Result.UNCONFIRMED ->
-                kotlin.Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed ($verdict)"))
+                kotlin.Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed ($verdict)"))
         }
     }
 
