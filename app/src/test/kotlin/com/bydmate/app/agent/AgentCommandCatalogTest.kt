@@ -82,6 +82,10 @@ class AgentCommandCatalogTest {
             Triple("sunroof_stop", null, "天窗停止"),
             Triple("sunroof_updip", null, "天窗通风"),
             Triple("sunroof_comfort", null, "天窗舒适打开"),
+            // Spoiler (#383): the automation actions of 4.4.1, missing from the agent until now.
+            Triple("spoiler_up", null, "打开尾翼"),
+            Triple("spoiler_down", null, "关闭尾翼"),
+            Triple("spoiler_auto_on", null, "尾翼自动模式"),
         )
     }
 }
