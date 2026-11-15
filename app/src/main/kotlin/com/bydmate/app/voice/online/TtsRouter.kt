@@ -6,7 +6,6 @@ import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -25,7 +24,6 @@ import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.LinkedBlockingQueue
-import kotlin.coroutines.ContinuationInterceptor
 
 /** Wraps an offline [TtsEngine] (the Sherpa/Piper voice) and, when an online source is selected,
  *  speaks through a cloud [OnlineTtsBackend]. If the online backend fails or times out, the rest of
@@ -379,7 +377,8 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
      *  the synthesized sentences in send order. A backend that can stream plays each sentence
      *  from its first network chunk (cache hits stay whole). The first failed/timed-out sentence
      *  (unless part of it was already heard) and every later one go, in order, to one offline
-     *  queue; no new online request starts after it. A playback failure silences the rest. */
+     *  queue; no new online request starts once the failure is known (requests already
+     *  prefetched are cancelled). A playback failure silences the rest. */
     private inner class OnlineSpeechQueue(private val backend: OnlineTtsBackend) : TtsEngine.SpeechQueue {
         private val pending = Channel<String>(Channel.UNLIMITED)
         private val synthesized = Channel<QueuedSentence>(capacity = 1)
@@ -392,20 +391,10 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         private var fellBack = false
         private var silenced = false
         private var offline: TtsEngine.SpeechQueue? = null
-        // One sentence at a time runs up to its first suspension, in reply order, so the backend
-        // receives the requests in that order; their network legs (the backends switch to
-        // Dispatchers.IO) still overlap.
-        private val requestOrder =
-            ((scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher) ?: Dispatchers.IO).limitedParallelism(1)
 
         private val synthJob: Job = scope.launch {
-            val ahead = ArrayDeque<Job>()
             for (text in pending) {
-                // At most two sentences synthesize ahead of the player; a third waits for the
-                // oldest, so a failure is seen before more than one later request has started.
-                if (ahead.size == 2) ahead.removeFirst().join()
                 val sentence = if (onlineFailed) OfflineSentence(text) else startSynthesis(text)
-                sentence.synthesis?.let(ahead::addLast)
                 synthesized.send(sentence)
             }
             synthesized.close()
@@ -415,12 +404,12 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
             val gender = selectedGender()
             val rate = if (cachedPcm(phraseKey(backend, gender, text)) == null) backend.streamSampleRate() else null
             return if (rate == null) {
-                WholeSentence(text, async(requestOrder) {
+                WholeSentence(text, async {
                     synthesizeOnline(backend, text).onFailure { onlineFailed = true }
                 })
             } else {
                 val chunks = LinkedBlockingQueue<FloatArray>()
-                StreamedSentence(text, chunks, rate, async(requestOrder) {
+                StreamedSentence(text, chunks, rate, async {
                     streamSentence(backend, text, gender, rate, chunks).also { if (it != null) onlineFailed = true }
                 })
             }
