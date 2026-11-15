@@ -33,6 +33,9 @@ class TtsRouterOfflineFallbackTest {
         @Volatile var queueFinished = false
         @Volatile var stopCalls = 0
         @Volatile var playPcmResult = true
+        /** False = the audio device refuses the stream (a playback failure, not a synthesis one). */
+        @Volatile var streamPlayable = true
+        @Volatile var offlineQueuePlayed = false
 
         override fun isReady() = ready
         override fun speak(text: String): Boolean {
@@ -46,13 +49,23 @@ class TtsRouterOfflineFallbackTest {
             return playPcmResult
         }
         override fun playPcmStream(chunks: BlockingQueue<FloatArray>, sampleRate: Int): Boolean {
+            // Like the real engine: "played" needs at least one frame written, so a stream that
+            // ends before its first chunk reports false.
+            var wrote = false
             var chunk = chunks.poll(5, TimeUnit.SECONDS)
-            while (chunk != null && chunk.isNotEmpty()) chunk = chunks.poll(5, TimeUnit.SECONDS)
-            return true
+            while (chunk != null && chunk.isNotEmpty()) {
+                wrote = true
+                chunk = chunks.poll(5, TimeUnit.SECONDS)
+            }
+            return wrote && streamPlayable
         }
         override fun startQueue(): TtsEngine.SpeechQueue = object : TtsEngine.SpeechQueue {
             override fun enqueue(text: String): Boolean { queueEnqueued += text; return true }
             override fun finish() { queueFinished = true }
+            override suspend fun awaitPlayed() {
+                delay(150)
+                offlineQueuePlayed = true
+            }
         }
     }
 
@@ -199,6 +212,8 @@ class TtsRouterOfflineFallbackTest {
         playAll(r.startQueue()!!, *reply.toTypedArray())
         assertEquals(reply, delegate.queueEnqueued.toList())
         assertTrue(delegate.queueFinished)
+        // awaitPlayed() of the reply returned only after the offline voice finished its share.
+        assertTrue(delegate.offlineQueuePlayed)
         assertTrue(delegate.playPcmCalls.isEmpty())
         assertEquals(1, failures.size)
         assertTrue(failures[0].spokenOffline)
@@ -244,11 +259,40 @@ class TtsRouterOfflineFallbackTest {
     // J
     @Test
     fun `streaming queue failing before any chunk speaks the whole reply offline`() {
+        // Repeated: the engine reports the empty stream as "not played" at the same moment the
+        // synthesis job reports its failure; whichever is seen first, the reply must go offline.
+        repeat(100) { round ->
+            failures.clear()
+            val delegate = FakeTtsEngine()
+            val r = router(delegate, FailingStreamBackend(), testScope())
+            playAll(r.startQueue()!!, "one", "two", "three")
+            assertEquals("round $round", listOf("one", "two", "three"), delegate.queueEnqueued.toList())
+            assertEquals("round $round", 1, failures.size)
+        }
+    }
+
+    @Test
+    fun `a stream that the audio device refuses is a playback failure even when synthesis then breaks`() {
+        repeat(100) { round ->
+            failures.clear()
+            val delegate = FakeTtsEngine().apply { streamPlayable = false }
+            val r = router(delegate, FailingStreamBackend(chunkThenFail = setOf("one")), testScope())
+            playAll(r.startQueue()!!, "one", "two", "three")
+            assertTrue("round $round", delegate.queueEnqueued.isEmpty())
+            assertTrue("round $round", failures.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a new reply cuts the offline speech of the reply it replaces`() {
         val delegate = FakeTtsEngine()
-        val r = router(delegate, FailingStreamBackend(), testScope())
-        playAll(r.startQueue()!!, "one", "two", "three")
-        assertEquals(listOf("one", "two", "three"), delegate.queueEnqueued.toList())
-        assertEquals(1, failures.size)
+        val r = router(delegate, ThrowingBackend(), testScope())
+        val first = r.startQueue()!!
+        first.enqueue("one")
+        awaitTrue { delegate.queueEnqueued.contains("one") }
+        assertEquals(0, delegate.stopCalls)
+        r.startQueue() // no stop() in between: e.g. an automation speaks while the agent answers
+        assertEquals(1, delegate.stopCalls)
     }
 
     // K
