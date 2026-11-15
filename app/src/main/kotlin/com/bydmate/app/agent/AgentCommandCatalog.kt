@@ -106,6 +106,8 @@ object AgentCommandCatalog {
         Cmd("light_drl_off", "выключить дневные ходовые огни", { "关闭日行灯" }),
         Cmd("hazard_on", "включить аварийку (аварийную сигнализацию)", { "双闪打开" }),
         Cmd("hazard_off", "выключить аварийку", { "双闪关闭" }),
+        Cmd("rear_logo_light_on", "включить подсветку заднего логотипа", { "后车标灯打开" }),
+        Cmd("rear_logo_light_off", "выключить подсветку заднего логотипа", { "后车标灯关闭" }),
         Cmd("light_interior_on", "включить плафон света в салоне", { "打开车内灯" }),
         Cmd("light_interior_off", "выключить плафон света в салоне", { "关闭车内灯" }),
         // HUD (projection on the windshield; the cluster projection is set_cluster_projection)

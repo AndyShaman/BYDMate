@@ -318,6 +318,21 @@ rule trunk: [задний] (багажник|багажнек)
 <open_lid> <trunk> => 开后备箱
 <close_lid> <trunk> => 关后备箱
 
+# ---- Spoiler -------------------------------------------------------------------------------
+# "подними" and "опусти" are the spoiler's own up and down here, the opposite of what they mean
+# for a window, so the window verb rules are not used. A car without a powered spoiler answers
+# that it has none; a standing car with the spoiler up refuses down and auto. There is no
+# "auto off": that phrase goes to the agent, which explains that up or down switches to manual.
+
+rule spoiler_up: подними|поднять|поднимите|выдвини|выдвинуть|открой|открыть
+rule spoiler_down: опусти|опустить|опустите|убери|убрать|закрой|закрыть
+rule spoiler_auto: авторежим|авто режим|автоматический режим
+<spoiler_up> спойлер => 打开尾翼
+<spoiler_down> спойлер => 关闭尾翼
+<on> <spoiler_auto> спойлера => 尾翼自动模式
+(поставь|переведи) спойлер в (авто|<spoiler_auto>) => 尾翼自动模式
+solo спойлер в (авто|<spoiler_auto>) => 尾翼自动模式
+
 # ---- Lights --------------------------------------------------------------------------------
 
 rule ambient: подсветку|амбиент|амбиентную подсветку
