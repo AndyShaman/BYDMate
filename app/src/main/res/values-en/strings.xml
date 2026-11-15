@@ -1288,7 +1288,11 @@
     <string name="settings_tts_voice_online_gemini_badge">OpenRouter key</string>
     <string name="settings_tts_voice_online_minimax_desc">Natural Russian voice · reply starts slightly later than the local voice</string>
     <string name="settings_tts_voice_online_minimax_badge">MiniMax key needed</string>
-    <string name="settings_tts_online_fallback_hint">Online voices need a network connection; if the service does not answer within 2 seconds, the reply stays silent</string>
+    <string name="settings_tts_online_fallback_hint">Online voices need a network connection; if the service does not answer, the reply is spoken by the local voice</string>
+    <string name="tts_online_failed_policy">The online voice is unavailable: the request was refused by the privacy settings of your OpenRouter account (openrouter.ai/settings/privacy).</string>
+    <string name="tts_online_failed_other">The online voice did not answer.</string>
+    <string name="tts_online_failed_spoken_local">Answering with the local voice.</string>
+    <string name="tts_online_failed_silent">The local voice is not downloaded, the answer is on screen only.</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Keys for online voices</string>

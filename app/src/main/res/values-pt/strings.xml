@@ -1267,7 +1267,11 @@
     <string name="settings_tts_voice_online_gemini_badge">chave OpenRouter</string>
     <string name="settings_tts_voice_online_minimax_desc">Voz russa natural · a resposta começa um pouco depois da voz local</string>
     <string name="settings_tts_voice_online_minimax_badge">chave MiniMax necessária</string>
-    <string name="settings_tts_online_fallback_hint">Vozes online precisam de rede; se o serviço não responder em 2 segundos, a fala fica sem áudio</string>
+    <string name="settings_tts_online_fallback_hint">Vozes online precisam de rede; se o serviço não responder, a fala sai pela voz local</string>
+    <string name="tts_online_failed_policy">A voz online não está disponível: o pedido foi recusado pelas configurações de privacidade da sua conta OpenRouter (openrouter.ai/settings/privacy).</string>
+    <string name="tts_online_failed_other">A voz online não respondeu.</string>
+    <string name="tts_online_failed_spoken_local">Respondendo com a voz local.</string>
+    <string name="tts_online_failed_silent">A voz local não foi baixada, a resposta está só na tela.</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Chaves para vozes online</string>

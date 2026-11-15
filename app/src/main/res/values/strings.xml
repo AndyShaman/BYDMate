@@ -1437,7 +1437,11 @@
     <string name="settings_tts_voice_online_gemini_badge">ключ OpenRouter</string>
     <string name="settings_tts_voice_online_minimax_desc">Живой русский · начало ответа чуть позже локального</string>
     <string name="settings_tts_voice_online_minimax_badge">нужен ключ MiniMax</string>
-    <string name="settings_tts_online_fallback_hint">Онлайн-голоса: нужна сеть; если сервис не ответил за 2 секунды, реплика останется без звука</string>
+    <string name="settings_tts_online_fallback_hint">Онлайн-голоса: нужна сеть; если сервис не ответил, ответ прозвучит локальным голосом</string>
+    <string name="tts_online_failed_policy">Онлайн-голос недоступен: запрос отклонён настройками приватности в аккаунте OpenRouter (openrouter.ai/settings/privacy).</string>
+    <string name="tts_online_failed_other">Онлайн-голос не ответил.</string>
+    <string name="tts_online_failed_spoken_local">Отвечаю локальным голосом.</string>
+    <string name="tts_online_failed_silent">Локальный голос не скачан, ответ только на экране.</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Ключи для онлайн-голосов</string>

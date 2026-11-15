@@ -1433,7 +1433,11 @@
     <string name="settings_tts_voice_online_gemini_badge">klucz OpenRouter</string>
     <string name="settings_tts_voice_online_minimax_desc">Żywy rosyjski · początek odpowiedzi nieco później niż lokalnie</string>
     <string name="settings_tts_voice_online_minimax_badge">potrzebny klucz MiniMax</string>
-    <string name="settings_tts_online_fallback_hint">Głosy online: potrzebna sieć; jeśli usługa nie odpowie w 2 sekundy, wypowiedź zostanie bez dźwięku</string>
+    <string name="settings_tts_online_fallback_hint">Głosy online: potrzebna sieć; jeśli usługa nie odpowie, wypowiedź zabrzmi lokalnym głosem</string>
+    <string name="tts_online_failed_policy">Głos online jest niedostępny: żądanie odrzuciły ustawienia prywatności konta OpenRouter (openrouter.ai/settings/privacy).</string>
+    <string name="tts_online_failed_other">Głos online nie odpowiedział.</string>
+    <string name="tts_online_failed_spoken_local">Odpowiadam lokalnym głosem.</string>
+    <string name="tts_online_failed_silent">Głos lokalny nie jest pobrany, odpowiedź tylko na ekranie.</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Klucze do głosów online</string>

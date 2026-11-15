@@ -61,7 +61,7 @@ class OpenRouterTtsBackend(
                 .build()
             ttsHttp.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) {
-                    val errBody = runCatching { resp.body?.string() }.getOrNull()?.take(200)?.trim().orEmpty()
+                    val errBody = runCatching { resp.body?.string() }.getOrNull()?.take(MAX_ERROR_CHARS)?.trim().orEmpty()
                     throw IOException(
                         if (errBody.isEmpty()) "OpenRouter TTS HTTP ${resp.code}"
                         else "OpenRouter TTS HTTP ${resp.code}: $errBody"
@@ -85,6 +85,9 @@ class OpenRouterTtsBackend(
         private val RATE_REGEX = Regex("""\brate\s*=\s*(\d+)""", RegexOption.IGNORE_CASE)
         private const val MIN_AUDIO_BYTES = 256
         private const val DEFAULT_PCM_RATE = 24_000
+        // The error text names the reason (a data policy refusal lists every removed endpoint);
+        // the cap only guards the log against a huge HTML error page.
+        private const val MAX_ERROR_CHARS = 2_000
 
         // Successor of gemini-3.1-flash-tts-preview, which Google retires on 2026-11-17 (#423).
         // Same endpoint and voices; listed at openrouter.ai/api/v1/models?output_modalities=speech.

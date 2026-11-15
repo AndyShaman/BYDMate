@@ -1399,7 +1399,11 @@
     <string name="settings_tts_voice_online_gemini_badge">OpenRouter 密钥</string>
     <string name="settings_tts_voice_online_minimax_desc">自然俄语音色 · 回复开始时间比本地语音稍晚</string>
     <string name="settings_tts_voice_online_minimax_badge">需要 MiniMax 密钥</string>
-    <string name="settings_tts_online_fallback_hint">在线语音需要网络；若服务2秒内未响应，该回复将不发声</string>
+    <string name="settings_tts_online_fallback_hint">在线语音需要网络；若服务未响应，该回复将以本地语音播放</string>
+    <string name="tts_online_failed_policy">在线语音不可用：请求被 OpenRouter 账户的隐私设置拒绝（openrouter.ai/settings/privacy）。</string>
+    <string name="tts_online_failed_other">在线语音未响应。</string>
+    <string name="tts_online_failed_spoken_local">改用本地语音回答。</string>
+    <string name="tts_online_failed_silent">本地语音未下载，回答仅显示在屏幕上。</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">在线语音密钥</string>
