@@ -61,6 +61,8 @@ class AgentCommandCatalogTest {
             Triple("windows_vent_rear", null, "后排车窗通风"),
             Triple("hazard_on", null, "双闪打开"),
             Triple("hazard_off", null, "双闪关闭"),
+            Triple("rear_logo_light_on", null, "后车标灯打开"),
+            Triple("rear_logo_light_off", null, "后车标灯关闭"),
             Triple("steering_heat_on", null, "方向盘加热"),
             Triple("steering_heat_off", null, "关闭方向盘加热"),
             Triple("hud_on", null, "打开抬头显示"),

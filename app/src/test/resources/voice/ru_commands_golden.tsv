@@ -700,3 +700,24 @@ utterance	expected	category	danger
 запусти радио	UNRECOGNIZED	navigation	
 поехали в магазин	UNRECOGNIZED	navigation	
 маршрут	UNRECOGNIZED	navigation	
+подними спойлер	打开尾翼	spoiler	
+поднять спойлер	打开尾翼	spoiler	
+выдвини спойлер	打开尾翼	spoiler	
+открой спойлер	打开尾翼	spoiler	
+подними спойлер пожалуйста	打开尾翼	spoiler	
+опусти спойлер	关闭尾翼	spoiler	
+опустить спойлер	关闭尾翼	spoiler	
+убери спойлер	关闭尾翼	spoiler	
+закрой спойлер	关闭尾翼	spoiler	
+включи авторежим спойлера	尾翼自动模式	spoiler	
+включи автоматический режим спойлера	尾翼自动模式	spoiler	
+поставь спойлер в авто	尾翼自动模式	spoiler	
+переведи спойлер в авторежим	尾翼自动模式	spoiler	
+спойлер в авто	尾翼自动模式	spoiler	
+подними спойлер и закрой окна	打开尾翼+车窗关闭	spoiler	
+спойлер	UNRECOGNIZED	spoiler	
+выключи авторежим спойлера	UNRECOGNIZED	spoiler	
+спойлер в ручной режим	UNRECOGNIZED	spoiler	
+подними спойлер наполовину	UNRECOGNIZED	spoiler	
+у него спойлер поднят	UNRECOGNIZED	spoiler	
+закрой окна и спойлер	UNRECOGNIZED	spoiler	
