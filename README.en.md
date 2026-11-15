@@ -65,7 +65,7 @@ The limits are the same for automation, the voice agent and quick voice commands
 | "Auto-switch the cluster" (works for projection to cluster and for blind-spot cameras shown on the cluster) | the cluster switches to projection mode by itself | turn the toggle off if ADAS or the stock widget disappears from the cluster |
 | HUD, methods 2 and 3 | the car's navigation mode is on while a route runs | end the route or turn off the windshield output |
 | "Disable built-in voice assistant" | the stock BYD assistant is disabled, and the Shortcuts app (quick commands) disappears with it | turn the toggle off and reboot the head unit. Do this before uninstalling BYDMate |
-| "Restore ADB after a reboot" | after a reboot the app turns ADB debugging and wireless debugging back on by itself | turn the toggle off: wireless debugging turns off. Regular ADB debugging stays on, the app needs it |
+| "Restore ADB after a reboot" | after a reboot the app turns on ADB debugging, wireless debugging and its own accessibility service, which presses the wireless debugging permission window | turn the toggle off: wireless debugging turns off. Regular ADB debugging and the accessibility service stay on |
 | "Steering wheel volume knob" | pressing the knob pauses the music | turn the toggle off |
 | "Don't change the time zone from the network" | the car stops changing the time zone by itself | turn the toggle off |
 | "BYD cloud over Wi-Fi" | the car's settings for the link to the BYD cloud | turn the toggle off, the previous settings come back |
@@ -187,7 +187,7 @@ Examples:
 | **Log** | Full trigger history with outcomes |
 | **Templates** | 8 ready-made rules for a quick start, two of them about the Telegram report. All are added turned off |
 | **How many rules** | Up to 50 |
-| **Test run** | A button in the editor: runs all the rule's actions right away, bypassing triggers and cooldown. A single vehicle command has a green arrow icon that runs only that command. The icon checks the speed against the last data from the car; if there is no data, it opens windows and the sunroof without a speed check, so press it only while the car is standing still |
+| **Test run** | A button in the editor: runs all the rule's actions right away, bypassing triggers and cooldown. A single vehicle command has a green arrow icon that runs only that command. The icon checks the speed against the last data from the car; if there is no data or it is stale (the app's service is stopped), the command can go out without a speed check, so press it only while the car is standing still |
 
 **"Toggle" is a third option next to the action itself, there is no separate item for it.** In the command list, under the "open / close" pair there is a line like "Trunk: toggle", and sentry mode and projection to cluster gained a "Toggle" button next to "Enable" and "Disable".
 
@@ -337,7 +337,7 @@ You cannot make the window fill the whole cluster on these cars: the display zon
 
 ### Under the Hood
 
-The projection runs in one of the two modes described above. In "Factory" mode, BYDMate creates a virtual display and mirrors the chosen app into it, without changing any system settings. In "Extended" mode, the app launches as a separate window right on the instrument-cluster display, so the voice agent and the HUD see the route during projection. To catch steering-wheel button presses, the app turns on its own accessibility service. It runs only while the toggle is on, and it exists solely for the chosen button. It does not change the firmware or the car itself, and it is fully reversible.
+The projection runs in one of the two modes described above. In "Factory" mode, BYDMate creates a virtual display and mirrors the chosen app into it, without changing any system settings. In "Extended" mode, the app launches as a separate window right on the instrument-cluster display, so the voice agent and the HUD see the route during projection. To catch steering-wheel button presses, the app turns on its own accessibility service. It catches the steering-wheel button only while the toggle is on. Two more features need the same service: "Restore ADB after a reboot" (it presses the wireless debugging permission window) and route building by the voice agent while split screen is on. It does not change the firmware or the car itself.
 
 ---
 
