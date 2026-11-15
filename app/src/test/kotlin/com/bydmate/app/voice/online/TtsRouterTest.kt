@@ -182,37 +182,7 @@ class TtsRouterTest {
         assertTrue(delegate.speakCalls.isEmpty()) // no offline fallback needed
     }
 
-    // --- speak(): online failure => reply stays silent, no fallback ---
-
-    @Test
-    fun `speak on online source stays silent after synth timeout (no fallback)`() {
-        val backend = FakeBackend(delayMs = 60_000)
-        val delegate = FakeTtsEngine()
-        val router = TtsRouter(
-            delegate = delegate,
-            backends = listOf(backend),
-            selectedSource = { "gemini" },
-            synthTimeoutMs = 100,
-            scope = virtualScope,
-        )
-        assertTrue(router.speak("привет"))
-        // synthTimeoutMs fires long before the backend responds; coroutine resolves to null.
-        scheduler.advanceUntilIdle()
-        assertTrue(delegate.playPcmCalls.isEmpty())
-        assertTrue(delegate.speakCalls.isEmpty())    // no offline fallback
-        assertTrue(delegate.queueEnqueued.isEmpty())
-    }
-
-    @Test
-    fun `speak on online source stays silent on backend exception (no fallback)`() {
-        val backend = FakeBackend(fail = true)
-        val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = virtualScope)
-        router.speak("привет")
-        scheduler.advanceUntilIdle() // exception is thrown instantly; let the coroutine finish
-        assertTrue(delegate.playPcmCalls.isEmpty())
-        assertTrue(delegate.speakCalls.isEmpty())
-    }
+    // --- speak(): playback failure stays silent (online synthesis failures: TtsRouterOfflineFallbackTest) ---
 
     @Test
     fun `speak on online source stays silent when playPcm reports it did not play (no fallback)`() {
@@ -262,22 +232,6 @@ class TtsRouterTest {
         queue.finish()
         runBlocking { withTimeout(5_000) { queue.awaitPlayed() } }
         assertEquals(2, delegate.playPcmCalls.size)
-    }
-
-    @Test
-    fun `queue silences the remainder when the first sentence fails (no fallback)`() {
-        val backend = FlakyBackend(failFrom = 1) // all sentences fail from the very first
-        val delegate = FakeTtsEngine()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "gemini" }, scope = virtualScope)
-        val queue = router.startQueue()!!
-        queue.enqueue("Первое.")
-        queue.enqueue("Второе.")
-        queue.enqueue("Третье.")
-        queue.finish()
-        scheduler.advanceUntilIdle() // all three fail instantly; let both coroutines finish
-        assertTrue(delegate.playPcmCalls.isEmpty())
-        assertTrue(delegate.queueEnqueued.isEmpty()) // no offline fallback
-        assertEquals(0, delegate.speakCalls.size)
     }
 
     @Test
@@ -692,25 +646,6 @@ class TtsRouterTest {
         awaitTrue { delegate.playStreamCalls.size == 2 }
         assertEquals(listOf(listOf(9f) to 24_000, listOf(3f) to 24_000), delegate.playStreamCalls.toList())
         assertEquals(listOf("Первое."), backend.synthesized.toList())
-    }
-
-    @Test
-    fun `a stream failing after audio started silences the rest of the reply`() {
-        val backend = StreamingBackend(
-            mapOf("Первое." to listOf(f(1f), f(2f)), "Второе." to listOf(f(3f))),
-            failAfterFirst = setOf("Первое."),
-        )
-        val delegate = FakeTtsEngine()
-        val scope = testScope()
-        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" }, scope = scope)
-        val queue = router.startQueue()!!
-        queue.enqueue("Первое.")
-        queue.enqueue("Второе.")
-        queue.finish()
-        awaitIdle(scope)
-        assertEquals(listOf(listOf(1f) to 24_000), delegate.playStreamCalls.toList())
-        assertTrue(backend.synthesized.isEmpty()) // no whole fallback once audio started
-        assertTrue(delegate.playPcmCalls.isEmpty())
     }
 
     @Test
