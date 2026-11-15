@@ -198,6 +198,15 @@ class VehicleApiSpoilerTest {
         coVerify(exactly = 1) { helper.writeStatus(1023, 1276182582, 2, any()) }
     }
 
+    @Test fun `a status that cannot be read after the write is unconfirmed, not unreachable`() = runTest {
+        coEvery { helper.read(1023, 1200619534, any()) } returns 2L
+        accepts(1276182582, 1)
+        coEvery { helper.read(1023, 1200619531, any()) } returnsMany listOf(6L, null)
+        val err = impl.dispatch("打开尾翼").exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.Unconfirmed)
+        coVerify(exactly = 1) { helper.writeStatus(1023, 1276182582, 1, any()) }
+    }
+
     private companion object {
         /** Speed.SPEED_AUTO_SPEED on the speed device (1013), literal on purpose. */
         const val SPEED_FID = -1807745016

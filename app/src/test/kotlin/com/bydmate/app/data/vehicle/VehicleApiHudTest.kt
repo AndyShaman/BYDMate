@@ -101,7 +101,7 @@ class VehicleApiHudTest {
         coEvery { helper.writeStatus(1023, 1276174371, 1) } returns 1
         coEvery { helper.read(1023, 951058460, any()) } returns 65535L
         val err = impl.dispatch("打开抬头显示").exceptionOrNull()
-        assertTrue("got $err", err is VehicleWriteError.HelperUnreachable)
+        assertTrue("got $err", err is VehicleWriteError.Unconfirmed)
         assertEquals("verdict=unconfirmed read=65535", verdictRow().error)
     }
 }
