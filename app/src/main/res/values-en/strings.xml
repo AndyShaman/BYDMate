@@ -2169,4 +2169,33 @@
         <item quantity="one">%1$d more code did not fit, all of them are in the “Diagnostics” window</item>
         <item quantity="other">%1$d more codes did not fit, all of them are in the “Diagnostics” window</item>
     </plurals>
+    <string name="settings_section_app_sets_title">Split screen</string>
+    <string name="settings_app_sets_howto">Voice:\n• "split" or "turn on split screen" — the first set in the list;\n• "split" and the name — that set. Any name works, small recognition slips are forgiven.\nWidget: a tap on the left part opens the first set.\nNo second app chosen: whatever is open now stays.</string>
+    <string name="settings_app_sets_add_title">New set</string>
+    <string name="settings_app_sets_add">Add</string>
+    <string name="settings_app_sets_name_label">Name (voice command)</string>
+    <string name="settings_app_sets_left_title">First app</string>
+    <string name="settings_app_sets_right_title">Second app</string>
+    <string name="settings_app_sets_right_desc">Opens first. Not chosen: whatever is open now stays</string>
+    <string name="settings_app_sets_right_keep">Keep what is open now</string>
+    <string name="settings_app_sets_right_clear_title">Do not choose a right app</string>
+    <string name="settings_app_sets_right_clear">Reset</string>
+    <string name="settings_app_sets_not_chosen">Not chosen</string>
+    <string name="settings_app_sets_autostart_title">Open at start</string>
+    <string name="settings_app_sets_autostart_desc">The set opens after the service starts, if the car is stopped</string>
+    <string name="settings_app_sets_save">Save</string>
+    <string name="settings_app_sets_run">Run</string>
+    <string name="settings_app_sets_delete">Delete</string>
+    <string name="settings_app_sets_cancel">Cancel</string>
+    <string name="settings_app_sets_err_name">Enter a name</string>
+    <string name="settings_app_sets_err_name_long">The name is too long</string>
+    <string name="settings_app_sets_err_left">Choose the left app</string>
+    <string name="settings_app_sets_err_same">Choose two different apps</string>
+    <string name="settings_app_sets_err_many">No more than 8 sets</string>
+    <string name="settings_app_sets_err_in_use">This name is already used: %1$s</string>
+    <string name="settings_app_sets_saved">Saved</string>
+    <string name="settings_app_sets_run_failed">The set did not open</string>
+    <string name="app_sets_none_hint">No set yet. Add one in Settings → Split screen</string>
+    <string name="settings_widget_left_tap_zoning_description_legacy">The left part opens an app or the split screen; the rest is BYDMate.</string>
+    <string name="settings_widget_left_tap_mode_split_legacy">Split screen</string>
 </resources>

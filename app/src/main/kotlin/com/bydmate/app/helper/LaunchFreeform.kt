@@ -78,6 +78,30 @@ internal fun launchAppCore(
 }
 
 /**
+ * `am start --windowingMode <mode> -n <component>`, nothing else: the launch of the app sets on the
+ * Android 10 head units. Mode 3 (split-screen primary) puts the app in the left half and leaves the
+ * app that was on screen in the right one (on-car, DiLink 3.0, 2026-11-17). No MAIN/monkey fallback
+ * (it would open the app fullscreen and report a success) and no `--display`.
+ * Returns true when the command ran without an "Error".
+ */
+internal fun launchAppInWindowingModeCore(
+    packageName: String,
+    windowingMode: Int,
+    resolveComponent: (String) -> String?,
+    shell: (String, List<String>) -> String,
+): Boolean {
+    if (!packageName.matches(PACKAGE_NAME_REGEX) || windowingMode !in WINDOWING_MODE_RANGE) return false
+    val component = resolveComponent(packageName) ?: return false
+    // Component is passed as positional "$1" — never interpolated into the sh -c string.
+    return !shell("am start --windowingMode $windowingMode -n \"\$1\"", listOf(component)).contains("Error")
+}
+
+private val WINDOWING_MODE_RANGE = 1..6
+
+internal fun launchAppInWindowingMode(packageName: String, windowingMode: Int): Boolean =
+    launchAppInWindowingModeCore(packageName, windowingMode, ::resolveLaunchComponent, amShell)
+
+/**
  * Launches [packageName] via am/monkey strategies. Returns true if a launch command ran without an
  * obvious "Error". Mirrors CarControlImpl.launchApp (simplified to a boolean).
  */

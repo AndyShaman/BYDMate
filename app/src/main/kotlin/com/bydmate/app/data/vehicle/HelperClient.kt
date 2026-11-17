@@ -334,6 +334,11 @@ interface HelperClient {
     ): Int?
     suspend fun releaseVirtualDisplay(displayId: Int): Boolean
     suspend fun launchApp(packageName: String): Boolean
+
+    /** `am start --windowingMode [windowingMode]` of [packageName] (3 = left half of a split) by the
+     *  daemon. False when the launch failed or the daemon is unreachable; the default is for fakes. */
+    suspend fun launchAppInWindowingMode(packageName: String, windowingMode: Int): Boolean = false
+
     /** Task id of [packageName]'s running task, or null if not running / channel unavailable. */
     suspend fun getTaskId(packageName: String): Int?
     suspend fun moveTaskToDisplay(taskId: Int, displayId: Int): Boolean
@@ -788,6 +793,9 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun launchApp(packageName: String): Boolean =
         statusOk(HelperBinderProtocol.TX_LAUNCH_APP) { it.writeString(packageName) }
+
+    override suspend fun launchAppInWindowingMode(packageName: String, windowingMode: Int): Boolean =
+        statusOk(HelperBinderProtocol.TX_LAUNCH_APP) { it.writeString(packageName); it.writeInt(windowingMode) }
 
     override suspend fun getTaskId(packageName: String): Int? =
         transact(HelperBinderProtocol.TX_GET_TASK_ID) { it.writeString(packageName) }

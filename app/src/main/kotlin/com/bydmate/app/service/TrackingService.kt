@@ -116,6 +116,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var asrLoadGuard: com.bydmate.app.voice.AsrLoadGuard
     @Inject lateinit var gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager
     @Inject lateinit var voiceGate: com.bydmate.app.voice.VoiceGate
+    @Inject lateinit var appSetAutostart: com.bydmate.app.split.AppSetAutostart
     @Named("ttsLoadGuard") @Inject lateinit var ttsLoadGuard: com.bydmate.app.voice.AsrLoadGuard
     @Inject lateinit var ttsModelManager: com.bydmate.app.voice.TtsModelManager
     @Inject lateinit var ttsEngine: com.bydmate.app.voice.TtsEngine
@@ -741,6 +742,12 @@ class TrackingService : Service(), LocationListener {
             } finally {
                 powerOffArmer.bootstrapAttempted()
             }
+        }
+
+        // The app set marked «open at start» (Android 10 head units only; no-op elsewhere).
+        serviceScope.launch(Dispatchers.IO) {
+            runCatching { appSetAutostart.runIfDue { voiceGate.vehicleSnapshot()?.speed } }
+                .onFailure { Log.w(TAG, "app set autostart failed: ${it.message}") }
         }
 
         // Pre-warm the GigaAM recognizer (Task 5): building it now, off the main thread, means

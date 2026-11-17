@@ -18,7 +18,10 @@ import android.os.IBinder
  *                               writeInt(density), writeInt(flags), Surface.writeToParcel(surface)
  *       -> reply: writeInt(status), writeInt(displayId)   // status 0 = ok, displayId>0
  *   TX_RELEASE_VIRTUAL_DISPLAY : writeInt(displayId)      -> reply: writeInt(status), writeInt(0)
- *   TX_LAUNCH_APP : writeString(packageName)              -> reply: writeInt(status), writeInt(0)
+ *   TX_LAUNCH_APP : writeString(packageName) [, writeInt(windowingMode)]
+ *                                                         -> reply: writeInt(status), writeInt(0)
+ *       The trailing windowing mode is additive: absent (or 0) = a plain launch, N > 0 =
+ *       `am start --windowingMode N` (the app sets of the Android 10 head units).
  *   TX_GET_TASK_ID : writeString(packageName)             -> reply: writeInt(status), writeInt(taskId)  // taskId -1 = not found
  *   TX_MOVE_TASK_TO_DISPLAY : writeInt(taskId), writeInt(displayId)   -> reply: writeInt(status), writeInt(0)
  *   TX_SET_TASK_BOUNDS : writeInt(taskId), writeInt(left), writeInt(top), writeInt(right), writeInt(bottom)

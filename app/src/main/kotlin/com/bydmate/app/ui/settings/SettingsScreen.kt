@@ -66,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import com.bydmate.app.R
+import com.bydmate.app.platform.LegacyHeadUnit
 import com.bydmate.app.ui.theme.*
 import androidx.compose.material.icons.outlined.Mic
 import java.util.Date
@@ -75,6 +76,7 @@ internal enum class SettingsSection(@StringRes val labelRes: Int, val icon: Imag
     WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
     DISPLAY(R.string.settings_section_display_title, Icons.Outlined.DirectionsCar),
     SPLIT(R.string.settings_section_split_title, Icons.Outlined.Apps),
+    APP_SETS(R.string.settings_section_app_sets_title, Icons.Outlined.Apps),
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
     SERVICE(R.string.settings_section_service_title, Icons.Outlined.Build),
@@ -83,6 +85,17 @@ internal enum class SettingsSection(@StringRes val labelRes: Int, val icon: Imag
 }
 
 internal val PrimaryColor = AccentGreen
+
+/**
+ * On the Android 10 head units (DiLink 3 / 4) BYDMate's freeform split section did not work as it
+ * should (#385): it is replaced there by the app sets, which use the firmware's own split. Every other firmware keeps
+ * the split section and has no sets.
+ */
+internal fun SettingsSection.availableOn(legacyHeadUnit: Boolean): Boolean = when (this) {
+    SettingsSection.SPLIT -> !legacyHeadUnit
+    SettingsSection.APP_SETS -> legacyHeadUnit
+    else -> true
+}
 
 /** Own phrases for built-in commands are hidden while the built-in phrase list settles. */
 internal const val SHOW_VOICE_USER_PHRASES = false
@@ -157,10 +170,12 @@ fun SettingsScreen(
 
         var selected by rememberSaveable { mutableStateOf(SettingsSection.VOICE) }
         val hiddenSelected = selected == SettingsSection.SMART_HOME
-        val safeSelected = if (hiddenSelected && !state.devModeUnlocked) {
-            SettingsSection.VOICE
-        } else {
-            selected
+        val legacyHeadUnit = LegacyHeadUnit.isAndroid10
+        val safeSelected = when {
+            hiddenSelected && !state.devModeUnlocked -> SettingsSection.VOICE
+            !selected.availableOn(legacyHeadUnit) ->
+                if (selected == SettingsSection.SPLIT) SettingsSection.APP_SETS else SettingsSection.SPLIT
+            else -> selected
         }
 
         Row(
@@ -196,6 +211,7 @@ fun SettingsScreen(
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
                         SettingsSection.SPLIT -> SplitSection(viewModel)
+                        SettingsSection.APP_SETS -> AppSetsSection()
                         SettingsSection.SERVICE -> ServiceSection(state, viewModel)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
@@ -233,6 +249,7 @@ private fun SettingsRail(
                 )
 
                 SettingsSection.entries.forEach { section ->
+                    if (!section.availableOn(LegacyHeadUnit.isAndroid10)) return@forEach
                     val isHidden = section == SettingsSection.SMART_HOME
                     if (isHidden && !smartHomeUnlocked) return@forEach
                     RailItem(
