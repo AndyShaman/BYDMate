@@ -222,6 +222,15 @@ fun SettingActionRow(
     }
 }
 
+/** The button of the action rows, on its own, for a row that holds something else beside it. */
+@Composable
+fun SettingActionButton(
+    label: String,
+    onClick: () -> Unit,
+    style: SettingButtonStyle = SettingButtonStyle.Secondary,
+    enabled: Boolean = true,
+) = SettingRowButton(label, onClick, style, enabled)
+
 @Composable
 private fun SettingRowButton(
     label: String,

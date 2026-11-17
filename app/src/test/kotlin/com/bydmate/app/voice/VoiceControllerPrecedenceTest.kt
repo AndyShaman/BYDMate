@@ -10,6 +10,9 @@ import com.bydmate.app.data.automation.VoiceFireResult
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
+import com.bydmate.app.split.AppSet
+import com.bydmate.app.split.AppSetLauncher
+import com.bydmate.app.split.AppSetStore
 import com.bydmate.app.util.appStringsOver
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -59,7 +62,11 @@ class VoiceControllerPrecedenceTest {
     }
 
     /** A real VoiceAutomationResolver over one enabled rule (id 9, name «Моё») with [automationPhrase]. */
-    private fun rig(automationPhrase: String?, userPhrases: VoiceUserPhrases): Rig {
+    private fun rig(
+        automationPhrase: String?,
+        userPhrases: VoiceUserPhrases,
+        appSets: Pair<AppSetStore, AppSetLauncher>? = null,
+    ): Rig {
         val gate = mockk<VoiceGate> {
             every { isEnabled() } returns true
             every { vehicleSnapshot() } returns null
@@ -90,6 +97,7 @@ class VoiceControllerPrecedenceTest {
             appStrings = appStringsOver(ctx),
             userPhrases = userPhrases,
         )
+        appSets?.let { (store, launcher) -> controller.injectAppSets(store, launcher) }
         return Rig(controller, asr, dispatcher, engine, journal).also { r ->
             coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } answers {
                 r.dispatched += firstArg<ActionDef>().command
@@ -167,6 +175,57 @@ class VoiceControllerPrecedenceTest {
 
         assertEquals("phrase:windows_close_all", r.say(text).command)
         assertEquals(listOf("车窗关闭"), r.dispatched.toList())
+    }
+
+    // --- the driver's app sets (Android 10 head units) ---
+
+    private val setStore = AppSetStore().apply {
+        upsert(AppSet("set1", "открой окна", "com.zhiliaoapp.musically", "ru.yandex.music"))
+    }
+
+    private fun setLauncher(outcome: AppSetLauncher.Outcome = AppSetLauncher.Outcome.OK) =
+        mockk<AppSetLauncher> { coEvery { launch(any()) } returns outcome }
+
+    @Test fun `split plus a set name beats the built-in parser and opens the set`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher)
+        val entry = r.say("сплит открой окна")
+
+        assertEquals(VoiceJournalEntry.Route.NLU, entry.route)
+        assertEquals(VoiceJournalEntry.Outcome.OK, entry.outcome)
+        assertEquals("appset:открой окна", entry.command)
+        coVerify(exactly = 1) { launcher.launch(match { it.id == "set1" }) }
+        assertEquals(emptyList<String>(), r.dispatched.toList())
+    }
+
+    @Test fun `the split screen phrase opens the first set`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher)
+
+        assertEquals("appset:открой окна", r.say("включи разделение экрана").command)
+        coVerify(exactly = 1) { launcher.launch(match { it.id == "set1" }) }
+    }
+
+    @Test fun `an app set that does not open is reported as blocked`() {
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to setLauncher(AppSetLauncher.Outcome.LEFT_FAILED))
+
+        assertEquals(VoiceJournalEntry.Outcome.BLOCKED, r.say("сплит открой окна").outcome)
+    }
+
+    @Test fun `a set name without split is left to the parser`() {
+        val text = "открой окна"
+        val expected = parserLabel(text)
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher)
+
+        assertEquals(expected, r.say(text).command)
+        coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `an automation phrase outranks an app set`() {
+        val r = rig("сплит открой окна", VoiceUserPhrases(), appSets = setStore to setLauncher())
+
+        assertEquals(VoiceJournalEntry.Route.AUTOMATION, r.say("сплит открой окна").route)
     }
 
     // --- a phrase inside a longer utterance never fires ---

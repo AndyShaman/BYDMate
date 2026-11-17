@@ -353,7 +353,10 @@ fun main(args: Array<String>) {
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
                 HelperBinderProtocol.TX_LAUNCH_APP -> runCatching {
-                    val ok = launchApp(data.readString() ?: "")
+                    val pkg = data.readString() ?: ""
+                    // Additive trailing int (app sets): absent or 0 = the plain launch.
+                    val mode = if (data.dataAvail() >= 4) data.readInt() else 0
+                    val ok = if (mode > 0) launchAppInWindowingMode(pkg, mode) else launchApp(pkg)
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }

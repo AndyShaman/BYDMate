@@ -13,6 +13,9 @@ import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.split.AppSet
+import com.bydmate.app.split.AppSetLauncher
+import com.bydmate.app.split.AppSetStore
 import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
@@ -72,6 +75,16 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     @Inject
     internal fun injectAgentTools(tools: AgentTools) {
         agentTools = tools
+    }
+
+    // Method injection as well: the driver's own app sets («открой комплект …», Android 10 head units).
+    private var appSets: AppSetStore? = null
+    private var appSetLauncher: AppSetLauncher? = null
+
+    @Inject
+    internal fun injectAppSets(store: AppSetStore, launcher: AppSetLauncher) {
+        appSets = store
+        appSetLauncher = launcher
     }
 
     // Process-lifetime scope (@Singleton): intentionally never cancelled.
@@ -636,6 +649,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     /** Side-effect-free resolution of a transcript to an actionable command. Precedence (the
      *  agent follow-up window, checked by the caller, outranks all of them):
      *  1. an automation phrase equal to the whole utterance, word for word after normalization;
+     *  1a. an app set: «сплит <название>», «включи разделение экрана» (Android 10 head units, where sets exist);
      *  2. the user's own phrase for a built-in command, equal to the whole utterance;
      *  3. the built-in NluParser on the full utterance;
      *  4. the agent (Resolution.None, with the parser's reason).
@@ -644,6 +658,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  «открой окно наполовину», «не открывай окно» or «открой окно на палец». */
     private suspend fun resolve(text: String): Resolution {
         automationResolver.match(text)?.let { return Resolution.Auto(it) }
+        appSets?.resolve(text)?.let { return Resolution.AppSetStart(it) }
         userPhrases.match(text)?.let { return Resolution.Cmd(listOf(it.command), "phrase:${it.id}") }
         return parse(text)
     }
@@ -679,6 +694,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             Resolution.OpenNavigator -> dispatchOpenNavigator(transcript, decodeMs)
             is Resolution.Answer -> answer(res, transcript, decodeMs)
             is Resolution.Auto -> fireAutomation(res.match, transcript, decodeMs)
+            is Resolution.AppSetStart -> dispatchAppSet(res.set, transcript, decodeMs)
             is Resolution.None -> agentFallback(transcript, decodeMs)
         }
     }
@@ -894,6 +910,18 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         }
         dispatchMedia(ActionDef(command = "", displayName = "Запуск навигатора", kind = "app_launch",
             payload = JSONObject().put("packageName", pkg).toString()), "app_launch=$pkg", transcript, decodeMs)
+    }
+
+    /** «открой комплект …»: the set's left app into the split, the right one beside it ([AppSetLauncher]). */
+    private suspend fun dispatchAppSet(set: AppSet, transcript: String, decodeMs: Long) {
+        val outcome = appSetLauncher?.launch(set) ?: AppSetLauncher.Outcome.LEFT_FAILED
+        val failure = when (outcome) {
+            AppSetLauncher.Outcome.OK -> null
+            AppSetLauncher.Outcome.RIGHT_FAILED -> Failure("right app did not start", "Не открылось второе приложение комплекта")
+            AppSetLauncher.Outcome.LEFT_FAILED -> Failure("left app did not start", "Не открылось первое приложение комплекта")
+        }
+        report("appset:${set.name}", "cmd=appset name=${set.name} left=${set.leftPkg} right=${set.rightPkg ?: "-"}",
+            failure, transcript, decodeMs)
     }
 
     /** The first package of the navigator chosen for routes that has a launcher entry here (the
@@ -1165,13 +1193,15 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             val label: String get() = "ask:${question.id}"
         }
         data class Auto(val match: VoiceAutomationMatch) : Resolution
+        /** The driver's app set, named by the whole utterance. */
+        data class AppSetStart(val set: AppSet) : Resolution
         /** Nothing local claimed the phrase: it goes to the agent; [reason] is a VoiceRefusal code. */
         data class None(val reason: String) : Resolution
 
         /** The route code of the trace. */
         val route: String get() = when (this) {
             is Cmd -> if (label.startsWith("phrase:")) "phrase" else "nlu"
-            is RelTemp, is Vol, Music, is Navigate, OpenNavigator, is Answer -> "nlu"
+            is RelTemp, is Vol, Music, is Navigate, OpenNavigator, is Answer, is AppSetStart -> "nlu"
             is Auto -> "automation"
             is None -> "agent"
         }

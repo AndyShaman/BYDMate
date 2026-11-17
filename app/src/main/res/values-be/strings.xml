@@ -2324,4 +2324,33 @@
         <item quantity="many">Яшчэ %1$d кодаў не змясціліся, усе ў акне «Дыягностыка»</item>
         <item quantity="other">Яшчэ %1$d кода не змясціліся, усе ў акне «Дыягностыка»</item>
     </plurals>
+    <string name="settings_section_app_sets_title">Падзел экрана</string>
+    <string name="settings_app_sets_howto">Голас:\n• «сплит» або «уключы падзел экрана» — першы камплект у спісе;\n• «сплит» і назва — патрэбны камплект. Назва любая, невялікія памылкі распазнавання даруюцца.\nВіджэт: тап па левай частцы адкрывае першы камплект.\nНе абрана другая праграма: застанецца тое, што адкрыта цяпер.</string>
+    <string name="settings_app_sets_add_title">Новы камплект</string>
+    <string name="settings_app_sets_add">Дадаць</string>
+    <string name="settings_app_sets_name_label">Назва (галасавая каманда)</string>
+    <string name="settings_app_sets_left_title">Першая праграма</string>
+    <string name="settings_app_sets_right_title">Другая праграма</string>
+    <string name="settings_app_sets_right_desc">Адкрываецца першай. Не абрана: застанецца тое, што адкрыта цяпер</string>
+    <string name="settings_app_sets_right_keep">Застанецца адкрытае цяпер</string>
+    <string name="settings_app_sets_right_clear_title">Не выбіраць праграму справа</string>
+    <string name="settings_app_sets_right_clear">Скінуць</string>
+    <string name="settings_app_sets_not_chosen">Не абрана</string>
+    <string name="settings_app_sets_autostart_title">Адкрываць пры запуску</string>
+    <string name="settings_app_sets_autostart_desc">Камплект адкрыецца пасля запуску службы, калі машына стаіць</string>
+    <string name="settings_app_sets_save">Захаваць</string>
+    <string name="settings_app_sets_run">Запусціць</string>
+    <string name="settings_app_sets_delete">Выдаліць</string>
+    <string name="settings_app_sets_cancel">Адмена</string>
+    <string name="settings_app_sets_err_name">Увядзіце назву</string>
+    <string name="settings_app_sets_err_name_long">Назва занадта доўгая</string>
+    <string name="settings_app_sets_err_left">Абярыце праграму злева</string>
+    <string name="settings_app_sets_err_same">Абярыце дзве розныя праграмы</string>
+    <string name="settings_app_sets_err_many">Не больш за 8 камплектаў</string>
+    <string name="settings_app_sets_err_in_use">Такая назва ўжо ёсць: %1$s</string>
+    <string name="settings_app_sets_saved">Захавана</string>
+    <string name="settings_app_sets_run_failed">Камплект не адкрыўся</string>
+    <string name="app_sets_none_hint">Няма камплекта. Дадайце яго ў Налады → Падзел экрана</string>
+    <string name="settings_widget_left_tap_zoning_description_legacy">Левая частка адкрывае праграму або падзел экрана; астатняе - BYDMate.</string>
+    <string name="settings_widget_left_tap_mode_split_legacy">Падзел экрана</string>
 </resources>
