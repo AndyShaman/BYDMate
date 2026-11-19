@@ -21,7 +21,9 @@ import android.os.IBinder
  *   TX_LAUNCH_APP : writeString(packageName) [, writeInt(windowingMode)]
  *                                                         -> reply: writeInt(status), writeInt(0)
  *       The trailing windowing mode is additive: absent (or 0) = a plain launch, N > 0 =
- *       `am start --windowingMode N` (the app sets of the Android 10 head units).
+ *       `am start --windowingMode N` (the app sets of the Android 10 head units). With N = 3 a
+ *       running task of the package is moved into the left half by id instead (am start would
+ *       bring it back fullscreen).
  *   TX_GET_TASK_ID : writeString(packageName)             -> reply: writeInt(status), writeInt(taskId)  // taskId -1 = not found
  *   TX_MOVE_TASK_TO_DISPLAY : writeInt(taskId), writeInt(displayId)   -> reply: writeInt(status), writeInt(0)
  *   TX_SET_TASK_BOUNDS : writeInt(taskId), writeInt(left), writeInt(top), writeInt(right), writeInt(bottom)
