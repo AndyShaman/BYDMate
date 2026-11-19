@@ -42,7 +42,7 @@ class AsrGuardRecoveryTest {
     @Test fun `each integrity verdict maps to one outcome`() {
         val cases = listOf(
             Triple(Integrity.INTACT, false, Outcome.KEPT_INTACT),
-            Triple(Integrity.INTACT, true, Outcome.KEPT_INTACT),
+            Triple(Integrity.INTACT, true, Outcome.DELETED),
             Triple(Integrity.CORRUPT, false, Outcome.DELETED),
             Triple(Integrity.CORRUPT, true, Outcome.DELETED),
             Triple(Integrity.UNVERIFIED, false, Outcome.KEPT_UNVERIFIED),
@@ -61,6 +61,18 @@ class AsrGuardRecoveryTest {
         assertEquals(0, files.deleted)
         assertFalse(guard.isTripped())
         assertFalse(AsrLoadGuard(context).isTripped())
+    }
+
+    // Files that match their hashes but abort the native load every time (an ONNX build the
+    // firmware cannot run) must not loop the app forever: kept once, deleted on the next trip
+    // when no load succeeded in between.
+    @Test fun `intact files that trip the guard twice in a row are deleted`() = runBlocking {
+        val files = FakeFiles(Integrity.INTACT)
+        assertEquals(Outcome.KEPT_INTACT, AsrGuardRecovery(trippedGuard(), files, journal).run())
+        assertTrue(files.unverifiedKept)
+        assertEquals(0, files.deleted)
+        assertEquals(Outcome.DELETED, AsrGuardRecovery(trippedGuard(), files, journal).run())
+        assertEquals(1, files.deleted)
     }
 
     @Test fun `corrupt files are deleted and the guard is reset`() = runBlocking {

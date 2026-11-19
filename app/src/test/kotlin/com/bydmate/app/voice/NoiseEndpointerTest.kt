@@ -29,6 +29,15 @@ class NoiseEndpointerTest {
         assertTrue(e.feed(420.0, 60).all { it == Decision.NONE })
     }
 
+    // AudioCapture can hand over a read of a few samples: its length rounds to 0 ms.
+    @Test fun `a zero-length frame never throws`() {
+        val e = NoiseEndpointer()
+        e.feed(420.0, 20)
+        e.feed(700.0, 2)     // too short to count as a phrase
+        e.feed(425.0, 9)     // the quiet tail is already long enough
+        assertEquals(Decision.NONE, e.onFrame(425.0, 0L, true))
+    }
+
     // The driver often talks right after the button press, before any noise was measured.
     @Test fun `words spoken before the floor is known still end the phrase`() {
         val e = NoiseEndpointer()

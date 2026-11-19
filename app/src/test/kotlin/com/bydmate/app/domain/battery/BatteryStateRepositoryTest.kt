@@ -163,6 +163,15 @@ class BatteryStateRepositoryTest {
         assertNull(fresh.lifetimeKwhForCycles)
     }
 
+    // A link-error word 0x0000FFFF read as a float is a positive denormal (~9e-41): never a counter.
+    @Test
+    fun `a link-error float is never remembered and never counts`() = runTest {
+        repo(reading(10963f)).refresh()
+        val after = repo(reading(Float.fromBits(0x0000FFFF))).refresh()
+        assertEquals(10963f, dao.map[SettingsRepository.KEY_BMS_LIFETIME_KWH_LAST]!!.toFloat(), 0.01f)
+        assertEquals(10963f, after.lifetimeKwhForCycles!!, 0.01f)
+    }
+
     @Test
     fun `the remembered value survives a new repository`() = runTest {
         repo(reading(10963f)).refresh()
