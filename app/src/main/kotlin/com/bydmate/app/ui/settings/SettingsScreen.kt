@@ -87,12 +87,11 @@ internal enum class SettingsSection(@StringRes val labelRes: Int, val icon: Imag
 internal val PrimaryColor = AccentGreen
 
 /**
- * On the Android 10 head units (DiLink 3 / 4) BYDMate's freeform split section did not work as it
- * should (#385): it is replaced there by the app sets, which use the firmware's own split. Every other firmware keeps
- * the split section and has no sets.
+ * The app sets exist only on the Android 10 head units (DiLink 3 / 4), next to the split section:
+ * they use the firmware's own split, an alternative where BYDMate's freeform split does not work.
+ * Every other firmware has the split section alone.
  */
 internal fun SettingsSection.availableOn(legacyHeadUnit: Boolean): Boolean = when (this) {
-    SettingsSection.SPLIT -> !legacyHeadUnit
     SettingsSection.APP_SETS -> legacyHeadUnit
     else -> true
 }
@@ -173,8 +172,7 @@ fun SettingsScreen(
         val legacyHeadUnit = LegacyHeadUnit.isAndroid10
         val safeSelected = when {
             hiddenSelected && !state.devModeUnlocked -> SettingsSection.VOICE
-            !selected.availableOn(legacyHeadUnit) ->
-                if (selected == SettingsSection.SPLIT) SettingsSection.APP_SETS else SettingsSection.SPLIT
+            !selected.availableOn(legacyHeadUnit) -> SettingsSection.SPLIT
             else -> selected
         }
 

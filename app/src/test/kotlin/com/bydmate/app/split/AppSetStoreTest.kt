@@ -69,6 +69,21 @@ class AppSetStoreTest {
         assertEquals("set1", s.defaultSet()?.id)
     }
 
+    @Test fun `without the default phrases only split plus a name opens a set`() {
+        val s = twoSets()
+        listOf("сплит", "включи сплит", "разделение экрана", "включи разделение экрана", "раздели экран").forEach {
+            assertNull(it, s.resolve(it, defaultPhrases = false))
+        }
+        assertEquals("set2", s.resolve("сплит кино", defaultPhrases = false)?.id)
+    }
+
+    @Test fun `the split gestures open a set only on Android 10 with the split section switched off`() {
+        assertTrue(appSetsTakeSplitGesture(legacyHeadUnit = true, splitFeatureEnabled = false))
+        assertFalse(appSetsTakeSplitGesture(legacyHeadUnit = true, splitFeatureEnabled = true))
+        assertFalse(appSetsTakeSplitGesture(legacyHeadUnit = false, splitFeatureEnabled = false))
+        assertFalse(appSetsTakeSplitGesture(legacyHeadUnit = false, splitFeatureEnabled = true))
+    }
+
     @Test fun `the bare name never opens a set, it would clash with open-app commands`() {
         val s = store().apply { upsert(tiktokMusic.copy(name = "тикток")) }
         assertNull(s.resolve("тикток"))
