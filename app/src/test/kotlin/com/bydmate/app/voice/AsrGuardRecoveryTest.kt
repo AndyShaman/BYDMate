@@ -42,7 +42,7 @@ class AsrGuardRecoveryTest {
     @Test fun `each integrity verdict maps to one outcome`() {
         val cases = listOf(
             Triple(Integrity.INTACT, false, Outcome.KEPT_INTACT),
-            Triple(Integrity.INTACT, true, Outcome.DELETED),
+            Triple(Integrity.INTACT, true, Outcome.KEPT_INTACT),
             Triple(Integrity.CORRUPT, false, Outcome.DELETED),
             Triple(Integrity.CORRUPT, true, Outcome.DELETED),
             Triple(Integrity.UNVERIFIED, false, Outcome.KEPT_UNVERIFIED),
@@ -63,16 +63,24 @@ class AsrGuardRecoveryTest {
         assertFalse(AsrLoadGuard(context).isTripped())
     }
 
-    // Files that match their hashes but abort the native load every time (an ONNX build the
-    // firmware cannot run) must not loop the app forever: kept once, deleted on the next trip
-    // when no load succeeded in between.
-    @Test fun `intact files that trip the guard twice in a row are deleted`() = runBlocking {
+    // Files that match their hashes are never deleted, however often the load is cut: power cuts
+    // are not corruption. They stay marked, and a marked model is not preloaded at start.
+    @Test fun `intact files are never deleted and stay marked`() = runBlocking {
         val files = FakeFiles(Integrity.INTACT)
         assertEquals(Outcome.KEPT_INTACT, AsrGuardRecovery(trippedGuard(), files, journal).run())
-        assertTrue(files.unverifiedKept)
+        assertEquals(Outcome.KEPT_INTACT, AsrGuardRecovery(trippedGuard(), files, journal).run())
         assertEquals(0, files.deleted)
-        assertEquals(Outcome.DELETED, AsrGuardRecovery(trippedGuard(), files, journal).run())
-        assertEquals(1, files.deleted)
+        assertTrue(files.unverifiedKept)
+    }
+
+    // A model that aborts the native load every time (an ONNX build the firmware cannot run) must
+    // not crash the app at every start: after a kept trip it loads on the first voice press only.
+    @Test fun `a kept or deleted model is not preloaded at service start`() {
+        assertTrue(AsrGuardRecovery.warmUpAtStart(Outcome.NOT_TRIPPED, keptMark = false))
+        assertFalse(AsrGuardRecovery.warmUpAtStart(Outcome.NOT_TRIPPED, keptMark = true))
+        assertFalse(AsrGuardRecovery.warmUpAtStart(Outcome.KEPT_INTACT, keptMark = true))
+        assertFalse(AsrGuardRecovery.warmUpAtStart(Outcome.KEPT_UNVERIFIED, keptMark = true))
+        assertFalse(AsrGuardRecovery.warmUpAtStart(Outcome.DELETED, keptMark = false))
     }
 
     @Test fun `corrupt files are deleted and the guard is reset`() = runBlocking {

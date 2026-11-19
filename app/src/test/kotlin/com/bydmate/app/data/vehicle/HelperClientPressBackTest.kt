@@ -54,11 +54,19 @@ class HelperClientPressBackTest {
         assertFalse(clientAnswering(-1).pressBack())
     }
 
+    @Test fun `pressHome sends TX_PRESS_HOME with no arguments and reads status 0 as ok`() = runBlocking {
+        var seenCode = -1
+        assertTrue(clientAnswering(0) { seenCode = it }.pressHome())
+        assertEquals(HelperBinderProtocol.TX_PRESS_HOME, seenCode)
+        assertFalse(clientAnswering(-1).pressHome())
+    }
+
     @Test fun `an old daemon (transact false) is a plain false`() = runBlocking {
         val fake = object : FakeIBinder() {
             override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean = false
         }
         val client = object : HelperClientImpl() { override fun resolveBinder(): IBinder = fake }
         assertFalse(client.pressBack())
+        assertFalse(client.pressHome())
     }
 }

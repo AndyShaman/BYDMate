@@ -94,13 +94,15 @@ class GigaAmModelIntegrityTest {
         assertFalse(File(dir, "asr/gigaam-v3-ru").exists())
     }
 
-    // A load that succeeds clears the kept mark even when the hash was already recorded, so only
-    // trips with no successful load between them add up to a delete.
-    @Test fun `a successful load clears the kept mark when the hash already exists`() = runBlocking {
-        val (_, m) = recorded("mark-intact")
+    // With the hashes already recorded, the kept mark clears only once both the recognizer and the
+    // VAD loaded in one process: a recognizer that loads cannot clear the mark of a crashing VAD.
+    @Test fun `the kept mark clears only after both kinds of files loaded`() = runBlocking {
+        val (dir, _) = recorded("mark-intact")
+        val m = manager(dir)            // a new process
         m.markUnverifiedKept()
-        assertTrue(m.unverifiedKeptBefore())
         m.recordIntegrityIfMissing(model = true)
+        assertTrue(m.unverifiedKeptBefore())
+        m.recordIntegrityIfMissing(model = false)
         assertFalse(m.unverifiedKeptBefore())
     }
 

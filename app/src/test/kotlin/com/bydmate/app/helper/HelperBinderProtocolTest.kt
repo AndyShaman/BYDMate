@@ -55,5 +55,6 @@ private val WIRE_NUMBERS: Map<String, Int> by lazy {
         "TX_SPLIT37_ROOT_STATE" to 60, "TX_SET_AUTO_VOICE" to 61, "TX_DTC_SCAN_START" to 62,
         "TX_DTC_SCAN_STATUS" to 63, "TX_DTC_ERASE_START" to 64, "TX_DISALLOW_NOTIFICATION_LISTENER" to 65,
         "TX_PRESS_BACK" to 66,
+        "TX_PRESS_HOME" to 67,
     )
 }
