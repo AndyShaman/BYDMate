@@ -22,7 +22,12 @@ data class BatteryState(
 ) {
     /** The counter the full-cycle count uses: the live one, else the remembered one. */
     val lifetimeKwhForCycles: Float?
-        get() = lifetimeKwh?.takeIf { it > 0f } ?: lifetimeKwhLastKnown?.takeIf { it > 0f }
+        get() = lifetimeKwh?.takeIf { it >= MIN_COUNTER_KWH } ?: lifetimeKwhLastKnown?.takeIf { it >= MIN_COUNTER_KWH }
+
+    companion object {
+        /** Below 1 kWh is not a lifetime counter: a link-error word read as a float is ~9e-41. */
+        const val MIN_COUNTER_KWH = 1f
+    }
 }
 
 @Singleton
@@ -44,7 +49,7 @@ class BatteryStateRepository @Inject constructor(
                 lifetimeKwhLastKnown = settings.getBmsLifetimeKwhLast(),
             )
 
-        val freshKwh = r.lifetimeKwh?.takeIf { it > 0f }
+        val freshKwh = r.lifetimeKwh?.takeIf { it >= BatteryState.MIN_COUNTER_KWH }
         if (freshKwh != null) settings.setBmsLifetimeKwhLast(freshKwh)
 
         val sohFromSnapshot = batteryHealth.getLast()?.sohPercent?.toFloat()

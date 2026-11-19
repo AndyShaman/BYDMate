@@ -181,7 +181,8 @@ fun ChargesScreen(
                 periodSummary = state.periodSummary,
                 currencySymbol = state.currencySymbol,
                 bmsLifetimeKm = state.bmsLifetimeKm,
-                bmsLifetimeKwh = state.bmsLifetimeKwh,
+                // After sleep the live counter is gone: the remembered one keeps the block and its cycles.
+                bmsLifetimeKwh = state.bmsLifetimeKwh ?: state.bmsLifetimeKwhLastKnown,
                 equivCycles = state.equivCycles,
                 sohSeries = state.sohSeries,
                 cellDeltaSeries = state.cellDeltaSeries,

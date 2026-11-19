@@ -139,7 +139,7 @@ class GigaAmModelManager(
     fun unverifiedKeptBefore(): Boolean = unverifiedMarker().isFile
 
     /** Records that a tripped guard kept files it could not verify: the next unverifiable trip
-     *  deletes them. Cleared by recording a hash and by [delete]. */
+     *  deletes them. Cleared by a successful recognizer load and by [delete]. */
     suspend fun markUnverifiedKept() {
         withContext(Dispatchers.IO) {
             diskMutex.withLock { runCatching { unverifiedMarker().createNewFile() } }
@@ -158,6 +158,8 @@ class GigaAmModelManager(
                     if (model) {
                         val dir = baseDir()
                         if (isModelComplete(dir) && !modelManifest(dir).isFile) writeModelManifest(dir)
+                        // The recognizer just loaded: an earlier kept trip is settled.
+                        unverifiedMarker().delete()
                     } else if (isVadComplete() && !vadManifest().isFile) {
                         writeManifest(vadManifest(), mapOf(VAD_KEY to sha256(vadFile())))
                     }

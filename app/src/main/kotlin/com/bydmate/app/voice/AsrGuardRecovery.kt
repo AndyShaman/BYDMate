@@ -54,8 +54,8 @@ class AsrGuardRecovery(
         val outcome = decide(integrity, files.unverifiedKeptBefore())
         when (outcome) {
             Outcome.DELETED -> files.delete()
-            Outcome.KEPT_UNVERIFIED -> files.markUnverifiedKept()
-            Outcome.KEPT_INTACT, Outcome.NOT_TRIPPED -> Unit
+            Outcome.KEPT_UNVERIFIED, Outcome.KEPT_INTACT -> files.markUnverifiedKept()
+            Outcome.NOT_TRIPPED -> Unit
         }
         guard.reset()
         record(outcome, integrity, counts)
@@ -79,7 +79,9 @@ class AsrGuardRecovery(
         const val KEY_COUNT_PREFIX = "count_"
 
         fun decide(integrity: Integrity, unverifiedKeptBefore: Boolean): Outcome = when (integrity) {
-            Integrity.INTACT -> Outcome.KEPT_INTACT
+            // Kept once; a second trip with no successful load between them means the files
+            // themselves abort the load (not a power cut), so they go as before.
+            Integrity.INTACT -> if (unverifiedKeptBefore) Outcome.DELETED else Outcome.KEPT_INTACT
             Integrity.CORRUPT -> Outcome.DELETED
             Integrity.UNVERIFIED -> if (unverifiedKeptBefore) Outcome.DELETED else Outcome.KEPT_UNVERIFIED
         }

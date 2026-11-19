@@ -48,6 +48,8 @@ internal class NoiseEndpointer(
     val noisy: Boolean get() = floorHistory.size >= MIN_FLOOR_FRAMES && floor >= noisyFloorRms
 
     fun onFrame(rms: Double, frameMs: Long, vadInSpeech: Boolean): Decision {
+        // A read of a few samples rounds to 0 ms: it carries no time, and the tail math divides by it.
+        if (frameMs <= 0) return Decision.NONE
         // Words do not move the floor: only frames not clearly louder than it are kept.
         if (floorHistory.size < MIN_FLOOR_FRAMES || rms < floor * loudRatio) {
             floorHistory.addLast(rms)
