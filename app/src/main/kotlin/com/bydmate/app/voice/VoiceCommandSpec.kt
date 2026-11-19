@@ -119,6 +119,13 @@ object VoiceCatalog {
         // Trunk
         VoiceCommandSpec(OPEN, TRUNK) { "开后备箱" },
         VoiceCommandSpec(CLOSE, TRUNK) { "关后备箱" },
+        // Front trunk: opening is speed gated by the dispatcher
+        VoiceCommandSpec(OPEN, FRONT_TRUNK) { "前备箱打开" },
+        VoiceCommandSpec(CLOSE, FRONT_TRUNK) { "前备箱关闭" },
+        // Spoiler (#383): OPEN is up, CLOSE is down; the car answers "not equipped" without one
+        VoiceCommandSpec(OPEN, SPOILER) { "打开尾翼" },
+        VoiceCommandSpec(CLOSE, SPOILER) { "关闭尾翼" },
+        VoiceCommandSpec(ON, SPOILER_AUTO) { "尾翼自动模式" },
         // Drive mode (terrain modes speed-gated to 15 km/h by the dispatcher)
         VoiceCommandSpec(SET, DRIVE_ECO) { "ECO模式" },
         VoiceCommandSpec(SET, DRIVE_NORMAL) { "普通模式" },

@@ -248,7 +248,7 @@ class DashboardViewModelTest {
             ?: InsightsManager(ctx, OpenRouterClient(httpClient), tripDao, idleDrainDao, chargeDao, settingsRepo)
 
         val batteryHealthRepo = BatteryHealthRepository(StubBatterySnapshotDao())
-        val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo)
+        val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo, settingsRepo)
 
         return DashboardViewModel(
             appContext = ctx,

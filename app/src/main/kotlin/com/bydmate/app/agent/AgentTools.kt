@@ -422,7 +422,8 @@ class AgentTools @Inject constructor(
                 "find_chargers" -> findChargers(args)
                 "range_to_destination" -> rangeToDestination(args)
                 "get_route_info" -> routeInfo()
-                "go_home" -> goHomeScreen()
+                "go_home" -> dispatchPlain("go_home", "Домой")
+                "go_back" -> dispatchPlain("go_back", "Назад")
                 // The voice session closes itself on this outcome (VoiceController); nothing to do here.
                 "end_conversation" -> """{"ok":true}"""
                 "play_music" -> playMusic(args)
@@ -1708,9 +1709,10 @@ class AgentTools @Inject constructor(
         else "$min мин"
     }
 
-    private suspend fun goHomeScreen(): String {
+    /** A payload-free action kind (go_home, go_back) run once. */
+    private suspend fun dispatchPlain(kind: String, displayName: String): String {
         val result = actionDispatcher.dispatch(
-            ActionDef(command = "", displayName = "Домой", kind = "go_home"), data = null)
+            ActionDef(command = "", displayName = displayName, kind = kind), data = null)
         return if (result.success) """{"ok":true}"""
         else JSONObject().put("error", result.reason ?: "не получилось").toString()
     }
@@ -2313,6 +2315,8 @@ class AgentTools @Inject constructor(
             }
             "go_home" -> Built.Value(
                 ActionDef(command = "", displayName = "Домой", kind = "go_home"))
+            "go_back" -> Built.Value(
+                ActionDef(command = "", displayName = "Назад", kind = "go_back"))
             "sentry" -> {
                 val on = requireBoolArg(a, "on") ?: return Built.Error("не указано состояние охранного режима")
                 Built.Value(ActionDef(command = "sentry",

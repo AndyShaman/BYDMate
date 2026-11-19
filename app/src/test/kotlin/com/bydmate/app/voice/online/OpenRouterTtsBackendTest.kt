@@ -194,6 +194,21 @@ class OpenRouterTtsBackendTest {
     }
 
     @Test
+    fun `non-2xx response keeps the whole error text, not a 200-char cut`() = runTest {
+        stubConnection()
+        // Synthetic body: the old code cut the text at 200 characters and hid the reason.
+        val body = "x".repeat(1_200) + "TAIL_MARKER"
+        server.enqueue(MockResponse().setResponseCode(404).setBody(body))
+        try {
+            backend.synthesize("привет", TtsGender.MALE)
+            fail("expected synthesize to throw")
+        } catch (e: IOException) {
+            assertTrue("message should contain 404", e.message!!.contains("404"))
+            assertTrue("message should contain the tail of the body", e.message!!.contains("TAIL_MARKER"))
+        }
+    }
+
+    @Test
     fun `synthesize throws without a network call when OpenRouter is not configured`() = runTest {
         coEvery { connections.get(LlmConnectionResolver.ID_OPENROUTER) } returns null
         try {

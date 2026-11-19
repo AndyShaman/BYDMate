@@ -16,6 +16,8 @@ object VoiceRefusal {
     const val DISPATCH_FAILED = "dispatch_failed"
     const val RULE_NOT_FOUND = "rule_not_found"
     const val INTERNAL_ERROR = "internal_error"
+    /** The VAD heard speech but no phrase ever reached the recognizer (road noise, 2026-11-15). */
+    const val NO_SEGMENT = "no_segment"
 
     /** A safety gate held the command back, e.g. `gate:speed_unknown`. */
     fun gate(name: String): String = "gate:$name"

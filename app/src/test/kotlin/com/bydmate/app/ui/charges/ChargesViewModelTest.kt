@@ -140,6 +140,7 @@ class ChargesViewModelTest {
     /** Held as a field so a test can verify the re-pricing range without a new factory arg. */
     private val costCalculator: com.bydmate.app.domain.cost.CostCalculator = mockk(relaxed = true)
 
+    @Suppress("LongParameterList")
     private fun buildViewModel(
         chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
         autoserviceCharges: List<ChargeEntity> = emptyList(),
@@ -147,12 +148,14 @@ class ChargesViewModelTest {
         batteryReading: BatteryReading? = null,
         autoserviceAvailable: Boolean = true,
         snapshots: List<BatterySnapshotEntity> = emptyList(),
-        batteryCapacityKwh: String = "72.9"
+        batteryCapacityKwh: String = "72.9",
+        rememberedBmsKwh: String? = null,
     ): ChargesViewModel = buildViewModelAndDao(
         chargesFlow, autoserviceCharges, legacyExists,
-        batteryReading, autoserviceAvailable, snapshots, batteryCapacityKwh
+        batteryReading, autoserviceAvailable, snapshots, batteryCapacityKwh, rememberedBmsKwh
     ).first
 
+    @Suppress("LongParameterList")
     private fun buildViewModelAndDao(
         chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
         autoserviceCharges: List<ChargeEntity> = emptyList(),
@@ -160,9 +163,11 @@ class ChargesViewModelTest {
         batteryReading: BatteryReading? = null,
         autoserviceAvailable: Boolean = true,
         snapshots: List<BatterySnapshotEntity> = emptyList(),
-        batteryCapacityKwh: String = "72.9"
+        batteryCapacityKwh: String = "72.9",
+        rememberedBmsKwh: String? = null,
     ): Pair<ChargesViewModel, FakeChargeDao> {
         val settingsDao = FakeSettingsDao(batteryCapacityKwh)
+        rememberedBmsKwh?.let { settingsDao.map[SettingsRepository.KEY_BMS_LIFETIME_KWH_LAST] = it }
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val chargeDao = FakeChargeDao(chargesFlow, autoserviceCharges, legacyExists)
@@ -171,7 +176,7 @@ class ChargesViewModelTest {
         val snapshotDao = FakeBatterySnapshotDao(snapshots)
         val autoservice = FakeAutoserviceClient(batteryReading, autoserviceAvailable)
         val batteryHealthRepo = BatteryHealthRepository(snapshotDao)
-        val batteryStateRepo = BatteryStateRepository(autoservice, batteryHealthRepo)
+        val batteryStateRepo = BatteryStateRepository(autoservice, batteryHealthRepo, settingsRepo)
 
         // Minimal Context mock — only locale lookup used in ChargesViewModel.groupChargesByMonthDay.
         val mockLocaleList = mockk<LocaleList> { every { get(0) } returns Locale("ru") }
@@ -498,6 +503,22 @@ class ChargesViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(126.0, vm.uiState.value.equivCycles, 0.1)
+    }
+
+    /** The counter read as null after the car slept: the last remembered BMS value keeps the cycles, not the app sum. */
+    @Test
+    fun `equivCycles uses the remembered BMS counter when the live one is gone`() = runTest {
+        val now = System.currentTimeMillis()
+        val vm = buildViewModel(
+            autoserviceCharges = listOf(makeCharge(1, now, kwhCharged = 100.0, gunState = 2)),
+            batteryReading = null,
+            autoserviceAvailable = false,
+            rememberedBmsKwh = "10963",
+            batteryCapacityKwh = "72.9"
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(10963.0 / 72.9, vm.uiState.value.equivCycles, 0.1)
     }
 
     /** #224: the BMS lifetime counter is divided by the average capacity nominal × (100 + SoH) / 200. */

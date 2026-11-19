@@ -577,6 +577,7 @@
     <string name="automation_action_hotspot_off">Отключить</string>
     <string name="automation_action_screen_off">Центральный экран: выключить</string>
     <string name="automation_action_screen_on">Центральный экран: включить</string>
+    <string name="automation_action_go_back">Назад</string>
     <string name="automation_action_speak">Озвучить текст</string>
     <string name="automation_action_agent_query">Запрос агенту</string>
     <string name="auto_act_speak">Озвучить текст</string>
@@ -1437,7 +1438,11 @@
     <string name="settings_tts_voice_online_gemini_badge">ключ OpenRouter</string>
     <string name="settings_tts_voice_online_minimax_desc">Живой русский · начало ответа чуть позже локального</string>
     <string name="settings_tts_voice_online_minimax_badge">нужен ключ MiniMax</string>
-    <string name="settings_tts_online_fallback_hint">Онлайн-голоса: нужна сеть; если сервис не ответил за 2 секунды, реплика останется без звука</string>
+    <string name="settings_tts_online_fallback_hint">Онлайн-голоса: нужна сеть; если сервис не ответил, ответ прозвучит локальным голосом</string>
+    <string name="tts_online_failed_policy">Онлайн-голос недоступен: запрос отклонён настройками приватности в аккаунте OpenRouter (openrouter.ai/settings/privacy).</string>
+    <string name="tts_online_failed_other">Онлайн-голос не ответил.</string>
+    <string name="tts_online_failed_spoken_local">Отвечаю локальным голосом.</string>
+    <string name="tts_online_failed_silent">Локальный голос недоступен, ответ только на экране.</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Ключи для онлайн-голосов</string>
@@ -1909,6 +1914,7 @@
     <string name="dispatch_sentry_failed">Не удалось переключить охранный режим</string>
     <string name="dispatch_hotspot_invalid_state">Некорректное состояние точки доступа Wi-Fi</string>
     <string name="dispatch_hotspot_failed">Не удалось переключить точку доступа Wi-Fi</string>
+    <string name="dispatch_back_failed">Не удалось нажать «Назад»</string>
     <string name="dispatch_screen_invalid_state">Некорректное состояние экрана</string>
     <string name="dispatch_screen_not_available">На этой машине управление экраном недоступно</string>
     <string name="dispatch_cluster_invalid_state">Некорректное состояние проекции на приборку</string>
@@ -1984,7 +1990,7 @@
     <string name="tg_report_field_battery_temp">Температура батареи</string>
     <string name="tg_report_field_openings">Что открыто</string>
     <string name="tg_report_field_tires">Давление в шинах</string>
-    <string name="tg_report_header_off">BYDMate: машина выключена в %1$s</string>
+    <string name="tg_report_header_off">BYDMate: машина выключена %1$s в %2$s</string>
     <string name="tg_report_map_link">Открыть на карте</string>
     <string name="tg_report_soc">заряд %1$s</string>
     <string name="tg_report_soc_value">%1$d%%</string>

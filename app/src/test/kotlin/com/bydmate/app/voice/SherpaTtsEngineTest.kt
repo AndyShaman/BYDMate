@@ -217,6 +217,44 @@ class SherpaTtsEngineTest {
         assertFalse(engine.speaking.value)
     }
 
+    // --- A local queue opened by a failed online reply can stay empty (the last sentence broke
+    // after part of it was heard). The track then still holds the tail of the online sentence
+    // this queue superseded, whose own drain wait bailed out on the generation bump: finish()
+    // owns that tail. SystemClock.elapsedRealtime() returns 0 under returnDefaultValues, so a
+    // zero floor has "passed" and any positive floor is "still sounding". ---
+
+    @Test
+    fun `finish of an empty queue parks the track the superseded utterance left playing`() {
+        val mm = mockk<TtsModelManager>(relaxed = true) { every { isReady(any()) } returns true }
+        val engine = SherpaTtsEngine(mm)
+        val track = mockk<AudioTrack>(relaxed = true)
+        engine.primeAudibleStateForTest(track = track, speaking = true, pendingTargetFrames = -1L)
+        val queue = engine.startQueue()!!
+        queue.finish()
+        runBlocking { withTimeout(10_000) { queue.awaitPlayed() } }
+        // Left PLAYING on an empty buffer the DiLink HAL disables the track for good.
+        io.mockk.verify(exactly = 1) { track.pause() }
+        assertFalse(engine.speaking.value)
+    }
+
+    @Test
+    fun `finish of an empty queue waits for the tail the superseded utterance left in the track`() {
+        val mm = mockk<TtsModelManager>(relaxed = true) { every { isReady(any()) } returns true }
+        val engine = SherpaTtsEngine(mm)
+        val track = mockk<AudioTrack>(relaxed = true)
+        engine.primeAudibleStateForTest(
+            track = track, speaking = true, pendingTargetFrames = -1L, audibleUntilMs = 60_000L,
+        )
+        val queue = engine.startQueue()!!
+        queue.finish()
+        Thread.sleep(200)
+        // Still sounding: the mic stays muted and the tail is not cut.
+        assertTrue(engine.speaking.value)
+        io.mockk.verify(exactly = 0) { track.pause() }
+        engine.stop() // frees the worker from the wait
+        runBlocking { withTimeout(10_000) { queue.awaitPlayed() } }
+    }
+
     // --- Task 6: audible() -- mic mute keys off physical playback, not the logical `speaking`
     // flag. speak()/enqueue() never reach real synthesis on the JVM (no native sherpa-onnx lib),
     // so primeAudibleStateForTest() drives the worker-confined track/pendingTargetFrames state
@@ -672,6 +710,62 @@ class SherpaTtsEngineTest {
 
         assertTrue(recreateAttempted)
         io.mockk.verify(exactly = 1) { track.release() }
+    }
+
+    // --- The local voice taking over from an online sentence (24 kHz against the model's own
+    // rate) used to release the old track at once and cut up to a buffer of its tail. ---
+
+    @Test
+    fun `ensureTrackForRate keeps the old track while its written audio still sounds for the local voice`() {
+        val mm = mockk<TtsModelManager>(relaxed = true) { every { isReady(any()) } returns true }
+        val engine = SherpaTtsEngine(mm)
+        val track = mockk<AudioTrack>(relaxed = true) { every { sampleRate } returns 24_000 }
+        engine.primeAudibleStateForTest(
+            track = track, speaking = true, pendingTargetFrames = -1L, audibleUntilMs = 60_000L,
+        )
+        val gen = engine.generationForTest()
+        val taker = Thread { runCatching { engine.ensureTrackForRate(22_050, tailOwnerGen = gen) } }
+        taker.start()
+        Thread.sleep(200)
+        io.mockk.verify(exactly = 0) { track.release() }
+        engine.startQueue() // a newer utterance supersedes the waiting one
+        taker.join(5_000)
+        io.mockk.verify(exactly = 1) { track.release() }
+    }
+
+    @Test
+    fun `ensureTrackForRate does not wait for the tail on the online path`() {
+        // playPcm()'s caller waits for the write under a bound of a few seconds; a tail wait
+        // there would end in a forced track stop and a silent reply.
+        val mm = mockk<TtsModelManager>(relaxed = true) { every { isReady(any()) } returns true }
+        val engine = SherpaTtsEngine(mm)
+        val track = mockk<AudioTrack>(relaxed = true) { every { sampleRate } returns 22_050 }
+        engine.primeAudibleStateForTest(
+            track = track, speaking = true, pendingTargetFrames = -1L, audibleUntilMs = 60_000L,
+        )
+        runCatching { engine.ensureTrackForRate(24_000) }
+        io.mockk.verify(exactly = 1) { track.release() }
+    }
+
+    @Test
+    fun `awaitAudibleFloor returns when the floor is reached, on supersede, or at the cap`() {
+        fun sleepsUntilReturn(floor: Long, maxWaitMs: Long, currentFor: Int = Int.MAX_VALUE): Int {
+            var clock = 0L
+            var sleeps = 0
+            SherpaTtsEngine.awaitAudibleFloor(
+                audibleUntil = { floor },
+                maxWaitMs = maxWaitMs,
+                pollMs = 20L,
+                stillCurrent = { sleeps < currentFor },
+                now = { clock },
+                sleep = { clock += it; sleeps++ },
+            )
+            return sleeps
+        }
+        assertEquals(5, sleepsUntilReturn(floor = 100L, maxWaitMs = 10_000L))  // 100 ms of tail
+        assertEquals(0, sleepsUntilReturn(floor = 0L, maxWaitMs = 10_000L))    // nothing sounding
+        assertEquals(2, sleepsUntilReturn(floor = 100L, maxWaitMs = 10_000L, currentFor = 2))
+        assertEquals(3, sleepsUntilReturn(floor = 60_000L, maxWaitMs = 60L))   // floor gone wrong
     }
 
     // --- Wave O, Task 5: playbackOutcome -- silence is failure, interruption is not.

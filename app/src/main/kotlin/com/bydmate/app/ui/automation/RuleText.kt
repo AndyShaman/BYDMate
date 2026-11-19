@@ -269,6 +269,8 @@ internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
     )
     "media_key" -> ActionDispatcher.mediaKeyNameRes(a.payload)?.let { lc.getString(it) } ?: a.displayName
     "screen" -> ActionDispatcher.screenNameRes(a.payload)?.let { lc.getString(it) } ?: a.displayName
+    "go_back" -> lc.getString(R.string.automation_action_go_back)
+    "go_home" -> lc.getString(R.string.widget_button_icon_home)
     "media_volume" -> a.payload?.toIntOrNull()
         ?.let { lc.getString(R.string.auto_ui_act_volume, lc.getString(R.string.automation_action_media_volume), it) }
         ?: a.displayName

@@ -14,8 +14,10 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.security.MessageDigest
 
 /** Downloads and unpacks the GigaAM v3 Russian ASR model (sherpa-onnx nemo-ctc archive:
  *  model.int8.onnx + tokens.txt under one top-level dir) plus the standalone silero VAD
@@ -52,6 +54,15 @@ class GigaAmModelManager(
 
     private fun vadFile() = File(context.filesDir, "asr/silero_vad.onnx")
 
+    /** SHA-256 of model.int8.onnx and tokens.txt, inside the model dir so it is published and
+     *  deleted together with the files it describes. */
+    private fun modelManifest(dir: File = baseDir()) = File(dir, MODEL_MANIFEST)
+
+    private fun vadManifest() = File(context.filesDir, "asr/silero_vad.onnx.sha256")
+
+    /** Marker: a tripped load guard once kept files it could not verify (see [markUnverifiedKept]). */
+    private fun unverifiedMarker() = File(context.filesDir, "asr/.unverified_kept")
+
     fun modelPath(): String = File(baseDir(), "model.int8.onnx").absolutePath
 
     fun tokensPath(): String = File(baseDir(), "tokens.txt").absolutePath
@@ -78,8 +89,113 @@ class GigaAmModelManager(
             legacyDir().deleteRecursively()
             legacyStagingDir().deleteRecursively()
             vadFile().delete()
+            vadManifest().delete()
+            unverifiedMarker().delete()
         }
     }
+
+    /** What [verifyIntegrity] found. */
+    enum class Integrity {
+        /** Every file is there and matches the hash taken when it was known good. */
+        INTACT,
+        /** A file is missing, empty or differs from its recorded hash. */
+        CORRUPT,
+        /** The files are there, but at least one has no recorded hash to compare with. */
+        UNVERIFIED,
+    }
+
+    /**
+     * Compares the model, tokens and VAD files with the SHA-256 recorded when they were known
+     * good: at download, or after their first successful load on installs older than the
+     * hashes. Reads ~230 MB, so it runs only when the load guard tripped.
+     */
+    suspend fun verifyIntegrity(): Integrity = withContext(Dispatchers.IO) {
+        diskMutex.withLock {
+            if (!isReady()) return@withLock Integrity.CORRUPT
+            val dir = baseDir()
+            val expected = readManifest(modelManifest(dir)) +
+                (readManifest(vadManifest())[VAD_KEY]?.let { mapOf(VAD_KEY to it) } ?: emptyMap())
+            val files = mapOf(
+                MODEL_FILE to File(dir, MODEL_FILE),
+                TOKENS_FILE to File(dir, TOKENS_FILE),
+                VAD_KEY to vadFile(),
+            )
+            var unknown = false
+            for ((key, file) in files) {
+                val want = expected[key]
+                if (want == null) { unknown = true; continue }
+                if (sha256(file) != want) return@withLock Integrity.CORRUPT
+            }
+            if (unknown) Integrity.UNVERIFIED else Integrity.INTACT
+        }
+    }
+
+    /** Which recorded hashes exist, for the diagnostic dump: "model=yes vad=no". */
+    fun manifestState(): String =
+        "model=${if (modelManifest().isFile) "yes" else "no"} vad=${if (vadManifest().isFile) "yes" else "no"} " +
+            "unverified_kept=${unverifiedMarker().isFile}"
+
+    /** True when a tripped guard already kept unverifiable files once and they tripped again. */
+    fun unverifiedKeptBefore(): Boolean = unverifiedMarker().isFile
+
+    /** Records that a tripped guard kept files it could not verify: the next unverifiable trip
+     *  deletes them. Cleared once one process loaded both the recognizer and the VAD, by a newly recorded hash, and by [delete]. */
+    suspend fun markUnverifiedKept() {
+        withContext(Dispatchers.IO) {
+            diskMutex.withLock { runCatching { unverifiedMarker().createNewFile() } }
+        }
+    }
+
+    /**
+     * After the recognizer ([model] true) or the VAD loaded: records the loaded files' SHA-256
+     * when none is recorded yet (installs that predate the hashes). A file the native loader just
+     * accepted is the best reference there is for the next tripped guard. Never throws.
+     */
+    private val loadedThisProcess = mutableSetOf<Boolean>()
+
+    suspend fun recordIntegrityIfMissing(model: Boolean) {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                diskMutex.withLock {
+                    if (model) {
+                        val dir = baseDir()
+                        if (isModelComplete(dir) && !modelManifest(dir).isFile) writeModelManifest(dir)
+                    } else if (isVadComplete() && !vadManifest().isFile) {
+                        writeManifest(vadManifest(), mapOf(VAD_KEY to sha256(vadFile())))
+                    }
+                    // A kept trip is settled once this process loaded both kinds of files: a
+                    // recognizer that loads cannot clear the mark of a VAD that keeps crashing.
+                    loadedThisProcess += model
+                    if (loadedThisProcess.size == 2) unverifiedMarker().delete()
+                }
+            }
+        }
+    }
+
+    private fun writeModelManifest(dir: File) {
+        writeManifest(modelManifest(dir), mapOf(
+            MODEL_FILE to sha256(File(dir, MODEL_FILE)),
+            TOKENS_FILE to sha256(File(dir, TOKENS_FILE)),
+        ))
+    }
+
+    /** Written beside, fsynced, then renamed: a power cut leaves either no manifest or a whole one. */
+    private fun writeManifest(target: File, hashes: Map<String, String>) {
+        val tmp = File(target.parentFile, target.name + ".tmp")
+        FileOutputStream(tmp).use { out ->
+            out.write(hashes.entries.joinToString("") { "${it.key} ${it.value}\n" }.toByteArray())
+            out.fd.sync()
+        }
+        check(tmp.renameTo(target)) { "failed to publish ${target.name}" }
+        unverifiedMarker().delete()
+    }
+
+    private fun readManifest(file: File): Map<String, String> =
+        runCatching {
+            file.takeIf(File::isFile)?.readLines().orEmpty()
+                .mapNotNull { line -> line.trim().split(' ').takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+                .toMap()
+        }.getOrDefault(emptyMap())
 
     suspend fun download(onProgress: (Phase, Int) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
@@ -119,6 +235,9 @@ class GigaAmModelManager(
                                 onProgress(Phase.UNPACK, DOWNLOAD_WEIGHT + (pct * (UNPACK_END - DOWNLOAD_WEIGHT)) / 100)
                             }
                             check(isModelComplete(staging)) { "unpack produced incomplete model dir" }
+                            // Hashed before publishing, so the dir appears with its reference
+                            // already inside (a later tripped load guard checks against it).
+                            writeModelManifest(staging)
                             // Atomic publish: the final dir only ever appears as a
                             // fully verified unpack, so a process kill mid-unpack can
                             // never leave a dir that isModelComplete() accepts.
@@ -143,8 +262,10 @@ class GigaAmModelManager(
                     diskMutex.withLock {
                         ensureActive()
                         check(tmpVad.length() > 0) { "downloaded VAD file is empty" }
+                        vadManifest().delete()
                         vadFile().delete()
                         check(tmpVad.renameTo(vadFile())) { "failed to publish VAD file" }
+                        writeManifest(vadManifest(), mapOf(VAD_KEY to sha256(vadFile())))
                     }
                     // Explicit 100: a chunked VAD response has no contentLength, so the loop
                     // above would never emit a final tick and the bar would stop short.
@@ -247,6 +368,25 @@ class GigaAmModelManager(
     }
 
     companion object {
+        private const val MODEL_FILE = "model.int8.onnx"
+        private const val TOKENS_FILE = "tokens.txt"
+        private const val VAD_KEY = "silero_vad.onnx"
+        private const val MODEL_MANIFEST = "sha256.txt"
+
+        /** Hex SHA-256 of [file], streamed. */
+        internal fun sha256(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buf = ByteArray(1024 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    digest.update(buf, 0, n)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+
         const val MODEL_URL =
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" +
                 "sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16.tar.bz2"

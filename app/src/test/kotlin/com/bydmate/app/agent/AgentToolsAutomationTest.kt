@@ -259,6 +259,18 @@ class AgentToolsAutomationTest {
         assertEquals("play", payload.getString("mode"))
     }
 
+    @Test fun create_automation_accepts_go_back() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        val out = JSONObject(tools().execute(call("create_automation", createArgs(
+            actions = """[{"kind":"go_back"}]"""))))
+
+        assertTrue(out.toString(), out.getBoolean("ok"))
+        assertEquals("go_back", ActionDef.listFromJson(slot.captured.actions)[0].kind)
+    }
+
     @Test fun create_automation_place_trigger_found_sets_place_id_and_name() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
         coEvery { places.getAllSnapshot() } returns listOf(PlaceEntity(id = 3, name = "Дом", lat = 55.0, lon = 37.0))

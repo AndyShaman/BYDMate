@@ -36,16 +36,21 @@ object HybridTechFixture {
     )
 
     /** key → raw text of the first `tech:` line. */
-    fun firstTechLine(): Map<String, String> {
-        val text = checkNotNull(javaClass.classLoader?.getResourceAsStream(FIXTURE)) { FIXTURE }
+    fun firstTechLine(): Map<String, String> = techLines(FIXTURE).first()
+
+    /** key → raw text of every `tech:` line of a fixture, in file order. */
+    fun techLines(fixture: String): List<Map<String, String>> {
+        val text = checkNotNull(javaClass.classLoader?.getResourceAsStream(fixture)) { fixture }
             .bufferedReader().use { it.readText() }
-        val line = text.lineSequence().first { "tech: " in it }.substringAfter("tech: ")
-        return line.split(' ').filter { '=' in it }.associate { it.substringBefore('=') to it.substringAfter('=') }
+        return text.lineSequence().filter { "tech: " in it }.map { raw ->
+            raw.substringAfter("tech: ").split(' ').filter { '=' in it }
+                .associate { it.substringBefore('=') to it.substringAfter('=') }
+        }.toList()
     }
 
     /** The batch words the daemon returned for that line; every fid the line does not carry is -10011. */
-    private fun batchPairs(): List<Pair<Int, Int>> {
-        val words = firstTechLine().mapNotNull { (key, raw) ->
+    private fun batchPairs(line: Map<String, String>): List<Pair<Int, Int>> {
+        val words = line.mapNotNull { (key, raw) ->
             val field = FIELDS[key] ?: return@mapNotNull null
             val entry = FidMap.entries.first { it.field == field }
             field to if (entry.transact == 7) java.lang.Float.floatToRawIntBits(raw.toFloat()) else raw.toInt()
@@ -54,11 +59,16 @@ object HybridTechFixture {
     }
 
     /** The snapshot the reader assembles from that line, battery capacity as in the dump. */
-    suspend fun snapshot(): DiParsData {
+    suspend fun snapshot(): DiParsData = snapshots(FIXTURE).first()
+
+    /** One snapshot per `tech:` line of [fixture], assembled through the reader's batch path. */
+    suspend fun snapshots(fixture: String): List<DiParsData> = techLines(fixture).map { snapshotOf(it) }
+
+    private suspend fun snapshotOf(line: Map<String, String>): DiParsData {
         val settings = mockk<SettingsRepository>()
         coEvery { settings.getBatteryCapacity() } returns 31.8
         val helper = mockk<HelperClient>()
-        coEvery { helper.readBatch(any()) } returns batchPairs()
+        coEvery { helper.readBatch(any()) } returns batchPairs(line)
         val gate = mockk<BatchReadGate>()
         coEvery { gate.mode() } returns BatchMode.ACTIVE
         coEvery { gate.recordComparison(any(), any()) } just Runs

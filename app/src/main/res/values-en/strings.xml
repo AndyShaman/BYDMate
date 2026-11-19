@@ -522,6 +522,7 @@
     <string name="automation_action_hotspot_off">Disable</string>
     <string name="automation_action_screen_off">Center screen: off</string>
     <string name="automation_action_screen_on">Center screen: on</string>
+    <string name="automation_action_go_back">Back</string>
     <string name="automation_action_speak">Speak text</string>
     <string name="automation_action_agent_query">Ask the agent</string>
     <string name="auto_act_speak">Speak text</string>
@@ -1288,7 +1289,11 @@
     <string name="settings_tts_voice_online_gemini_badge">OpenRouter key</string>
     <string name="settings_tts_voice_online_minimax_desc">Natural Russian voice · reply starts slightly later than the local voice</string>
     <string name="settings_tts_voice_online_minimax_badge">MiniMax key needed</string>
-    <string name="settings_tts_online_fallback_hint">Online voices need a network connection; if the service does not answer within 2 seconds, the reply stays silent</string>
+    <string name="settings_tts_online_fallback_hint">Online voices need a network connection; if the service does not answer, the reply is spoken by the local voice</string>
+    <string name="tts_online_failed_policy">The online voice is unavailable: the request was refused by the privacy settings of your OpenRouter account (openrouter.ai/settings/privacy).</string>
+    <string name="tts_online_failed_other">The online voice did not answer.</string>
+    <string name="tts_online_failed_spoken_local">Answering with the local voice.</string>
+    <string name="tts_online_failed_silent">The local voice is unavailable, the answer is on screen only.</string>
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Keys for online voices</string>
@@ -1750,6 +1755,7 @@
     <string name="dispatch_sentry_failed">Could not switch sentry mode</string>
     <string name="dispatch_hotspot_invalid_state">Invalid Wi-Fi hotspot state</string>
     <string name="dispatch_hotspot_failed">Could not switch the Wi-Fi hotspot</string>
+    <string name="dispatch_back_failed">Could not press Back</string>
     <string name="dispatch_screen_invalid_state">Invalid screen state</string>
     <string name="dispatch_screen_not_available">Screen control is not available on this car</string>
     <string name="dispatch_cluster_invalid_state">Invalid cluster projection state</string>
@@ -1825,7 +1831,7 @@
     <string name="tg_report_field_battery_temp">Battery temperature</string>
     <string name="tg_report_field_openings">What is open</string>
     <string name="tg_report_field_tires">Tire pressure</string>
-    <string name="tg_report_header_off">BYDMate: car turned off at %1$s</string>
+    <string name="tg_report_header_off">BYDMate: car turned off on %1$s at %2$s</string>
     <string name="tg_report_map_link">Open on the map</string>
     <string name="tg_report_soc">charge %1$s</string>
     <string name="tg_report_soc_value">%1$d%%</string>

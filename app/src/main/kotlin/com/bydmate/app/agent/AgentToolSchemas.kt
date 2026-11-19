@@ -318,6 +318,12 @@ internal suspend fun agentToolSchemas(
         JSONObject(), emptyList(),
     ))
     put(tool(
+        "go_back",
+        "Нажать системную кнопку Назад: вернуться на предыдущий экран приложения. Для команд: " +
+            "назад, вернись, на шаг назад.",
+        JSONObject(), emptyList(),
+    ))
+    put(tool(
         "end_conversation",
         "Закрыть голосового помощника (тебя самого). Вызывать ТОЛЬКО когда водитель прямо просит " +
             "закрыть, выключить или остановить помощника или говорит, что разговор окончен: " +
@@ -491,9 +497,9 @@ internal suspend fun agentToolSchemas(
                                     "yandex_music", "sentry", "hotspot", "screen", "app_launch", "app_close", "media_key",
                                     "cluster_projection", "speak", "agent_query",
                                     "split_screen", "split_screen_close",
-                                    "split_screen_toggle", "youtube", "go_home")))
+                                    "split_screen_toggle", "youtube", "go_home", "go_back")))
                                 .put("description", "Тип действия. split_screen_close, " +
-                                    "split_screen_toggle и go_home дополнительных полей не требуют"))
+                                    "split_screen_toggle, go_home и go_back дополнительных полей не требуют"))
                             // No second enum: the same ~90 ids already ship with
                             // vehicle_control, and repeating them here cost ~2 kB of the
                             // static prefix on every single turn.

@@ -11,6 +11,7 @@ import com.bydmate.app.data.dtc.DtcLabels
 import com.bydmate.app.data.dtc.DtcParser
 import com.bydmate.app.data.dtc.DtcSavedScan
 import com.bydmate.app.data.dtc.DtcScanRepository
+import com.bydmate.app.data.nativestack.MotorPresence
 import com.bydmate.app.data.nativestack.VehicleKindMonitor
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -42,6 +43,7 @@ class TechPanelViewModel @Inject constructor(
     private val carStatusReader: CarStatusReader,
     private val dtcScanRepository: DtcScanRepository,
     private val pm25Reader: Pm25Reader,
+    private val motorPresence: MotorPresence,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TechPanelUiState())
@@ -140,10 +142,11 @@ class TechPanelViewModel @Inject constructor(
                             bmsMaxDischargeKw = data?.bmsMaxDischargeKw,
                             cellMin = data?.minCellVoltage,
                             cellMax = data?.maxCellVoltage,
-                            motorTempFront = data?.motorTempFront,
-                            motorTempRear = data?.motorTempRear,
-                            inverterTempFront = data?.inverterTempFront,
-                            inverterTempRear = data?.inverterTempRear,
+                            // #426: a motor the car does not have reports made-up temperatures.
+                            motorTempFront = data?.motorTempFront?.takeUnless { motorPresence.frontAbsent },
+                            motorTempRear = data?.motorTempRear?.takeUnless { motorPresence.rearAbsent },
+                            inverterTempFront = data?.inverterTempFront?.takeUnless { motorPresence.frontAbsent },
+                            inverterTempRear = data?.inverterTempRear?.takeUnless { motorPresence.rearAbsent },
                             motorRpmFront = data?.motorRpmFront,
                             motorRpmRear = data?.motorRpmRear,
                             motorCurrentFront = data?.motorCurrentFront,
@@ -185,12 +188,13 @@ class TechPanelViewModel @Inject constructor(
         val state = runCatching { batteryStateRepository.refresh() }.getOrNull()
         _uiState.update {
             if (state == null || !state.autoserviceAvailable) {
-                it.copy(autoserviceOnline = false)
+                it.copy(autoserviceOnline = false, bmsLifetimeKwhForCycles = state?.lifetimeKwhForCycles)
             } else {
                 it.copy(
                     soh = state.sohPercent,
                     lifetimeKm = state.lifetimeKm,
                     lifetimeKwh = state.lifetimeKwh,
+                    bmsLifetimeKwhForCycles = state.lifetimeKwhForCycles,
                 )
             }
         }

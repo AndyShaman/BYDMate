@@ -171,7 +171,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
      * 2. Out of range        → OutOfRange
      * 3. helper.write throws → HelperUnreachable (IOException or other)
      * 4. helper.write false  → HelperUnreachable (validated) / Unsupported (non-validated)
-     * 5. Readback == -10011  → Sentinel
+     * 5. Readback == -10011  → Unconfirmed
      * 6. Readback != value   → ReadbackMismatch
      * 7. Otherwise           → Result.success(Unit)
      *
@@ -295,7 +295,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             // For non-validated entries, sentinel is expected (crowd-validation in progress) — surface as Unsupported.
             // DAO error string stays "readback_sentinel" for diagnostic analysis.
             windowCheck?.before?.cancel()
-            val err = if (entry.validated) VehicleWriteError.Sentinel(actionName) else VehicleWriteError.Unsupported(actionName)
+            val err = if (entry.validated) VehicleWriteError.Unconfirmed(actionName) else VehicleWriteError.Unsupported(actionName)
             logWrite(actionName, entry.dev, entry.writeFid, value, readback.toInt(), false, "readback_sentinel", entry.validated)
             maybeReportValidatedFailure(actionName, err, entry)
             return Result.failure(err)
@@ -453,7 +453,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             SteeringHeatChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "helper write not accepted"))
             SteeringHeatChannel.Result.UNCONFIRMED ->
-                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+                Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed (${outcome.verdict})"))
         }
     }
 
@@ -476,7 +476,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             HudSwitchChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
             HudSwitchChannel.Result.UNCONFIRMED ->
-                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+                Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed (${outcome.verdict})"))
         }
     }
 
@@ -501,7 +501,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             SpoilerChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
             SpoilerChannel.Result.UNCONFIRMED ->
-                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+                Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed (${outcome.verdict})"))
         }
     }
 
@@ -525,7 +525,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
             RearSeatHeatChannel.Result.UNREACHABLE ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
             RearSeatHeatChannel.Result.UNCONFIRMED ->
-                Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+                Result.failure(VehicleWriteError.Unconfirmed(action, "result not confirmed (${outcome.verdict})"))
         }
     }
 

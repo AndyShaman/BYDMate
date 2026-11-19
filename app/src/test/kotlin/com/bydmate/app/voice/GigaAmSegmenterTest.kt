@@ -452,8 +452,12 @@ class GigaAmSegmenterTest {
 
         engine.transcribe(List(2) { ShortArray(320) { 1000 } }.asFlow()).toList()
 
+        // Plus one summary line per session: loudness and counts only, never audio or text.
         assertEquals(
-            listOf("voice  vad-ready ms=N prebuilt=false #1"),
+            listOf(
+                "voice  vad-ready ms=N prebuilt=false #1",
+                "voice  vad-summary heard_ms=40 speech_ms=20 segments=1 noise_flushes=0 floor=1000 noisy=false #2",
+            ),
             trace.events().map { it.replace(Regex(""" ms=\d+"""), " ms=N") },
         )
     }
@@ -465,7 +469,10 @@ class GigaAmSegmenterTest {
         engine.transcribe(flowOf(ShortArray(160))).collect {}
 
         assertEquals(
-            listOf("voice  vad-ready ms=N prebuilt=true #1"),
+            listOf(
+                "voice  vad-ready ms=N prebuilt=true #1",
+                "voice  vad-summary heard_ms=10 speech_ms=0 segments=0 noise_flushes=0 floor=0 noisy=false #2",
+            ),
             trace.events().map { it.replace(Regex(""" ms=\d+"""), " ms=N") },
         )
     }

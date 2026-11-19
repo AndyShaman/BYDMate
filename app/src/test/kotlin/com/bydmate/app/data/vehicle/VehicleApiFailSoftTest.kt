@@ -11,7 +11,7 @@ import org.junit.Test
 
 /**
  * Tests for the fail-soft Result<Unit> contract introduced in Task C.6.
- * Covers AllowlistMiss, HelperUnreachable (IOException), Sentinel, and
+ * Covers AllowlistMiss, HelperUnreachable (IOException), Unconfirmed, and
  * Unsupported (non-validated helper-false) paths.
  */
 class VehicleApiFailSoftTest {
@@ -60,9 +60,9 @@ class VehicleApiFailSoftTest {
         assertTrue(result.exceptionOrNull() is VehicleWriteError.HelperUnreachable)
     }
 
-    // ── Test 3: readback sentinel -10011 returns Result failure Sentinel ──────
+    // ── Test 3: readback sentinel -10011 returns Result failure Unconfirmed ───
 
-    @Test fun `readback sentinel returns Result failure Sentinel`() = runTest {
+    @Test fun `readback sentinel returns Result failure Unconfirmed`() = runTest {
         // No production entry has a readbackFid anymore (doors_lock dropped it —
         // see WriteAllowlist), so the sentinel path is exercised via a synthetic
         // validated entry with a readbackFid.
@@ -85,7 +85,7 @@ class VehicleApiFailSoftTest {
 
         val result = customApi.doWrite("synthetic_readback_action", 2)
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is VehicleWriteError.Sentinel)
+        assertTrue(result.exceptionOrNull() is VehicleWriteError.Unconfirmed)
     }
 
     // ── Test 4: non-validated entry helper-false returns Unsupported ──────────
@@ -129,7 +129,7 @@ class VehicleApiFailSoftTest {
 
     // ── Test 6: non-validated sentinel returns Unsupported, DAO row uses "readback_sentinel" ──
 
-    @Test fun `non-validated sentinel returns Unsupported not Sentinel`() = runTest {
+    @Test fun `non-validated sentinel returns Unsupported not Unconfirmed`() = runTest {
         val customAllowlist = WriteAllowlist(mapOf(
             "trunk_open" to WriteEntry(
                 actionName = "trunk_open",

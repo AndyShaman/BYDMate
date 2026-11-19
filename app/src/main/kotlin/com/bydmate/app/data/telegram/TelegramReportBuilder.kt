@@ -102,9 +102,12 @@ object TelegramReportBuilder {
     fun ruleHeader(ruleName: String?): String =
         ruleName?.trim()?.takeIf { it.isNotEmpty() }?.let { "$APP_NAME: $it" } ?: APP_NAME
 
-    /** «BYDMate: машина выключена в {{time}}»: the daemon fills the time when it sends. */
-    fun powerOffHeader(strings: ReportStrings): String =
-        strings.get(R.string.tg_report_header_off, arrayOf(TIME_PLACEHOLDER))
+    /**
+     * «BYDMate: машина выключена 14.11 в {{time}}»: the date of [nowMs] (the text is rebuilt while the
+     * car is on), the daemon fills the time when it sends.
+     */
+    fun powerOffHeader(strings: ReportStrings, nowMs: Long): String =
+        strings.get(R.string.tg_report_header_off, arrayOf(formatDate(nowMs), TIME_PLACEHOLDER))
 
     /** Puts the send time into a power-off text built with [powerOffHeader]. */
     fun fillTime(text: String, timeMs: Long): String = text.replace(TIME_PLACEHOLDER, formatTime(timeMs))

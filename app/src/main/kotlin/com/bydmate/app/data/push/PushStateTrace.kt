@@ -83,8 +83,8 @@ internal class PushStateTrace(
         const val ADAS_DEVICE = 1038
 
         /**
-         * ADAS states subscribed for the trace alone (Leopard 3 BYDAutoFeatureIds; all seven
-         * answered a plain read there on 2026-09-29). Not FidMap fields: nothing polls them or
+         * ADAS states subscribed for the trace alone (Leopard 3 BYDAutoFeatureIds; the first
+         * seven answered a plain read there on 2026-09-29). Not FidMap fields: nothing polls them or
          * patches the snapshot with them. The fid is the Leopard 3 number; the push channel
          * subscribes one only where this car's catalog gives its symbol that same number.
          */
@@ -96,6 +96,16 @@ internal class PushStateTrace(
             AdasState(535826458, "noa-gray", "Adas.ADAS_NOA_GRAY_STATE"),
             AdasState(535830556, "noa-quit", "Adas.ADAS_NOA_QUIT_PROMPT"),
             AdasState(828375060, "lks-fault", "Adas.ADAS_LKS_FAULT"),
+            // #383, a rule condition "ICC is on": which of these follows the cruise and the lane
+            // keeping is not known from a car yet, the trace of a drive is what tells. BYD's own
+            // code reads the mode as 1 ACC, 2 ICC, 3 NOA and the cruise as active at 3..7; the
+            // navigation pilot drives at 4, 6, 8. Not read on a car before 4.4.2.
+            AdasState(535830576, "assist-mode", "Adas.ADAS_ASSIST_DRIVE_MODE_STATUS"),
+            AdasState(700448780, "cruise-arhud", "Adas.ADAS_ACC_MODE_ARHUD"),
+            AdasState(852492340, "cruise-mode", "Adas.ADAS_ACC_MODE"),
+            AdasState(828375084, "lane-cruise", "Adas.ADAS_TJA_ICA_STATE"),
+            AdasState(700448784, "icc-signal", "Adas.ADAS_BROADCAST_AFTER_GET_ICCSIGNAL"),
+            AdasState(700448800, "nav-pilot", "Adas.ADAS_DNP_STATE"),
         )
 
         /** Turn signal mask (Leopard 3): 1=off, 2=left, 4=right, 6=hazard; anything else by number. */
