@@ -130,6 +130,45 @@ class FidCatalogManagerTest {
         assertEquals(1125122091, catalog.fidOf("Setting.SET_REAR_LEFT_SEAT_HEATING_STATE_SET"))
     }
 
+    /** #443: a firmware that dumps only the flat namespace is installed and cached with nested keys. */
+    @Test fun `a flat-only dump is installed and cached with nested keys`() = runTest {
+        val flat = javaClass.classLoader!!.getResource("fid-catalog-yuanpro-flat.txt")!!.readText()
+        val subject = manager(FakeHelper(listOf(DumpFidsResult.Success(flat))))
+        subject.ensureResolved()
+
+        assertTrue(subject.resolveStatus, subject.resolveStatus.contains("installed"))
+        assertEquals(1033543720, subject.catalog!!.fidOf("Statistic.STATISTIC_ELEC_PERCENTAGE"))
+
+        val cache = java.io.File(
+            ApplicationProvider.getApplicationContext<android.content.Context>().filesDir,
+            "fid-catalog.txt",
+        ).readText()
+        assertTrue(cache.contains("Statistic.STATISTIC_ELEC_PERCENTAGE=1033543720"))
+        assertFalse(cache.contains("BYDAutoFeatureIds."))
+
+        val fromFile = manager(FakeHelper(listOf(DumpFidsResult.BinderAbsent)))
+        fromFile.ensureResolved()
+        assertEquals(1033543720, fromFile.catalog!!.fidOf("Statistic.STATISTIC_ELEC_PERCENTAGE"))
+    }
+
+    /** #429: the battery current probe reads these three by name, so a cached catalog must keep them. */
+    @Test fun `the cached catalog keeps the battery current candidates`() = runTest {
+        val candidates = """
+            Charging.CHARGING_CHARGE_CURRENT_NOT_CONVERT=-1002438632
+            Gb.GB_BATTERY_CCURRENT=677380120
+            Instrument.INSTRUMENT_PSPK_BATTERY_CURRENT=1298153504
+        """.trimIndent()
+        manager(FakeHelper(listOf(DumpFidsResult.Success("$dump\n$candidates")))).ensureResolved()
+
+        val cache = java.io.File(
+            ApplicationProvider.getApplicationContext<android.content.Context>().filesDir,
+            "fid-catalog.txt",
+        ).readText()
+        assertTrue(cache.contains("Charging.CHARGING_CHARGE_CURRENT_NOT_CONVERT=-1002438632"))
+        assertTrue(cache.contains("Gb.GB_BATTERY_CCURRENT=677380120"))
+        assertTrue(cache.contains("Instrument.INSTRUMENT_PSPK_BATTERY_CURRENT=1298153504"))
+    }
+
     /**
      * A silent autoservice under a healthy daemon leaves the resolution PENDING, which is the
      * signal the service's poll tick retries on — the watchdog respawn would never fire here.

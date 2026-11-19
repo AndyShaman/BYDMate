@@ -49,4 +49,61 @@ class FidCatalogTest {
             assertEquals("$name has symbols", true, catalog.symbols.size > 100)
         }
     }
+
+    private fun resource(name: String): String =
+        checkNotNull(javaClass.classLoader?.getResourceAsStream(name)) { "missing fixture $name" }
+            .bufferedReader().readText()
+
+    private val flatOnly = "BYDAutoConstants.BYDAUTO_DEVICE_STATISTIC=1014\n" +
+        "BYDAutoFeatureIds.STATISTIC_ELEC_PERCENTAGE=1033543720"
+
+    @Test fun `a flat-only dump maps flat names onto the wanted nested symbols`() {
+        val catalog = FidCatalog.parse(flatOnly, listOf("Statistic.STATISTIC_ELEC_PERCENTAGE"))
+        assertEquals(1033543720, catalog.fidOf("Statistic.STATISTIC_ELEC_PERCENTAGE"))
+        assertEquals(1014, catalog.deviceOf("STATISTIC"))
+    }
+
+    @Test fun `one nested line switches the flat fallback off`() {
+        val catalog = FidCatalog.parse(
+            "BYDAutoFeatureIds.STATISTIC_ELEC_PERCENTAGE=1\nAc.AC_TEMP_MAIN=2",
+            listOf("Statistic.STATISTIC_ELEC_PERCENTAGE", "Ac.AC_TEMP_MAIN"),
+        )
+        assertNull(catalog.fidOf("Statistic.STATISTIC_ELEC_PERCENTAGE"))
+        assertEquals(2, catalog.fidOf("Ac.AC_TEMP_MAIN"))
+        assertEquals(1, catalog.symbols.size)
+    }
+
+    @Test fun `without aliases a flat dump still parses empty`() {
+        assertEquals(true, FidCatalog.parse(flatOnly).symbols.isEmpty())
+    }
+
+    @Test fun `flat names that no wanted symbol asks for are not added`() {
+        val catalog = FidCatalog.parse(
+            "BYDAutoFeatureIds.STATISTIC_ELEC_PERCENTAGE=1033543720\nBYDAutoFeatureIds.AC_TEMP_MAIN=330301480",
+            listOf("Statistic.STATISTIC_ELEC_PERCENTAGE"),
+        )
+        assertEquals(1, catalog.symbols.size)
+    }
+
+    @Test fun `a flat name listed twice with different values is dropped`() {
+        val catalog = FidCatalog.parse("BYDAutoFeatureIds.X=1\nBYDAutoFeatureIds.X=2", listOf("Ac.X"))
+        assertNull(catalog.fidOf("Ac.X"))
+    }
+
+    @Test fun `the Yuan Pro flat fixture yields a usable catalog`() {
+        val catalog = FidCatalog.parse(resource("fid-catalog-yuanpro-flat.txt"), FidCatalogManager.wantedSymbols())
+        assertEquals(50, catalog.devices.size)
+        assertEquals(1033543720, catalog.fidOf("Statistic.STATISTIC_ELEC_PERCENTAGE"))
+        assertEquals(1033543696, catalog.fidOf("Statistic.STATISTIC_TOTAL_MILEAGE"))
+        assertEquals(303038472, catalog.fidOf("Speed.SPEED_AUTO_SPEED"))
+        assertEquals(1145047064, catalog.fidOf("Charging.CHARGING_CHARGE_CURRENT"))
+    }
+
+    /** Real-data pin: on a firmware that has both namespaces the flat value is the nested value. */
+    @Test fun `the flat namespace of a nested dump equals its nested classes`() {
+        val nested = FidCatalog.parse(resource("fid-catalog-songplus.txt"))
+        val flat = FidCatalog.parse(resource("fid-catalog-songplus-flat.txt"), nested.symbols.keys)
+        assertEquals(true, flat.symbols.size > 50)
+        flat.symbols.forEach { (symbol, value) -> assertEquals(symbol, nested.fidOf(symbol), value) }
+    }
 }
