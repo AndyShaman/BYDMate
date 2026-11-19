@@ -364,6 +364,14 @@ class RuleShareTest {
         assertTrue("screen" in RuleShare.KNOWN_ACTION_KINDS)
     }
 
+    @Test fun `go_back is a known action kind and survives the share file`() {
+        val steps = listOf(ActionDef("", "Назад", "go_back"))
+        val rule = SharedRule.fromEntity(sourceEntity()).copy(actions = steps)
+        val parsed = RuleShare.parse(RuleShare.exportJson(rule, "4.5.0"), "Звонок") as RuleParseResult.Ok
+        assertEquals(steps, parsed.rule.actions)
+        assertTrue("go_back" in RuleShare.KNOWN_ACTION_KINDS)
+    }
+
     // --- Import ---
 
     @Test fun `export then parse keeps the rule minus private fields`() {

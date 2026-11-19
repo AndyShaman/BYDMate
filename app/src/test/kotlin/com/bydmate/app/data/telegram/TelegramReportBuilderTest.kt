@@ -469,13 +469,30 @@ class TelegramReportBuilderTest {
         assertFalse(MapPoint(53.9, 27.56).toString().contains("53"))
     }
 
-    @Test fun `power-off header carries the time placeholder the daemon fills`() {
-        val header = TelegramReportBuilder.powerOffHeader(strings("ru"))
-        assertEquals("BYDMate: машина выключена в ${TelegramReportBuilder.TIME_PLACEHOLDER}", header)
+    @Test fun `power-off header carries the date and the time placeholder`() {
+        val header = TelegramReportBuilder.powerOffHeader(strings("ru"), now)
+        assertEquals("BYDMate: машина выключена ${dayOf(now)} в ${TelegramReportBuilder.TIME_PLACEHOLDER}", header)
+    }
+
+    @Test fun `power-off header filled by the daemon reads date and time`() {
+        val header = TelegramReportBuilder.powerOffHeader(strings("ru"), now)
         val text = build(fields = setOf(ReportField.SOC), header = header).text
         val filled = TelegramReportBuilder.fillTime(text, now)
-        assertTrue(filled, filled.startsWith("<b>BYDMate: машина выключена в ${TelegramReportBuilder.formatTime(now)}</b>"))
+        assertTrue(filled, filled.startsWith("<b>BYDMate: машина выключена ${dayOf(now)} в ${TelegramReportBuilder.formatTime(now)}</b>"))
         assertFalse(filled.contains(TelegramReportBuilder.TIME_PLACEHOLDER))
+    }
+
+    @Test fun `power-off header has date and time placeholder in every language`() {
+        for (lang in listOf("ru", "be", "en", "pl", "pt", "zh")) {
+            val header = TelegramReportBuilder.powerOffHeader(strings(lang), now)
+            assertTrue("$lang: $header", header.contains(dayOf(now)))
+            assertTrue("$lang: $header", header.contains(TelegramReportBuilder.TIME_PLACEHOLDER))
+            assertFalse("$lang: $header", header.contains("%"))
+        }
+        assertEquals(
+            "BYDMate: car turned off on ${dayOf(now)} at ${TelegramReportBuilder.TIME_PLACEHOLDER}",
+            TelegramReportBuilder.powerOffHeader(strings("en"), now),
+        )
     }
 
     // --- trip time, energy and cost ---

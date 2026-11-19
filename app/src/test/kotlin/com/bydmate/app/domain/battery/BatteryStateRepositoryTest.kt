@@ -3,7 +3,11 @@ package com.bydmate.app.domain.battery
 import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
+import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.data.local.dao.FakeSettingsDao
 import com.bydmate.app.data.repository.BatteryHealthRepository
+import com.bydmate.app.data.repository.SettingsRepository
+import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -33,6 +37,9 @@ class BatteryStateRepositoryTest {
         override suspend fun getLast(): BatterySnapshotEntity? = lastValue
     }
 
+    private val dao = FakeSettingsDao()
+    private val settings = SettingsRepository(dao, mockk<LocalePreferences>(relaxed = true))
+
     private fun fakeBatteryHealth(last: BatterySnapshotEntity?): BatteryHealthRepository =
         BatteryHealthRepository(StubBatterySnapshotDao(last))
 
@@ -41,6 +48,7 @@ class BatteryStateRepositoryTest {
         val repo = BatteryStateRepository(
             FakeVehicleApi(BatteryReading(100f, 91f, 602.7f, 2091f, 14.0f, 0L)),
             fakeBatteryHealth(null),
+            settings,
         )
 
         val state = repo.refresh()
@@ -57,6 +65,7 @@ class BatteryStateRepositoryTest {
         val repo = BatteryStateRepository(
             FakeVehicleApi(battery = null, available = false),
             fakeBatteryHealth(null),
+            settings,
         )
 
         val state = repo.refresh()
@@ -70,6 +79,7 @@ class BatteryStateRepositoryTest {
         val repo = BatteryStateRepository(
             FakeVehicleApi(battery = null, available = true),
             fakeBatteryHealth(null),
+            settings,
         )
 
         val state = repo.refresh()
@@ -87,10 +97,86 @@ class BatteryStateRepositoryTest {
         val repo = BatteryStateRepository(
             FakeVehicleApi(BatteryReading(null, 91f, 602.7f, 2091f, 14f, 0L)),  // sohPercent sentinel
             fakeBatteryHealth(snap),
+            settings,
         )
 
         val state = repo.refresh()
 
         assertEquals(98.7f, state.sohPercent!!, 0.01f)  // from snapshot
+    }
+
+    private fun repo(battery: BatteryReading?, available: Boolean = true, settings: SettingsRepository = this.settings) =
+        BatteryStateRepository(FakeVehicleApi(battery, available), fakeBatteryHealth(null), settings)
+
+    private fun reading(kwh: Float?) = BatteryReading(100f, 91f, kwh, 2091f, 14f, 0L)
+
+    @Test
+    fun `a live lifetime counter is remembered`() = runTest {
+        val state = repo(reading(10963f)).refresh()
+
+        assertEquals(10963f, state.lifetimeKwh!!, 0.01f)
+        assertEquals(10963f, state.lifetimeKwhLastKnown!!, 0.01f)
+        assertEquals(10963f, dao.map[SettingsRepository.KEY_BMS_LIFETIME_KWH_LAST]!!.toFloat(), 0.01f)
+    }
+
+    @Test
+    fun `an absent counter gives the remembered one, the raw value stays null`() = runTest {
+        repo(reading(10963f)).refresh()
+
+        val state = repo(reading(null)).refresh()
+
+        assertNull(state.lifetimeKwh)
+        assertEquals(10963f, state.lifetimeKwhLastKnown!!, 0.01f)
+        assertEquals(10963f, state.lifetimeKwhForCycles!!, 0.01f)
+    }
+
+    @Test
+    fun `car asleep still has the remembered one`() = runTest {
+        dao.map[SettingsRepository.KEY_BMS_LIFETIME_KWH_LAST] = "10963"
+
+        val state = repo(battery = null, available = false).refresh()
+
+        assertFalse(state.autoserviceAvailable)
+        assertEquals(10963f, state.lifetimeKwhLastKnown!!, 0.01f)
+    }
+
+    @Test
+    fun `snapshot null with the car available still has the remembered one`() = runTest {
+        dao.map[SettingsRepository.KEY_BMS_LIFETIME_KWH_LAST] = "10963"
+
+        val state = repo(battery = null, available = true).refresh()
+
+        assertEquals(10963f, state.lifetimeKwhLastKnown!!, 0.01f)
+    }
+
+    @Test
+    fun `a zero counter is never remembered and never overwrites`() = runTest {
+        repo(reading(10963f)).refresh()
+        val after = repo(reading(0f)).refresh()
+        assertEquals(10963f, dao.map[SettingsRepository.KEY_BMS_LIFETIME_KWH_LAST]!!.toFloat(), 0.01f)
+        assertEquals(10963f, after.lifetimeKwhForCycles!!, 0.01f)
+
+        val freshDao = FakeSettingsDao()
+        val fresh = repo(reading(0f), settings = SettingsRepository(freshDao, mockk<LocalePreferences>(relaxed = true))).refresh()
+        assertNull(freshDao.map[SettingsRepository.KEY_BMS_LIFETIME_KWH_LAST])
+        assertNull(fresh.lifetimeKwhLastKnown)
+        assertNull(fresh.lifetimeKwhForCycles)
+    }
+
+    @Test
+    fun `the remembered value survives a new repository`() = runTest {
+        repo(reading(10963f)).refresh()
+
+        val state = repo(battery = null, available = false).refresh()
+
+        assertEquals(10963f, state.lifetimeKwhLastKnown!!, 0.01f)
+    }
+
+    @Test
+    fun `a car that never reported the counter has nothing remembered`() = runTest {
+        val state = repo(reading(null)).refresh()
+
+        assertNull(state.lifetimeKwhLastKnown)
+        assertNull(state.lifetimeKwhForCycles)
     }
 }

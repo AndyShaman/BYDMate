@@ -222,7 +222,17 @@ utterance	expected	category	danger
 открой багажник	开后备箱	locks	
 закрой багажник	关后备箱	locks	
 открой багажнек	开后备箱	locks	
-открой передний багажник	UNRECOGNIZED	locks	
+открой передний багажник	前备箱打开	locks	
+открыть передний багажник	前备箱打开	locks	
+откройте передний багажник	前备箱打开	locks	
+открой багажник спереди	前备箱打开	locks	
+закрой багажник спереди	前备箱关闭	locks	
+открой передний багажнек	前备箱打开	locks	
+открой передний багажник и закрой окна	前备箱打开+车窗关闭	locks	
+приоткрой передний багажник	UNRECOGNIZED	locks	danger
+передний багажник	UNRECOGNIZED	locks	
+мы откроем передний багажник	UNRECOGNIZED	locks	danger
+открой передний и задний багажник	UNRECOGNIZED	locks	danger
 сделай погромче	VOL:+1	media	
 громче	VOL:+1	media	
 сделай потише	VOL:-1	media	
@@ -513,7 +523,7 @@ utterance	expected	category	danger
 запри машину	车门上锁	locks	
 заблокируй двери машины	车门上锁	locks	
 открой задний багажник	开后备箱	locks	
-закрой передний багажник	UNRECOGNIZED	locks	
+закрой передний багажник	前备箱关闭	locks	
 мы откроем багажник	UNRECOGNIZED	locks	danger
 багажник открывается	UNRECOGNIZED	locks	
 открой багажник климат	UNRECOGNIZED	locks	

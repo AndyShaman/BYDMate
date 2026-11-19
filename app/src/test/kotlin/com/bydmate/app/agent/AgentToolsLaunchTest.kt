@@ -129,6 +129,33 @@ class AgentToolsLaunchTest {
         assertEquals("go_home", captured.captured.kind)
     }
 
+    @Test fun go_back_dispatches_go_back_kind() = runTest {
+        val captured = slot<ActionDef>()
+        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "go_back", "{}")))
+        assertTrue(out.getBoolean("ok"))
+        assertEquals("go_back", captured.captured.kind)
+    }
+
+    @Test fun go_back_failure_surfaces_the_reason() = runTest {
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(false, "x")
+        val out = JSONObject(tools().execute(AgentToolCall("1", "go_back", "{}")))
+        assertFalse(out.has("ok"))
+        assertEquals("x", out.getString("error"))
+    }
+
+    @Test fun schemas_contain_go_back_and_create_automation_lists_it() = runTest {
+        coEvery { ruleDao.getEnabled() } returns emptyList()
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "") } returns ""
+        val schemas = tools().schemas()
+        val functions = (0 until schemas.length()).map { schemas.getJSONObject(it).getJSONObject("function") }
+        assertTrue("go_back" in functions.map { it.getString("name") })
+        val kinds = functions.first { it.getString("name") == "create_automation" }
+            .getJSONObject("parameters").getJSONObject("properties").getJSONObject("actions")
+            .getJSONObject("items").getJSONObject("properties").getJSONObject("kind").getJSONArray("enum")
+        assertTrue("go_back" in (0 until kinds.length()).map { kinds.getString(it) })
+    }
+
     // end_conversation only reports ok: the voice session closes itself.
     @Test fun end_conversation_returns_ok_and_dispatches_nothing() = runTest {
         coEvery { ruleDao.getEnabled() } returns emptyList()

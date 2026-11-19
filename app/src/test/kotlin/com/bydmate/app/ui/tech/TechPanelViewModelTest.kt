@@ -574,6 +574,46 @@ class TechPanelViewModelTest {
         assertEquals(72.9, vm.uiState.value.nominalCapacityKwh, 1e-9)
     }
 
+    /** After the car slept the live read is empty; the cycles row must count from the remembered BMS counter. */
+    @Test
+    fun `the remembered BMS counter reaches the cycles source when the live read is absent`() = runTest {
+        val vm = buildViewModel(
+            battery = BatteryState(
+                null, null, null, null, autoserviceAvailable = false, lifetimeKwhLastKnown = 10963f,
+            ),
+            lifetimeCharged = LifetimeChargingStats(totalKwhAdded = 100.0, acKwh = 100.0, dcKwh = 0.0, sessionCount = 2),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(10963f, state.bmsLifetimeKwhForCycles)
+        val cycles = TechPanelVisuals.fullCycles(
+            state.bmsLifetimeKwhForCycles?.toDouble(), state.lifetimeChargedKwh,
+            state.nominalCapacityKwh, state.soh, java.util.Locale.US,
+        )!!
+        assertEquals("150", cycles.value)
+    }
+
+    @Test
+    fun `a live counter wins over the remembered one`() = runTest {
+        val vm = buildViewModel(
+            battery = BatteryState(
+                null, null, null, 12000f, autoserviceAvailable = true, lifetimeKwhLastKnown = 10963f,
+            ),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(12000f, vm.uiState.value.bmsLifetimeKwhForCycles)
+    }
+
+    @Test
+    fun `no counter ever leaves the cycles source empty`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(vm.uiState.value.bmsLifetimeKwhForCycles)
+    }
+
     /** The row moved into «Батарея · история», so a car whose only number is the logged sum
      *  must still open that card — otherwise the cycles would disappear with it. */
     @Test
