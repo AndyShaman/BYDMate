@@ -210,11 +210,14 @@ class VoiceControllerPrecedenceTest {
     }
 
     @Test fun `with the split section switched on the split screen phrase is not taken by a set`() {
+        // One utterance per rig: say() reads the first journal entry.
         val launcher = setLauncher()
-        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, splitFeatureEnabled = true)
+        val bare = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, splitFeatureEnabled = true)
+        assertNotEquals("appset:открой окна", bare.say("включи разделение экрана").command)
+        coVerify(exactly = 0) { launcher.launch(any()) }
 
-        assertNotEquals("appset:открой окна", r.say("включи разделение экрана").command)
-        assertEquals("appset:открой окна", r.say("сплит открой окна").command)
+        val named = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, splitFeatureEnabled = true)
+        assertEquals("appset:открой окна", named.say("сплит открой окна").command)
         coVerify(exactly = 1) { launcher.launch(match { it.id == "set1" }) }
     }
 
