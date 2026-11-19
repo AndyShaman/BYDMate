@@ -139,7 +139,7 @@ class GigaAmModelManager(
     fun unverifiedKeptBefore(): Boolean = unverifiedMarker().isFile
 
     /** Records that a tripped guard kept files it could not verify: the next unverifiable trip
-     *  deletes them. Cleared by a successful recognizer load and by [delete]. */
+     *  deletes them. Cleared once one process loaded both the recognizer and the VAD, by a newly recorded hash, and by [delete]. */
     suspend fun markUnverifiedKept() {
         withContext(Dispatchers.IO) {
             diskMutex.withLock { runCatching { unverifiedMarker().createNewFile() } }
@@ -151,6 +151,8 @@ class GigaAmModelManager(
      * when none is recorded yet (installs that predate the hashes). A file the native loader just
      * accepted is the best reference there is for the next tripped guard. Never throws.
      */
+    private val loadedThisProcess = mutableSetOf<Boolean>()
+
     suspend fun recordIntegrityIfMissing(model: Boolean) {
         withContext(Dispatchers.IO) {
             runCatching {
@@ -158,11 +160,13 @@ class GigaAmModelManager(
                     if (model) {
                         val dir = baseDir()
                         if (isModelComplete(dir) && !modelManifest(dir).isFile) writeModelManifest(dir)
-                        // The recognizer just loaded: an earlier kept trip is settled.
-                        unverifiedMarker().delete()
                     } else if (isVadComplete() && !vadManifest().isFile) {
                         writeManifest(vadManifest(), mapOf(VAD_KEY to sha256(vadFile())))
                     }
+                    // A kept trip is settled once this process loaded both kinds of files: a
+                    // recognizer that loads cannot clear the mark of a VAD that keeps crashing.
+                    loadedThisProcess += model
+                    if (loadedThisProcess.size == 2) unverifiedMarker().delete()
                 }
             }
         }

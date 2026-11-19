@@ -416,6 +416,9 @@ interface HelperClient {
     /** The «Назад» action: one system Back key press through the daemon. False on an old daemon. */
     suspend fun pressBack(): Boolean = false
 
+    /** The «Домой» action: one system Home key press through the daemon. False on an old daemon. */
+    suspend fun pressHome(): Boolean = false
+
     /** Powers the cluster compositor on/off via auto_container (Wave P). True on daemon status 0. */
     suspend fun setClusterContainerMode(on: Boolean): Boolean
 
@@ -1278,6 +1281,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     // FORCE_TIMEOUT_MS: `input` starts a process of its own, slow on a cold head unit. status 0 = sent.
     override suspend fun pressBack(): Boolean =
         transactParsed(HelperBinderProtocol.TX_PRESS_BACK, { }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
+            if (reply.dataAvail() >= 4) reply.readInt() == 0 else false
+        } ?: false
+
+    override suspend fun pressHome(): Boolean =
+        transactParsed(HelperBinderProtocol.TX_PRESS_HOME, { }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
             if (reply.dataAvail() >= 4) reply.readInt() == 0 else false
         } ?: false
 

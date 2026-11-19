@@ -79,12 +79,19 @@ class AsrGuardRecovery(
         const val KEY_COUNT_PREFIX = "count_"
 
         fun decide(integrity: Integrity, unverifiedKeptBefore: Boolean): Outcome = when (integrity) {
-            // Kept once; a second trip with no successful load between them means the files
-            // themselves abort the load (not a power cut), so they go as before.
-            Integrity.INTACT -> if (unverifiedKeptBefore) Outcome.DELETED else Outcome.KEPT_INTACT
+            Integrity.INTACT -> Outcome.KEPT_INTACT
             Integrity.CORRUPT -> Outcome.DELETED
             Integrity.UNVERIFIED -> if (unverifiedKeptBefore) Outcome.DELETED else Outcome.KEPT_UNVERIFIED
         }
+
+        /**
+         * Whether the service preloads the model at start. Not after a delete, and not while a
+         * kept trip is unsettled ([keptMark]: no process has loaded both the recognizer and the
+         * VAD since): files that abort the native load every time would otherwise crash the app
+         * at every start. The model then loads on the first voice press.
+         */
+        fun warmUpAtStart(outcome: Outcome, keptMark: Boolean): Boolean =
+            outcome != Outcome.DELETED && !keptMark
 
         /** One dump line: what the last trip did and how often each outcome happened. */
         fun dumpLine(journal: SharedPreferences): String {

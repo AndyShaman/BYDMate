@@ -755,14 +755,19 @@ class TrackingService : Service(), LocationListener {
                 // aborting the process from native code (SIGABRT, no Java exception), or just a
                 // process kill mid-load. The files are checked against their known-good hashes
                 // and deleted only when that check says they are bad (AsrGuardRecovery).
+                var outcome = com.bydmate.app.voice.AsrGuardRecovery.Outcome.NOT_TRIPPED
                 if (asrLoadGuard.isTripped()) {
-                    val outcome = com.bydmate.app.voice.AsrGuardRecovery(
+                    outcome = com.bydmate.app.voice.AsrGuardRecovery(
                         asrLoadGuard, gigaAmModelManager,
                         getSharedPreferences(com.bydmate.app.voice.AsrGuardRecovery.PREFS_NAME, Context.MODE_PRIVATE),
                     ).run()
                     Log.w(TAG, "ASR load guard tripped: $outcome")
                     Trace.event(TraceArea.VOICE, "asr-guard", "outcome" to outcome.name.lowercase())
-                    if (outcome == com.bydmate.app.voice.AsrGuardRecovery.Outcome.DELETED) return@runCatching
+                }
+                val keptMark = gigaAmModelManager.unverifiedKeptBefore()
+                if (!com.bydmate.app.voice.AsrGuardRecovery.warmUpAtStart(outcome, keptMark)) {
+                    Log.i(TAG, "ASR pre-warm skipped: outcome=$outcome kept_mark=$keptMark, loads on the first voice press")
+                    return@runCatching
                 }
                 if (voiceGate.isEnabled()) {
                     continuousAsr.warmUp()
@@ -1390,12 +1395,14 @@ class TrackingService : Service(), LocationListener {
             sharedAdaptiveLoop.samples.collect { sample ->
                 val data = sample.data
                 try {
+                    // Before the snapshot goes out: the Tech panel maps temperatures by the
+                    // verdict when it receives this very snapshot.
+                    motorPresence.onSnapshot(data, SystemClock.elapsedRealtime())
                     _lastData.value = data
                     lastDataAtMs = System.currentTimeMillis()
                     lastSample = sample
                     blindSpotController.onPollSnapshot(data)
                     beltProbeLog.onSnapshot(data)
-                    motorPresence.onSnapshot(data, SystemClock.elapsedRealtime())
                     probeBatteryCurrent(data)
                     alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.

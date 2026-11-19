@@ -3,6 +3,7 @@ package com.bydmate.app.ui.charges
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.domain.battery.BatteryState
 import com.bydmate.app.R
 import com.bydmate.app.data.charging.AutoserviceChargingDetector
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
@@ -102,7 +103,7 @@ data class ChargesUiState(
      */
     val equivCycles: Double
         get() {
-            val bms = bmsLifetimeKwh?.takeIf { it > 0.0 } ?: bmsLifetimeKwhLastKnown
+            val bms = bmsLifetimeKwh?.takeIf { it >= BatteryState.MIN_COUNTER_KWH } ?: bmsLifetimeKwhLastKnown
             return fullCycleKwh(bms, lifetimeTotalKwh)
                 ?.let {
                     equivalentFullCycles(

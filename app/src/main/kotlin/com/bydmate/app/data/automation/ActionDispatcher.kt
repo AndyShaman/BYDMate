@@ -1617,7 +1617,15 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private fun isPackageInstalled(pkg: String): Boolean =
         context.packageManager.getLaunchIntentForPackage(pkg) != null
 
-    private fun goHome(): DispatchResult {
+    // Home key through the daemon first: Android 12 drops a background HOME intent silently, so a
+    // rule fired while another app is in front would report success with nothing on screen. An
+    // old or absent daemon falls back to the intent, as before.
+    private suspend fun goHome(): DispatchResult {
+        if (helper.pressHome()) {
+            Log.i(TAG, "go_home via daemon key")
+            return DispatchResult(true)
+        }
+        Log.i(TAG, "go_home via HOME intent (daemon key unavailable)")
         val home = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_HOME)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
