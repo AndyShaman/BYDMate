@@ -89,8 +89,16 @@ internal fun launchAppInWindowingModeCore(
     windowingMode: Int,
     resolveComponent: (String) -> String?,
     shell: (String, List<String>) -> String,
+    dockRunning: (String) -> Boolean = { false },
 ): Boolean {
     if (!packageName.matches(PACKAGE_NAME_REGEX) || windowingMode !in WINDOWING_MODE_RANGE) return false
+    // An app that is already running (left in the background by Home, say): `am start` brings its
+    // task back in the mode it had, fullscreen, and the screen is not split (on-car, DiLink 3.0,
+    // 2026-11-19). Its task is moved into the left half by id instead; `am start` stays for an app
+    // that is not running and for a task the firmware refuses to move.
+    if (windowingMode == WINDOWING_SPLIT_SCREEN_PRIMARY && runCatching { dockRunning(packageName) }.getOrDefault(false)) {
+        return true
+    }
     val component = resolveComponent(packageName) ?: return false
     // Component is passed as positional "$1" — never interpolated into the sh -c string.
     return !shell("am start --windowingMode $windowingMode -n \"\$1\"", listOf(component)).contains("Error")
@@ -98,8 +106,22 @@ internal fun launchAppInWindowingModeCore(
 
 private val WINDOWING_MODE_RANGE = 1..6
 
+/** WindowConfiguration.WINDOWING_MODE_SPLIT_SCREEN_PRIMARY. */
+private const val WINDOWING_SPLIT_SCREEN_PRIMARY = 3
+
 internal fun launchAppInWindowingMode(packageName: String, windowingMode: Int): Boolean =
-    launchAppInWindowingModeCore(packageName, windowingMode, ::resolveLaunchComponent, amShell)
+    launchAppInWindowingModeCore(
+        packageName, windowingMode, ::resolveLaunchComponent, amShell,
+        dockRunning = ::dockRunningTaskSplitPrimary,
+    )
+
+/** Moves [packageName]'s running task into the left half; false when it has none or the firmware refuses. */
+private fun dockRunningTaskSplitPrimary(packageName: String): Boolean {
+    val taskId = findTaskId(packageName).takeIf { it > 0 } ?: return false
+    return runCatching { dockTaskSplitPrimaryReflect(taskId) }
+        .onFailure { android.util.Log.w("bydmate_helper", "dock task=$taskId failed: ${it.message}") }
+        .isSuccess
+}
 
 /**
  * Launches [packageName] via am/monkey strategies. Returns true if a launch command ran without an
