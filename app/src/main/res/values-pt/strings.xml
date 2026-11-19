@@ -2170,8 +2170,8 @@
         <item quantity="many">Mais %1$d códigos não couberam, todos estão na janela «Diagnóstico»</item>
         <item quantity="other">Mais %1$d códigos não couberam, todos estão na janela «Diagnóstico»</item>
     </plurals>
-    <string name="settings_section_app_sets_title">Tela dividida</string>
-    <string name="settings_app_sets_howto">Voz:\n• «split» ou «ligar tela dividida» — o primeiro conjunto da lista;\n• «split» e o nome — esse conjunto. Qualquer nome serve, pequenos erros de reconhecimento são perdoados.\nWidget: tocar na parte esquerda abre o primeiro conjunto.\nSem segundo app: fica o que está aberto agora.</string>
+    <string name="settings_section_app_sets_title">Tela dividida 50/50</string>
+    <string name="settings_app_sets_howto">Voz:\n• «split» ou «ligar tela dividida» — o primeiro conjunto da lista;\n• «split» e o nome — esse conjunto. Qualquer nome serve, pequenos erros de reconhecimento são perdoados.\nWidget: tocar na parte esquerda abre o primeiro conjunto.\n«Split» sem nome e o widget funcionam aqui enquanto «Tela dividida 1/3 + 2/3» estiver desligado na secção «Tela dividida».\nSem segundo app: fica o que está aberto agora.</string>
     <string name="settings_app_sets_add_title">Novo conjunto</string>
     <string name="settings_app_sets_add">Adicionar</string>
     <string name="settings_app_sets_name_label">Nome (comando de voz)</string>
@@ -2196,7 +2196,7 @@
     <string name="settings_app_sets_err_in_use">Este nome já existe: %1$s</string>
     <string name="settings_app_sets_saved">Guardado</string>
     <string name="settings_app_sets_run_failed">O conjunto não abriu</string>
-    <string name="app_sets_none_hint">Ainda não há conjunto. Adicione um em Definições → Tela dividida</string>
+    <string name="app_sets_none_hint">Ainda não há conjunto. Adicione um em Definições → Tela dividida 50/50</string>
     <string name="settings_widget_left_tap_zoning_description_legacy">A parte esquerda abre um app ou a tela dividida; o resto é o BYDMate.</string>
     <string name="settings_widget_left_tap_mode_split_legacy">Tela dividida</string>
 </resources>

@@ -36,9 +36,10 @@ import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.TextPrimary
 
 /**
- * «Разделение экрана» section of the Android 10 head units (DiLink 3 / 4), in place of the freeform
- * split, which did not work as it should there: app sets with a name that doubles as the voice
- * command, a first and a second app, and «open at start».
+ * «Разделение экрана 50/50» section of the Android 10 head units (DiLink 3 / 4), an alternative to
+ * the freeform split of the «Разделение экрана» section, which does not work on every one of them:
+ * a name that doubles as the voice command, the app for the left half, the app for the right half
+ * and «open at start».
  */
 @Composable
 internal fun AppSetsSection(viewModel: AppSetsViewModel = hiltViewModel()) {

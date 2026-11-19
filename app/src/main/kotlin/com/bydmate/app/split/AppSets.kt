@@ -29,6 +29,15 @@ data class AppSet(
 )
 
 /**
+ * Whether the split gestures that name no set (the widget's left tap, the split key, «сплит» and
+ * «включи разделение экрана» on their own) open the first app set: on the Android 10 head units, while
+ * the split of the «Разделение экрана» section is switched off. With it on they run that split,
+ * which works on some of these head units; «сплит <название>» opens its set either way.
+ */
+fun appSetsTakeSplitGesture(legacyHeadUnit: Boolean, splitFeatureEnabled: Boolean): Boolean =
+    legacyHeadUnit && !splitFeatureEnabled
+
+/**
  * The saved [AppSet]s, JSON in SharedPreferences("bydmate_app_sets"). Null [prefs] keeps everything
  * in memory (unit tests). At most one set starts with the service ([AppSet.autostart]).
  */
@@ -55,7 +64,8 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
      * The set an utterance asks for, or null when it asks for none.
      *
      * - «сплит», «включи / открой / запусти сплит», «разделение экрана», «включи / открой разделение
-     *   экрана», «раздели экран»: the default set, the first in the list.
+     *   экрана», «раздели экран»: the default set, the first in the list, but only with
+     *   [defaultPhrases] ([appSetsTakeSplitGesture]); otherwise these phrases go on to the split.
      * - «сплит <название>» (also after «включи», «открой», «запусти»): the set with that name. The
      *   name is compared by its letters, without spaces, and a slip of the recognizer is forgiven
      *   ([nameDistanceLimit]): an invented word is written differently every time. With one set
@@ -63,11 +73,11 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
      *
      * The bare name never opens a set: it would collide with «открой тикток» and the like.
      */
-    fun resolve(transcript: String): AppSet? {
+    fun resolve(transcript: String, defaultPhrases: Boolean = true): AppSet? {
         val sets = _sets.value
         val heard = VoicePhrase.words(transcript)
         if (sets.isEmpty() || heard.isEmpty()) return null
-        if (DEFAULT_PHRASES.any { it == heard }) return sets.first()
+        if (DEFAULT_PHRASES.any { it == heard }) return if (defaultPhrases) sets.first() else null
         val rest = heard.dropWhile { it in LEAD_VERBS }
         val prefix = rest.firstOrNull() ?: return null
         val name = rest.drop(1)

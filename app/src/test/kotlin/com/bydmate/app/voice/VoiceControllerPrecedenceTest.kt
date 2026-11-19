@@ -66,6 +66,7 @@ class VoiceControllerPrecedenceTest {
         automationPhrase: String?,
         userPhrases: VoiceUserPhrases,
         appSets: Pair<AppSetStore, AppSetLauncher>? = null,
+        splitFeatureEnabled: Boolean = false,
     ): Rig {
         val gate = mockk<VoiceGate> {
             every { isEnabled() } returns true
@@ -97,7 +98,9 @@ class VoiceControllerPrecedenceTest {
             appStrings = appStringsOver(ctx),
             userPhrases = userPhrases,
         )
-        appSets?.let { (store, launcher) -> controller.injectAppSets(store, launcher) }
+        appSets?.let { (store, launcher) ->
+            controller.injectAppSets(store, launcher, mockk { every { isFeatureEnabled() } returns splitFeatureEnabled })
+        }
         return Rig(controller, asr, dispatcher, engine, journal).also { r ->
             coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } answers {
                 r.dispatched += firstArg<ActionDef>().command
@@ -203,6 +206,15 @@ class VoiceControllerPrecedenceTest {
         val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher)
 
         assertEquals("appset:открой окна", r.say("включи разделение экрана").command)
+        coVerify(exactly = 1) { launcher.launch(match { it.id == "set1" }) }
+    }
+
+    @Test fun `with the split section switched on the split screen phrase is not taken by a set`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, splitFeatureEnabled = true)
+
+        assertNotEquals("appset:открой окна", r.say("включи разделение экрана").command)
+        assertEquals("appset:открой окна", r.say("сплит открой окна").command)
         coVerify(exactly = 1) { launcher.launch(match { it.id == "set1" }) }
     }
 
