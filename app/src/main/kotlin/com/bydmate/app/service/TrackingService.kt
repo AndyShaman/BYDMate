@@ -749,15 +749,18 @@ class TrackingService : Service(), LocationListener {
         // the voice toggle so we don't load a 226 MiB model for drivers who never enabled voice.
         serviceScope.launch(Dispatchers.IO) {
             runCatching {
-                // A tripped guard means the last ASR model loads aborted this whole process
-                // from native code (corrupt .onnx -> SIGABRT, no Java exception): the files
-                // are provably unloadable, so delete them (the model is re-downloadable in
-                // Settings) instead of crash-looping on every service start.
+                // A tripped guard means the last ASR model loads did not finish: a corrupt .onnx
+                // aborting the process from native code (SIGABRT, no Java exception), or just a
+                // process kill mid-load. The files are checked against their known-good hashes
+                // and deleted only when that check says they are bad (AsrGuardRecovery).
                 if (asrLoadGuard.isTripped()) {
-                    Log.w(TAG, "ASR load guard tripped: deleting corrupt model files")
-                    gigaAmModelManager.delete()
-                    asrLoadGuard.reset()
-                    return@runCatching
+                    val outcome = com.bydmate.app.voice.AsrGuardRecovery(
+                        asrLoadGuard, gigaAmModelManager,
+                        getSharedPreferences(com.bydmate.app.voice.AsrGuardRecovery.PREFS_NAME, Context.MODE_PRIVATE),
+                    ).run()
+                    Log.w(TAG, "ASR load guard tripped: $outcome")
+                    Trace.event(TraceArea.VOICE, "asr-guard", "outcome" to outcome.name.lowercase())
+                    if (outcome == com.bydmate.app.voice.AsrGuardRecovery.Outcome.DELETED) return@runCatching
                 }
                 if (voiceGate.isEnabled()) {
                     continuousAsr.warmUp()
@@ -1938,6 +1941,10 @@ class TrackingService : Service(), LocationListener {
                     Trace.event(TraceArea.APP, "a11y-recovery-force-stop", "reason" to reason, "streak" to streak)
                     Trace.flushBlocking(A11Y_RECOVERY_TRACE_FLUSH_MS)
                     automationEngine.markSelfRestart()
+                    // A model load still running dies with the process: a kill we ask for says
+                    // nothing about the model files, so it must not count towards their quarantine.
+                    asrLoadGuard.withdrawInFlight()
+                    ttsLoadGuard.withdrawInFlight()
                     helperClient.recoverAccessibilityService()
                     // Still alive: the force-stop did not happen, the next process is a real start.
                     automationEngine.clearSelfRestartMark()
