@@ -1,6 +1,7 @@
 package com.bydmate.app.agent
 
 import com.bydmate.app.data.vehicle.CommandTranslator
+import com.bydmate.app.ui.automation.ACTION_COMMANDS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -29,6 +30,21 @@ class AgentCatalogParityTest {
                 assertTrue("id=${cmd.id} -> $chinese is not dispatchable", dispatchable)
             }
         }
+    }
+
+    /**
+     * The other direction: an action a driver can pick in a rule must be known to the agent too,
+     * or it answers "I cannot do that" for something the app does (the spoiler of 4.4.1 and the
+     * rear logo light were both added to automation only). The fridge's two temperature actions
+     * take a number in the agent catalog, so they match by their command prefix.
+     */
+    @Test fun every_automation_action_is_known_to_the_agent() {
+        val fixed = AgentCommandCatalog.ALL.filter { it.value == null }.map { it.chinese(null) }.toSet()
+        val ranged = AgentCommandCatalog.ALL.filter { it.value != null }.map { it.chinese(it.value!!.first) }
+        val missing = ACTION_COMMANDS.map { it.command }
+            .filter { it.isNotEmpty() }
+            .filter { command -> command !in fixed && ranged.none { it.startsWith(command) } }
+        assertEquals("automation actions the agent catalog lacks", emptyList<String>(), missing)
     }
 
     @Test fun catalog_ids_are_unique() {

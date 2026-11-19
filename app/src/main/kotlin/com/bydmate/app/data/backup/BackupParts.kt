@@ -92,6 +92,7 @@ object BackupParts {
         SettingsRepository.KEY_CATCHUP_JOURNAL,
         SettingsRepository.KEY_LAST_MILEAGE_KM,
         SettingsRepository.KEY_LAST_CAPACITY_KWH,
+        SettingsRepository.KEY_BMS_LIFETIME_KWH_LAST,
         SettingsRepository.KEY_LAST_STATE_TS,
         BatchReadGate.KEY_STATE,
         BatchReadGate.KEY_FP,

@@ -178,10 +178,11 @@ class TelegramReporter @Inject constructor(
         val config = settings.getTgBackupConfig()
         val chatId = config.chatId
         if (!config.configured || chatId == null) return null
-        val header = TelegramReportBuilder.powerOffHeader(strings)
+        val now = clock()
+        val header = TelegramReportBuilder.powerOffHeader(strings, now)
         val fields = settings.getTgReportOffFields()
         val report = TelegramReportBuilder.build(
-            header, "", fields, inputs(), language(), strings, clock(),
+            header, "", fields, inputs(), language(), strings, now,
             tripEndLabel = TelegramReportBuilder.TIME_PLACEHOLDER,
         )
         previous?.takeIf { it.token == config.token && it.chatId == chatId && it.text == report.text }

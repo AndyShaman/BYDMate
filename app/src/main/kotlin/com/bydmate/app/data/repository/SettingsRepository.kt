@@ -156,6 +156,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_CATCHUP_JOURNAL = "catchup_journal"
         /** Comma-separated TechCard ids in the order the driver dragged them into. */
         const val KEY_TECH_CARD_ORDER = "tech_card_order"
+        /** Last positive BMS lifetime energy counter (kWh): the cycle count when the car reads none. */
+        const val KEY_BMS_LIFETIME_KWH_LAST = "bms_lifetime_kwh_last"
         /** "true" once a card has actually been dragged — hides the reorder hint. */
         const val KEY_TECH_ORDER_HINT_SEEN = "tech_card_order_hint_seen"
         /** Comma-separated automation rule ids in the order the driver dragged them into (#249). */
@@ -212,6 +214,7 @@ open class SettingsRepository @Inject constructor(
             Currency("UAH", "₴"),
             Currency("KZT", "₸"),
             Currency("AMD", "֏"),
+            Currency("AZN", "₼"),
             Currency("USD", "$"),
             Currency("EUR", "€"),
             Currency("PLN", "zł"),
@@ -425,6 +428,13 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun getLastCapacityKwh(): Float? =
         getString(KEY_LAST_CAPACITY_KWH, "").toFloatOrNull()
+
+    suspend fun getBmsLifetimeKwhLast(): Float? =
+        getString(KEY_BMS_LIFETIME_KWH_LAST, "").toFloatOrNull()?.takeIf { it > 0f }
+
+    suspend fun setBmsLifetimeKwhLast(kwh: Float) {
+        if (kwh > 0f) setString(KEY_BMS_LIFETIME_KWH_LAST, kwh.toString())
+    }
 
     suspend fun getLastStateTs(): Long =
         getString(KEY_LAST_STATE_TS, "0").toLongOrNull() ?: 0L

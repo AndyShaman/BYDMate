@@ -139,6 +139,17 @@ class ActionDispatcherLaunchTest {
 
     // --- go_home ---
 
+    // Android 12 blocks a background activity start silently: a rule run while another app is in
+    // front would report success with nothing happening. The daemon's Home key is not blocked.
+    @Test fun `go_home presses the Home key through the daemon when it answers`() {
+        coEvery { helper.pressHome() } returns true
+        val action = ActionDef(command = "", displayName = "home", kind = "go_home", payload = null)
+        val result = runBlocking { dispatcher.dispatch(action, null) }
+        assertTrue(result.success)
+        verify(exactly = 0) { context.startActivity(any()) }
+    }
+
+    // Daemon down or older than this verb: the HOME intent, as before.
     @Test fun `go_home starts HOME intent`() {
         val action = ActionDef(command = "", displayName = "home", kind = "go_home", payload = null)
         val (result, intent) = dispatchAndCapture(action)

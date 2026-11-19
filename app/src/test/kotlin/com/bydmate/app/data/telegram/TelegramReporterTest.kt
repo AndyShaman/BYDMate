@@ -87,6 +87,8 @@ class TelegramReporterTest {
         reporter.language = { "ru" }
     }
 
+    private fun dayOf(timeMs: Long): String = TelegramReportBuilder.formatDateTime(timeMs).split(' ')[0]
+
     private fun connect() = runBlocking { settings.saveTgBackup("tok", "bot", chat, "Андрей") }
 
     private fun answer(results: List<Result<Unit>> = emptyList()) {
@@ -244,7 +246,7 @@ class TelegramReporterTest {
         val report = reporter.powerOffReport()!!
         assertEquals("tok", report.token)
         assertEquals(chat, report.chatId)
-        assertEquals("<b>BYDMate: машина выключена в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>\n\n🔋 Заряд <b>64%</b>", report.text)
+        assertEquals("<b>BYDMate: машина выключена ${dayOf(now)} в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>\n\n🔋 Заряд <b>64%</b>", report.text)
         assertEquals("<i>(записано в ${TelegramReportBuilder.TIME_PLACEHOLDER})</i>", report.lateMark)
         assertFalse(report.toString().contains("tok"))
     }
@@ -261,11 +263,23 @@ class TelegramReporterTest {
         assertTrue(second.text.endsWith("<b>63%</b>"))
     }
 
+    @Test fun `the power-off report is re-armed when the day changes`() = runBlocking {
+        settings.setTgReportOffEnabled(true)
+        connect()
+        settings.setTgReportOffFields(setOf(ReportField.SOC))
+        val first = reporter.powerOffReport()!!
+        assertTrue(first === reporter.powerOffReport(first))
+        now += 24 * 3600_000L
+        val second = reporter.powerOffReport(first)!!
+        assertFalse(second.id == first.id)
+        assertTrue(second.text, second.text.contains(dayOf(now)))
+    }
+
     @Test fun `the power-off report carries the odometer by the same rules`() = runBlocking {
         settings.setTgReportOffEnabled(true)
         connect()
         assertTrue("a fresh install has it on", "odometer" in settings.getTgReportOffFields().map { it.id })
-        val header = "<b>BYDMate: машина выключена в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>"
+        val header = "<b>BYDMate: машина выключена ${dayOf(now)} в ${TelegramReportBuilder.TIME_PLACEHOLDER}</b>"
         reporter.inputs = { ReportInputs(diParsData(soc = 64, mileage = 23_456.7), 312.0, null, null, null, null) }
         settings.setTgReportOffFields(setOf(ReportField.SOC, ReportField.fromId("odometer")!!))
         assertEquals("$header\n\n🔋 Заряд <b>64%</b>\n🧭 Пробег 23\u00A0456 км", reporter.powerOffReport()!!.text)

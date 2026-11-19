@@ -298,7 +298,7 @@ class VehicleApiBatteryPreheatTest {
         status(0, null)
         writeAnswers(1, 1)
         val err = api().dispatch(ON).exceptionOrNull()
-        assertTrue("got $err", err is VehicleWriteError.HelperUnreachable)
+        assertTrue("got $err", err is VehicleWriteError.Unconfirmed)
         assertEquals("verdict=unconfirmed read=err", verdictRow().error)
     }
 

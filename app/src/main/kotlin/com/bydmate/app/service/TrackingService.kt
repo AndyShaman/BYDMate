@@ -23,6 +23,7 @@ import android.net.NetworkRequest
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationCompat
@@ -112,6 +113,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap
     @Inject lateinit var fidCatalogManager: FidCatalogManager
     @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
+    @Inject lateinit var motorPresence: com.bydmate.app.data.nativestack.MotorPresence
     @Inject lateinit var continuousAsr: com.bydmate.app.voice.ContinuousAsr
     @Inject lateinit var asrLoadGuard: com.bydmate.app.voice.AsrLoadGuard
     @Inject lateinit var gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager
@@ -605,7 +607,7 @@ class TrackingService : Service(), LocationListener {
         if (restored != null) {
             val nowMs = System.currentTimeMillis()
             if (restored.isStale(nowMs, SESSION_IDLE_CLOSE_MS)) {
-                // Process was killed inside the 30-sec grace window before idle-close
+                // Process was killed inside the SESSION_IDLE_CLOSE_MS window before idle-close
                 // could fire. Without this guard the next start would render
                 // (now - old sessionStartedAt) as "11 ч 43 мин" trip time.
                 val idleFor = (nowMs - restored.lastActiveTs) / 1000
@@ -756,14 +758,22 @@ class TrackingService : Service(), LocationListener {
         // the voice toggle so we don't load a 226 MiB model for drivers who never enabled voice.
         serviceScope.launch(Dispatchers.IO) {
             runCatching {
-                // A tripped guard means the last ASR model loads aborted this whole process
-                // from native code (corrupt .onnx -> SIGABRT, no Java exception): the files
-                // are provably unloadable, so delete them (the model is re-downloadable in
-                // Settings) instead of crash-looping on every service start.
+                // A tripped guard means the last ASR model loads did not finish: a corrupt .onnx
+                // aborting the process from native code (SIGABRT, no Java exception), or just a
+                // process kill mid-load. The files are checked against their known-good hashes
+                // and deleted only when that check says they are bad (AsrGuardRecovery).
+                var outcome = com.bydmate.app.voice.AsrGuardRecovery.Outcome.NOT_TRIPPED
                 if (asrLoadGuard.isTripped()) {
-                    Log.w(TAG, "ASR load guard tripped: deleting corrupt model files")
-                    gigaAmModelManager.delete()
-                    asrLoadGuard.reset()
+                    outcome = com.bydmate.app.voice.AsrGuardRecovery(
+                        asrLoadGuard, gigaAmModelManager,
+                        getSharedPreferences(com.bydmate.app.voice.AsrGuardRecovery.PREFS_NAME, Context.MODE_PRIVATE),
+                    ).run()
+                    Log.w(TAG, "ASR load guard tripped: $outcome")
+                    Trace.event(TraceArea.VOICE, "asr-guard", "outcome" to outcome.name.lowercase())
+                }
+                val keptMark = gigaAmModelManager.unverifiedKeptBefore()
+                if (!com.bydmate.app.voice.AsrGuardRecovery.warmUpAtStart(outcome, keptMark)) {
+                    Log.i(TAG, "ASR pre-warm skipped: outcome=$outcome kept_mark=$keptMark, loads on the first voice press")
                     return@runCatching
                 }
                 if (voiceGate.isEnabled()) {
@@ -987,6 +997,20 @@ class TrackingService : Service(), LocationListener {
     private fun pushLogThrottleFor(field: String) =
         if (com.bydmate.app.data.push.FidPushLogPolicy.isAnalog(field)) analogPushLogThrottle else pushLogThrottle
     private val beltProbeLog = BeltProbeLog()
+    private val batteryCurrentProbe = com.bydmate.app.data.nativestack.BatteryCurrentProbe()
+
+    /** #429: the battery current candidates, read only while «Запись логов» records. */
+    private fun probeBatteryCurrent(data: DiParsData) {
+        if (!logRecorder.state.value.isRecording) return
+        if (!batteryCurrentProbe.shouldRead(SystemClock.elapsedRealtime())) return
+        serviceScope.launch {
+            val items = batteryCurrentProbe.items(
+                fidCatalogManager.catalog,
+                com.bydmate.app.data.nativestack.FidAddresses.of("hvCurrent"),
+            )
+            Log.i("TechPanel", batteryCurrentProbe.line(data, helperClient.readBatch(items)))
+        }
+    }
 
     private fun resolveFidCatalog() {
         serviceScope.launch {
@@ -1378,11 +1402,15 @@ class TrackingService : Service(), LocationListener {
             sharedAdaptiveLoop.samples.collect { sample ->
                 val data = sample.data
                 try {
+                    // Before the snapshot goes out: the Tech panel maps temperatures by the
+                    // verdict when it receives this very snapshot.
+                    motorPresence.onSnapshot(data, SystemClock.elapsedRealtime())
                     _lastData.value = data
                     lastDataAtMs = System.currentTimeMillis()
                     lastSample = sample
                     blindSpotController.onPollSnapshot(data)
                     beltProbeLog.onSnapshot(data)
+                    probeBatteryCurrent(data)
                     alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.
                     autoserviceDetector.onSample(data)
@@ -1945,6 +1973,10 @@ class TrackingService : Service(), LocationListener {
                     Trace.event(TraceArea.APP, "a11y-recovery-force-stop", "reason" to reason, "streak" to streak)
                     Trace.flushBlocking(A11Y_RECOVERY_TRACE_FLUSH_MS)
                     automationEngine.markSelfRestart()
+                    // A model load still running dies with the process: a kill we ask for says
+                    // nothing about the model files, so it must not count towards their quarantine.
+                    asrLoadGuard.withdrawInFlight()
+                    ttsLoadGuard.withdrawInFlight()
                     helperClient.recoverAccessibilityService()
                     // Still alive: the force-stop did not happen, the next process is a real start.
                     automationEngine.clearSelfRestartMark()

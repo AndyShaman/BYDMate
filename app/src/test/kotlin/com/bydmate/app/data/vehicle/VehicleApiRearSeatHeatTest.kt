@@ -48,6 +48,15 @@ class VehicleApiRearSeatHeatTest {
         assertEquals(2, row.readback)
     }
 
+    @Test fun `a state that cannot be read after the write is unconfirmed, not unreachable`() = runTest {
+        coEvery { helper.read(1023, -933232629, any()) } returns 1L
+        coEvery { helper.read(1023, 1214251019, any()) } returnsMany listOf(1L, null)
+        coEvery { helper.writeStatus(1001, 1125122091, 2) } returns 1
+        val err = api().dispatch("后左座椅加热1档").exceptionOrNull()
+        assertTrue("got $err", err is VehicleWriteError.Unconfirmed)
+        coVerify(exactly = 1) { helper.writeStatus(1001, 1125122091, 2) }
+    }
+
     @Test fun `a car without rear heat fails with NotEquipped and writes nothing`() = runTest {
         coEvery { helper.read(1023, -933232629, any()) } returns 0L
         val err = api().dispatch("后左座椅加热1档").exceptionOrNull()

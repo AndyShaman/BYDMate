@@ -2,14 +2,21 @@ package com.bydmate.app.di
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.widget.Toast
+import com.bydmate.app.R
 import com.bydmate.app.agent.LlmConnectionResolver
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.platform.LegacyHeadUnit
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.voice.*
+import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.voice.online.MiniMaxTtsBackend
+import com.bydmate.app.voice.online.OnlineTtsFailureKind
+import com.bydmate.app.voice.online.OnlineTtsFailureNotifier
 import com.bydmate.app.voice.online.OpenRouterTtsBackend
 import com.bydmate.app.voice.online.TtsRouter
 import dagger.Module
@@ -94,6 +101,22 @@ object VoiceModule {
             marker = marker,
             loadGuard = ttsGuard,
         )
+        // Tells the driver why the online voice went quiet, once per voice and reason.
+        val failureNotifier = OnlineTtsFailureNotifier { kind, spokenOffline ->
+            Handler(Looper.getMainLooper()).post {
+                runCatching {
+                    val localized = ctx.appLocalizedContext()
+                    val reason = localized.getString(
+                        if (kind == OnlineTtsFailureKind.DATA_POLICY) R.string.tts_online_failed_policy
+                        else R.string.tts_online_failed_other,
+                    )
+                    val outcome = localized.getString(
+                        if (spokenOffline) R.string.tts_online_failed_spoken_local else R.string.tts_online_failed_silent,
+                    )
+                    Toast.makeText(localized, "$reason $outcome", Toast.LENGTH_LONG).show()
+                }.onFailure { Log.w("VoiceModule", "online tts failure toast failed", it) }
+            }
+        }
         return TtsRouter(
             delegate = offline,
             backends = listOf(
@@ -121,6 +144,7 @@ object VoiceModule {
                 )
             },
             phraseDir = File(ctx.filesDir, "tts_phrases"),
+            onOnlineFailure = failureNotifier::onFailure,
         )
     }
 

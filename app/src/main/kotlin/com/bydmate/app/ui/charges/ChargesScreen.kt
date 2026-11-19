@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.bydmate.app.domain.battery.BatteryState
 import com.bydmate.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -181,7 +182,8 @@ fun ChargesScreen(
                 periodSummary = state.periodSummary,
                 currencySymbol = state.currencySymbol,
                 bmsLifetimeKm = state.bmsLifetimeKm,
-                bmsLifetimeKwh = state.bmsLifetimeKwh,
+                // After sleep the live counter is gone: the remembered one keeps the block and its cycles.
+                bmsLifetimeKwh = state.bmsLifetimeKwh?.takeIf { it >= BatteryState.MIN_COUNTER_KWH } ?: state.bmsLifetimeKwhLastKnown,
                 equivCycles = state.equivCycles,
                 sohSeries = state.sohSeries,
                 cellDeltaSeries = state.cellDeltaSeries,

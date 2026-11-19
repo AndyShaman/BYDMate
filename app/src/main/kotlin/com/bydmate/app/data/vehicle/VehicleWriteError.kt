@@ -36,10 +36,11 @@ sealed class VehicleWriteError(
         : VehicleWriteError(action, details)
 
     /**
-     * Readback returned the -10011 permanent sentinel ("no data / permission denied").
+     * The command was sent, but the readback could not tell whether the car followed: the
+     * -10011 sentinel ("no data / permission denied"), an unreadable or an invalid status.
      * Usually transient — caller may retry after a state change.
      */
-    class Sentinel(action: String, details: String = "value=-10011 sentinel returned")
+    class Unconfirmed(action: String, details: String = "value=-10011 sentinel returned")
         : VehicleWriteError(action, details)
 
     /**

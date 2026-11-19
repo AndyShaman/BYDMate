@@ -78,6 +78,8 @@ data class TechPanelUiState(
     // Батарея · история
     val lifetimeKm: Float? = null,
     val lifetimeKwh: Float? = null,
+    /** The BMS counter the «Полных циклов» row divides: live, else the last one remembered. */
+    val bmsLifetimeKwhForCycles: Float? = null,
     val avgSocSinceCharge: Int? = null,
     val avgSocAllTime: Int? = null,
     /** Everything the app has ever seen charged into the pack, kWh; null until the first session. */
@@ -223,7 +225,7 @@ data class TechPanelUiState(
         get() = faultCount != null || hasServiceRow || gear != null || dtcSummary != null
     val showHistory: Boolean
         get() = anyOf(
-            lifetimeKm, lifetimeKwh, avgSocSinceCharge, avgSocAllTime,
+            lifetimeKm, lifetimeKwh, bmsLifetimeKwhForCycles, avgSocSinceCharge, avgSocAllTime,
             // The «Полных циклов» row lives here; a car that logged charges but answers no
             // lifetime counter still has a number to show. A zero sum has nothing to divide.
             lifetimeChargedKwh?.takeIf { it > 0.0 },

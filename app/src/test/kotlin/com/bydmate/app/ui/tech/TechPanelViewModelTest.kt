@@ -8,6 +8,7 @@ import com.bydmate.app.data.dtc.DtcScanPhase
 import com.bydmate.app.data.dtc.DtcScanRepository
 import com.bydmate.app.data.dtc.DtcScanState
 import com.bydmate.app.data.nativestack.HybridTechFixture
+import com.bydmate.app.data.nativestack.MotorPresence
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.domain.battery.AvgSoc
@@ -49,6 +50,7 @@ import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("LargeClass")
 class TechPanelViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
@@ -154,6 +156,7 @@ class TechPanelViewModelTest {
         kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
         carStatus: CarServiceStatus? = null,
         pm25: Pm25Reader = pm25Reader(null),
+        motorPresence: MotorPresence = MotorPresence(),
     ): TechPanelViewModel {
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } returns (
@@ -167,7 +170,7 @@ class TechPanelViewModelTest {
             )
         every { charges.getAllCharges() } returns chargeLog
         val settings = settings().also { coEvery { it.getBatteryCapacity() } returns capacityKwh }
-        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind), carStatusReader(carStatus), dtcRepo(), pm25))
+        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges, com.bydmate.app.data.nativestack.kindMonitor(kind), carStatusReader(carStatus), dtcRepo(), pm25, motorPresence))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -291,6 +294,50 @@ class TechPanelViewModelTest {
         assertTrue(state.showBatteryNow)
     }
 
+    /** #426: a Qin L DM-i drive, the front motor spinning while the rear axle answers readable zeros. */
+    private fun rearAbsentPresence(): MotorPresence = MotorPresence().also { presence ->
+        val driving = diParsData().copy(
+            motorRpmFront = 5000, motorRpmRear = 0, motorCurrentFront = 30f, motorCurrentRear = 0f,
+        )
+        for (t in 0L..24_000L step 2_000L) presence.onSnapshot(driving, t)
+    }
+
+    private val qinTemps = diParsData().copy(
+        motorTempFront = 20, motorTempRear = -36, inverterTempRear = 58,
+        motorRpmFront = 5000, motorRpmRear = 0, motorCurrentRear = 0f,
+    )
+
+    @Test
+    fun `rear motor and inverter show a dash once the rear axle is absent`() = runTest {
+        val presence = rearAbsentPresence()
+        assertTrue(presence.rearAbsent)
+        val vm = buildViewModel(motorPresence = presence)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        liveDataFlow().value = qinTemps
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertNull(state.motorTempRear)
+        assertNull(state.inverterTempRear)
+        assertEquals(20, state.motorTempFront)
+        assertEquals(0, state.motorRpmRear)
+        assertTrue(state.showMotors)
+    }
+
+    @Test
+    fun `without a verdict every temperature passes as before`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        liveDataFlow().value = qinTemps
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(-36, state.motorTempRear)
+        assertEquals(58, state.inverterTempRear)
+    }
+
     /** Leopard 3, 2026-09-23 on the car: SoC 63%, the BMS reports 42.9 kWh — shown as is. */
     @Test
     fun `a real remaining energy still reaches the battery card`() = runTest {
@@ -328,7 +375,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null), dtcRepo(), pm25Reader(null)))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null), dtcRepo(), pm25Reader(null), MotorPresence()))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
@@ -572,6 +619,46 @@ class TechPanelViewModelTest {
 
         assertEquals(6340.0, vm.uiState.value.lifetimeChargedKwh!!, 1e-9)
         assertEquals(72.9, vm.uiState.value.nominalCapacityKwh, 1e-9)
+    }
+
+    /** After the car slept the live read is empty; the cycles row must count from the remembered BMS counter. */
+    @Test
+    fun `the remembered BMS counter reaches the cycles source when the live read is absent`() = runTest {
+        val vm = buildViewModel(
+            battery = BatteryState(
+                null, null, null, null, autoserviceAvailable = false, lifetimeKwhLastKnown = 10963f,
+            ),
+            lifetimeCharged = LifetimeChargingStats(totalKwhAdded = 100.0, acKwh = 100.0, dcKwh = 0.0, sessionCount = 2),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(10963f, state.bmsLifetimeKwhForCycles)
+        val cycles = TechPanelVisuals.fullCycles(
+            state.bmsLifetimeKwhForCycles?.toDouble(), state.lifetimeChargedKwh,
+            state.nominalCapacityKwh, state.soh, java.util.Locale.US,
+        )!!
+        assertEquals("150", cycles.value)
+    }
+
+    @Test
+    fun `a live counter wins over the remembered one`() = runTest {
+        val vm = buildViewModel(
+            battery = BatteryState(
+                null, null, null, 12000f, autoserviceAvailable = true, lifetimeKwhLastKnown = 10963f,
+            ),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(12000f, vm.uiState.value.bmsLifetimeKwhForCycles)
+    }
+
+    @Test
+    fun `no counter ever leaves the cycles source empty`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(vm.uiState.value.bmsLifetimeKwhForCycles)
     }
 
     /** The row moved into «Батарея · история», so a car whose only number is the logged sum

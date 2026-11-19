@@ -64,7 +64,7 @@ class VehicleApiSteeringHeatTest {
         coEvery { helper.writeStatus(1023, 944767029, 2) } returns 1
         coEvery { helper.read(1023, 1116733454, any()) } returns null
         val err = impl.dispatch("方向盘加热").exceptionOrNull()
-        assertTrue("got $err", err is VehicleWriteError.HelperUnreachable)
+        assertTrue("got $err", err is VehicleWriteError.Unconfirmed)
         coVerify(exactly = 0) { helper.writeStatus(1000, any(), any()) }
         val row = verdictRow()
         assertEquals("verdict=unconfirmed", row.error)

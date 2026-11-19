@@ -6,8 +6,8 @@ import com.bydmate.app.voice.TtsGender
 data class TtsPcm(val samples: FloatArray, val sampleRate: Int)
 
 /** A cloud TTS provider (Gemini / MiniMax). [TtsRouter] synthesizes through this; on any
- *  failure or timeout the rest of the reply stays silent -- the voice is never swapped to
- *  the offline engine. */
+ *  failure or timeout the rest of the reply is spoken by the offline engine (when its model is
+ *  downloaded) and the failure is reported once. */
 interface OnlineTtsBackend {
     /** Stable id matched against the `tts_source` preference ("gemini" | "minimax"). */
     val id: String

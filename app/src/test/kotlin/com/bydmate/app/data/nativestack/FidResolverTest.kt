@@ -55,6 +55,18 @@ class FidResolverTest {
     }
 
     @Test
+    fun `yuan pro flat catalog moves the poll fields off the Leopard 3 constants`() = runTest {
+        val flat = FidCatalog.parse(resource("fid-catalog-yuanpro-flat.txt"), FidCatalogManager.wantedSymbols())
+        val outcome = FidResolver.resolve(FidMap.all, flat, alwaysPlausible, "t")
+        assertEquals(1033543720, outcome.table.fid("soc"))
+        assertEquals(1014, outcome.table.device("soc"))
+        assertEquals(330301480, outcome.table.fid("acTemp"))
+        assertEquals(1145047064, outcome.table.fid("hvCurrent"))
+        assertEquals(1033543696, outcome.table.fid("mileage"))
+        assertEquals(303038472, outcome.table.fid("speed"))
+    }
+
+    @Test
     fun `song plus catalog reproduces the addresses of the tester's patched build`() = runTest {
         val outcome = FidResolver.resolve(FidMap.all, catalog("songplus"), alwaysPlausible, "test")
         val expected = resource("fid-songplus-expected.tsv")

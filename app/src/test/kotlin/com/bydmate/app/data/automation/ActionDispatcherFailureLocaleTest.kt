@@ -105,7 +105,7 @@ class ActionDispatcherFailureLocaleTest {
 
     @Test fun `write errors are worded per cause in the app language`() = runTest {
         val cases = listOf(
-            VehicleWriteError.Sentinel("doors_lock") to R.string.auto_err_not_confirmed,
+            VehicleWriteError.Unconfirmed("doors_lock") to R.string.auto_err_not_confirmed,
             VehicleWriteError.AllowlistMiss("doors_lock") to R.string.auto_err_not_supported,
             VehicleWriteError.OutOfRange("doors_lock", "value=7") to R.string.auto_err_out_of_range,
             VehicleWriteError.HelperUnreachable("doors_lock", "binder dead") to R.string.auto_err_unreachable,

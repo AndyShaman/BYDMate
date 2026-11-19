@@ -93,9 +93,9 @@ class PushStateTraceTest {
         val wave = FidPushApplier.PUSH_FIELDS.map { FidPushSub(FidAddresses.fid(it), FidAddresses.device(it)) }
         assertEquals(wave, subs.captured.take(wave.size))
         assertEquals(ADAS.keys.map { FidPushSub(it, 1038) }, subs.captured.drop(wave.size))
-        assertEquals(wave.size + 7, subs.captured.size)
+        assertEquals(wave.size + ADAS.size, subs.captured.size)
         assertTrue(subs.captured.size <= MAX_PUSH_FIDS)
-        assertEquals(listOf("car adas-subscribe confirmed=7 skipped=0"), events())
+        assertEquals(listOf("car adas-subscribe confirmed=13 skipped=0"), events())
     }
 
     @Test fun `a symbol this firmware numbers differently is skipped, and never traced by name`() = runTest {
@@ -109,7 +109,7 @@ class PushStateTraceTest {
         push(LKS_FAULT to 1, 309 to 1, LANE_GRAY to 1)
 
         assertEquals(
-            listOf("car adas-subscribe confirmed=6 skipped=1", "car adas name=lane-change-gray to=1"),
+            listOf("car adas-subscribe confirmed=12 skipped=1", "car adas name=lane-change-gray to=1"),
             events(),
         )
     }
@@ -119,7 +119,7 @@ class PushStateTraceTest {
         channel.resubscribe("fid catalog resolved") { FidCatalog(mapOf(LKS_SYMBOL to LKS_FAULT), emptyMap()) }
 
         assertEquals(listOf(FidPushSub(LKS_FAULT, 1038)), subs.captured.drop(FidPushApplier.PUSH_FIELDS.size))
-        assertEquals(listOf("car adas-subscribe confirmed=1 skipped=6"), events())
+        assertEquals(listOf("car adas-subscribe confirmed=1 skipped=12"), events())
     }
 
     @Test fun `without a catalog no ADAS state is subscribed or traced`() = runTest {
@@ -143,7 +143,7 @@ class PushStateTraceTest {
         assertEquals(
             listOf(
                 "car adas-subscribe reason=no-catalog",
-                "car adas-subscribe confirmed=7 skipped=0",
+                "car adas-subscribe confirmed=13 skipped=0",
                 "car adas name=lane-change-gray to=1",
             ),
             events(),
@@ -197,7 +197,7 @@ class PushStateTraceTest {
         channel.resubscribe("fid catalog resolved") { CATALOG }
 
         coVerify(exactly = 2) { helper.pushSubscribe(any(), any()) }
-        assertEquals(FidPushApplier.PUSH_FIELDS.size + 7, channel.results.size)
+        assertEquals(FidPushApplier.PUSH_FIELDS.size + ADAS.size, channel.results.size)
         assertEquals(2, channel.resubscribes)
     }
 
@@ -216,7 +216,7 @@ class PushStateTraceTest {
         assertEquals(
             listOf(
                 "car adas-subscribe reason=no-catalog",
-                "car adas-subscribe confirmed=7 skipped=0 result=unconfirmed",
+                "car adas-subscribe confirmed=13 skipped=0 result=unconfirmed",
                 "car adas-subscribe reason=no-catalog result=unconfirmed",
             ),
             events(),
@@ -239,7 +239,7 @@ class PushStateTraceTest {
 
         assertEquals(1, subs.captured.count { it.fid == lane })
         assertEquals("bsdLeft", channel.fieldFor(lane))
-        assertEquals(listOf("car adas-subscribe confirmed=6 skipped=1"), events())
+        assertEquals(listOf("car adas-subscribe confirmed=12 skipped=1"), events())
     }
 
     @Test fun `ADAS fids are not FidMap fields, so nothing patches the snapshot with them`() = runTest {
@@ -378,9 +378,18 @@ class PushStateTraceTest {
             535826458 to "noa-gray",
             535830556 to "noa-quit",
             LKS_FAULT to "lks-fault",
+            535830576 to "assist-mode",
+            700448780 to "cruise-arhud",
+            852492340 to "cruise-mode",
+            828375084 to "lane-cruise",
+            700448784 to "icc-signal",
+            700448800 to "nav-pilot",
         )
 
-        /** The seven symbols as the Leopard 3 catalog numbers them (fid dump 2026-07-29). */
+        /**
+         * The first seven symbols as the Leopard 3 catalog numbers them (fid dump 2026-07-29); the
+         * six around the cruise (#383) as its firmware's BYDAutoFeatureIds and a Tang L catalog do.
+         */
         val SYMBOLS = mapOf(
             "Adas.ADAS_INTERACTIVE_LANE_CHANGE_ASSIST_GRAY" to LANE_GRAY,
             "Adas.ADAS_ILCA_SWITCH_STATE" to ILCA,
@@ -389,6 +398,12 @@ class PushStateTraceTest {
             "Adas.ADAS_NOA_GRAY_STATE" to 535826458,
             "Adas.ADAS_NOA_QUIT_PROMPT" to 535830556,
             LKS_SYMBOL to LKS_FAULT,
+            "Adas.ADAS_ASSIST_DRIVE_MODE_STATUS" to 535830576,
+            "Adas.ADAS_ACC_MODE_ARHUD" to 700448780,
+            "Adas.ADAS_ACC_MODE" to 852492340,
+            "Adas.ADAS_TJA_ICA_STATE" to 828375084,
+            "Adas.ADAS_BROADCAST_AFTER_GET_ICCSIGNAL" to 700448784,
+            "Adas.ADAS_DNP_STATE" to 700448800,
         )
         val CATALOG = FidCatalog(SYMBOLS, emptyMap())
 

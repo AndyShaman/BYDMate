@@ -179,7 +179,7 @@ Examples:
 |---|-------------|
 | **Triggers** | SOC, speed, temperature, turn signal, gear, doors, windows, sunroof, trunks, tire pressure, drive mode, geofence places, time of day, exact time and a time range with weekdays, steering-wheel key, widget tap, voice phrase, service start, internet available, seat belts and seat occupancy, rain, key fob battery, headlights and ambient light, charging status, climate, and more. Turn signals, gear, doors, windows, trunks, and blind-spot sensors reach the app the moment they happen, not by polling |
 | **Vehicle commands** | Sections in the picker: Windows (all, front, rear, and each one separately), Climate (including airflow direction, recirculation and windshield airflow), Seats, Sunroof (sunroof and shade), Locks, Body (trunks and spoiler), Light (cabin, ambient, DRL, hazard lights, rear logo light, HUD), Mirrors, Drive mode, Fridge. Steering wheel heating and rear seat heating on cars that have them. Battery preheating is not in the picker: add any vehicle command and choose battery preheating in its dropdown |
-| **Other actions** | Besides vehicle commands, the picker has these sections. **Messages**: notification, speak text, ask the agent, send a Telegram report. **Apps**: launch app, close app, Yandex Music, media play and pause, call, route in Yandex Navigator, open URL. **Screen**: projection to cluster, split screen (start, close, toggle). **System**: sentry mode, Wi-Fi hotspot, center screen off and on, media volume. **Wait** between actions, up to 24 hours. Vehicle commands, sentry mode, and projection to cluster also have a "Toggle" option. Rules built by the voice agent can have two more actions: a YouTube video and the BYDMate home screen, they are not in the picker |
+| **Other actions** | Besides vehicle commands, the picker has these sections. **Messages**: notification, speak text, ask the agent, send a Telegram report. **Apps**: launch app, close app, Yandex Music, media play and pause, call, route in Yandex Navigator, open URL. **Screen**: projection to cluster, split screen (start, close, toggle). **System**: sentry mode, Wi-Fi hotspot, center screen off and on, media volume, Back (the system Back button), Home (the car's home screen). **Wait** between actions, up to 24 hours. Vehicle commands, sentry mode, and projection to cluster also have a "Toggle" option. Rules built by the voice agent can also have a YouTube video, it is not in the picker |
 | **Edge trigger** | Fires only on a false→true transition (not every 3 seconds) |
 | **Cooldown** | Configurable delay between firings |
 | **Ask before running** | A "Cancel / Run" popup before the action, with no answer in 15 seconds the action is canceled. If drawing over other apps is not allowed, the question comes as a notification and waits 30 seconds |
@@ -437,6 +437,7 @@ The agent has over 30 tools. Example phrases:
 - "Поставь на охрану" (Arm the car), "Сними с охраны" (Disarm the car) (BYD sentry mode). Before disarming the agent shows a confirmation window
 - "Включи точку доступа" (Turn on the hotspot), "Выключи раздачу" (Turn off internet sharing) (sharing the internet from the car)
 - "Погаси экран" (Turn off the screen), "Включи экран" (Turn on the screen) (only the center screen backlight goes off, music and apps keep running, a touch lights the screen up again)
+- "Назад", "Вернись" (Back) (the system Back button: the app's previous screen)
 
 ### Vehicle Control: Command Catalog
 
@@ -450,11 +451,12 @@ The catalog has over 100 commands. The agent picks from the app's closed list of
 | Seat ventilation | driver and passenger, levels 1-5 and off |
 | Mirrors | mirror and rear window heating on/off |
 | Steering wheel | heating on/off, on cars with steering wheel heating |
-| Lights | cabin dome light, ambient lighting, daytime running lights: on, off |
+| Lights | cabin dome light, ambient lighting, daytime running lights, rear logo light: on, off |
 | Locks | lock, unlock |
 | Sunroof and shade | sunroof: open, close, halfway, tilt to vent, comfort position, stop; shade: open, close, halfway, stop |
 | Trunk | open, close |
 | Front trunk | open, close |
+| Spoiler | raise, lower, turn on auto mode; on cars with a spoiler. While the car stands still with the spoiler up, it cannot be lowered and auto mode cannot be turned on |
 | Fridge | cooling from -6 to +6, heating from 35 to 50, off |
 | Hazard lights | on, off |
 | Drive mode | ECO, Normal, Sport; Snow, Sand, Mud, Mountain, Rock and the smart mode only below 15 km/h |
@@ -465,7 +467,7 @@ Safety: window opening is blocked above 120 km/h, the sunroof above 80 km/h, doo
 
 ### Quick Commands Without the Agent and Without Internet
 
-Frequent commands run instantly, without the language model and without the network. For this, the app has a fixed list of Russian phrases: windows and sunroof, seat heating and ventilation, steering wheel heating, mirrors, climate, fan, volume, locks, trunk, lights, and navigation.
+Frequent commands run instantly, without the language model and without the network. For this, the app has a fixed list of Russian phrases: windows and sunroof, seat heating and ventilation, steering wheel heating, mirrors, climate, fan, volume, locks, trunk, spoiler, lights, and navigation.
 
 How it works:
 
@@ -523,7 +525,7 @@ Offline voices (work without internet, downloaded one at a time):
 
 Mark and Sofia (the Supertonic engine) sound noticeably more natural than the standard voices, but weigh more and share one download: once you get either one, you cannot get the other without a separate download. Speed and intonation liveliness are set with sliders, with a "Play a sample" button next to them.
 
-Online voices (optional, sound more natural): Gemini and OpenAI through the OpenRouter key, MiniMax through its own key (three connection methods: the official API, fal.run, replicate). There is no offline fallback: if the online voice does not answer or fails, the reply stays as text in the pill but is not spoken.
+Online voices (optional, sound more natural): Gemini and OpenAI through the OpenRouter key, MiniMax through its own key (three connection methods: the official API, fal.run, replicate). If the online voice does not answer, the reply is spoken with the local voice, and the reason is shown on the screen.
 
 About volume: agent replies go through BYD's own voice channel (the same one native prompts use), its volume is set by the car's system voice setting. The "turn it up" command changes the music volume, not the agent's voice. If the agent sounds too quiet or too loud, adjust the system voice volume.
 

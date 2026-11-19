@@ -68,6 +68,9 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
     private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge,
     private val vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao,
     private val vehicleKindMonitor: com.bydmate.app.data.nativestack.VehicleKindMonitor,
+    // Null in tests that build the writer by hand: the ASR model line is then skipped.
+    private val asrLoadGuard: com.bydmate.app.voice.AsrLoadGuard? = null,
+    private val gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager? = null,
 ) {
 
     companion object {
@@ -402,6 +405,22 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
             // automation, agent) and why not, with the agent's tools and answer. The only place a
             // user report about a misheard or refused command becomes checkable.
             appendLine("--- voice ---")
+            // The GigaAM model and its load guard (model deleted and re-downloaded, DiLink 3 field log 2026-11): the
+            // interrupted-load counters as this process found them and as stored now, which
+            // known-good hashes exist, and what the last tripped guard did with the files.
+            if (asrLoadGuard != null && gigaAmModelManager != null) {
+                try {
+                    fun counts(m: Map<String, Int>) = "recognizer=${m[com.bydmate.app.voice.AsrLoadGuard.ARTIFACT_RECOGNIZER] ?: 0}" +
+                        "/vad=${m[com.bydmate.app.voice.AsrLoadGuard.ARTIFACT_VAD] ?: 0}"
+                    appendLine("asr_model: ready=${gigaAmModelManager.isReady()} tripped=${asrLoadGuard.isTripped()} " +
+                        "inherited=${counts(asrLoadGuard.inheritedCounts())} stored=${counts(asrLoadGuard.storedCounts())} " +
+                        "hashes: ${gigaAmModelManager.manifestState()}")
+                    appendLine(com.bydmate.app.voice.AsrGuardRecovery.dumpLine(appContext.getSharedPreferences(
+                        com.bydmate.app.voice.AsrGuardRecovery.PREFS_NAME, Context.MODE_PRIVATE)))
+                } catch (e: Exception) {
+                    appendLine("(failed to gather asr model state: ${e.message})")
+                }
+            }
             try {
                 VoiceJournalDump.lines(voiceJournal.entries.value, AGENT_DUMP_ENTRIES, AGENT_DUMP_ANSWER_CHARS)
                     .forEach { appendLine(it) }
