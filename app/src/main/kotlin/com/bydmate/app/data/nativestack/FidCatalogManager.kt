@@ -119,7 +119,7 @@ class FidCatalogManager @Inject constructor(
         if (catalog == null) {
             source = "daemon"
             catalog = when (val dump = helperClient.dumpFids()) {
-                is DumpFidsResult.Success -> FidCatalog.parse(dump.dump)
+                is DumpFidsResult.Success -> FidCatalog.parse(dump.dump, wantedSymbols())
                 DumpFidsResult.BinderAbsent -> {
                     Log.i(TAG, "fid catalog: daemon unreachable, staying on constants")
                     return
@@ -133,6 +133,7 @@ class FidCatalogManager @Inject constructor(
                 Log.w(TAG, "fid catalog: dump carried no symbols, staying on constants")
                 return
             }
+            if (catalog.flatLayout) Log.i(TAG, "fid catalog: flat layout, ${catalog.symbols.size} aliases mapped")
             writeCache(fingerprint, catalog)
         }
         this.catalog = catalog
@@ -236,18 +237,13 @@ class FidCatalogManager @Inject constructor(
     }
 
     /**
-     * Persists the symbols this app can use (READ entries with the hybrid set, the WRITE symbols the dump prints,
-     * the ADAS states the push channel confirms, the cluster music card's write fids and the rear seat heat symbols) and the whole device table. Keeping only those turns a ~700 KB dump into a few
+     * Persists the symbols this app can use ([wantedSymbols]) and the whole device table. Keeping only those turns a ~700 KB dump into a few
      * KB; the original symbol count travels in the header so the log stays honest about what
      * the firmware reported.
      */
     private fun writeCache(fingerprint: String, catalog: FidCatalog) {
         try {
-            val adas = PushStateTrace.ADAS_STATES.map { it.symbol }
-            val wanted = (
-                (FidMap.all + FidMap.hybrid).mapNotNull { it.symbol } + WriteFidSymbols.byFid.values + adas +
-                    com.bydmate.app.media.ClusterMusicFids.SYMBOLS + com.bydmate.app.data.vehicle.RearSeatHeat.SYMBOLS
-            ).toSortedSet()
+            val wanted = wantedSymbols()
             val body = buildString {
                 append(FidCatalogCache.header(fingerprint, BuildConfig.VERSION_CODE, catalog.totalSymbols))
                 append('\n')
@@ -268,6 +264,17 @@ class FidCatalogManager @Inject constructor(
 
     internal companion object {
         const val TAG = "FidCatalog"
+
+        /**
+         * Every symbol this app looks up by name: READ entries with the hybrid set, the WRITE symbols the dump
+         * prints, the ADAS states the push channel confirms, the cluster music card's write fids, the rear seat
+         * heat symbols and the battery current probe's candidates. A flat-only dump is mapped onto exactly these.
+         */
+        fun wantedSymbols(): Set<String> = (
+            (FidMap.all + FidMap.hybrid).mapNotNull { it.symbol } + WriteFidSymbols.byFid.values +
+                PushStateTrace.ADAS_STATES.map { it.symbol } + com.bydmate.app.media.ClusterMusicFids.SYMBOLS +
+                com.bydmate.app.data.vehicle.RearSeatHeat.SYMBOLS + BatteryCurrentProbe.SYMBOLS
+        ).toSortedSet()
         const val CACHE_FILE = "fid-catalog.txt"
         const val PROBE_ATTEMPTS = 3
         const val PROBE_RETRY_DELAY_MS = 10_000L

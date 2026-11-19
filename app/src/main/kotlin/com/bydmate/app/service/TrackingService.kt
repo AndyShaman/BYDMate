@@ -23,6 +23,7 @@ import android.net.NetworkRequest
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationCompat
@@ -112,6 +113,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap
     @Inject lateinit var fidCatalogManager: FidCatalogManager
     @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
+    @Inject lateinit var motorPresence: com.bydmate.app.data.nativestack.MotorPresence
     @Inject lateinit var continuousAsr: com.bydmate.app.voice.ContinuousAsr
     @Inject lateinit var asrLoadGuard: com.bydmate.app.voice.AsrLoadGuard
     @Inject lateinit var gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager
@@ -983,6 +985,20 @@ class TrackingService : Service(), LocationListener {
     private fun pushLogThrottleFor(field: String) =
         if (com.bydmate.app.data.push.FidPushLogPolicy.isAnalog(field)) analogPushLogThrottle else pushLogThrottle
     private val beltProbeLog = BeltProbeLog()
+    private val batteryCurrentProbe = com.bydmate.app.data.nativestack.BatteryCurrentProbe()
+
+    /** #429: the battery current candidates, read only while «Запись логов» records. */
+    private fun probeBatteryCurrent(data: DiParsData) {
+        if (!logRecorder.state.value.isRecording) return
+        if (!batteryCurrentProbe.shouldRead(SystemClock.elapsedRealtime())) return
+        serviceScope.launch {
+            val items = batteryCurrentProbe.items(
+                fidCatalogManager.catalog,
+                com.bydmate.app.data.nativestack.FidAddresses.of("hvCurrent"),
+            )
+            Log.i("TechPanel", batteryCurrentProbe.line(data, helperClient.readBatch(items)))
+        }
+    }
 
     private fun resolveFidCatalog() {
         serviceScope.launch {
@@ -1379,6 +1395,8 @@ class TrackingService : Service(), LocationListener {
                     lastSample = sample
                     blindSpotController.onPollSnapshot(data)
                     beltProbeLog.onSnapshot(data)
+                    motorPresence.onSnapshot(data, SystemClock.elapsedRealtime())
+                    probeBatteryCurrent(data)
                     alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.
                     autoserviceDetector.onSample(data)
