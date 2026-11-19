@@ -577,6 +577,7 @@
     <string name="automation_action_hotspot_off">Адключыць</string>
     <string name="automation_action_screen_off">Цэнтральны экран: выключыць</string>
     <string name="automation_action_screen_on">Цэнтральны экран: уключыць</string>
+    <string name="automation_action_go_back">Назад</string>
     <string name="automation_action_speak">Агучыць тэкст</string>
     <string name="automation_action_agent_query">Запыт агенту</string>
     <string name="auto_act_speak">Агучыць тэкст</string>
@@ -1899,6 +1900,7 @@
     <string name="dispatch_sentry_failed">Не ўдалося пераключыць ахоўны рэжым</string>
     <string name="dispatch_hotspot_invalid_state">Некарэктны стан пункта доступу Wi-Fi</string>
     <string name="dispatch_hotspot_failed">Не ўдалося пераключыць пункт доступу Wi-Fi</string>
+    <string name="dispatch_back_failed">Не ўдалося націснуць «Назад»</string>
     <string name="dispatch_screen_invalid_state">Некарэктны стан экрана</string>
     <string name="dispatch_screen_not_available">На гэтай машыне кіраванне экранам недаступна</string>
     <string name="dispatch_cluster_invalid_state">Некарэктны стан праекцыі на прыборку</string>
@@ -1974,7 +1976,7 @@
     <string name="tg_report_field_battery_temp">Тэмпература батарэі</string>
     <string name="tg_report_field_openings">Што адчынена</string>
     <string name="tg_report_field_tires">Ціск у шынах</string>
-    <string name="tg_report_header_off">BYDMate: машына выключана ў %1$s</string>
+    <string name="tg_report_header_off">BYDMate: машына выключана %1$s у %2$s</string>
     <string name="tg_report_map_link">Адкрыць на карце</string>
     <string name="tg_report_soc">зарад %1$s</string>
     <string name="tg_report_soc_value">%1$d%%</string>

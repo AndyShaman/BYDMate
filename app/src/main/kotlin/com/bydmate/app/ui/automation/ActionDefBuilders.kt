@@ -372,6 +372,22 @@ fun newSplitScreenToggleAction(context: Context): ActionDef = ActionDef(
     payload = null
 )
 
+/** «Назад» — no payload: one system Back key press. */
+fun newGoBackAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.automation_action_go_back),
+    kind = "go_back",
+    payload = null
+)
+
+/** «Домой» — no payload: the launcher's home screen. */
+fun newGoHomeAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.widget_button_icon_home),
+    kind = "go_home",
+    payload = null
+)
+
 fun ActionDef.splitNarrowPkg(): String = try {
     org.json.JSONObject(payload ?: "{}").optString("narrow")
 } catch (e: Exception) { "" }

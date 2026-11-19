@@ -80,6 +80,8 @@ data class ChargesUiState(
     // BMS lifetime from autoservice — distinct from sum across our charge rows
     val bmsLifetimeKm: Double? = null,
     val bmsLifetimeKwh: Double? = null,
+    /** Last positive BMS counter remembered; the cycles use it while the live read is empty. */
+    val bmsLifetimeKwhLastKnown: Double? = null,
     // Snapshot dynamics (collected at vehicle wake-up; populated by Phase 5 write-path)
     val cellDeltaSeries: List<Float> = emptyList(),
     val batTempSeries: List<Float> = emptyList(),
@@ -99,14 +101,17 @@ data class ChargesUiState(
      * this state from two independent coroutines, and whichever arrives last must be counted.
      */
     val equivCycles: Double
-        get() = fullCycleKwh(bmsLifetimeKwh, lifetimeTotalKwh)
-            ?.let {
-                equivalentFullCycles(
-                    it, nominalCapacityKwh,
-                    sohPercent = sohPercent,
-                    lifetimeSource = bmsLifetimeKwh != null && bmsLifetimeKwh > 0.0,
-                )
-            } ?: 0.0
+        get() {
+            val bms = bmsLifetimeKwh?.takeIf { it > 0.0 } ?: bmsLifetimeKwhLastKnown
+            return fullCycleKwh(bms, lifetimeTotalKwh)
+                ?.let {
+                    equivalentFullCycles(
+                        it, nominalCapacityKwh,
+                        sohPercent = sohPercent,
+                        lifetimeSource = bms != null && bms > 0.0,
+                    )
+                } ?: 0.0
+        }
 }
 
 @HiltViewModel
@@ -320,6 +325,7 @@ class ChargesViewModel @Inject constructor(
                     autoserviceAllSentinel = allSentinel,
                     bmsLifetimeKm = state.lifetimeKm?.toDouble(),
                     bmsLifetimeKwh = state.lifetimeKwh?.toDouble(),
+                    bmsLifetimeKwhLastKnown = state.lifetimeKwhLastKnown?.toDouble(),
                     sohFactor = state.sohPercent?.toDouble()
                         ?.takeIf { soh -> soh in AutoserviceChargingDetector.SOH_SANITY_MIN..100.0 }
                         ?.div(100.0) ?: 1.0,

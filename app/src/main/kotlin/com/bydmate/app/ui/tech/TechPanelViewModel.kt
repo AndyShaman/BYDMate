@@ -185,12 +185,13 @@ class TechPanelViewModel @Inject constructor(
         val state = runCatching { batteryStateRepository.refresh() }.getOrNull()
         _uiState.update {
             if (state == null || !state.autoserviceAvailable) {
-                it.copy(autoserviceOnline = false)
+                it.copy(autoserviceOnline = false, bmsLifetimeKwhForCycles = state?.lifetimeKwhForCycles)
             } else {
                 it.copy(
                     soh = state.sohPercent,
                     lifetimeKm = state.lifetimeKm,
                     lifetimeKwh = state.lifetimeKwh,
+                    bmsLifetimeKwhForCycles = state.lifetimeKwhForCycles,
                 )
             }
         }

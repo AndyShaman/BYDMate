@@ -32,6 +32,7 @@ import com.bydmate.app.R
 import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.ui.theme.*
+import java.util.Locale
 
 // ============================================================================
 // AI Insight card — text-based, different from value-pair cards
@@ -96,6 +97,10 @@ internal fun InsightCard(
 // TRIP 1 / TRIP 2 counter button
 // ============================================================================
 
+/** TRIP card kilometres: one decimal, like the details dialog. */
+internal fun formatTripCounterKm(km: Double?, locale: Locale = Locale.getDefault()): String =
+    String.format(locale, "%.1f", km ?: 0.0)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun TripCounterButton(
@@ -118,7 +123,7 @@ internal fun TripCounterButton(
             Text(label, color = AccentGreen, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("%.0f".format(ui?.km ?: 0.0), color = AccentGreen,
+                    Text(formatTripCounterKm(ui?.km), color = AccentGreen,
                         fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     Text(stringResource(R.string.dashboard_unit_km), color = TextMuted, fontSize = 10.sp)
                 }

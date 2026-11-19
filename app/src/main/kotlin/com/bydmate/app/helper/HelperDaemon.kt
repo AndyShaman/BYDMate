@@ -554,6 +554,14 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); true }
 
+                HelperBinderProtocol.TX_PRESS_BACK -> runCatching {
+                    // Fixed key code (KEYCODE_BACK), nothing from the caller.
+                    val result = shExec("input keyevent 4")
+                    android.util.Log.i("bydmate_helper", "TX_PRESS_BACK code=${result.code}")
+                    reply?.writeInt(if (result.code == 0) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 HelperBinderProtocol.TX_SET_APP_HIDDEN -> runCatching {
                     val pkg = data.readString() ?: ""
                     val hidden = data.readInt()    // 1 = disable, 0 = enable

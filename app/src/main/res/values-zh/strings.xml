@@ -1279,6 +1279,7 @@
     <string name="automation_action_hotspot_off">关闭</string>
     <string name="automation_action_screen_off">关闭中控屏</string>
     <string name="automation_action_screen_on">打开中控屏</string>
+    <string name="automation_action_go_back">返回</string>
     <string name="automation_action_speak">朗读文字</string>
     <string name="automation_action_agent_query">询问语音助手</string>
     <string name="auto_act_speak">朗读文字</string>
@@ -1864,6 +1865,7 @@
     <string name="dispatch_sentry_failed">无法切换哨兵模式</string>
     <string name="dispatch_hotspot_invalid_state">Wi-Fi 热点状态无效</string>
     <string name="dispatch_hotspot_failed">无法切换 Wi-Fi 热点</string>
+    <string name="dispatch_back_failed">无法执行“返回”</string>
     <string name="dispatch_screen_invalid_state">屏幕状态无效</string>
     <string name="dispatch_screen_not_available">本车不支持控制屏幕</string>
     <string name="dispatch_cluster_invalid_state">仪表盘投射状态无效</string>
@@ -1939,7 +1941,7 @@
     <string name="tg_report_field_battery_temp">电池温度</string>
     <string name="tg_report_field_openings">未关闭项</string>
     <string name="tg_report_field_tires">胎压</string>
-    <string name="tg_report_header_off">BYDMate：车辆于 %1$s 熄火</string>
+    <string name="tg_report_header_off">BYDMate：车辆于 %1$s %2$s 熄火</string>
     <string name="tg_report_map_link">在地图上打开</string>
     <string name="tg_report_soc">电量 %1$s</string>
     <string name="tg_report_soc_value">%1$d%%</string>

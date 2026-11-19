@@ -2,6 +2,7 @@ package com.bydmate.app.domain.battery
 
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.repository.BatteryHealthRepository
+import com.bydmate.app.data.repository.SettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,20 +16,36 @@ data class BatteryState(
     val lifetimeKm: Float?,
     val lifetimeKwh: Float?,
     /** True when the autoservice client returned at least one real value. */
-    val autoserviceAvailable: Boolean
-)
+    val autoserviceAvailable: Boolean,
+    /** Last positive BMS lifetime counter seen (this read or remembered from an earlier one). */
+    val lifetimeKwhLastKnown: Float? = null,
+) {
+    /** The counter the full-cycle count uses: the live one, else the remembered one. */
+    val lifetimeKwhForCycles: Float?
+        get() = lifetimeKwh?.takeIf { it > 0f } ?: lifetimeKwhLastKnown?.takeIf { it > 0f }
+}
 
 @Singleton
 class BatteryStateRepository @Inject constructor(
     private val vehicleApi: VehicleApi,
     private val batteryHealth: BatteryHealthRepository,
+    private val settings: SettingsRepository,
 ) {
     suspend fun refresh(): BatteryState {
         if (!vehicleApi.isAvailable()) {
-            return BatteryState(null, null, null, null, autoserviceAvailable = false)
+            return BatteryState(
+                null, null, null, null, autoserviceAvailable = false,
+                lifetimeKwhLastKnown = settings.getBmsLifetimeKwhLast(),
+            )
         }
         val r = vehicleApi.readBatterySnapshot()
-            ?: return BatteryState(null, null, null, null, autoserviceAvailable = false)
+            ?: return BatteryState(
+                null, null, null, null, autoserviceAvailable = false,
+                lifetimeKwhLastKnown = settings.getBmsLifetimeKwhLast(),
+            )
+
+        val freshKwh = r.lifetimeKwh?.takeIf { it > 0f }
+        if (freshKwh != null) settings.setBmsLifetimeKwhLast(freshKwh)
 
         val sohFromSnapshot = batteryHealth.getLast()?.sohPercent?.toFloat()
         return BatteryState(
@@ -36,7 +53,8 @@ class BatteryStateRepository @Inject constructor(
             sohPercent = r.sohPercent ?: sohFromSnapshot,
             lifetimeKm = r.lifetimeMileageKm,
             lifetimeKwh = r.lifetimeKwh,
-            autoserviceAvailable = true
+            autoserviceAvailable = true,
+            lifetimeKwhLastKnown = freshKwh ?: settings.getBmsLifetimeKwhLast(),
         )
     }
 }

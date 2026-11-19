@@ -219,6 +219,8 @@ private fun pickerSections(): List<PickerSection> {
                 PickerTile(lc.getString(R.string.automation_action_screen_off)) { newScreenAction(it, on = false) },
                 PickerTile(lc.getString(R.string.automation_action_screen_on)) { newScreenAction(it, on = true) },
                 PickerTile(lc.getString(R.string.automation_action_media_volume)) { newMediaVolumeAction(it) },
+                PickerTile(lc.getString(R.string.automation_action_go_back)) { newGoBackAction(it) },
+                PickerTile(lc.getString(R.string.widget_button_icon_home)) { newGoHomeAction(it) },
             )),
             PickerSection(lc.getString(R.string.auto_ui_wait), DELAY_OPTION_MS.map { ms ->
                 PickerTile(lc.getString(R.string.auto_ui_act_wait, durationText(ms, lc))) { delayAction(ms, it) }

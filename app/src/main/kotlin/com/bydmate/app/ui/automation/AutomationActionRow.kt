@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.minimumInteractiveComponentSize
 import kotlinx.coroutines.delay
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
@@ -153,6 +155,8 @@ internal fun ActionRow(
                     HotspotActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 "screen" ->
                     ScreenActionControls(payload = action.payload, modifier = fill)
+                "go_back", "go_home" ->
+                    SystemKeyActionControls(kind = action.kind, modifier = fill)
                 "cluster_projection" ->
                     ClusterActionControls(action = action, onUpdate = onUpdate, modifier = fill)
                 // A toggle on sentry or the cluster goes back to its own three-state row, so the
@@ -573,6 +577,32 @@ private fun ScreenActionControls(payload: String?, modifier: Modifier = Modifier
             text = stringResource(
                 if (payload == "1") R.string.automation_action_screen_on else R.string.automation_action_screen_off
             ),
+            fontSize = 16.sp,
+            color = TextPrimary,
+            maxLines = 1,
+        )
+    }
+}
+
+/** «Назад» / «Домой»: nothing to configure, the row only names the step. */
+@Composable
+private fun SystemKeyActionControls(kind: String, modifier: Modifier = Modifier) {
+    val back = kind == "go_back"
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .heightIn(min = FIELD_HEIGHT)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (back) Icons.AutoMirrored.Outlined.ArrowBack else Icons.Outlined.Home,
+            null, tint = AccentTeal, modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = stringResource(if (back) R.string.automation_action_go_back else R.string.widget_button_icon_home),
             fontSize = 16.sp,
             color = TextPrimary,
             maxLines = 1,

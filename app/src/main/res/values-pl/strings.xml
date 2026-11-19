@@ -577,6 +577,7 @@
     <string name="automation_action_hotspot_off">Wyłącz</string>
     <string name="automation_action_screen_off">Ekran centralny: wyłącz</string>
     <string name="automation_action_screen_on">Ekran centralny: włącz</string>
+    <string name="automation_action_go_back">Wstecz</string>
     <string name="automation_action_speak">Odczytaj tekst</string>
     <string name="automation_action_agent_query">Zapytanie do agenta</string>
     <string name="auto_act_speak">Odczytaj tekst</string>
@@ -1899,6 +1900,7 @@
     <string name="dispatch_sentry_failed">Nie udało się przełączyć trybu ochrony</string>
     <string name="dispatch_hotspot_invalid_state">Nieprawidłowy stan hotspotu Wi-Fi</string>
     <string name="dispatch_hotspot_failed">Nie udało się przełączyć hotspotu Wi-Fi</string>
+    <string name="dispatch_back_failed">Nie udało się nacisnąć „Wstecz”</string>
     <string name="dispatch_screen_invalid_state">Nieprawidłowy stan ekranu</string>
     <string name="dispatch_screen_not_available">W tym samochodzie sterowanie ekranem jest niedostępne</string>
     <string name="dispatch_cluster_invalid_state">Nieprawidłowy stan wyświetlania na wskaźnikach</string>
@@ -1974,7 +1976,7 @@
     <string name="tg_report_field_battery_temp">Temperatura baterii</string>
     <string name="tg_report_field_openings">Co jest otwarte</string>
     <string name="tg_report_field_tires">Ciśnienie w oponach</string>
-    <string name="tg_report_header_off">BYDMate: samochód wyłączony o %1$s</string>
+    <string name="tg_report_header_off">BYDMate: samochód wyłączony %1$s o %2$s</string>
     <string name="tg_report_map_link">Otwórz na mapie</string>
     <string name="tg_report_soc">naładowanie %1$s</string>
     <string name="tg_report_soc_value">%1$d%%</string>

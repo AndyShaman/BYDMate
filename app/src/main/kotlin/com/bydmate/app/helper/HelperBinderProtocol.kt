@@ -42,6 +42,7 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
  *   TX_ENABLE_NOTIFICATION_LISTENER : (no args)           -> reply: writeInt(status), writeInt(0)  // status 0 = our listener stub enabled
  *   TX_DISALLOW_NOTIFICATION_LISTENER : (no args)         -> reply: writeInt(status)  // status 0 = our listener stub disallowed (#325 rebind)
+ *   TX_PRESS_BACK : (no args)                             -> reply: writeInt(status), writeInt(0)  // status 0 = system Back key sent
  *   TX_SET_CLUSTER_MODE: [int on(0|1)] -> [int status]; status 0 = ok.
  *   TX_GET_TASK_STATE : writeString(packageName)
  *       -> reply: writeInt(status), then on status 0:
@@ -613,6 +614,15 @@ object HelperBinderProtocol {
      * and the rebind stops there, nothing revoked.
      */
     val TX_DISALLOW_NOTIFICATION_LISTENER: Int = IBinder.FIRST_CALL_TRANSACTION + 64  // 65
+
+    /**
+     * The «Назад» action: one system Back key press (`input keyevent 4`). The key code is fixed
+     * daemon-side and no argument is read.
+     *
+     * Request: (no args) -> Reply: [int status (0 = sent, -1 = failed), int 0]
+     * An old daemon without this handler makes transact return false → the client returns false.
+     */
+    val TX_PRESS_BACK: Int = IBinder.FIRST_CALL_TRANSACTION + 65  // 66
 
     /** TX_SET_AUTO_VOICE outcomes: called; no such method on this firmware; the audio service or
      *  the call threw. */

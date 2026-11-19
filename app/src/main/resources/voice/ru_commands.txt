@@ -317,6 +317,10 @@ solo навигация => OPEN_NAVIGATOR
 rule trunk: [задний] (багажник|багажнек)
 <open_lid> <trunk> => 开后备箱
 <close_lid> <trunk> => 关后备箱
+# The front trunk opens only on a standing car: the dispatcher's speed gate holds it.
+rule frunk: передний (багажник|багажнек)|(багажник|багажнек) спереди
+<open_lid> <frunk> => 前备箱打开
+<close_lid> <frunk> => 前备箱关闭
 
 # ---- Spoiler -------------------------------------------------------------------------------
 # "подними" and "опусти" are the spoiler's own up and down here, the opposite of what they mean

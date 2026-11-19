@@ -677,6 +677,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             "yandex_music" -> launchYandexMusic(action)
             "youtube" -> launchYoutube(action)
             "go_home" -> goHome()
+            "go_back" -> goBack()
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
             "media_key" -> dispatchMediaKey(action)
@@ -1621,6 +1622,14 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             .addCategory(Intent.CATEGORY_HOME)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return tryStartActivity(home, "go_home")
+    }
+
+    // System Back key through the helper daemon; no speed gate, it changes no car state.
+    private suspend fun goBack(): DispatchResult {
+        val ok = helper.pressBack()
+        Log.i(TAG, "go_back ok=$ok")
+        return if (ok) DispatchResult(true)
+        else DispatchResult(false, appStrings.get(R.string.dispatch_back_failed))
     }
 
     private suspend fun maybeMinimize(payload: JSONObject?) {
