@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [4.4.2] - 2026-11-19
+
 ### Новое
 - «Запись логов»: в файл теперь попадают сигналы круиза и удержания полосы (режим помощи водителю, состояние круиза, навигационный пилот). По такой записи можно будет сделать условие правила «включён ICC» (#383).
 - Голосовые команды без интернета: «открой передний багажник» и «закрой передний багажник» (также «багажник спереди»). Передний багажник открывается только на стоящей машине. «Открой багажник» по-прежнему открывает задний.
@@ -1594,7 +1596,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.4.1...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.4.2...HEAD
+[4.4.2]: https://github.com/AndyShaman/BYDMate/compare/v4.4.1...v4.4.2
 [4.4.1]: https://github.com/AndyShaman/BYDMate/compare/v4.4.0...v4.4.1
 [4.4.0]: https://github.com/AndyShaman/BYDMate/compare/v4.3.2...v4.4.0
 [4.3.2]: https://github.com/AndyShaman/BYDMate/compare/v4.3.1...v4.3.2
