@@ -1,5 +1,7 @@
 package com.bydmate.app.data.automation
 
+import android.app.NotificationManager
+import android.content.Context
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.vehicle.HelperClient
@@ -17,7 +19,10 @@ import org.junit.Test
 class ActionDispatcherGoBackTest {
     private val helper = mockk<HelperClient>()
     private val strings = mockk<AppStrings> { every { get(any(), *anyVararg()) } returns "Не удалось нажать «Назад»" }
-    private val dispatcher = testDispatcher(helper = helper, appStrings = strings)
+    private val context = mockk<Context>(relaxed = true) {
+        every { getSystemService(Context.NOTIFICATION_SERVICE) } returns mockk<NotificationManager>(relaxed = true)
+    }
+    private val dispatcher = testDispatcher(helper = helper, context = context, appStrings = strings)
 
     private val back = ActionDef(command = "", displayName = "Назад", kind = "go_back")
 

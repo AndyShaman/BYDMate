@@ -140,6 +140,7 @@ class ChargesViewModelTest {
     /** Held as a field so a test can verify the re-pricing range without a new factory arg. */
     private val costCalculator: com.bydmate.app.domain.cost.CostCalculator = mockk(relaxed = true)
 
+    @Suppress("LongParameterList")
     private fun buildViewModel(
         chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
         autoserviceCharges: List<ChargeEntity> = emptyList(),
@@ -154,6 +155,7 @@ class ChargesViewModelTest {
         batteryReading, autoserviceAvailable, snapshots, batteryCapacityKwh, rememberedBmsKwh
     ).first
 
+    @Suppress("LongParameterList")
     private fun buildViewModelAndDao(
         chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
         autoserviceCharges: List<ChargeEntity> = emptyList(),

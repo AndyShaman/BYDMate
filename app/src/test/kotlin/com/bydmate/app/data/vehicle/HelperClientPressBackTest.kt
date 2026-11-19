@@ -18,6 +18,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [29])
 class HelperClientPressBackTest {
 
+    @Suppress("EmptyFunctionBlock")
     private abstract class FakeIBinder : IBinder {
         override fun isBinderAlive(): Boolean = true
         override fun pingBinder(): Boolean = true

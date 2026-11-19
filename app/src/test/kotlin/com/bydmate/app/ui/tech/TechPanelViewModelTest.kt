@@ -49,6 +49,7 @@ import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("LargeClass")
 class TechPanelViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
