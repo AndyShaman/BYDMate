@@ -15,9 +15,11 @@ import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.helper.dtc.DtcScanStatus
+import com.bydmate.app.helper.dtc.FirmwareStatus
 import com.bydmate.app.helper.dtc.TpmsPlanEntry
 import com.bydmate.app.helper.dtc.TpmsStatus
 import com.bydmate.app.helper.dtc.readDtcScanStatus
+import com.bydmate.app.helper.dtc.readFirmwareStatus
 import com.bydmate.app.helper.dtc.readTpmsStatus
 import com.bydmate.app.helper.offreport.OffReportStatus
 import com.bydmate.app.helper.offreport.readOffReportStatus
@@ -464,7 +466,8 @@ interface HelperClient {
     /** Firmware check start (TX 70): 0 ok, 1 busy, -1 refused, -2 not handled (old daemon); null unreachable. */
     suspend fun firmwareStart(gearDev: Int, gearFid: Int): Int? = null
 
-    suspend fun firmwareStatus(): com.bydmate.app.helper.dtc.FirmwareStatus? = null
+    /** State and raw answers of the last firmware check (TX_DIAG_JOB_STATUS, firmware part); null when unreachable. */
+    suspend fun firmwareStatus(): FirmwareStatus? = null
 
     /**
      * Direct freeform launch: find-or-launch [packageName], switch its task to freeform,
@@ -1425,6 +1428,23 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     override suspend fun tpmsStatus(): TpmsStatus? =
         transactParsed(HelperBinderProtocol.TX_DIAG_JOB_STATUS, { }, parse = ::readTpmsStatus)
 
+    // dtcScanStart's path: an older daemon answers notHandled, which the caller reports as outdated.
+    override suspend fun firmwareStart(gearDev: Int, gearFid: Int): Int? =
+        withContext(Dispatchers.IO) {
+            withTimeoutOrNull(REQ_TIMEOUT_MS) {
+                onBeforeLock?.invoke()
+                mutex.withLock {
+                    transactBodyUnlocked(
+                        HelperBinderProtocol.TX_FW_READ_START, { it.writeInt(gearDev); it.writeInt(gearFid) },
+                        notHandled = DTC_SCAN_NOT_HANDLED,
+                    ) { if (it.dataAvail() < 4) null else it.readInt() }
+                }
+            }
+        }
+
+    override suspend fun firmwareStatus(): FirmwareStatus? =
+        transactParsed(HelperBinderProtocol.TX_DIAG_JOB_STATUS, { }, parse = ::readFirmwareStatus)
+
     override suspend fun offReportArm(id: String, token: String, chatId: Long, text: String, lateMark: String): Boolean =
         transactParsed(
             HelperBinderProtocol.TX_OFFREPORT_ARM,
@@ -1635,7 +1655,7 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
         private const val TAG = "HelperClient"
         private const val REQ_TIMEOUT_MS = 2000L
-        /** The start verbs' answer (dtc scan / erase, tpms read / write) from a daemon that does not know the code. */
+        /** The start verbs' answer (dtc scan / erase, tpms read / write, firmware) from a daemon that does not know the code. */
         private const val DTC_SCAN_NOT_HANDLED = -2
         /** Budget for a [writeStatus] beforeSend guard (e.g. DriveModeChannel's terrain speed
          *  re-check): well under REQ_TIMEOUT_MS so a slow guard cannot hold the transport mutex
