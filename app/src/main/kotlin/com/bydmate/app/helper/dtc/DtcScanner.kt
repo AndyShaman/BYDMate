@@ -20,9 +20,9 @@ interface DtcDevice {
 }
 
 /**
- * The daemon's diagnostic jobs: one run at a time (scan, erase, tyre-sensor read or write), on
- * its own thread ([runner] starts it), talking only to the whitelisted addresses with the fixed
- * requests of [DtcWire] and [TpmsWire]. Checks the guard property, the gear and the budget before
+ * The daemon's diagnostic jobs: one run at a time (scan, erase, tyre-sensor read or write,
+ * firmware check), on its own thread ([runner] starts it), talking only to the whitelisted
+ * addresses with the fixed requests of [DtcWire], [TpmsWire] and [EcuFirmwareWire]. Checks the guard property, the gear and the budget before
  * every request; an erase and a tyre write also check the speed ([readSpeed], km/h, null =
  * unknown) and stop on any foreign frame.
  */
@@ -63,6 +63,7 @@ class DtcScanner(
     private val results = ArrayList<DtcAddressResult>()
     private val erase = ArrayList<DtcEraseResult>()
     private var tpms: TpmsJobs.Run? = null
+    private var firmware: FirmwareJob.Run? = null
     /** A failed security attempt on 0x720: no further tyre write for this daemon's lifetime. */
     @Volatile private var securityLatched = false
 
@@ -124,15 +125,26 @@ class DtcScanner(
         }
     }
 
-    /** The last tyre job's raw answers and verdicts (one slot per DID); empty slots when the last job was not one. */
     /**
      * Reads `22 F1 94` then, when it answered, `22 F1 95` of every address in [DtcWire.ADDRESSES]:
      * 0 started, 1 busy, -1 refused. Read gates as for a scan; nothing else is ever sent.
      */
-    fun startFirmware(gear: () -> Int?): Int = TODO()
+    fun startFirmware(gear: () -> Int?): Int {
+        val run = FirmwareJob.Run(link(gear, FIRMWARE_POLICY))
+        return launch(DtcWire.MODE_FIRMWARE, IntArray(0), firmwareRun = run) {
+            execute(run.link, { FirmwareJob.read(run) }) { FirmwareJob.close(run, it) }
+        }
+    }
 
-    fun firmwareStatus(): FirmwareStatus = TODO()
+    /** The last firmware check's raw answers; state IDLE with no results when the last job was not one. */
+    fun firmwareStatus(): FirmwareStatus {
+        val (state, reason, run) = synchronized(lock) {
+            Triple(state, reason, firmware.takeIf { mode == DtcWire.MODE_FIRMWARE })
+        }
+        return run?.status(state, reason) ?: FirmwareStatus(DtcWire.STATE_IDLE, 0, 0, "", emptyList())
+    }
 
+    /** The last tyre job's raw answers and verdicts (one slot per DID); empty slots when the last job was not one. */
     fun tpmsStatus(): TpmsStatus {
         val (base, run) = synchronized(lock) {
             val slots = TpmsWire.DIDS.map { TpmsSlotResult(it, null, null, null) }
@@ -154,12 +166,19 @@ class DtcScanner(
             LinkPolicy(TPMS_BUDGET_MS, speedGate, strict, allow = guard::allowed)
         }
 
-    private fun launch(mode: Int, addrs: IntArray, tpmsRun: TpmsJobs.Run? = null, job: () -> Unit): Int {
+    private fun launch(
+        mode: Int,
+        addrs: IntArray,
+        tpmsRun: TpmsJobs.Run? = null,
+        firmwareRun: FirmwareJob.Run? = null,
+        job: () -> Unit,
+    ): Int {
         synchronized(lock) {
             if (state == DtcWire.STATE_RUNNING) return START_BUSY
             state = DtcWire.STATE_RUNNING
             this.mode = mode
             tpms = tpmsRun
+            firmware = firmwareRun
             done = 0
             reason = ""
             results.clear()
@@ -176,7 +195,7 @@ class DtcScanner(
     }
 
     fun status(): DtcScanStatus = synchronized(lock) {
-        // A tyre job reports its mode with empty lists, so the scan and erase pollers see "not mine".
+        // A tyre job or a firmware check reports its mode with empty lists, so the scan and erase pollers see "not mine".
         val total = when (mode) {
             DtcWire.MODE_ERASE -> erase.size
             DtcWire.MODE_SCAN -> DtcWire.ADDRESSES.size
@@ -410,7 +429,7 @@ class DtcScanner(
         const val PASSIVE_MS = 2_000L
         const val WINDOW_MS = 2_500L
         const val SETTLE_MS = 400L
-        const val BUDGET_MS = 90_000L
+        const val BUDGET_MS = 180_000L
 
         /** Tyre jobs: whole run; inside the extended session the duplicate settle and the window after a pending. */
         const val TPMS_BUDGET_MS = 30_000L
@@ -438,6 +457,8 @@ class DtcScanner(
 
         private val SCAN_POLICY = LinkPolicy(BUDGET_MS, speedGate = false, strictTraffic = false)
         private val ERASE_POLICY = LinkPolicy(ERASE_BUDGET_MS, speedGate = true, strictTraffic = true)
+        private val FIRMWARE_POLICY =
+            LinkPolicy(BUDGET_MS, speedGate = false, strictTraffic = false, allow = EcuFirmwareWire::allowed)
     }
 }
 
@@ -447,7 +468,7 @@ private const val LIST_HEAD_BYTES = 3
 private const val RECORD_BYTES = 4
 private const val VISIBLE_STATUS = 0x0D
 
-private fun outcomeOf(m: DtcMatch?): String = when (m) {
+internal fun outcomeOf(m: DtcMatch?): String = when (m) {
     null -> DtcWire.OUTCOME_NO_ANSWER
     is DtcMatch.Answer -> DtcWire.OUTCOME_OK
     is DtcMatch.Nrc -> DtcWire.OUTCOME_NRC
@@ -460,7 +481,7 @@ private fun outcomeOf(m: DtcMatch?): String = when (m) {
 }
 
 /** What the app gets for one request: the answer, the negative answer as `7F sid nrc`, or the raw multi-frame. */
-private fun udsOf(m: DtcMatch?, service: Int): ByteArray? = when (m) {
+internal fun udsOf(m: DtcMatch?, service: Int): ByteArray? = when (m) {
     is DtcMatch.Answer -> m.uds
     is DtcMatch.Nrc -> byteArrayOf(NEGATIVE.toByte(), service.toByte(), m.code.toByte())
     is DtcMatch.Multiframe -> m.raw

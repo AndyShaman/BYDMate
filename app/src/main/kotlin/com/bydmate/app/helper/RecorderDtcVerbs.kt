@@ -7,6 +7,7 @@ import com.bydmate.app.helper.dtc.DtcScanner
 import com.bydmate.app.helper.dtc.TpmsPlanEntry
 import com.bydmate.app.helper.dtc.TpmsWire
 import com.bydmate.app.helper.dtc.writeDtcScanStatus
+import com.bydmate.app.helper.dtc.writeFirmwareStatus
 import com.bydmate.app.helper.dtc.writeTpmsStatus
 import com.bydmate.app.helper.offreport.OffReport
 import com.bydmate.app.helper.offreport.readOffReportArm
@@ -88,7 +89,8 @@ internal fun handleOffReportTransact(code: Int, data: Parcel, reply: Parcel?): B
 }
 
 /**
- * The manual fault-code scan and erase verbs, and the tyre-sensor read and write. START only
+ * The manual fault-code scan and erase verbs, the tyre-sensor read and write, and the block
+ * firmware check. START only
  * hands the job to its own thread and answers; the gear (getInt, tx 5) and, for the erase and the
  * tyre write, the speed (getFloat, tx 7) are read live at the addresses the app resolved, before
  * every request. A failure here costs this call only.
@@ -126,7 +128,17 @@ internal fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc:
                 reply?.writeInt(status)
             }
             HelperBinderProtocol.TX_TPMS_WRITE_START -> reply?.writeInt(handleTpmsWrite(data, svc, autoIface))
-            HelperBinderProtocol.TX_DIAG_JOB_STATUS -> reply?.let { writeTpmsStatus(it, DtcDaemon.scanner.tpmsStatus()) }
+            HelperBinderProtocol.TX_FW_READ_START -> {
+                val gearDev = data.readInt()
+                val gearFid = data.readInt()
+                val status = DtcDaemon.scanner.startFirmware { readDtcGear(svc, autoIface, gearDev, gearFid) }
+                android.util.Log.i("DtcScan", "firmware request gear=$gearDev/$gearFid reply=$status")
+                reply?.writeInt(status)
+            }
+            HelperBinderProtocol.TX_DIAG_JOB_STATUS -> reply?.let {
+                writeTpmsStatus(it, DtcDaemon.scanner.tpmsStatus())
+                writeFirmwareStatus(it, DtcDaemon.scanner.firmwareStatus())
+            }
             else -> reply?.let { writeDtcScanStatus(it, DtcDaemon.scanner.status()) }
         }
     }.onFailure { e ->

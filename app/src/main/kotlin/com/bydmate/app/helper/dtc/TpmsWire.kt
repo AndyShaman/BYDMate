@@ -244,7 +244,7 @@ fun readTpmsStatus(p: Parcel): TpmsStatus? {
     val state = p.readInt()
     if (state !in DtcWire.STATE_IDLE..DtcWire.STATE_ABORTED) return null
     val mode = p.readInt()
-    if (mode !in DtcWire.MODE_SCAN..DtcWire.MODE_TPMS_WRITE) return null
+    if (mode !in DtcWire.MODE_SCAN..DtcWire.MODE_FIRMWARE) return null
     val reason = p.readString()?.takeIf { it.length <= MAX_TEXT } ?: return null
     val idUds = p.createByteArray()
     val dtcBefore = p.createByteArray()

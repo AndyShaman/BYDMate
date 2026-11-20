@@ -96,10 +96,15 @@ object DtcWire {
     /** Value of `sys.diagmgrsrv.task_bk` while the diagnostic manager is idle. */
     const val GUARD_BASELINE = "r@-1_0&w@-1_0"
 
-    /** The only addresses ever read (the Leopard 3 blocks). */
+    /**
+     * The only addresses ever read (the Leopard 3 blocks): the first 18, then the 20 found on the car
+     * 2026-11-19, after them so the first 18 keep their place in a scan.
+     */
     val ADDRESSES: IntArray = intArrayOf(
         0x712, 0x720, 0x722, 0x726, 0x747, 0x762, 0x782, 0x783, 0x7E0,
         0x7E1, 0x7E2, 0x7E3, 0x7E4, 0x7E5, 0x7E6, 0x7E7, 0x7F1, 0x7F2,
+        0x703, 0x711, 0x723, 0x725, 0x733, 0x741, 0x751, 0x754, 0x760, 0x761,
+        0x766, 0x770, 0x771, 0x785, 0x790, 0x793, 0x7A7, 0x7C2, 0x7D4, 0x7D6,
     )
 
     /** Services of the only requests ever built: read DTC information, read data by identifier, clear DTC. */
@@ -298,7 +303,7 @@ fun readDtcScanStatus(p: Parcel): DtcScanStatus? {
     if (p.dataAvail() == 0) return DtcScanStatus(state, done, total, reason, results)
     if (p.dataAvail() < 2 * INT_BYTES) return null
     val mode = p.readInt()
-    if (mode !in DtcWire.MODE_SCAN..DtcWire.MODE_TPMS_WRITE) return null
+    if (mode !in DtcWire.MODE_SCAN..DtcWire.MODE_FIRMWARE) return null
     val eraseCount = p.readInt()
     if (eraseCount !in 0..DtcWire.ADDRESSES.size) return null
     val erase = ArrayList<DtcEraseResult>(eraseCount)
