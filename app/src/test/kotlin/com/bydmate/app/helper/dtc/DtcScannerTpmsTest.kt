@@ -714,8 +714,14 @@ class DtcScannerTpmsTest {
     @Test fun `E1 no gear or speed read happens between the last 2E answer and 10 01, which is sent once`() {
         val (w, _) = world()
         val late = mutableListOf<String>()
-        w.gear = { if (w.count("2E") >= 4 && w.count("1001") == 0) late += "gear"; 1 }
-        w.speed = { if (w.count("2E") >= 4 && w.count("1001") == 0) late += "speed"; 0 }
+        w.gear = {
+            if (w.count("2E") >= 4 && w.count("1001") == 0) late += "gear"
+            1
+        }
+        w.speed = {
+            if (w.count("2E") >= 4 && w.count("1001") == 0) late += "speed"
+            0
+        }
         write(w)
         assertEquals(emptyList<String>(), late)
         assertExitSentOnceRightAfterLastWrite(w)

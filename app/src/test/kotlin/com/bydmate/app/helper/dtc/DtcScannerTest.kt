@@ -457,7 +457,10 @@ class DtcScannerTest {
         var bad = false
         var reads = 0
         w.guard = { if (bad) "r@1_0&w@-1_0" else DtcWire.GUARD_BASELINE }
-        w.gear = { if (++reads == 2) bad = true; 1 }
+        w.gear = {
+            if (++reads == 2) bad = true
+            1
+        }
         val s = w.erase(0x712, 0x7E7)
         assertEquals(DtcWire.STATE_ABORTED, s.state)
         assertTrue(s.reason, s.reason.startsWith("diag_busy"))
