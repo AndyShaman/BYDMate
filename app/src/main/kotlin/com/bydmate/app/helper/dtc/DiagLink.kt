@@ -3,21 +3,30 @@ package com.bydmate.app.helper.dtc
 import android.util.Log
 
 /** Ends a run from anywhere inside it with its terminal state. */
-internal class DiagStop(val state: Int, val reason: String) : RuntimeException(reason)
+internal class DiagStop(val state: Int, val reason: String, val at: String = "") : RuntimeException(reason)
 
 /**
  * How one job talks through [DiagLink]: its whole budget, whether the speed must read exactly 0
  * before every request ([speedGate], unknown = refuse), whether any frame that is not ours or a
- * duplicate of ours stops the run ([strictTraffic]), the pause after an answer and how often a
- * busy gateway gets the request again.
+ * duplicate of ours stops the run ([strictTraffic]), the pause after an answer, how often a
+ * busy gateway gets the request again, whether a `7F xx 78` answer restarts the window
+ * ([pendingWindowMs] > 0, at most [MAX_PENDINGS] times) and the outgoing allowlist [allow],
+ * checked right before every send.
  */
+@Suppress("LongParameterList") // one field per knob of the policy
 internal class LinkPolicy(
     val budgetMs: Long,
     val speedGate: Boolean,
     val strictTraffic: Boolean,
     val settleMs: Long = DtcScanner.SETTLE_MS,
     val busyRetries: Int = DtcScanner.BUSY_RETRIES,
-)
+    val pendingWindowMs: Long = 0,
+    val allow: (addr: Int, uds: ByteArray) -> Boolean = { _, _ -> true },
+) {
+    companion object {
+        const val MAX_PENDINGS = 2
+    }
+}
 
 /**
  * One run's request core on the vendor device: the gates before the run and before every request
@@ -25,13 +34,14 @@ internal class LinkPolicy(
  * listen, request / answer matching and the handling of frames that are not the answer awaited.
  * Touched by the run thread only.
  */
+@Suppress("TooManyFunctions") // one request core: each step of an exchange is its own small function
 internal class DiagLink(
     private val device: DtcDevice,
-    private val clock: DtcClock,
+    val clock: DtcClock,
     private val readGuard: () -> String?,
     private val readSpeed: () -> Int?,
     val gear: () -> Int?,
-    val policy: LinkPolicy,
+    var policy: LinkPolicy,
 ) {
     val startedMs = clock.nowMs()
     var registerTried = false
@@ -40,6 +50,8 @@ internal class DiagLink(
     var foreign = 0
     /** Strict traffic: every frame matched as ours, so their duplicates are not taken for foreign traffic. */
     private val ours = ArrayList<ByteArray>()
+    /** New `7F xx 78` answers in the current wait. */
+    private var pendings = 0
 
     /** Gate before the run, listener, then the passive listen: any frame there stops the run. */
     fun open(what: String, addrs: Int) {
@@ -80,26 +92,16 @@ internal class DiagLink(
      * longer window for `14`). Null when nothing of ours came; a match is followed by a settle
      * pause that drops the duplicate frame (strict traffic checks what came in that pause instead).
      */
-    fun exchange(addr: Int, payload: ByteArray, service: Int, sub: Int): DtcMatch? {
+    fun exchange(addr: Int, payload: ByteArray, service: Int, sub: Int, gated: Boolean = true): DtcMatch? {
         val req = hex(payload, REQUEST_HEADER_BYTES, payload.size)
         val at = "at=${hexAddr(addr)} req=$req"
         val guard = readGuard()
         val gearValue = gear()
         val speed = if (policy.speedGate) readSpeed() else null
-        gate(guard, gearValue, speed, at)?.let { throw it }
+        val refused = if (gated) gate(guard, gearValue, speed, at) else exitGate(guard, at)
+        refused?.let { throw it }
         if (policy.strictTraffic) quiet(at)
-
-        val rc = device.send(payload)
-        sent++
-        val sentAt = clock.nowMs()
-        log(
-            "tx addr=${hexAddr(addr)} req=$req gear=$gearValue" +
-                (if (policy.speedGate) " speed=$speed guard=$guard" else "") + " rc=$rc"
-        )
-        if (rc != 0) {
-            val state = if (sent == 1) DtcWire.STATE_UNAVAILABLE else DtcWire.STATE_ABORTED
-            throw stop(state, "transport_rejected rc=$rc", at)
-        }
+        val sentAt = send(addr, payload, at, "gear=$gearValue" + if (policy.speedGate) " speed=$speed guard=$guard" else "")
 
         val windowMs = if (service == DtcWire.SERVICE_CLEAR) DtcScanner.ERASE_WINDOW_MS else DtcScanner.WINDOW_MS
         val (match, frame) = await(sentAt + windowMs, at) { DtcWire.match(it, addr, service, sub) } ?: run {
@@ -116,24 +118,70 @@ internal class DiagLink(
         return match
     }
 
-    /** Frames until [match] finds the answer (null at [deadline]); others go to [other], pending waits on. */
-    private fun await(deadline: Long, at: String, match: (ByteArray) -> DtcMatch): Pair<DtcMatch, ByteArray>? {
+    /** The allowlist right before the send, the send, its log line; the time it went out. */
+    private fun send(addr: Int, payload: ByteArray, at: String, values: String): Long {
+        val req = hex(payload, REQUEST_HEADER_BYTES, payload.size)
+        if (!policy.allow(addr, payload.copyOfRange(REQUEST_HEADER_BYTES, payload.size))) {
+            throw stop(DtcWire.STATE_ABORTED, "not_allowed", at)
+        }
+        val rc = device.send(payload)
+        sent++
+        val sentAt = clock.nowMs()
+        log("tx addr=${hexAddr(addr)} req=$req $values rc=$rc")
+        if (rc != 0) {
+            val state = if (sent == 1) DtcWire.STATE_UNAVAILABLE else DtcWire.STATE_ABORTED
+            throw stop(state, "transport_rejected rc=$rc", at)
+        }
+        return sentAt
+    }
+
+    /**
+     * The one request a job still sends after a gate stop (the exit from the extended session):
+     * only the guard property, strict traffic and the allowlist are checked, not the budget, the
+     * gear or the speed. No busy resend.
+     */
+    fun exit(addr: Int, payload: ByteArray, service: Int, sub: Int): DtcMatch? =
+        exchange(addr, payload, service, sub, gated = false)
+
+    /**
+     * Frames until [match] finds the answer (null at [deadline]); others go to [other], pending
+     * waits on (and, under [LinkPolicy.pendingWindowMs], restarts the window a few times).
+     */
+    private fun await(start: Long, at: String, match: (ByteArray) -> DtcMatch): Pair<DtcMatch, ByteArray>? {
+        var deadline = start
+        pendings = 0
         while (true) {
             val left = deadline - clock.nowMs()
             val frame = (if (left > 0) device.poll(left) else null) ?: return null
             frames++
             when (val m = match(frame)) {
                 DtcMatch.NotMine -> other(frame, at)
-                DtcMatch.Pending -> {
-                    if (policy.strictTraffic) ours += frame
-                    log("pending $at ms_left=${deadline - clock.nowMs()}")
-                }
+                DtcMatch.Pending -> deadline = pending(frame, at, deadline) ?: return null
                 else -> {
                     if (policy.strictTraffic) ours += frame
                     return m to frame
                 }
             }
         }
+    }
+
+    /**
+     * A `7F xx 78`: keep waiting, and under [LinkPolicy.pendingWindowMs] a new one (not the
+     * gateway's copy) restarts the window; the deadline, or null after too many.
+     */
+    private fun pending(frame: ByteArray, at: String, deadline: Long): Long? {
+        val repeat = ours.any { sameFrame(it, frame) }
+        if (policy.strictTraffic) ours += frame
+        var next = deadline
+        if (policy.pendingWindowMs > 0 && !repeat) {
+            if (++pendings > LinkPolicy.MAX_PENDINGS) {
+                log("pending $at count=$pendings, too many")
+                return null
+            }
+            next = clock.nowMs() + policy.pendingWindowMs
+        }
+        log("pending $at ms_left=${next - clock.nowMs()}")
+        return next
     }
 
     /** A frame that is not the answer awaited: skipped, or under strict traffic only a duplicate of ours is. */
@@ -156,6 +204,10 @@ internal class DiagLink(
         }
     }
 
+    /** The exit after a gate stop goes out only while the diagnostic manager is idle. */
+    private fun exitGate(guard: String?, at: String): DiagStop? =
+        if (guard == DtcWire.GUARD_BASELINE) null else stop(DtcWire.STATE_ABORTED, "diag_busy prop=$guard", at)
+
     /** Why the next request (or, with [at] null, the run itself) must not go out; null when it may. */
     private fun gate(guard: String?, gear: Int?, speed: Int?, at: String?): DiagStop? = when {
         at == null && guard == null -> stop(DtcWire.STATE_UNAVAILABLE, "guard_absent", at)
@@ -177,7 +229,7 @@ internal class DiagLink(
 internal fun stop(state: Int, reason: String, at: String?): DiagStop {
     val verb = if (state == DtcWire.STATE_UNAVAILABLE) "unavailable" else "abort"
     log("$verb $reason" + if (at == null) "" else " $at")
-    return DiagStop(state, reason)
+    return DiagStop(state, reason, at.orEmpty())
 }
 
 // Byte reading and the log text of the diagnostic jobs.

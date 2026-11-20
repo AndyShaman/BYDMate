@@ -20,10 +20,11 @@ interface DtcDevice {
 }
 
 /**
- * The daemon's scan and erase jobs: one run at a time (scan or erase), on its own thread
- * ([runner] starts it), talking only to the whitelisted addresses with the fixed requests of
- * [DtcWire]. Checks the guard property, the gear and the budget before every request; an erase
- * run also checks the speed ([readSpeed], km/h, null = unknown) and stops on any foreign frame.
+ * The daemon's diagnostic jobs: one run at a time (scan, erase, tyre-sensor read or write), on
+ * its own thread ([runner] starts it), talking only to the whitelisted addresses with the fixed
+ * requests of [DtcWire] and [TpmsWire]. Checks the guard property, the gear and the budget before
+ * every request; an erase and a tyre write also check the speed ([readSpeed], km/h, null =
+ * unknown) and stop on any foreign frame.
  */
 @Suppress("TooManyFunctions") // one scan job: each step of the run is its own small function
 class DtcScanner(
@@ -61,10 +62,14 @@ class DtcScanner(
     private var reason = ""
     private val results = ArrayList<DtcAddressResult>()
     private val erase = ArrayList<DtcEraseResult>()
+    private var tpms: TpmsJobs.Run? = null
+    /** A failed security attempt on 0x720: no further tyre write for this daemon's lifetime. */
+    @Volatile private var securityLatched = false
 
     /** 0 started, 1 busy. [gear] returns the live gear value, null when it could not be read. */
     fun start(gear: () -> Int?): Int = launch(DtcWire.MODE_SCAN, IntArray(0)) {
-        execute(Run(link(gear, SCAN_POLICY)), ::scan, ::closeResults)
+        val run = Run(link(gear, SCAN_POLICY))
+        execute(run.link, { scan(run) }) { closeResults(run, it) }
     }
 
     /**
@@ -78,7 +83,8 @@ class DtcScanner(
             return START_REFUSED
         }
         return launch(DtcWire.MODE_ERASE, addrs) {
-            execute(Run(link(gear, ERASE_POLICY)), ::eraseAll, ::closeErase)
+            val run = Run(link(gear, ERASE_POLICY))
+            execute(run.link, { eraseAll(run) }) { closeErase(run, it) }
         }
     }
 
@@ -86,7 +92,13 @@ class DtcScanner(
      * Reads the four tyre-sensor slots of 0x720 (F194, 19 02 FF, 22 3305..3308; nothing else):
      * 0 started, 1 busy, -1 refused. Read gates as for a scan.
      */
-    fun startTpmsRead(gear: () -> Int?): Int = TODO()
+    fun startTpmsRead(gear: () -> Int?): Int {
+        val guard = TpmsGuard(TpmsJobKind.READ, emptyList(), securityLatched)
+        val run = TpmsJobs.Run(link(gear, tpmsPolicy(guard, speedGate = false, strict = false)), guard, emptyList())
+        return launch(DtcWire.MODE_TPMS_READ, IntArray(0), run) {
+            execute(run.link, { TpmsJobs.read(run) }) { TpmsJobs.close(run, it, DtcWire.MODE_TPMS_READ) }
+        }
+    }
 
     /**
      * Writes [plan] to 0x720 per design B.3: 0 started, 1 busy, -1 refused (invalid plan, or the
@@ -95,17 +107,51 @@ class DtcScanner(
      * gear, speed or budget inside the extended session still sends one `10 01`; a stop for the
      * guard or a foreign frame sends nothing more.
      */
-    fun startTpmsWrite(plan: List<TpmsPlanEntry>, gear: () -> Int?): Int = TODO()
+    fun startTpmsWrite(plan: List<TpmsPlanEntry>, gear: () -> Int?): Int {
+        val planText = plan.joinToString(",") { "${hexAddr(it.did)}:%08X>%08X".format(it.expectedOld, it.newId) }
+        val refused = TpmsWire.validatePlan(plan) ?: "security_latched".takeIf { securityLatched }
+        if (refused != null) {
+            log("tpms write refused $refused plan=$planText")
+            return START_REFUSED
+        }
+        val guard = TpmsGuard(TpmsJobKind.WRITE, plan, securityLatched)
+        val run = TpmsJobs.Run(link(gear, tpmsPolicy(guard, speedGate = true, strict = true)), guard, plan)
+        val session = tpmsPolicy(guard, speedGate = true, strict = true, inSession = true)
+        return launch(DtcWire.MODE_TPMS_WRITE, IntArray(0), run) {
+            execute(run.link, { TpmsJobs.write(run, session) { securityLatched = true } }) {
+                TpmsJobs.close(run, it, DtcWire.MODE_TPMS_WRITE)
+            }
+        }
+    }
 
-    fun tpmsStatus(): TpmsStatus = TODO()
+    /** The last tyre job's raw answers and verdicts (one slot per DID); empty slots when the last job was not one. */
+    fun tpmsStatus(): TpmsStatus {
+        val (base, run) = synchronized(lock) {
+            val slots = TpmsWire.DIDS.map { TpmsSlotResult(it, null, null, null) }
+            TpmsStatus(state, mode, reason, null, null, null, slots, "") to tpms
+        }
+        return run?.status(base.state, base.mode, base.reason) ?: base
+    }
 
     private fun link(gear: () -> Int?, policy: LinkPolicy) = DiagLink(device, clock, readGuard, readSpeed, gear, policy)
 
-    private fun launch(mode: Int, addrs: IntArray, job: () -> Unit): Int {
+    /** Tyre jobs: 0x720 only through [guard]; inside the extended session no busy resend, a short settle, pendings wait on. */
+    private fun tpmsPolicy(guard: TpmsGuard, speedGate: Boolean, strict: Boolean, inSession: Boolean = false) =
+        if (inSession) {
+            LinkPolicy(
+                TPMS_BUDGET_MS, speedGate, strict, settleMs = TPMS_SESSION_SETTLE_MS, busyRetries = 0,
+                pendingWindowMs = TPMS_PENDING_WINDOW_MS, allow = guard::allowed,
+            )
+        } else {
+            LinkPolicy(TPMS_BUDGET_MS, speedGate, strict, allow = guard::allowed)
+        }
+
+    private fun launch(mode: Int, addrs: IntArray, tpmsRun: TpmsJobs.Run? = null, job: () -> Unit): Int {
         synchronized(lock) {
             if (state == DtcWire.STATE_RUNNING) return START_BUSY
             state = DtcWire.STATE_RUNNING
             this.mode = mode
+            tpms = tpmsRun
             done = 0
             reason = ""
             results.clear()
@@ -122,25 +168,30 @@ class DtcScanner(
     }
 
     fun status(): DtcScanStatus = synchronized(lock) {
-        val total = if (mode == DtcWire.MODE_ERASE) erase.size else DtcWire.ADDRESSES.size
+        // A tyre job reports its mode with empty lists, so the scan and erase pollers see "not mine".
+        val total = when (mode) {
+            DtcWire.MODE_ERASE -> erase.size
+            DtcWire.MODE_SCAN -> DtcWire.ADDRESSES.size
+            else -> 0
+        }
         DtcScanStatus(state, done, total, reason, results.toList(), erase.toList(), mode)
     }
 
     /** The run thread: nothing escapes it, and the terminal state is published after the listener is gone. */
-    private fun execute(run: Run, body: (Run) -> DiagStop, close: (Run, DiagStop) -> Unit) {
+    private fun execute(link: DiagLink, body: () -> DiagStop, close: (DiagStop) -> Unit) {
         var stop = DiagStop(DtcWire.STATE_ABORTED, "exception")
         try {
-            stop = runCatching { body(run) }.getOrElse { e ->
+            stop = runCatching { body() }.getOrElse { e ->
                 e as? DiagStop ?: stop(DtcWire.STATE_ABORTED, "exception ${e.javaClass.simpleName}", at = null)
             }
         } finally {
             // The listener lives for this run only, whatever ended it.
-            if (run.link.registerTried) {
+            if (link.registerTried) {
                 runCatching { device.unregister() }
                     .onSuccess { log("unregistered") }
                     .onFailure { log("unregister failed ${it.javaClass.simpleName}") }
             }
-            runCatching { close(run, stop) }
+            runCatching { close(stop) }
             publish(stop.state, stop.reason)
         }
     }
@@ -353,6 +404,11 @@ class DtcScanner(
         const val SETTLE_MS = 400L
         const val BUDGET_MS = 90_000L
 
+        /** Tyre jobs: whole run; inside the extended session the duplicate settle and the window after a pending. */
+        const val TPMS_BUDGET_MS = 30_000L
+        const val TPMS_SESSION_SETTLE_MS = 60L
+        const val TPMS_PENDING_WINDOW_MS = 5_000L
+
         /** Erase: answer window of one clear, pause between blocks, pause before the re-reads, whole run. */
         const val ERASE_WINDOW_MS = 6_000L
         const val ERASE_GAP_MS = 1_000L
@@ -416,7 +472,7 @@ private fun visibleCodes(uds: ByteArray): List<Int> {
     return codes
 }
 
-private fun stateName(state: Int): String = when (state) {
+internal fun stateName(state: Int): String = when (state) {
     DtcWire.STATE_DONE -> "DONE"
     DtcWire.STATE_UNAVAILABLE -> "UNAVAILABLE"
     DtcWire.STATE_ABORTED -> "ABORTED"

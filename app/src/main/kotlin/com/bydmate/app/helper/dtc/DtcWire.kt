@@ -184,7 +184,7 @@ object DtcWire {
     /**
      * Matches [raw] (`0A rid(2) len frames idx result uds…tail`) against the request whose reply
      * is awaited: reply id = [addr] + 8, positive service = [service] + 0x40 with its [sub] echo
-     * (one byte for 0x19, the 16-bit DID for 0x22). [sub] < 0 means no echo: the positive answer
+     * (one byte for 0x19, the 16-bit DID for 0x22 and 0x2E). [sub] < 0 means no echo: the positive answer
      * is the service byte alone (`54` for the clear). Gateway results 3, 4 and 5 count when they
      * echo this request or carry no UDS bytes.
      */
@@ -232,11 +232,11 @@ object DtcWire {
     /** `rid` of a frame of at least the header's size. */
     fun replyId(raw: ByteArray): Int = (u(raw, 1) shl 8) or u(raw, 2)
 
-    /** [head] first, then the sub-function byte (0x19), the DID (0x22) or nothing ([sub] < 0). */
+    /** [head] first, then the sub-function byte (0x19 and others), the DID (0x22, 0x2E) or nothing ([sub] < 0). */
     private fun echoes(uds: ByteArray, head: Int, service: Int, sub: Int): Boolean =
         if (sub < 0) {
             uds.isNotEmpty() && u(uds, 0) == head
-        } else if (service == SERVICE_READ_DID) {
+        } else if (service == SERVICE_READ_DID || service == TpmsWire.SERVICE_WRITE_DID) {
             uds.size >= 3 && u(uds, 0) == head && ((u(uds, 1) shl 8) or u(uds, 2)) == sub
         } else {
             uds.size >= 2 && u(uds, 0) == head && u(uds, 1) == sub
@@ -297,7 +297,7 @@ fun readDtcScanStatus(p: Parcel): DtcScanStatus? {
     if (p.dataAvail() == 0) return DtcScanStatus(state, done, total, reason, results)
     if (p.dataAvail() < 2 * INT_BYTES) return null
     val mode = p.readInt()
-    if (mode != DtcWire.MODE_SCAN && mode != DtcWire.MODE_ERASE) return null
+    if (mode !in DtcWire.MODE_SCAN..DtcWire.MODE_TPMS_WRITE) return null
     val eraseCount = p.readInt()
     if (eraseCount !in 0..DtcWire.ADDRESSES.size) return null
     val erase = ArrayList<DtcEraseResult>(eraseCount)
