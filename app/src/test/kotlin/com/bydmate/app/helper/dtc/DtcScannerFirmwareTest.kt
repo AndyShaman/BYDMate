@@ -142,7 +142,6 @@ class DtcScannerFirmwareTest {
         assertNull(none.f194Uds)
         assertNull(none.f195Uds)
         assertNotEquals(DtcWire.OUTCOME_OK, none.outcome)
-        assertNull(s.results.first { it.addr == refused }.f195Uds)
     }
 
     @Test fun `a gear other than P before the start sends nothing and aborts as not_park`() {

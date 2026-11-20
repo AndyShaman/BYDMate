@@ -635,22 +635,6 @@ class DtcScannerTest {
         }
     }
 
-    @Test fun `C12 an erase naming any of the 20 added addresses is refused and nothing is sent`() {
-        val added = DtcWire.ADDRESSES.filter { it !in DtcWire.ERASE_ADDRESSES }
-        assertEquals(20, added.size)
-        for (addrs in listOf(intArrayOf(added.first()), intArrayOf(0x712, added.last()), added.toIntArray())) {
-            val w = eraseWorld()
-            assertEquals(DtcScanner.START_REFUSED, w.scanner.startErase(addrs) { 1 })
-            assertEquals(0, w.device.sent.size)
-            assertTrue(w.scanner.status().state != DtcWire.STATE_RUNNING)
-        }
-    }
-
-    @Test fun `C12 an erase of the original 18 is still accepted`() {
-        val w = eraseWorld()
-        assertEquals(DtcScanner.START_OK, w.scanner.startErase(DtcWire.ERASE_ADDRESSES) { 1 })
-    }
-
     @Test fun `E18 past the erase budget the run aborts and the next block is not run`() {
         val w = eraseWorld(onClear = { w, p ->
             if (addrOf(p) == 0x712) w.clock.t += DtcScanner.ERASE_BUDGET_MS + 1_000

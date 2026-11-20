@@ -571,7 +571,7 @@ class DtcScannerTpmsTest {
 
     @Test fun `C6c a gear read that throws inside the session sends one 10 01 and nothing after it`() {
         val (w, _) = world()
-        w.gear = { if (w.count("2701") >= 1) throw IllegalStateException("gear") else 1 }
+        w.gear = { if (w.count("2701") >= 1) error("gear") else 1 }
         write(w)
         assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
         assertEquals("1001", w.requests().last())
@@ -581,7 +581,7 @@ class DtcScannerTpmsTest {
 
     @Test fun `C6c a speed read that throws inside the session sends one 10 01 and nothing after it`() {
         val (w, _) = world()
-        w.speed = { if (w.count("2701") >= 1) throw IllegalStateException("speed") else 0 }
+        w.speed = { if (w.count("2701") >= 1) error("speed") else 0 }
         write(w)
         assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
         assertEquals("1001", w.requests().last())
