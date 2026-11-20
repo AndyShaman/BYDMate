@@ -29,8 +29,19 @@ class DtcScannerTpmsTest {
             if (code == 0) queue += respond(payload)
             return code
         }
+        /** Frames that arrive [later]: (ready at, frame). */
+        private val delayed = mutableListOf<Pair<Long, ByteArray>>()
+        fun later(ms: Long, frames: List<ByteArray>) { frames.forEach { delayed += clock.t + ms to it } }
+
         override fun poll(timeoutMs: Long): ByteArray? {
+            delayed.filter { it.first <= clock.t }.sortedBy { it.first }.forEach { queue += it.second; delayed.remove(it) }
             if (queue.isNotEmpty()) return queue.removeFirst()
+            val next = delayed.minByOrNull { it.first }
+            if (next != null && next.first <= clock.t + timeoutMs) {
+                clock.t = maxOf(clock.t, next.first)
+                delayed.remove(next)
+                return next.second
+            }
             clock.t += timeoutMs
             return null
         }
@@ -665,5 +676,71 @@ class DtcScannerTpmsTest {
         assertEquals(1, w.count("2E"))
         assertEquals(TpmsVerdict.UNVERIFIED, slot(s, 0x3305).verdict)
         assertEquals(List(3) { TpmsVerdict.NOT_RUN }, dids.drop(1).map { slot(s, it).verdict })
+    }
+
+    // Review round 2
+
+    @Test fun `D1 a re-read answer whose frame result byte is not 1 leaves that slot unread and unverified`() {
+        val (w, car) = world()
+        car.override = { h ->
+            if (h == "223305" && w.count("1001") >= 1) twice(slotUds(0x3305, newIds[0]), result = 2) else null
+        }
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(TpmsVerdict.UNVERIFIED, slot(s, 0x3305).verdict)
+        assertEquals(null, slot(s, 0x3305).afterUds)
+        assertEquals(List(3) { TpmsVerdict.WRITTEN }, dids.drop(1).map { slot(s, it).verdict })
+    }
+
+    private fun assertExitSentOnceRightAfterLastWrite(w: World) {
+        val r = w.requests()
+        assertEquals(4, w.count("2E"))
+        assertEquals(1, w.count("1001"))
+        assertEquals("1001", r[r.indexOfLast { it.startsWith("2E") } + 1])
+    }
+
+    @Test fun `D2 the normal exit after the last 2E is sent although the gear read now throws`() {
+        val (w, _) = world()
+        w.gear = { if (w.count("2E") >= 4) error("gear") else 1 }
+        write(w)
+        assertExitSentOnceRightAfterLastWrite(w)
+    }
+
+    @Test fun `D2 the normal exit after the last 2E is sent although the gear is now R`() {
+        val (w, _) = world()
+        w.gear = { if (w.count("2E") >= 4) 2 else 1 }
+        write(w)
+        assertExitSentOnceRightAfterLastWrite(w)
+    }
+
+    @Test fun `D3 a gear read right after the speed read, in the same gate, before the first 2E, that is not P sends no 2E`() {
+        val (w, _) = world()
+        var speedAt = -1
+        w.speed = { speedAt = w.device.sent.size; 0 }
+        // The re-read: a gear read with the speed read already made and no request sent in between.
+        w.gear = { val g = if (speedAt == w.device.sent.size && w.count("2702") >= 1) 2 else 1; speedAt = -1; g }
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("not_park"))
+        assertEquals(0, w.count("2E"))
+        assertEquals(1, w.count("1001"))
+    }
+
+    @Test fun `D4 a pending 7F 2E 78 for each of three 2E extends that request's own window`() {
+        val (w, car) = world()
+        car.override = { h ->
+            if (h.startsWith("2E")) {
+                val did = h.substring(2, 6).toInt(16)
+                car.ids[did] = id(h.substring(6))
+                w.device.later(3_000, twice(hex("6E%04X".format(did))))
+                twice(hex("7F2E78"))
+            } else null
+        }
+        write(w, plan(3))
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(3, w.count("2E"))
+        assertEquals(List(3) { TpmsVerdict.WRITTEN }, dids.take(3).map { slot(s, it).verdict })
     }
 }

@@ -370,6 +370,60 @@ class TpmsRepositoryTest {
         assertEquals(TyreSet(carIds.map(::hx)), r.state.value.sets.winter)
     }
 
+    // D5: complete = DONE and the read-back is the target the user confirmed
+
+    private val f2 = 0x9A222222.toInt()
+    private val h2 = 0x9A333333.toInt()
+
+    @Test fun `D5 a read-back equal to the daemon's own read but not to the confirmed target is not complete`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        r.takeFromCar(TyreSetName.WINTER)
+        // Confirmed [a,b,c,d] -> [e,f2,c,d]; the daemon read [e,b,h2,d] and wrote f2: the car holds [e,f2,h2,d].
+        statuses.addLast(writeDone(listOf(e, b, h2, d), listOf(e, f2, h2, d), listOf(TpmsVerdict.ALREADY, TpmsVerdict.WRITTEN, null, null)))
+        r.write(listOf(hx(e), hx(f2), hx(c), hx(d)), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        assertFalse(r.state.value.lastWriteComplete)
+        assertEquals(TyreSet(carIds.map(::hx)), r.state.value.sets.winter)
+    }
+
+    @Test fun `D5 all four read back as the target but the job ABORTED updates the sets, is not complete and says it reached the target`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        r.takeFromCar(TyreSetName.WINTER)
+        val done = writeDone(carIds, swapped, allWritten)
+        statuses.addLast(TpmsStatus(DtcWire.STATE_ABORTED, done.mode, "not_park", done.idUds, null, null, done.slots, "19 02 FF"))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        assertEquals(TyreSet(swapped.map(::hx)), r.state.value.sets.winter)
+        assertFalse(r.state.value.lastWriteComplete)
+        assertTrue(r.state.value.lastWriteTargetReached)
+        assertNotNull(r.state.value.error)
+    }
+
+    @Test fun `D5 a DONE write that reached the target is complete and reached the target`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        statuses.addLast(writeDone(carIds, swapped, allWritten))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        assertTrue(r.state.value.lastWriteComplete)
+        assertTrue(r.state.value.lastWriteTargetReached)
+    }
+
+    @Test fun `D5 a write that did not reach the target does not say it did`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        statuses.addLast(writeDone(carIds, listOf(b, e, c, d), allWritten))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        assertFalse(r.state.value.lastWriteTargetReached)
+    }
+
     // C11: a read that parsed nothing
 
     private fun unparsedRead() = TpmsStatus(
@@ -399,5 +453,77 @@ class TpmsRepositoryTest {
         assertNull(r.state.value.lastReadAt)
         assertNotNull(r.state.value.error)
         assertFalse(r.state.value.canWrite)
+    }
+
+    // D10: after an incomplete write the first fresh P sample (the window calls onParkAgain) reads the block once
+
+    private val halfDone = listOf(TpmsVerdict.WRITTEN, TpmsVerdict.REFUSED, null, null)
+    private val freshAfterHalf = listOf(b, e, c, d)
+
+    private suspend fun TestScope.incompleteWrite(r: TpmsRepository) {
+        openAndRead(r)
+        statuses.addLast(writeDone(carIds, listOf(b, b, c, d), halfDone))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        assertFalse(r.state.value.lastWriteComplete)
+    }
+
+    @Test fun `D10 after an incomplete write the first park sample starts exactly one read, no more until the next write`() = runTest {
+        val r = repo(this)
+        incompleteWrite(r)
+        statuses.addLast(readDone(freshAfterHalf))
+        r.onParkAgain()
+        runCurrent()
+        settle()
+        coVerify(exactly = 2) { helper.tpmsReadStart(any(), any()) }
+        assertEquals(freshAfterHalf, idsOf(r.state.value.lastRead))
+        r.onParkAgain()
+        r.onParkAgain()
+        runCurrent()
+        coVerify(exactly = 2) { helper.tpmsReadStart(any(), any()) }
+    }
+
+    @Test fun `D10 not on P or with the window closed no read starts`() = runTest {
+        val r = repo(this)
+        incompleteWrite(r)
+        gear = 4
+        r.onParkAgain()
+        runCurrent()
+        coVerify(exactly = 1) { helper.tpmsReadStart(any(), any()) }
+        gear = 1
+        r.onWindowClosed()
+        r.onParkAgain()
+        runCurrent()
+        coVerify(exactly = 1) { helper.tpmsReadStart(any(), any()) }
+    }
+
+    @Test fun `D10 after a complete write the park sample starts no read`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        statuses.addLast(writeDone(carIds, swapped, allWritten))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        r.onParkAgain()
+        runCurrent()
+        coVerify(exactly = 1) { helper.tpmsReadStart(any(), any()) }
+    }
+
+    @Test fun `D10 undo after that read takes the fresh read as the was and writes the before IDs against it`() = runTest {
+        val r = repo(this)
+        incompleteWrite(r)
+        statuses.addLast(readDone(freshAfterHalf))
+        r.onParkAgain()
+        runCurrent()
+        settle()
+        r.undoLastWrite(freshAfterHalf)
+        runCurrent()
+        coVerify(exactly = 1) {
+            helper.tpmsWriteStart(any(), any(), any(), any(), listOf(
+                TpmsPlanEntry(TpmsWire.DID_FL, b, a),
+                TpmsPlanEntry(TpmsWire.DID_FR, e, b),
+            ))
+        }
     }
 }

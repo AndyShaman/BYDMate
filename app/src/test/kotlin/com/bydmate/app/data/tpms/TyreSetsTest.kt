@@ -117,34 +117,50 @@ class TyreSetsTest {
     // D.8 set update
 
     private val sets = TyreSets(winter = set(a, b, c, d), summer = set(e, f, g, h))
+    /** A snapshot that equals no saved set: the single-wheel fallback by the other three wheels decides. */
+    private val noSet = listOf<Int?>(0x0A0A0A0A, 0x0B0B0B0B, 0x0C0C0C0C, 0x0D0D0D0D)
 
     @Test fun `update 63 - a written set read back as written stays unchanged`() {
-        assertEquals(sets, TyreSetUpdate.afterWrite(sets, TyreSetName.WINTER, null, listOf(a, b, c, d), true))
+        assertEquals(sets, TyreSetUpdate.afterWrite(sets, TyreSetName.WINTER, null, cur, listOf(a, b, c, d), true))
     }
 
     @Test fun `update 64 - a winter set written in a swapped order takes the swapped order`() {
-        val r = TyreSetUpdate.afterWrite(sets, TyreSetName.WINTER, null, listOf(b, a, c, d), true)
+        val r = TyreSetUpdate.afterWrite(sets, TyreSetName.WINTER, null, cur, listOf(b, a, c, d), true)
         assertEquals(set(b, a, c, d), r.winter)
         assertEquals(sets.summer, r.summer)
     }
 
     @Test fun `update 65 - an incomplete result leaves the sets as they were`() {
-        assertEquals(sets, TyreSetUpdate.afterWrite(sets, TyreSetName.WINTER, null, listOf(b, a, c, d), false))
+        assertEquals(sets, TyreSetUpdate.afterWrite(sets, TyreSetName.WINTER, null, cur, listOf(b, a, c, d), false))
     }
 
     @Test fun `single wheel - the set with the same other three takes the read back`() {
-        val r = TyreSetUpdate.afterWrite(sets, null, 2, listOf(a, b, x, d), true)
+        val r = TyreSetUpdate.afterWrite(sets, null, 2, noSet, listOf(a, b, x, d), true)
         assertEquals(set(a, b, x, d), r.winter)
         assertEquals(sets.summer, r.summer)
     }
 
     @Test fun `single wheel - a read back matching neither set leaves the sets unchanged`() {
-        assertEquals(sets, TyreSetUpdate.afterWrite(sets, null, 2, listOf(a, b, x, 0x01010101), true))
-        assertEquals(sets, TyreSetUpdate.afterWrite(sets, null, 2, listOf(e, b, x, d), true))
+        assertEquals(sets, TyreSetUpdate.afterWrite(sets, null, 2, noSet, listOf(a, b, x, 0x01010101), true))
+        assertEquals(sets, TyreSetUpdate.afterWrite(sets, null, 2, noSet, listOf(e, b, x, d), true))
     }
 
     @Test fun `single wheel - an incomplete result leaves the sets unchanged`() {
-        assertEquals(sets, TyreSetUpdate.afterWrite(sets, null, 2, listOf(a, b, x, d), false))
+        assertEquals(sets, TyreSetUpdate.afterWrite(sets, null, 2, noSet, listOf(a, b, x, d), false))
+    }
+
+    @Test fun `D8 the set equal to the before IDs takes the single wheel write, another set with the same other three stays`() {
+        val s = TyreSets(winter = set(a, b, c, d), summer = set(x, b, c, d))
+        val r = TyreSetUpdate.afterWrite(s, null, 0, listOf(a, b, c, d), listOf(0x0E0E0E0E, b, c, d), true)
+        assertEquals(set(0x0E0E0E0E, b, c, d), r.winter)
+        assertEquals(s.summer, r.summer)
+    }
+
+    @Test fun `D8 without a set equal to the before IDs the unique other-three match decides`() {
+        val s = TyreSets(winter = set(a, b, c, d), summer = set(e, f, g, h))
+        val r = TyreSetUpdate.afterWrite(s, null, 2, listOf(a, b, 0x0F0F0F0F, d), listOf(a, b, x, d), true)
+        assertEquals(set(a, b, x, d), r.winter)
+        assertEquals(s.summer, r.summer)
     }
 
     // D.8 codec and backup

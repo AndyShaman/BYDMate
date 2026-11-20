@@ -313,4 +313,79 @@ class EcuFirmwareRepositoryTest {
         assertEquals(1, r.state.value.history.size)
         assertNull(r.state.value.error)
     }
+
+    // Review round 2
+
+    private val bareF195 = hex("62F195")
+
+    @Test fun `D7 a bare 62 F1 95 gives no version and the run is not saved as a check`() = runTest {
+        val r = repo(this)
+        finishCheck(
+            r,
+            FirmwareStatus(
+                DtcWire.STATE_DONE, 2, 2, "",
+                listOf(
+                    FirmwareAddressResult(0x720, DtcWire.OUTCOME_OK, f720, bareF195),
+                    FirmwareAddressResult(0x754, DtcWire.OUTCOME_NO_ANSWER, null, null),
+                ),
+            ),
+        )
+        assertTrue(r.state.value.history.isEmpty())
+        assertNotNull(r.state.value.error)
+    }
+
+    @Test fun `D7 a bare 62 F1 95 keeps the earlier checks and the head unit highlight`() = runTest {
+        val r = repo(this)
+        finishCheck(r, done(old720))
+        build = "BUILD-Y"
+        r.refreshHuState()
+        runCurrent()
+        assertTrue(r.state.value.huChanged)
+        wall += 60_000
+        finishCheck(
+            r,
+            FirmwareStatus(DtcWire.STATE_DONE, 2, 2, "", listOf(FirmwareAddressResult(0x720, DtcWire.OUTCOME_OK, f720, bareF195))),
+        )
+        assertEquals(1, r.state.value.history.size)
+        assertTrue(r.state.value.huChanged)
+    }
+
+    @Test fun `D7 a bare 62 F1 95 next to one real version is still a check`() = runTest {
+        val r = repo(this)
+        finishCheck(
+            r,
+            FirmwareStatus(
+                DtcWire.STATE_DONE, 2, 2, "",
+                listOf(
+                    FirmwareAddressResult(0x720, DtcWire.OUTCOME_OK, f720, bareF195),
+                    FirmwareAddressResult(0x754, DtcWire.OUTCOME_OK, f754, fw754),
+                ),
+            ),
+        )
+        assertEquals(1, r.state.value.history.size)
+        assertNull(r.state.value.error)
+    }
+
+    @Test fun `D9 the dump prints version and date of every address for the newest two checks only`() = runTest {
+        val r = repo(this)
+        build = "BUILD-1"
+        finishCheck(r, done(hex("62F1959C481A010101")))
+        wall += 60_000
+        build = "BUILD-2"
+        finishCheck(r, done(old720))
+        wall += 60_000
+        build = "BUILD-3"
+        finishCheck(r, done(new720))
+        val dump = EcuFirmwareRepository.dumpLines(prefs).joinToString("\n")
+        // check 3 and check 2 of 720
+        for (needle in listOf("4.00.12", "2026-09-10", "4.00.10", "2026-04-09", "BUILD-3", "BUILD-2")) {
+            assertTrue("$needle in:\n$dump", dump.contains(needle))
+        }
+        // 754 answered the same in all three checks: version and date appear for two of them
+        assertEquals(dump, 2, Regex("3\\.99\\.37").findAll(dump).count())
+        assertEquals(dump, 2, Regex("2024-01-20").findAll(dump).count())
+        // the oldest check keeps only its summary line
+        assertFalse(dump, dump.contains("4.00.08"))
+        assertFalse(dump, dump.contains("2026-01-01"))
+    }
 }
