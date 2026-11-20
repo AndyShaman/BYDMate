@@ -136,8 +136,8 @@ class EcuFirmwareRepository(
     }
 
     private fun finish(status: FirmwareStatus) {
-        if (status.results.none { EcuFirmwareWire.parse(it.f195Uds) != null }) {
-            // A run that read no version at all is not a check: the history and the head-unit highlight stay.
+        if (status.results.none { EcuFirmwareWire.parse(it.f195Uds)?.version != null }) {
+            // A run that read no version at all (a bare `62 F1 95` has none) is not a check: the history and the head-unit highlight stay.
             Log.w(
                 TAG,
                 "check end no parseable f195, not saved: blocks=${status.results.size} " +
@@ -218,14 +218,17 @@ class EcuFirmwareRepository(
         private const val POLL_MS = 1_000L
         private const val MAX_LOST_POLLS = 3
         private const val START_OUTDATED = -2
+        /** Checks the dump prints address by address: the newest and the one it is compared with. */
+        private const val DUMP_DETAILED = 2
 
         /** The newest check against the one before it; empty without a check. */
         private fun rowsOf(history: List<FirmwareCheck>): List<FirmwareRow> =
             history.lastOrNull()?.let { EcuFirmwareDiff.diff(history.getOrNull(history.size - 2), it) }.orEmpty()
 
         /**
-         * The `--- ecu firmware ---` dump section: the baseline and every saved check, raw per
-         * address. Never starts a check.
+         * The `--- ecu firmware ---` dump section: the baseline, a line per saved check, and for the
+         * newest [DUMP_DETAILED] checks every address with its change, version, date and raw answers,
+         * so the «было → стало» shown can be checked. Never starts a check.
          */
         fun dumpLines(prefs: SharedPreferences): List<String> {
             val lines = mutableListOf("hu baseline: ${prefs.getString(KEY_BASELINE, null) ?: "none"}")
@@ -235,11 +238,11 @@ class EcuFirmwareRepository(
                 val at = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(c.at))
                 lines += "check ${i + 1}/${history.size}: at=$at hu=${c.huBuild} blocks=${c.blocks.size}"
             }
-            history.lastOrNull()?.let { last ->
-                val rows = rowsOf(history).associateBy { it.addr }
-                last.blocks.forEach { b ->
-                    lines += "  ${EcuFirmwareText.addr(b.addr)} ${rows[b.addr]?.change ?: "-"} " +
-                        "f194=${hex(b.f194Uds) ?: "-"} f195=${hex(b.f195Uds) ?: "-"} v=${rows[b.addr]?.after?.version ?: "-"}"
+            for (i in maxOf(0, history.size - DUMP_DETAILED) until history.size) {
+                lines += "check ${i + 1}/${history.size} blocks:"
+                EcuFirmwareDiff.diff(history.getOrNull(i - 1), history[i]).zip(history[i].blocks).forEach { (row, b) ->
+                    lines += "  ${EcuFirmwareText.addr(b.addr)} ${row.change} v=${row.after?.version ?: "-"} date=${row.after?.date ?: "-"} " +
+                        "f194=${hex(b.f194Uds) ?: "-"} f195=${hex(b.f195Uds) ?: "-"}"
                 }
             }
             return lines
