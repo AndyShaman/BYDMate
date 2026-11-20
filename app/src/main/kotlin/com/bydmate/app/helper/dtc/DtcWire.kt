@@ -100,6 +100,9 @@ object DtcWire {
      * The only addresses ever read (the Leopard 3 blocks): the first 18, then the 20 found on the car
      * 2026-11-19, after them so the first 18 keep their place in a scan.
      */
+    /** Blocks an erase may target (stub for the review-round red tests; the fix narrows it to the original 18). */
+    val ERASE_ADDRESSES: IntArray get() = ADDRESSES
+
     val ADDRESSES: IntArray = intArrayOf(
         0x712, 0x720, 0x722, 0x726, 0x747, 0x762, 0x782, 0x783, 0x7E0,
         0x7E1, 0x7E2, 0x7E3, 0x7E4, 0x7E5, 0x7E6, 0x7E7, 0x7F1, 0x7F2,

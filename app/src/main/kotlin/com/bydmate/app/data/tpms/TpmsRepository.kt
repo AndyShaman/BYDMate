@@ -122,13 +122,15 @@ class TpmsRepository(
      * Not on P, no read, not L3, invalid plan or nothing to write → nothing goes to the daemon.
      * On a complete result the sets follow [TyreSetUpdate.afterWrite].
      */
-    fun write(target: List<String?>, written: TyreSetName?, wheel: Int?) {
+    @Suppress("UNUSED_PARAMETER") // stub for the review-round red tests: [shown] is checked by the fix
+    fun write(target: List<String?>, written: TyreSetName?, wheel: Int?, shown: List<Int?>) {
         Log.i(TAG, "write tap set=${written ?: "-"} wheel=${wheel?.let { WHEEL_NAMES.getOrNull(it) } ?: "-"} target=${target.joinToString(",") { it ?: "-" }}")
         startWrite(idsOf(_state.value.lastRead), target, PendingWrite(emptyList(), written, wheel, undo = false))
     }
 
     /** «Вернуть как было»: writes back the `before` IDs of the last write, as a new write. */
-    fun undoLastWrite() {
+    @Suppress("UNUSED_PARAMETER") // stub for the review-round red tests
+    fun undoLastWrite(shown: List<Int?>) {
         val last = _state.value.lastWrite
         Log.i(TAG, "undo tap last_write=${last != null}")
         if (last == null) return

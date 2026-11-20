@@ -45,9 +45,9 @@ class TyreIdsViewModel @Inject constructor(
 
     fun editSet(name: TyreSetName, wheel: Int, raw: String?) = tpmsRepository.editSet(name, wheel, raw)
 
-    fun write(target: List<String?>, written: TyreSetName?, wheel: Int?) = tpmsRepository.write(target, written, wheel)
+    fun write(target: List<String?>, written: TyreSetName?, wheel: Int?, shown: List<Int?>) = tpmsRepository.write(target, written, wheel, shown)
 
-    fun undo() = tpmsRepository.undoLastWrite()
+    fun undo(shown: List<Int?>) = tpmsRepository.undoLastWrite(shown)
 
     /** One line per step of the window the repository does not see (screens, confirmations, drags). */
     fun logStep(step: String) {

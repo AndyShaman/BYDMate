@@ -71,4 +71,28 @@ class DtcErasePlanTest {
         assertArrayEquals(intArrayOf(), DtcErasePlan.eligible(saved, now))
         assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(saved, 0x7E0, now))
     }
+
+    private val newBlock = 0x703
+    private val rowsOnly = "5902FF D16687 08"
+
+    @Test fun `C12 a block outside the erase list is left out of the plan and has no block plan`() {
+        val saved = DtcSavedScan(
+            now - 60_000L, 2,
+            listOf(rows(0x712, rowsOnly), rows(newBlock, "5902FF D16787 08")),
+        )
+        assertArrayEquals(intArrayOf(0x712), DtcErasePlan.eligible(saved, now))
+        assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(saved, newBlock, now))
+        assertArrayEquals(intArrayOf(0x712), DtcErasePlan.eligibleBlock(saved, 0x712, now))
+    }
+
+    @Test fun `C12 a merged group with one address outside the erase list offers no erase`() {
+        val ure = "5902FF D71187 08 D0FFCE 08"
+        val saved = DtcSavedScan(
+            now - 60_000L, 2,
+            listOf(rows(0x7E0, ure, ureId), rows(newBlock, ure, ureId)),
+        )
+        assertArrayEquals(intArrayOf(), DtcErasePlan.eligible(saved, now))
+        assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(saved, 0x7E0, now))
+        assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(saved, newBlock, now))
+    }
 }

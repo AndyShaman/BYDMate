@@ -18,10 +18,17 @@ class DtcScannerTpmsTest {
         val queue = ArrayDeque<ByteArray>()
         val sent = mutableListOf<ByteArray>()
         var respond: (ByteArray) -> List<ByteArray> = { emptyList() }
+        /** The vendor return code per request; non-zero = rejected (the frame is still counted as sent). */
+        var rc: (ByteArray) -> Int = { 0 }
 
         override fun register(): String? = null
         override fun unregister() { queue.clear() }
-        override fun send(payload: ByteArray): Int { sent += payload; queue += respond(payload); return 0 }
+        override fun send(payload: ByteArray): Int {
+            sent += payload
+            val code = rc(payload)
+            if (code == 0) queue += respond(payload)
+            return code
+        }
         override fun poll(timeoutMs: Long): ByteArray? {
             if (queue.isNotEmpty()) return queue.removeFirst()
             clock.t += timeoutMs
@@ -188,12 +195,14 @@ class DtcScannerTpmsTest {
         assertAddr720(w)
     }
 
-    @Test fun `session 34 - another session timing aborts before 27`() {
+    @Test fun `session 34 - another session timing aborts before 27 with one 10 01 as the exit`() {
         val (w, car) = world()
         car.override = { h -> if (h == "1003") twice(hex("5003001901F4")) else null }
         write(w)
         assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
         assertEquals(0, w.count("27") + w.count("2E"))
+        assertEquals(1, w.count("1001"))
+        assertEquals("1001", w.requests().last())
         assertAddr720(w)
     }
 
@@ -392,5 +401,269 @@ class DtcScannerTpmsTest {
         assertEquals(DtcWire.STATE_DONE, w.scanner.tpmsStatus().state)
         assertEquals(happyRequests().size, w.device.sent.size)
         assertFalse(w.scanner.tpmsStatus().reason.startsWith("foreign"))
+    }
+
+    // Review round: exact answers (C3)
+
+    private fun key(w: World) = w.requests().indexOfFirst { it.startsWith("2702") }
+
+    @Test fun `C3 a key answer longer than 67 02 is a security failure - latched, exit, no 2E`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2702")) twice(hex("670200")) else null }
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("security_rejected"))
+        assertEquals(0, w.count("2E"))
+        assertTrue(w.requests().indexOf("1001") > key(w))
+        val before = w.device.sent.size
+        assertEquals(-1, write(w))
+        assertEquals(before, w.device.sent.size)
+    }
+
+    @Test fun `C3 a key answer whose frame result byte is not 1 is not an unlock`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2702")) twice(hex("6702"), result = 2) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.count("2E"))
+    }
+
+    @Test fun `C3 a write answer longer than 6E 33 0x leaves the entry unknown, sends no more 2E and exits`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2E")) twice(hex("6E330500")) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(1, w.count("2E"))
+        val r = w.requests()
+        assertTrue(r.indexOf("1001") > r.indexOfFirst { it.startsWith("2E") })
+        assertEquals(List(3) { TpmsVerdict.NOT_RUN }, dids.drop(1).map { slot(w.scanner.tpmsStatus(), it).verdict })
+    }
+
+    @Test fun `C3 a write answer whose frame result byte is not 1 is not positive and ends the writes`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2E")) twice(hex("6E3305"), result = 2) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(1, w.count("2E"))
+    }
+
+    // C4: the gateway answers that are not a plain answer, inside the extended session
+
+    private fun multiframe(uds: ByteArray): ByteArray = DtcFixtures.frame(TpmsWire.ADDR, uds).also { it[4] = 2 }
+
+    /** A frame whose length byte promises more than it carries. */
+    private fun truncated(): ByteArray = DtcFixtures.frame(TpmsWire.ADDR, hex("6E3305")).copyOf(8).also { it[3] = 0x20 }
+
+    @Test fun `C4 a multiframe answer to the seed request stops the run with nothing sent after it`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "2701") listOf(multiframe(hex("6701$seed"))) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals("2701", w.requests().last())
+        assertEquals(0, w.count("1001") + w.count("2702") + w.count("2E"))
+    }
+
+    @Test fun `C4 a multiframe answer to a 2E stops the run with no further 2E and nothing after it`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2E")) listOf(multiframe(hex("6E3305"))) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(1, w.count("2E"))
+        assertTrue(w.requests().last().startsWith("2E"))
+        assertEquals(0, w.count("1001"))
+    }
+
+    @Test fun `C4 a truncated answer to a 2E stops the run with no further 2E and nothing after it`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2E")) listOf(truncated()) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(1, w.count("2E"))
+        assertTrue(w.requests().last().startsWith("2E"))
+        assertEquals(0, w.count("1001"))
+    }
+
+    @Test fun `C4 a multiframe answer to the session request itself sends nothing after 10 03`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "1003") listOf(multiframe(hex("5003003201F4"))) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals("1003", w.requests().last())
+    }
+
+    @Test fun `C4 before 10 03 a multiframe answer keeps its old effect - not_l3 and no session`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "22F194") listOf(multiframe(f194)) else null }
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("not_l3"))
+        assertEquals(0, w.count("10"))
+    }
+
+    // C5: the security latch
+
+    @Test fun `C5a a refused key followed by a foreign frame before the job reacts still latches`() {
+        val (w, car) = world()
+        car.override = { h ->
+            if (h.startsWith("2702")) twice(hex("7F2735")) + DtcFixtures.frame(0x7E0, hex("620000")) else null
+        }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.count("2E"))
+        val before = w.device.sent.size
+        assertEquals(-1, write(w))
+        assertEquals(before, w.device.sent.size)
+    }
+
+    @Test fun `C5b a transport error on the 27 02 send latches`() {
+        val (w, _) = world()
+        w.device.rc = { p -> if (DtcFixtures.hex(p.copyOfRange(4, p.size)).startsWith("2702")) 1 else 0 }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.count("2E"))
+        val before = w.device.sent.size
+        assertEquals(-1, write(w))
+        assertEquals(before, w.device.sent.size)
+    }
+
+    /** Sets the daemon's security latch the way a failed key of another job would (the field is private). */
+    private fun setLatch(scanner: DtcScanner) {
+        val f = DtcScanner::class.java.getDeclaredField("securityLatched").apply { isAccessible = true }
+        val current = f.get(scanner)
+        if (current is java.util.concurrent.atomic.AtomicBoolean) current.set(true) else f.setBoolean(scanner, true)
+    }
+
+    @Test fun `C5c a write started before the latch was set never sends 27 02 once it is set`() {
+        val (w, _) = world()
+        w.inline = false
+        assertEquals(0, write(w))
+        setLatch(w.scanner)
+        w.tasks.single().run()
+        assertEquals(0, w.count("2702"))
+        assertEquals(0, w.count("2E"))
+    }
+
+    // C6: leaving the extended session
+
+    @Test fun `C6a 10 03 sent and not answered sends one 10 01 and nothing after it`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "1003") emptyList() else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        val r = w.requests()
+        assertEquals("1001", r.last())
+        assertEquals(1, w.count("1001"))
+        assertTrue(r.indexOf("1001") > r.indexOf("1003"))
+        assertEquals(0, w.count("27") + w.count("2E"))
+    }
+
+    @Test fun `C6b a wrong session answer sends one 10 01, no 27 and no 2E`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "1003") twice(hex("5003001901F4")) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(1, w.count("1001"))
+        assertEquals("1001", w.requests().last())
+        assertEquals(0, w.count("27") + w.count("2E"))
+    }
+
+    @Test fun `C6c a gear read that throws inside the session sends one 10 01 and nothing after it`() {
+        val (w, _) = world()
+        w.gear = { if (w.count("2701") >= 1) throw IllegalStateException("gear") else 1 }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals("1001", w.requests().last())
+        assertEquals(1, w.count("1001"))
+        assertEquals(0, w.count("2702") + w.count("2E"))
+    }
+
+    @Test fun `C6c a speed read that throws inside the session sends one 10 01 and nothing after it`() {
+        val (w, _) = world()
+        w.speed = { if (w.count("2701") >= 1) throw IllegalStateException("speed") else 0 }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals("1001", w.requests().last())
+        assertEquals(1, w.count("1001"))
+        assertEquals(0, w.count("2702") + w.count("2E"))
+    }
+
+    @Test fun `C6d the exit 10 01 does not read the gear again`() {
+        val (w, _) = world()
+        val reads = mutableListOf<Int>()
+        w.gear = { reads += w.device.sent.size; if (w.count("2E") >= 1) 4 else 1 }
+        write(w)
+        val exitAt = w.requests().indexOf("1001")
+        assertTrue(exitAt > 0)
+        // One read decided the stop for the next 2E; the exit adds none.
+        assertEquals(1, reads.count { it == exitAt })
+        assertEquals(1, w.count("1001"))
+    }
+
+    @Test fun `C6d the exit 10 01 does not read the speed again`() {
+        val (w, _) = world()
+        val reads = mutableListOf<Int>()
+        w.speed = { reads += w.device.sent.size; if (w.count("2E") >= 1) 5 else 0 }
+        write(w)
+        val exitAt = w.requests().indexOf("1001")
+        assertTrue(exitAt > 0)
+        assertEquals(1, reads.count { it == exitAt })
+        assertEquals(1, w.count("1001"))
+    }
+
+    private fun worldWithUnansweredExit(): World {
+        val (w, car) = world()
+        car.override = { h -> if (h == "1001") emptyList() else null }
+        write(w)
+        return w
+    }
+
+    @Test fun `C6e after a job whose exit was not confirmed no job starts for 6 seconds`() {
+        val w = worldWithUnansweredExit()
+        val end = w.clock.t
+        val before = w.device.sent.size
+        w.clock.t = end + 1_000
+        assertEquals(1, w.scanner.start { w.gear() })
+        assertEquals(1, w.scanner.startTpmsRead { w.gear() })
+        assertEquals(1, w.scanner.startErase(intArrayOf(0x712)) { w.gear() })
+        assertEquals(1, w.scanner.startFirmware { w.gear() })
+        assertEquals(1, write(w))
+        assertEquals(before, w.device.sent.size)
+        w.clock.t = end + 6_500
+        assertEquals(0, w.scanner.startTpmsRead { w.gear() })
+    }
+
+    @Test fun `C6e after a stop on a foreign frame inside the session no job starts at once`() {
+        val (w, car) = world()
+        car.override = { h ->
+            if (h == "1003") twice(hex("5003003201F4")) + DtcFixtures.frame(0x7E0, hex("620000")) else null
+        }
+        write(w)
+        val before = w.device.sent.size
+        assertEquals(1, w.scanner.startTpmsRead { w.gear() })
+        assertEquals(before, w.device.sent.size)
+    }
+
+    @Test fun `C6e after a write whose exit was confirmed the next job starts at once`() {
+        val (w, _) = world()
+        write(w)
+        assertEquals(DtcWire.STATE_DONE, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.scanner.startTpmsRead { w.gear() })
+    }
+
+    // C9: an entry whose 2E went out
+
+    @Test fun `C9 a stop while waiting for the answer to a 2E leaves that entry unverified, the rest not run`() {
+        val (w, car) = world()
+        car.override = { h ->
+            if (h.startsWith("2E")) listOf(DtcFixtures.frame(0x7E0, hex("620000"))) + twice(hex("6E3305")) else null
+        }
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertEquals(1, w.count("2E"))
+        assertEquals(TpmsVerdict.UNVERIFIED, slot(s, 0x3305).verdict)
+        assertEquals(List(3) { TpmsVerdict.NOT_RUN }, dids.drop(1).map { slot(s, it).verdict })
     }
 }

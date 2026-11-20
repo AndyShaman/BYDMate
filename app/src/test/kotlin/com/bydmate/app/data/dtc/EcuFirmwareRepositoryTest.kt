@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -260,5 +261,56 @@ class EcuFirmwareRepositoryTest {
         assertTrue(msg, msg.contains("754"))
         assertFalse(msg, msg.contains("unknown", ignoreCase = true))
         assertFalse(msg, msg.contains("не найден", ignoreCase = true))
+    }
+
+    // C13: a run that read no firmware at all is not a check
+
+    /** DONE, but no address gave a parseable F195: silent, or a negative answer. */
+    private fun noFirmware() = FirmwareStatus(
+        DtcWire.STATE_DONE, 2, 2, "",
+        listOf(
+            FirmwareAddressResult(0x720, DtcWire.OUTCOME_NRC, hex("7F2231"), hex("7F2231")),
+            FirmwareAddressResult(0x754, DtcWire.OUTCOME_NO_ANSWER, null, null),
+        ),
+    )
+
+    @Test fun `C13 a run with no parseable F195 is not saved as a check and shows an error`() = runTest {
+        val r = repo(this)
+        finishCheck(r, noFirmware())
+        assertTrue(r.state.value.history.isEmpty())
+        assertEquals(FirmwarePhase.IDLE, r.state.value.phase)
+        assertNotNull(r.state.value.error)
+        assertTrue(repo(this).state.value.history.isEmpty())
+    }
+
+    @Test fun `C13 a run with no parseable F195 keeps the earlier checks and the head unit highlight`() = runTest {
+        val r = repo(this)
+        finishCheck(r, done(old720))
+        build = "BUILD-Y"
+        r.refreshHuState()
+        runCurrent()
+        assertTrue(r.state.value.huChanged)
+        wall += 60_000
+        finishCheck(r, noFirmware())
+        assertEquals(1, r.state.value.history.size)
+        assertEquals(1_000_000L, r.state.value.history.single().at)
+        assertNotNull(r.state.value.error)
+        assertTrue(r.state.value.huChanged)
+    }
+
+    @Test fun `C13 one parseable F195 among silent blocks is still a check`() = runTest {
+        val r = repo(this)
+        finishCheck(
+            r,
+            FirmwareStatus(
+                DtcWire.STATE_DONE, 2, 2, "",
+                listOf(
+                    FirmwareAddressResult(0x720, DtcWire.OUTCOME_OK, f720, old720),
+                    FirmwareAddressResult(0x754, DtcWire.OUTCOME_NO_ANSWER, null, null),
+                ),
+            ),
+        )
+        assertEquals(1, r.state.value.history.size)
+        assertNull(r.state.value.error)
     }
 }

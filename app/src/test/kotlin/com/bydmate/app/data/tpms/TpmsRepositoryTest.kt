@@ -169,7 +169,7 @@ class TpmsRepositoryTest {
     @Test fun `a write with every target equal to the read never reaches the daemon`() = runTest {
         val r = repo(this)
         openAndRead(r)
-        r.write(carIds.map(::hx), TyreSetName.WINTER, null)
+        r.write(carIds.map(::hx), TyreSetName.WINTER, null, carIds)
         runCurrent()
         coVerify(exactly = 0) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
     }
@@ -178,7 +178,7 @@ class TpmsRepositoryTest {
         val r = repo(this)
         openAndRead(r)
         gear = 4
-        r.write(listOf(hx(e), null, null, null), null, 0)
+        r.write(listOf(hx(e), null, null, null), null, 0, carIds)
         runCurrent()
         coVerify(exactly = 0) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
         assertEquals(TpmsError.NOT_PARK, r.state.value.error)
@@ -187,7 +187,7 @@ class TpmsRepositoryTest {
     @Test fun `a write with a duplicate ID never reaches the daemon`() = runTest {
         val r = repo(this)
         openAndRead(r)
-        r.write(listOf(hx(d), null, null, null), null, 0)
+        r.write(listOf(hx(d), null, null, null), null, 0, carIds)
         runCurrent()
         coVerify(exactly = 0) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
     }
@@ -196,7 +196,7 @@ class TpmsRepositoryTest {
         val r = repo(this)
         openAndRead(r)
         statuses.addLast(writeDone(carIds, carIds, listOf(null, null, null, null)))
-        r.write(listOf(hx(a), hx(b), hx(e), null), null, 2)
+        r.write(listOf(hx(a), hx(b), hx(e), null), null, 2, carIds)
         runCurrent()
         val g = FidAddresses.of("gear")
         val s = FidAddresses.of("speed")
@@ -210,7 +210,7 @@ class TpmsRepositoryTest {
         openAndRead(r)
         r.takeFromCar(TyreSetName.WINTER)
         statuses.addLast(writeDone(carIds, swapped, allWritten))
-        r.write(swapped.map(::hx), TyreSetName.WINTER, null)
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
         runCurrent()
         settle()
         assertEquals(TyreSet(swapped.map(::hx)), r.state.value.sets.winter)
@@ -222,7 +222,7 @@ class TpmsRepositoryTest {
         openAndRead(r)
         r.takeFromCar(TyreSetName.WINTER)
         statuses.addLast(writeDone(carIds, listOf(a, b, e, d), listOf(null, null, TpmsVerdict.WRITTEN, null)))
-        r.write(listOf(null, null, hx(e), null), null, 2)
+        r.write(listOf(null, null, hx(e), null), null, 2, carIds)
         runCurrent()
         settle()
         assertEquals(TyreSet(listOf(a, b, e, d).map(::hx)), r.state.value.sets.winter)
@@ -233,7 +233,7 @@ class TpmsRepositoryTest {
         openAndRead(r)
         r.takeFromCar(TyreSetName.WINTER)
         statuses.addLast(writeDone(carIds, listOf(b, b, c, d), listOf(TpmsVerdict.WRITTEN, TpmsVerdict.REFUSED, null, null)))
-        r.write(swapped.map(::hx), TyreSetName.WINTER, null)
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
         runCurrent()
         settle()
         assertEquals(TyreSet(carIds.map(::hx)), r.state.value.sets.winter)
@@ -243,10 +243,10 @@ class TpmsRepositoryTest {
         val r = repo(this)
         openAndRead(r)
         statuses.addLast(writeDone(carIds, swapped, allWritten))
-        r.write(swapped.map(::hx), TyreSetName.WINTER, null)
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
         runCurrent()
         settle()
-        r.undoLastWrite()
+        r.undoLastWrite(swapped)
         runCurrent()
         coVerify(exactly = 1) {
             helper.tpmsWriteStart(any(), any(), any(), any(), listOf(
@@ -274,7 +274,7 @@ class TpmsRepositoryTest {
         r.onWindowOpened()
         runCurrent()
         assertEquals(TpmsPhase.READING, r.state.value.phase)
-        r.write(listOf(hx(e), null, null, null), null, 0)
+        r.write(listOf(hx(e), null, null, null), null, 0, carIds)
         runCurrent()
         coVerify(exactly = 0) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
     }
@@ -283,11 +283,121 @@ class TpmsRepositoryTest {
         val r = repo(this)
         openAndRead(r)
         fallbackStatus = running(DtcWire.MODE_TPMS_WRITE)
-        r.write(listOf(hx(e), null, null, null), null, 0)
+        r.write(listOf(hx(e), null, null, null), null, 0, carIds)
         runCurrent()
         assertEquals(TpmsPhase.WRITING, r.state.value.phase)
-        r.write(listOf(null, hx(e), null, null), null, 1)
+        r.write(listOf(null, hx(e), null, null), null, 1, carIds)
         runCurrent()
         coVerify(exactly = 1) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
+    }
+
+    // Review round: the shown «было» (C7)
+
+    @Test fun `C7 a write whose shown list differs from the last read never reaches the daemon`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        r.write(listOf(hx(e), null, null, null), null, 0, listOf(b, a, c, d))
+        runCurrent()
+        coVerify(exactly = 0) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
+        assertEquals(TpmsError.REFUSED, r.state.value.error)
+        assertEquals(TpmsPhase.IDLE, r.state.value.phase)
+    }
+
+    @Test fun `C7 a shown list with an unread slot never matches a full read`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        r.write(listOf(hx(e), null, null, null), null, 0, listOf(a, b, c, null))
+        runCurrent()
+        coVerify(exactly = 0) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
+        assertEquals(TpmsError.REFUSED, r.state.value.error)
+    }
+
+    @Test fun `C7 a write whose shown list equals the last read goes to the daemon`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        statuses.addLast(writeDone(carIds, carIds, listOf(null, null, null, null)))
+        r.write(listOf(hx(e), null, null, null), null, 0, carIds)
+        runCurrent()
+        coVerify(exactly = 1) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
+    }
+
+    @Test fun `C7 an undo whose shown list differs from the IDs now in the block never reaches the daemon`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        statuses.addLast(writeDone(carIds, swapped, allWritten))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        r.undoLastWrite(carIds)
+        runCurrent()
+        coVerify(exactly = 1) { helper.tpmsWriteStart(any(), any(), any(), any(), any()) }
+        assertEquals(TpmsError.REFUSED, r.state.value.error)
+    }
+
+    // C10: when a write is complete
+
+    @Test fun `C10 a planned entry found already in place with the others written still completes the write`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        r.takeFromCar(TyreSetName.WINTER)
+        statuses.addLast(writeDone(carIds, swapped, listOf(TpmsVerdict.WRITTEN, TpmsVerdict.ALREADY, null, null)))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        assertEquals(TyreSet(swapped.map(::hx)), r.state.value.sets.winter)
+    }
+
+    @Test fun `C10 every planned entry written but a read-back that is not the target leaves the sets as they were`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        r.takeFromCar(TyreSetName.WINTER)
+        // The car holds e where the target says a.
+        statuses.addLast(writeDone(carIds, listOf(b, e, c, d), allWritten))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        assertEquals(TyreSet(carIds.map(::hx)), r.state.value.sets.winter)
+    }
+
+    @Test fun `C10 a write with a slot not read back leaves the sets as they were`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        r.takeFromCar(TyreSetName.WINTER)
+        statuses.addLast(writeDone(carIds, listOf(b, a, c, null), allWritten))
+        r.write(swapped.map(::hx), TyreSetName.WINTER, null, carIds)
+        runCurrent()
+        settle()
+        assertEquals(TyreSet(carIds.map(::hx)), r.state.value.sets.winter)
+    }
+
+    // C11: a read that parsed nothing
+
+    private fun unparsedRead() = TpmsStatus(
+        DtcWire.STATE_DONE, DtcWire.MODE_TPMS_READ, "", f194, null, null,
+        dids.map { TpmsSlotResult(it, hex("7F2231"), null, null) }, "",
+    )
+
+    @Test fun `C11 a read with no parsed slot keeps the previous read and reports the failure`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        val kept = r.state.value.lastRead
+        val keptAt = r.state.value.lastReadAt
+        wall += 60_000
+        openAndRead(r, unparsedRead())
+        assertSame(kept, r.state.value.lastRead)
+        assertEquals(keptAt, r.state.value.lastReadAt)
+        assertNotNull(r.state.value.error)
+        assertEquals(TpmsPhase.IDLE, r.state.value.phase)
+        // The saved read survives a restart too.
+        assertEquals(carIds, idsOf(repo(this).state.value.lastRead))
+    }
+
+    @Test fun `C11 a first read with no parsed slot saves nothing`() = runTest {
+        val r = repo(this)
+        openAndRead(r, unparsedRead())
+        assertNull(r.state.value.lastRead)
+        assertNull(r.state.value.lastReadAt)
+        assertNotNull(r.state.value.error)
+        assertFalse(r.state.value.canWrite)
     }
 }

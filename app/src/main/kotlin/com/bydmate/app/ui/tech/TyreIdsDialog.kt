@@ -123,8 +123,9 @@ private data class TyreDraft(val target: List<String?>, val set: TyreSetName?, v
 internal class TyreIdsActions(
     val onTake: (TyreSetName) -> Unit,
     val onSave: (TyreSetName, Int, String?) -> Unit,
-    val onWrite: (List<String?>, TyreSetName?, Int?) -> Unit,
-    val onUndo: () -> Unit,
+    /** target, set, wheel, and the «было» IDs the confirmation showed. */
+    val onWrite: (List<String?>, TyreSetName?, Int?, List<Int?>) -> Unit,
+    val onUndo: (List<Int?>) -> Unit,
     val onStep: (String) -> Unit,
 )
 
@@ -224,7 +225,7 @@ internal fun TyreIdsDialog(state: TechPanelUiState, actions: TyreIdsActions, onD
                                     onConfirmed = { d ->
                                         writeFrom = last
                                         go(TyreStep.RESULT, "confirm2 write undo=${d.undo} plan=${planText(ctx.from(d), d.target)}")
-                                        if (d.undo) actions.onUndo() else actions.onWrite(d.target, d.set, d.wheel)
+                                        if (d.undo) actions.onUndo(ctx.from(d)) else actions.onWrite(d.target, d.set, d.wheel, ctx.from(d))
                                     },
                                     onUndo = {
                                         draft = TyreDraft(ctx.before.map { it?.let(::tyreHex) }, null, null, undo = true)

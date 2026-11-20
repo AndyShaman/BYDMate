@@ -96,12 +96,30 @@ class DtcScannerFirmwareTest {
         assertEquals(DtcWire.ADDRESSES.toSet(), asked)
     }
 
-    @Test fun `a block silent or negative on F194 gets no F195`() {
+    @Test fun `a block silent on F194 gets no F195`() {
         val w = world()
         w.scanner.startFirmware { w.gear() }
-        for (addr in listOf(silentGateway, silentNothing, refused)) {
+        for (addr in listOf(silentGateway, silentNothing)) {
             val sent = w.requestsTo(addr)
             assertTrue("0x${"%X".format(addr)} $sent", sent.isNotEmpty() && sent.all { it == "22F194" })
+        }
+    }
+
+    @Test fun `C13 a block that answered F194 with a negative code still gets F195`() {
+        val w = world()
+        w.scanner.startFirmware { w.gear() }
+        assertEquals(listOf("22F194", "22F195"), w.requestsTo(refused))
+    }
+
+    @Test fun `C13 a gateway timeout, a busy gateway or a manager timeout on F194 gets no F195`() {
+        for (result in listOf(3, 4, 5)) {
+            val w = world()
+            w.device.respond = { p ->
+                val addr = ((p[1].toInt() and 0xFF) shl 8) or (p[2].toInt() and 0xFF)
+                if (addr == 0x720) twice(addr, "", result = result) else emptyList()
+            }
+            w.scanner.startFirmware { w.gear() }
+            assertTrue("result=$result ${w.requestsTo(0x720)}", w.requestsTo(0x720).all { it == "22F194" })
         }
     }
 
