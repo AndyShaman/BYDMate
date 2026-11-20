@@ -156,7 +156,7 @@ class DtcScanRepositoryTest {
         assertEquals(wall, last.at)
         val s = DtcParser.summarize(last.results)
         assertEquals(14, s.answered)
-        assertEquals(18, s.total)
+        assertEquals(38, s.total)
         assertEquals(1, s.now)
         assertEquals(9, s.old)
         assertNotNull(prefs.getString("last", null))

@@ -125,6 +125,14 @@ class DtcScanner(
     }
 
     /** The last tyre job's raw answers and verdicts (one slot per DID); empty slots when the last job was not one. */
+    /**
+     * Reads `22 F1 94` then, when it answered, `22 F1 95` of every address in [DtcWire.ADDRESSES]:
+     * 0 started, 1 busy, -1 refused. Read gates as for a scan; nothing else is ever sent.
+     */
+    fun startFirmware(gear: () -> Int?): Int = TODO()
+
+    fun firmwareStatus(): FirmwareStatus = TODO()
+
     fun tpmsStatus(): TpmsStatus {
         val (base, run) = synchronized(lock) {
             val slots = TpmsWire.DIDS.map { TpmsSlotResult(it, null, null, null) }

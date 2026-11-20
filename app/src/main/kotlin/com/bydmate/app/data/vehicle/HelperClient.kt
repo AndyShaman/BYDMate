@@ -461,6 +461,11 @@ interface HelperClient {
     /** State and raw answers of the last tyre job (TX_DIAG_JOB_STATUS); null when unreachable. */
     suspend fun tpmsStatus(): TpmsStatus? = null
 
+    /** Firmware check start (TX 70): 0 ok, 1 busy, -1 refused, -2 not handled (old daemon); null unreachable. */
+    suspend fun firmwareStart(gearDev: Int, gearFid: Int): Int? = null
+
+    suspend fun firmwareStatus(): com.bydmate.app.helper.dtc.FirmwareStatus? = null
+
     /**
      * Direct freeform launch: find-or-launch [packageName], switch its task to freeform,
      * move it to [displayId] with the given window bounds and focus it. UNAVAILABLE = the

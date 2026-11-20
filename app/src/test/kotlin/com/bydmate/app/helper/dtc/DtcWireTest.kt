@@ -64,8 +64,8 @@ class DtcWireTest {
         assertArrayEquals(raw, (m as DtcMatch.Multiframe).raw)
     }
 
-    @Test fun `only the three fixed read requests exist for the eighteen addresses`() {
-        assertEquals(18, DtcWire.ADDRESSES.size)
+    @Test fun `only the three fixed read requests exist for the thirty-eight addresses`() {
+        assertEquals(38, DtcWire.ADDRESSES.size)
         val forbidden = setOf(0x14, 0x2E, 0x2F, 0x31, 0x27, 0x10, 0x11, 0x85)
         for (addr in DtcWire.ADDRESSES) {
             val hi = (addr shr 8).toByte()

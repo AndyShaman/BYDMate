@@ -75,6 +75,7 @@ object DtcWire {
     const val MODE_ERASE = 1
     const val MODE_TPMS_READ = 2
     const val MODE_TPMS_WRITE = 3
+    const val MODE_FIRMWARE = 4
 
     const val OUTCOME_OK = "ok"
     const val OUTCOME_NO_ANSWER = "no_answer"
