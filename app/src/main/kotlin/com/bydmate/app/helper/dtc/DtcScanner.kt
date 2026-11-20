@@ -1,7 +1,5 @@
 package com.bydmate.app.helper.dtc
 
-import android.util.Log
-
 /** Time source of the scan; the fake one in tests moves only when asked. */
 interface DtcClock {
     fun nowMs(): Long
@@ -35,9 +33,6 @@ class DtcScanner(
     private val runner: (Runnable) -> Unit = { Thread(it, "dtc-scan").start() },
     private val readSpeed: () -> Int? = { null },
 ) {
-    /** Ends the run from anywhere inside it with its terminal state. */
-    private class Stop(val state: Int, val reason: String) : RuntimeException(reason)
-
     /** One address while it is being read; [outcome] stays skipped until its first answer. */
     private class Acc(val addr: Int) {
         var outcome = DtcWire.OUTCOME_SKIPPED
@@ -47,13 +42,8 @@ class DtcScanner(
         fun result() = DtcAddressResult(addr, outcome, countUds, listUds, idUds)
     }
 
-    /** Counters of one run; touched by the run thread only. */
-    private class Run(val gear: () -> Int?, val startedMs: Long, val erase: Boolean) {
-        val budgetMs = if (erase) ERASE_BUDGET_MS else BUDGET_MS
-        var registerTried = false
-        var sent = 0
-        var frames = 0
-        var foreign = 0
+    /** One scan or erase run: its [link] and the scan's own bookkeeping; touched by the run thread only. */
+    private class Run(val link: DiagLink) {
         var current: Acc? = null
         /** Blocks with a visible row, whose F197 name is asked after the whole scan. */
         val named = ArrayList<Int>()
@@ -62,8 +52,6 @@ class DtcScanner(
         /** Erase: index of the block being cleared and [sent] when its clear started. */
         var eraseIndex = -1
         var eraseSentBefore = 0
-        /** Erase: every frame matched as ours, so their duplicates are not taken for foreign traffic. */
-        val ours = ArrayList<ByteArray>()
     }
 
     private val lock = Any()
@@ -76,7 +64,7 @@ class DtcScanner(
 
     /** 0 started, 1 busy. [gear] returns the live gear value, null when it could not be read. */
     fun start(gear: () -> Int?): Int = launch(DtcWire.MODE_SCAN, IntArray(0)) {
-        execute(Run(gear, clock.nowMs(), erase = false), ::scan, ::closeResults)
+        execute(Run(link(gear, SCAN_POLICY)), ::scan, ::closeResults)
     }
 
     /**
@@ -90,7 +78,7 @@ class DtcScanner(
             return START_REFUSED
         }
         return launch(DtcWire.MODE_ERASE, addrs) {
-            execute(Run(gear, clock.nowMs(), erase = true), ::eraseAll, ::closeErase)
+            execute(Run(link(gear, ERASE_POLICY)), ::eraseAll, ::closeErase)
         }
     }
 
@@ -110,6 +98,8 @@ class DtcScanner(
     fun startTpmsWrite(plan: List<TpmsPlanEntry>, gear: () -> Int?): Int = TODO()
 
     fun tpmsStatus(): TpmsStatus = TODO()
+
+    private fun link(gear: () -> Int?, policy: LinkPolicy) = DiagLink(device, clock, readGuard, readSpeed, gear, policy)
 
     private fun launch(mode: Int, addrs: IntArray, job: () -> Unit): Int {
         synchronized(lock) {
@@ -137,15 +127,15 @@ class DtcScanner(
     }
 
     /** The run thread: nothing escapes it, and the terminal state is published after the listener is gone. */
-    private fun execute(run: Run, body: (Run) -> Stop, close: (Run, Stop) -> Unit) {
-        var stop = Stop(DtcWire.STATE_ABORTED, "exception")
+    private fun execute(run: Run, body: (Run) -> DiagStop, close: (Run, DiagStop) -> Unit) {
+        var stop = DiagStop(DtcWire.STATE_ABORTED, "exception")
         try {
             stop = runCatching { body(run) }.getOrElse { e ->
-                e as? Stop ?: stop(DtcWire.STATE_ABORTED, "exception ${e.javaClass.simpleName}", at = null)
+                e as? DiagStop ?: stop(DtcWire.STATE_ABORTED, "exception ${e.javaClass.simpleName}", at = null)
             }
         } finally {
             // The listener lives for this run only, whatever ended it.
-            if (run.registerTried) {
+            if (run.link.registerTried) {
                 runCatching { device.unregister() }
                     .onSuccess { log("unregistered") }
                     .onFailure { log("unregister failed ${it.javaClass.simpleName}") }
@@ -156,7 +146,7 @@ class DtcScanner(
     }
 
     /** A run stopped mid-address keeps what that address already answered; the rest are skipped. */
-    private fun closeResults(run: Run, stop: Stop) {
+    private fun closeResults(run: Run, stop: DiagStop) {
         synchronized(lock) {
             run.current?.let { results += it.result() }
             val seen = results.map { it.addr }.toSet()
@@ -168,7 +158,7 @@ class DtcScanner(
                 "ok=${list.count { it.outcome == DtcWire.OUTCOME_OK }} " +
                 "nrc=${list.count { it.outcome == DtcWire.OUTCOME_NRC }} " +
                 "no_answer=${list.count { it.outcome == DtcWire.OUTCOME_NO_ANSWER }} " +
-                "sent=${run.sent} frames=${run.frames} foreign=${run.foreign} ms=${clock.nowMs() - run.startedMs}"
+                "sent=${run.link.sent} frames=${run.link.frames} foreign=${run.link.foreign} ms=${clock.nowMs() - run.link.startedMs}"
         )
     }
 
@@ -176,12 +166,12 @@ class DtcScanner(
      * The block whose clear was out when the run stopped is unconfirmed, the blocks after it were
      * not run; both carry the stop reason. Finished blocks keep their confirmation.
      */
-    private fun closeErase(run: Run, stop: Stop) {
+    private fun closeErase(run: Run, stop: DiagStop) {
         val list = synchronized(lock) {
             for (i in erase.indices) {
                 val e = erase[i]
                 if (e.confirm != DtcWire.CONFIRM_NOT_RUN) continue
-                val inFlight = i == run.eraseIndex && run.sent > run.eraseSentBefore
+                val inFlight = i == run.eraseIndex && run.link.sent > run.eraseSentBefore
                 val confirm = if (inFlight) DtcWire.CONFIRM_UNCONFIRMED else DtcWire.CONFIRM_NOT_RUN
                 erase[i] = DtcEraseResult(e.addr, confirm, null, stop.reason, null)
             }
@@ -194,39 +184,21 @@ class DtcScanner(
                 "refused=${list.count { it.confirm == DtcWire.CONFIRM_REFUSED }} " +
                 "unconfirmed=${list.count { it.confirm == DtcWire.CONFIRM_UNCONFIRMED }} " +
                 "not_run=${list.count { it.confirm == DtcWire.CONFIRM_NOT_RUN }} " +
-                "sent=${run.sent} frames=${run.frames} ms=${clock.nowMs() - run.startedMs}"
+                "sent=${run.link.sent} frames=${run.link.frames} ms=${clock.nowMs() - run.link.startedMs}"
         )
     }
 
-    /** Gate before the run, listener, then the passive listen: any frame there stops the run. */
-    private fun open(run: Run, what: String, addrs: Int) {
-        val guard = readGuard()
-        val gearValue = run.gear()
-        val speed = if (run.erase) readSpeed() else null
-        log("$what start gearValue=$gearValue speed=$speed guard=$guard addrs=$addrs budget_ms=${run.budgetMs}")
-        gate(run, guard, gearValue, speed, at = null)?.let { throw it }
-
-        run.registerTried = true
-        val failed = device.register()?.let { stop(DtcWire.STATE_UNAVAILABLE, it, at = null) }
-            ?: device.poll(PASSIVE_MS)?.let { frame ->
-                log("abort passive_traffic head=${hex(frame, 0, PASSIVE_HEAD_BYTES)}")
-                Stop(DtcWire.STATE_ABORTED, "passive_traffic")
-            }
-        if (failed != null) throw failed
-        log("passive frames=0 ms=$PASSIVE_MS")
-    }
-
     /** The whole scan; returns the terminal state (DONE or no_frames) or throws [Stop]. */
-    private fun scan(run: Run): Stop {
-        open(run, "scan", DtcWire.ADDRESSES.size)
+    private fun scan(run: Run): DiagStop {
+        run.link.open("scan", DtcWire.ADDRESSES.size)
         for (addr in DtcWire.ADDRESSES) {
             val acc = Acc(addr)
             run.current = acc
             val started = clock.nowMs()
-            val requests = run.sent
+            val requests = run.link.sent
             readAddress(run, acc)
             log(
-                "addr=${hexAddr(addr)} outcome=${acc.outcome} requests=${run.sent - requests} " +
+                "addr=${hexAddr(addr)} outcome=${acc.outcome} requests=${run.link.sent - requests} " +
                     "ms=${clock.nowMs() - started}"
             )
             synchronized(lock) {
@@ -236,10 +208,10 @@ class DtcScanner(
             run.current = null
         }
         readExtras(run)
-        return if (run.frames == 0) {
-            Stop(DtcWire.STATE_UNAVAILABLE, "no_frames")
+        return if (run.link.frames == 0) {
+            DiagStop(DtcWire.STATE_UNAVAILABLE, "no_frames")
         } else {
-            Stop(DtcWire.STATE_DONE, "")
+            DiagStop(DtcWire.STATE_DONE, "")
         }
     }
 
@@ -248,14 +220,14 @@ class DtcScanner(
      * codes of every block whose clear went out read again. Never resends a clear whose answer
      * was lost (only a busy gateway, which did not forward it, gets it again).
      */
-    private fun eraseAll(run: Run): Stop {
+    private fun eraseAll(run: Run): DiagStop {
         val addrs = synchronized(lock) { erase.map { it.addr } }
-        open(run, "erase", addrs.size)
+        run.link.open("erase", addrs.size)
         val cleared = ArrayList<Int>()
         for ((i, addr) in addrs.withIndex()) {
             if (i > 0) clock.sleep(ERASE_GAP_MS)
             run.eraseIndex = i
-            run.eraseSentBefore = run.sent
+            run.eraseSentBefore = run.link.sent
             eraseBlock(run, i, addr)
             cleared += i
             synchronized(lock) { done++ }
@@ -275,12 +247,12 @@ class DtcScanner(
                 erase[i] = DtcEraseResult(e.addr, e.confirm, e.nrc, e.reason, acc.result())
             }
         }
-        return Stop(DtcWire.STATE_DONE, "")
+        return DiagStop(DtcWire.STATE_DONE, "")
     }
 
     private fun eraseBlock(run: Run, i: Int, addr: Int) {
         val started = clock.nowMs()
-        val m = request(run, addr, DtcWire.clearRequest(addr), DtcWire.SERVICE_CLEAR, -1)
+        val m = run.link.request(addr, DtcWire.clearRequest(addr), DtcWire.SERVICE_CLEAR, -1)
         val result = when (m) {
             is DtcMatch.Answer -> DtcEraseResult(addr, DtcWire.CONFIRM_CONFIRMED, null, "", null)
             is DtcMatch.Nrc -> DtcEraseResult(addr, DtcWire.CONFIRM_REFUSED, m.code, DtcWire.OUTCOME_NRC, null)
@@ -288,7 +260,7 @@ class DtcScanner(
         }
         log(
             "erase addr=${hexAddr(addr)} confirm=${result.confirm} nrc=${result.nrc?.let { "0x%02X".format(it) } ?: "-"} " +
-                "reason=${result.reason.ifEmpty { "-" }} sends=${run.sent - run.eraseSentBefore} ms=${clock.nowMs() - started}"
+                "reason=${result.reason.ifEmpty { "-" }} sends=${run.link.sent - run.eraseSentBefore} ms=${clock.nowMs() - started}"
         )
         synchronized(lock) { erase[i] = result }
     }
@@ -300,7 +272,7 @@ class DtcScanner(
      */
     private fun readCodes(run: Run, acc: Acc): List<Int> {
         val addr = acc.addr
-        val count = request(run, addr, DtcWire.countRequest(addr), DtcWire.SERVICE_READ_DTC, DtcWire.SUB_COUNT)
+        val count = run.link.request(addr, DtcWire.countRequest(addr), DtcWire.SERVICE_READ_DTC, DtcWire.SUB_COUNT)
         acc.outcome = outcomeOf(count)
         acc.countUds = udsOf(count, DtcWire.SERVICE_READ_DTC)
         if (count !is DtcMatch.Answer) return emptyList()
@@ -310,10 +282,10 @@ class DtcScanner(
         if (records == 0) return emptyList()
 
         val mask = if (u(uds, 2) and STATUS_PENDING != 0) MASK_WITH_PENDING else MASK_CONFIRMED
-        var list = request(run, addr, DtcWire.listRequest(addr, mask), DtcWire.SERVICE_READ_DTC, DtcWire.SUB_LIST)
+        var list = run.link.request(addr, DtcWire.listRequest(addr, mask), DtcWire.SERVICE_READ_DTC, DtcWire.SUB_LIST)
         if (list is DtcMatch.Nrc) {
             log("list retry addr=${hexAddr(addr)} mask=${"%02X".format(mask)} nrc=0x${"%02X".format(list.code)} next=FF")
-            list = request(run, addr, DtcWire.listRequest(addr, MASK_ALL), DtcWire.SERVICE_READ_DTC, DtcWire.SUB_LIST)
+            list = run.link.request(addr, DtcWire.listRequest(addr, MASK_ALL), DtcWire.SERVICE_READ_DTC, DtcWire.SUB_LIST)
         }
         acc.outcome = outcomeOf(list)
         acc.listUds = udsOf(list, DtcWire.SERVICE_READ_DTC)
@@ -329,8 +301,8 @@ class DtcScanner(
         if (codes.isEmpty()) return
         val addr = acc.addr
         codes.forEach { if (run.snapshots.size < SNAPSHOT_CAP) run.snapshots += addr to it }
-        val id = request(
-            run, addr, DtcWire.identityRequest(addr),
+        val id = run.link.request(
+            addr, DtcWire.identityRequest(addr),
             DtcWire.SERVICE_READ_DID, DtcWire.DID_IDENTITY,
         )
         // The identity only names the block: no answer leaves the address's outcome as it is.
@@ -348,148 +320,26 @@ class DtcScanner(
     private fun readExtras(run: Run) {
         try {
             for (addr in run.named) {
-                val name = request(run, addr, DtcWire.nameRequest(addr), DtcWire.SERVICE_READ_DID, DtcWire.DID_NAME)
+                val name = run.link.request(addr, DtcWire.nameRequest(addr), DtcWire.SERVICE_READ_DID, DtcWire.DID_NAME)
                 log("name addr=${hexAddr(addr)} ${DtcWire.nameText(name)}")
             }
             for ((addr, code) in run.snapshots) {
-                val snap = request(
-                    run, addr, DtcWire.snapshotRequest(addr, code),
+                val snap = run.link.request(
+                    addr, DtcWire.snapshotRequest(addr, code),
                     DtcWire.SERVICE_READ_DTC, DtcWire.SUB_SNAPSHOT,
                 )
                 log("snapshot addr=${hexAddr(addr)} dtc=${"%06X".format(code)} kind=${snap?.let(::kindName) ?: "none"}")
             }
-        } catch (e: Stop) {
+        } catch (e: DiagStop) {
             log("extras stopped ${e.reason}, the scan result stays")
         } catch (e: Exception) {
             log("extras stopped exception ${e.javaClass.simpleName}, the scan result stays")
         }
     }
 
-    /**
-     * [exchange], and again after a growing pause while the gateway answers busy (it did not
-     * forward the request), at most [BUSY_RETRIES] times; the gates run before every send.
-     */
-    private fun request(run: Run, addr: Int, payload: ByteArray, service: Int, sub: Int): DtcMatch? {
-        var attempt = 0
-        while (true) {
-            val m = exchange(run, addr, payload, service, sub)
-            if (m != DtcMatch.Busy || attempt == BUSY_RETRIES) return m
-            attempt++
-            val wait = BUSY_BACKOFF_MS * attempt
-            log("busy addr=${hexAddr(addr)} req=${hex(payload, REQUEST_HEADER_BYTES, payload.size)} retry=$attempt wait_ms=$wait")
-            clock.sleep(wait)
-        }
-    }
-
-    /**
-     * Checks the gates, sends [payload] and waits one window for the answer to it (the clear's own
-     * longer window for `14`). Null when nothing of ours came; a match is followed by a settle
-     * pause that drops the duplicate frame (an erase run checks what came in that pause instead).
-     */
-    private fun exchange(run: Run, addr: Int, payload: ByteArray, service: Int, sub: Int): DtcMatch? {
-        val req = hex(payload, REQUEST_HEADER_BYTES, payload.size)
-        val at = "at=${hexAddr(addr)} req=$req"
-        val guard = readGuard()
-        val gear = run.gear()
-        val speed = if (run.erase) readSpeed() else null
-        gate(run, guard, gear, speed, at)?.let { throw it }
-        if (run.erase) quiet(run, at)
-
-        val rc = device.send(payload)
-        run.sent++
-        val sentAt = clock.nowMs()
-        log("tx addr=${hexAddr(addr)} req=$req gear=$gear" + (if (run.erase) " speed=$speed guard=$guard" else "") + " rc=$rc")
-        if (rc != 0) {
-            val state = if (run.sent == 1) DtcWire.STATE_UNAVAILABLE else DtcWire.STATE_ABORTED
-            throw stop(state, "transport_rejected rc=$rc", at)
-        }
-
-        val windowMs = if (service == DtcWire.SERVICE_CLEAR) ERASE_WINDOW_MS else WINDOW_MS
-        val (match, frame) = await(run, sentAt + windowMs, at) { DtcWire.match(it, addr, service, sub) } ?: run {
-            log("no_answer addr=${hexAddr(addr)} req=$req ms=${clock.nowMs() - sentAt}")
-            return null
-        }
-        log(
-            "rx addr=${hexAddr(addr)} req=$req ${head(frame)} kind=${kindName(match)} " +
-                "uds=${udsHex(frame)} ms=${clock.nowMs() - sentAt}" +
-                if (match is DtcMatch.Multiframe) " raw=${hex(frame, 0, frame.size)}" else ""
-        )
-        clock.sleep(SETTLE_MS)
-        if (run.erase) quiet(run, at) else device.drain()
-        return match
-    }
-
-    /** Frames until [match] finds the answer (null at [deadline]); others go to [other], pending waits on. */
-    private fun await(run: Run, deadline: Long, at: String, match: (ByteArray) -> DtcMatch): Pair<DtcMatch, ByteArray>? {
-        while (true) {
-            val left = deadline - clock.nowMs()
-            val frame = (if (left > 0) device.poll(left) else null) ?: return null
-            run.frames++
-            when (val m = match(frame)) {
-                DtcMatch.NotMine -> other(run, frame, at)
-                DtcMatch.Pending -> {
-                    if (run.erase) run.ours += frame
-                    log("pending $at ms_left=${deadline - clock.nowMs()}")
-                }
-                else -> {
-                    if (run.erase) run.ours += frame
-                    return m to frame
-                }
-            }
-        }
-    }
-
-    /** A frame that is not the answer awaited: skipped in a scan; in an erase only a duplicate of ours is. */
-    private fun other(run: Run, frame: ByteArray, at: String) {
-        if (run.erase && run.ours.none { sameFrame(it, frame) }) {
-            run.foreign++
-            log("foreign ${head(frame)} uds=${udsHex(frame)}")
-            throw stop(DtcWire.STATE_ABORTED, "foreign " + head(frame).substringBefore(' '), at)
-        }
-        run.foreign++
-        log("foreign ${head(frame)} uds=${udsHex(frame)} (ignored)")
-    }
-
-    /** Erase: whatever is queued now must be a duplicate of an answer of ours, else the run stops. */
-    private fun quiet(run: Run, at: String) {
-        while (true) {
-            val frame = device.poll(0) ?: return
-            run.frames++
-            other(run, frame, at)
-        }
-    }
-
-    /** The `len` UDS bytes of a frame, hex. */
-    private fun udsHex(frame: ByteArray): String =
-        if (frame.size < FRAME_HEADER_BYTES) "" else hex(frame, FRAME_HEADER_BYTES, FRAME_HEADER_BYTES + u(frame, 3))
-
-    /** Header and `len` UDS bytes equal: the gateway's second copy of a frame (the tail may differ). */
-    private fun sameFrame(a: ByteArray, b: ByteArray): Boolean {
-        if (a.size < FRAME_HEADER_BYTES || b.size < FRAME_HEADER_BYTES) return a.contentEquals(b)
-        val n = FRAME_HEADER_BYTES + u(a, 3)
-        return a.size >= n && b.size >= n && a.copyOf(n).contentEquals(b.copyOf(n))
-    }
-
-    /** Why the next request (or, with [at] null, the run itself) must not go out; null when it may. */
-    private fun gate(run: Run, guard: String?, gear: Int?, speed: Int?, at: String?): Stop? = when {
-        at == null && guard == null -> stop(DtcWire.STATE_UNAVAILABLE, "guard_absent", at)
-        clock.nowMs() - run.startedMs >= run.budgetMs -> stop(DtcWire.STATE_ABORTED, "budget", at)
-        guard != DtcWire.GUARD_BASELINE -> stop(DtcWire.STATE_ABORTED, "diag_busy prop=$guard", at)
-        gear != GEAR_PARK -> stop(DtcWire.STATE_ABORTED, "not_park gear=$gear", at)
-        run.erase && speed != 0 -> stop(DtcWire.STATE_ABORTED, "speed kmh=$speed", at)
-        else -> null
-    }
-
     private fun publish(state: Int, reason: String) = synchronized(lock) {
         this.state = state
         this.reason = reason
-    }
-
-    /** Logs the abort or unavailability line, then hands back the [Stop] to throw. */
-    private fun stop(state: Int, reason: String, at: String?): Stop {
-        val verb = if (state == DtcWire.STATE_UNAVAILABLE) "unavailable" else "abort"
-        log("$verb $reason" + if (at == null) "" else " $at")
-        return Stop(state, reason)
     }
 
     companion object {
@@ -516,24 +366,22 @@ class DtcScanner(
         /** Snapshot requests (`19 04`, log only) per scan. */
         const val SNAPSHOT_CAP = 30
 
-        private const val GEAR_PARK = 1
         private const val STATUS_PENDING = 0x04
         private const val MASK_WITH_PENDING = 0x0D
         private const val MASK_CONFIRMED = 0x09
         private const val MASK_ALL = 0xFF
         private const val COUNT_UDS_BYTES = 6
-        private const val REQUEST_HEADER_BYTES = 4
-        private const val PASSIVE_HEAD_BYTES = 16
+
+        private val SCAN_POLICY = LinkPolicy(BUDGET_MS, speedGate = false, strictTraffic = false)
+        private val ERASE_POLICY = LinkPolicy(ERASE_BUDGET_MS, speedGate = true, strictTraffic = true)
     }
 }
 
 // Byte reading and the log text of DtcScanner.
-private const val TAG = "DtcScan"
 private const val NEGATIVE = 0x7F
 private const val LIST_HEAD_BYTES = 3
 private const val RECORD_BYTES = 4
 private const val VISIBLE_STATUS = 0x0D
-private const val FRAME_HEADER_BYTES = 7
 
 private fun outcomeOf(m: DtcMatch?): String = when (m) {
     null -> DtcWire.OUTCOME_NO_ANSWER
@@ -568,43 +416,10 @@ private fun visibleCodes(uds: ByteArray): List<Int> {
     return codes
 }
 
-private fun head(frame: ByteArray): String =
-    if (frame.size < FRAME_HEADER_BYTES) {
-        "short=${hex(frame, 0, frame.size)}"
-    } else {
-        "rid=${hexAddr(DtcWire.replyId(frame))} len=${u(frame, 3)} fr=${u(frame, 5)}/${u(frame, 4)} res=${u(frame, 6)}"
-    }
-
-private fun kindName(m: DtcMatch): String = when (m) {
-    is DtcMatch.Answer -> "answer"
-    is DtcMatch.Nrc -> "nrc=0x${"%02X".format(m.code)}"
-    DtcMatch.GatewayTimeout -> "gw_timeout"
-    DtcMatch.Busy -> "busy"
-    DtcMatch.ManagerTimeout -> "manager_timeout"
-    DtcMatch.Truncated -> "truncated"
-    is DtcMatch.Multiframe -> "multiframe"
-    DtcMatch.NotMine, DtcMatch.Pending -> "other"
-}
-
 private fun stateName(state: Int): String = when (state) {
     DtcWire.STATE_DONE -> "DONE"
     DtcWire.STATE_UNAVAILABLE -> "UNAVAILABLE"
     DtcWire.STATE_ABORTED -> "ABORTED"
     DtcWire.STATE_RUNNING -> "RUNNING"
     else -> "IDLE"
-}
-
-private fun log(line: String) {
-    Log.i(TAG, line)
-}
-
-private fun u(b: ByteArray, i: Int): Int = b[i].toInt() and 0xFF
-
-private fun hexAddr(addr: Int): String = "0x%X".format(addr)
-
-/** Hex of `[from, to)`, clipped to what the array holds. */
-private fun hex(b: ByteArray, from: Int, to: Int): String {
-    val sb = StringBuilder()
-    for (i in from until minOf(to, b.size)) sb.append("%02X".format(b[i].toInt() and 0xFF))
-    return sb.toString()
 }
