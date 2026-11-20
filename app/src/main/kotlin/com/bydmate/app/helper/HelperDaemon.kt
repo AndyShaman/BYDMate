@@ -948,7 +948,10 @@ fun main(args: Array<String>) {
 
                 HelperBinderProtocol.TX_DTC_SCAN_START,
                 HelperBinderProtocol.TX_DTC_SCAN_STATUS,
-                HelperBinderProtocol.TX_DTC_ERASE_START -> handleDtcScanTransact(code, data, reply, svc, autoIface)
+                HelperBinderProtocol.TX_DTC_ERASE_START,
+                HelperBinderProtocol.TX_TPMS_READ_START,
+                HelperBinderProtocol.TX_TPMS_WRITE_START,
+                HelperBinderProtocol.TX_DIAG_JOB_STATUS -> handleDtcScanTransact(code, data, reply, svc, autoIface)
 
                 else -> super.onTransact(code, data, reply, flags)
             }
