@@ -53,7 +53,6 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
-import com.bydmate.app.data.dtc.DtcScanPhase
 import com.bydmate.app.ui.components.HelpIcon
 import com.bydmate.app.ui.components.HintBlock
 import com.bydmate.app.ui.theme.AccentGreen
@@ -79,12 +78,15 @@ internal const val DASH = "—"
 fun TechPanelScreen(
     viewModel: TechPanelViewModel = hiltViewModel(),
     tyreViewModel: TyreIdsViewModel = hiltViewModel(),
+    firmwareViewModel: EcuFirmwareViewModel = hiltViewModel(),
 ) {
     val panel by viewModel.uiState.collectAsStateWithLifecycle()
     val tpms by tyreViewModel.tpms.collectAsStateWithLifecycle()
     val tyreDialogOpen by tyreViewModel.open.collectAsStateWithLifecycle()
-    // One state for both: the scan button waits for a tyre job and the tyre window for a scan.
-    val state = panel.copy(tpms = tpms, tyreDialogOpen = tyreDialogOpen)
+    val firmware by firmwareViewModel.firmware.collectAsStateWithLifecycle()
+    val firmwareWindow by firmwareViewModel.window.collectAsStateWithLifecycle()
+    // One state for all: the scan button, the tyre window and the firmware check wait for each other.
+    val state = panel.copy(tpms = tpms, tyreDialogOpen = tyreDialogOpen, firmware = firmware)
     // PM2.5 is read only while this screen is on display: leaving the tab or the app stops it.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
@@ -121,9 +123,8 @@ fun TechPanelScreen(
             onMove = viewModel::moveCard,
             onScan = viewModel::scanDtc,
             onOpenDtc = viewModel::openDtcDialog,
-            onOpenTyres = {
-                tyreViewModel.openDialog(state.gear, state.serviceRunning, state.dtcScan.phase == DtcScanPhase.SCANNING || state.dtcErasing)
-            },
+            onOpenTyres = { tyreViewModel.openDialog(state.gear, state.serviceRunning, state.diagBusy) },
+            onOpenFirmware = firmwareViewModel::openDialog,
         )
     }
 
@@ -149,6 +150,17 @@ fun TechPanelScreen(
                 onStep = tyreViewModel::logStep,
             ),
             onDismiss = tyreViewModel::closeDialog,
+        )
+    }
+
+    if (firmwareWindow.open) {
+        val context = LocalContext.current
+        EcuFirmwareDialog(
+            state = state,
+            window = firmwareWindow,
+            onCheck = { firmwareViewModel.check(state.gear, state.serviceRunning) },
+            onSend = { firmwareViewModel.send(firmwareLabels(context)) },
+            onDismiss = firmwareViewModel::closeDialog,
         )
     }
 }
@@ -177,6 +189,7 @@ private fun TechCardGrid(
     onScan: () -> Unit,
     onOpenDtc: () -> Unit,
     onOpenTyres: () -> Unit,
+    onOpenFirmware: () -> Unit,
 ) {
     val cards = state.visibleCards
     val slots = remember { mutableStateMapOf<Int, Rect>() }
@@ -234,7 +247,7 @@ private fun TechCardGrid(
                             offset.value = Offset.Zero
                         },
                     ) { cardModifier ->
-                        TechCardContent(card, state, onHint, onScan, onOpenDtc, onOpenTyres, cardModifier)
+                        TechCardContent(card, state, onHint, onScan, onOpenDtc, onOpenTyres, onOpenFirmware, cardModifier)
                     }
                 }
             }
@@ -290,6 +303,7 @@ private fun TechCardContent(
     onScan: () -> Unit,
     onOpenDtc: () -> Unit,
     onOpenTyres: () -> Unit,
+    onOpenFirmware: () -> Unit,
     modifier: Modifier,
 ) {
     when (card) {
@@ -299,7 +313,7 @@ private fun TechCardContent(
         TechCard.MOTORS -> MotorsCard(state, onHint, modifier)
         TechCard.CAR_STATE -> CarStateCard(state, onHint, onOpenTyres, modifier)
         TechCard.FUEL -> FuelCard(state, modifier)
-        TechCard.DIAGNOSTICS -> DiagnosticsCard(state, onHint, onScan, onOpenDtc, modifier)
+        TechCard.DIAGNOSTICS -> DiagnosticsCard(state, onHint, onScan, onOpenDtc, onOpenFirmware, modifier)
     }
 }
 

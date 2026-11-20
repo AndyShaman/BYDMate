@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
@@ -32,11 +33,18 @@ import com.bydmate.app.R
 import com.bydmate.app.data.dtc.DtcKind
 import com.bydmate.app.data.dtc.DtcParser
 import com.bydmate.app.data.dtc.DtcScanPhase
+import com.bydmate.app.data.dtc.FirmwareChange
+import com.bydmate.app.data.dtc.FirmwarePhase
+import com.bydmate.app.data.dtc.FirmwareUiState
+import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.SocYellow
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.TextSecondary
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * «Диагностика»: what the car itself reports (cluster warnings, service countdown), then the
@@ -48,6 +56,7 @@ internal fun DiagnosticsCard(
     onHint: (String) -> Unit,
     onScan: () -> Unit,
     onOpenDtc: () -> Unit,
+    onOpenFirmware: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     TechCard(
@@ -78,7 +87,7 @@ internal fun DiagnosticsCard(
                 )
             }
             Hint(state.openHint, "diagnostics", R.string.tech_hint_diagnostics)
-            DtcScanBlock(state, onScan, onOpenDtc)
+            DtcScanBlock(state, onScan, onOpenDtc, onOpenFirmware)
         }
     }
 }
@@ -89,7 +98,7 @@ internal fun DiagnosticsCard(
  * a failed attempt keeps the last good scan and adds one line.
  */
 @Composable
-private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit, onOpen: () -> Unit) {
+private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit, onOpen: () -> Unit, onOpenFirmware: () -> Unit) {
     val context = LocalContext.current
     val summary = state.dtcSummary
     val scanning = state.dtcScan.phase == DtcScanPhase.SCANNING
@@ -168,6 +177,7 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
     if (!scanning && error != null && !unavailableOnly) DtcNote(error)
     if (!scanning && state.dtcScan.firmwareHint) DtcNote(R.string.tech_dtc_firmware_hint)
     Box(modifier = Modifier.weight(1f))
+    FirmwareRow(state.firmware, onOpenFirmware)
     if (state.scanLabel == DtcScanLabel.ONLY_PARK) {
         Text(
             stringResource(R.string.tech_dtc_only_on_p),
@@ -184,6 +194,42 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
         accent = true,
         onClick = onScan,
         modifier = Modifier.padding(top = 6.dp).fillMaxWidth(),
+    )
+}
+
+/**
+ * «Прошивки блоков · 20.11 · без изменений ›» over the scan button; blue «Магнитола обновилась ·
+ * проверить прошивки ›» when the head-unit build changed since the last check. A tap opens the
+ * window and reads nothing.
+ */
+@Composable
+private fun FirmwareRow(fw: FirmwareUiState, onOpen: () -> Unit) {
+    val text = if (fw.huChanged && fw.phase == FirmwarePhase.IDLE) {
+        stringResource(R.string.tech_fw_row_hu)
+    } else {
+        val last = fw.history.lastOrNull()
+        val status = when {
+            fw.phase == FirmwarePhase.CHECKING -> stringResource(R.string.tech_fw_row_checking, fw.done, fw.total)
+            last == null -> stringResource(R.string.tech_fw_row_never)
+            fw.history.size < 2 -> stringResource(R.string.tech_fw_row_checked)
+            else -> fw.rows.count { it.change == FirmwareChange.UPDATED }.let { n ->
+                if (n > 0) stringResource(R.string.tech_fw_row_updated, n) else stringResource(R.string.tech_fw_row_unchanged)
+            }
+        }
+        val date = last?.takeIf { fw.phase == FirmwarePhase.IDLE }?.let { SimpleDateFormat("dd.MM", Locale.getDefault()).format(Date(it.at)) }
+        listOfNotNull(stringResource(R.string.tech_fw_row_title), date, status).joinToString(" · ")
+    }
+    Text(
+        "$text ›",
+        color = if (fw.huChanged && fw.phase == FirmwarePhase.IDLE) AccentBlue else TextSecondary,
+        fontSize = 12.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onOpen)
+            .wrapContentHeight(Alignment.CenterVertically),
     )
 }
 
