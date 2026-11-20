@@ -162,6 +162,24 @@ class DtcScanRepositoryTest {
         assertNotNull(prefs.getString("last", null))
     }
 
+    @Test fun `a busy reply that finds another job (not scan, not erase) keeps the saved scan`() = runTest {
+        val r = repo(this)
+        finishScan(r)
+        val before = r.last.value!!.at
+        val savedJson = prefs.getString("last", null)
+        wall += 60_000
+
+        // Mode 3 stands for any later daemon job (tyre sensors, firmware): its DONE carries no scan results.
+        startReply = 1
+        statuses.addLast(DtcScanStatus(DtcWire.STATE_DONE, 4, 4, "", emptyList(), emptyList(), 3))
+        r.start()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(DtcScanError.ABORTED, r.state.value.error)
+        assertEquals(before, r.last.value!!.at)
+        assertEquals(savedJson, prefs.getString("last", null))
+    }
+
     @Test fun `an unavailable or aborted scan keeps the previous result`() = runTest {
         val r = repo(this)
         finishScan(r)
