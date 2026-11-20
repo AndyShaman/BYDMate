@@ -382,7 +382,7 @@ class EcuFirmwareRepositoryTest {
             assertTrue("$needle in:\n$dump", dump.contains(needle))
         }
         // 754 answered the same in all three checks: version and date appear for two of them
-        assertEquals(dump, 2, Regex("3\\.99\\.37").findAll(dump).count())
+        assertEquals(dump, 2, Regex("4\\.00\\.01").findAll(dump).count())
         assertEquals(dump, 2, Regex("2024-01-20").findAll(dump).count())
         // the oldest check keeps only its summary line
         assertFalse(dump, dump.contains("4.00.08"))

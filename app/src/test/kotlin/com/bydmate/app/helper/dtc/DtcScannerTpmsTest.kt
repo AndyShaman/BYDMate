@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@Suppress("LargeClass") // one fake car scripts every write scenario; splitting would copy it
 class DtcScannerTpmsTest {
 
     private class FakeClock : DtcClock {
@@ -724,7 +725,7 @@ class DtcScannerTpmsTest {
         assertEquals(1, w.count("1001"))
     }
 
-    @Test fun `D4 a pending 7F 2E 78 for each of three 2E extends that request's own window`() {
+    @Test fun `D4 a pending 7F 2E 78 for each 2E of a four-wheel swap extends that request's own window`() {
         val (w, car) = world()
         car.override = { h ->
             if (h.startsWith("2E")) {
@@ -734,11 +735,12 @@ class DtcScannerTpmsTest {
                 twice(hex("7F2E78"))
             } else null
         }
-        write(w, plan(3))
+        // A three-wheel subset of this swap would leave one ID on two wheels; the full plan is valid.
+        write(w, plan())
         val s = w.scanner.tpmsStatus()
         assertEquals(DtcWire.STATE_DONE, s.state)
-        assertEquals(3, w.count("2E"))
-        assertEquals(List(3) { TpmsVerdict.WRITTEN }, dids.take(3).map { slot(s, it).verdict })
+        assertEquals(4, w.count("2E"))
+        assertEquals(List(4) { TpmsVerdict.WRITTEN }, dids.map { slot(s, it).verdict })
     }
 
     // D11: security attempts (3 per window, 60 s pause after a failure, 30 min reset, NRC 36/37 wait 10 min)
