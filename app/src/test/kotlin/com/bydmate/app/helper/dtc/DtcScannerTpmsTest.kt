@@ -254,7 +254,7 @@ class DtcScannerTpmsTest {
         assertAddr720(w)
     }
 
-    @Test fun `write 39 - a rejected key sends no 2E, exits the session, latches, and the next start is refused`() {
+    @Test fun `write 39 - a rejected key sends no 2E, exits the session, pauses, and a start within 60 s is refused`() {
         val (w, car) = world()
         car.override = { h -> if (h.startsWith("2702")) twice(hex("7F2735")) else null }
         write(w)
@@ -266,9 +266,7 @@ class DtcScannerTpmsTest {
         assertTrue(i > 0)
         assertEquals(reads, w.requests().drop(i + 1).take(4))
         assertAddr720(w)
-        val before = w.device.sent.size
-        assertEquals(-1, write(w))
-        assertEquals(before, w.device.sent.size)
+        assertPauseThenProceed(w)
     }
 
     @Test fun `write 40 - a refused first 2E stops further 2E and leaves entry 1 not written`() {
@@ -427,9 +425,7 @@ class DtcScannerTpmsTest {
         assertTrue(s.reason, s.reason.startsWith("security_rejected"))
         assertEquals(0, w.count("2E"))
         assertTrue(w.requests().indexOf("1001") > key(w))
-        val before = w.device.sent.size
-        assertEquals(-1, write(w))
-        assertEquals(before, w.device.sent.size)
+        assertPauseThenProceed(w)
     }
 
     @Test fun `C3 a key answer whose frame result byte is not 1 is not an unlock`() {
@@ -513,7 +509,19 @@ class DtcScannerTpmsTest {
         assertEquals(0, w.count("10"))
     }
 
-    // C5: the security latch
+    // C5: the security attempt counts when the key is sent (D11 replaced the daemon-lifetime latch)
+
+    /** D11: 30 s after a failed key a start is refused with nothing sent; 61 s after it a start sends 27 02 again. */
+    private fun assertPauseThenProceed(w: World) {
+        val sentBefore = w.device.sent.size
+        val keysBefore = w.count("2702")
+        w.clock.t += 30_000
+        assertEquals(-1, write(w))
+        assertEquals(sentBefore, w.device.sent.size)
+        w.clock.t += 31_000
+        assertEquals(0, write(w))
+        assertEquals(keysBefore + 1, w.count("2702"))
+    }
 
     @Test fun `C5a a refused key followed by a foreign frame before the job reacts still latches`() {
         val (w, car) = world()
@@ -523,9 +531,7 @@ class DtcScannerTpmsTest {
         write(w)
         assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
         assertEquals(0, w.count("2E"))
-        val before = w.device.sent.size
-        assertEquals(-1, write(w))
-        assertEquals(before, w.device.sent.size)
+        assertPauseThenProceed(w)
     }
 
     @Test fun `C5b a transport error on the 27 02 send latches`() {
@@ -534,23 +540,14 @@ class DtcScannerTpmsTest {
         write(w)
         assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
         assertEquals(0, w.count("2E"))
-        val before = w.device.sent.size
-        assertEquals(-1, write(w))
-        assertEquals(before, w.device.sent.size)
+        assertPauseThenProceed(w)
     }
 
-    /** Sets the daemon's security latch the way a failed key of another job would (the field is private). */
-    private fun setLatch(scanner: DtcScanner) {
-        val f = DtcScanner::class.java.getDeclaredField("securityLatched").apply { isAccessible = true }
-        val current = f.get(scanner)
-        if (current is java.util.concurrent.atomic.AtomicBoolean) current.set(true) else f.setBoolean(scanner, true)
-    }
-
-    @Test fun `C5c a write started before the latch was set never sends 27 02 once it is set`() {
+    @Test fun `C5c a write started before a failed key was recorded never sends 27 02 once it is recorded`() {
         val (w, _) = world()
         w.inline = false
         assertEquals(0, write(w))
-        setLatch(w.scanner)
+        w.scanner.recordSecurityFailure(w.clock.t)
         w.tasks.single().run()
         assertEquals(0, w.count("2702"))
         assertEquals(0, w.count("2E"))
@@ -742,5 +739,125 @@ class DtcScannerTpmsTest {
         assertEquals(DtcWire.STATE_DONE, s.state)
         assertEquals(3, w.count("2E"))
         assertEquals(List(3) { TpmsVerdict.WRITTEN }, dids.take(3).map { slot(s, it).verdict })
+    }
+
+    // D11: security attempts (3 per window, 60 s pause after a failure, 30 min reset, NRC 36/37 wait 10 min)
+
+    private fun rejectKeys(car: Car, whileKeysAtMost: Int, w: World) {
+        car.override = { h -> if (h.startsWith("2702") && w.count("2702") <= whileKeysAtMost) twice(hex("7F2735")) else null }
+    }
+
+    private fun assertStartRefusedNothingSent(w: World) {
+        val before = w.device.sent.size
+        assertEquals(-1, write(w))
+        assertEquals(before, w.device.sent.size)
+    }
+
+    @Test fun `D11 a rejected key refuses a start 30 s later with nothing sent, and 61 s later it sends 27 02 again`() {
+        val (w, car) = world()
+        rejectKeys(car, 99, w)
+        write(w)
+        assertEquals(1, w.count("2702"))
+        assertPauseThenProceed(w)
+        assertEquals(2, w.count("2702"))
+    }
+
+    @Test fun `D11 three failures each after the pause refuse the fourth start until 30 min after the last failure`() {
+        val (w, car) = world()
+        rejectKeys(car, 99, w)
+        write(w)
+        w.clock.t += 61_000
+        assertEquals(0, write(w))
+        w.clock.t += 61_000
+        assertEquals(0, write(w))
+        assertEquals(3, w.count("2702"))
+        val end = w.clock.t
+        w.clock.t = end + 61_000
+        assertStartRefusedNothingSent(w)
+        w.clock.t = end + 29 * 60_000L
+        assertStartRefusedNothingSent(w)
+        w.clock.t = end + 31 * 60_000L
+        assertEquals(0, write(w))
+        assertEquals(4, w.count("2702"))
+    }
+
+    @Test fun `D11 a good 67 02 after one failure resets the count, two more failures are then allowed`() {
+        val (w, car) = world()
+        rejectKeys(car, 1, w)
+        write(w) // failure 1
+        w.clock.t += 61_000
+        assertEquals(0, write(w)) // good key, the plan is written
+        assertEquals(DtcWire.STATE_DONE, w.scanner.tpmsStatus().state)
+        dids.forEachIndexed { i, d -> car.ids[d] = oldIds[i] }
+        rejectKeys(car, 99, w)
+        w.clock.t += 61_000
+        assertEquals(0, write(w)) // failure A
+        w.clock.t += 61_000
+        assertEquals(0, write(w)) // failure B
+        w.clock.t += 61_000
+        val keys = w.count("2702")
+        assertEquals(0, write(w)) // not refused: the count was reset, only two failures stand
+        assertEquals(keys + 1, w.count("2702"))
+    }
+
+    @Test fun `D11 NRC 36 on 27 02 stops with one 10 01 and refuses starts for 10 min`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2702")) twice(hex("7F2736")) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.count("2E"))
+        assertEquals(1, w.count("1001"))
+        assertTrue(w.requests().indexOf("1001") > key(w))
+        val end = w.clock.t
+        w.clock.t = end + 61_000 // the 60 s pause alone would be over
+        assertStartRefusedNothingSent(w)
+        w.clock.t = end + 9 * 60_000L
+        assertStartRefusedNothingSent(w)
+        w.clock.t = end + 11 * 60_000L
+        assertEquals(0, write(w))
+        assertEquals(2, w.count("2702"))
+    }
+
+    @Test fun `D11 NRC 37 on 27 01 stops, sends no 27 02 and one 10 01, and refuses starts for 10 min`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "2701") twice(hex("7F2737")) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.count("2702") + w.count("2E"))
+        assertEquals(1, w.count("1001"))
+        assertEquals("1001", w.requests().last())
+        val end = w.clock.t
+        w.clock.t = end + 61_000
+        assertStartRefusedNothingSent(w)
+        w.clock.t = end + 9 * 60_000L
+        assertStartRefusedNothingSent(w)
+        w.clock.t = end + 11 * 60_000L
+        assertEquals(0, write(w))
+        assertEquals(2, w.count("2701"))
+    }
+
+    @Test fun `D11 securityWaitMs reports the remaining wait, zero when a start is allowed`() {
+        val (w, car) = world()
+        assertEquals(0L, w.scanner.securityWaitMs())
+        rejectKeys(car, 99, w)
+        write(w)
+        val end = w.clock.t
+        assertTrue(w.scanner.securityWaitMs() in 1L..60_000L)
+        w.clock.t = end + 30_000
+        assertTrue(w.scanner.securityWaitMs() in 1L..30_000L)
+        w.clock.t = end + 61_000
+        assertEquals(0L, w.scanner.securityWaitMs())
+        write(w)
+        w.clock.t += 61_000
+        write(w) // third failure
+        assertTrue(w.scanner.securityWaitMs() > 25 * 60_000L)
+    }
+
+    @Test fun `D11 securityWaitMs after NRC 36 is the 10 min wait`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2702")) twice(hex("7F2736")) else null }
+        write(w)
+        val wait = w.scanner.securityWaitMs()
+        assertTrue(wait.toString(), wait in 9 * 60_000L..10 * 60_000L)
     }
 }
