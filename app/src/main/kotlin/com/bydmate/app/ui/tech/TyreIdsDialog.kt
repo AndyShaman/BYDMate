@@ -44,6 +44,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -127,6 +128,8 @@ internal class TyreIdsActions(
     val onWrite: (List<String?>, TyreSetName?, Int?, List<Int?>) -> Unit,
     val onUndo: (List<Int?>) -> Unit,
     val onStep: (String) -> Unit,
+    /** A new gear or service sample, or a job ended, while the window is open (TpmsRepository.onParkAgain). */
+    val onParkAgain: () -> Unit,
 )
 
 /**
@@ -141,15 +144,15 @@ private class TyreCtx(
     val state: TechPanelUiState,
     val actions: TyreIdsActions,
     val current: List<Int?>,
-    val readBack: List<Int?>,
     val before: List<Int?>,
 ) {
     val block: TyreWriteBlock? get() = state.tyreWriteBlock
 
-    /** «Было» of [draft]: the last read, or for an undo what the last write read back. */
-    fun from(draft: TyreDraft): List<Int?> = if (draft.undo) readBack else current
-
-    fun plan(draft: TyreDraft): TyrePlan = TyrePlans.build(from(draft), draft.target)
+    /**
+     * The plan of [draft] from its «было», [current], the last read: for an undo too, as that is
+     * the last write's read-back or the read on P after an incomplete write (TpmsRepository.onParkAgain).
+     */
+    fun plan(draft: TyreDraft): TyrePlan = TyrePlans.build(current, draft.target)
 }
 
 /**
@@ -167,19 +170,17 @@ internal fun TyreIdsDialog(state: TechPanelUiState, actions: TyreIdsActions, onD
     // The last write when «Прописать» was tapped: a different one is the result of that tap.
     var writeFrom by remember { mutableStateOf<TpmsStatus?>(null) }
     val last = tpms.lastWrite
-    val ctx = TyreCtx(
-        state, actions, TpmsRepository.idsOf(tpms.lastRead),
-        readBack = last?.let { st -> TpmsWire.DIDS.map { did -> TpmsWire.parseSlot(did, slotOf(st, did)?.afterUds)?.id } }
-            ?: List(TpmsWire.DIDS.size) { null },
-        before = TpmsRepository.idsOf(last),
-    )
+    val ctx = TyreCtx(state, actions, TpmsRepository.idsOf(tpms.lastRead), before = TpmsRepository.idsOf(last))
     val go: (TyreStep, String) -> Unit = { next, why ->
         actions.onStep("step $step -> $next $why")
         step = next
     }
-    val result = last?.takeIf { step == TyreStep.RESULT && it !== writeFrom && tpms.phase == TpmsPhase.IDLE }
+    // The read on P after an incomplete write (READING) keeps the result on screen.
+    val result = last?.takeIf { step == TyreStep.RESULT && it !== writeFrom && tpms.phase != TpmsPhase.WRITING }
     // Until the repository's WRITING reaches this frame there is neither a result nor an error: still writing.
     val writing = step == TyreStep.RESULT && result == null && (tpms.phase == TpmsPhase.WRITING || tpms.error == null)
+    // While the window is open: after an incomplete write the repository reads the block once on a fresh P.
+    LaunchedEffect(state.gear, state.serviceRunning, tpms.phase) { actions.onParkAgain() }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         ScaledDialogContent {
@@ -231,8 +232,8 @@ internal fun TyreIdsDialog(state: TechPanelUiState, actions: TyreIdsActions, onD
                                     },
                                     onConfirmed = { d ->
                                         writeFrom = last
-                                        go(TyreStep.RESULT, "confirm2 write undo=${d.undo} plan=${planText(ctx.from(d), d.target)}")
-                                        if (d.undo) actions.onUndo(ctx.from(d)) else actions.onWrite(d.target, d.set, d.wheel, ctx.from(d))
+                                        go(TyreStep.RESULT, "confirm2 write undo=${d.undo} plan=${planText(ctx.current, d.target)}")
+                                        if (d.undo) actions.onUndo(ctx.current) else actions.onWrite(d.target, d.set, d.wheel, ctx.current)
                                     },
                                     onUndo = {
                                         val (undoDraft, undoAgreed) = undoStart(ctx.before)
@@ -376,7 +377,7 @@ private fun ViewCar(ctx: TyreCtx, onHold: (Int) -> Unit) {
 @Composable
 private fun PlanCar(ctx: TyreCtx, draft: TyreDraft, draggable: Boolean, single: Boolean, onSwap: (Int, Int) -> Unit) {
     val context = LocalContext.current
-    val from = ctx.from(draft)
+    val from = ctx.current
     val shown = draft.target.mapIndexed { i, t -> TyrePlans.normalize(t) ?: from[i]?.let(::tyreHex) }
     val changed = shown.mapIndexed { i, id -> id != null && id != from[i]?.let(::tyreHex) }
     val bounds = remember { mutableStateMapOf<Int, Rect>() }
@@ -455,12 +456,11 @@ private fun ResultCar(result: TpmsStatus) {
         val did = TpmsWire.DIDS[i]
         val slot = slotOf(result, did)
         val after = TpmsWire.parseSlot(did, slot?.afterUds)
-        val (text, color) = when (slot?.verdict) {
-            null -> R.string.tyre_status_not_changed to TextMuted
-            TpmsVerdict.WRITTEN ->
-                if (after?.heard == true) R.string.tyre_status_written to AccentGreen else R.string.tyre_status_written_wait to SocYellow
-            TpmsVerdict.ALREADY -> R.string.tyre_status_in_block to TextMuted
-            else -> R.string.tyre_status_not_written to SocYellow
+        val text = resultStatusRes(slot?.verdict, after?.heard)
+        val color = when (text) {
+            R.string.tyre_status_not_changed, R.string.tyre_status_in_block -> TextMuted
+            R.string.tyre_status_written -> AccentGreen
+            else -> SocYellow
         }
         WheelTile(bar = if (color == TextMuted) AccentGreen else color, outline = null) {
             Text(wheelName(context, i), color = TextSecondary, fontSize = 14.sp, lineHeight = 17.sp, maxLines = 1)
@@ -468,6 +468,19 @@ private fun ResultCar(result: TpmsStatus) {
             Text(stringResource(text), color = color, fontSize = 12.sp, lineHeight = 15.sp)
         }
     }
+}
+
+/**
+ * The result tile text of a wheel by its [verdict] and whether the block hears the sensor after the
+ * write ([heard], null = not read back). UNVERIFIED (the `2E` went out, the read-back did not
+ * decide) asks for a read, never says «не записан».
+ */
+internal fun resultStatusRes(verdict: TpmsVerdict?, heard: Boolean?): Int = when (verdict) {
+    null -> R.string.tyre_status_not_changed
+    TpmsVerdict.WRITTEN -> if (heard == true) R.string.tyre_status_written else R.string.tyre_status_written_wait
+    TpmsVerdict.ALREADY -> R.string.tyre_status_in_block
+    TpmsVerdict.UNVERIFIED -> R.string.tyre_status_unverified
+    else -> R.string.tyre_status_not_written
 }
 
 /**
@@ -614,7 +627,7 @@ private fun ColumnScope.RightSide(
         TyreStep.PLAN -> {
             Scroll {
                 TyreHeader(stringResource(R.string.tyre_hd_changes))
-                DiffBox(ctx.from(draft), draft.target, sameText = R.string.tyre_diff_in_block)
+                DiffBox(ctx.current, draft.target, sameText = R.string.tyre_diff_in_block)
                 Text(
                     stringResource(R.string.tyre_plan_count, (plan as? TyrePlan.Ok)?.entries?.size ?: 0),
                     color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp),
@@ -669,7 +682,7 @@ private fun ColumnScope.RightSide(
         TyreStep.CONFIRM2 -> {
             Scroll {
                 TyreHeader(stringResource(R.string.tyre_hd_check))
-                DiffBox(ctx.from(draft), draft.target, sameText = R.string.tyre_status_unchanged)
+                DiffBox(ctx.current, draft.target, sameText = R.string.tyre_status_unchanged)
                 PlanProblem(plan)
                 BlockLine(ctx)
             }
@@ -738,8 +751,8 @@ private fun ColumnScope.SetsView(ctx: TyreCtx, cb: RightCallbacks) {
                 Modifier.weight(1f),
             )
         }
-        ctx.state.tpms.error?.let { tpmsErrorText(it) }?.let {
-            Text(stringResource(it), color = SocYellow, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+        ctx.state.tpms.error?.let { tpmsErrorString(it, ctx.state.tpms.securityWaitMin) }?.let {
+            Text(it, color = SocYellow, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
         }
     }
     val block = ctx.block
@@ -804,7 +817,8 @@ private fun ColumnScope.OneWheel(ctx: TyreCtx, draft: TyreDraft, plan: TyrePlan,
 /** The write running, then its read-back verdict and «Вернуть как было». */
 @Composable
 private fun ColumnScope.ResultSide(ctx: TyreCtx, result: TpmsStatus?, writing: Boolean, cb: RightCallbacks) {
-    val error = ctx.state.tpms.error
+    val tpms = ctx.state.tpms
+    val errorText = tpms.error?.let { tpmsErrorString(it, tpms.securityWaitMin) }
     Scroll {
         when {
             writing -> {
@@ -815,25 +829,31 @@ private fun ColumnScope.ResultSide(ctx: TyreCtx, result: TpmsStatus?, writing: B
             result == null -> {
                 // The start was refused before anything went to the car.
                 TyreHeader(stringResource(R.string.tyre_hd_not_done))
-                Text(stringResource(error?.let { tpmsErrorText(it) } ?: R.string.tyre_err_failed), color = SocYellow, fontSize = 15.sp)
+                Text(errorText ?: stringResource(R.string.tyre_err_failed), color = SocYellow, fontSize = 15.sp)
             }
-            ctx.state.tpms.lastWriteComplete -> {
+            tpms.lastWriteComplete -> {
                 TyreHeader(stringResource(R.string.tyre_hd_done))
                 Column(modifier = Modifier.fillMaxWidth().tyreBox(CardBorder)) {
                     Text(stringResource(R.string.tyre_done_ok), color = AccentGreen, fontSize = 15.sp, lineHeight = 22.sp)
                 }
             }
             else -> {
-                TyreHeader(stringResource(R.string.tyre_hd_not_done))
+                // Every ID read back as confirmed, but the job stopped before its end: the stop reason, not «Готово».
+                val reached = tpms.lastWriteTargetReached
+                TyreHeader(stringResource(if (reached) R.string.tyre_title_not_done else R.string.tyre_hd_not_done))
                 Column(modifier = Modifier.fillMaxWidth().tyreBox(SocYellow)) {
-                    Text(stringResource(R.string.tyre_done_partial), color = SocYellow, fontSize = 15.sp, lineHeight = 22.sp)
-                    error?.let { tpmsErrorText(it) }?.let { Text(stringResource(it), color = TextMuted, fontSize = 14.sp, lineHeight = 20.sp) }
+                    Text(
+                        stringResource(if (reached) R.string.tyre_done_stopped else R.string.tyre_done_partial),
+                        color = SocYellow, fontSize = 15.sp, lineHeight = 22.sp,
+                    )
+                    errorText?.let { Text(it, color = TextMuted, fontSize = 14.sp, lineHeight = 20.sp) }
                 }
             }
         }
         if (result != null) BlockLine(ctx)
     }
-    val changed = result != null && ctx.before.indices.any { ctx.before[it] != null && ctx.readBack[it] != null && ctx.before[it] != ctx.readBack[it] }
+    // Undo from the last read: the write's read-back, or the read on P after an incomplete write.
+    val changed = result != null && ctx.before.indices.any { ctx.before[it] != null && ctx.current[it] != null && ctx.before[it] != ctx.current[it] }
     Buttons(
         TyreButtonSpec(stringResource(R.string.tyre_undo), TyreButtonKind.WARN, changed && ctx.block == null) { cb.onUndo() },
         TyreButtonSpec(stringResource(R.string.tyre_close), TyreButtonKind.PRIMARY, ctx.state.tpms.phase != TpmsPhase.WRITING) {
@@ -1012,6 +1032,10 @@ private fun planErrorText(plan: TyrePlan): Int? = when (plan) {
         TyrePlanError.NOT_READ -> R.string.tyre_why_no_read
     }
 }
+
+@Composable
+private fun tpmsErrorString(error: TpmsError, waitMin: Int): String =
+    if (error == TpmsError.SECURITY_WAIT) stringResource(R.string.tyre_err_security_wait, waitMin) else stringResource(tpmsErrorText(error))
 
 private fun tpmsErrorText(error: TpmsError): Int = when (error) {
     TpmsError.NOT_PARK -> R.string.tyre_why_only_p

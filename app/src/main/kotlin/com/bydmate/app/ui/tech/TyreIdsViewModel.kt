@@ -39,7 +39,11 @@ class TyreIdsViewModel @Inject constructor(
     fun closeDialog() {
         Log.i(TAG, "ui window closed")
         _open.update { false }
+        tpmsRepository.onWindowClosed()
     }
+
+    /** The open window saw a new sample or a job end: after an incomplete write the repository reads once on P. */
+    fun onParkAgain() = tpmsRepository.onParkAgain()
 
     fun takeFromCar(name: TyreSetName) = tpmsRepository.takeFromCar(name)
 

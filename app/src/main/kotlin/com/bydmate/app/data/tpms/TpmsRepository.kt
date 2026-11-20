@@ -31,13 +31,15 @@ import java.util.Locale
 
 enum class TpmsPhase { IDLE, READING, WRITING }
 
-enum class TpmsError { NOT_PARK, DAEMON_UNREACHABLE, DAEMON_OUTDATED, BUSY, REFUSED, ABORTED, STATUS_LOST, NOT_L3 }
+enum class TpmsError { NOT_PARK, DAEMON_UNREACHABLE, DAEMON_OUTDATED, BUSY, REFUSED, ABORTED, STATUS_LOST, NOT_L3, SECURITY_WAIT }
 
 /**
  * The tyre window's state. [lastRead] = the last finished read (kept in prefs, shown while
  * driving); [canWrite] = that read has the exact Leopard 3 shape; [lastWrite] = the last write
- * result (for «Вернуть как было» and the result screen); [lastWriteComplete] = that result is
- * complete ([writeComplete] against its plan), set with it.
+ * result (for «Вернуть как было» and the result screen); [lastWriteTargetReached] = all four
+ * slots of that result read back as the target the user confirmed ([targetReached]), and
+ * [lastWriteComplete] = that, and the job ended DONE; both set with it. [securityWaitMin] = the
+ * minutes left of the security wait, with [TpmsError.SECURITY_WAIT].
  */
 data class TpmsUiState(
     val phase: TpmsPhase = TpmsPhase.IDLE,
@@ -47,6 +49,8 @@ data class TpmsUiState(
     val canWrite: Boolean = false,
     val lastWrite: TpmsStatus? = null,
     val lastWriteComplete: Boolean = false,
+    val lastWriteTargetReached: Boolean = false,
+    val securityWaitMin: Int = 0,
     val sets: TyreSets = TyreSets(),
 )
 
@@ -72,10 +76,21 @@ class TpmsRepository(
     private val _state = MutableStateFlow(initialState())
     val state: StateFlow<TpmsUiState> get() = _state
 
-    /** What the running write was for: the set update needs it when the result comes. */
-    private class PendingWrite(val plan: List<TpmsPlanEntry>, val written: TyreSetName?, val wheel: Int?, val undo: Boolean)
+    /**
+     * What the running write was for: the set update needs it when the result comes. [target] =
+     * the four IDs the confirmation showed as the result: its «было» with the plan applied.
+     */
+    private class PendingWrite(
+        val target: List<Int?>,
+        val written: TyreSetName?,
+        val wheel: Int?,
+        val undo: Boolean,
+    )
 
     @Volatile private var pending: PendingWrite? = null
+    @Volatile private var windowOpen = false
+    /** A write ended incomplete: the next fresh P sample in the open window reads the block once (D10). */
+    @Volatile private var parkReadArmed = false
     /** An edit before the saved sets came back from the database wins over them. */
     @Volatile private var setsTouched = false
     private val saveLock = Mutex()
@@ -92,11 +107,35 @@ class TpmsRepository(
     fun onWindowOpened() {
         val current = _state.value
         Log.i(TAG, "window opened phase=${current.phase} last_read_at=${current.lastReadAt ?: "-"} can_write=${current.canWrite}")
+        windowOpen = true
         if (current.phase != TpmsPhase.IDLE) return
         _state.update { it.copy(error = null) }
         if (parkGear() == null) return
+        // This read is the fresh one an incomplete write waits for.
+        parkReadArmed = false
         _state.update { it.copy(phase = TpmsPhase.READING) }
         scope.launch { runRead() }
+    }
+
+    /** The window closed: a fresh P sample no longer reads anything. */
+    fun onWindowClosed() {
+        Log.i(TAG, "window closed park_read_armed=$parkReadArmed")
+        windowOpen = false
+    }
+
+    /**
+     * A fresh P sample while the window is open (the window calls it on each one): after a write
+     * that ended incomplete the first one reads the block, once, so «Вернуть как было» starts from
+     * what the block holds now. Otherwise nothing happens.
+     */
+    fun onParkAgain() {
+        if (!parkReadArmed || !windowOpen || _state.value.phase != TpmsPhase.IDLE) return
+        val sample = liveSample()
+        if (sample == null || !isSampleFresh(sample, serviceRunning(), elapsedNow()) || sample.data.gear != GEAR_PARK) return
+        parkReadArmed = false
+        Log.i(TAG, "park again after an incomplete write: one read")
+        _state.update { it.copy(phase = TpmsPhase.READING) }
+        scope.launch { runRead(busyRetries = PARK_READ_BUSY_RETRIES) }
     }
 
     /** «Взять с машины»: [name] := the IDs of the last read, in wheel order. No car request. */
@@ -134,16 +173,19 @@ class TpmsRepository(
         startWrite(idsOf(_state.value.lastRead), target, shown, PendingWrite(emptyList(), written, wheel, undo = false))
     }
 
-    /** «Вернуть как было»: writes back the `before` IDs of the last write, as a new write; [shown] = the «было» it showed. */
+    /**
+     * «Вернуть как было»: writes back the `before` IDs of the last write, as a new write, against
+     * the last read (the write's read-back, or the read after it on P); [shown] = the «было» it showed.
+     */
     fun undoLastWrite(shown: List<Int?>) {
         val last = _state.value.lastWrite
         Log.i(TAG, "undo tap last_write=${last != null} shown=${idsText(shown)}")
         if (last == null) return
         val before = slotIds(last) { it.beforeUds }
-        val readBack = slotIds(last) { it.afterUds }
+        val current = idsOf(_state.value.lastRead)
         // The set that took the last write's order follows the undo too (order = what is in the car).
-        val set = TyreSetName.entries.singleOrNull { n -> _state.value.sets.of(n).ids == readBack.map { it?.let(::tyreHex) } }
-        startWrite(readBack, before.map { it?.let(::tyreHex) }, shown, PendingWrite(emptyList(), set, null, undo = true))
+        val set = TyreSetName.entries.singleOrNull { n -> _state.value.sets.of(n).ids == current.map { it?.let(::tyreHex) } }
+        startWrite(current, before.map { it?.let(::tyreHex) }, shown, PendingWrite(emptyList(), set, null, undo = true))
     }
 
     /**
@@ -190,7 +232,11 @@ class TpmsRepository(
                 "${WHEEL_NAMES[i]}=" + if (e == null) "same" else "${tyreHex(e.expectedOld)}>${tyreHex(e.newId)}"
             },
         )
-        pending = PendingWrite(plan, intent.written, intent.wheel, intent.undo)
+        val confirmed = TpmsWire.DIDS.mapIndexed { i, did -> plan.firstOrNull { it.did == did }?.newId ?: current[i] }
+        Log.i(TAG, "write target ${idsText(confirmed)}")
+        pending = PendingWrite(confirmed, intent.written, intent.wheel, intent.undo)
+        // A write starts only from the open window, also one opened while a scan held the daemon.
+        windowOpen = true
         _state.update { it.copy(phase = TpmsPhase.WRITING) }
         scope.launch { runWrite(plan) }
     }
@@ -207,10 +253,18 @@ class TpmsRepository(
         return gear
     }
 
-    private suspend fun runRead() {
+    /** [busyRetries]: starts again, a second apart, while the daemon answers busy (the pause after a write). */
+    private suspend fun runRead(busyRetries: Int = 0) {
         val gear = gearAddress()
-        val reply = runCatching { helper.tpmsReadStart(gear.device, gear.fid) }.getOrNull()
+        var reply = runCatching { helper.tpmsReadStart(gear.device, gear.fid) }.getOrNull()
         Log.i(TAG, "read start reply=${replyName(reply)}")
+        var retries = 0
+        while (reply == DtcScanner.START_BUSY && retries < busyRetries) {
+            delay(POLL_MS)
+            retries++
+            reply = runCatching { helper.tpmsReadStart(gear.device, gear.fid) }.getOrNull()
+            Log.i(TAG, "read start retry=$retries reply=${replyName(reply)}")
+        }
         if (reply != DtcScanner.START_OK) return fail(startError(reply))
         val status = poll(DtcWire.MODE_TPMS_READ) ?: return
         if (status.state != DtcWire.STATE_DONE) {
@@ -236,6 +290,11 @@ class TpmsRepository(
         Log.i(TAG, "write start reply=${replyName(reply)} gear=${gear.device}/${gear.fid} speed=${speed.device}/${speed.fid}")
         if (reply != DtcScanner.START_OK) {
             pending = null
+            val wait = if (reply == DtcScanner.START_REFUSED) runCatching { helper.tpmsStatus() }.getOrNull()?.securityWaitMs ?: 0L else 0L
+            if (wait > 0) {
+                Log.i(TAG, "write refused security_wait ms=$wait")
+                return failSecurityWait(wait)
+            }
             return fail(startError(reply))
         }
         val status = poll(DtcWire.MODE_TPMS_WRITE) ?: run { pending = null; return }
@@ -271,15 +330,16 @@ class TpmsRepository(
 
     /**
      * A write that ended in any terminal state may have written something: its result is kept for
-     * the result screen and «Вернуть как было», its read-back becomes the last read, and on a
-     * complete result the sets follow it.
+     * the result screen and «Вернуть как было», its read-back becomes the last read, and when the
+     * read-back is the confirmed target the sets follow it (also after a stop, D5). Incomplete,
+     * the next fresh P sample in the open window reads the block once ([onParkAgain]).
      */
     private fun finishWrite(status: TpmsStatus) {
         val intent = pending
         pending = null
-        val planned = intent?.plan.orEmpty()
         val readBack = slotIds(status) { it.afterUds }
-        val complete = writeComplete(status, planned)
+        val reached = intent != null && targetReached(status, intent.target)
+        val complete = reached && status.state == DtcWire.STATE_DONE
         status.slots.forEach { slot ->
             Log.i(
                 TAG,
@@ -287,18 +347,31 @@ class TpmsRepository(
                     "before=${parsedId(slot.did, slot.beforeUds)} after=${parsedId(slot.did, slot.afterUds)}",
             )
         }
-        Log.i(TAG, "write end state=${stateName(status.state)} reason=${status.reason.ifEmpty { "-" }} stopped_at=${status.stoppedAt.ifEmpty { "-" }} complete=$complete undo=${intent?.undo}")
+        Log.i(
+            TAG,
+            "write end state=${stateName(status.state)} reason=${status.reason.ifEmpty { "-" }} stopped_at=${status.stoppedAt.ifEmpty { "-" }} " +
+                "complete=$complete reached=$reached target=${intent?.target?.let(::idsText) ?: "-"} read_back=${idsText(readBack)} " +
+                "undo=${intent?.undo} security_wait_ms=${status.securityWaitMs}",
+        )
         val at = wallNow()
         prefs.edit().putString(KEY_LAST_WRITE, statusToJson(status, at)).apply()
-        _state.update { it.copy(lastWrite = status, lastWriteComplete = complete) }
+        _state.update { it.copy(lastWrite = status, lastWriteComplete = complete, lastWriteTargetReached = reached) }
         if (readBack.none { it == null }) saveRead(readBackAsRead(status), "write read-back")
         if (intent != null) {
-            changeSets("after write set=${intent.written ?: "-"} wheel=${intent.wheel ?: "-"} complete=$complete") {
-                TyreSetUpdate.afterWrite(it, intent.written, intent.wheel, readBack, complete)
+            changeSets("after write set=${intent.written ?: "-"} wheel=${intent.wheel ?: "-"} reached=$reached") {
+                TyreSetUpdate.afterWrite(it, intent.written, intent.wheel, idsOf(status), readBack, reached)
             }
         }
-        val error = if (status.state == DtcWire.STATE_DONE) null else errorOf(status)
-        _state.update { it.copy(phase = TpmsPhase.IDLE, error = error) }
+        parkReadArmed = !complete
+        if (parkReadArmed) Log.i(TAG, "write incomplete: the next fresh P sample in the open window reads the block once")
+        endWrite(status)
+    }
+
+    /** The phase back to IDLE with the stop reason of [status]; a security stop says how long to wait. */
+    private fun endWrite(status: TpmsStatus) = when {
+        status.state == DtcWire.STATE_DONE -> _state.update { it.copy(phase = TpmsPhase.IDLE, error = null) }
+        status.reason.startsWith(SECURITY_PREFIX) && status.securityWaitMs > 0 -> failSecurityWait(status.securityWaitMs)
+        else -> _state.update { it.copy(phase = TpmsPhase.IDLE, error = errorOf(status)) }
     }
 
     private fun saveRead(status: TpmsStatus, source: String) {
@@ -318,6 +391,13 @@ class TpmsRepository(
     private fun fail(error: TpmsError) {
         Log.i(TAG, "end error=$error")
         _state.update { it.copy(phase = TpmsPhase.IDLE, error = error) }
+    }
+
+    /** The block took no key or holds attempts: the window says how many minutes until the next try. */
+    private fun failSecurityWait(waitMs: Long) {
+        val minutes = ((waitMs + MINUTE_MS - 1) / MINUTE_MS).toInt()
+        Log.i(TAG, "end error=${TpmsError.SECURITY_WAIT} wait_ms=$waitMs minutes=$minutes")
+        _state.update { it.copy(phase = TpmsPhase.IDLE, error = TpmsError.SECURITY_WAIT, securityWaitMin = minutes) }
     }
 
     /** Applies [change] to the sets; a real change is logged before → after and saved. */
@@ -366,6 +446,10 @@ class TpmsRepository(
         private const val POLL_MS = 1_000L
         private const val MAX_LOST_POLLS = 3
         private const val START_OUTDATED = -2
+        private const val MINUTE_MS = 60_000L
+        private const val SECURITY_PREFIX = "security_"
+        /** The read after an incomplete write: busy answers waited out, the daemon's 6 s pause after a write and some. */
+        private const val PARK_READ_BUSY_RETRIES = 8
         private val WHEEL_NAMES = listOf("FL", "FR", "RL", "RR")
 
         /** The IDs of [status]'s slots (as read before any write), FL..RR; null = not read. */
@@ -376,17 +460,10 @@ class TpmsRepository(
             TpmsWire.parseSlot(did, status?.slots?.firstOrNull { it.did == did }?.beforeUds)
         }
 
-        /**
-         * Every entry of [plan] came back WRITTEN or ALREADY, all four slots were read back, and
-         * the read-back is the target: the new ID on a planned wheel, the daemon's fresh read on the others.
-         */
-        fun writeComplete(status: TpmsStatus, plan: List<TpmsPlanEntry>): Boolean {
-            if (plan.isEmpty()) return false
+        /** All four slots were read back and equal [target], the four IDs the user confirmed (FL..RR). */
+        fun targetReached(status: TpmsStatus, target: List<Int?>): Boolean {
             val readBack = slotIds(status) { it.afterUds }
-            val target = TpmsWire.DIDS.zip(idsOf(status)) { did, before -> plan.firstOrNull { it.did == did }?.newId ?: before }
-            val verdicts = plan.map { e -> status.slots.firstOrNull { it.did == e.did }?.verdict }
-            return readBack.none { it == null } && readBack == target &&
-                verdicts.all { it == TpmsVerdict.WRITTEN || it == TpmsVerdict.ALREADY }
+            return target.size == TpmsWire.DIDS.size && readBack.none { it == null } && readBack == target
         }
 
         /** The `--- tpms ---` dump section: last read, sets, last write and the daemon's job state. Never starts a job. */
@@ -409,7 +486,8 @@ class TpmsRepository(
             }
             lines += "sets: " + setsText(TyreSetsCodec.fromJson(setsJson))
             lines += if (daemon == null) "daemon: unreachable" else
-                "daemon: state=${stateName(daemon.state)} mode=${modeName(daemon.mode)} reason=${daemon.reason.ifEmpty { "-" }}"
+                "daemon: state=${stateName(daemon.state)} mode=${modeName(daemon.mode)} reason=${daemon.reason.ifEmpty { "-" }}" +
+                    if (daemon.securityWaitMs > 0) " security_wait_ms=${daemon.securityWaitMs}" else ""
             return lines
         }
 

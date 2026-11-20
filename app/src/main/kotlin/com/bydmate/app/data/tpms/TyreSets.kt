@@ -110,21 +110,33 @@ object TyrePlans {
 
 object TyreSetUpdate {
     /**
-     * Sets after a write. [complete] = every planned wheel came back WRITTEN and all four slots
-     * were read back; otherwise the sets stay as they were. [written] = the set the user wrote
-     * from the table: it becomes [readBack] (so a dragged order is kept). [written] null = a
-     * single wheel: the set whose other three IDs equal [readBack]'s other three ([wheel] is the
-     * written index) takes [readBack]; when no set matches, nothing changes.
+     * Sets after a write. [complete] = all four slots were read back as the confirmed target;
+     * otherwise the sets stay as they were. [written] = the set the user wrote from the table: it
+     * becomes [readBack] (so a dragged order is kept). [written] null = a single wheel ([wheel] is
+     * the written index): the set whose four IDs equal [before] (the block before the write) takes
+     * [readBack]; without one, the only set whose other three IDs equal [readBack]'s other three;
+     * when no set matches, nothing changes.
      */
-    fun afterWrite(sets: TyreSets, written: TyreSetName?, wheel: Int?, readBack: List<Int?>, complete: Boolean): TyreSets {
+    @Suppress("LongParameterList") // the sets, what was written and the block before and after it
+    fun afterWrite(
+        sets: TyreSets,
+        written: TyreSetName?,
+        wheel: Int?,
+        before: List<Int?>,
+        readBack: List<Int?>,
+        complete: Boolean,
+    ): TyreSets {
         if (!complete || readBack.size != WHEELS || readBack.any { it == null }) return sets
         val back = TyreSet(readBack.map { tyreHex(it!!) })
         val name = written ?: run {
             val w = wheel ?: return sets
-            // Only an unambiguous match: the set on the car is the one whose other three wheels agree.
-            TyreSetName.entries.singleOrNull { n ->
-                (0 until WHEELS).all { it == w || sets.of(n).ids.getOrNull(it) == back.ids[it] }
-            } ?: return sets
+            val was = before.map { it?.let(::tyreHex) }
+            TyreSetName.entries.firstOrNull { n -> was.none { it == null } && sets.of(n).ids == was }
+                // Only an unambiguous match: the set on the car is the one whose other three wheels agree.
+                ?: TyreSetName.entries.singleOrNull { n ->
+                    (0 until WHEELS).all { it == w || sets.of(n).ids.getOrNull(it) == back.ids[it] }
+                }
+                ?: return sets
         }
         return if (name == TyreSetName.WINTER) sets.copy(winter = back) else sets.copy(summer = back)
     }

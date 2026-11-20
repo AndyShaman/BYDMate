@@ -148,6 +148,7 @@ fun TechPanelScreen(
                 onWrite = tyreViewModel::write,
                 onUndo = tyreViewModel::undo,
                 onStep = tyreViewModel::logStep,
+                onParkAgain = tyreViewModel::onParkAgain,
             ),
             onDismiss = tyreViewModel::closeDialog,
         )

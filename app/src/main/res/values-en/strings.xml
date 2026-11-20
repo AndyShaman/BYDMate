@@ -2241,6 +2241,7 @@
     <string name="tyre_status_written">written</string>
     <string name="tyre_status_written_wait">written, waiting for signal</string>
     <string name="tyre_status_not_written">not written</string>
+    <string name="tyre_status_unverified">Not checked, read the block</string>
     <string name="tyre_diff_in_block">already in the unit</string>
     <string name="tyre_title_plan_winter">Write winter set</string>
     <string name="tyre_title_plan_summer">Write summer set</string>
@@ -2275,11 +2276,13 @@
     <string name="tyre_hd_not_done">Not everything was written</string>
     <string name="tyre_done_ok">The unit took the IDs, the read-back has everything in place.</string>
     <string name="tyre_done_partial">Not everything was written. Check the IDs on the tiles on the left.</string>
+    <string name="tyre_done_stopped">The IDs are in place, but the write stopped before its final check.</string>
     <string name="tyre_after_hint">A tile turns green once the unit hears the sensor.</string>
     <string name="tyre_undo">Undo</string>
     <string name="tyre_hd_undo">As before the write</string>
     <string name="tyre_err_failed">Could not reach the unit. Please try again.</string>
     <string name="tyre_err_lost">Could not find out how the write ended. Open the window again in P.</string>
+    <string name="tyre_err_security_wait">The wheel block does not allow writing yet. Try again in %1$d min.</string>
     <string name="tyre_why_busy">A fault-code scan is running, please wait.</string>
     <string name="tyre_why_no_read">IDs not read yet: open this window in P.</string>
     <string name="tyre_why_only_p">Writing is possible only in P.</string>

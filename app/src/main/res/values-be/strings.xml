@@ -2396,6 +2396,7 @@
     <string name="tyre_status_written">запісаны</string>
     <string name="tyre_status_written_wait">запісаны, чакаем сігналу</string>
     <string name="tyre_status_not_written">не запісаны</string>
+    <string name="tyre_status_unverified">Не праверана, прачытайце блок</string>
     <string name="tyre_diff_in_block">ужо ў блоку</string>
     <string name="tyre_title_plan_winter">Прапісаць зімовы камплект</string>
     <string name="tyre_title_plan_summer">Прапісаць летні камплект</string>
@@ -2430,11 +2431,13 @@
     <string name="tyre_hd_not_done">Не ўсё запісалася</string>
     <string name="tyre_done_ok">Блок прыняў нумары, пры чытанні ўсё на сваіх месцах.</string>
     <string name="tyre_done_partial">Запісалася не ўсё. Праверце нумары на плашках злева.</string>
+    <string name="tyre_done_stopped">Нумары на сваіх месцах, але запіс спыніўся да канца праверкі.</string>
     <string name="tyre_after_hint">Плашка стане зялёнай, калі блок пачуе датчык.</string>
     <string name="tyre_undo">Вярнуць як было</string>
     <string name="tyre_hd_undo">Як было да запісу</string>
     <string name="tyre_err_failed">Не ўдалося звязацца з блокам. Паспрабуйце яшчэ раз.</string>
     <string name="tyre_err_lost">Не ўдалося даведацца, чым скончыўся запіс. Адкрыйце акно яшчэ раз на P.</string>
+    <string name="tyre_err_security_wait">Блок колаў пакуль не дае запісаць. Паспрабуйце зноў праз %1$d хв.</string>
     <string name="tyre_why_busy">Цяпер ідзе праверка памылак, пачакайце.</string>
     <string name="tyre_why_no_read">Нумары яшчэ не прачытаны: адкрыйце гэта акно на P.</string>
     <string name="tyre_why_only_p">Прапісаць можна толькі на P.</string>

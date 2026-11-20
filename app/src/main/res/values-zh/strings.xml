@@ -2346,6 +2346,7 @@
     <string name="tyre_status_written">已写入</string>
     <string name="tyre_status_written_wait">已写入，等待信号</string>
     <string name="tyre_status_not_written">未写入</string>
+    <string name="tyre_status_unverified">未核实，请读取模块</string>
     <string name="tyre_diff_in_block">已在模块中</string>
     <string name="tyre_title_plan_winter">写入冬季套装</string>
     <string name="tyre_title_plan_summer">写入夏季套装</string>
@@ -2380,11 +2381,13 @@
     <string name="tyre_hd_not_done">未全部写入</string>
     <string name="tyre_done_ok">模块已接受编号，读取结果全部正确。</string>
     <string name="tyre_done_partial">未全部写入。请检查左侧方块上的编号。</string>
+    <string name="tyre_done_stopped">编号已就位，但写入在最终检查前停止。</string>
     <string name="tyre_after_hint">模块收到传感器信号后，方块会变为绿色。</string>
     <string name="tyre_undo">恢复原样</string>
     <string name="tyre_hd_undo">写入前的状态</string>
     <string name="tyre_err_failed">无法连接模块。请重试。</string>
     <string name="tyre_err_lost">无法确定写入结果。请在 P 挡再次打开窗口。</string>
+    <string name="tyre_err_security_wait">轮胎模块暂不允许写入。请 %1$d 分钟后再试。</string>
     <string name="tyre_why_busy">正在进行故障码检查，请稍候。</string>
     <string name="tyre_why_no_read">编号尚未读取：请在 P 挡打开此窗口。</string>
     <string name="tyre_why_only_p">只能在 P 挡写入。</string>

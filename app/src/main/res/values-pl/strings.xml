@@ -2396,6 +2396,7 @@
     <string name="tyre_status_written">zapisany</string>
     <string name="tyre_status_written_wait">zapisany, czekamy na sygnał</string>
     <string name="tyre_status_not_written">nie zapisany</string>
+    <string name="tyre_status_unverified">Niesprawdzony, odczytaj blok</string>
     <string name="tyre_diff_in_block">już w module</string>
     <string name="tyre_title_plan_winter">Wpisz komplet zimowy</string>
     <string name="tyre_title_plan_summer">Wpisz komplet letni</string>
@@ -2430,11 +2431,13 @@
     <string name="tyre_hd_not_done">Nie wszystko się zapisało</string>
     <string name="tyre_done_ok">Moduł przyjął numery, w odczycie wszystko na swoich miejscach.</string>
     <string name="tyre_done_partial">Nie wszystko się zapisało. Sprawdź numery na kafelkach po lewej.</string>
+    <string name="tyre_done_stopped">Numery są na swoich miejscach, ale zapis zatrzymał się przed końcem sprawdzania.</string>
     <string name="tyre_after_hint">Kafelek zrobi się zielony, gdy moduł usłyszy czujnik.</string>
     <string name="tyre_undo">Przywróć jak było</string>
     <string name="tyre_hd_undo">Jak przed zapisem</string>
     <string name="tyre_err_failed">Nie udało się połączyć z modułem. Spróbuj ponownie.</string>
     <string name="tyre_err_lost">Nie udało się ustalić, jak zakończył się zapis. Otwórz okno ponownie na P.</string>
+    <string name="tyre_err_security_wait">Blok kół na razie nie pozwala na zapis. Spróbuj ponownie za %1$d min.</string>
     <string name="tyre_why_busy">Trwa sprawdzanie błędów, poczekaj.</string>
     <string name="tyre_why_no_read">Numery jeszcze nie odczytane: otwórz to okno na P.</string>
     <string name="tyre_why_only_p">Wpisać można tylko na P.</string>

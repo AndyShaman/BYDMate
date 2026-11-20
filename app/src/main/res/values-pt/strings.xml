@@ -2242,6 +2242,7 @@
     <string name="tyre_status_written">gravado</string>
     <string name="tyre_status_written_wait">gravado, à espera do sinal</string>
     <string name="tyre_status_not_written">não gravado</string>
+    <string name="tyre_status_unverified">Não verificado, leia o bloco</string>
     <string name="tyre_diff_in_block">já no módulo</string>
     <string name="tyre_title_plan_winter">Gravar conjunto de inverno</string>
     <string name="tyre_title_plan_summer">Gravar conjunto de verão</string>
@@ -2276,11 +2277,13 @@
     <string name="tyre_hd_not_done">Nem tudo foi gravado</string>
     <string name="tyre_done_ok">O módulo aceitou os números, na leitura está tudo no lugar.</string>
     <string name="tyre_done_partial">Nem tudo foi gravado. Verifique os números nos blocos à esquerda.</string>
+    <string name="tyre_done_stopped">Os números estão nos lugares, mas a gravação parou antes da verificação final.</string>
     <string name="tyre_after_hint">O bloco fica verde quando o módulo ouvir o sensor.</string>
     <string name="tyre_undo">Repor como estava</string>
     <string name="tyre_hd_undo">Como antes da gravação</string>
     <string name="tyre_err_failed">Não foi possível contactar o módulo. Tente novamente.</string>
     <string name="tyre_err_lost">Não foi possível saber como terminou a gravação. Abra a janela de novo em P.</string>
+    <string name="tyre_err_security_wait">O bloco das rodas ainda não permite gravar. Tente de novo em %1$d min.</string>
     <string name="tyre_why_busy">Está a decorrer a verificação de erros, aguarde.</string>
     <string name="tyre_why_no_read">Números ainda não lidos: abra esta janela em P.</string>
     <string name="tyre_why_only_p">Só é possível gravar em P.</string>
