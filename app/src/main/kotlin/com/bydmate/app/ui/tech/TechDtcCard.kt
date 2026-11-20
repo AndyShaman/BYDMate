@@ -199,6 +199,13 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
 }
 
 /**
+ * The changes the row names after a second check: (reflashed, answered before and silent now).
+ * «без изменений» only when both are 0.
+ */
+internal fun firmwareRowChanges(rows: List<com.bydmate.app.data.dtc.FirmwareRow>): Pair<Int, Int> =
+    rows.count { it.change == FirmwareChange.UPDATED } to rows.count { it.change == FirmwareChange.GONE }
+
+/**
  * «Прошивки блоков · 20.11 · без изменений ›» over the scan button; blue «Магнитола обновилась ·
  * проверить прошивки ›» when the head-unit build changed since the last check. A tap opens the
  * window and reads nothing.
@@ -213,8 +220,11 @@ private fun FirmwareRow(fw: FirmwareUiState, onOpen: () -> Unit) {
             fw.phase == FirmwarePhase.CHECKING -> stringResource(R.string.tech_fw_row_checking, fw.done, fw.total)
             last == null -> stringResource(R.string.tech_fw_row_never)
             fw.history.size < 2 -> stringResource(R.string.tech_fw_row_checked)
-            else -> fw.rows.count { it.change == FirmwareChange.UPDATED }.let { n ->
-                if (n > 0) stringResource(R.string.tech_fw_row_updated, n) else stringResource(R.string.tech_fw_row_unchanged)
+            else -> firmwareRowChanges(fw.rows).let { (updated, gone) ->
+                listOfNotNull(
+                    if (updated > 0) stringResource(R.string.tech_fw_row_updated, updated) else null,
+                    if (gone > 0) stringResource(R.string.tech_fw_row_gone, gone) else null,
+                ).ifEmpty { listOf(stringResource(R.string.tech_fw_row_unchanged)) }.joinToString(" · ")
             }
         }
         val date = last?.takeIf { fw.phase == FirmwarePhase.IDLE }?.let { SimpleDateFormat("dd.MM", Locale.getDefault()).format(Date(it.at)) }

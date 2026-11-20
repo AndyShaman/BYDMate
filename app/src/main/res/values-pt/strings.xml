@@ -2120,6 +2120,7 @@
     <string name="tech_fw_row_unchanged">sem alterações</string>
     <string name="tech_fw_row_checked">verificado</string>
     <string name="tech_fw_row_updated">atualizados: %1$d</string>
+    <string name="tech_fw_row_gone">sem resposta: %1$d</string>
     <string name="tech_fw_row_checking">a ler %1$d de %2$d</string>
     <string name="tech_fw_row_hu">Central multimídia atualizada · verificar firmware</string>
     <string name="tech_fw_sub_last">última verificação %1$s</string>

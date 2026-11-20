@@ -666,7 +666,7 @@ object HelperBinderProtocol {
 
     /**
      * Block firmware check: per address of DtcWire.ADDRESSES `22 F1 94`, then `22 F1 95` only
-     * when F194 answered; nothing else (allowlist before every frame). On the scan's thread and
+     * when the block answered F194 (positive or negative); nothing else (allowlist before every frame). On the scan's thread and
      * state; gates as for a scan (the 180 s budget, the guard property at its idle value, the gear
      * read live == P, the 2 s passive listen first). Result through [TX_DIAG_JOB_STATUS] (mode 4).
      *

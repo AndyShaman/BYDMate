@@ -2269,6 +2269,7 @@
     <string name="tech_fw_row_unchanged">bez zmian</string>
     <string name="tech_fw_row_checked">sprawdzono</string>
     <string name="tech_fw_row_updated">zaktualizowane: %1$d</string>
+    <string name="tech_fw_row_gone">brak odpowiedzi: %1$d</string>
     <string name="tech_fw_row_checking">odczyt %1$d z %2$d</string>
     <string name="tech_fw_row_hu">Jednostka centralna zaktualizowana · sprawdź oprogramowanie</string>
     <string name="tech_fw_sub_last">ostatnie sprawdzenie %1$s</string>

@@ -2234,6 +2234,7 @@
     <string name="tech_fw_row_unchanged">无变化</string>
     <string name="tech_fw_row_checked">已检查</string>
     <string name="tech_fw_row_updated">已刷新：%1$d</string>
+    <string name="tech_fw_row_gone">无应答：%1$d</string>
     <string name="tech_fw_row_checking">读取中 %1$d / %2$d</string>
     <string name="tech_fw_row_hu">车机已更新 · 检查固件</string>
     <string name="tech_fw_sub_last">上次检查 %1$s</string>

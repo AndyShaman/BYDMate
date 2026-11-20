@@ -2,7 +2,8 @@ package com.bydmate.app.helper.dtc
 
 /**
  * The firmware check (CONTEXT.md «Прошивки блоков»): per address of [DtcWire.ADDRESSES] `22 F1 94`,
- * then `22 F1 95` only when F194 got an answer. Read gates as for a scan, run on the scanner's
+ * then `22 F1 95` only when the block itself answered F194 (positive or negative; not silence, not
+ * a gateway result). Read gates as for a scan, run on the scanner's
  * thread through a [DiagLink] whose policy carries [EcuFirmwareWire.allowed].
  */
 internal object FirmwareJob {
@@ -32,7 +33,7 @@ internal object FirmwareJob {
             var outcome = outcomeOf(id)
             val f194 = udsOf(id, DtcWire.SERVICE_READ_DID)
             var f195: ByteArray? = null
-            if (id is DtcMatch.Answer) {
+            if (id is DtcMatch.Answer || id is DtcMatch.Nrc) {
                 val sw = run.link.request(addr, EcuFirmwareWire.softwareRequest(addr), DtcWire.SERVICE_READ_DID, EcuFirmwareWire.DID_SOFTWARE)
                 outcome = outcomeOf(sw)
                 f195 = udsOf(sw, DtcWire.SERVICE_READ_DID)

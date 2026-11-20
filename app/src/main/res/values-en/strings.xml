@@ -2124,6 +2124,7 @@
     <string name="tech_fw_row_unchanged">unchanged</string>
     <string name="tech_fw_row_checked">checked</string>
     <string name="tech_fw_row_updated">reflashed: %1$d</string>
+    <string name="tech_fw_row_gone">no answer: %1$d</string>
     <string name="tech_fw_row_checking">reading %1$d of %2$d</string>
     <string name="tech_fw_row_hu">Head unit updated · check firmware</string>
     <string name="tech_fw_sub_last">last check %1$s</string>

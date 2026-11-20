@@ -11,6 +11,7 @@ import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.helper.dtc.DtcScanner
 import com.bydmate.app.helper.dtc.DtcWire
+import com.bydmate.app.helper.dtc.EcuFirmwareWire
 import com.bydmate.app.helper.dtc.FirmwareStatus
 import com.bydmate.app.ui.automation.isSampleFresh
 import kotlinx.coroutines.CoroutineScope
@@ -135,6 +136,15 @@ class EcuFirmwareRepository(
     }
 
     private fun finish(status: FirmwareStatus) {
+        if (status.results.none { EcuFirmwareWire.parse(it.f195Uds) != null }) {
+            // A run that read no version at all is not a check: the history and the head-unit highlight stay.
+            Log.w(
+                TAG,
+                "check end no parseable f195, not saved: blocks=${status.results.size} " +
+                    "f194=${status.results.count { it.f194Uds != null }} f195=${status.results.count { it.f195Uds != null }}",
+            )
+            return fail(DtcScanError.ABORTED)
+        }
         val check = FirmwareCheck(wallNow(), huBuild(), status.results.map { FirmwareBlock(it.addr, it.f194Uds, it.f195Uds) })
         val history = EcuFirmwareDiff.append(_state.value.history, check)
         val json = EcuFirmwareDiff.toJson(history)

@@ -2283,6 +2283,7 @@
     <string name="tech_fw_row_unchanged">без изменений</string>
     <string name="tech_fw_row_checked">проверено</string>
     <string name="tech_fw_row_updated">перепрошились: %1$d</string>
+    <string name="tech_fw_row_gone">не ответили: %1$d</string>
     <string name="tech_fw_row_checking">читаем %1$d из %2$d</string>
     <string name="tech_fw_row_hu">Магнитола обновилась · проверить прошивки</string>
     <string name="tech_fw_sub_last">последняя проверка %1$s</string>
