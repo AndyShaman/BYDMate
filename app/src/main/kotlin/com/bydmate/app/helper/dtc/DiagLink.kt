@@ -7,7 +7,7 @@ internal class DiagStop(val state: Int, val reason: String, val at: String = "")
 
 /**
  * How one job talks through [DiagLink]: its whole budget, whether the speed must read exactly 0
- * before every request ([speedGate], unknown = refuse), whether any frame that is not ours or a
+ * before every request ([speedGate], unknown = refuse; the gear is then read again after it), whether any frame that is not ours or a
  * duplicate of ours stops the run ([strictTraffic]), the pause after an answer, how often a
  * busy gateway gets the request again, whether a `7F xx 78` answer restarts the window
  * ([pendingWindowMs] > 0, at most [MAX_PENDINGS] times) and the outgoing allowlist [allow],
@@ -52,6 +52,8 @@ internal class DiagLink(
     private val ours = ArrayList<ByteArray>()
     /** New `7F xx 78` answers in the current wait. */
     private var pendings = 0
+    /** The `7F xx 78` frames of the current wait: only their copies are repeats, not another request's (D4). */
+    private val waitPendings = ArrayList<ByteArray>()
     /**
      * Inside the tyre write's extended session: a multi-frame, a truncated frame or an empty
      * gateway timeout cannot be told apart from another sender's and stops the run as foreign.
@@ -104,8 +106,10 @@ internal class DiagLink(
         val values = if (gated) {
             val gearValue = gear()
             val speed = if (policy.speedGate) readSpeed() else null
-            gate(guard, gearValue, speed, at)?.let { throw it }
-            "gear=$gearValue" + if (policy.speedGate) " speed=$speed guard=$guard" else ""
+            // The speed read blocks: a gear moved out of P meanwhile must still stop the request (D3).
+            val gearAgain = if (policy.speedGate && gearValue == GEAR_PARK) gear() else gearValue
+            gate(guard, gearAgain, speed, at)?.let { throw it }
+            "gear=$gearValue" + if (policy.speedGate) " speed=$speed gear2=$gearAgain guard=$guard" else ""
         } else {
             exitGate(guard, at)?.let { throw it }
             "exit guard=$guard"
@@ -160,6 +164,7 @@ internal class DiagLink(
     private fun await(start: Long, at: String, match: (ByteArray) -> DtcMatch): Pair<DtcMatch, ByteArray>? {
         var deadline = start
         pendings = 0
+        waitPendings.clear()
         while (true) {
             val left = deadline - clock.nowMs()
             val frame = (if (left > 0) device.poll(left) else null) ?: return null
@@ -177,11 +182,12 @@ internal class DiagLink(
     }
 
     /**
-     * A `7F xx 78`: keep waiting, and under [LinkPolicy.pendingWindowMs] a new one (not the
-     * gateway's copy) restarts the window; the deadline, or null after too many.
+     * A `7F xx 78`: keep waiting, and under [LinkPolicy.pendingWindowMs] a new one of this wait (not
+     * the gateway's copy) restarts the window; the deadline, or null after too many.
      */
     private fun pending(frame: ByteArray, at: String, deadline: Long): Long? {
-        val repeat = ours.any { sameFrame(it, frame) }
+        val repeat = waitPendings.any { sameFrame(it, frame) }
+        waitPendings += frame
         if (policy.strictTraffic) ours += frame
         var next = deadline
         if (policy.pendingWindowMs > 0 && !repeat) {
@@ -191,7 +197,7 @@ internal class DiagLink(
             }
             next = clock.nowMs() + policy.pendingWindowMs
         }
-        log("pending $at ms_left=${next - clock.nowMs()}")
+        log("pending $at repeat=$repeat ms_left=${next - clock.nowMs()}")
         return next
     }
 

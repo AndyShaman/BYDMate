@@ -152,15 +152,15 @@ enum class TpmsJobKind { READ, WRITE }
  * The outgoing allowlist of one tyre job run (design B.1), checked right before every send.
  * Stateful: [onSeed] records the `67 01` seed of this run; `27 02` passes once and only with the
  * key of that seed; each `2E` entry passes once. Address 0x720 only. No `27` passes while
- * [latched] (read live, at the send) holds; [onKeySent] runs as the one `27 02` is let through.
+ * [securityWait] (read live, at the send) holds; [onKeySent] runs as the one `27 02` is let through.
  */
 class TpmsGuard(
     private val kind: TpmsJobKind,
     private val plan: List<TpmsPlanEntry>,
-    private val latched: () -> Boolean,
+    private val securityWait: () -> Boolean,
     private val onKeySent: () -> Unit = {},
 ) {
-    constructor(kind: TpmsJobKind, plan: List<TpmsPlanEntry>, latched: Boolean) : this(kind, plan, { latched })
+    constructor(kind: TpmsJobKind, plan: List<TpmsPlanEntry>, securityWait: Boolean) : this(kind, plan, { securityWait })
 
     private var key: ByteArray? = null
     private var keyUsed = false
@@ -177,7 +177,7 @@ class TpmsGuard(
         return when (uds[0].toInt() and 0xFF) {
             TpmsWire.SERVICE_SESSION -> uds.contentEquals(TpmsWire.sessionRequest(TpmsWire.SESSION_EXTENDED)) ||
                 uds.contentEquals(TpmsWire.sessionRequest(TpmsWire.SESSION_DEFAULT))
-            TpmsWire.SERVICE_SECURITY -> !latched() && security(uds)
+            TpmsWire.SERVICE_SECURITY -> !securityWait() && security(uds)
             TpmsWire.SERVICE_WRITE_DID -> write(uds)
             else -> false
         }
@@ -224,12 +224,17 @@ class TpmsStatus(
     val dtcAfter: ByteArray?,
     val slots: List<TpmsSlotResult>,
     val stoppedAt: String,
+    /** Milliseconds until a tyre write may start (DtcScanner.securityWaitMs) when the status was asked; 0 = now. */
+    val securityWaitMs: Long = 0,
 )
 
 /** Upper bound of one UDS answer the parcel carries; a frame is at most 1024 bytes. */
 private const val MAX_UDS_BYTES = 1024
 private const val MAX_TEXT = 256
 private const val INT_BYTES = 4
+private const val LONG_BYTES = 8
+/** The longest wait [TpmsSecurity] gives: the 30 min after the third failure. */
+private const val MAX_SECURITY_WAIT_MS = TpmsSecurity.RESET_MS
 
 /** TX_DIAG_JOB_STATUS reply: see HelperBinderProtocol.TX_DIAG_JOB_STATUS. */
 fun writeTpmsStatus(p: Parcel, status: TpmsStatus) {
@@ -249,8 +254,19 @@ fun writeTpmsStatus(p: Parcel, status: TpmsStatus) {
     p.writeString(status.stoppedAt.take(MAX_TEXT))
 }
 
-/** Null on a truncated, oversized or unknown-state reply (the daemon writes -1 when it failed). */
+/**
+ * Null on a truncated, oversized or unknown-state reply (the daemon writes -1 when it failed).
+ * The security wait comes last in the reply, after the firmware part; a daemon without it reads 0.
+ */
 fun readTpmsStatus(p: Parcel): TpmsStatus? {
+    val s = readTpmsPart(p) ?: return null
+    val wait = if (readFirmwarePart(p) != null && p.dataAvail() >= LONG_BYTES) p.readLong() else 0L
+    if (wait !in 1..MAX_SECURITY_WAIT_MS) return s
+    return TpmsStatus(s.state, s.mode, s.reason, s.idUds, s.dtcBefore, s.dtcAfter, s.slots, s.stoppedAt, wait)
+}
+
+/** The tyre part of TX_DIAG_JOB_STATUS, the first in the reply. */
+internal fun readTpmsPart(p: Parcel): TpmsStatus? {
     if (p.dataAvail() < 2 * INT_BYTES) return null
     val state = p.readInt()
     if (state !in DtcWire.STATE_IDLE..DtcWire.STATE_ABORTED) return null

@@ -658,8 +658,8 @@ object HelperBinderProtocol {
      *
      * Request: [int gearDev, int gearFid, int speedDev, int speedFid, int n (1..4),
      *           n × (int did (0x3305..0x3308), int expectedOld, int newId)]
-     * Reply:   [int status: 0 = started, 1 = busy, -1 = refused (invalid plan or the security key
-     *           already failed in this daemon's lifetime; the reason goes to the log)]
+     * Reply:   [int status: 0 = started, 1 = busy, -1 = refused (invalid plan, or the security wait
+     *           after a failed key or an NRC 36/37 runs, see [TX_DIAG_JOB_STATUS]; the reason goes to the log)]
      * An old daemon without this handler makes transact return false → the client returns -2.
      */
     val TX_TPMS_WRITE_START: Int = IBinder.FIRST_CALL_TRANSACTION + 68  // 69
@@ -686,9 +686,10 @@ object HelperBinderProtocol {
      *         TpmsVerdict name)), String stoppedAt,
      *         then the firmware part: int state (IDLE when the last job was not a firmware check),
      *         int done, int total, String reason, int count,
-     *         count × (int addr, String outcome, byte[] f194Uds, byte[] f195Uds)]
+     *         count × (int addr, String outcome, byte[] f194Uds, byte[] f195Uds),
+     *         long securityWaitMs (ms until a tyre write may start, 0 = now)]
      * After a scan or an erase the mode is theirs and every tyre array is null. A daemon from
-     * before the firmware check ends after stoppedAt. A failed call answers a lone -1. An old
+     * before the firmware check ends after stoppedAt, one from before the security wait after the firmware part. A failed call answers a lone -1. An old
      * daemon without this handler makes transact return false → the client returns null.
      */
     val TX_DIAG_JOB_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 70  // 71

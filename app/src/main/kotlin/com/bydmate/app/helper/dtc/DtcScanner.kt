@@ -64,11 +64,8 @@ class DtcScanner(
     private val erase = ArrayList<DtcEraseResult>()
     private var tpms: TpmsJobs.Run? = null
     private var firmware: FirmwareJob.Run? = null
-    /**
-     * Set as a `27 02` goes to 0x720 and cleared only by exactly `67 02`: after a failed or unknown
-     * key no further tyre write for this daemon's lifetime.
-     */
-    @Volatile private var securityLatched = false
+    /** The tyre write's security attempts: the pause after a failed key and the lockout of NRC 36/37. */
+    private val security = TpmsSecurity()
     /** A tyre write that left the extended session unconfirmed: no job starts before this time (S3). */
     private var quietUntilMs = Long.MIN_VALUE
 
@@ -100,7 +97,7 @@ class DtcScanner(
      * 0 started, 1 busy, -1 refused. Read gates as for a scan.
      */
     fun startTpmsRead(gear: () -> Int?): Int {
-        val guard = TpmsGuard(TpmsJobKind.READ, emptyList(), securityLatched)
+        val guard = TpmsGuard(TpmsJobKind.READ, emptyList(), false)
         val run = TpmsJobs.Run(link(gear, tpmsPolicy(guard, speedGate = false, strict = false)), guard, emptyList())
         return launch(DtcWire.MODE_TPMS_READ, IntArray(0), run) {
             execute(run.link, { TpmsJobs.read(run) }) { TpmsJobs.close(run, it, DtcWire.MODE_TPMS_READ) }
@@ -108,8 +105,8 @@ class DtcScanner(
     }
 
     /**
-     * Writes [plan] to 0x720 per design B.3: 0 started, 1 busy, -1 refused (invalid plan, or the
-     * security key already failed in this daemon's lifetime; nothing is sent). Gates as for an
+     * Writes [plan] to 0x720 per design B.3: 0 started, 1 busy, -1 refused (invalid plan, or a
+     * security wait of [TpmsSecurity] runs, [securityWaitMs]; nothing is sent). Gates as for an
      * erase (P, speed exactly 0, guard), strict traffic, one `27 02`, no resent `2E`. A stop for
      * stop once `10 03` went out still sends one `10 01`, except for the guard or a foreign frame,
      * after which nothing more is sent. Ended without a confirmed `50 01`, no job starts for
@@ -117,19 +114,21 @@ class DtcScanner(
      */
     fun startTpmsWrite(plan: List<TpmsPlanEntry>, accepted: () -> Unit = {}, gear: () -> Int?): Int {
         val planText = plan.joinToString(",") { "${hexAddr(it.did)}:%08X>%08X".format(it.expectedOld, it.newId) }
-        val refused = TpmsWire.validatePlan(plan) ?: "security_latched".takeIf { securityLatched }
+        val wait = securityWaitMs()
+        val refused = TpmsWire.validatePlan(plan) ?: "security_wait ms_left=$wait".takeIf { wait > 0 }
         if (refused != null) {
             log("tpms write refused $refused plan=$planText")
             return START_REFUSED
         }
-        val guard = TpmsGuard(TpmsJobKind.WRITE, plan, latched = { securityLatched }, onKeySent = {
-            securityLatched = true
-            log("tpms security latched at the key send")
-        })
+        val guard = TpmsGuard(
+            TpmsJobKind.WRITE, plan,
+            securityWait = { securityWaitMs() > 0 },
+            onKeySent = { security.keySent(clock.nowMs()) },
+        )
         val run = TpmsJobs.Run(link(gear, tpmsPolicy(guard, speedGate = true, strict = true)), guard, plan)
         val session = tpmsPolicy(guard, speedGate = true, strict = true, inSession = true)
         return launch(DtcWire.MODE_TPMS_WRITE, IntArray(0), run, accepted = accepted) {
-            execute(run.link, { TpmsJobs.write(run, session) { securityLatched = it } }) {
+            execute(run.link, { TpmsJobs.write(run, session, security) }) {
                 TpmsJobs.close(run, it, DtcWire.MODE_TPMS_WRITE)
                 if (run.exitUnconfirmed) {
                     val until = clock.nowMs() + TpmsJobs.S3_WAIT_MS
@@ -150,6 +149,12 @@ class DtcScanner(
             execute(run.link, { FirmwareJob.read(run) }) { FirmwareJob.close(run, it) }
         }
     }
+
+    /** Milliseconds until a tyre write may start after a failed key or an NRC 36/37; 0 when it may now. */
+    fun securityWaitMs(): Long = security.waitMs(clock.nowMs())
+
+    /** A failed key at [nowMs], as a `27 02` of a write would count it. */
+    internal fun recordSecurityFailure(nowMs: Long) = security.keySent(nowMs)
 
     /** The last firmware check's raw answers; state IDLE with no results when the last job was not one. */
     fun firmwareStatus(): FirmwareStatus {

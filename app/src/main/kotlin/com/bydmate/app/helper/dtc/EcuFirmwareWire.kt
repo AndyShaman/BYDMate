@@ -112,7 +112,12 @@ fun writeFirmwareStatus(p: Parcel, status: FirmwareStatus) {
  * dropped. Null on a truncated, oversized or unknown-state reply, or a daemon without the part.
  */
 fun readFirmwareStatus(p: Parcel): FirmwareStatus? {
-    readTpmsStatus(p) ?: return null
+    readTpmsPart(p) ?: return null
+    return readFirmwarePart(p)
+}
+
+/** The firmware part alone, the parcel positioned right after the tyre part. */
+internal fun readFirmwarePart(p: Parcel): FirmwareStatus? {
     if (p.dataAvail() < 3 * INT_BYTES) return null
     val state = p.readInt()
     if (state !in DtcWire.STATE_IDLE..DtcWire.STATE_ABORTED) return null

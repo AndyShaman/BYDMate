@@ -73,19 +73,19 @@ internal object TpmsJobs {
     /**
      * Write job, design B.3: identity and slots must have the L3 shape, compare-and-set against
      * this fresh read, `10 03` with the exact L3 answer, one security attempt, then each `2E` once,
-     * the exit `10 01`, the re-read and the stored codes. [latch] sets (a failed seed) or clears (an
-     * exact `67 02`) the daemon's security latch; the guard sets it as the key goes out. Any stop
-     * once `10 03` went out, other than the guard or a foreign frame, still sends one `10 01` and
-     * nothing after it.
+     * the exit `10 01`, the re-read and the stored codes. The guard counts the attempt in
+     * [security] as the key goes out; an exact `67 02` clears the count, an NRC 36/37 starts its
+     * lockout and stops the run. Any stop once `10 03` went out, other than the guard or a foreign
+     * frame, still sends one `10 01` and nothing after it.
      */
     @Suppress("TooGenericExceptionCaught") // whatever ends the run inside the session gets the exit, then goes on
-    fun write(run: Run, sessionPolicy: LinkPolicy, latch: (Boolean) -> Unit): DiagStop {
+    fun write(run: Run, sessionPolicy: LinkPolicy, security: TpmsSecurity): DiagStop {
         log("tpms write plan=${run.plan.joinToString(",") { "${hexAddr(it.did)}:${id8(it.expectedOld)}>${id8(it.newId)}" }}")
         run.link.open("tpms write", 1)
         try {
             val entries = casStep(run, readShape(run)) ?: return DiagStop(DtcWire.STATE_DONE, "nothing_to_write")
             enterSession(run, sessionPolicy)
-            val failure = unlock(run, latch) ?: writeEntries(run, entries)
+            val failure = unlock(run, security) ?: writeEntries(run, entries)
             leave(run)
             readBack(run)
             return failure ?: DiagStop(DtcWire.STATE_DONE, "")
@@ -200,15 +200,16 @@ internal object TpmsJobs {
 
     /**
      * Steps 6-7: `27 01`, then `27 02 <key>` unless the seed is zero; null when unlocked, else the
-     * stop to end with. The latch set as the key went out is cleared by exactly `67 02` only.
+     * stop to end with. The attempt counted as the key went out is cleared by exactly `67 02` only;
+     * an NRC 36/37 to either request throws the lockout stop (the exit follows, nothing else).
      */
-    private fun unlock(run: Run, latch: (Boolean) -> Unit): DiagStop? {
+    private fun unlock(run: Run, security: TpmsSecurity): DiagStop? {
         val seedReq = TpmsWire.seedRequest()
         val m = ask(run, seedReq, TpmsWire.SERVICE_SECURITY, TpmsWire.SECURITY_SEED)
+        lockoutCheck(run, m, security, seedReq)
         val seedAnswer = positive(run, m)
         val seed = seedAnswer?.let { TpmsWire.seedOf(it.uds) }
         if (seed == null) {
-            latch(true)
             return securityStop(seedAnswer?.let { "seed_len=${it.uds.size - 2}" } ?: outcome(m), seedReq)
         }
         val seedValue = TpmsWire.int32(seed, 0)
@@ -221,16 +222,24 @@ internal object TpmsJobs {
         log("tpms security seed=${id8(seedValue)} key=${id8(key)}")
         val keyReq = TpmsWire.keyRequest(key)
         val k = ask(run, keyReq, TpmsWire.SERVICE_SECURITY, TpmsWire.SECURITY_KEY)
+        lockoutCheck(run, k, security, keyReq)
         if (positive(run, k)?.uds?.contentEquals(TpmsWire.KEY_ANSWER) == true) {
-            latch(false)
+            security.unlocked()
             log("tpms security unlocked")
             return null
         }
         return securityStop(outcome(k) + ((k as? DtcMatch.Answer)?.let { " uds=${hex(it.uds, 0, it.uds.size)}" } ?: ""), keyReq)
     }
 
+    /** NRC 36 or 37 to a `27` request: the lockout starts and the run stops here. */
+    private fun lockoutCheck(run: Run, m: DtcMatch?, security: TpmsSecurity, req: ByteArray) {
+        if (m !is DtcMatch.Nrc || m.code !in TpmsSecurity.LOCKOUT_NRCS) return
+        security.lockout(run.link.clock.nowMs(), m.code)
+        throw stop(DtcWire.STATE_ABORTED, "security_lockout nrc=0x%02X".format(m.code), at(req))
+    }
+
     private fun securityStop(detail: String, req: ByteArray): DiagStop {
-        log("tpms security failed $detail, latched for this daemon")
+        log("tpms security failed $detail")
         return DiagStop(DtcWire.STATE_ABORTED, "security_rejected $detail", at(req))
     }
 
@@ -296,10 +305,19 @@ internal object TpmsJobs {
 
     private fun defaultAnswer(run: Run, m: DtcMatch?): Boolean = positive(run, m)?.uds?.contentEquals(TpmsWire.DEFAULT_ANSWER) == true
 
-    /** Steps 10 and 11: the four slots again and the stored codes. */
+    /**
+     * Steps 10 and 11: the four slots again and the stored codes. A slot answer whose frame result
+     * byte is not 1 is not a read-back (D1): that slot stays unread, so its verdict stays as the `2E` left it.
+     */
     private fun readBack(run: Run) {
         for (did in TpmsWire.DIDS) {
-            val uds = readDid(run, did)
+            val m = ask(run, TpmsWire.readRequest(did), DtcWire.SERVICE_READ_DID, did)
+            val uds = if (m is DtcMatch.Answer && positive(run, m) == null) {
+                log("tpms reread did=${hexAddr(did)} ${outcome(m)} uds=${hex(m.uds, 0, m.uds.size)} not taken")
+                null
+            } else {
+                udsOf(m, DtcWire.SERVICE_READ_DID)
+            }
             run.edit { after[did] = uds }
         }
         val dtc = readList(run)

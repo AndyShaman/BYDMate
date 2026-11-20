@@ -140,6 +140,7 @@ internal fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc:
             HelperBinderProtocol.TX_DIAG_JOB_STATUS -> reply?.let {
                 writeTpmsStatus(it, DtcDaemon.scanner.tpmsStatus())
                 writeFirmwareStatus(it, DtcDaemon.scanner.firmwareStatus())
+                it.writeLong(DtcDaemon.scanner.securityWaitMs())
             }
             else -> reply?.let { writeDtcScanStatus(it, DtcDaemon.scanner.status()) }
         }
