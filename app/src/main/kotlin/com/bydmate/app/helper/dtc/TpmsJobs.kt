@@ -271,10 +271,17 @@ internal object TpmsJobs {
         return null
     }
 
-    /** Step 9: `10 01`; without the exact default-session answer the block's own S3 timeout is awaited. */
+    /**
+     * Step 9: `10 01`; without the exact default-session answer the block's own S3 timeout is awaited.
+     * Like the exit after a stop it reads no gear or speed first (only the guard and the allowlist):
+     * a blocked autoservice read must not hold the block in the extended session (release audit E1).
+     */
     private fun leave(run: Run) {
         val m = sent(run, { run.exitSent = true }) {
-            ask(run, TpmsWire.sessionRequest(TpmsWire.SESSION_DEFAULT), TpmsWire.SERVICE_SESSION, TpmsWire.SESSION_DEFAULT)
+            run.link.exit(
+                TpmsWire.ADDR, TpmsWire.frame(TpmsWire.sessionRequest(TpmsWire.SESSION_DEFAULT)),
+                TpmsWire.SERVICE_SESSION, TpmsWire.SESSION_DEFAULT,
+            )
         }
         run.exitConfirmed = defaultAnswer(run, m)
         run.link.policy = run.normalPolicy

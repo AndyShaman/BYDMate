@@ -102,15 +102,17 @@ internal class DiagLink(
     fun exchange(addr: Int, payload: ByteArray, service: Int, sub: Int, gated: Boolean = true): DtcMatch? {
         val req = hex(payload, REQUEST_HEADER_BYTES, payload.size)
         val at = "at=${hexAddr(addr)} req=$req"
-        val guard = readGuard()
         val values = if (gated) {
             val gearValue = gear()
             val speed = if (policy.speedGate) readSpeed() else null
             // The speed read blocks: a gear moved out of P meanwhile must still stop the request (D3).
             val gearAgain = if (policy.speedGate && gearValue == GEAR_PARK) gear() else gearValue
+            // The guard last, after the blocking reads, right before the send (release audit E2).
+            val guard = readGuard()
             gate(guard, gearAgain, speed, at)?.let { throw it }
             "gear=$gearValue" + if (policy.speedGate) " speed=$speed gear2=$gearAgain guard=$guard" else ""
         } else {
+            val guard = readGuard()
             exitGate(guard, at)?.let { throw it }
             "exit guard=$guard"
         }
