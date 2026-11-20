@@ -17,6 +17,7 @@ import com.bydmate.app.split.AppSet
 import com.bydmate.app.split.AppSetLauncher
 import com.bydmate.app.split.AppSetStore
 import com.bydmate.app.split.SplitPreferences
+import com.bydmate.app.split.appSetsActive
 import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
@@ -664,8 +665,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     /** Side-effect-free resolution of a transcript to an actionable command. Precedence (the
      *  agent follow-up window, checked by the caller, outranks all of them):
      *  1. an automation phrase equal to the whole utterance, word for word after normalization;
-     *  1a. an app set: «сплит <название>»; «сплит», «включи разделение экрана» too while the split of
-     *      the «Разделение экрана» section is off (Android 10 head units, where sets exist);
+     *  1a. an app set: «сплит <название>», «сплит», «включи разделение экрана», while «Разделение
+     *      экрана 1/3 + 2/3» is off (Android 10 head units, where sets exist, see [appSetsActive]);
      *  2. the user's own phrase for a built-in command, equal to the whole utterance;
      *  3. the built-in NluParser on the full utterance;
      *  4. the agent (Resolution.None, with the parser's reason).
@@ -674,9 +675,11 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  «открой окно наполовину», «не открывай окно» or «открой окно на палец». */
     private suspend fun resolve(text: String): Resolution {
         automationResolver.match(text)?.let { return Resolution.Auto(it) }
-        // Sets are made only on the Android 10 head units, so the firmware check is already behind them.
-        val bareSplitOpensSet = splitPreferences?.isFeatureEnabled() != true
-        appSets?.resolve(text, defaultPhrases = bareSplitOpensSet)?.let { return Resolution.AppSetStart(it) }
+        // Only one split works at a time ([appSetsActive]); sets are made only on the Android 10 head
+        // units, so the firmware check is already behind them.
+        if (splitPreferences?.isFeatureEnabled() != true) {
+            appSets?.resolve(text)?.let { return Resolution.AppSetStart(it) }
+        }
         userPhrases.match(text)?.let { return Resolution.Cmd(listOf(it.command), "phrase:${it.id}") }
         return parse(text)
     }

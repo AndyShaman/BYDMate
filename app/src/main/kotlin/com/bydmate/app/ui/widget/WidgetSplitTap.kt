@@ -10,7 +10,7 @@ import com.bydmate.app.split.AppSetStore
 import com.bydmate.app.split.SplitOverlayController
 import com.bydmate.app.split.SplitPreferences
 import com.bydmate.app.split.SplitSessionManager
-import com.bydmate.app.split.appSetsTakeSplitGesture
+import com.bydmate.app.split.appSetsActive
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -47,7 +47,7 @@ internal suspend fun toggleSplitByUser(context: Context, fromWidget: Boolean) {
             context.applicationContext,
             SplitWidgetEntryPoint::class.java,
         )
-        if (appSetsTakeSplitGesture(LegacyHeadUnit.isAndroid10, ep.splitPreferences().isFeatureEnabled())) {
+        if (appSetsActive(LegacyHeadUnit.isAndroid10, ep.splitPreferences().isFeatureEnabled())) {
             openDefaultAppSet(context, ep.appSetStore(), ep.appSetLauncher())
             return
         }
@@ -82,7 +82,7 @@ internal suspend fun toggleSplitByUser(context: Context, fromWidget: Boolean) {
 /**
  * On the Android 10 head units, while the split of the «Разделение экрана» section is off, the widget
  * tap and the split key open the default app set (the first in the list) with the firmware's own
- * split ([appSetsTakeSplitGesture]).
+ * split ([appSetsActive]).
  */
 internal suspend fun openDefaultAppSet(context: Context, store: AppSetStore, launcher: AppSetLauncher) {
     val set = store.defaultSet()

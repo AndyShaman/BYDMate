@@ -18,23 +18,33 @@ import javax.inject.Singleton
  * is not started again. And it starts only with the car standing: the speed must be read and be 0.
  */
 @Singleton
-class AppSetAutostart(
+class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard injectable for the tests
     private val store: AppSetStore,
     private val launcher: AppSetLauncher,
     private val prefs: SharedPreferences?,
     private val legacyHeadUnit: () -> Boolean = { LegacyHeadUnit.isAndroid10 },
+    private val splitFeatureEnabled: () -> Boolean = { false },
     private val now: () -> Long = System::currentTimeMillis,
     private val pause: suspend (Long) -> Unit = { delay(it) },
 ) {
-    @Inject constructor(store: AppSetStore, launcher: AppSetLauncher, @ApplicationContext context: Context) :
-        this(store, launcher, context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE))
+    @Inject constructor(
+        store: AppSetStore,
+        launcher: AppSetLauncher,
+        splitPreferences: SplitPreferences,
+        @ApplicationContext context: Context,
+    ) : this(
+        store, launcher, context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
+        splitFeatureEnabled = { splitPreferences.isFeatureEnabled() },
+    )
 
-    enum class Result { NO_SET, NOT_LEGACY, REPEAT, MOVING, NO_SPEED, STARTED, FAILED }
+    /** [SPLIT_ON]: «Разделение экрана 1/3 + 2/3» is the split in use, the sets are not ([appSetsActive]). */
+    enum class Result { NO_SET, NOT_LEGACY, SPLIT_ON, REPEAT, MOVING, NO_SPEED, STARTED, FAILED }
 
     /** [speedKmh] is the car's speed when known, null before the first reading. */
     suspend fun runIfDue(speedKmh: () -> Int?): Result {
         if (!legacyHeadUnit()) return Result.NOT_LEGACY
         val set = store.autostartSet() ?: return Result.NO_SET
+        if (!appSetsActive(legacyHeadUnit = true, splitFeatureEnabled = splitFeatureEnabled())) return trace(set, Result.SPLIT_ON)
         val last = prefs?.getLong(KEY_LAST_MS, 0L) ?: 0L
         if (last > 0L && now() - last in 0 until REPEAT_WINDOW_MS) return trace(set, Result.REPEAT)
         pause(START_DELAY_MS)
