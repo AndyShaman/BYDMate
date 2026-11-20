@@ -196,12 +196,10 @@ fun SettingsScreen(
                         )
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
-                        SettingsSection.SPLIT -> {
-                            SplitSection(viewModel)
-                            // Android 10 head units (DiLink 3 / 4): the app sets, an alternative
-                            // split through the firmware's own one, in the same section.
-                            if (LegacyHeadUnit.isAndroid10) AppSetsSection()
-                        }
+                        // Android 10 head units (DiLink 3 / 4): a choice between the split and the
+                        // app sets, an alternative split through the firmware's own one.
+                        SettingsSection.SPLIT ->
+                            if (LegacyHeadUnit.isAndroid10) SplitModeSection(viewModel) else SplitSection(viewModel)
                         SettingsSection.SERVICE -> ServiceSection(state, viewModel)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)

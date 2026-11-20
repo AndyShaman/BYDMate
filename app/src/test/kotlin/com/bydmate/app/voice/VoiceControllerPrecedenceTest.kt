@@ -13,6 +13,8 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.split.AppSet
 import com.bydmate.app.split.AppSetLauncher
 import com.bydmate.app.split.AppSetStore
+import com.bydmate.app.split.SplitSessionManager
+import com.bydmate.app.split.SplitStartResult
 import com.bydmate.app.util.appStringsOver
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -61,12 +63,19 @@ class VoiceControllerPrecedenceTest {
         fail("condition not met within ${timeoutMs}ms")
     }
 
+    /** «Разделение экрана»: [mainMethod] = the split master switch on (Android 10: «Основной»). */
+    private class SplitSetup(
+        val mainMethod: Boolean = false,
+        val manager: SplitSessionManager = mockk { coEvery { startLastPair() } returns SplitStartResult.OK },
+        val legacy: Boolean = true,
+    )
+
     /** A real VoiceAutomationResolver over one enabled rule (id 9, name «Моё») with [automationPhrase]. */
     private fun rig(
         automationPhrase: String?,
         userPhrases: VoiceUserPhrases,
         appSets: Pair<AppSetStore, AppSetLauncher>? = null,
-        splitFeatureEnabled: Boolean = false,
+        split: SplitSetup = SplitSetup(),
     ): Rig {
         val gate = mockk<VoiceGate> {
             every { isEnabled() } returns true
@@ -98,8 +107,12 @@ class VoiceControllerPrecedenceTest {
             appStrings = appStringsOver(ctx),
             userPhrases = userPhrases,
         )
+        controller.legacyHeadUnit = { split.legacy }
         appSets?.let { (store, launcher) ->
-            controller.injectAppSets(store, launcher, mockk { every { isFeatureEnabled() } returns splitFeatureEnabled })
+            controller.injectAppSets(
+                store, launcher, mockk { every { isFeatureEnabled() } returns split.mainMethod },
+                dagger.Lazy { split.manager },
+            )
         }
         return Rig(controller, asr, dispatcher, engine, journal).also { r ->
             coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } answers {
@@ -212,13 +225,44 @@ class VoiceControllerPrecedenceTest {
     @Test fun `with the 1-3 split switched on no set opens, by name either`() {
         // One utterance per rig: say() reads the first journal entry.
         val launcher = setLauncher()
-        val bare = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, splitFeatureEnabled = true)
+        val bare = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, split = SplitSetup(mainMethod = true))
         assertNotEquals("appset:открой окна", bare.say("включи разделение экрана").command)
 
-        val named = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, splitFeatureEnabled = true)
+        val named = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, split = SplitSetup(mainMethod = true))
         assertNotEquals("appset:открой окна", named.say("сплит открой окна").command)
 
         coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `with the main method the split screen phrase opens its saved pair`() {
+        val manager = mockk<SplitSessionManager> { coEvery { startLastPair() } returns SplitStartResult.OK }
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, split = SplitSetup(mainMethod = true, manager = manager))
+
+        val entry = r.say("включи разделение экрана")
+
+        assertEquals("split:start", entry.command)
+        assertEquals(VoiceJournalEntry.Outcome.OK, entry.outcome)
+        coVerify(exactly = 1) { manager.startLastPair() }
+        coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `with the main method and no saved pair the phrase is reported as blocked`() {
+        val manager = mockk<SplitSessionManager> { coEvery { startLastPair() } returns null }
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to setLauncher(), split = SplitSetup(mainMethod = true, manager = manager))
+
+        assertEquals(VoiceJournalEntry.Outcome.BLOCKED, r.say("сплит").outcome)
+    }
+
+    @Test fun `other firmwares keep the split screen phrase for the agent`() {
+        val manager = mockk<SplitSessionManager> { coEvery { startLastPair() } returns SplitStartResult.OK }
+        val r = rig(
+            null, VoiceUserPhrases(), appSets = setStore to setLauncher(),
+            split = SplitSetup(mainMethod = true, manager = manager, legacy = false),
+        )
+
+        assertNotEquals("split:start", r.say("включи разделение экрана").command)
+        coVerify(exactly = 0) { manager.startLastPair() }
     }
 
     @Test fun `an app set that does not open is reported as blocked`() {

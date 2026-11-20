@@ -17,16 +17,51 @@ class AppSetAutostartTest {
     private val pauses = mutableListOf<Long>()
     private var clock = 1_000_000_000L
 
+    private var splitStarts = 0
+    private var splitResult: SplitStartResult? = SplitStartResult.OK
+
     private fun autostart(legacy: Boolean = true, st: AppSetStore = store, splitOn: Boolean = false) = AppSetAutostart(
         st, launcher, fakeSplitSharedPrefs(backing), legacyHeadUnit = { legacy }, splitFeatureEnabled = { splitOn },
-        now = { clock }, pause = { pauses += it },
+        startSplit = { splitStarts++; splitResult }, now = { clock }, pause = { pauses += it },
     )
 
-    @Test fun `with the 1-3 split switched on the set does not start`() = runBlocking {
-        assertEquals(Result.SPLIT_ON, autostart(splitOn = true).runIfDue { 0 })
+    @Test fun `with the main method chosen its saved pair opens, not a set`() = runBlocking {
+        assertEquals(Result.STARTED, autostart(splitOn = true).runIfDue { 0 })
 
+        assertEquals(1, splitStarts)
+        coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `the main method without a saved pair opens nothing`() = runBlocking {
+        splitResult = null
+
+        assertEquals(Result.NO_SET, autostart(splitOn = true).runIfDue { 0 })
+    }
+
+    @Test fun `the main method that does not start is reported`() = runBlocking {
+        splitResult = SplitStartResult.LAUNCH_FAILED
+
+        assertEquals(Result.FAILED, autostart(splitOn = true).runIfDue { 0 })
+    }
+
+    @Test fun `the switch off opens nothing with either method`() = runBlocking {
+        val a = autostart()
+        a.setEnabled(false)
+
+        assertEquals(Result.OFF, a.runIfDue { 0 })
+        assertEquals(Result.OFF, autostart(splitOn = true).runIfDue { 0 })
+        assertEquals(0, splitStarts)
         coVerify(exactly = 0) { launcher.launch(any()) }
         assertEquals(emptyList<Long>(), pauses)
+    }
+
+    @Test fun `the switch starts off without a set that had its own open at start, and on when set`() = runBlocking {
+        val plain = AppSetStore().apply { upsert(set.copy(autostart = false)) }
+        coEvery { launcher.launch(any()) } returns AppSetLauncher.Outcome.OK
+
+        assertEquals(Result.OFF, autostart(st = plain).runIfDue { 0 })
+        autostart(st = plain).setEnabled(true)
+        assertEquals(Result.STARTED, autostart(st = plain).runIfDue { 0 })
     }
 
     @Test fun `a standing car starts the set once`() = runBlocking {
@@ -84,7 +119,9 @@ class AppSetAutostartTest {
 
     @Test fun `other firmwares and an empty choice do nothing`() = runBlocking {
         assertEquals(Result.NOT_LEGACY, autostart(legacy = false).runIfDue { 0 })
-        assertEquals(Result.NO_SET, autostart(st = AppSetStore()).runIfDue { 0 })
+        val empty = autostart(st = AppSetStore())
+        empty.setEnabled(true)
+        assertEquals(Result.NO_SET, empty.runIfDue { 0 })
         coVerify(exactly = 0) { launcher.launch(any()) }
     }
 }

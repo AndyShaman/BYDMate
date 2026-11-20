@@ -13,10 +13,13 @@ import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.platform.LegacyHeadUnit
 import com.bydmate.app.split.AppSet
 import com.bydmate.app.split.AppSetLauncher
 import com.bydmate.app.split.AppSetStore
 import com.bydmate.app.split.SplitPreferences
+import com.bydmate.app.split.SplitSessionManager
+import com.bydmate.app.split.SplitStartResult
 import com.bydmate.app.split.appSetsActive
 import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.util.AppStrings
@@ -83,12 +86,22 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     private var appSets: AppSetStore? = null
     private var appSetLauncher: AppSetLauncher? = null
     private var splitPreferences: SplitPreferences? = null
+    private var splitManager: dagger.Lazy<SplitSessionManager>? = null
+
+    /** The Android 10 head units, where «Разделение экрана» has a main and an alternative method. */
+    internal var legacyHeadUnit: () -> Boolean = { LegacyHeadUnit.isAndroid10 }
 
     @Inject
-    internal fun injectAppSets(store: AppSetStore, launcher: AppSetLauncher, splitPrefs: SplitPreferences) {
+    internal fun injectAppSets(
+        store: AppSetStore,
+        launcher: AppSetLauncher,
+        splitPrefs: SplitPreferences,
+        splitMgr: dagger.Lazy<SplitSessionManager>,
+    ) {
         appSets = store
         appSetLauncher = launcher
         splitPreferences = splitPrefs
+        splitManager = splitMgr
     }
 
     // Process-lifetime scope (@Singleton): intentionally never cancelled.
@@ -675,9 +688,12 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  «открой окно наполовину», «не открывай окно» or «открой окно на палец». */
     private suspend fun resolve(text: String): Resolution {
         automationResolver.match(text)?.let { return Resolution.Auto(it) }
-        // Only one split works at a time ([appSetsActive]); sets are made only on the Android 10 head
-        // units, so the firmware check is already behind them.
-        if (splitPreferences?.isFeatureEnabled() != true) {
+        // Only one split works at a time ([appSetsActive]). The main method (Android 10 head units):
+        // the bare split phrases open its saved pair. The alternative one: the sets, which are made
+        // only on those head units, so the firmware check is already behind them.
+        if (splitPreferences?.isFeatureEnabled() == true) {
+            if (legacyHeadUnit() && AppSetStore.isBareSplitPhrase(text)) return Resolution.SplitStart
+        } else {
             appSets?.resolve(text)?.let { return Resolution.AppSetStart(it) }
         }
         userPhrases.match(text)?.let { return Resolution.Cmd(listOf(it.command), "phrase:${it.id}") }
@@ -716,6 +732,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is Resolution.Answer -> answer(res, transcript, decodeMs)
             is Resolution.Auto -> fireAutomation(res.match, transcript, decodeMs)
             is Resolution.AppSetStart -> dispatchAppSet(res.set, transcript, decodeMs)
+            Resolution.SplitStart -> dispatchSplitStart(transcript, decodeMs)
             is Resolution.None -> agentFallback(transcript, decodeMs)
         }
     }
@@ -944,6 +961,21 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         }
         report("appset:${set.name}", "cmd=appset name=${set.name} left=${set.leftPkg} right=${set.rightPkg ?: "-"}",
             failure, transcript, decodeMs)
+    }
+
+    /** The main split method's saved pair, the way the widget tap opens it (SplitSessionManager.startLastPair). */
+    private suspend fun dispatchSplitStart(transcript: String, decodeMs: Long) {
+        // startLastPair() is null when no pair is saved, so a missing manager is told apart first.
+        val manager = splitManager?.get()
+        val result = if (manager == null) SplitStartResult.DISABLED else manager.startLastPair()
+        val failure = when (result) {
+            SplitStartResult.OK -> null
+            null -> Failure("no saved pair", "Нет сохранённой пары приложений: выберите её в настройках «Разделение экрана»")
+            SplitStartResult.FREEFORM_UNAVAILABLE -> Failure("freeform unavailable", "Разделение экрана пока недоступно на этой машине")
+            SplitStartResult.LAUNCH_FAILED -> Failure("launch failed", "Не удалось запустить приложение")
+            SplitStartResult.DISABLED -> Failure("split disabled", "Разделение экрана выключено в настройках")
+        }
+        report("split:start", "cmd=split action=start", failure, transcript, decodeMs)
     }
 
     /** The first package of the navigator chosen for routes that has a launcher entry here (the
@@ -1217,13 +1249,15 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         data class Auto(val match: VoiceAutomationMatch) : Resolution
         /** The driver's app set, named by the whole utterance. */
         data class AppSetStart(val set: AppSet) : Resolution
+        /** «Разделение экрана», main method of the Android 10 head units: its saved pair. */
+        data object SplitStart : Resolution
         /** Nothing local claimed the phrase: it goes to the agent; [reason] is a VoiceRefusal code. */
         data class None(val reason: String) : Resolution
 
         /** The route code of the trace. */
         val route: String get() = when (this) {
             is Cmd -> if (label.startsWith("phrase:")) "phrase" else "nlu"
-            is RelTemp, is Vol, Music, is Navigate, OpenNavigator, is Answer, is AppSetStart -> "nlu"
+            is RelTemp, is Vol, Music, is Navigate, OpenNavigator, is Answer, is AppSetStart, SplitStart -> "nlu"
             is Auto -> "automation"
             is None -> "agent"
         }
