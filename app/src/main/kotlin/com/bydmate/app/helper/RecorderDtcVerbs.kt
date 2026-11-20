@@ -111,8 +111,10 @@ internal fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc:
                 val speedDev = data.readInt()
                 val speedFid = data.readInt()
                 val addrs = data.createIntArray() ?: IntArray(0)
-                DtcDaemon.speed = { readDtcSpeed(svc, autoIface, speedDev, speedFid) }
-                val status = DtcDaemon.scanner.startErase(addrs) { readDtcGear(svc, autoIface, gearDev, gearFid) }
+                // The speed source changes only for an accepted start: a busy or refused one leaves the running job's.
+                val status = DtcDaemon.scanner.startErase(
+                    addrs, accepted = { DtcDaemon.speed = { readDtcSpeed(svc, autoIface, speedDev, speedFid) } },
+                ) { readDtcGear(svc, autoIface, gearDev, gearFid) }
                 android.util.Log.i(
                     "DtcScan",
                     "erase request gear=$gearDev/$gearFid speed=$speedDev/$speedFid " +
@@ -157,9 +159,11 @@ private fun handleTpmsWrite(data: Parcel, svc: IBinder, autoIface: String): Int 
     val speedFid = data.readInt()
     val n = data.readInt()
     val plan = if (n in 0..TpmsWire.DIDS.size) List(n) { TpmsPlanEntry(data.readInt(), data.readInt(), data.readInt()) } else null
-    DtcDaemon.speed = { readDtcSpeed(svc, autoIface, speedDev, speedFid) }
-    val status = plan?.let { DtcDaemon.scanner.startTpmsWrite(it) { readDtcGear(svc, autoIface, gearDev, gearFid) } }
-        ?: DtcScanner.START_REFUSED
+    val status = plan?.let {
+        DtcDaemon.scanner.startTpmsWrite(it, accepted = { DtcDaemon.speed = { readDtcSpeed(svc, autoIface, speedDev, speedFid) } }) {
+            readDtcGear(svc, autoIface, gearDev, gearFid)
+        }
+    } ?: DtcScanner.START_REFUSED
     android.util.Log.i(
         "DtcScan",
         "tpms write request gear=$gearDev/$gearFid speed=$speedDev/$speedFid n=$n " +
@@ -172,9 +176,13 @@ private fun readDtcGear(svc: IBinder, autoIface: String, dev: Int, fid: Int): In
     autoserviceTransact(svc, autoIface, 5, dev, fid, 0, writeValue = false)
         .takeIf { (status, _) -> status == 0 }?.second
 
-/** Speed in whole km/h rounded away from 0 (any movement reads >= 1); null when unreadable or a sentinel. */
+/**
+ * Speed in whole km/h rounded away from 0 (any movement reads >= 1); null when unreadable, a
+ * sentinel, or a status-only reply without the value word.
+ */
 private fun readDtcSpeed(svc: IBinder, autoIface: String, dev: Int, fid: Int): Int? =
-    autoserviceTransact(svc, autoIface, 7, dev, fid, 0, writeValue = false)
+    autoserviceTransactOrNull(svc, autoIface, 7, dev, fid, 0, writeValue = false)
         .takeIf { (status, _) -> status == 0 }
-        ?.let { (_, bits) -> SentinelDecoder.parseFloatFromShellInt(bits) }
+        ?.second
+        ?.let { bits -> SentinelDecoder.parseFloatFromShellInt(bits) }
         ?.let { kotlin.math.ceil(kotlin.math.abs(it)).toInt() }

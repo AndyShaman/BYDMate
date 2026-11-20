@@ -52,6 +52,11 @@ internal class DiagLink(
     private val ours = ArrayList<ByteArray>()
     /** New `7F xx 78` answers in the current wait. */
     private var pendings = 0
+    /**
+     * Inside the tyre write's extended session: a multi-frame, a truncated frame or an empty
+     * gateway timeout cannot be told apart from another sender's and stops the run as foreign.
+     */
+    var plainOnly = false
 
     /** Gate before the run, listener, then the passive listen: any frame there stops the run. */
     fun open(what: String, addrs: Int) {
@@ -96,12 +101,17 @@ internal class DiagLink(
         val req = hex(payload, REQUEST_HEADER_BYTES, payload.size)
         val at = "at=${hexAddr(addr)} req=$req"
         val guard = readGuard()
-        val gearValue = gear()
-        val speed = if (policy.speedGate) readSpeed() else null
-        val refused = if (gated) gate(guard, gearValue, speed, at) else exitGate(guard, at)
-        refused?.let { throw it }
+        val values = if (gated) {
+            val gearValue = gear()
+            val speed = if (policy.speedGate) readSpeed() else null
+            gate(guard, gearValue, speed, at)?.let { throw it }
+            "gear=$gearValue" + if (policy.speedGate) " speed=$speed guard=$guard" else ""
+        } else {
+            exitGate(guard, at)?.let { throw it }
+            "exit guard=$guard"
+        }
         if (policy.strictTraffic) quiet(at)
-        val sentAt = send(addr, payload, at, "gear=$gearValue" + if (policy.speedGate) " speed=$speed guard=$guard" else "")
+        val sentAt = send(addr, payload, at, values)
 
         val windowMs = if (service == DtcWire.SERVICE_CLEAR) DtcScanner.ERASE_WINDOW_MS else DtcScanner.WINDOW_MS
         val (match, frame) = await(sentAt + windowMs, at) { DtcWire.match(it, addr, service, sub) } ?: run {
@@ -136,9 +146,9 @@ internal class DiagLink(
     }
 
     /**
-     * The one request a job still sends after a gate stop (the exit from the extended session):
-     * only the guard property, strict traffic and the allowlist are checked, not the budget, the
-     * gear or the speed. No busy resend.
+     * The one request a job still sends after a stop (the exit from the extended session): only
+     * the guard property, strict traffic and the allowlist are checked; the budget, the gear and
+     * the speed are not even read. No busy resend.
      */
     fun exit(addr: Int, payload: ByteArray, service: Int, sub: Int): DtcMatch? =
         exchange(addr, payload, service, sub, gated = false)
@@ -158,6 +168,7 @@ internal class DiagLink(
                 DtcMatch.NotMine -> other(frame, at)
                 DtcMatch.Pending -> deadline = pending(frame, at, deadline) ?: return null
                 else -> {
+                    if (plainOnly && !plain(m, frame)) throw foreignStop(frame, at, kindName(m))
                     if (policy.strictTraffic) ours += frame
                     return m to frame
                 }
@@ -186,13 +197,23 @@ internal class DiagLink(
 
     /** A frame that is not the answer awaited: skipped, or under strict traffic only a duplicate of ours is. */
     private fun other(frame: ByteArray, at: String) {
-        if (policy.strictTraffic && ours.none { sameFrame(it, frame) }) {
-            foreign++
-            log("foreign ${head(frame)} uds=${udsHex(frame)}")
-            throw stop(DtcWire.STATE_ABORTED, "foreign " + head(frame).substringBefore(' '), at)
-        }
+        if (policy.strictTraffic && ours.none { sameFrame(it, frame) }) throw foreignStop(frame, at, null)
         foreign++
         log("foreign ${head(frame)} uds=${udsHex(frame)} (ignored)")
+    }
+
+    /** Counts and logs a frame that stops the run as foreign traffic ([kind]: what the matcher made of it). */
+    private fun foreignStop(frame: ByteArray, at: String, kind: String?): DiagStop {
+        foreign++
+        log("foreign ${head(frame)} uds=${udsHex(frame)}" + if (kind == null) "" else " kind=$kind raw=${hex(frame, 0, frame.size)}")
+        return stop(DtcWire.STATE_ABORTED, "foreign " + head(frame).substringBefore(' '), at)
+    }
+
+    /** Under [plainOnly]: an answer, a negative answer, or a gateway result that echoes the request. */
+    private fun plain(m: DtcMatch, frame: ByteArray): Boolean = when (m) {
+        is DtcMatch.Multiframe, DtcMatch.Truncated -> false
+        DtcMatch.GatewayTimeout, DtcMatch.ManagerTimeout -> u(frame, 3) > 0
+        else -> true
     }
 
     /** Strict traffic: whatever is queued now must be a duplicate of an answer of ours, else the run stops. */

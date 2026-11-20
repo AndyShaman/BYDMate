@@ -30,6 +30,8 @@ object TpmsWire {
     /** The exact session answers of the L3 block (P2 50 ms, P2* 5000 ms). */
     val EXTENDED_ANSWER: ByteArray = bytes(0x50, 0x03, 0x00, 0x32, 0x01, 0xF4)
     val DEFAULT_ANSWER: ByteArray = bytes(0x50, 0x01, 0x00, 0x32, 0x01, 0xF4)
+    /** The only key answer that unlocks: exactly `67 02`. */
+    val KEY_ANSWER: ByteArray = bytes(0x67, 0x02)
 
     private const val FRAME_PREFIX = 0x0A
     private const val POSITIVE_READ = 0x62
@@ -149,9 +151,17 @@ enum class TpmsJobKind { READ, WRITE }
 /**
  * The outgoing allowlist of one tyre job run (design B.1), checked right before every send.
  * Stateful: [onSeed] records the `67 01` seed of this run; `27 02` passes once and only with the
- * key of that seed; each `2E` entry passes once. Address 0x720 only.
+ * key of that seed; each `2E` entry passes once. Address 0x720 only. No `27` passes while
+ * [latched] (read live, at the send) holds; [onKeySent] runs as the one `27 02` is let through.
  */
-class TpmsGuard(private val kind: TpmsJobKind, private val plan: List<TpmsPlanEntry>, private val latched: Boolean) {
+class TpmsGuard(
+    private val kind: TpmsJobKind,
+    private val plan: List<TpmsPlanEntry>,
+    private val latched: () -> Boolean,
+    private val onKeySent: () -> Unit = {},
+) {
+    constructor(kind: TpmsJobKind, plan: List<TpmsPlanEntry>, latched: Boolean) : this(kind, plan, { latched })
+
     private var key: ByteArray? = null
     private var keyUsed = false
     private val written = HashSet<Int>()
@@ -167,7 +177,7 @@ class TpmsGuard(private val kind: TpmsJobKind, private val plan: List<TpmsPlanEn
         return when (uds[0].toInt() and 0xFF) {
             TpmsWire.SERVICE_SESSION -> uds.contentEquals(TpmsWire.sessionRequest(TpmsWire.SESSION_EXTENDED)) ||
                 uds.contentEquals(TpmsWire.sessionRequest(TpmsWire.SESSION_DEFAULT))
-            TpmsWire.SERVICE_SECURITY -> !latched && security(uds)
+            TpmsWire.SERVICE_SECURITY -> !latched() && security(uds)
             TpmsWire.SERVICE_WRITE_DID -> write(uds)
             else -> false
         }
@@ -183,6 +193,7 @@ class TpmsGuard(private val kind: TpmsJobKind, private val plan: List<TpmsPlanEn
         val k = key ?: return false
         if (keyUsed || !uds.contentEquals(k)) return false
         keyUsed = true
+        onKeySent()
         return true
     }
 

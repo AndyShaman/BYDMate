@@ -12,8 +12,11 @@ import android.os.Parcel
 sealed interface DtcMatch {
     /** Another block's frame, a late duplicate of an earlier answer, or too short to read. */
     data object NotMine : DtcMatch
-    /** The positive answer; [uds] is exactly `len` bytes with the frame header stripped. */
-    class Answer(val uds: ByteArray) : DtcMatch
+    /**
+     * The positive answer; [uds] is exactly `len` bytes with the frame header stripped, [result]
+     * the frame's result byte (1 on every answer recorded so far; the tyre write takes only 1).
+     */
+    class Answer(val uds: ByteArray, val result: Int = DtcWire.RESULT_ANSWER) : DtcMatch
     class Nrc(val code: Int) : DtcMatch
     /** NRC 0x78: the block is still working, keep waiting in the same window. */
     data object Pending : DtcMatch
@@ -135,6 +138,8 @@ object DtcWire {
     private const val POSITIVE_OFFSET = 0x40
     private const val NEGATIVE = 0x7F
     private const val NRC_PENDING = 0x78
+    /** Result byte of a plain answer frame. */
+    const val RESULT_ANSWER = 1
     private const val RESULT_GATEWAY_TIMEOUT = 3
     private const val RESULT_MANAGER_TIMEOUT = 4
     private const val RESULT_BUSY = 5
@@ -212,7 +217,7 @@ object DtcWire {
         // (Song Plus EV 0x726) echo the cleared group after it: `54 FF FF FF`.
         val positive = echoes(uds, service + POSITIVE_OFFSET, service, sub) &&
             (sub >= 0 || uds.size == 1 || isClearEcho(uds, service))
-        return if (positive) DtcMatch.Answer(uds) else DtcMatch.NotMine
+        return if (positive) DtcMatch.Answer(uds, u(raw, 6)) else DtcMatch.NotMine
     }
 
     /** `54 FF FF FF`: the clear's positive answer with the group `FF FF FF` it was sent for echoed back. */

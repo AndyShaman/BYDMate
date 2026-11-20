@@ -64,8 +64,13 @@ class DtcScanner(
     private val erase = ArrayList<DtcEraseResult>()
     private var tpms: TpmsJobs.Run? = null
     private var firmware: FirmwareJob.Run? = null
-    /** A failed security attempt on 0x720: no further tyre write for this daemon's lifetime. */
+    /**
+     * Set as a `27 02` goes to 0x720 and cleared only by exactly `67 02`: after a failed or unknown
+     * key no further tyre write for this daemon's lifetime.
+     */
     @Volatile private var securityLatched = false
+    /** A tyre write that left the extended session unconfirmed: no job starts before this time (S3). */
+    private var quietUntilMs = Long.MIN_VALUE
 
     /** 0 started, 1 busy. [gear] returns the live gear value, null when it could not be read. */
     fun start(gear: () -> Int?): Int = launch(DtcWire.MODE_SCAN, IntArray(0)) {
@@ -76,14 +81,15 @@ class DtcScanner(
     /**
      * Clears the stored codes of [addrs] (`14 FF FF FF` each, in this order) and reads them again:
      * 0 started, 1 busy (a scan or an erase runs), -1 refused (empty, repeated or outside
-     * [DtcWire.ADDRESSES]; nothing is sent).
+     * [DtcWire.ADDRESSES]; nothing is sent). [accepted] runs once the start is taken, before
+     * the job's thread starts.
      */
-    fun startErase(addrs: IntArray, gear: () -> Int?): Int {
+    fun startErase(addrs: IntArray, accepted: () -> Unit = {}, gear: () -> Int?): Int {
         if (addrs.isEmpty() || addrs.any { it !in DtcWire.ADDRESSES } || addrs.distinct().size != addrs.size) {
             log("erase refused addrs=${addrs.joinToString(",") { hexAddr(it) }}")
             return START_REFUSED
         }
-        return launch(DtcWire.MODE_ERASE, addrs) {
+        return launch(DtcWire.MODE_ERASE, addrs, accepted = accepted) {
             val run = Run(link(gear, ERASE_POLICY))
             execute(run.link, { eraseAll(run) }) { closeErase(run, it) }
         }
@@ -105,28 +111,37 @@ class DtcScanner(
      * Writes [plan] to 0x720 per design B.3: 0 started, 1 busy, -1 refused (invalid plan, or the
      * security key already failed in this daemon's lifetime; nothing is sent). Gates as for an
      * erase (P, speed exactly 0, guard), strict traffic, one `27 02`, no resent `2E`. A stop for
-     * gear, speed or budget inside the extended session still sends one `10 01`; a stop for the
-     * guard or a foreign frame sends nothing more.
+     * stop once `10 03` went out still sends one `10 01`, except for the guard or a foreign frame,
+     * after which nothing more is sent. Ended without a confirmed `50 01`, no job starts for
+     * [TpmsJobs.S3_WAIT_MS]. [accepted] as for [startErase].
      */
-    fun startTpmsWrite(plan: List<TpmsPlanEntry>, gear: () -> Int?): Int {
+    fun startTpmsWrite(plan: List<TpmsPlanEntry>, accepted: () -> Unit = {}, gear: () -> Int?): Int {
         val planText = plan.joinToString(",") { "${hexAddr(it.did)}:%08X>%08X".format(it.expectedOld, it.newId) }
         val refused = TpmsWire.validatePlan(plan) ?: "security_latched".takeIf { securityLatched }
         if (refused != null) {
             log("tpms write refused $refused plan=$planText")
             return START_REFUSED
         }
-        val guard = TpmsGuard(TpmsJobKind.WRITE, plan, securityLatched)
+        val guard = TpmsGuard(TpmsJobKind.WRITE, plan, latched = { securityLatched }, onKeySent = {
+            securityLatched = true
+            log("tpms security latched at the key send")
+        })
         val run = TpmsJobs.Run(link(gear, tpmsPolicy(guard, speedGate = true, strict = true)), guard, plan)
         val session = tpmsPolicy(guard, speedGate = true, strict = true, inSession = true)
-        return launch(DtcWire.MODE_TPMS_WRITE, IntArray(0), run) {
-            execute(run.link, { TpmsJobs.write(run, session) { securityLatched = true } }) {
+        return launch(DtcWire.MODE_TPMS_WRITE, IntArray(0), run, accepted = accepted) {
+            execute(run.link, { TpmsJobs.write(run, session) { securityLatched = it } }) {
                 TpmsJobs.close(run, it, DtcWire.MODE_TPMS_WRITE)
+                if (run.exitUnconfirmed) {
+                    val until = clock.nowMs() + TpmsJobs.S3_WAIT_MS
+                    synchronized(lock) { quietUntilMs = until }
+                    log("tpms exit unconfirmed: no job starts before ms=$until")
+                }
             }
         }
     }
 
     /**
-     * Reads `22 F1 94` then, when it answered, `22 F1 95` of every address in [DtcWire.ADDRESSES]:
+     * Reads `22 F1 94` then, when the block answered it (positive or negative), `22 F1 95` of every address in [DtcWire.ADDRESSES]:
      * 0 started, 1 busy, -1 refused. Read gates as for a scan; nothing else is ever sent.
      */
     fun startFirmware(gear: () -> Int?): Int {
@@ -166,15 +181,23 @@ class DtcScanner(
             LinkPolicy(TPMS_BUDGET_MS, speedGate, strict, allow = guard::allowed)
         }
 
+    @Suppress("LongParameterList") // the state one start sets, then the hook that must run before the thread
     private fun launch(
         mode: Int,
         addrs: IntArray,
         tpmsRun: TpmsJobs.Run? = null,
         firmwareRun: FirmwareJob.Run? = null,
+        accepted: () -> Unit = {},
         job: () -> Unit,
     ): Int {
         synchronized(lock) {
             if (state == DtcWire.STATE_RUNNING) return START_BUSY
+            val now = clock.nowMs()
+            if (now < quietUntilMs) {
+                log("start busy mode=$mode: the last tyre write left the session unconfirmed, ms_left=${quietUntilMs - now}")
+                return START_BUSY
+            }
+            accepted()
             state = DtcWire.STATE_RUNNING
             this.mode = mode
             tpms = tpmsRun

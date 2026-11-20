@@ -20,8 +20,17 @@ internal object TpmsJobs {
         val after = HashMap<Int, ByteArray?>()
         val verdicts = HashMap<Int, TpmsVerdict>()
         var stoppedAt = ""
-        /** `10 03` was answered and no `10 01` went out since; run thread only. */
-        var inSession = false
+        /** A write run: its answers count only with result byte 1 and the exact length (C3). */
+        val writeJob = plan.isNotEmpty()
+        /** `10 03` reached the device (answered or not); run thread only. */
+        var sessionSent = false
+        /** A `10 01` reached the device after it; run thread only. */
+        var exitSent = false
+        /** That `10 01` got exactly the default-session answer; run thread only. */
+        var exitConfirmed = false
+
+        /** The block may still be in the extended session when the run ends: the next job waits out S3. */
+        val exitUnconfirmed: Boolean get() = sessionSent && !exitConfirmed
 
         fun <T> edit(block: Run.() -> T): T = synchronized(this) { block() }
 
@@ -33,14 +42,14 @@ internal object TpmsJobs {
         }
     }
 
-    /** Stops that still send the exit from the extended session (owner's rule): not the guard, not a foreign frame. */
-    private val SESSION_EXIT_STOPS = listOf("not_park", "speed", "budget")
+    /** Stops after which nothing more is sent, not even the exit (owner's rule): the guard, a foreign frame. */
+    private val NO_EXIT_STOPS = listOf("diag_busy", "foreign")
     /** Verdict of a `2E` answered `6E 33xx`, until the re-read decides. */
     private val SENT_OK = TpmsVerdict.UNVERIFIED
     private const val WRITE_ANSWER_BYTES = 3
     private const val NEGATIVE = 0x7F
     /** The block drops the extended session on its own after about 5 s (S3). */
-    private const val S3_WAIT_MS = 6_000L
+    const val S3_WAIT_MS = 6_000L
 
     /** Read job: F194, the stored codes, the four slots; nothing else (design B.1 read context). */
     fun read(run: Run): DiagStop {
@@ -64,11 +73,13 @@ internal object TpmsJobs {
     /**
      * Write job, design B.3: identity and slots must have the L3 shape, compare-and-set against
      * this fresh read, `10 03` with the exact L3 answer, one security attempt, then each `2E` once,
-     * the exit `10 01`, the re-read and the stored codes. [latch] records a failed security attempt
-     * for the daemon's lifetime. A gear, speed or budget stop inside the session still sends one
-     * `10 01` and nothing after it.
+     * the exit `10 01`, the re-read and the stored codes. [latch] sets (a failed seed) or clears (an
+     * exact `67 02`) the daemon's security latch; the guard sets it as the key goes out. Any stop
+     * once `10 03` went out, other than the guard or a foreign frame, still sends one `10 01` and
+     * nothing after it.
      */
-    fun write(run: Run, sessionPolicy: LinkPolicy, latch: () -> Unit): DiagStop {
+    @Suppress("TooGenericExceptionCaught") // whatever ends the run inside the session gets the exit, then goes on
+    fun write(run: Run, sessionPolicy: LinkPolicy, latch: (Boolean) -> Unit): DiagStop {
         log("tpms write plan=${run.plan.joinToString(",") { "${hexAddr(it.did)}:${id8(it.expectedOld)}>${id8(it.newId)}" }}")
         run.link.open("tpms write", 1)
         try {
@@ -78,8 +89,9 @@ internal object TpmsJobs {
             leave(run)
             readBack(run)
             return failure ?: DiagStop(DtcWire.STATE_DONE, "")
-        } catch (e: DiagStop) {
-            if (run.inSession && SESSION_EXIT_STOPS.any { e.reason.startsWith(it) }) exitAfterStop(run, e)
+        } catch (e: Exception) {
+            val reason = (e as? DiagStop)?.reason ?: "exception ${e.javaClass.simpleName}"
+            if (run.sessionSent && !run.exitSent && NO_EXIT_STOPS.none { reason.startsWith(it) }) exitAfterStop(run, reason)
             throw e
         }
     }
@@ -100,6 +112,7 @@ internal object TpmsJobs {
         log("tpms dtc before=${hexOrNull(s.dtcBefore)} after=${hexOrNull(s.dtcAfter)}")
         log(
             "tpms end state=${stateName(stop.state)} reason=${stop.reason} stoppedAt=${stop.at.ifEmpty { "-" }} " +
+                "session_sent=${run.sessionSent} exit_sent=${run.exitSent} exit_confirmed=${run.exitConfirmed} " +
                 "sent=${run.link.sent} frames=${run.link.frames} foreign=${run.link.foreign} " +
                 "ms=${run.link.clock.nowMs() - run.link.startedMs}"
         )
@@ -118,9 +131,10 @@ internal object TpmsJobs {
 
     /** Steps 1-3: F194, the stored codes and the four slots, each in the L3 shape; the current IDs. */
     private fun readShape(run: Run): Map<Int, Int> {
-        val id = readDid(run, DtcWire.DID_IDENTITY)
+        val idMatch = ask(run, TpmsWire.readRequest(DtcWire.DID_IDENTITY), DtcWire.SERVICE_READ_DID, DtcWire.DID_IDENTITY)
+        val id = udsOf(idMatch, DtcWire.SERVICE_READ_DID)
         run.edit { idUds = id }
-        if (!TpmsWire.l3Identity(id)) {
+        if (positive(run, idMatch) == null || !TpmsWire.l3Identity(id)) {
             log("tpms shape fail rule=f194 uds=${hexOrNull(id)}")
             throw stop(DtcWire.STATE_ABORTED, "not_l3 f194", at(TpmsWire.readRequest(DtcWire.DID_IDENTITY)))
         }
@@ -129,9 +143,10 @@ internal object TpmsJobs {
         run.edit { dtcBefore = dtc }
         val current = HashMap<Int, Int>()
         for (did in TpmsWire.DIDS) {
-            val uds = readDid(run, did)
+            val m = ask(run, TpmsWire.readRequest(did), DtcWire.SERVICE_READ_DID, did)
+            val uds = udsOf(m, DtcWire.SERVICE_READ_DID)
             run.edit { before[did] = uds }
-            val slot = TpmsWire.parseSlot(did, uds)
+            val slot = positive(run, m)?.let { TpmsWire.parseSlot(did, it.uds) }
                 ?: run {
                     log("tpms shape fail rule=slot did=${hexAddr(did)} uds=${hexOrNull(uds)}")
                     throw stop(DtcWire.STATE_ABORTED, "not_l3 slot=${hexAddr(did)}", at(TpmsWire.readRequest(did)))
@@ -164,29 +179,37 @@ internal object TpmsJobs {
         return entries.ifEmpty { null }
     }
 
-    /** Step 5: `10 03` must get exactly the L3 answer; then the session policy applies. */
+    /**
+     * Step 5: `10 03` must get exactly the L3 answer; then the session policy applies. From this
+     * request on only plain frames count as ours ([DiagLink.plainOnly]).
+     */
     private fun enterSession(run: Run, sessionPolicy: LinkPolicy) {
         val req = TpmsWire.sessionRequest(TpmsWire.SESSION_EXTENDED)
-        val m = ask(run, req, TpmsWire.SERVICE_SESSION, TpmsWire.SESSION_EXTENDED)
+        run.link.plainOnly = true
+        val m = sent(run, { run.sessionSent = true }) { ask(run, req, TpmsWire.SERVICE_SESSION, TpmsWire.SESSION_EXTENDED) }
+        val answer = positive(run, m)
         val refused = when {
-            m !is DtcMatch.Answer -> "session_refused ${outcome(m)}"
-            !m.uds.contentEquals(TpmsWire.EXTENDED_ANSWER) -> "not_l3 session=${hex(m.uds, 0, m.uds.size)}"
+            answer == null -> "session_refused ${outcome(m)}"
+            !answer.uds.contentEquals(TpmsWire.EXTENDED_ANSWER) -> "not_l3 session=${hex(answer.uds, 0, answer.uds.size)}"
             else -> null
         }
         if (refused != null) throw stop(DtcWire.STATE_ABORTED, refused, at(req))
-        run.inSession = true
         run.link.policy = sessionPolicy
         log("tpms session extended settle_ms=${sessionPolicy.settleMs} busy_retries=${sessionPolicy.busyRetries}")
     }
 
-    /** Steps 6-7: `27 01`, then `27 02 <key>` unless the seed is zero; null when unlocked, else the stop to end with. */
-    private fun unlock(run: Run, latch: () -> Unit): DiagStop? {
+    /**
+     * Steps 6-7: `27 01`, then `27 02 <key>` unless the seed is zero; null when unlocked, else the
+     * stop to end with. The latch set as the key went out is cleared by exactly `67 02` only.
+     */
+    private fun unlock(run: Run, latch: (Boolean) -> Unit): DiagStop? {
         val seedReq = TpmsWire.seedRequest()
         val m = ask(run, seedReq, TpmsWire.SERVICE_SECURITY, TpmsWire.SECURITY_SEED)
-        val seed = (m as? DtcMatch.Answer)?.let { TpmsWire.seedOf(it.uds) }
+        val seedAnswer = positive(run, m)
+        val seed = seedAnswer?.let { TpmsWire.seedOf(it.uds) }
         if (seed == null) {
-            latch()
-            return securityStop((m as? DtcMatch.Answer)?.let { "seed_len=${it.uds.size - 2}" } ?: outcome(m), seedReq)
+            latch(true)
+            return securityStop(seedAnswer?.let { "seed_len=${it.uds.size - 2}" } ?: outcome(m), seedReq)
         }
         val seedValue = TpmsWire.int32(seed, 0)
         if (seedValue == 0) {
@@ -198,12 +221,12 @@ internal object TpmsJobs {
         log("tpms security seed=${id8(seedValue)} key=${id8(key)}")
         val keyReq = TpmsWire.keyRequest(key)
         val k = ask(run, keyReq, TpmsWire.SERVICE_SECURITY, TpmsWire.SECURITY_KEY)
-        if (k is DtcMatch.Answer) {
+        if (positive(run, k)?.uds?.contentEquals(TpmsWire.KEY_ANSWER) == true) {
+            latch(false)
             log("tpms security unlocked")
             return null
         }
-        latch()
-        return securityStop(outcome(k), keyReq)
+        return securityStop(outcome(k) + ((k as? DtcMatch.Answer)?.let { " uds=${hex(it.uds, 0, it.uds.size)}" } ?: ""), keyReq)
     }
 
     private fun securityStop(detail: String, req: ByteArray): DiagStop {
@@ -211,14 +234,17 @@ internal object TpmsJobs {
         return DiagStop(DtcWire.STATE_ABORTED, "security_rejected $detail", at(req))
     }
 
-    /** Step 8: each entry's `2E` once, DID order; the first one without `6E 33xx` ends the writes. */
+    /**
+     * Step 8: each entry's `2E` once, DID order; the first one without exactly `6E 33xx` ends the
+     * writes. A `2E` that went out before the run stopped is unverified: the re-read, if any, decides.
+     */
     private fun writeEntries(run: Run, entries: List<TpmsPlanEntry>): DiagStop? {
         for (e in entries) {
             val req = TpmsWire.writeRequest(e)
             val sentBefore = run.link.sent
-            val m = ask(run, req, TpmsWire.SERVICE_WRITE_DID, e.did)
+            val m = sent(run, { run.edit { verdicts[e.did] = SENT_OK } }) { ask(run, req, TpmsWire.SERVICE_WRITE_DID, e.did) }
             val verdict = when {
-                m is DtcMatch.Answer && m.uds.size == WRITE_ANSWER_BYTES -> SENT_OK
+                positive(run, m)?.uds?.size == WRITE_ANSWER_BYTES -> SENT_OK
                 m is DtcMatch.Nrc -> TpmsVerdict.REFUSED
                 m == DtcMatch.Busy -> TpmsVerdict.NOT_SENT
                 else -> TpmsVerdict.UNKNOWN
@@ -238,27 +264,37 @@ internal object TpmsJobs {
 
     /** Step 9: `10 01`; without the exact default-session answer the block's own S3 timeout is awaited. */
     private fun leave(run: Run) {
-        val m = ask(run, TpmsWire.sessionRequest(TpmsWire.SESSION_DEFAULT), TpmsWire.SERVICE_SESSION, TpmsWire.SESSION_DEFAULT)
-        run.inSession = false
+        val m = sent(run, { run.exitSent = true }) {
+            ask(run, TpmsWire.sessionRequest(TpmsWire.SESSION_DEFAULT), TpmsWire.SERVICE_SESSION, TpmsWire.SESSION_DEFAULT)
+        }
+        run.exitConfirmed = defaultAnswer(run, m)
         run.link.policy = run.normalPolicy
-        if (m is DtcMatch.Answer && m.uds.contentEquals(TpmsWire.DEFAULT_ANSWER)) return
-        log("tpms exit not confirmed answer=${outcome(m)}, waiting $S3_WAIT_MS ms")
-        run.link.clock.sleep(S3_WAIT_MS)
+        if (!run.exitConfirmed) {
+            log("tpms exit not confirmed answer=${outcome(m)}, waiting $S3_WAIT_MS ms")
+            run.link.clock.sleep(S3_WAIT_MS)
+        }
+        run.link.plainOnly = false
     }
 
-    /** After a gear, speed or budget stop inside the session: the one `10 01`, nothing after it. */
-    private fun exitAfterStop(run: Run, e: DiagStop) {
-        log("tpms exit after stop ${e.reason}")
-        run.inSession = false
+    /** After a stop once `10 03` went out (not the guard, not a foreign frame): the one `10 01`, nothing after it. */
+    private fun exitAfterStop(run: Run, reason: String) {
+        log("tpms exit after stop $reason")
         runCatching {
-            run.link.exit(
-                TpmsWire.ADDR, TpmsWire.frame(TpmsWire.sessionRequest(TpmsWire.SESSION_DEFAULT)),
-                TpmsWire.SERVICE_SESSION, TpmsWire.SESSION_DEFAULT,
-            )
+            sent(run, { run.exitSent = true }) {
+                run.link.exit(
+                    TpmsWire.ADDR, TpmsWire.frame(TpmsWire.sessionRequest(TpmsWire.SESSION_DEFAULT)),
+                    TpmsWire.SERVICE_SESSION, TpmsWire.SESSION_DEFAULT,
+                )
+            }
         }
-            .onSuccess { log("tpms exit answer ${outcome(it)}") }
-            .onFailure { log("tpms exit not sent ${(it as? DiagStop)?.reason ?: it.javaClass.simpleName}") }
+            .onSuccess {
+                run.exitConfirmed = defaultAnswer(run, it)
+                log("tpms exit answer ${outcome(it)} confirmed=${run.exitConfirmed}")
+            }
+            .onFailure { log("tpms exit not sent ${(it as? DiagStop)?.reason ?: it.javaClass.simpleName} sent=${run.exitSent}") }
     }
+
+    private fun defaultAnswer(run: Run, m: DtcMatch?): Boolean = positive(run, m)?.uds?.contentEquals(TpmsWire.DEFAULT_ANSWER) == true
 
     /** Steps 10 and 11: the four slots again and the stored codes. */
     private fun readBack(run: Run) {
@@ -274,6 +310,20 @@ internal object TpmsJobs {
     private fun ask(run: Run, uds: ByteArray, service: Int, sub: Int): DtcMatch? =
         run.link.request(TpmsWire.ADDR, TpmsWire.frame(uds), service, sub)
 
+    /** Runs the one request of [block]; [mark] when it reached the device, also when the wait for its answer then threw. */
+    private inline fun <T> sent(run: Run, mark: () -> Unit, block: () -> T): T {
+        val before = run.link.sent
+        try {
+            return block()
+        } finally {
+            if (run.link.sent > before) mark()
+        }
+    }
+
+    /** The positive answer as the write takes it: result byte 1 only (C3); the read job takes any. */
+    private fun positive(run: Run, m: DtcMatch?): DtcMatch.Answer? =
+        (m as? DtcMatch.Answer)?.takeIf { !run.writeJob || it.result == DtcWire.RESULT_ANSWER }
+
     private fun readDid(run: Run, did: Int): ByteArray? =
         udsOf(ask(run, TpmsWire.readRequest(did), DtcWire.SERVICE_READ_DID, did), DtcWire.SERVICE_READ_DID)
 
@@ -286,7 +336,11 @@ internal object TpmsJobs {
 
     private fun hexOrNull(b: ByteArray?) = b?.let { hex(it, 0, it.size) }
 
-    private fun outcome(m: DtcMatch?): String = m?.let(::kindName) ?: "no_answer"
+    private fun outcome(m: DtcMatch?): String = when {
+        m == null -> "no_answer"
+        m is DtcMatch.Answer && m.result != DtcWire.RESULT_ANSWER -> "answer res=${m.result}"
+        else -> kindName(m)
+    }
 
     /** The answer as the app gets it: positive UDS, `7F sid nrc`, or the raw multi-frame; else null. */
     private fun udsOf(m: DtcMatch?, service: Int): ByteArray? = when (m) {
