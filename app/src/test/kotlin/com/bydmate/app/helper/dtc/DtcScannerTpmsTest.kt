@@ -235,7 +235,8 @@ class DtcScannerTpmsTest {
     }
 
     @Test fun `write 39 - a rejected key sends no 2E, exits the session, latches, and the next start is refused`() {
-        val (w, _) = world()
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2702")) twice(hex("7F2735")) else null }
         write(w)
         val s = w.scanner.tpmsStatus()
         assertEquals(DtcWire.STATE_ABORTED, s.state)
@@ -285,13 +286,15 @@ class DtcScannerTpmsTest {
 
     @Test fun `write 42 - a pending answer then the positive one counts as written`() {
         val (w, car) = world()
+        val fresh = id("9A0000A1")
         car.override = { h ->
             if (h.startsWith("2E")) {
-                car.ids[0x3305] = newIds[0]
+                car.ids[0x3305] = fresh
                 twice(hex("7F2E78")) + twice(hex("6E3305"))
             } else null
         }
-        write(w, plan(1))
+        // A new sensor ID that no other wheel holds (newIds[0] already sits in 3307: a duplicate).
+        write(w, listOf(TpmsPlanEntry(0x3305, oldIds[0], fresh)))
         val s = w.scanner.tpmsStatus()
         assertEquals(DtcWire.STATE_DONE, s.state)
         assertEquals(TpmsVerdict.WRITTEN, slot(s, 0x3305).verdict)
