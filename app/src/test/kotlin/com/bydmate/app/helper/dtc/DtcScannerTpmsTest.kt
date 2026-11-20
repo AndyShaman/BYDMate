@@ -711,6 +711,42 @@ class DtcScannerTpmsTest {
         assertExitSentOnceRightAfterLastWrite(w)
     }
 
+    @Test fun `E1 no gear or speed read happens between the last 2E answer and 10 01, which is sent once`() {
+        val (w, _) = world()
+        val late = mutableListOf<String>()
+        w.gear = { if (w.count("2E") >= 4 && w.count("1001") == 0) late += "gear"; 1 }
+        w.speed = { if (w.count("2E") >= 4 && w.count("1001") == 0) late += "speed"; 0 }
+        write(w)
+        assertEquals(emptyList<String>(), late)
+        assertExitSentOnceRightAfterLastWrite(w)
+    }
+
+    @Test fun `E1 the exit after the last 2E is sent once when any gear or speed read would throw`() {
+        val (w, _) = world()
+        w.gear = { if (w.count("2E") >= 4 && w.count("1001") == 0) error("gear") else 1 }
+        w.speed = { if (w.count("2E") >= 4 && w.count("1001") == 0) error("speed") else 0 }
+        write(w)
+        assertExitSentOnceRightAfterLastWrite(w)
+    }
+
+    @Test fun `E2 a guard that changes during the second gear read of the gate sends no 2E and stops as diag_busy`() {
+        val (w, _) = world()
+        var bad = false
+        var gateReads = 0
+        w.guard = { if (bad) "r@1_0&w@-1_0" else DtcWire.GUARD_BASELINE }
+        w.gear = {
+            if (w.count("2702") >= 1 && w.count("2E") == 0 && ++gateReads == 2) bad = true
+            1
+        }
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("diag_busy"))
+        assertEquals(0, w.count("2E"))
+        assertEquals(0, w.count("1001"))
+        assertTrue(w.requests().last().startsWith("2702"))
+    }
+
     @Test fun `D3 a gear read right after the speed read, in the same gate, before the first 2E, that is not P sends no 2E`() {
         val (w, _) = world()
         var speedAt = -1

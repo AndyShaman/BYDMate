@@ -452,6 +452,19 @@ class DtcScannerTest {
         assertTrue(s.erase.all { it.confirm == DtcWire.CONFIRM_NOT_RUN })
     }
 
+    @Test fun `E2b a guard that changes during the second gear read of the gate sends no clear and stops as diag_busy`() {
+        val w = eraseWorld()
+        var bad = false
+        var reads = 0
+        w.guard = { if (bad) "r@1_0&w@-1_0" else DtcWire.GUARD_BASELINE }
+        w.gear = { if (++reads == 2) bad = true; 1 }
+        val s = w.erase(0x712, 0x7E7)
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("diag_busy"))
+        assertEquals(0, w.device.sent.count(::isClear))
+        assertEquals(0, w.device.sent.size)
+    }
+
     @Test fun `E3 an unknown or non-zero speed stops the erase before any send`() {
         for (speed in listOf<Int?>(null, 3)) {
             val w = eraseWorld()
