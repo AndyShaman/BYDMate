@@ -70,9 +70,12 @@ import com.bydmate.app.split.applyPick
  *
  * The app rows edit the MENU pair; a launch with other apps changes only the session pair, which
  * the next process (car power cycle) forgets (SplitPreferences).
+ *
+ * [embedded]: the Android 10 head units show this section as «Основной способ» under their own
+ * method selector ([SplitModeSection]), which owns the master switch: the toggle row is hidden.
  */
 @Composable
-internal fun SplitSection(viewModel: SettingsViewModel) {
+internal fun SplitSection(viewModel: SettingsViewModel, embedded: Boolean = false) {
     val context = LocalContext.current
     val entryPoint = remember {
         EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
@@ -107,7 +110,7 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
     var openPicker by remember { mutableStateOf<SplitRole?>(null) }
 
     SectionHeader(
-        text = stringResource(R.string.settings_section_split_title),
+        text = stringResource(if (embedded) R.string.settings_split_mode_main_header else R.string.settings_section_split_title),
         onHelp = { howToOpen = !howToOpen },
     )
     Card(
@@ -122,7 +125,7 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
                 SettingHint(text = stringResource(R.string.settings_split_howto_body))
                 SettingDivider()
             }
-            SettingToggleRow(
+            if (!embedded) SettingToggleRow(
                 title = stringResource(R.string.settings_split_enable_title),
                 traceId = "split_enable",
                 description = stringResource(R.string.settings_split_enable_desc),
@@ -149,10 +152,10 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
                 },
             )
             if (splitEnabled && split37Firmware) {
-                SettingDivider()
+                if (!embedded) SettingDivider()
                 SettingHint(text = stringResource(R.string.settings_split_mechanism_platformized_hint))
             } else if (splitEnabled) {
-                SettingDivider()
+                if (!embedded) SettingDivider()
                 // Mechanism selector: our own freeform panes vs handing the pair to the
                 // firmware's split. Native is the fallback for firmwares that gate freeform.
                 SettingChipRow(

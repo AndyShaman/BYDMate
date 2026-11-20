@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.split.AppSet
+import com.bydmate.app.split.AppSetAutostart
 import com.bydmate.app.split.AppSetLauncher
 import com.bydmate.app.split.AppSetStore
 import com.bydmate.app.split.SplitPreferences
@@ -17,12 +18,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** What the driver sees under a set after pressing «Запустить», and whether the sets are the split in use. */
+/**
+ * What the driver sees under a set after pressing «Запустить», which split method is in use and
+ * «Открывать при запуске» of the «Разделение экрана» section (Android 10 head units).
+ */
 @HiltViewModel
 class AppSetsViewModel @Inject constructor(
     val store: AppSetStore,
     private val launcher: AppSetLauncher,
     private val splitPreferences: SplitPreferences,
+    private val autostart: AppSetAutostart,
     @ApplicationContext context: Context,
 ) : ViewModel() {
     private val _lastRun = MutableStateFlow<AppSetLauncher.Outcome?>(null)
@@ -31,8 +36,8 @@ class AppSetsViewModel @Inject constructor(
     private val _splitOn = MutableStateFlow(splitPreferences.isFeatureEnabled())
 
     /**
-     * «Разделение экрана 1/3 + 2/3» is on: it is the split in use and the sets rest
-     * ([com.bydmate.app.split.appSetsActive]). Follows its switch in the same section live.
+     * The main method is chosen (the split master switch is on) and the sets rest
+     * ([com.bydmate.app.split.appSetsActive]). Follows the switch live.
      */
     val splitOn: StateFlow<Boolean> = _splitOn.asStateFlow()
 
@@ -50,6 +55,10 @@ class AppSetsViewModel @Inject constructor(
     override fun onCleared() {
         splitFile.unregisterOnSharedPreferenceChangeListener(splitListener)
     }
+
+    fun autostartEnabled(): Boolean = autostart.isEnabled()
+
+    fun setAutostart(enabled: Boolean) = autostart.setEnabled(enabled)
 
     fun run(set: AppSet) {
         if (_splitOn.value) return

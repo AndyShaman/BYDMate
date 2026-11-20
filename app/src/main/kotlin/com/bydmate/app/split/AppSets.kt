@@ -29,10 +29,10 @@ data class AppSet(
 )
 
 /**
- * Whether the app sets are the split in use: on the Android 10 head units, while «Разделение экрана
- * 1/3 + 2/3» of the «Разделение экрана» section is switched off. Only one of the two works at a
- * time: with it on, that split takes the widget tap, the split key and the voice, and no set opens
- * (nor by name, nor at start); with it off, the sets take them.
+ * Whether the app sets are the split in use: on the Android 10 head units, with «Альтернативный»
+ * chosen in «Разделение экрана» (the split master switch off). Only one method works at a time:
+ * with «Основной» the widget tap, the split key, the voice and the start open its saved pair, and
+ * no set opens; with «Альтернативный» they open the sets.
  */
 fun appSetsActive(legacyHeadUnit: Boolean, splitFeatureEnabled: Boolean): Boolean =
     legacyHeadUnit && !splitFeatureEnabled
@@ -166,6 +166,10 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
             "разделение экрана", "включи разделение экрана", "открой разделение экрана", "запусти разделение экрана",
             "включи разделение", "открой разделение", "раздели экран",
         ).map { VoicePhrase.words(it) }
+
+        /** «сплит», «включи разделение экрана» and the like on their own: the split with no set named. */
+        fun isBareSplitPhrase(transcript: String): Boolean =
+            VoicePhrase.words(transcript).let { heard -> DEFAULT_PHRASES.any { it == heard } }
 
         /** How many letters the recognizer may have got wrong in a name of [length] letters. */
         internal fun nameDistanceLimit(key: String): Int = maxOf(1, key.length / 4)
