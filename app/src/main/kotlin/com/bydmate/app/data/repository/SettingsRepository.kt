@@ -217,6 +217,7 @@ open class SettingsRepository @Inject constructor(
             Currency("KZT", "₸"),
             Currency("AMD", "֏"),
             Currency("AZN", "₼"),
+            Currency("GEL", "₾"),
             Currency("USD", "$"),
             Currency("EUR", "€"),
             Currency("PLN", "zł"),
