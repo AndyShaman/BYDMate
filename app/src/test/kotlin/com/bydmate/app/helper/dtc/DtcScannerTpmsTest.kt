@@ -1,0 +1,393 @@
+package com.bydmate.app.helper.dtc
+
+import com.bydmate.app.helper.dtc.DtcFixtures.hex
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class DtcScannerTpmsTest {
+
+    private class FakeClock : DtcClock {
+        var t = 0L
+        override fun nowMs() = t
+        override fun sleep(ms: Long) { t += ms }
+    }
+
+    private class FakeDevice(private val clock: FakeClock) : DtcDevice {
+        val queue = ArrayDeque<ByteArray>()
+        val sent = mutableListOf<ByteArray>()
+        var respond: (ByteArray) -> List<ByteArray> = { emptyList() }
+
+        override fun register(): String? = null
+        override fun unregister() { queue.clear() }
+        override fun send(payload: ByteArray): Int { sent += payload; queue += respond(payload); return 0 }
+        override fun poll(timeoutMs: Long): ByteArray? {
+            if (queue.isNotEmpty()) return queue.removeFirst()
+            clock.t += timeoutMs
+            return null
+        }
+        override fun drain() = queue.clear()
+    }
+
+    private fun id(s: String) = s.toLong(16).toInt()
+    private fun idHex(v: Int) = "%08X".format(v)
+
+    private val f194 = hex("62F1944845001201F00056E0")
+    private val dtc = hex("5902FF5000032850010328500203285003032850150028")
+    private val seed = "12345678"
+    private val key = "B8FEFFA3" // key of [seed]
+    private val dids = listOf(0x3305, 0x3306, 0x3307, 0x3308)
+    private val oldIds = listOf("9A4B4AC0", "9A367593", "9A7BB4C2", "9A1561AF").map(::id)
+    private val newIds = listOf("9A7BB4C2", "9A1561AF", "9A4B4AC0", "9A367593").map(::id)
+    private val reads = listOf("223305", "223306", "223307", "223308")
+
+    private fun plan(n: Int = 4) = (0 until n).map { TpmsPlanEntry(dids[it], oldIds[it], newIds[it]) }
+
+    /** Every answer the car gives comes twice, like the real device. */
+    private fun twice(uds: ByteArray, result: Int = 1): List<ByteArray> =
+        DtcFixtures.frame(TpmsWire.ADDR, uds, result).let { listOf(it, it) }
+
+    /** The block of an L3 car, answering as recorded in the winter write. */
+    private class Car(val seed: String, val key: String) {
+        val ids = mutableMapOf<Int, Int>()
+        var session = false
+        /** Returns the answer for a request (hex of the UDS) or null for the default behaviour. */
+        var override: (String) -> List<ByteArray>? = { null }
+    }
+
+    private fun slotUds(did: Int, id: Int, heard: Boolean = true) =
+        hex("62%04X%08X%02X0001011C0200".format(did, id, if (heard) 0 else 1))
+
+    private class World {
+        val clock = FakeClock()
+        val device = FakeDevice(clock)
+        var guard: () -> String? = { DtcWire.GUARD_BASELINE }
+        var gear: () -> Int? = { 1 }
+        var speed: () -> Int? = { 0 }
+        val tasks = mutableListOf<Runnable>()
+        var inline = true
+        val scanner by lazy {
+            DtcScanner(device, clock, { guard() }, runner = { if (inline) it.run() else tasks += it }, readSpeed = { speed() })
+        }
+        fun requests() = device.sent.map { DtcFixtures.hex(it.copyOfRange(4, it.size)) }
+        fun count(prefix: String) = requests().count { it.startsWith(prefix) }
+    }
+
+    private fun world(car: Car = Car(seed, key).also { c -> dids.forEachIndexed { i, d -> c.ids[d] = oldIds[i] } },
+                      setup: (World, Car) -> Unit = { _, _ -> }): Pair<World, Car> {
+        val w = World()
+        w.device.respond = { p ->
+            val h = DtcFixtures.hex(p.copyOfRange(4, p.size))
+            car.override(h) ?: when {
+                h == "22F194" -> twice(f194)
+                h == "1902FF" -> twice(dtc)
+                h.startsWith("2233") -> {
+                    val did = h.substring(2).toInt(16)
+                    twice(slotUds(did, car.ids.getValue(did)))
+                }
+                h == "1003" -> { car.session = true; twice(hex("5003003201F4")) }
+                h == "1001" -> { car.session = false; twice(hex("5001003201F4")) }
+                h == "2701" -> twice(hex("6701$seed"))
+                h.startsWith("2702") -> if (h.substring(4) == key) twice(hex("6702")) else twice(hex("7F2735"))
+                h.startsWith("2E") -> {
+                    val did = h.substring(2, 6).toInt(16)
+                    car.ids[did] = id(h.substring(6))
+                    twice(hex("6E%04X".format(did)))
+                }
+                else -> emptyList()
+            }
+        }
+        setup(w, car)
+        return w to car
+    }
+
+    private fun write(w: World, p: List<TpmsPlanEntry> = plan()) = w.scanner.startTpmsWrite(p) { w.gear() }
+    private fun slot(s: TpmsStatus, did: Int) = s.slots.first { it.did == did }
+
+    /** D.6 50: every frame the device received goes to 0x720. */
+    private fun assertAddr720(w: World) {
+        for (p in w.device.sent) {
+            assertEquals(0x0A, p[0].toInt())
+            assertEquals(0x07, p[1].toInt())
+            assertEquals(0x20, p[2].toInt())
+            assertEquals(p.size - 4, p[3].toInt() and 0xFF)
+        }
+    }
+
+    private fun happyRequests() = listOf("22F194", "1902FF") + reads + listOf("1003", "2701", "2702$key") +
+        dids.indices.map { "2E%04X%s".format(dids[it], idHex(newIds[it])) } + listOf("1001") + reads + listOf("1902FF")
+
+    // Read job
+
+    @Test fun `tpms read sends exactly the six reads to 0x720 and returns the raw slots`() {
+        val (w, car) = world()
+        assertEquals(0, w.scanner.startTpmsRead { w.gear() })
+        assertEquals(listOf("22F194", "1902FF") + reads, w.requests())
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(DtcWire.MODE_TPMS_READ, s.mode)
+        assertEquals(dids.map { DtcFixtures.hex(slotUds(it, car.ids.getValue(it))) }, dids.map { DtcFixtures.hex(slot(s, it).beforeUds!!) })
+        assertAddr720(w)
+    }
+
+    @Test fun `tpms read never sends 10, 27 or 2E`() {
+        val (w, _) = world()
+        w.scanner.startTpmsRead { w.gear() }
+        assertEquals(DtcWire.STATE_DONE, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.count("10") + w.count("27") + w.count("2E"))
+    }
+
+    // Start refusals
+
+    @Test fun `a tpms write while a scan runs is busy and sends nothing`() {
+        val (w, _) = world()
+        w.inline = false
+        assertEquals(0, w.scanner.start { w.gear() })
+        assertEquals(1, write(w))
+        assertEquals(0, w.device.sent.size)
+    }
+
+    @Test fun `a plan that fails validation returns -1 and sends nothing`() {
+        val (w, _) = world()
+        assertEquals(-1, write(w, emptyList()))
+        assertEquals(-1, write(w, listOf(TpmsPlanEntry(0x3305, 5, 5))))
+        assertEquals(0, w.device.sent.size)
+    }
+
+    // D.2 20, 21 at job level
+
+    @Test fun `cas 20 - a slot that changed since the window ends as car_changed without a session`() {
+        val (w, car) = world()
+        car.ids[0x3305] = id("11111111")
+        assertEquals(0, write(w))
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("car_changed"))
+        assertEquals(0, w.count("1003") + w.count("2E"))
+        assertAddr720(w)
+    }
+
+    @Test fun `cas 21 - every slot already new is done with nothing to write and no session`() {
+        val (w, car) = world()
+        dids.forEachIndexed { i, d -> car.ids[d] = newIds[i] }
+        assertEquals(0, write(w))
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertTrue(s.reason, s.reason.startsWith("nothing_to_write"))
+        assertEquals(0, w.count("1003") + w.count("2E"))
+        assertAddr720(w)
+    }
+
+    // D.4 34
+
+    @Test fun `session 34 - 50 03 00 32 01 F4 continues to the security seed`() {
+        val (w, _) = world()
+        write(w)
+        assertEquals(1, w.count("2701"))
+        assertAddr720(w)
+    }
+
+    @Test fun `session 34 - another session timing aborts before 27`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "1003") twice(hex("5003001901F4")) else null }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.count("27") + w.count("2E"))
+        assertAddr720(w)
+    }
+
+    // D.5 36, 37
+
+    @Test fun `security 36 - seed 00000000 means unlocked and no 27 02 is sent`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "2701") twice(hex("670100000000")) else null }
+        write(w)
+        assertEquals(0, w.count("2702"))
+        assertEquals(4, w.count("2E"))
+        assertAddr720(w)
+    }
+
+    @Test fun `security 37 - a seed of 2 or 5 bytes sends no 27 02 and no 2E`() {
+        for (bad in listOf("6701AABB", "6701AABBCCDDEE")) {
+            val (w, car) = world()
+            car.override = { h -> if (h == "2701") twice(hex(bad)) else null }
+            write(w)
+            assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+            assertEquals(0, w.count("2702"))
+            assertEquals(0, w.count("2E"))
+            assertAddr720(w)
+        }
+    }
+
+    // D.6
+
+    @Test fun `write 38 - happy path sends exactly the recorded sequence and every entry is written`() {
+        val (w, car) = world()
+        assertEquals(0, write(w))
+        assertEquals(happyRequests(), w.requests())
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(DtcWire.MODE_TPMS_WRITE, s.mode)
+        assertEquals(List(4) { TpmsVerdict.WRITTEN }, dids.map { slot(s, it).verdict })
+        assertEquals(newIds, dids.map { car.ids.getValue(it) })
+        assertAddr720(w)
+    }
+
+    @Test fun `write 39 - a rejected key sends no 2E, exits the session, latches, and the next start is refused`() {
+        val (w, _) = world()
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("security_rejected"))
+        assertEquals(0, w.count("2E"))
+        val i = w.requests().indexOf("1001")
+        assertTrue(i > 0)
+        assertEquals(reads, w.requests().drop(i + 1).take(4))
+        assertAddr720(w)
+        val before = w.device.sent.size
+        assertEquals(-1, write(w))
+        assertEquals(before, w.device.sent.size)
+    }
+
+    @Test fun `write 40 - a refused first 2E stops further 2E and leaves entry 1 not written`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2E")) twice(hex("7F2E33")) else null }
+        write(w)
+        val r = w.requests()
+        assertEquals(1, w.count("2E"))
+        assertTrue(r.indexOf("1001") > r.indexOfFirst { it.startsWith("2E") })
+        val s = w.scanner.tpmsStatus()
+        assertEquals(TpmsVerdict.NOT_WRITTEN, slot(s, 0x3305).verdict)
+        assertEquals(List(3) { TpmsVerdict.NOT_RUN }, dids.drop(1).map { slot(s, it).verdict })
+        assertAddr720(w)
+    }
+
+    @Test fun `write 41 - a silent 2E is not resent and the re-read decides, new means written`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2E")) { car.ids[0x3305] = newIds[0]; emptyList() } else null }
+        write(w)
+        assertEquals(1, w.count("2E"))
+        val s = w.scanner.tpmsStatus()
+        assertEquals(TpmsVerdict.WRITTEN, slot(s, 0x3305).verdict)
+        assertEquals(List(3) { TpmsVerdict.NOT_RUN }, dids.drop(1).map { slot(s, it).verdict })
+        assertAddr720(w)
+    }
+
+    @Test fun `write 41 - a silent 2E is not resent and the re-read decides, old means not written`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2E")) emptyList() else null }
+        write(w)
+        assertEquals(1, w.count("2E"))
+        assertEquals(TpmsVerdict.NOT_WRITTEN, slot(w.scanner.tpmsStatus(), 0x3305).verdict)
+        assertAddr720(w)
+    }
+
+    @Test fun `write 42 - a pending answer then the positive one counts as written`() {
+        val (w, car) = world()
+        car.override = { h ->
+            if (h.startsWith("2E")) {
+                car.ids[0x3305] = newIds[0]
+                twice(hex("7F2E78")) + twice(hex("6E3305"))
+            } else null
+        }
+        write(w, plan(1))
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(TpmsVerdict.WRITTEN, slot(s, 0x3305).verdict)
+        assertEquals(1, w.count("2E"))
+        assertAddr720(w)
+    }
+
+    private fun assertStoppedInSession(w: World, reasonPrefix: String, closes: Boolean) {
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith(reasonPrefix))
+        assertEquals(1, w.count("2E"))
+        if (closes) {
+            assertEquals("1001", w.requests().last())
+            assertEquals(1, w.count("1001"))
+        } else {
+            assertTrue(w.requests().last().startsWith("2E"))
+            assertEquals(0, w.count("1001"))
+        }
+        assertEquals(TpmsVerdict.UNVERIFIED, slot(s, 0x3305).verdict)
+        assertEquals(List(3) { TpmsVerdict.NOT_RUN }, dids.drop(1).map { slot(s, it).verdict })
+        assertAddr720(w)
+    }
+
+    @Test fun `write 43 - leaving park before the second 2E sends one 10 01 and nothing after`() {
+        val (w, _) = world()
+        w.gear = { if (w.count("2E") >= 1) 4 else 1 }
+        write(w)
+        assertStoppedInSession(w, "not_park", closes = true)
+    }
+
+    @Test fun `write 44 - speed above zero before the second 2E sends one 10 01 and nothing after`() {
+        val (w, _) = world()
+        w.speed = { if (w.count("2E") >= 1) 1 else 0 }
+        write(w)
+        assertStoppedInSession(w, "speed", closes = true)
+    }
+
+    @Test fun `write 44 - a non-baseline guard before the second 2E sends nothing after the last 2E`() {
+        val (w, _) = world()
+        w.guard = { if (w.count("2E") >= 1) "r@1_0&w@-1_0" else DtcWire.GUARD_BASELINE }
+        write(w)
+        assertStoppedInSession(w, "diag_busy", closes = false)
+    }
+
+    @Test fun `write 45 - a frame from 0x7E8 during the session aborts and nothing more is sent`() {
+        val (w, car) = world()
+        car.override = { h ->
+            if (h == "1003") twice(hex("5003003201F4")) + DtcFixtures.frame(0x7E0, hex("620000"))
+            else null
+        }
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals("1003", w.requests().last())
+        assertAddr720(w)
+    }
+
+    @Test fun `write 46 - traffic in the first two seconds sends nothing`() {
+        val (w, _) = world()
+        w.device.queue += DtcFixtures.frame(TpmsWire.ADDR, f194)
+        write(w)
+        assertEquals(DtcWire.STATE_ABORTED, w.scanner.tpmsStatus().state)
+        assertEquals(0, w.device.sent.size)
+    }
+
+    @Test fun `write 47 - a busy result on a 2E is not resent, entry not sent, session closed`() {
+        val (w, car) = world()
+        car.override = { h -> if (h.startsWith("2E")) twice(ByteArray(0), result = 5) else null }
+        write(w)
+        assertEquals(1, w.count("2E"))
+        val r = w.requests()
+        assertTrue(r.indexOf("1001") > r.indexOfFirst { it.startsWith("2E") })
+        val s = w.scanner.tpmsStatus()
+        assertEquals(TpmsVerdict.NOT_SENT, slot(s, 0x3305).verdict)
+        assertEquals(List(3) { TpmsVerdict.NOT_RUN }, dids.drop(1).map { slot(s, it).verdict })
+        assertAddr720(w)
+    }
+
+    @Test fun `write 48 - running over the budget inside the session aborts with one 10 01 and no 2E`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "1003") { w.clock.t += 60_000; twice(hex("5003003201F4")) } else null }
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("budget"))
+        assertEquals(0, w.count("2E"))
+        assertEquals("1001", w.requests().last())
+        assertEquals(1, w.count("1001"))
+        assertAddr720(w)
+    }
+
+    @Test fun `write 49 - duplicated answers are not counted as foreign traffic`() {
+        val (w, _) = world()
+        write(w)
+        assertEquals(DtcWire.STATE_DONE, w.scanner.tpmsStatus().state)
+        assertEquals(happyRequests().size, w.device.sent.size)
+        assertFalse(w.scanner.tpmsStatus().reason.startsWith("foreign"))
+    }
+}

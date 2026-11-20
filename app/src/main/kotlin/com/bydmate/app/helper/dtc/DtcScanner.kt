@@ -94,6 +94,23 @@ class DtcScanner(
         }
     }
 
+    /**
+     * Reads the four tyre-sensor slots of 0x720 (F194, 19 02 FF, 22 3305..3308; nothing else):
+     * 0 started, 1 busy, -1 refused. Read gates as for a scan.
+     */
+    fun startTpmsRead(gear: () -> Int?): Int = TODO()
+
+    /**
+     * Writes [plan] to 0x720 per design B.3: 0 started, 1 busy, -1 refused (invalid plan, or the
+     * security key already failed in this daemon's lifetime; nothing is sent). Gates as for an
+     * erase (P, speed exactly 0, guard), strict traffic, one `27 02`, no resent `2E`. A stop for
+     * gear, speed or budget inside the extended session still sends one `10 01`; a stop for the
+     * guard or a foreign frame sends nothing more.
+     */
+    fun startTpmsWrite(plan: List<TpmsPlanEntry>, gear: () -> Int?): Int = TODO()
+
+    fun tpmsStatus(): TpmsStatus = TODO()
+
     private fun launch(mode: Int, addrs: IntArray, job: () -> Unit): Int {
         synchronized(lock) {
             if (state == DtcWire.STATE_RUNNING) return START_BUSY
