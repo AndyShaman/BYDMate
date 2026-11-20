@@ -472,6 +472,8 @@ class LogRecorder internal constructor(
             "FidRec:*",
             // Manual fault-code scan: the daemon's requests, frames and outcomes (app and daemon share the tag).
             "DtcScan:*",
+            // Tyre-sensor IDs window: reads, writes, plans, set changes (the daemon logs under DtcScan).
+            "Tpms:*",
             // Fault-code texts: which description tables were loaded for which car type.
             "DtcDesc:*", "CarAutoType:*",
             // Split-screen wave: session/watchdog decisions, pill+picker overlay, widget tap.

@@ -196,7 +196,7 @@ class TpmsRepository(
         if (reply != DtcScanner.START_OK) return fail(startError(reply))
         val status = poll(DtcWire.MODE_TPMS_READ) ?: return
         if (status.state != DtcWire.STATE_DONE) {
-            Log.w(TAG, "read end state=${status.state} reason=${status.reason.ifEmpty { "-" }}")
+            Log.w(TAG, "read end state=${stateName(status.state)} reason=${status.reason.ifEmpty { "-" }}")
             return fail(errorOf(status))
         }
         saveRead(status, "read")
@@ -227,7 +227,7 @@ class TpmsRepository(
             val status = runCatching { helper.tpmsStatus() }.getOrNull()
             if (status == null) {
                 if (++lost >= MAX_LOST_POLLS) {
-                    Log.w(TAG, "status lost polls=$lost mode=$mode")
+                    Log.w(TAG, "status lost polls=$lost mode=${modeName(mode)}")
                     fail(TpmsError.STATUS_LOST)
                     return null
                 }
@@ -235,7 +235,7 @@ class TpmsRepository(
             }
             lost = 0
             if (status.mode != mode || status.state == DtcWire.STATE_IDLE) {
-                Log.w(TAG, "poll saw mode=${status.mode} state=${status.state} waiting for mode=$mode, job lost")
+                Log.w(TAG, "poll saw mode=${modeName(status.mode)} state=${stateName(status.state)} waiting for mode=${modeName(mode)}, job lost")
                 fail(TpmsError.STATUS_LOST)
                 return null
             }
@@ -253,8 +253,7 @@ class TpmsRepository(
         pending = null
         val planned = intent?.plan.orEmpty()
         val readBack = slotIds(status) { it.afterUds }
-        val complete = planned.isNotEmpty() && readBack.none { it == null } &&
-            planned.all { e -> status.slots.firstOrNull { it.did == e.did }?.verdict == TpmsVerdict.WRITTEN }
+        val complete = writeComplete(status, planned.map { it.did })
         status.slots.forEach { slot ->
             Log.i(
                 TAG,
@@ -262,7 +261,7 @@ class TpmsRepository(
                     "before=${parsedId(slot.did, slot.beforeUds)} after=${parsedId(slot.did, slot.afterUds)}",
             )
         }
-        Log.i(TAG, "write end state=${status.state} reason=${status.reason.ifEmpty { "-" }} stopped_at=${status.stoppedAt.ifEmpty { "-" }} complete=$complete undo=${intent?.undo}")
+        Log.i(TAG, "write end state=${stateName(status.state)} reason=${status.reason.ifEmpty { "-" }} stopped_at=${status.stoppedAt.ifEmpty { "-" }} complete=$complete undo=${intent?.undo}")
         val at = wallNow()
         prefs.edit().putString(KEY_LAST_WRITE, statusToJson(status, at)).apply()
         _state.update { it.copy(lastWrite = status) }
@@ -351,6 +350,11 @@ class TpmsRepository(
             TpmsWire.parseSlot(did, status?.slots?.firstOrNull { it.did == did }?.beforeUds)
         }
 
+        /** Every one of [plannedDids] came back WRITTEN and all four slots were read back. */
+        fun writeComplete(status: TpmsStatus, plannedDids: Collection<Int>): Boolean =
+            plannedDids.isNotEmpty() && slotIds(status) { it.afterUds }.none { it == null } &&
+                plannedDids.all { did -> status.slots.firstOrNull { it.did == did }?.verdict == TpmsVerdict.WRITTEN }
+
         /** The `--- tpms ---` dump section: last read, sets, last write and the daemon's job state. Never starts a job. */
         fun dumpLines(prefs: SharedPreferences, setsJson: String?, daemon: TpmsStatus?): List<String> {
             val lines = mutableListOf<String>()
@@ -362,7 +366,7 @@ class TpmsRepository(
                 }
                 val (at, st) = saved
                 val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(at))
-                lines += "$name: at=$stamp state=${st.state} reason=${st.reason.ifEmpty { "-" }} l3=${l3(st)} " +
+                lines += "$name: at=$stamp state=${stateName(st.state)} reason=${st.reason.ifEmpty { "-" }} l3=${l3(st)} " +
                     "stopped_at=${st.stoppedAt.ifEmpty { "-" }} id=${hex(st.idUds) ?: "-"}"
                 lines += "  dtc before=${hex(st.dtcBefore) ?: "-"} after=${hex(st.dtcAfter) ?: "-"}"
                 st.slots.forEach {
@@ -371,7 +375,7 @@ class TpmsRepository(
             }
             lines += "sets: " + setsText(TyreSetsCodec.fromJson(setsJson))
             lines += if (daemon == null) "daemon: unreachable" else
-                "daemon: state=${daemon.state} mode=${daemon.mode} reason=${daemon.reason.ifEmpty { "-" }}"
+                "daemon: state=${stateName(daemon.state)} mode=${modeName(daemon.mode)} reason=${daemon.reason.ifEmpty { "-" }}"
             return lines
         }
 
@@ -398,6 +402,23 @@ class TpmsRepository(
             status.reason.startsWith("not_park") || status.reason.startsWith("speed") -> TpmsError.NOT_PARK
             status.reason.startsWith("not_l3") -> TpmsError.NOT_L3
             else -> TpmsError.ABORTED
+        }
+
+        private fun stateName(state: Int): String = when (state) {
+            DtcWire.STATE_IDLE -> "IDLE"
+            DtcWire.STATE_RUNNING -> "RUNNING"
+            DtcWire.STATE_DONE -> "DONE"
+            DtcWire.STATE_UNAVAILABLE -> "UNAVAILABLE"
+            DtcWire.STATE_ABORTED -> "ABORTED"
+            else -> state.toString()
+        }
+
+        private fun modeName(mode: Int): String = when (mode) {
+            DtcWire.MODE_SCAN -> "SCAN"
+            DtcWire.MODE_ERASE -> "ERASE"
+            DtcWire.MODE_TPMS_READ -> "TPMS_READ"
+            DtcWire.MODE_TPMS_WRITE -> "TPMS_WRITE"
+            else -> mode.toString()
         }
 
         private fun replyName(reply: Int?): String = when (reply) {

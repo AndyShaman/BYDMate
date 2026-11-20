@@ -157,7 +157,8 @@ object TyreWheelStatuses {
 
     /** Wheels with an active battery record; null when [dtcUds] is not a `59 02` answer. */
     private fun lowBattery(dtcUds: ByteArray?): Set<Int>? {
-        if (dtcUds == null || dtcUds.size < LIST_HEAD || u(dtcUds, 0) != POSITIVE_LIST || u(dtcUds, 1) != SUB_LIST) return null
+        if (dtcUds == null || dtcUds.size < LIST_HEAD) return null
+        if (u(dtcUds, 0) != POSITIVE_LIST || u(dtcUds, 1) != SUB_LIST) return null
         val low = HashSet<Int>()
         var i = LIST_HEAD
         while (i + RECORD_BYTES <= dtcUds.size) {
