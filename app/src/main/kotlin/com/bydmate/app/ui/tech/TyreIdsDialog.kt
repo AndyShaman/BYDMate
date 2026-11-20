@@ -228,7 +228,7 @@ internal fun TyreIdsDialog(state: TechPanelUiState, actions: TyreIdsActions, onD
                                     },
                                     onUndo = {
                                         draft = TyreDraft(ctx.before.map { it?.let(::tyreHex) }, null, null, undo = true)
-                                        go(TyreStep.CONFIRM2, "undo tap")
+                                        go(TyreStep.CONFIRM1, "undo tap")
                                     },
                                     onResetAgree = { agreed = false },
                                 ),
@@ -658,7 +658,7 @@ private fun ColumnScope.RightSide(
             }
             Buttons(
                 TyreButtonSpec(stringResource(R.string.tyre_back)) {
-                    cb.onGo(if (draft.undo) TyreStep.RESULT else TyreStep.CONFIRM1, "confirm2 back")
+                    cb.onGo(TyreStep.CONFIRM1, "confirm2 back")
                 },
                 TyreButtonSpec(stringResource(R.string.tyre_write), TyreButtonKind.PRIMARY, plan is TyrePlan.Ok && ctx.block == null) {
                     cb.onConfirmed(draft)

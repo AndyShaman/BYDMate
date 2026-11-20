@@ -134,7 +134,9 @@ class TpmsRepository(
         if (last == null) return
         val before = slotIds(last) { it.beforeUds }
         val readBack = slotIds(last) { it.afterUds }
-        startWrite(readBack, before.map { it?.let(::tyreHex) }, PendingWrite(emptyList(), null, null, undo = true))
+        // The set that took the last write's order follows the undo too (order = what is in the car).
+        val set = TyreSetName.entries.singleOrNull { n -> _state.value.sets.of(n).ids == readBack.map { it?.let(::tyreHex) } }
+        startWrite(readBack, before.map { it?.let(::tyreHex) }, PendingWrite(emptyList(), set, null, undo = true))
     }
 
     /** The write gates, then the plan of [target] against [current]; one start, no retry. */
@@ -266,7 +268,7 @@ class TpmsRepository(
         prefs.edit().putString(KEY_LAST_WRITE, statusToJson(status, at)).apply()
         _state.update { it.copy(lastWrite = status) }
         if (readBack.none { it == null }) saveRead(readBackAsRead(status), "write read-back")
-        if (intent != null && !intent.undo) {
+        if (intent != null) {
             changeSets("after write set=${intent.written ?: "-"} wheel=${intent.wheel ?: "-"} complete=$complete") {
                 TyreSetUpdate.afterWrite(it, intent.written, intent.wheel, readBack, complete)
             }
