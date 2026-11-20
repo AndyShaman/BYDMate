@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bydmate.app.R
+import com.bydmate.app.data.dtc.DtcBlock
 import com.bydmate.app.data.dtc.DtcKind
 import com.bydmate.app.data.dtc.DtcParser
 import com.bydmate.app.data.dtc.DtcScanPhase
@@ -142,7 +143,7 @@ private fun ColumnScope.DtcScanBlock(state: TechPanelUiState, onScan: () -> Unit
                         fontFamily = FontFamily.Monospace,
                     )
                     Text(
-                        dtcBlockShort(context, codes.first().block),
+                        codes.first().block.let { if (it.block == DtcBlock.UNKNOWN) "" else dtcBlockShort(context, it) },
                         color = TextSecondary,
                         fontSize = 12.sp,
                         maxLines = 1,

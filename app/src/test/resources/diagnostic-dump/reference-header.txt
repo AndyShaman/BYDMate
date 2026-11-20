@@ -247,6 +247,9 @@ last read: none
 last write: none
 sets: WINTER=-,-,-,- SUMMER=-,-,-,-
 daemon: state=IDLE mode=SCAN reason=-
+--- ecu firmware ---
+hu baseline: none
+checks: none
 --- last crash ---
 (none)
 --- trace ---

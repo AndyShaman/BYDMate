@@ -119,7 +119,7 @@ class DtcScanRepositoryTest {
         val gearAddress = FidAddresses.of("gear")
         coVerify(exactly = 1) { helper.dtcScanStart(gearAddress.device, gearAddress.fid) }
         assertEquals(DtcScanPhase.SCANNING, r.state.value.phase)
-        assertEquals(18, r.state.value.total)
+        assertEquals(38, r.state.value.total)
         assertNull(r.state.value.error)
     }
 

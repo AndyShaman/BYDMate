@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bydmate.app.R
+import com.bydmate.app.data.dtc.DtcBlock
 import com.bydmate.app.data.dtc.DtcDescLevel
 import com.bydmate.app.data.dtc.DtcDescription
 import com.bydmate.app.data.dtc.DtcFound
@@ -245,7 +246,8 @@ private fun BlockBox(codes: List<DtcFound>, section: SectionData) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
             Text(addrsText(addrs), color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
             Text(
-                dtcBlockFull(context, block),
+                // The addresses are already on the left: an unnamed block adds no second «Блок 0x…».
+                if (block.block == DtcBlock.UNKNOWN) "" else dtcBlockFull(context, block),
                 color = TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
