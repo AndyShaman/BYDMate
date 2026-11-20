@@ -129,6 +129,13 @@ internal class TyreIdsActions(
     val onStep: (String) -> Unit,
 )
 
+/**
+ * «Вернуть как было» opens the first confirmation afresh: the draft back to the last write's
+ * «было», and the box of confirmation 1 unticked, so «Далее» waits for a new tick.
+ */
+private fun undoStart(before: List<Int?>): Pair<TyreDraft, Boolean> =
+    TyreDraft(before.map { it?.let(::tyreHex) }, null, null, undo = true) to false
+
 /** The IDs now in the block and the one write this window is about, worked out once per frame. */
 private class TyreCtx(
     val state: TechPanelUiState,
@@ -184,7 +191,7 @@ internal fun TyreIdsDialog(state: TechPanelUiState, actions: TyreIdsActions, onD
             ) {
                 Column(modifier = Modifier.padding(start = 22.dp, end = 12.dp, top = 8.dp, bottom = 16.dp)) {
                     TitleRow(
-                        title = titleText(step, draft, result, context),
+                        title = titleText(step, draft, result, tpms.lastWriteComplete, context),
                         sub = when {
                             tpms.phase == TpmsPhase.READING -> stringResource(R.string.tyre_reading)
                             tpms.lastReadAt != null -> stringResource(R.string.tyre_read_at, dtcWhen(context, tpms.lastReadAt))
@@ -228,8 +235,10 @@ internal fun TyreIdsDialog(state: TechPanelUiState, actions: TyreIdsActions, onD
                                         if (d.undo) actions.onUndo(ctx.from(d)) else actions.onWrite(d.target, d.set, d.wheel, ctx.from(d))
                                     },
                                     onUndo = {
-                                        draft = TyreDraft(ctx.before.map { it?.let(::tyreHex) }, null, null, undo = true)
-                                        go(TyreStep.CONFIRM1, "undo tap")
+                                        val (undoDraft, undoAgreed) = undoStart(ctx.before)
+                                        draft = undoDraft
+                                        agreed = undoAgreed
+                                        go(TyreStep.CONFIRM1, "undo tap agreed=$undoAgreed")
                                     },
                                     onResetAgree = { agreed = false },
                                 ),
@@ -253,17 +262,24 @@ private fun TitleRow(title: String, sub: String, onDismiss: () -> Unit) {
     }
 }
 
-private fun titleText(step: TyreStep, draft: TyreDraft?, result: TpmsStatus?, context: android.content.Context): String = when {
+private fun titleText(
+    step: TyreStep,
+    draft: TyreDraft?,
+    result: TpmsStatus?,
+    complete: Boolean,
+    context: android.content.Context,
+): String = when {
     step == TyreStep.VIEW || draft == null -> context.getString(R.string.tyre_title)
-    step == TyreStep.RESULT && result != null -> context.getString(resultTitle(draft, result))
+    step == TyreStep.RESULT && result != null -> context.getString(resultTitle(draft, complete))
     draft.undo -> context.getString(R.string.tyre_undo)
     draft.set == TyreSetName.WINTER -> context.getString(R.string.tyre_title_plan_winter)
     draft.set == TyreSetName.SUMMER -> context.getString(R.string.tyre_title_plan_summer)
     else -> context.getString(R.string.tyre_title_one, wheelName(context, draft.wheel ?: 0).lowercase())
 }
 
-private fun resultTitle(draft: TyreDraft, result: TpmsStatus): Int = when {
-    !writeComplete(result) -> R.string.tyre_title_not_done
+/** [complete]: the repository's verdict on the result shown (TpmsUiState.lastWriteComplete). */
+private fun resultTitle(draft: TyreDraft, complete: Boolean): Int = when {
+    !complete -> R.string.tyre_title_not_done
     draft.undo -> R.string.tyre_title_undone
     draft.set == TyreSetName.WINTER -> R.string.tyre_title_done_winter
     draft.set == TyreSetName.SUMMER -> R.string.tyre_title_done_summer
@@ -801,11 +817,10 @@ private fun ColumnScope.ResultSide(ctx: TyreCtx, result: TpmsStatus?, writing: B
                 TyreHeader(stringResource(R.string.tyre_hd_not_done))
                 Text(stringResource(error?.let { tpmsErrorText(it) } ?: R.string.tyre_err_failed), color = SocYellow, fontSize = 15.sp)
             }
-            writeComplete(result) -> {
+            ctx.state.tpms.lastWriteComplete -> {
                 TyreHeader(stringResource(R.string.tyre_hd_done))
                 Column(modifier = Modifier.fillMaxWidth().tyreBox(CardBorder)) {
                     Text(stringResource(R.string.tyre_done_ok), color = AccentGreen, fontSize = 15.sp, lineHeight = 22.sp)
-                    Text(stringResource(R.string.tyre_done_drive), color = TextPrimary, fontSize = 15.sp, lineHeight = 22.sp, modifier = Modifier.padding(top = 10.dp))
                 }
             }
             else -> {
@@ -822,7 +837,7 @@ private fun ColumnScope.ResultSide(ctx: TyreCtx, result: TpmsStatus?, writing: B
     Buttons(
         TyreButtonSpec(stringResource(R.string.tyre_undo), TyreButtonKind.WARN, changed && ctx.block == null) { cb.onUndo() },
         TyreButtonSpec(stringResource(R.string.tyre_close), TyreButtonKind.PRIMARY, ctx.state.tpms.phase != TpmsPhase.WRITING) {
-            cb.onGo(TyreStep.VIEW, "result close complete=${result?.let(::writeComplete)}")
+            cb.onGo(TyreStep.VIEW, "result close complete=${result?.let { ctx.state.tpms.lastWriteComplete }}")
         },
     )
 }
@@ -1018,9 +1033,6 @@ private fun blockText(block: TyreWriteBlock): Int = when (block) {
 private fun slotOf(status: TpmsStatus, did: Int) = status.slots.firstOrNull { it.did == did }
 
 /** The daemon leaves unplanned wheels without a verdict, so the planned ones are those with one. */
-private fun writeComplete(status: TpmsStatus): Boolean =
-    TpmsRepository.writeComplete(status, status.slots.filter { it.verdict != null }.map { it.did })
-
 private fun planText(from: List<Int?>, target: List<String?>): String = TpmsWire.DIDS.indices.joinToString(" ") { i ->
     val old = from[i]?.let(::tyreHex) ?: "-"
     val new = TyrePlans.normalize(target[i]) ?: old

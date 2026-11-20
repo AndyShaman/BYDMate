@@ -2444,7 +2444,6 @@
     <string name="tyre_hd_done">Готово</string>
     <string name="tyre_hd_not_done">Не всё записалось</string>
     <string name="tyre_done_ok">Блок принял номера, при чтении всё на своих местах.</string>
-    <string name="tyre_done_drive">Проедьте 10–15 минут, лучше быстрее 40 км/ч, потом откройте это окно ещё раз. Колесо, которое блок так и не услышал, будет отмечено жёлтым: обычно это опечатка в номере.</string>
     <string name="tyre_done_partial">Записалось не всё. Проверьте номера на плашках слева.</string>
     <string name="tyre_after_hint">Плашка станет зелёной, когда блок услышит датчик.</string>
     <string name="tyre_undo">Вернуть как было</string>

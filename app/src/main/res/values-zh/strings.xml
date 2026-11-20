@@ -2379,7 +2379,6 @@
     <string name="tyre_hd_done">完成</string>
     <string name="tyre_hd_not_done">未全部写入</string>
     <string name="tyre_done_ok">模块已接受编号，读取结果全部正确。</string>
-    <string name="tyre_done_drive">请行驶 10–15 分钟，最好车速高于 40 km/h，然后再次打开此窗口。模块仍未收到信号的车轮会标为黄色：通常是编号输错了。</string>
     <string name="tyre_done_partial">未全部写入。请检查左侧方块上的编号。</string>
     <string name="tyre_after_hint">模块收到传感器信号后，方块会变为绿色。</string>
     <string name="tyre_undo">恢复原样</string>

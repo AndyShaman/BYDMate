@@ -2275,7 +2275,6 @@
     <string name="tyre_hd_done">Pronto</string>
     <string name="tyre_hd_not_done">Nem tudo foi gravado</string>
     <string name="tyre_done_ok">O módulo aceitou os números, na leitura está tudo no lugar.</string>
-    <string name="tyre_done_drive">Conduza 10–15 minutos, de preferência acima de 40 km/h, depois abra esta janela de novo. A roda que o módulo continuar sem ouvir ficará a amarelo: normalmente é um erro no número.</string>
     <string name="tyre_done_partial">Nem tudo foi gravado. Verifique os números nos blocos à esquerda.</string>
     <string name="tyre_after_hint">O bloco fica verde quando o módulo ouvir o sensor.</string>
     <string name="tyre_undo">Repor como estava</string>

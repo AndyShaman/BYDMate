@@ -2429,7 +2429,6 @@
     <string name="tyre_hd_done">Гатова</string>
     <string name="tyre_hd_not_done">Не ўсё запісалася</string>
     <string name="tyre_done_ok">Блок прыняў нумары, пры чытанні ўсё на сваіх месцах.</string>
-    <string name="tyre_done_drive">Праедзьце 10–15 хвілін, лепш хутчэй за 40 км/г, потым адкрыйце гэта акно яшчэ раз. Кола, якое блок так і не пачуў, будзе адзначана жоўтым: звычайна гэта памылка ў нумары.</string>
     <string name="tyre_done_partial">Запісалася не ўсё. Праверце нумары на плашках злева.</string>
     <string name="tyre_after_hint">Плашка стане зялёнай, калі блок пачуе датчык.</string>
     <string name="tyre_undo">Вярнуць як было</string>

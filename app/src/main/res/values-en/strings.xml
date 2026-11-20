@@ -2274,7 +2274,6 @@
     <string name="tyre_hd_done">Done</string>
     <string name="tyre_hd_not_done">Not everything was written</string>
     <string name="tyre_done_ok">The unit took the IDs, the read-back has everything in place.</string>
-    <string name="tyre_done_drive">Drive for 10–15 minutes, better above 40 km/h, then open this window again. A wheel the unit still does not hear will be marked yellow: usually a typo in the ID.</string>
     <string name="tyre_done_partial">Not everything was written. Check the IDs on the tiles on the left.</string>
     <string name="tyre_after_hint">A tile turns green once the unit hears the sensor.</string>
     <string name="tyre_undo">Undo</string>

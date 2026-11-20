@@ -36,7 +36,8 @@ enum class TpmsError { NOT_PARK, DAEMON_UNREACHABLE, DAEMON_OUTDATED, BUSY, REFU
 /**
  * The tyre window's state. [lastRead] = the last finished read (kept in prefs, shown while
  * driving); [canWrite] = that read has the exact Leopard 3 shape; [lastWrite] = the last write
- * result (for «Вернуть как было» and the result screen).
+ * result (for «Вернуть как было» and the result screen); [lastWriteComplete] = that result is
+ * complete ([writeComplete] against its plan), set with it.
  */
 data class TpmsUiState(
     val phase: TpmsPhase = TpmsPhase.IDLE,
@@ -45,6 +46,7 @@ data class TpmsUiState(
     val lastReadAt: Long? = null,
     val canWrite: Boolean = false,
     val lastWrite: TpmsStatus? = null,
+    val lastWriteComplete: Boolean = false,
     val sets: TyreSets = TyreSets(),
 )
 
@@ -118,31 +120,37 @@ class TpmsRepository(
 
     /**
      * After both confirmations: builds the plan with [TyrePlans.build] against the last read and
-     * starts the daemon write; [written] = the set (null for a single wheel, then [wheel] is set).
-     * Not on P, no read, not L3, invalid plan or nothing to write → nothing goes to the daemon.
+     * starts the daemon write; [written] = the set (null for a single wheel, then [wheel] is set),
+     * [shown] = the «было» IDs the confirmation showed. Not on P, no read, not L3, [shown] not the
+     * last read, invalid plan or nothing to write → nothing goes to the daemon.
      * On a complete result the sets follow [TyreSetUpdate.afterWrite].
      */
-    @Suppress("UNUSED_PARAMETER") // stub for the review-round red tests: [shown] is checked by the fix
     fun write(target: List<String?>, written: TyreSetName?, wheel: Int?, shown: List<Int?>) {
-        Log.i(TAG, "write tap set=${written ?: "-"} wheel=${wheel?.let { WHEEL_NAMES.getOrNull(it) } ?: "-"} target=${target.joinToString(",") { it ?: "-" }}")
-        startWrite(idsOf(_state.value.lastRead), target, PendingWrite(emptyList(), written, wheel, undo = false))
+        Log.i(
+            TAG,
+            "write tap set=${written ?: "-"} wheel=${wheel?.let { WHEEL_NAMES.getOrNull(it) } ?: "-"} " +
+                "target=${target.joinToString(",") { it ?: "-" }} shown=${idsText(shown)}",
+        )
+        startWrite(idsOf(_state.value.lastRead), target, shown, PendingWrite(emptyList(), written, wheel, undo = false))
     }
 
-    /** «Вернуть как было»: writes back the `before` IDs of the last write, as a new write. */
-    @Suppress("UNUSED_PARAMETER") // stub for the review-round red tests
+    /** «Вернуть как было»: writes back the `before` IDs of the last write, as a new write; [shown] = the «было» it showed. */
     fun undoLastWrite(shown: List<Int?>) {
         val last = _state.value.lastWrite
-        Log.i(TAG, "undo tap last_write=${last != null}")
+        Log.i(TAG, "undo tap last_write=${last != null} shown=${idsText(shown)}")
         if (last == null) return
         val before = slotIds(last) { it.beforeUds }
         val readBack = slotIds(last) { it.afterUds }
         // The set that took the last write's order follows the undo too (order = what is in the car).
         val set = TyreSetName.entries.singleOrNull { n -> _state.value.sets.of(n).ids == readBack.map { it?.let(::tyreHex) } }
-        startWrite(readBack, before.map { it?.let(::tyreHex) }, PendingWrite(emptyList(), set, null, undo = true))
+        startWrite(readBack, before.map { it?.let(::tyreHex) }, shown, PendingWrite(emptyList(), set, null, undo = true))
     }
 
-    /** The write gates, then the plan of [target] against [current]; one start, no retry. */
-    private fun startWrite(current: List<Int?>, target: List<String?>, intent: PendingWrite) {
+    /**
+     * The write gates, then the plan of [target] against [current]; one start, no retry. [shown]
+     * must be both [current] and the last read: the plan is the one the confirmation showed.
+     */
+    private fun startWrite(current: List<Int?>, target: List<String?>, shown: List<Int?>, intent: PendingWrite) {
         val st = _state.value
         if (st.phase != TpmsPhase.IDLE) {
             Log.i(TAG, "write ignored phase=${st.phase}")
@@ -156,6 +164,12 @@ class TpmsRepository(
         if (!st.canWrite) {
             Log.i(TAG, "write refused not_l3 last_read=${st.lastRead != null}")
             _state.update { it.copy(error = TpmsError.NOT_L3) }
+            return
+        }
+        val lastRead = idsOf(st.lastRead)
+        if (shown != current || shown != lastRead) {
+            Log.w(TAG, "write refused shown_stale undo=${intent.undo} shown=${idsText(shown)} plan_from=${idsText(current)} last_read=${idsText(lastRead)}")
+            _state.update { it.copy(error = TpmsError.REFUSED) }
             return
         }
         val plan = when (val p = TyrePlans.build(current, target)) {
@@ -202,6 +216,14 @@ class TpmsRepository(
         if (status.state != DtcWire.STATE_DONE) {
             Log.w(TAG, "read end state=${stateName(status.state)} reason=${status.reason.ifEmpty { "-" }}")
             return fail(errorOf(status))
+        }
+        if (slots(status).all { it == null }) {
+            Log.w(
+                TAG,
+                "read end no slot parsed, the saved read stays: " +
+                    status.slots.joinToString(" ") { "${wheelName(it.did)}=${hex(it.beforeUds) ?: "-"}" } + " id=${hex(status.idUds) ?: "-"}",
+            )
+            return fail(TpmsError.ABORTED)
         }
         saveRead(status, "read")
         _state.update { it.copy(phase = TpmsPhase.IDLE) }
@@ -257,7 +279,7 @@ class TpmsRepository(
         pending = null
         val planned = intent?.plan.orEmpty()
         val readBack = slotIds(status) { it.afterUds }
-        val complete = writeComplete(status, planned.map { it.did })
+        val complete = writeComplete(status, planned)
         status.slots.forEach { slot ->
             Log.i(
                 TAG,
@@ -268,7 +290,7 @@ class TpmsRepository(
         Log.i(TAG, "write end state=${stateName(status.state)} reason=${status.reason.ifEmpty { "-" }} stopped_at=${status.stoppedAt.ifEmpty { "-" }} complete=$complete undo=${intent?.undo}")
         val at = wallNow()
         prefs.edit().putString(KEY_LAST_WRITE, statusToJson(status, at)).apply()
-        _state.update { it.copy(lastWrite = status) }
+        _state.update { it.copy(lastWrite = status, lastWriteComplete = complete) }
         if (readBack.none { it == null }) saveRead(readBackAsRead(status), "write read-back")
         if (intent != null) {
             changeSets("after write set=${intent.written ?: "-"} wheel=${intent.wheel ?: "-"} complete=$complete") {
@@ -354,10 +376,18 @@ class TpmsRepository(
             TpmsWire.parseSlot(did, status?.slots?.firstOrNull { it.did == did }?.beforeUds)
         }
 
-        /** Every one of [plannedDids] came back WRITTEN and all four slots were read back. */
-        fun writeComplete(status: TpmsStatus, plannedDids: Collection<Int>): Boolean =
-            plannedDids.isNotEmpty() && slotIds(status) { it.afterUds }.none { it == null } &&
-                plannedDids.all { did -> status.slots.firstOrNull { it.did == did }?.verdict == TpmsVerdict.WRITTEN }
+        /**
+         * Every entry of [plan] came back WRITTEN or ALREADY, all four slots were read back, and
+         * the read-back is the target: the new ID on a planned wheel, the daemon's fresh read on the others.
+         */
+        fun writeComplete(status: TpmsStatus, plan: List<TpmsPlanEntry>): Boolean {
+            if (plan.isEmpty()) return false
+            val readBack = slotIds(status) { it.afterUds }
+            val target = TpmsWire.DIDS.zip(idsOf(status)) { did, before -> plan.firstOrNull { it.did == did }?.newId ?: before }
+            val verdicts = plan.map { e -> status.slots.firstOrNull { it.did == e.did }?.verdict }
+            return readBack.none { it == null } && readBack == target &&
+                verdicts.all { it == TpmsVerdict.WRITTEN || it == TpmsVerdict.ALREADY }
+        }
 
         /** The `--- tpms ---` dump section: last read, sets, last write and the daemon's job state. Never starts a job. */
         fun dumpLines(prefs: SharedPreferences, setsJson: String?, daemon: TpmsStatus?): List<String> {
@@ -432,6 +462,8 @@ class TpmsRepository(
             START_OUTDATED -> "-2(outdated)"
             else -> reply.toString()
         }
+
+        private fun idsText(ids: List<Int?>): String = ids.joinToString(",") { it?.let(::tyreHex) ?: "-" }
 
         private fun wheelName(did: Int): String = WHEEL_NAMES.getOrNull(TpmsWire.DIDS.indexOf(did)) ?: "0x%X".format(did)
 

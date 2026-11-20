@@ -2429,7 +2429,6 @@
     <string name="tyre_hd_done">Gotowe</string>
     <string name="tyre_hd_not_done">Nie wszystko się zapisało</string>
     <string name="tyre_done_ok">Moduł przyjął numery, w odczycie wszystko na swoich miejscach.</string>
-    <string name="tyre_done_drive">Przejedź 10–15 minut, najlepiej szybciej niż 40 km/h, potem otwórz to okno ponownie. Koło, którego moduł dalej nie słyszy, będzie oznaczone na żółto: zwykle to literówka w numerze.</string>
     <string name="tyre_done_partial">Nie wszystko się zapisało. Sprawdź numery na kafelkach po lewej.</string>
     <string name="tyre_after_hint">Kafelek zrobi się zielony, gdy moduł usłyszy czujnik.</string>
     <string name="tyre_undo">Przywróć jak było</string>
