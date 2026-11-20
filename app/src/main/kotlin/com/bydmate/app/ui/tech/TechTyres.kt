@@ -2,6 +2,7 @@ package com.bydmate.app.ui.tech
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,9 +30,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bydmate.app.R
+import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurfaceElevated
@@ -43,8 +46,8 @@ import kotlin.math.roundToInt
 
 /** Height of the car silhouette; its viewport is 160 x 260, so 1 viewport unit = 0.5 dp. */
 private val CAR_HEIGHT = 130.dp
-private const val CAR_VIEWPORT_W = 160f
-private const val CAR_VIEWPORT_H = 260f
+internal const val CAR_VIEWPORT_W = 160f
+internal const val CAR_VIEWPORT_H = 260f
 
 /** Wheel rectangles in viewport units (x, top, bottom), front then rear axle; width 22, rx 5. */
 private const val WHEEL_W = 22f
@@ -55,8 +58,8 @@ private const val REAR_TOP = 170f
 private const val REAR_BOTTOM = 220f
 
 /** Leader lines, viewport units: from the wheel side outwards at the axle's height. */
-private const val FRONT_LEAD_Y = 66f
-private const val REAR_LEAD_Y = 195f
+internal const val FRONT_LEAD_Y = 66f
+internal const val REAR_LEAD_Y = 195f
 private const val LEAD_REACH = 36f
 
 /** Distance from the car's centre line to the inner edge of each tile. */
@@ -65,22 +68,22 @@ private val TILE_GAP = 62.dp
 /**
  * Top view of the car (mock car B): a line runs from each wheel to its tile, so it is plain
  * which wheel each pressure belongs to. Tiles size to their text, so both lines show at any font
- * scale; the block grows when the tiles outgrow the car.
+ * scale; the block grows when the tiles outgrow the car. A tap opens the tyre-sensor window.
  */
 @Composable
-internal fun TyreTopView(state: TechPanelUiState) {
+internal fun TyreTopView(state: TechPanelUiState, onClick: () -> Unit) {
     val deviates = TechPanelVisuals.tyreDeviates(
         listOf(state.tirePressFL, state.tirePressFR, state.tirePressRL, state.tirePressRR)
     )
     Layout(
         content = {
-            CarTopImage(deviates)
+            CarTopImage(deviates.map { if (it) WheelTint.WARN else WheelTint.NORMAL })
             TyreTile(state.tirePressFL, state.tyreTempFL, deviates[0])
             TyreTile(state.tirePressFR, state.tyreTempFR, deviates[1])
             TyreTile(state.tirePressRL, state.tyreTempRL, deviates[2])
             TyreTile(state.tirePressRR, state.tyreTempRR, deviates[3])
         },
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(top = 8.dp, bottom = 2.dp),
     ) { measurables, constraints ->
         val placeables = measurables.map { it.measure(Constraints()) }
         val car = placeables[0]
@@ -108,20 +111,26 @@ internal fun TyreTopView(state: TechPanelUiState) {
     }
 }
 
-/** The silhouette with the leader lines under it and the wheels over it, wheels in the tile colour. */
+/** How a wheel of the drawing is coloured: as the car, yellow for a deviating tyre, blue for one to be written. */
+internal enum class WheelTint { NORMAL, WARN, CHANGE }
+
+/**
+ * The silhouette with the leader lines under it and the wheels over it, wheels in the tile colour;
+ * [leadReach] is the line length in viewport units.
+ */
 @Composable
-private fun CarTopImage(deviates: List<Boolean>) {
+internal fun CarTopImage(tints: List<WheelTint>, height: Dp = CAR_HEIGHT, leadReach: Float = LEAD_REACH) {
     Image(
         painter = painterResource(R.drawable.ic_tech_car_top),
         contentDescription = null,
         modifier = Modifier
-            .size(width = CAR_HEIGHT * (CAR_VIEWPORT_W / CAR_VIEWPORT_H), height = CAR_HEIGHT)
+            .size(width = height * (CAR_VIEWPORT_W / CAR_VIEWPORT_H), height = height)
             .drawWithContent {
                 val k = size.height / CAR_VIEWPORT_H
                 val line = 2f * k
                 for (y in listOf(FRONT_LEAD_Y, REAR_LEAD_Y)) {
-                    drawLine(CardBorder, Offset(0f, y * k), Offset(-LEAD_REACH * k, y * k), line)
-                    drawLine(CardBorder, Offset(size.width, y * k), Offset(size.width + LEAD_REACH * k, y * k), line)
+                    drawLine(CardBorder, Offset(0f, y * k), Offset(-leadReach * k, y * k), line)
+                    drawLine(CardBorder, Offset(size.width, y * k), Offset(size.width + leadReach * k, y * k), line)
                 }
                 drawContent()
                 val wheels = listOf(
@@ -134,8 +143,11 @@ private fun CarTopImage(deviates: List<Boolean>) {
                     val topLeft = Offset(x * k, ys.first * k)
                     val wheel = Size(WHEEL_W * k, (ys.second - ys.first) * k)
                     val radius = CornerRadius(WHEEL_RX * k)
-                    val (fill, stroke) = if (deviates[i]) SocYellow.copy(alpha = 0.45f) to SocYellow
-                        else NavyDark to WHEEL_STROKE
+                    val (fill, stroke) = when (tints[i]) {
+                        WheelTint.WARN -> SocYellow.copy(alpha = WHEEL_FILL_ALPHA) to SocYellow
+                        WheelTint.CHANGE -> AccentBlue.copy(alpha = WHEEL_FILL_ALPHA) to AccentBlue
+                        WheelTint.NORMAL -> NavyDark to WHEEL_STROKE
+                    }
                     drawRoundRect(fill, topLeft, wheel, radius)
                     drawRoundRect(stroke, topLeft, wheel, radius, style = Stroke(line))
                 }
@@ -144,6 +156,7 @@ private fun CarTopImage(deviates: List<Boolean>) {
 }
 
 private val WHEEL_STROKE = Color(0xFF3A4D6B)
+private const val WHEEL_FILL_ALPHA = 0.45f
 
 @Composable
 private fun TyreTile(pressureKpa: Int?, tempC: Int?, deviates: Boolean) {

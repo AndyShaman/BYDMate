@@ -11,9 +11,14 @@ import com.bydmate.app.data.dtc.DtcScanState
 import com.bydmate.app.data.dtc.DtcScanSummary
 import com.bydmate.app.data.dtc.DtcSendResult
 import com.bydmate.app.data.nativestack.VehicleKind
+import com.bydmate.app.data.tpms.TpmsPhase
+import com.bydmate.app.data.tpms.TpmsUiState
 
 /** Caption of the «Сканировать» button. */
 enum class DtcScanLabel { SCAN, SCANNING, ONLY_PARK }
+
+/** Why the tyre window cannot write now; each has its own plain line in place of the buttons. */
+enum class TyreWriteBlock { READING, WRITING, NO_READ, NOT_L3, NOT_PARK, BUSY }
 
 /**
  * Live state of the «Техника» screen. Everything vehicle-side rides the poller that already
@@ -132,13 +137,29 @@ data class TechPanelUiState(
     val dtcBlocks: Map<Int, DtcBlockName> = emptyMap(),
     /** Blocks of unknown erase result since the saved scan: no erase of them until a new scan. */
     val dtcEraseLocked: Set<Int> = emptySet(),
+    // Состояние машины: the tyre-sensor ID window
+    val tpms: TpmsUiState = TpmsUiState(),
+    val tyreDialogOpen: Boolean = false,
 ) {
     val dtcErasing: Boolean
         get() = dtcErase?.phase == DtcErasePhase.ERASING
 
-    /** The scan button is enabled on a running service in P and while no scan or erase runs. */
+    /** The scan button is enabled on a running service in P and while no scan, erase or tyre job runs. */
     val canScan: Boolean
-        get() = gear == GEAR_PARK && serviceRunning && dtcScan.phase != DtcScanPhase.SCANNING && !dtcErasing
+        get() = gear == GEAR_PARK && serviceRunning && dtcScan.phase != DtcScanPhase.SCANNING && !dtcErasing &&
+            tpms.phase == TpmsPhase.IDLE
+
+    /** Null when the tyre window may write: a Leopard 3 shaped read, P, and no tyre or fault-code job running. */
+    val tyreWriteBlock: TyreWriteBlock?
+        get() = when {
+            tpms.phase == TpmsPhase.READING -> TyreWriteBlock.READING
+            tpms.phase == TpmsPhase.WRITING -> TyreWriteBlock.WRITING
+            tpms.lastRead == null -> TyreWriteBlock.NO_READ
+            !tpms.canWrite -> TyreWriteBlock.NOT_L3
+            gear != GEAR_PARK || !serviceRunning -> TyreWriteBlock.NOT_PARK
+            dtcScan.phase == DtcScanPhase.SCANNING || dtcErasing -> TyreWriteBlock.BUSY
+            else -> null
+        }
 
     /** An erase of unknown outcome ran after the saved scan: its list may be out of date until a new scan. */
     val dtcErasedSinceScan: Boolean

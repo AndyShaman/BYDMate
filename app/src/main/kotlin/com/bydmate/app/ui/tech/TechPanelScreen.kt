@@ -53,6 +53,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
+import com.bydmate.app.data.dtc.DtcScanPhase
 import com.bydmate.app.ui.components.HelpIcon
 import com.bydmate.app.ui.components.HintBlock
 import com.bydmate.app.ui.theme.AccentGreen
@@ -77,8 +78,13 @@ internal const val DASH = "—"
 @Composable
 fun TechPanelScreen(
     viewModel: TechPanelViewModel = hiltViewModel(),
+    tyreViewModel: TyreIdsViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val panel by viewModel.uiState.collectAsStateWithLifecycle()
+    val tpms by tyreViewModel.tpms.collectAsStateWithLifecycle()
+    val tyreDialogOpen by tyreViewModel.open.collectAsStateWithLifecycle()
+    // One state for both: the scan button waits for a tyre job and the tyre window for a scan.
+    val state = panel.copy(tpms = tpms, tyreDialogOpen = tyreDialogOpen)
     // PM2.5 is read only while this screen is on display: leaving the tab or the app stops it.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
@@ -115,6 +121,9 @@ fun TechPanelScreen(
             onMove = viewModel::moveCard,
             onScan = viewModel::scanDtc,
             onOpenDtc = viewModel::openDtcDialog,
+            onOpenTyres = {
+                tyreViewModel.openDialog(state.gear, state.serviceRunning, state.dtcScan.phase == DtcScanPhase.SCANNING || state.dtcErasing)
+            },
         )
     }
 
@@ -126,6 +135,20 @@ fun TechPanelScreen(
             onSend = { viewModel.sendDtc(dtcLabels(context)) },
             onErase = viewModel::eraseDtc,
             onDismiss = viewModel::closeDtcDialog,
+        )
+    }
+
+    if (state.tyreDialogOpen) {
+        TyreIdsDialog(
+            state = state,
+            actions = TyreIdsActions(
+                onTake = tyreViewModel::takeFromCar,
+                onSave = tyreViewModel::editSet,
+                onWrite = tyreViewModel::write,
+                onUndo = tyreViewModel::undo,
+                onStep = tyreViewModel::logStep,
+            ),
+            onDismiss = tyreViewModel::closeDialog,
         )
     }
 }
@@ -153,6 +176,7 @@ private fun TechCardGrid(
     onMove: (TechCard, TechCard) -> Unit,
     onScan: () -> Unit,
     onOpenDtc: () -> Unit,
+    onOpenTyres: () -> Unit,
 ) {
     val cards = state.visibleCards
     val slots = remember { mutableStateMapOf<Int, Rect>() }
@@ -210,7 +234,7 @@ private fun TechCardGrid(
                             offset.value = Offset.Zero
                         },
                     ) { cardModifier ->
-                        TechCardContent(card, state, onHint, onScan, onOpenDtc, cardModifier)
+                        TechCardContent(card, state, onHint, onScan, onOpenDtc, onOpenTyres, cardModifier)
                     }
                 }
             }
@@ -265,6 +289,7 @@ private fun TechCardContent(
     onHint: (String) -> Unit,
     onScan: () -> Unit,
     onOpenDtc: () -> Unit,
+    onOpenTyres: () -> Unit,
     modifier: Modifier,
 ) {
     when (card) {
@@ -272,7 +297,7 @@ private fun TechCardContent(
         TechCard.LIMITS -> LimitsAndCellsCard(state, onHint, modifier)
         TechCard.HISTORY -> HistoryCard(state, onHint, modifier)
         TechCard.MOTORS -> MotorsCard(state, onHint, modifier)
-        TechCard.CAR_STATE -> CarStateCard(state, onHint, modifier)
+        TechCard.CAR_STATE -> CarStateCard(state, onHint, onOpenTyres, modifier)
         TechCard.FUEL -> FuelCard(state, modifier)
         TechCard.DIAGNOSTICS -> DiagnosticsCard(state, onHint, onScan, onOpenDtc, modifier)
     }
