@@ -39,11 +39,13 @@ import com.bydmate.app.ui.theme.TextPrimary
  * «Альтернативный способ: 50/50», the second part of the «Разделение экрана» section on the Android
  * 10 head units (DiLink 3 / 4), under the freeform split, which does not work on every one of them:
  * a name that doubles as the voice command, the app for the left half, the app for the right half
- * and «open at start».
+ * and «open at start». Only one of the two works at a time: while «Разделение экрана 1/3 + 2/3» is
+ * on, this part says so and offers nothing else.
  */
 @Composable
 internal fun AppSetsSection(viewModel: AppSetsViewModel = hiltViewModel()) {
     val sets by viewModel.store.sets.collectAsStateWithLifecycle()
+    val splitOn by viewModel.splitOn.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf(false) }
     SectionHeader(text = stringResource(R.string.settings_section_app_sets_title))
     Card(
@@ -52,9 +54,13 @@ internal fun AppSetsSection(viewModel: AppSetsViewModel = hiltViewModel()) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingHint(text = stringResource(R.string.settings_app_sets_howto))
+            SettingHint(
+                text = stringResource(if (splitOn) R.string.settings_app_sets_inactive else R.string.settings_app_sets_howto),
+            )
         }
     }
+    // Only one of the two splits works: while the one above is on, the sets are not offered.
+    if (splitOn) return
     sets.forEach { set ->
         key(set.id) { AppSetEditor(viewModel, set, isNew = false, onDone = {}) }
     }

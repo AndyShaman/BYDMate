@@ -17,9 +17,17 @@ class AppSetAutostartTest {
     private val pauses = mutableListOf<Long>()
     private var clock = 1_000_000_000L
 
-    private fun autostart(legacy: Boolean = true, st: AppSetStore = store) = AppSetAutostart(
-        st, launcher, fakeSplitSharedPrefs(backing), legacyHeadUnit = { legacy }, now = { clock }, pause = { pauses += it },
+    private fun autostart(legacy: Boolean = true, st: AppSetStore = store, splitOn: Boolean = false) = AppSetAutostart(
+        st, launcher, fakeSplitSharedPrefs(backing), legacyHeadUnit = { legacy }, splitFeatureEnabled = { splitOn },
+        now = { clock }, pause = { pauses += it },
     )
+
+    @Test fun `with the 1-3 split switched on the set does not start`() = runBlocking {
+        assertEquals(Result.SPLIT_ON, autostart(splitOn = true).runIfDue { 0 })
+
+        coVerify(exactly = 0) { launcher.launch(any()) }
+        assertEquals(emptyList<Long>(), pauses)
+    }
 
     @Test fun `a standing car starts the set once`() = runBlocking {
         coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK

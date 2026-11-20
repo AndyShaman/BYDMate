@@ -69,19 +69,11 @@ class AppSetStoreTest {
         assertEquals("set1", s.defaultSet()?.id)
     }
 
-    @Test fun `without the default phrases only split plus a name opens a set`() {
-        val s = twoSets()
-        listOf("сплит", "включи сплит", "разделение экрана", "включи разделение экрана", "раздели экран").forEach {
-            assertNull(it, s.resolve(it, defaultPhrases = false))
-        }
-        assertEquals("set2", s.resolve("сплит кино", defaultPhrases = false)?.id)
-    }
-
-    @Test fun `the split gestures open a set only on Android 10 with the split section switched off`() {
-        assertTrue(appSetsTakeSplitGesture(legacyHeadUnit = true, splitFeatureEnabled = false))
-        assertFalse(appSetsTakeSplitGesture(legacyHeadUnit = true, splitFeatureEnabled = true))
-        assertFalse(appSetsTakeSplitGesture(legacyHeadUnit = false, splitFeatureEnabled = false))
-        assertFalse(appSetsTakeSplitGesture(legacyHeadUnit = false, splitFeatureEnabled = true))
+    @Test fun `the sets are the split in use only on Android 10 with the 1-3 split switched off`() {
+        assertTrue(appSetsActive(legacyHeadUnit = true, splitFeatureEnabled = false))
+        assertFalse(appSetsActive(legacyHeadUnit = true, splitFeatureEnabled = true))
+        assertFalse(appSetsActive(legacyHeadUnit = false, splitFeatureEnabled = false))
+        assertFalse(appSetsActive(legacyHeadUnit = false, splitFeatureEnabled = true))
     }
 
     @Test fun `the bare name never opens a set, it would clash with open-app commands`() {

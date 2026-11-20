@@ -29,12 +29,12 @@ data class AppSet(
 )
 
 /**
- * Whether the split gestures that name no set (the widget's left tap, the split key, «сплит» and
- * «включи разделение экрана» on their own) open the first app set: on the Android 10 head units, while
- * the split of the «Разделение экрана» section is switched off. With it on they run that split,
- * which works on some of these head units; «сплит <название>» opens its set either way.
+ * Whether the app sets are the split in use: on the Android 10 head units, while «Разделение экрана
+ * 1/3 + 2/3» of the «Разделение экрана» section is switched off. Only one of the two works at a
+ * time: with it on, that split takes the widget tap, the split key and the voice, and no set opens
+ * (nor by name, nor at start); with it off, the sets take them.
  */
-fun appSetsTakeSplitGesture(legacyHeadUnit: Boolean, splitFeatureEnabled: Boolean): Boolean =
+fun appSetsActive(legacyHeadUnit: Boolean, splitFeatureEnabled: Boolean): Boolean =
     legacyHeadUnit && !splitFeatureEnabled
 
 /**
@@ -64,8 +64,7 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
      * The set an utterance asks for, or null when it asks for none.
      *
      * - «сплит», «включи / открой / запусти сплит», «разделение экрана», «включи / открой разделение
-     *   экрана», «раздели экран»: the default set, the first in the list, but only with
-     *   [defaultPhrases] ([appSetsTakeSplitGesture]); otherwise these phrases go on to the split.
+     *   экрана», «раздели экран»: the default set, the first in the list.
      * - «сплит <название>» (also after «включи», «открой», «запусти»): the set with that name. The
      *   name is compared by its letters, without spaces, and a slip of the recognizer is forgiven
      *   ([nameDistanceLimit]): an invented word is written differently every time. With one set
@@ -73,11 +72,11 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
      *
      * The bare name never opens a set: it would collide with «открой тикток» and the like.
      */
-    fun resolve(transcript: String, defaultPhrases: Boolean = true): AppSet? {
+    fun resolve(transcript: String): AppSet? {
         val sets = _sets.value
         val heard = VoicePhrase.words(transcript)
         if (sets.isEmpty() || heard.isEmpty()) return null
-        if (DEFAULT_PHRASES.any { it == heard }) return if (defaultPhrases) sets.first() else null
+        if (DEFAULT_PHRASES.any { it == heard }) return sets.first()
         val rest = heard.dropWhile { it in LEAD_VERBS }
         val prefix = rest.firstOrNull() ?: return null
         val name = rest.drop(1)
