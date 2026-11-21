@@ -29,25 +29,74 @@ data class AppSet(
 )
 
 /**
- * Whether the app sets are the split in use: on the Android 10 head units, with «Альтернативный»
- * chosen in «Разделение экрана» (the split master switch off). Only one method works at a time:
- * with «Основной» the widget tap, the split key, the voice and the start open its saved pair, and
- * no set opens; with «Альтернативный» they open the sets.
+ * Whether the app sets are the split in use: on the Android 10 head units, with «Разделение экрана»
+ * switched on and «Пополам 1:1» chosen ([AppSetStore.setsOn]). They run exactly as they did with
+ * the split switched off: the author's split flag stays off then (its machinery idle), so only one
+ * split works at a time. With «Окна BYDMate» or «Родное разделение» the widget tap, the split key,
+ * the voice and the start open the saved pair, and no set opens.
  */
-fun appSetsActive(legacyHeadUnit: Boolean, splitFeatureEnabled: Boolean): Boolean =
-    legacyHeadUnit && !splitFeatureEnabled
+fun appSetsActive(legacyHeadUnit: Boolean, setsOn: Boolean): Boolean = legacyHeadUnit && setsOn
 
 /**
  * The saved [AppSet]s, JSON in SharedPreferences("bydmate_app_sets"). Null [prefs] keeps everything
  * in memory (unit tests). At most one set starts with the service ([AppSet.autostart]).
  */
 @Singleton
+@Suppress("TooManyFunctions") // the sets, the phrase they answer to and the «Пополам 1:1» choice
 class AppSetStore(private val prefs: SharedPreferences? = null) {
     @Inject constructor(@ApplicationContext context: Context) :
         this(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE))
 
     private val _sets = MutableStateFlow(load())
     val sets: StateFlow<List<AppSet>> = _sets.asStateFlow()
+
+    private val _setsMode = MutableStateFlow(prefs?.getBoolean(KEY_SETS_MODE, false) ?: false)
+    private val _setsOn = MutableStateFlow(prefs?.getBoolean(KEY_SETS_ON, false) ?: false)
+
+    /** «Пополам 1:1» is the chosen mechanism (kept while the split is switched off). */
+    val setsMode: StateFlow<Boolean> = _setsMode.asStateFlow()
+
+    /** «Пополам 1:1» is chosen and the split is switched on: the sets run ([appSetsActive]). */
+    val setsOn: StateFlow<Boolean> = _setsOn.asStateFlow()
+
+    fun setSetsMode(on: Boolean) {
+        _setsMode.value = on
+        prefs?.edit()?.putBoolean(KEY_SETS_MODE, on)?.apply()
+    }
+
+    fun setSetsOn(on: Boolean) {
+        _setsOn.value = on
+        prefs?.edit()?.putBoolean(KEY_SETS_ON, on)?.apply()
+    }
+
+    /**
+     * Once, on the first start of this version:
+     * - the first app-set builds ran the sets with the split switched off: a head unit with sets
+     *   and the split off gets «Пополам 1:1» chosen and on;
+     * - the method switch («Основной / Альтернативный») kept the author's split on while the sets
+     *   ran, and with it on the firmware split stopped working (on-car, 2026-11-20): it is switched
+     *   back off, the sets keep running, and [onSplitOff] runs what the author's own switch-off runs
+     *   next (the freeform flag back to 0).
+     */
+    fun migrateSetsMode(split: SplitPreferences, onSplitOff: () -> Unit = {}) {
+        if (prefs == null || prefs.contains(KEY_SETS_ON)) return
+        when {
+            prefs.getBoolean(KEY_SETS_MODE, false) -> {
+                val wasOn = split.isFeatureEnabled()
+                setSetsOn(wasOn)
+                split.setFeatureEnabled(false)
+                if (wasOn) onSplitOff()
+            }
+            !split.isFeatureEnabled() && _sets.value.isNotEmpty() -> {
+                setSetsMode(true)
+                setSetsOn(true)
+            }
+            else -> {
+                setSetsMode(false)
+                setSetsOn(false)
+            }
+        }
+    }
 
     sealed interface Check {
         data object Ok : Check
@@ -68,11 +117,12 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
      * - «сплит <название>» (also after «включи», «открой», «запусти»): the set with that name. The
      *   name is compared by its letters, without spaces, and a slip of the recognizer is forgiven
      *   ([nameDistanceLimit]): an invented word is written differently every time. With one set
-     *   saved, whatever follows «сплит» is that set.
+     *   saved, whatever follows «сплит» is that set, unless [oneSetTakesAny] is false (the words
+     *   name an app, which the voice then puts into a split of its own).
      *
      * The bare name never opens a set: it would collide with «открой тикток» and the like.
      */
-    fun resolve(transcript: String): AppSet? {
+    fun resolve(transcript: String, oneSetTakesAny: Boolean = true): AppSet? {
         val sets = _sets.value
         val heard = VoicePhrase.words(transcript)
         if (sets.isEmpty() || heard.isEmpty()) return null
@@ -81,7 +131,7 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
         val prefix = rest.firstOrNull() ?: return null
         val name = rest.drop(1)
         if (name.isEmpty() || editDistance(prefix, SPLIT_WORD) > 1) return null
-        if (sets.size == 1) return sets.first()
+        if (sets.size == 1 && oneSetTakesAny) return sets.first()
         val spoken = name.joinToString("")
         val scored = sets.mapNotNull { set ->
             val key = VoicePhrase.words(set.name).joinToString("")
@@ -189,6 +239,8 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
         }
         const val PREFS_NAME = "bydmate_app_sets"
         const val KEY = "sets"
+        const val KEY_SETS_MODE = "sets_mode"
+        const val KEY_SETS_ON = "sets_on"
         const val MAX_SETS = 8
         const val MAX_NAME_CHARS = 40
     }

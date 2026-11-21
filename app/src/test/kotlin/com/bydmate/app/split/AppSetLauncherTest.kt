@@ -18,7 +18,8 @@ class AppSetLauncherTest {
     private val set = AppSet("set1", "Комплект", left, right)
     private val pauses = mutableListOf<Long>()
     private val helper = mockk<HelperClient>(relaxed = true)
-    private val launcher = AppSetLauncher(helper) { pauses += it }
+    private var cameraOn = false
+    private val launcher = AppSetLauncher(helper, { pauses += it }, { cameraOn })
 
     private fun task(id: Int, mode: Int = 1) =
         SplitTaskState(taskId = id, windowingMode = mode, displayId = 0, left = 0, top = 0, right = 1920, bottom = 1080)
@@ -50,7 +51,9 @@ class AppSetLauncherTest {
 
     @Test fun `the left app waits until the right one is the top task`() = runBlocking {
         happyPath()
-        coEvery { helper.getTopTask() } returnsMany listOf(top("com.android.launcher3"), top("com.android.launcher3"), top(right))
+        // The first read is the camera check before the launch.
+        val home = top("com.android.launcher3")
+        coEvery { helper.getTopTask() } returnsMany listOf(home, home, home, top(right))
 
         assertEquals(AppSetLauncher.Outcome.OK, launcher.launch(set))
 
@@ -69,13 +72,77 @@ class AppSetLauncherTest {
         assertEquals(listOf(AppSetLauncher.SETTLE_MS, AppSetLauncher.VERIFY_MS), pauses)
     }
 
-    @Test fun `a right app that never shows up is waited for a bounded time, then the split goes on`() = runBlocking {
+    @Test fun `a right app that never shows up is launched once more, then the set stops before the split`() =
+        runBlocking {
+            happyPath()
+            coEvery { helper.getTopTask() } returns top("com.android.launcher3")
+
+            assertEquals(AppSetLauncher.Outcome.RIGHT_FAILED, launcher.launch(set))
+
+            coVerify(exactly = 2) { helper.launchApp(right) }
+            coVerify(exactly = 0) { helper.launchAppInWindowingMode(any(), any()) }
+            assertEquals(2 * AppSetLauncher.TASK_WAIT_MS, pauses.sum())
+        }
+
+    @Test fun `a right app that shows up after the second launch is split as usual`() = runBlocking {
         happyPath()
-        coEvery { helper.getTopTask() } returns top("com.android.launcher3")
+        val launcherTop = List((AppSetLauncher.TASK_WAIT_MS / AppSetLauncher.TASK_POLL_MS).toInt() + 1) {
+            top("com.android.launcher3")
+        }
+        coEvery { helper.getTopTask() } returnsMany launcherTop + top(right)
 
         assertEquals(AppSetLauncher.Outcome.OK, launcher.launch(set))
 
-        assertEquals(AppSetLauncher.TASK_WAIT_MS + AppSetLauncher.SETTLE_MS + AppSetLauncher.VERIFY_MS, pauses.sum())
+        coVerify(exactly = 2) { helper.launchApp(right) }
+        coVerify(exactly = 1) { helper.launchAppInWindowingMode(left, AppSetLauncher.WINDOWING_SPLIT_PRIMARY) }
+    }
+
+    @Test fun `the launch waits while the camera is on screen and opens the set once it closes`() = runBlocking {
+        happyPath()
+        var checks = 0
+        val launcher = AppSetLauncher(helper, { pauses += it }, { ++checks <= 3 })
+
+        assertEquals(AppSetLauncher.Outcome.OK, launcher.launch(set))
+
+        assertEquals(List(3) { AppSetLauncher.CAMERA_POLL_MS }, pauses.take(3))
+        coVerifyOrder {
+            helper.launchApp(right)
+            helper.launchAppInWindowingMode(left, AppSetLauncher.WINDOWING_SPLIT_PRIMARY)
+        }
+    }
+
+    @Test fun `the camera as the top task counts as on screen too`() = runBlocking {
+        happyPath()
+        coEvery { helper.getTopTask() } returnsMany listOf(top(AppSetLauncher.CAMERA_PACKAGE), top(right))
+
+        assertEquals(AppSetLauncher.Outcome.OK, launcher.launch(set))
+
+        assertEquals(AppSetLauncher.CAMERA_POLL_MS, pauses.first())
+    }
+
+    @Test fun `a camera that stays opens nothing`() = runBlocking {
+        happyPath()
+        cameraOn = true
+
+        assertEquals(AppSetLauncher.Outcome.CAMERA, launcher.launch(set))
+
+        coVerify(exactly = 0) { helper.launchApp(any()) }
+        coVerify(exactly = 0) { helper.launchAppInWindowingMode(any(), any()) }
+        assertEquals(AppSetLauncher.CAMERA_WAIT_MS, pauses.sum())
+    }
+
+    @Test fun `a camera that comes up over the right app is waited out and the app launched again`() = runBlocking {
+        happyPath()
+        val cameraTop = List((AppSetLauncher.TASK_WAIT_MS / AppSetLauncher.TASK_POLL_MS).toInt() + 3) {
+            top(AppSetLauncher.CAMERA_PACKAGE)
+        }
+        // Free before the launch, then the camera over the right app for the wait and two more checks.
+        coEvery { helper.getTopTask() } returnsMany listOf(top("com.android.launcher3")) + cameraTop + top(right)
+
+        assertEquals(AppSetLauncher.Outcome.OK, launcher.launch(set))
+
+        coVerify(exactly = 2) { helper.launchApp(right) }
+        coVerify(exactly = 1) { helper.launchAppInWindowingMode(left, AppSetLauncher.WINDOWING_SPLIT_PRIMARY) }
     }
 
     @Test fun `a left app that stayed fullscreen is moved again and then counts as split`() = runBlocking {

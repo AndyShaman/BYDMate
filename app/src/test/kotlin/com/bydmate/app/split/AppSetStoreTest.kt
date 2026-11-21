@@ -69,11 +69,59 @@ class AppSetStoreTest {
         assertEquals("set1", s.defaultSet()?.id)
     }
 
-    @Test fun `the sets are the split in use only on Android 10 with the 1-3 split switched off`() {
-        assertTrue(appSetsActive(legacyHeadUnit = true, splitFeatureEnabled = false))
-        assertFalse(appSetsActive(legacyHeadUnit = true, splitFeatureEnabled = true))
-        assertFalse(appSetsActive(legacyHeadUnit = false, splitFeatureEnabled = false))
-        assertFalse(appSetsActive(legacyHeadUnit = false, splitFeatureEnabled = true))
+    @Test fun `the sets are the split in use only on Android 10 with 1-1 on`() {
+        assertTrue(appSetsActive(legacyHeadUnit = true, setsOn = true))
+        assertFalse(appSetsActive(legacyHeadUnit = true, setsOn = false))
+        assertFalse(appSetsActive(legacyHeadUnit = false, setsOn = true))
+    }
+
+    @Test fun `a 1-2-5 head unit on the sets gets 1-1 on, the author's split stays off`() {
+        val s = AppSetStore(fakeSplitSharedPrefs(mutableMapOf())).apply { upsert(tiktokMusic) }
+        val split = FakeSplit(enabled = false)
+
+        s.migrateSetsMode(split)
+
+        assertTrue(s.setsMode.value)
+        assertTrue(s.setsOn.value)
+        assertFalse(split.enabled)
+        assertFalse(split.native)
+    }
+
+    @Test fun `the first 1-2-6 build's author flag for 1-1 is switched back off, once`() {
+        val backing = mutableMapOf<String, Any?>(AppSetStore.KEY_SETS_MODE to true)
+        val s = AppSetStore(fakeSplitSharedPrefs(backing)).apply { upsert(tiktokMusic) }
+        val split = FakeSplit(enabled = true, native = true)
+        var flagReset = 0
+
+        s.migrateSetsMode(split) { flagReset++ }
+
+        assertTrue(s.setsOn.value)
+        assertFalse(split.enabled)
+        assertEquals("the freeform flag goes back as the switch-off does", 1, flagReset)
+        split.enabled = true
+        s.migrateSetsMode(split)
+        assertTrue("runs once", split.enabled)
+    }
+
+    @Test fun `a head unit on the split pair keeps it`() {
+        val s = AppSetStore(fakeSplitSharedPrefs(mutableMapOf())).apply { upsert(tiktokMusic) }
+        val split = FakeSplit(enabled = true)
+
+        s.migrateSetsMode(split)
+
+        assertFalse(s.setsMode.value)
+        assertFalse(s.setsOn.value)
+        assertTrue(split.enabled)
+    }
+
+    private class FakeSplit(var enabled: Boolean, var native: Boolean = false) : SplitPreferences {
+        override fun getLastPair(): SplitPair? = null
+        override fun saveLastPair(pair: SplitPair) = Unit
+        override fun clearLastPair() = Unit
+        override fun isFeatureEnabled() = enabled
+        override fun setFeatureEnabled(enabled: Boolean) { this.enabled = enabled }
+        override fun isNativeModeEnabled() = native
+        override fun setNativeModeEnabled(enabled: Boolean) { native = enabled }
     }
 
     @Test fun `the bare name never opens a set, it would clash with open-app commands`() {

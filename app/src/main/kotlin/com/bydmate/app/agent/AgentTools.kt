@@ -81,6 +81,9 @@ import com.bydmate.app.split.DisabledSplitPreferences
 import com.bydmate.app.split.Pane
 import com.bydmate.app.split.SplitPair
 import com.bydmate.app.split.SplitPreferences
+import com.bydmate.app.split.AppSetStore
+import com.bydmate.app.platform.LegacyHeadUnit
+import com.bydmate.app.split.appSetsActive
 import com.bydmate.app.split.SplitSessionManager
 import com.bydmate.app.split.SplitSessionState
 import com.bydmate.app.split.SplitSide
@@ -129,6 +132,14 @@ class AgentTools @Inject constructor(
     internal fun injectSplit(prefs: SplitPreferences, mgr: SplitSessionManager) {
         splitPrefs = prefs
         splitMgr = mgr
+    }
+
+    // Android 10 head units: with «Пополам 1:1» the app sets are the split, not this one.
+    private var appSetStore: AppSetStore? = null
+
+    @Inject
+    internal fun injectAppSets(store: AppSetStore) {
+        appSetStore = store
     }
 
     // Same method-injection reason as splitPrefs above: keeps every existing test constructor
@@ -1764,6 +1775,10 @@ class AgentTools @Inject constructor(
         }
     }
 
+    /** The package of the one installed app [name] names (alias or label), else null: «сплит <приложение>». */
+    internal suspend fun launcherAppPackage(name: String): String? =
+        (resolveLauncherApp(name.trim()) as? Built.Value)?.value?.second
+
     /** "навигатор" = the app chosen in «Навигатор для маршрутов» (#334), also for the offline
      *  «открой навигатор» (#416); see [RouteNavigatorUris.launchPackages]. */
     internal fun chosenNavigatorPackages(): List<String> = RouteNavigatorUris.launchPackages(
@@ -1881,6 +1896,10 @@ class AgentTools @Inject constructor(
     // --- split_screen ---
 
     private suspend fun splitScreen(args: JSONObject): String {
+        // Only one split works at a time (appSetsActive): the 1:1 sets are opened by the voice itself.
+        if (appSetsActive(LegacyHeadUnit.isAndroid10, appSetStore?.setsOn?.value == true)) {
+            return """{"error":"выбран способ «Пополам 1:1»: скажи «сплит» и название комплекта или приложения"}"""
+        }
         if (!splitPrefs.isFeatureEnabled()) {
             return """{"error":"разделение экрана выключено в настройках"}"""
         }

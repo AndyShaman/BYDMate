@@ -1699,8 +1699,8 @@
     <string name="widget_button_icon_star">Избранное</string>
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">Разделение экрана</string>
-    <string name="settings_split_enable_title">Разделение экрана 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">Два freeform-окна: одно на треть экрана, другое на две трети. По умолчанию выключено. Штатная кнопка разделения по-прежнему делит экран пополам.</string>
+    <string name="settings_split_enable_title">Разделение экрана</string>
+    <string name="settings_split_enable_desc">Работает один механизм, выбранный ниже. Виджет, кнопка на руле, голос и открытие при запуске работают с ним. По умолчанию выключено.</string>
     <string name="settings_split_clear_pair_title">Сбросить последнюю пару</string>
     <string name="settings_split_clear_pair_desc">Удалить сохранённую пару приложений. Следующий запуск откроет пикер.</string>
     <string name="settings_split_pair_cleared">Пара сброшена</string>
@@ -2370,15 +2370,11 @@
         <item quantity="other">Ещё %1$d кода не поместились, все в окне «Диагностика»</item>
     </plurals>
     <string name="tech_value_pm25" translatable="false">%1$d µg/m³</string>
-    <string name="settings_split_mode_title">Способ</string>
-    <string name="settings_split_mode_main">Основной</string>
-    <string name="settings_split_mode_alternative">Альтернативный</string>
-    <string name="settings_split_mode_desc">Работает один способ. Основной: окна BYDMate или разделение прошивки, как на других машинах. Альтернативный: комплекты, разделение прошивки пополам. Виджет, кнопка на руле, голос и открытие при запуске работают с выбранным.</string>
+    <string name="settings_split_mechanism_halves">Пополам 1:1</string>
     <string name="settings_split_autostart_title">Открывать при запуске</string>
-    <string name="settings_split_autostart_desc">Только когда машина стоит. Основной способ открывает сохранённую пару, альтернативный — первый комплект.</string>
-    <string name="settings_split_mode_main_header">Основной способ</string>
-    <string name="settings_section_app_sets_title">Альтернативный способ: 50/50</string>
-    <string name="settings_app_sets_howto">Голос:\n• «сплит» или «включи разделение экрана» — первый комплект в списке;\n• «сплит» и название — нужный комплект. Название любое, небольшие ошибки распознавания прощаются.\nВиджет: тап по левой части открывает первый комплект.\nНе выбрано второе приложение: останется то, что открыто сейчас.</string>
+    <string name="settings_split_autostart_desc">Только когда машина стоит: выбранный механизм открывает сохранённую пару, «Пополам 1:1» — первый комплект.</string>
+    <string name="settings_section_app_sets_title">Комплекты 1:1</string>
+    <string name="settings_app_sets_howto">Голос:\n• «сплит» или «включи разделение экрана» — первый комплект в списке;\n• «сплит» и название — нужный комплект. Название любое, небольшие ошибки распознавания прощаются.\n• «сплит» и название приложения (или «добавь &lt;приложение&gt; в сплит») — это приложение слева, то, что на экране, справа. Название комплекта важнее.\nВиджет: тап по левой части открывает первый комплект.\nНе выбрано второе приложение: останется то, что открыто сейчас.</string>
     <string name="settings_app_sets_add_title">Новый комплект</string>
     <string name="settings_app_sets_add">Добавить</string>
     <string name="settings_app_sets_name_label">Название (голосовая команда)</string>
@@ -2401,7 +2397,7 @@
     <string name="settings_app_sets_err_in_use">Такое название уже есть: %1$s</string>
     <string name="settings_app_sets_saved">Сохранено</string>
     <string name="settings_app_sets_run_failed">Комплект не открылся</string>
-    <string name="app_sets_none_hint">Нет комплекта. Добавьте его в Настройки → Разделение экрана → Альтернативный способ</string>
+    <string name="app_sets_none_hint">Нет комплекта. Добавьте его в Настройки → Разделение экрана → Пополам 1:1</string>
     <string name="settings_widget_left_tap_zoning_description_legacy">Левая часть открывает приложение или разделение экрана; остальное - BYDMate.</string>
     <string name="settings_widget_left_tap_mode_split_legacy">Разделение экрана</string>
 
