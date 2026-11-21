@@ -1757,16 +1757,20 @@ class AgentTools @Inject constructor(
     private suspend fun resolveLauncherApp(name: String): Built<Pair<String, String>> {
         val apps = runCatchingCancellable { launcherAppsProvider() }.getOrNull()
             ?: return Built.Error("список приложений недоступен")
-        val needle = name.lowercase()
+        // The name as said, then in the nominative («яндекс музыку» → «яндекс музыка»): voice
+        // phrases like «добавь … в сплит» carry the accusative.
+        val needles = listOf(name.lowercase(), nominative(name.lowercase())).distinct()
         // Alias hit: resolve to the first candidate package present in the launcher list, so an
         // alias never launches an app this car does not have; miss falls through to label match.
-        val candidates = if (needle == NAVIGATOR_ALIAS) chosenNavigatorPackages() else APP_ALIASES[needle]
-        val aliasMatch = candidates?.firstNotNullOfOrNull { pkg ->
-            apps.firstOrNull { it.second == pkg }
+        val aliasMatch = needles.firstNotNullOfOrNull { needle ->
+            val candidates = if (needle == NAVIGATOR_ALIAS) chosenNavigatorPackages() else APP_ALIASES[needle]
+            candidates?.firstNotNullOfOrNull { pkg -> apps.firstOrNull { it.second == pkg } }
         }
         if (aliasMatch != null) return Built.Value(aliasMatch)
-        val exact = apps.filter { it.first.lowercase() == needle }
-        val matches = exact.ifEmpty { apps.filter { it.first.lowercase().contains(needle) } }
+        val matches = needles.firstNotNullOfOrNull { needle ->
+            val exact = apps.filter { it.first.lowercase() == needle }
+            exact.ifEmpty { apps.filter { it.first.lowercase().contains(needle) } }.ifEmpty { null }
+        }.orEmpty()
         return when {
             matches.isEmpty() -> Built.Error("приложение не найдено: $name")
             matches.size > 1 -> Built.Error(
@@ -2552,7 +2556,34 @@ class AgentTools @Inject constructor(
         // unreachable by label match. Values are candidate packages in priority order; an alias
         // fires only when one of them is actually installed on this car (fleet cars differ).
         // App store and fridge app are excluded deliberately (user decision, 2026-07-05).
+        /** TikTok's global and Asian builds. */
+        private val TIKTOK_PACKAGES = listOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill")
+
+        /** Accusative endings of a spoken app name back to the nominative, word by word:
+         *  «музыку» → «музыка», «камеру» → «камера»; short words stay as they are. */
+        internal fun nominative(name: String): String = name.split(' ').joinToString(" ") { w ->
+            when {
+                w.length <= NOMINATIVE_MIN_LEN -> w
+                w.endsWith("у") -> w.dropLast(1) + "а"
+                w.endsWith("ю") -> w.dropLast(1) + "я"
+                else -> w
+            }
+        }
+
+        private const val NOMINATIVE_MIN_LEN = 3
+
         internal val APP_ALIASES: Map<String, List<String>> = mapOf(
+            // Apps whose launcher label is Latin («TikTok», «Waze»): the recognizer writes their
+            // names in Cyrillic, so the label match alone never finds them offline.
+            "тикток" to TIKTOK_PACKAGES,
+            "тик ток" to TIKTOK_PACKAGES,
+            "вейз" to listOf("com.waze"),
+            "вэйз" to listOf("com.waze"),
+            "телеграм" to listOf("org.telegram.messenger"),
+            "телеграмм" to listOf("org.telegram.messenger"),
+            "спотифай" to listOf("com.spotify.music"),
+            "ватсап" to listOf("com.whatsapp"),
+            "вотсап" to listOf("com.whatsapp"),
             "яндекс навигатор" to listOf("ru.yandex.yandexnavi"),
             "яндекс карты" to YANDEX_MAPS_PACKAGES,
             "карты" to YANDEX_MAPS_PACKAGES,
