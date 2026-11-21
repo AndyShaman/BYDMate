@@ -2307,7 +2307,7 @@
     </plurals>
     <string name="settings_split_mechanism_halves">对半 1:1</string>
     <string name="settings_split_autostart_title">启动时打开</string>
-    <string name="settings_split_autostart_desc">仅在车辆停止时：所选机制打开已保存的应用对，“对半 1:1”打开第一个组合。</string>
+    <string name="settings_split_autostart_desc">每次启动车辆时，无论车速；若屏幕上有摄像头画面，则在其关闭后。所选机制打开已保存的应用对，“对半 1:1”打开第一个组合。</string>
     <string name="settings_section_app_sets_title">组合 1:1</string>
     <string name="settings_app_sets_howto">语音：\n• “split”或“打开分屏”——列表中的第一个组合；\n• “split”加名称——对应的组合。名称随意，轻微的识别误差也能容忍。\n• “split”加应用名称（或“把&lt;应用&gt;加入分屏”）——该应用在左侧，当前屏幕上的内容在右侧。组合名称优先。\n小组件：点按左侧打开第一个组合。\n未选择第二个应用：保留当前已打开的内容。</string>
     <string name="settings_app_sets_add_title">新建组合</string>

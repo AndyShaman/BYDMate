@@ -2202,7 +2202,7 @@
     </plurals>
     <string name="settings_split_mechanism_halves">Half and half 1:1</string>
     <string name="settings_split_autostart_title">Open at start</string>
-    <string name="settings_split_autostart_desc">Only with the car standing: the chosen mechanism opens the saved pair, \"Half and half 1:1\" the first set.</string>
+    <string name="settings_split_autostart_desc">At every car start, at any speed; with the camera on screen, once it closes. The chosen mechanism opens the saved pair, \"Half and half 1:1\" the first set.</string>
     <string name="settings_section_app_sets_title">Sets 1:1</string>
     <string name="settings_app_sets_howto">Voice:\n• \"split\" or \"turn on split screen\" — the first set in the list;\n• \"split\" and the name — that set. Any name works, small recognition slips are forgiven.\n• \"split\" and an app name (or \"add &lt;app&gt; to split\") — that app on the left, whatever is on screen on the right. A set name comes first.\nWidget: a tap on the left part opens the first set.\nNo second app chosen: whatever is open now stays.</string>
     <string name="settings_app_sets_add_title">New set</string>

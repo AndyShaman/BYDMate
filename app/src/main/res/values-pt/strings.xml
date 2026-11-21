@@ -2203,7 +2203,7 @@
     </plurals>
     <string name="settings_split_mechanism_halves">Metade 1:1</string>
     <string name="settings_split_autostart_title">Abrir no arranque</string>
-    <string name="settings_split_autostart_desc">Só com o carro parado: o mecanismo escolhido abre o par guardado, «Metade 1:1» o primeiro conjunto.</string>
+    <string name="settings_split_autostart_desc">A cada arranque do carro, a qualquer velocidade; com a câmara no ecrã, quando fechar. O mecanismo escolhido abre o par guardado, «Metade 1:1» o primeiro conjunto.</string>
     <string name="settings_section_app_sets_title">Conjuntos 1:1</string>
     <string name="settings_app_sets_howto">Voz:\n• «split» ou «ligar tela dividida» — o primeiro conjunto da lista;\n• «split» e o nome — esse conjunto. Qualquer nome serve, pequenos erros de reconhecimento são perdoados.\n• «split» e o nome de um app (ou «adicionar &lt;app&gt; ao split») — esse app à esquerda, o que está na tela à direita. O nome de um conjunto vem primeiro.\nWidget: tocar na parte esquerda abre o primeiro conjunto.\nSem segundo app: fica o que está aberto agora.</string>
     <string name="settings_app_sets_add_title">Novo conjunto</string>

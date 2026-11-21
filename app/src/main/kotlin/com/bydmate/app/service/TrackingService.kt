@@ -760,7 +760,7 @@ class TrackingService : Service(), LocationListener {
                 }
                     .onFailure { Log.w(TAG, "split mode migration failed: ${it.message}") }
             }
-            runCatching { appSetAutostart.runIfDue { voiceGate.vehicleSnapshot()?.speed } }
+            runCatching { appSetAutostart.runIfDue() }
                 .onFailure { Log.w(TAG, "app set autostart failed: ${it.message}") }
         }
 

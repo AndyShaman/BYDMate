@@ -2372,7 +2372,7 @@
     <string name="tech_value_pm25" translatable="false">%1$d µg/m³</string>
     <string name="settings_split_mechanism_halves">Пополам 1:1</string>
     <string name="settings_split_autostart_title">Открывать при запуске</string>
-    <string name="settings_split_autostart_desc">Только когда машина стоит: выбранный механизм открывает сохранённую пару, «Пополам 1:1» — первый комплект.</string>
+    <string name="settings_split_autostart_desc">При каждом включении машины, на любой скорости; если на экране камера, после её закрытия. Выбранный механизм открывает сохранённую пару, «Пополам 1:1» — первый комплект.</string>
     <string name="settings_section_app_sets_title">Комплекты 1:1</string>
     <string name="settings_app_sets_howto">Голос:\n• «сплит» или «включи разделение экрана» — первый комплект в списке;\n• «сплит» и название — нужный комплект. Название любое, небольшие ошибки распознавания прощаются.\n• «сплит» и название приложения (или «добавь &lt;приложение&gt; в сплит») — это приложение слева, то, что на экране, справа. Название комплекта важнее.\nВиджет: тап по левой части открывает первый комплект.\nНе выбрано второе приложение: останется то, что открыто сейчас.</string>
     <string name="settings_app_sets_add_title">Новый комплект</string>

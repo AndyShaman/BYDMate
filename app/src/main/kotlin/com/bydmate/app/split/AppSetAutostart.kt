@@ -16,10 +16,11 @@ import javax.inject.Singleton
  * saved pair ([startSplit], SplitSessionManager.startLastPair), «Пополам 1:1» (Android 10 head
  * units) the first app set. The split switched off opens nothing.
  *
- * Two guards keep it from firing when it should not. The service restarts itself seconds after a
- * start there (the accessibility recovery), so a split already started within [REPEAT_WINDOW_MS]
- * is not started again. And it starts only with the car standing: the speed must be read and be 0.
- * The BYD camera on screen (reverse, parking) is waited out first, the speed is read after it.
+ * It opens at every start, whatever the speed: the head unit boots with the car and the service
+ * gets to it some 30 s later, when the car is often already moving (2026-11-21: 10 and 15 km/h,
+ * nothing opened). The service restarts itself seconds after a start there (the accessibility
+ * recovery), so a split already started within [REPEAT_WINDOW_MS] is not started again. The BYD
+ * camera on screen (reverse, parking) is waited out first, so the split never lands beside it.
  */
 @Singleton
 class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard injectable for the tests
@@ -48,7 +49,7 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
      * [OFF]: this switch or the split's is off; [NO_SET]: nothing to open (no set, or no saved pair for
      * the main method); [CAMERA]: the BYD camera did not close within AppSetLauncher.CAMERA_WAIT_MS.
      */
-    enum class Result { OFF, NO_SET, REPEAT, CAMERA, MOVING, NO_SPEED, STARTED, FAILED }
+    enum class Result { OFF, NO_SET, REPEAT, CAMERA, STARTED, FAILED }
 
     /** The switch. Before it existed each set had its own «open at start»: such a set turns it on. */
     fun isEnabled(): Boolean = prefs?.getBoolean(KEY_ENABLED, store.autostartSet() != null) ?: false
@@ -57,8 +58,7 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
         prefs?.edit()?.putBoolean(KEY_ENABLED, enabled)?.apply()
     }
 
-    /** [speedKmh] is the car's speed when known, null before the first reading. */
-    suspend fun runIfDue(speedKmh: () -> Int?): Result {
+    suspend fun runIfDue(): Result {
         if (!isEnabled()) return Result.OFF
         val sets = appSetsActive(legacyHeadUnit(), store.setsOn.value)
         if (!sets && !splitFeatureEnabled()) return Result.OFF
@@ -68,26 +68,9 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
         if (last > 0L && now() - last in 0 until REPEAT_WINDOW_MS) return trace(mode, Result.REPEAT)
         pause(START_DELAY_MS)
         if (!launcher.cameraClosed()) return trace(mode, Result.CAMERA)
-        standingOrNot(speedKmh)?.let { return trace(mode, it) }
         // Marked before the launch: a second service start must not open it twice, whatever the outcome.
         prefs?.edit()?.putLong(KEY_LAST_MS, now())?.apply()
         return trace(mode, if (set != null) openSet(set) else openSplitPair())
-    }
-
-    /** Null when the car stands still; else why nothing opens (no speed reading, or moving). */
-    private suspend fun standingOrNot(speedKmh: () -> Int?): Result? {
-        var speed = speedKmh()
-        var waited = 0L
-        while (speed == null && waited < SPEED_WAIT_MS) {
-            pause(SPEED_POLL_MS)
-            waited += SPEED_POLL_MS
-            speed = speedKmh()
-        }
-        return when {
-            speed == null -> Result.NO_SPEED
-            speed > 0 -> Result.MOVING
-            else -> null
-        }
     }
 
     private suspend fun openSet(set: AppSet): Result =
@@ -114,7 +97,5 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
 
         /** Lets the head unit finish booting and the recovery restart pass before the launch. */
         const val START_DELAY_MS = 15_000L
-        const val SPEED_WAIT_MS = 20_000L
-        const val SPEED_POLL_MS = 1_000L
     }
 }

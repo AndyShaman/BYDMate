@@ -2357,7 +2357,7 @@
     </plurals>
     <string name="settings_split_mechanism_halves">Po połowie 1:1</string>
     <string name="settings_split_autostart_title">Otwieraj przy starcie</string>
-    <string name="settings_split_autostart_desc">Tylko gdy auto stoi: wybrany mechanizm otwiera zapisaną parę, „Po połowie 1:1” — pierwszy zestaw.</string>
+    <string name="settings_split_autostart_desc">Przy każdym uruchomieniu auta, przy dowolnej prędkości; gdy na ekranie jest kamera, po jej zamknięciu. Wybrany mechanizm otwiera zapisaną parę, „Po połowie 1:1” — pierwszy zestaw.</string>
     <string name="settings_section_app_sets_title">Zestawy 1:1</string>
     <string name="settings_app_sets_howto">Głos:\n• „split” lub „włącz podział ekranu” — pierwszy zestaw na liście;\n• „split” i nazwa — wybrany zestaw. Nazwa dowolna, drobne błędy rozpoznawania są wybaczane.\n• „split” i nazwa aplikacji (lub „dodaj &lt;aplikację&gt; do splitu”) — ta aplikacja po lewej, to, co na ekranie, po prawej. Nazwa zestawu ma pierwszeństwo.\nWidżet: dotknięcie lewej części otwiera pierwszy zestaw.\nNie wybrano drugiej aplikacji: zostaje to, co jest teraz otwarte.</string>
     <string name="settings_app_sets_add_title">Nowy zestaw</string>
