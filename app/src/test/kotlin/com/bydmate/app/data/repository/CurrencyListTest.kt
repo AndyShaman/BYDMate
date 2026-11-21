@@ -24,6 +24,12 @@ class CurrencyListTest {
         assertEquals("₼", repo.getCurrencySymbol())
     }
 
+    @Test fun `GEL is offered with the lari sign and read back`() = runTest {
+        assertEquals("₾", CURRENCIES.single { it.code == "GEL" }.symbol)
+        dao.map[SettingsRepository.KEY_CURRENCY] = "GEL"
+        assertEquals("₾", repo.getCurrencySymbol())
+    }
+
     @Test fun `codes are unique and BYN stays the first and default`() {
         val codes = CURRENCIES.map { it.code }
         assertEquals(codes.distinct(), codes)

@@ -13,11 +13,13 @@ data class DtcRow(val code: String, val status: Int, val kind: DtcKind)
 /** [records] = every 4-byte record read; [rows] = the visible ones. [negative] = the block answered an NRC. */
 data class DtcList(val records: Int, val rows: List<DtcRow>, val negative: Boolean)
 
-data class DtcFound(val addr: Int, val row: DtcRow, val block: DtcBlockName)
+/** [unitId]: hex of an unnamed block's own F194 answer (null for a named one), which tells its units apart. */
+data class DtcFound(val addr: Int, val row: DtcRow, val block: DtcBlockName, val unitId: String? = null)
 
 /**
  * Blocks shown as one: the same visible rows in the same order under the same block name (the
- * L3 URE answers at 0x7E0 and 0x7E2 alike). [addrs] ascending, [block] and [rows] of the first.
+ * L3 URE answers at 0x7E0 and 0x7E2 alike), or unnamed blocks with the same F194 answer too.
+ * [addrs] ascending, [block] and [rows] of the first.
  */
 data class DtcBlockGroup(val addrs: List<Int>, val block: DtcBlockName, val rows: List<DtcRow>)
 
@@ -54,7 +56,6 @@ object DtcParser {
     private const val CONFIRMED = 0x08
 
     private val LETTERS = charArrayOf('P', 'C', 'B', 'U')
-    private val UNMERGED = setOf(DtcBlock.BODY, DtcBlock.UNKNOWN)
 
     /** Outcomes of a block that is there: it answered, positively or not. */
     private val PRESENT = setOf(
@@ -110,7 +111,8 @@ object DtcParser {
             .flatMap { r ->
                 val list = r.listUds ?: return@flatMap emptyList()
                 val block = DtcBlockNames.identify(r.addr, r.idUds)
-                parseList(list).rows.map { DtcFound(r.addr, it, block) }
+                val unitId = r.idUds?.takeIf { block.block == DtcBlock.UNKNOWN }?.joinToString("") { "%02X".format(it) }
+                parseList(list).rows.map { DtcFound(r.addr, it, block, unitId) }
             }
             .sortedBy { if (it.row.kind == DtcKind.NOW) 0 else 1 }
         val rows = groups(found).flatMap { it.rows }
@@ -128,21 +130,30 @@ object DtcParser {
     /**
      * One group per address with rows, addresses with identical rows and block merged (addrs
      * ascending); groups in the order their first address appears in [found], which for
-     * [summarize]'s list is the current code first, then address order. Only a named block merges:
-     * BODY and UNKNOWN name a family or nothing, so two of them are two control units.
+     * [summarize]'s list is the current code first, then address order. A named block merges by
+     * its name: BODY names a family, so two of them are two control units; UNKNOWN merges only
+     * with a byte-identical F194 answer (one part number, L3 0x760 / 0x761 / 0x7C2 / 0x7D4).
      */
-    fun groups(found: List<DtcFound>): List<DtcBlockGroup> = found
-        .groupBy { it.addr }
-        .map { (addr, list) -> DtcBlockGroup(listOf(addr), list.first().block, list.map { it.row }) }
-        .groupBy { g ->
-            val unit = if (g.block.block in UNMERGED) g.addrs.single() else null
-            Triple(g.block.block, g.rows, unit)
-        }
-        .values
-        .map { same ->
-            val addrs = same.map { it.addrs.single() }.sorted()
-            same.first { it.addrs.single() == addrs.first() }.copy(addrs = addrs)
-        }
+    fun groups(found: List<DtcFound>): List<DtcBlockGroup> {
+        val unitIds = found.associate { it.addr to it.unitId }
+        return found
+            .groupBy { it.addr }
+            .map { (addr, list) -> DtcBlockGroup(listOf(addr), list.first().block, list.map { it.row }) }
+            .groupBy { g ->
+                val addr = g.addrs.single()
+                val unit: Any? = when (g.block.block) {
+                    DtcBlock.BODY -> addr
+                    DtcBlock.UNKNOWN -> unitIds[addr] ?: addr
+                    else -> null
+                }
+                Triple(g.block.block, g.rows, unit)
+            }
+            .values
+            .map { same ->
+                val addrs = same.map { it.addrs.single() }.sorted()
+                same.first { it.addrs.single() == addrs.first() }.copy(addrs = addrs)
+            }
+    }
 
     /** The count answer says there are codes, but no list was read (no answer, NRC, multiframe, cut). */
     private fun unread(r: DtcAddressResult): Boolean {

@@ -64,8 +64,8 @@ class DtcWireTest {
         assertArrayEquals(raw, (m as DtcMatch.Multiframe).raw)
     }
 
-    @Test fun `only the three fixed read requests exist for the eighteen addresses`() {
-        assertEquals(18, DtcWire.ADDRESSES.size)
+    @Test fun `only the three fixed read requests exist for the thirty-eight addresses`() {
+        assertEquals(38, DtcWire.ADDRESSES.size)
         val forbidden = setOf(0x14, 0x2E, 0x2F, 0x31, 0x27, 0x10, 0x11, 0x85)
         for (addr in DtcWire.ADDRESSES) {
             val hi = (addr shr 8).toByte()
@@ -104,10 +104,17 @@ class DtcWireTest {
         assertArrayEquals(hex("0A 07 12 04 14 FF FF FF"), DtcWire.clearRequest(0x712))
     }
 
+    @Test fun `clearRequest builds for every scanned address, the 20 added ones included`() {
+        // Owner 2026-11-20: erase works on all 38 blocks, as on the first 18.
+        assertArrayEquals(hex("0A 07 54 04 14 FF FF FF"), DtcWire.clearRequest(0x754))
+        DtcWire.ADDRESSES.forEach { DtcWire.clearRequest(it) }
+    }
+
     @Test fun `W2 clearRequest refuses an address outside the whitelist`() {
         assertThrows(IllegalArgumentException::class.java) { DtcWire.clearRequest(0x700) }
     }
 
+    /** The 18 blocks the erase was validated on, before the 20 added on 2026-11-19. */
     @Test fun `W3 snapshotRequest declares all six UDS bytes`() {
         assertArrayEquals(hex("0A 07 12 06 19 04 D1 66 87 FF"), DtcWire.snapshotRequest(0x712, 0xD16687))
     }

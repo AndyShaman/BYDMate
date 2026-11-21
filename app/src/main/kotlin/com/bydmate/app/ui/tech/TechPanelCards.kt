@@ -307,10 +307,15 @@ internal fun FuelCard(state: TechPanelUiState, modifier: Modifier = Modifier) {
 
 /** «Состояние машины»: climate on top, then the tyres; each part only when the car reports it. */
 @Composable
-internal fun CarStateCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
+internal fun CarStateCard(
+    state: TechPanelUiState,
+    onHint: (String) -> Unit,
+    onOpenTyres: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     TechCard(stringResource(R.string.tech_card_car_state), modifier = modifier) {
         if (state.showClimate) ClimateRows(state, onHint)
-        if (state.showTyres) TyresSection(state, onHint)
+        if (state.showTyres) TyresSection(state, onHint, onOpenTyres)
     }
 }
 
@@ -355,12 +360,12 @@ private fun Pm25Row(labelRes: Int, value: Int, level: Int?) {
 }
 
 @Composable
-private fun TyresSection(state: TechPanelUiState, onHint: (String) -> Unit) {
+private fun TyresSection(state: TechPanelUiState, onHint: (String) -> Unit, onOpenTyres: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
         SectionHeader(stringResource(R.string.tech_card_tyres))
         HelpIcon { onHint("tyres") }
     }
-    TyreTopView(state)
+    TyreTopView(state, onOpenTyres)
     Hint(state.openHint, "tyres", R.string.tech_hint_tyres)
 }
 

@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 internal object DtcDaemon {
     private const val GUARD_PROPERTY = "sys.diagmgrsrv.task_bk"
 
-    /** Reads the speed (km/h, null = unknown) at the address the app resolved; set by the erase verb. */
+    /** Reads the speed (km/h, null = unknown) at the address the app resolved; set by an accepted erase or tyre write start. */
     @Volatile var speed: (() -> Int?)? = null
 
     val scanner: DtcScanner by lazy {

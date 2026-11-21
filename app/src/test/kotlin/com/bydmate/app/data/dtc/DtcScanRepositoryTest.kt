@@ -119,7 +119,7 @@ class DtcScanRepositoryTest {
         val gearAddress = FidAddresses.of("gear")
         coVerify(exactly = 1) { helper.dtcScanStart(gearAddress.device, gearAddress.fid) }
         assertEquals(DtcScanPhase.SCANNING, r.state.value.phase)
-        assertEquals(18, r.state.value.total)
+        assertEquals(38, r.state.value.total)
         assertNull(r.state.value.error)
     }
 
@@ -156,10 +156,28 @@ class DtcScanRepositoryTest {
         assertEquals(wall, last.at)
         val s = DtcParser.summarize(last.results)
         assertEquals(14, s.answered)
-        assertEquals(18, s.total)
+        assertEquals(38, s.total)
         assertEquals(1, s.now)
         assertEquals(9, s.old)
         assertNotNull(prefs.getString("last", null))
+    }
+
+    @Test fun `a busy reply that finds another job (not scan, not erase) keeps the saved scan`() = runTest {
+        val r = repo(this)
+        finishScan(r)
+        val before = r.last.value!!.at
+        val savedJson = prefs.getString("last", null)
+        wall += 60_000
+
+        // Mode 3 stands for any later daemon job (tyre sensors, firmware): its DONE carries no scan results.
+        startReply = 1
+        statuses.addLast(DtcScanStatus(DtcWire.STATE_DONE, 4, 4, "", emptyList(), emptyList(), 3))
+        r.start()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(DtcScanError.ABORTED, r.state.value.error)
+        assertEquals(before, r.last.value!!.at)
+        assertEquals(savedJson, prefs.getString("last", null))
     }
 
     @Test fun `an unavailable or aborted scan keeps the previous result`() = runTest {

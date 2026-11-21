@@ -107,11 +107,11 @@ class TelegramReportBuilderTest {
                 "${em}Стоимость 1,14 BYN",
                 "",
                 "🔁 <b>TRIP 1</b> с ${dayOf(counter1.resetTs)}",
-                "${em}412 км за 9 ч 20 мин",
+                "${em}412,3 км за 9 ч 20 мин",
                 "${em}Расход 21,4 кВт·ч/100 км",
                 "",
                 "🔁 <b>TRIP 2</b> с ${dayOf(counter2.resetTs)}",
-                "${em}32 км за 47 мин",
+                "${em}31,6 км за 47 мин",
                 "${em}Расход 16,1 кВт·ч/100 км",
                 "",
                 "⚠️ <b>Открыто: окно водителя</b>",
@@ -408,7 +408,7 @@ class TelegramReportBuilderTest {
                 "<b>BYDMate: Где машина</b>",
                 "",
                 "🔁 <b>TRIP 2</b> с ${dayOf(counter2.resetTs)}",
-                "${em}32 км за 47 мин",
+                "${em}31,6 км за 47 мин",
                 "${em}Расход 16,1 кВт·ч/100 км",
             ),
             report.text.lines(),
@@ -443,7 +443,7 @@ class TelegramReportBuilderTest {
         )
         val noTime = counter(41.6, 0.0, 0L)
         assertEquals(
-            listOf("🔁 <b>TRIP 1</b> с ${dayOf(noTime.resetTs)}", "${em}42 км"),
+            listOf("🔁 <b>TRIP 1</b> с ${dayOf(noTime.resetTs)}", "${em}41,6 км"),
             build(fields = setOf(ReportField.TRIP1), inputs = inputs(trip1 = noTime)).text.lines().drop(2),
         )
     }

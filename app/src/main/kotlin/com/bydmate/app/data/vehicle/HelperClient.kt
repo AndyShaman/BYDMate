@@ -15,7 +15,12 @@ import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.helper.dtc.DtcScanStatus
+import com.bydmate.app.helper.dtc.FirmwareStatus
+import com.bydmate.app.helper.dtc.TpmsPlanEntry
+import com.bydmate.app.helper.dtc.TpmsStatus
 import com.bydmate.app.helper.dtc.readDtcScanStatus
+import com.bydmate.app.helper.dtc.readFirmwareStatus
+import com.bydmate.app.helper.dtc.readTpmsStatus
 import com.bydmate.app.helper.offreport.OffReportStatus
 import com.bydmate.app.helper.offreport.readOffReportStatus
 import com.bydmate.app.helper.offreport.writeOffReportArm
@@ -451,6 +456,23 @@ interface HelperClient {
     /** Starts the daemon's erase of the stored codes of [addrs] (TX_DTC_ERASE_START): 0 started,
      *  1 busy, -1 refused, -2 daemon too old to know the code; null when the daemon is unreachable. */
     suspend fun dtcEraseStart(gearDev: Int, gearFid: Int, speedDev: Int, speedFid: Int, addrs: IntArray): Int? = null
+
+    /** Starts the daemon's read of the tyre-sensor IDs (TX_TPMS_READ_START): 0 started, 1 busy,
+     *  -1 refused, -2 daemon too old to know the code; null when the daemon is unreachable. */
+    suspend fun tpmsReadStart(gearDev: Int, gearFid: Int): Int? = null
+
+    /** Starts the daemon's write of [plan] (TX_TPMS_WRITE_START), sent once with no retry on a dead
+     *  binder: 0 started, 1 busy, -1 refused, -2 daemon too old; null when unreachable. */
+    suspend fun tpmsWriteStart(gearDev: Int, gearFid: Int, speedDev: Int, speedFid: Int, plan: List<TpmsPlanEntry>): Int? = null
+
+    /** State and raw answers of the last tyre job (TX_DIAG_JOB_STATUS); null when unreachable. */
+    suspend fun tpmsStatus(): TpmsStatus? = null
+
+    /** Firmware check start (TX 70): 0 ok, 1 busy, -1 refused, -2 not handled (old daemon); null unreachable. */
+    suspend fun firmwareStart(gearDev: Int, gearFid: Int): Int? = null
+
+    /** State and raw answers of the last firmware check (TX_DIAG_JOB_STATUS, firmware part); null when unreachable. */
+    suspend fun firmwareStatus(): FirmwareStatus? = null
 
     /**
      * Direct freeform launch: find-or-launch [packageName], switch its task to freeform,
@@ -1374,6 +1396,63 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             }
         }
 
+    // dtcScanStart's path: an older daemon answers notHandled, which the caller reports as outdated.
+    override suspend fun tpmsReadStart(gearDev: Int, gearFid: Int): Int? =
+        withContext(Dispatchers.IO) {
+            withTimeoutOrNull(REQ_TIMEOUT_MS) {
+                onBeforeLock?.invoke()
+                mutex.withLock {
+                    transactBodyUnlocked(
+                        HelperBinderProtocol.TX_TPMS_READ_START, { it.writeInt(gearDev); it.writeInt(gearFid) },
+                        notHandled = DTC_SCAN_NOT_HANDLED,
+                    ) { if (it.dataAvail() < 4) null else it.readInt() }
+                }
+            }
+        }
+
+    // As tpmsReadStart, but one attempt only: a write start is never sent twice by the transport.
+    override suspend fun tpmsWriteStart(
+        gearDev: Int, gearFid: Int, speedDev: Int, speedFid: Int, plan: List<TpmsPlanEntry>,
+    ): Int? =
+        withContext(Dispatchers.IO) {
+            withTimeoutOrNull(REQ_TIMEOUT_MS) {
+                onBeforeLock?.invoke()
+                mutex.withLock {
+                    transactBodyUnlocked(
+                        HelperBinderProtocol.TX_TPMS_WRITE_START,
+                        { p ->
+                            p.writeInt(gearDev); p.writeInt(gearFid)
+                            p.writeInt(speedDev); p.writeInt(speedFid)
+                            p.writeInt(plan.size)
+                            plan.forEach { p.writeInt(it.did); p.writeInt(it.expectedOld); p.writeInt(it.newId) }
+                        },
+                        notHandled = DTC_SCAN_NOT_HANDLED,
+                        attempts = 1,
+                    ) { if (it.dataAvail() < 4) null else it.readInt() }
+                }
+            }
+        }
+
+    override suspend fun tpmsStatus(): TpmsStatus? =
+        transactParsed(HelperBinderProtocol.TX_DIAG_JOB_STATUS, { }, parse = ::readTpmsStatus)
+
+    // dtcScanStart's path: an older daemon answers notHandled, which the caller reports as outdated.
+    override suspend fun firmwareStart(gearDev: Int, gearFid: Int): Int? =
+        withContext(Dispatchers.IO) {
+            withTimeoutOrNull(REQ_TIMEOUT_MS) {
+                onBeforeLock?.invoke()
+                mutex.withLock {
+                    transactBodyUnlocked(
+                        HelperBinderProtocol.TX_FW_READ_START, { it.writeInt(gearDev); it.writeInt(gearFid) },
+                        notHandled = DTC_SCAN_NOT_HANDLED,
+                    ) { if (it.dataAvail() < 4) null else it.readInt() }
+                }
+            }
+        }
+
+    override suspend fun firmwareStatus(): FirmwareStatus? =
+        transactParsed(HelperBinderProtocol.TX_DIAG_JOB_STATUS, { }, parse = ::readFirmwareStatus)
+
     override suspend fun offReportArm(id: String, token: String, chatId: Long, text: String, lateMark: String): Boolean =
         transactParsed(
             HelperBinderProtocol.TX_OFFREPORT_ARM,
@@ -1447,16 +1526,18 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
      * It is handed [lockedReader], bound to THIS already-held lock via a direct
      * [transactBodyUnlocked] call, never [readBatch] (which would re-take the mutex and deadlock).
      * [notHandled] is returned instead of null when the daemon refuses the code (uid gate, or a
-     * daemon too old to know it).
+     * daemon too old to know it). [attempts] = 1 sends at most once: no retry on a dead binder.
      */
+    @Suppress("LongParameterList") // the shared transport's knobs, all but code and parse defaulted
     private suspend fun <T> transactBodyUnlocked(
         code: Int,
         writeArgs: (Parcel) -> Unit,
         beforeSend: (suspend (LockedReader) -> Boolean)? = null,
         notHandled: T? = null,
+        attempts: Int = 2,
         parse: (Parcel) -> T?,
     ): T? {
-        repeat(2) { attempt ->
+        repeat(attempts) { attempt ->
             val binder = ensureBinder() ?: return null
             if (beforeSend != null && !runGuard { beforeSend(lockedReader) }) throw WriteGuardRefused()
             val data = Parcel.obtain()
@@ -1469,7 +1550,7 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
                 return parse(reply)
             } catch (e: DeadObjectException) {
                 cached = null                                 // stale binder; loop re-resolves once
-                if (attempt == 1) { Log.w(TAG, "binder dead after retry: ${e.message}"); return null }
+                if (attempt == attempts - 1) { Log.w(TAG, "binder dead after retry: ${e.message}"); return null }
             } catch (e: Exception) {
                 Log.w(TAG, "transact failed: ${e.message}"); return null
             } finally {
@@ -1582,7 +1663,7 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
         private const val TAG = "HelperClient"
         private const val REQ_TIMEOUT_MS = 2000L
-        /** dtcScanStart's / dtcEraseStart's answer from a daemon that does not know the code. */
+        /** The start verbs' answer (dtc scan / erase, tpms read / write, firmware) from a daemon that does not know the code. */
         private const val DTC_SCAN_NOT_HANDLED = -2
         /** Budget for a [writeStatus] beforeSend guard (e.g. DriveModeChannel's terrain speed
          *  re-check): well under REQ_TIMEOUT_MS so a slow guard cannot hold the transport mutex

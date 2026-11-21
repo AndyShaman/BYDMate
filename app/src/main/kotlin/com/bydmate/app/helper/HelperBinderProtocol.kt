@@ -570,9 +570,9 @@ object HelperBinderProtocol {
      * shared client mutex is held for milliseconds only. No address or payload bytes come from
      * the app, only where to read the gear fid.
      *
-     * The daemon holds the 18 addresses (DtcWire.ADDRESSES) and builds only `19 01 FF`,
+     * The daemon holds the 38 addresses (DtcWire.ADDRESSES) and builds only `19 01 FF`,
      * `19 02 0D`/`19 02 09` (by the block's availability mask, `19 02 FF` once after a negative
-     * answer) and `22 F1 94`. Before every request: the 90 s budget, `sys.diagmgrsrv.task_bk`
+     * answer) and `22 F1 94`. Before every request: the 180 s budget, `sys.diagmgrsrv.task_bk`
      * at its idle value and the gear read live (getInt) == P; a 2 s passive listen comes first.
      *
      * Request: [int gearDev, int gearFid]
@@ -586,7 +586,7 @@ object HelperBinderProtocol {
      *
      * Reply: [int state, int done, int total, String reason, int count,
      *         count × (int addr, String outcome, byte[] countUds, byte[] listUds, byte[] idUds),
-     *         int mode (0 scan, 1 erase), int eraseCount, eraseCount × (int addr, String confirm,
+     *         int mode (0 scan, 1 erase, 2/3 a tyre job, 4 a firmware check: empty lists), int eraseCount, eraseCount × (int addr, String confirm,
      *         int nrc (-1 none), String reason, int hasReread, [the five reread fields above])]
      * A daemon from before the erase ends after the results; the client reads that as a scan.
      * state: DtcWire.STATE_* (0 idle, 1 running, 2 done, 3 unavailable, 4 aborted); a failed
@@ -640,6 +640,64 @@ object HelperBinderProtocol {
      * HOME intent.
      */
     val TX_PRESS_HOME: Int = IBinder.FIRST_CALL_TRANSACTION + 66  // 67
+
+    /**
+     * Tyre-sensor IDs, read: `22 F1 94`, `19 02 FF` and `22 3305..3308` to 0x720 only, on the
+     * scan's thread and state (one diagnostic job at a time). Gates as for a scan: the 30 s
+     * budget, the guard property at its idle value, the gear read live == P, the 2 s passive
+     * listen first. Result through [TX_DIAG_JOB_STATUS] (mode 2).
+     *
+     * Request: [int gearDev, int gearFid]
+     * Reply:   [int status: 0 = started, 1 = busy, -1 = refused]
+     * An old daemon without this handler makes transact return false → the client returns -2.
+     */
+    val TX_TPMS_READ_START: Int = IBinder.FIRST_CALL_TRANSACTION + 67  // 68
+
+    /**
+     * Tyre-sensor IDs, write (design B.3): the daemon reads 0x720 again itself, demands the
+     * Leopard 3 answer shape, and writes only the DIDs whose current ID equals expectedOld
+     * (already newId = skipped; anything else, or two wheels with one ID, = nothing sent). Then
+     * `10 03`, one security attempt per daemon lifetime, each `2E` once, `10 01`, the re-read.
+     * Gates as for the erase (P, speed exactly 0, guard), strict traffic, an allowlist checked
+     * before every frame. No key bytes and no frames come from the app.
+     *
+     * Request: [int gearDev, int gearFid, int speedDev, int speedFid, int n (1..4),
+     *           n × (int did (0x3305..0x3308), int expectedOld, int newId)]
+     * Reply:   [int status: 0 = started, 1 = busy, -1 = refused (invalid plan, or the security wait
+     *           after a failed key or an NRC 36/37 runs, see [TX_DIAG_JOB_STATUS]; the reason goes to the log)]
+     * An old daemon without this handler makes transact return false → the client returns -2.
+     */
+    val TX_TPMS_WRITE_START: Int = IBinder.FIRST_CALL_TRANSACTION + 68  // 69
+
+    /**
+     * Block firmware check: per address of DtcWire.ADDRESSES `22 F1 94`, then `22 F1 95` only
+     * when the block answered F194 (positive or negative); nothing else (allowlist before every frame). On the scan's thread and
+     * state; gates as for a scan (the 180 s budget, the guard property at its idle value, the gear
+     * read live == P, the 2 s passive listen first). Result through [TX_DIAG_JOB_STATUS] (mode 4).
+     *
+     * Request: [int gearDev, int gearFid]
+     * Reply:   [int status: 0 = started, 1 = busy, -1 = refused]
+     * An old daemon without this handler makes transact return false → the client returns -2.
+     */
+    val TX_FW_READ_START: Int = IBinder.FIRST_CALL_TRANSACTION + 69  // 70
+
+    /**
+     * Status of the last tyre job (see [TX_TPMS_READ_START], [TX_TPMS_WRITE_START]) and of the
+     * last firmware check ([TX_FW_READ_START]).
+     *
+     * Reply: [int state, int mode (DtcWire.MODE_*), String reason, byte[] idUds (0x720 F194),
+     *         byte[] dtcBefore, byte[] dtcAfter, int n (4),
+     *         n × (int did, byte[] beforeUds, byte[] afterUds, String verdict ("" = none, else a
+     *         TpmsVerdict name)), String stoppedAt,
+     *         then the firmware part: int state (IDLE when the last job was not a firmware check),
+     *         int done, int total, String reason, int count,
+     *         count × (int addr, String outcome, byte[] f194Uds, byte[] f195Uds),
+     *         long securityWaitMs (ms until a tyre write may start, 0 = now)]
+     * After a scan or an erase the mode is theirs and every tyre array is null. A daemon from
+     * before the firmware check ends after stoppedAt, one from before the security wait after the firmware part. A failed call answers a lone -1. An old
+     * daemon without this handler makes transact return false → the client returns null.
+     */
+    val TX_DIAG_JOB_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 70  // 71
 
     /** TX_SET_AUTO_VOICE outcomes: called; no such method on this firmware; the audio service or
      *  the call threw. */

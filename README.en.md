@@ -21,7 +21,7 @@ Split screen 1/3 and 2/3, navigation on the instrument cluster, Yandex Navigator
 
 Tested on Leopard 3 (Fangchengbao Tai 3), with support for Sea Lion 07, Song, Atto 3, Seal, Han and the DM-i and DM-o hybrids (Song Pro DM-i, Leopard 5, Leopard 8, Sealion 06). DiLink 3.0, 4.0, 5.0, 5.1, and firmware with the new UI7 interface (OTA V1.6).
 
-[Safety](#safety-do-no-harm) | [Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [Voice AI Agent](#voice-ai-agent) | [Car](#the-car-screen) | [Diagnostics](#diagnostics-module-faults) | [AI Insights](#ai-insights) | [ABRP](#abrp-live-telemetry) | [Install](#install) | [Build](#build-from-source) | [What's new](CHANGELOG.md) | [Releases](https://github.com/AndyShaman/BYDMate/releases) | [Sponsor](SUPPORT.md)
+[Safety](#safety-do-no-harm) | [Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [Voice AI Agent](#voice-ai-agent) | [Car](#the-car-screen) | [Diagnostics](#diagnostics-module-faults) | [Firmware](#ecu-firmware) | [Tyre sensors](#tyre-sensors) | [AI Insights](#ai-insights) | [ABRP](#abrp-live-telemetry) | [Install](#install) | [Build](#build-from-source) | [What's new](CHANGELOG.md) | [Releases](https://github.com/AndyShaman/BYDMate/releases) | [Sponsor](SUPPORT.md)
 
 </div>
 
@@ -125,6 +125,12 @@ Below the ring: an AI insight, a small battery health card (SoH on Leopard 3 and
 <img src="docs/screenshots/tech-screen-en.jpg" alt="The Car screen" width="800">
 
 *Battery, motors, BMS limits, cells, battery history, climate, tyres, diagnostics. Opens from the "Car" tab or with a tap on the battery card on the Dashboard*
+
+**Tyre sensors**
+
+<img src="docs/screenshots/tyre-ids.jpg" alt="The tyre sensors window" width="800">
+
+*Tyre sensor IDs, Winter and Summer sets, writing them into the car without a service visit. Opens with a tap on the car with tyre pressures*
 
 **Trips**
 
@@ -942,7 +948,7 @@ Wireless ADB debugging has to be active, as for the rest of the car data (see "I
 
 <img src="docs/screenshots/dtc-window.jpg" alt="The Diagnostics · module faults window" width="800">
 
-- **At the top**: when the check ran and how many modules answered, for example "15 of 18 modules answered". That is normal: not every module exists on every model, and some modules do not always answer.
+- **At the top**: when the check ran and how many modules answered, for example "30 of 38 modules answered". That is normal: not every module exists on every model, and some modules do not always answer.
 - **"Present now"**: the fault is active right now. These codes are yellow.
 - **"Old"**: the fault happened before and the module remembers it. These are gray. Almost every car has old codes, a module remembers even a short loss of communication. If the cluster shows no warnings and the car behaves as usual, there is usually nothing to worry about.
 - **Codes are grouped by module**: the module address (for example 0x712) and its name (on Leopard 3; on other models some modules are labelled with the address only).
@@ -970,6 +976,59 @@ The **"Send to Telegram"** button in the window sends the codes with their descr
 - **"Could not check"** happens if the gear left P during the scan or the app lost its connection to the car. Press "Scan" again. If it keeps happening, send a log recording in an [Issue](https://github.com/AndyShaman/BYDMate/issues).
 
 At the bottom of the window there is a line about supporting the project. Diagnostic apps are usually paid, BYDMate is free, and every description is available without a donation.
+
+---
+
+## ECU Firmware
+
+Versions and dates of the firmware of all the car's modules. It helps to see what an update changed: afterwards you can see which modules were reflashed, was → now.
+
+<img src="docs/screenshots/ecu-firmware.jpg" alt="The Module firmware window" width="800">
+
+1. The **"Car"** tab → the **"Diagnostics"** card → the **"Module firmware"** row.
+2. Stop and shift to **P**, press **"Check now"**. Asking all the modules takes a couple of minutes.
+3. At the top are the modules that were updated, with the date of the check, below are the ones that did not change. On the first check all modules go to "Read for the first time".
+
+- **Read only.** Nothing is written to the modules.
+- **The app does not ask the modules on its own.** It only notices that the head unit firmware was updated, and then the card shows the row **"Head unit updated · check firmware"**.
+- **"Send to Telegram"** sends the result to your bot in one message.
+- Modules that are not in our list of names are shown by address only.
+
+## Tyre Sensors
+
+Tyre pressure sensor IDs and the "Winter" and "Summer" sets. Changed tyres: write the right set into the car yourself, without a service.
+
+<img src="docs/screenshots/tyre-ids.jpg" alt="The Tyre sensors window" width="800">
+
+### How to open
+
+The **"Car"** tab → tap the car picture with the tyre pressure. If the car is in **P**, the window reads the sensor IDs straight from the module. While driving it shows the IDs from the last read.
+
+### What is in the window
+
+- **On the left** is the car picture: each wheel shows pressure, temperature, the sensor ID and the battery. **OK** means the battery is fine, a yellow battery means the module sees a low charge in this sensor right now, **"no signal"** means the module does not hear the sensor.
+- **On the right** is the table of the "Winter" and "Summer" sets by wheel: FL, FR, RL, RR. You can type the IDs by hand or press **"Take from car to Winter"** (or "Summer"), then **"Save"**. The sets are included in the app's backup.
+
+### How to write a set
+
+1. The car is on and in **P**.
+2. Press **"Write winter"** or **"Write summer"**. If you swapped the wheels around, drag a tile onto another one and they swap.
+3. Tick "I understand the feature is experimental and write at my own risk", press "Next".
+4. Check "what will change" and press **"Write"**.
+
+Only the wheels whose ID changes are written. After writing, the app re-reads the module and shows the result for each wheel. The **"Undo"** button brings the previous IDs back, also with both confirmations.
+
+<img src="docs/screenshots/tyre-confirm.jpg" alt="Confirmation of writing one wheel" width="800">
+
+**Replaced one sensor?** Press and hold that wheel in the window and type the new ID. The ID is 8 characters, digits and letters A-F, it is on the sensor body or in the window of a service tool.
+
+### Good to know
+
+- **The feature is experimental.** Tested on Leopard 3. On another car, writing turns on only if the tyre module answers the same way as on Leopard 3. Otherwise the window only shows the IDs.
+- **Only in P.** If the car was taken out of P during the write, the app still exits the module's write mode correctly.
+- **One ID cannot be written to two wheels**, the app will not allow it.
+- After a new ID is written, the tile stays green until the module hears the sensor. Usually you need to drive for that. If the ID is typed wrong, the car shows a sensor error.
+- If the write was interrupted, the window re-reads the module by itself when you return to P and offers "Undo".
 
 ---
 
