@@ -49,10 +49,7 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
         store, launcher, context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
         splitFeatureEnabled = { splitPreferences.isFeatureEnabled() },
         startSplit = { splitManager.get().startLastPair() },
-        bootCount = {
-            runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1) }
-                .getOrNull()?.takeIf { it >= 0 }
-        },
+        bootCount = { readBootCount(context) },
     )
 
     /**
@@ -108,6 +105,11 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
         const val PREFS_NAME = "bydmate_app_sets_autostart"
         const val KEY_LAST_MS = "last_ms"
         const val KEY_LAST_BOOT = "last_boot"
+
+        /** Settings.Global.BOOT_COUNT, null when the head unit does not give it. */
+        private fun readBootCount(context: Context): Int? =
+            kotlin.runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1) }
+                .getOrNull()?.takeIf { it >= 0 }
         const val KEY_ENABLED = "enabled"
 
         /** Without a boot number: the accessibility recovery restarts the service ~13 s after a start; this outlasts it. */
