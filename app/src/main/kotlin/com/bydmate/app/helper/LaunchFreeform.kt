@@ -124,6 +124,16 @@ private fun dockRunningTaskSplitPrimary(packageName: String): Boolean {
 }
 
 /**
+ * TX_LAUNCH_APP: the package, then an additive trailing int (app sets) with the windowing mode.
+ * Absent or 0 is the plain launch, so an older app's parcel works as before.
+ */
+internal fun launchAppFromParcel(data: android.os.Parcel): Boolean {
+    val pkg = data.readString() ?: ""
+    val mode = if (data.dataAvail() >= 4) data.readInt() else 0
+    return if (mode > 0) launchAppInWindowingMode(pkg, mode) else launchApp(pkg)
+}
+
+/**
  * Launches [packageName] via am/monkey strategies. Returns true if a launch command ran without an
  * obvious "Error". Mirrors CarControlImpl.launchApp (simplified to a boolean).
  */

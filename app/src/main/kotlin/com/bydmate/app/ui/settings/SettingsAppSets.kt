@@ -36,10 +36,10 @@ import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.TextPrimary
 
 /**
- * «Альтернативный способ: 50/50» of the «Разделение экрана» section on the Android 10 head units
- * (DiLink 3 / 4), shown while it is the chosen method ([SplitModeSection]): a name that doubles as
- * the voice command, the app for the left half and the app for the right half. «Открывать при
- * запуске» is one switch for both methods, above.
+ * «Комплекты 1:1» of the «Разделение экрана» section on the Android 10 head units (DiLink 3 / 4),
+ * shown in place of the pair rows while «Пополам 1:1» is the chosen mechanism ([SplitSection]): a
+ * name that doubles as the voice command, the app for the left half and the app for the right half.
+ * «Открывать при запуске» is one switch for every mechanism, above.
  */
 @Composable
 internal fun AppSetsSection(viewModel: AppSetsViewModel = hiltViewModel()) {

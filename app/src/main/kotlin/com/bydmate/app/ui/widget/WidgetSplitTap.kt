@@ -47,8 +47,9 @@ internal suspend fun toggleSplitByUser(context: Context, fromWidget: Boolean) {
             context.applicationContext,
             SplitWidgetEntryPoint::class.java,
         )
-        if (appSetsActive(LegacyHeadUnit.isAndroid10, ep.splitPreferences().isFeatureEnabled())) {
-            openDefaultAppSet(context, ep.appSetStore(), ep.appSetLauncher())
+        val store = ep.appSetStore()
+        if (appSetsActive(LegacyHeadUnit.isAndroid10, store.setsOn.value)) {
+            openDefaultAppSet(context, store, ep.appSetLauncher())
             return
         }
         val manager = ep.splitSessionManager()
@@ -80,9 +81,8 @@ internal suspend fun toggleSplitByUser(context: Context, fromWidget: Boolean) {
 }
 
 /**
- * On the Android 10 head units, while the split of the «Разделение экрана» section is off, the widget
- * tap and the split key open the default app set (the first in the list) with the firmware's own
- * split ([appSetsActive]).
+ * On the Android 10 head units, with «Пополам 1:1» chosen, the widget tap and the split key open the
+ * default app set (the first in the list) with the firmware's own split ([appSetsActive]).
  */
 internal suspend fun openDefaultAppSet(context: Context, store: AppSetStore, launcher: AppSetLauncher) {
     val set = store.defaultSet()

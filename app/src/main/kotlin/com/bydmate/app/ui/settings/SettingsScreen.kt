@@ -66,7 +66,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import com.bydmate.app.R
-import com.bydmate.app.platform.LegacyHeadUnit
 import com.bydmate.app.ui.theme.*
 import androidx.compose.material.icons.outlined.Mic
 import java.util.Date
@@ -196,10 +195,7 @@ fun SettingsScreen(
                         )
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
-                        // Android 10 head units (DiLink 3 / 4): a choice between the split and the
-                        // app sets, an alternative split through the firmware's own one.
-                        SettingsSection.SPLIT ->
-                            if (LegacyHeadUnit.isAndroid10) SplitModeSection(viewModel) else SplitSection(viewModel)
+                        SettingsSection.SPLIT -> SplitSection(viewModel)
                         SettingsSection.SERVICE -> ServiceSection(state, viewModel)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)

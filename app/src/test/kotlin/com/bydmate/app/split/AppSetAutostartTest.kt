@@ -12,7 +12,7 @@ class AppSetAutostartTest {
 
     private val set = AppSet("set1", "Видео", "com.zhiliaoapp.musically", "ru.yandex.music", autostart = true)
     private val store = AppSetStore().apply { upsert(set) }
-    private val launcher = mockk<AppSetLauncher>()
+    private val launcher = mockk<AppSetLauncher>().also { coEvery { it.cameraClosed() } returns true }
     private val backing = mutableMapOf<String, Any?>()
     private val pauses = mutableListOf<Long>()
     private var clock = 1_000_000_000L
@@ -20,8 +20,12 @@ class AppSetAutostartTest {
     private var splitStarts = 0
     private var splitResult: SplitStartResult? = SplitStartResult.OK
 
-    private fun autostart(legacy: Boolean = true, st: AppSetStore = store, splitOn: Boolean = false) = AppSetAutostart(
-        st, launcher, fakeSplitSharedPrefs(backing), legacyHeadUnit = { legacy }, splitFeatureEnabled = { splitOn },
+    /** [splitOn]: the saved pair's mechanism (not «Пополам 1:1»); [switchedOn]: the split at all. */
+    private fun autostart(
+        legacy: Boolean = true, st: AppSetStore = store, splitOn: Boolean = false, switchedOn: Boolean = true,
+    ) = AppSetAutostart(
+        st.apply { setSetsMode(!splitOn); setSetsOn(!splitOn && switchedOn) }, launcher, fakeSplitSharedPrefs(backing),
+        legacyHeadUnit = { legacy }, splitFeatureEnabled = { splitOn && switchedOn },
         startSplit = { splitStarts++; splitResult }, now = { clock }, pause = { pauses += it },
     )
 
@@ -53,6 +57,12 @@ class AppSetAutostartTest {
         assertEquals(0, splitStarts)
         coVerify(exactly = 0) { launcher.launch(any()) }
         assertEquals(emptyList<Long>(), pauses)
+    }
+
+    @Test fun `the split switched off opens nothing`() = runBlocking {
+        assertEquals(Result.OFF, autostart(switchedOn = false).runIfDue { 0 })
+        assertEquals(0, splitStarts)
+        coVerify(exactly = 0) { launcher.launch(any()) }
     }
 
     @Test fun `the switch starts off without a set that had its own open at start, and on when set`() = runBlocking {
@@ -91,6 +101,23 @@ class AppSetAutostartTest {
         assertEquals(Result.STARTED, autostart().runIfDue { 0 })
     }
 
+    @Test fun `a camera that does not close opens nothing`() = runBlocking {
+        coEvery { launcher.cameraClosed() } returns false
+
+        assertEquals(Result.CAMERA, autostart().runIfDue { 0 })
+        assertEquals(Result.CAMERA, autostart(splitOn = true).runIfDue { 0 })
+        coVerify(exactly = 0) { launcher.launch(any()) }
+        assertEquals(0, splitStarts)
+    }
+
+    @Test fun `the speed is read once the camera has closed`() = runBlocking {
+        var cameraGone = false
+        coEvery { launcher.cameraClosed() } coAnswers { cameraGone = true; true }
+        coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
+
+        assertEquals(Result.STARTED, autostart().runIfDue { if (cameraGone) 0 else 12 })
+    }
+
     @Test fun `a moving car never gets a video app opened`() = runBlocking {
         assertEquals(Result.MOVING, autostart().runIfDue { 12 })
         coVerify(exactly = 0) { launcher.launch(any()) }
@@ -117,8 +144,16 @@ class AppSetAutostartTest {
         assertEquals(Result.REPEAT, autostart().runIfDue { 0 })
     }
 
-    @Test fun `other firmwares and an empty choice do nothing`() = runBlocking {
-        assertEquals(Result.NOT_LEGACY, autostart(legacy = false).runIfDue { 0 })
+    @Test fun `other firmwares open the saved pair, never a set`() = runBlocking {
+        val a = autostart(legacy = false, splitOn = true)
+        a.setEnabled(true)
+
+        assertEquals(Result.STARTED, a.runIfDue { 0 })
+        assertEquals(1, splitStarts)
+        coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `an empty choice does nothing`() = runBlocking {
         val empty = autostart(st = AppSetStore())
         empty.setEnabled(true)
         assertEquals(Result.NO_SET, empty.runIfDue { 0 })
