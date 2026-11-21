@@ -109,9 +109,9 @@ class DtcScannerTest {
         val w = world()
         val s = w.run()
         assertEquals(DtcWire.STATE_DONE, s.state)
-        assertEquals(18, s.total)
-        assertEquals(18, s.done)
-        assertEquals(18, s.results.size)
+        assertEquals(38, s.total)
+        assertEquals(38, s.done)
+        assertEquals(38, s.results.size)
         assertEquals(DtcWire.OUTCOME_OK, s.of(0x712).outcome)
         assertEquals(DtcWire.OUTCOME_GW_TIMEOUT, s.of(0x722).outcome)
         assertEquals(DtcWire.OUTCOME_NRC, s.of(0x7E4).outcome)
@@ -260,7 +260,7 @@ class DtcScannerTest {
         }
         val s = w.run()
         assertEquals(DtcWire.STATE_DONE, s.state)
-        assertEquals(18, s.done)
+        assertEquals(38, s.done)
         assertEquals(DtcWire.OUTCOME_OK, s.of(0x712).outcome)
         assertEquals(1, w.device.sent.count(::isName))
         assertEquals(1, w.device.unregisterCalls)
@@ -274,7 +274,7 @@ class DtcScannerTest {
         }
         val s = w.run()
         assertEquals(DtcWire.STATE_DONE, s.state)
-        assertEquals(18, s.done)
+        assertEquals(38, s.done)
         assertEquals(DtcWire.OUTCOME_OK, s.of(0x712).outcome)
         assertEquals(1, w.device.sent.count(::isName))
         assertEquals(1, w.device.unregisterCalls)
@@ -283,12 +283,12 @@ class DtcScannerTest {
     @Test fun `the budget running out during the names keeps the scan DONE`() {
         val w = world()
         w.device.respond = { p ->
-            if (isName(p)) w.clock.t += 91_000
+            if (isName(p)) w.clock.t += DtcScanner.BUDGET_MS + 1_000
             recorded(p)
         }
         val s = w.run()
         assertEquals(DtcWire.STATE_DONE, s.state)
-        assertEquals(18, s.done)
+        assertEquals(38, s.done)
         assertEquals(1, w.device.sent.count(::isName))
     }
 
@@ -343,10 +343,10 @@ class DtcScannerTest {
         assertEquals(1, w.tasks.size)
     }
 
-    @Test fun `past ninety seconds the scan aborts on the budget`() {
+    @Test fun `past the scan budget the scan aborts on the budget`() {
         val w = world()
         w.device.respond = { p ->
-            if (w.device.sent.size == 3) w.clock.t += 91_000
+            if (w.device.sent.size == 3) w.clock.t += DtcScanner.BUDGET_MS + 1_000
             recorded(p)
         }
         val s = w.run()
@@ -450,6 +450,22 @@ class DtcScannerTest {
         assertTrue(s.reason, s.reason.startsWith("not_park"))
         assertEquals(2, s.erase.size)
         assertTrue(s.erase.all { it.confirm == DtcWire.CONFIRM_NOT_RUN })
+    }
+
+    @Test fun `E2b a guard that changes during the second gear read of the gate sends no clear and stops as diag_busy`() {
+        val w = eraseWorld()
+        var bad = false
+        var reads = 0
+        w.guard = { if (bad) "r@1_0&w@-1_0" else DtcWire.GUARD_BASELINE }
+        w.gear = {
+            if (++reads == 2) bad = true
+            1
+        }
+        val s = w.erase(0x712, 0x7E7)
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("diag_busy"))
+        assertEquals(0, w.device.sent.count(::isClear))
+        assertEquals(0, w.device.sent.size)
     }
 
     @Test fun `E3 an unknown or non-zero speed stops the erase before any send`() {

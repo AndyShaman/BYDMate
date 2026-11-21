@@ -21,7 +21,22 @@ internal fun autoserviceTransact(
     fid: Int,
     value: Int,
     writeValue: Boolean
-): Pair<Int, Int> {
+): Pair<Int, Int> = autoserviceTransactOrNull(svc, autoIface, tx, dev, fid, value, writeValue)
+    .let { (status, retInt) -> status to (retInt ?: 0) }
+
+/**
+ * [autoserviceTransact] without the 0 stand-in: retInt is null when the reply carries no value
+ * word. For the diagnostic jobs' speed gate, where a missing value must read as unknown, not 0.
+ */
+internal fun autoserviceTransactOrNull(
+    svc: IBinder,
+    autoIface: String,
+    tx: Int,
+    dev: Int,
+    fid: Int,
+    value: Int,
+    writeValue: Boolean
+): Pair<Int, Int?> {
     val data2 = Parcel.obtain()
     val reply2 = Parcel.obtain()
     return try {
@@ -32,7 +47,7 @@ internal fun autoserviceTransact(
         svc.transact(tx, data2, reply2, 0)
         val avail = reply2.dataAvail()
         val status = if (avail >= 4) reply2.readInt() else -999
-        val retInt = if (avail >= 8) reply2.readInt() else 0
+        val retInt = if (avail >= 8) reply2.readInt() else null
         status to retInt
     } finally {
         data2.recycle()

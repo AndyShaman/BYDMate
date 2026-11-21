@@ -242,6 +242,14 @@ not running
 --- dtc scan ---
 last: none
 daemon: state=IDLE done=0/0 reason=-
+--- tpms ---
+last read: none
+last write: none
+sets: WINTER=-,-,-,- SUMMER=-,-,-,-
+daemon: state=IDLE mode=SCAN reason=-
+--- ecu firmware ---
+hu baseline: none
+checks: none
 --- last crash ---
 (none)
 --- trace ---

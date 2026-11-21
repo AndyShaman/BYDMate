@@ -404,7 +404,8 @@ object TelegramReportBuilder {
         val since = if (c.resetTs <= 0L) text(strings, R.string.dashboard_trip_since_all_time)
         else text(strings, R.string.tg_report_counter_since, formatDate(c.resetTs))
         val title = "🔁 ${bold(escape(text(strings, field.labelRes)))} ${escape(since)}"
-        val block = tripLines(title, c.km, consumption, c.drivingMs.takeIf { it > 0L }, strings)
+        // Tenths always, as the widget shows TRIP 1/2 (#452).
+        val block = tripLines(title, c.km, consumption, c.drivingMs.takeIf { it > 0L }, strings, tenths = true)
         val fuel = (if (field == ReportField.TRIP1) inputs.trip1Fuel else inputs.trip2Fuel)
             ?.takeIf { inputs.hybrid && it.km > 0.0 }
             ?: return block
@@ -412,12 +413,20 @@ object TelegramReportBuilder {
     }
 
     /** [title] (HTML) and the indented «14 км за 35 мин» / «Расход …» lines under it. */
-    private fun tripLines(title: String, km: Double, kwhPer100: Double?, durationMs: Long?, strings: ReportStrings): String =
-        (listOf(title) + distanceLines(km, kwhPer100, durationMs, strings).map { INDENT + escape(it) }).joinToString("\n")
+    @Suppress("LongParameterList") // the trip numbers and whether the distance keeps its tenths
+    private fun tripLines(
+        title: String,
+        km: Double,
+        kwhPer100: Double?,
+        durationMs: Long?,
+        strings: ReportStrings,
+        tenths: Boolean = false,
+    ): String =
+        (listOf(title) + distanceLines(km, kwhPer100, durationMs, strings, tenths).map { INDENT + escape(it) }).joinToString("\n")
 
     /** «14 км за 35 мин» and «Расход …», not escaped yet. */
-    private fun distanceLines(km: Double, kwhPer100: Double?, durationMs: Long?, strings: ReportStrings): List<String> {
-        val distance = if (km >= WHOLE_KM_FROM) text(strings, R.string.tg_report_trip_km_whole, km.roundToInt())
+    private fun distanceLines(km: Double, kwhPer100: Double?, durationMs: Long?, strings: ReportStrings, tenths: Boolean = false): List<String> {
+        val distance = if (!tenths && km >= WHOLE_KM_FROM) text(strings, R.string.tg_report_trip_km_whole, km.roundToInt())
         else text(strings, R.string.tg_report_trip_km, km)
         val took = durationMs?.takeIf { it >= 0 }?.let { duration(it, strings) }
         return listOfNotNull(

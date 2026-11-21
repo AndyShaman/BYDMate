@@ -630,6 +630,43 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideTpmsRepository(
+        @ApplicationContext context: Context,
+        helper: com.bydmate.app.data.vehicle.HelperClient,
+        settings: SettingsRepository,
+    ): com.bydmate.app.data.tpms.TpmsRepository = com.bydmate.app.data.tpms.TpmsRepository(
+        helper = helper,
+        prefs = context.getSharedPreferences(com.bydmate.app.data.tpms.TpmsRepository.PREFS_NAME, Context.MODE_PRIVATE),
+        settings = settings,
+        scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+        liveSample = { com.bydmate.app.service.TrackingService.lastSample },
+        serviceRunning = { com.bydmate.app.service.TrackingService.isRunning.value },
+        elapsedNow = { android.os.SystemClock.elapsedRealtime() },
+        wallNow = { System.currentTimeMillis() },
+    )
+
+    @Provides
+    @Singleton
+    fun provideEcuFirmwareRepository(
+        @ApplicationContext context: Context,
+        helper: com.bydmate.app.data.vehicle.HelperClient,
+        settings: SettingsRepository,
+        sink: com.bydmate.app.data.backup.TelegramBackupSink,
+    ): com.bydmate.app.data.dtc.EcuFirmwareRepository = com.bydmate.app.data.dtc.EcuFirmwareRepository(
+        helper = helper,
+        prefs = context.getSharedPreferences(com.bydmate.app.data.dtc.EcuFirmwareRepository.PREFS_NAME, Context.MODE_PRIVATE),
+        settings = settings,
+        sink = sink,
+        scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+        liveSample = { com.bydmate.app.service.TrackingService.lastSample },
+        serviceRunning = { com.bydmate.app.service.TrackingService.isRunning.value },
+        elapsedNow = { android.os.SystemClock.elapsedRealtime() },
+        wallNow = { System.currentTimeMillis() },
+        huBuild = { android.os.Build.FINGERPRINT.orEmpty() },
+    )
+
+    @Provides
+    @Singleton
     fun provideWriteAllowlist(@ApplicationContext context: Context): com.bydmate.app.data.vehicle.WriteAllowlist =
         com.bydmate.app.data.vehicle.WriteAllowlist.loadProduction {
             context.assets.open("competitor-actions.json").bufferedReader().use { it.readText() }

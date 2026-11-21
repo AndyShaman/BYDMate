@@ -1,6 +1,8 @@
 package com.bydmate.app.data.dtc
 
+import com.bydmate.app.helper.dtc.DtcAddressResult
 import com.bydmate.app.helper.dtc.DtcFixtures
+import com.bydmate.app.helper.dtc.DtcWire
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,6 +28,28 @@ class DtcGroupsTest {
         assertEquals(withRows, others.map { it.addrs.single() })
         // groups come ordered by their first address
         assertEquals(groups.map { it.addrs.first() }.sorted(), groups.map { it.addrs.first() })
+    }
+
+    // Unnamed blocks of one part number (0x760, 0x761, 0x7C2, 0x7D4 on the L3 answer the same F194 and
+    // the same codes): shown once, not four times. Different F194 = different units, kept apart.
+    private fun unknownBlock(addr: Int, f194: String) = DtcAddressResult(
+        addr, DtcWire.OUTCOME_OK, DtcFixtures.hex("5901FF000002"),
+        DtcFixtures.hex("5902FFC1648708C3348708"), DtcFixtures.hex(f194),
+    )
+
+    @Test fun `unknown blocks with the same F194 and the same codes form one group`() {
+        val id = "62F1940031001202025600"
+        val found = DtcParser.summarize(listOf(unknownBlock(0x760, id), unknownBlock(0x761, id), unknownBlock(0x7C2, id))).found
+        val groups = DtcParser.groups(found)
+        assertEquals(listOf(listOf(0x760, 0x761, 0x7C2)), groups.map { it.addrs })
+        assertEquals(DtcBlock.UNKNOWN, groups.single().block.block)
+    }
+
+    @Test fun `unknown blocks with the same codes but another F194 stay apart`() {
+        val found = DtcParser.summarize(
+            listOf(unknownBlock(0x760, "62F1940031001202025600"), unknownBlock(0x766, "62F194484400124D5B0057")),
+        ).found
+        assertEquals(listOf(listOf(0x760), listOf(0x766)), DtcParser.groups(found).map { it.addrs })
     }
 
     @Test fun `identical rows under different block names stay two groups`() {

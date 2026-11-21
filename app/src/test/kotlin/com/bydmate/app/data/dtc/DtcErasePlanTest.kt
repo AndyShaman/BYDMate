@@ -71,4 +71,5 @@ class DtcErasePlanTest {
         assertArrayEquals(intArrayOf(), DtcErasePlan.eligible(saved, now))
         assertArrayEquals(intArrayOf(), DtcErasePlan.eligibleBlock(saved, 0x7E0, now))
     }
+
 }

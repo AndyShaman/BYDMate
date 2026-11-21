@@ -97,7 +97,7 @@ class DtcParserTest {
     @Test fun `the whole pre-clear scan reads as 14 answered, one now and nine old (duplicate URE list counted once)`() {
         val s = DtcParser.summarize(DtcFixtures.preClearScan())
         assertEquals(14, s.answered)
-        assertEquals(18, s.total)
+        assertEquals(38, s.total)
         assertEquals(1, s.now)
         assertEquals(9, s.old)
         assertEquals(0, s.pending)

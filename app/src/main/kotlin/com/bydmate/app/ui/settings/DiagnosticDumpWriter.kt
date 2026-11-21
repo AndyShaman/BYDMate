@@ -964,6 +964,25 @@ class DiagnosticDumpWriter @Inject @Suppress("LongParameterList") constructor( /
                     .forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
+            // The last tyre-sensor read and write, raw per wheel, and the owner's sets. Never reads the car.
+            appendLine("--- tpms ---")
+            try {
+                val prefs = appContext.getSharedPreferences(
+                    com.bydmate.app.data.tpms.TpmsRepository.PREFS_NAME, Context.MODE_PRIVATE,
+                )
+                com.bydmate.app.data.tpms.TpmsRepository.dumpLines(prefs, settingsRepository.getTyreSets(), helperClient.tpmsStatus())
+                    .forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
+            // The saved block firmware checks, raw per address, and the head-unit baseline. Never reads the car.
+            appendLine("--- ecu firmware ---")
+            try {
+                val prefs = appContext.getSharedPreferences(
+                    com.bydmate.app.data.dtc.EcuFirmwareRepository.PREFS_NAME, Context.MODE_PRIVATE,
+                )
+                com.bydmate.app.data.dtc.EcuFirmwareRepository.dumpLines(prefs).forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
             appendLine("--- last crash ---")
             try {
                 val crashes = CrashLog.read(appContext)

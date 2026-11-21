@@ -182,9 +182,10 @@ class DtcScanRepository(
                 continue
             }
             lost = 0
-            if (status.mode == DtcWire.MODE_ERASE) {
-                // An erase holds the daemon (e.g. started before the app was restarted): never a scan.
-                Log.w(TAG, "scan poll saw an erase state=${STATE_NAMES[status.state] ?: "IDLE"}, scan ended")
+            if (status.mode != DtcWire.MODE_SCAN) {
+                // Another job holds the daemon (an erase, or a later job, e.g. started before the app was
+                // restarted): its result is never a scan, so it must not replace the saved one.
+                Log.w(TAG, "scan poll saw mode=${status.mode} state=${STATE_NAMES[status.state] ?: "IDLE"}, scan ended")
                 return fail(DtcScanError.ABORTED)
             }
             when (status.state) {

@@ -26,4 +26,5 @@ class TechPanelEraseLockTest {
         val both = TechPanelUiState(dtcSummary = summary, dtcEraseLocked = setOf(0x712, 0x726))
         assertFalse(both.showErase)
     }
+
 }

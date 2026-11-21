@@ -3,7 +3,12 @@ package com.bydmate.app.helper
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.helper.push.FidRecorder
 import com.bydmate.app.helper.dtc.DtcDaemon
+import com.bydmate.app.helper.dtc.DtcScanner
+import com.bydmate.app.helper.dtc.TpmsPlanEntry
+import com.bydmate.app.helper.dtc.TpmsWire
 import com.bydmate.app.helper.dtc.writeDtcScanStatus
+import com.bydmate.app.helper.dtc.writeFirmwareStatus
+import com.bydmate.app.helper.dtc.writeTpmsStatus
 import com.bydmate.app.helper.offreport.OffReport
 import com.bydmate.app.helper.offreport.readOffReportArm
 import com.bydmate.app.helper.offreport.writeOffReportStatus
@@ -84,9 +89,11 @@ internal fun handleOffReportTransact(code: Int, data: Parcel, reply: Parcel?): B
 }
 
 /**
- * The manual fault-code scan and erase verbs. START only hands the job to its own thread and
- * answers; the gear (getInt, tx 5) and, for the erase, the speed (getFloat, tx 7) are read live at
- * the addresses the app resolved, before every request. A failure here costs this call only.
+ * The manual fault-code scan and erase verbs, the tyre-sensor read and write, and the block
+ * firmware check. START only
+ * hands the job to its own thread and answers; the gear (getInt, tx 5) and, for the erase and the
+ * tyre write, the speed (getFloat, tx 7) are read live at the addresses the app resolved, before
+ * every request. A failure here costs this call only.
  */
 internal fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc: IBinder, autoIface: String): Boolean {
     runCatching {
@@ -104,14 +111,36 @@ internal fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc:
                 val speedDev = data.readInt()
                 val speedFid = data.readInt()
                 val addrs = data.createIntArray() ?: IntArray(0)
-                DtcDaemon.speed = { readDtcSpeed(svc, autoIface, speedDev, speedFid) }
-                val status = DtcDaemon.scanner.startErase(addrs) { readDtcGear(svc, autoIface, gearDev, gearFid) }
+                // The speed source changes only for an accepted start: a busy or refused one leaves the running job's.
+                val status = DtcDaemon.scanner.startErase(
+                    addrs, accepted = { DtcDaemon.speed = { readDtcSpeed(svc, autoIface, speedDev, speedFid) } },
+                ) { readDtcGear(svc, autoIface, gearDev, gearFid) }
                 android.util.Log.i(
                     "DtcScan",
                     "erase request gear=$gearDev/$gearFid speed=$speedDev/$speedFid " +
                         "addrs=${addrs.joinToString(",") { "0x%X".format(it) }} reply=$status",
                 )
                 reply?.writeInt(status)
+            }
+            HelperBinderProtocol.TX_TPMS_READ_START -> {
+                val gearDev = data.readInt()
+                val gearFid = data.readInt()
+                val status = DtcDaemon.scanner.startTpmsRead { readDtcGear(svc, autoIface, gearDev, gearFid) }
+                android.util.Log.i("DtcScan", "tpms read request gear=$gearDev/$gearFid reply=$status")
+                reply?.writeInt(status)
+            }
+            HelperBinderProtocol.TX_TPMS_WRITE_START -> reply?.writeInt(handleTpmsWrite(data, svc, autoIface))
+            HelperBinderProtocol.TX_FW_READ_START -> {
+                val gearDev = data.readInt()
+                val gearFid = data.readInt()
+                val status = DtcDaemon.scanner.startFirmware { readDtcGear(svc, autoIface, gearDev, gearFid) }
+                android.util.Log.i("DtcScan", "firmware request gear=$gearDev/$gearFid reply=$status")
+                reply?.writeInt(status)
+            }
+            HelperBinderProtocol.TX_DIAG_JOB_STATUS -> reply?.let {
+                writeTpmsStatus(it, DtcDaemon.scanner.tpmsStatus())
+                writeFirmwareStatus(it, DtcDaemon.scanner.firmwareStatus())
+                it.writeLong(DtcDaemon.scanner.securityWaitMs())
             }
             else -> reply?.let { writeDtcScanStatus(it, DtcDaemon.scanner.status()) }
         }
@@ -123,13 +152,38 @@ internal fun handleDtcScanTransact(code: Int, data: Parcel, reply: Parcel?, svc:
     return true
 }
 
+/** TX_TPMS_WRITE_START: the plan as sent (n outside 0..4 is refused unread); the start's reply. */
+private fun handleTpmsWrite(data: Parcel, svc: IBinder, autoIface: String): Int {
+    val gearDev = data.readInt()
+    val gearFid = data.readInt()
+    val speedDev = data.readInt()
+    val speedFid = data.readInt()
+    val n = data.readInt()
+    val plan = if (n in 0..TpmsWire.DIDS.size) List(n) { TpmsPlanEntry(data.readInt(), data.readInt(), data.readInt()) } else null
+    val status = plan?.let {
+        DtcDaemon.scanner.startTpmsWrite(it, accepted = { DtcDaemon.speed = { readDtcSpeed(svc, autoIface, speedDev, speedFid) } }) {
+            readDtcGear(svc, autoIface, gearDev, gearFid)
+        }
+    } ?: DtcScanner.START_REFUSED
+    android.util.Log.i(
+        "DtcScan",
+        "tpms write request gear=$gearDev/$gearFid speed=$speedDev/$speedFid n=$n " +
+            "plan=${plan?.joinToString(",") { "0x%X:%08X>%08X".format(it.did, it.expectedOld, it.newId) }} reply=$status",
+    )
+    return status
+}
+
 private fun readDtcGear(svc: IBinder, autoIface: String, dev: Int, fid: Int): Int? =
     autoserviceTransact(svc, autoIface, 5, dev, fid, 0, writeValue = false)
         .takeIf { (status, _) -> status == 0 }?.second
 
-/** Speed in whole km/h rounded away from 0 (any movement reads >= 1); null when unreadable or a sentinel. */
+/**
+ * Speed in whole km/h rounded away from 0 (any movement reads >= 1); null when unreadable, a
+ * sentinel, or a status-only reply without the value word.
+ */
 private fun readDtcSpeed(svc: IBinder, autoIface: String, dev: Int, fid: Int): Int? =
-    autoserviceTransact(svc, autoIface, 7, dev, fid, 0, writeValue = false)
+    autoserviceTransactOrNull(svc, autoIface, 7, dev, fid, 0, writeValue = false)
         .takeIf { (status, _) -> status == 0 }
-        ?.let { (_, bits) -> SentinelDecoder.parseFloatFromShellInt(bits) }
+        ?.second
+        ?.let { bits -> SentinelDecoder.parseFloatFromShellInt(bits) }
         ?.let { kotlin.math.ceil(kotlin.math.abs(it)).toInt() }

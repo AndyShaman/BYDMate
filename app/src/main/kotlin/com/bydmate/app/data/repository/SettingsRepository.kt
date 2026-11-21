@@ -160,6 +160,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_BMS_LIFETIME_KWH_LAST = "bms_lifetime_kwh_last"
         /** "true" once a card has actually been dragged — hides the reorder hint. */
         const val KEY_TECH_ORDER_HINT_SEEN = "tech_card_order_hint_seen"
+        /** The owner's winter and summer tyre-sensor sets, TyreSetsCodec JSON; in the backup with the settings. */
+        const val KEY_TYRE_SETS = "tyre_sets"
         /** Comma-separated automation rule ids in the order the driver dragged them into (#249). */
         const val KEY_AUTOMATION_RULE_ORDER = "automation_rule_order"
         const val KEY_MIGRATION_V2_4_17 = "migration_v2_4_17_done"
@@ -215,6 +217,7 @@ open class SettingsRepository @Inject constructor(
             Currency("KZT", "₸"),
             Currency("AMD", "֏"),
             Currency("AZN", "₼"),
+            Currency("GEL", "₾"),
             Currency("USD", "$"),
             Currency("EUR", "€"),
             Currency("PLN", "zł"),
@@ -596,6 +599,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setTechCardOrder(ids: String) =
         setString(KEY_TECH_CARD_ORDER, ids)
+
+    suspend fun getTyreSets(): String =
+        getString(KEY_TYRE_SETS, "")
+
+    suspend fun setTyreSets(json: String) =
+        setString(KEY_TYRE_SETS, json)
 
     suspend fun isTechOrderHintSeen(): Boolean =
         getString(KEY_TECH_ORDER_HINT_SEEN, "false") == "true"
