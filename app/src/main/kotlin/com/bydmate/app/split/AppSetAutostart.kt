@@ -2,6 +2,7 @@ package com.bydmate.app.split
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.provider.Settings
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.platform.LegacyHeadUnit
@@ -19,8 +20,11 @@ import javax.inject.Singleton
  * It opens at every start, whatever the speed: the head unit boots with the car and the service
  * gets to it some 30 s later, when the car is often already moving (2026-11-21: 10 and 15 km/h,
  * nothing opened). The service restarts itself seconds after a start there (the accessibility
- * recovery), so a split already started within [REPEAT_WINDOW_MS] is not started again. The BYD
- * camera on screen (reverse, parking) is waited out first, so the split never lands beside it.
+ * recovery), so it opens once per head-unit boot ([bootCount], Settings.Global.BOOT_COUNT): every
+ * car start boots the head unit anew, the recovery restart is the same boot. A ten-minute window
+ * ([REPEAT_WINDOW_MS]) blocked a real car start 90 s after an earlier opening (2026-11-21 21:35);
+ * it is kept only where the boot count cannot be read. The BYD camera on screen (reverse,
+ * parking) is waited out first, so the split never lands beside it.
  */
 @Singleton
 class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard injectable for the tests
@@ -32,6 +36,8 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
     private val startSplit: suspend () -> SplitStartResult? = { null },
     private val now: () -> Long = System::currentTimeMillis,
     private val pause: suspend (Long) -> Unit = { delay(it) },
+    /** The head unit's boot number, null when it cannot be read. */
+    private val bootCount: () -> Int? = { null },
 ) {
     @Inject constructor(
         store: AppSetStore,
@@ -43,6 +49,10 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
         store, launcher, context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
         splitFeatureEnabled = { splitPreferences.isFeatureEnabled() },
         startSplit = { splitManager.get().startLastPair() },
+        bootCount = {
+            runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1) }
+                .getOrNull()?.takeIf { it >= 0 }
+        },
     )
 
     /**
@@ -64,13 +74,20 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
         if (!sets && !splitFeatureEnabled()) return Result.OFF
         val mode = if (sets) "sets" else "pair"
         val set = if (sets) store.defaultSet() ?: return trace(mode, Result.NO_SET) else null
-        val last = prefs?.getLong(KEY_LAST_MS, 0L) ?: 0L
-        if (last > 0L && now() - last in 0 until REPEAT_WINDOW_MS) return trace(mode, Result.REPEAT)
+        val boot = bootCount()
+        if (openedAlready(boot)) return trace(mode, Result.REPEAT)
         pause(START_DELAY_MS)
         if (!launcher.cameraClosed()) return trace(mode, Result.CAMERA)
         // Marked before the launch: a second service start must not open it twice, whatever the outcome.
-        prefs?.edit()?.putLong(KEY_LAST_MS, now())?.apply()
+        prefs?.edit()?.putLong(KEY_LAST_MS, now())?.putInt(KEY_LAST_BOOT, boot ?: -1)?.apply()
         return trace(mode, if (set != null) openSet(set) else openSplitPair())
+    }
+
+    /** Opened in this boot already; without a boot number, within [REPEAT_WINDOW_MS]. */
+    private fun openedAlready(boot: Int?): Boolean {
+        if (boot != null) return prefs?.getInt(KEY_LAST_BOOT, -1) == boot
+        val last = prefs?.getLong(KEY_LAST_MS, 0L) ?: 0L
+        return last > 0L && now() - last in 0 until REPEAT_WINDOW_MS
     }
 
     private suspend fun openSet(set: AppSet): Result =
@@ -90,9 +107,10 @@ class AppSetAutostart @Suppress("LongParameterList") constructor( // each guard 
     companion object {
         const val PREFS_NAME = "bydmate_app_sets_autostart"
         const val KEY_LAST_MS = "last_ms"
+        const val KEY_LAST_BOOT = "last_boot"
         const val KEY_ENABLED = "enabled"
 
-        /** The accessibility recovery restarts the service ~13 s after a start; this outlasts it. */
+        /** Without a boot number: the accessibility recovery restarts the service ~13 s after a start; this outlasts it. */
         const val REPEAT_WINDOW_MS = 10 * 60 * 1000L
 
         /** Lets the head unit finish booting and the recovery restart pass before the launch. */

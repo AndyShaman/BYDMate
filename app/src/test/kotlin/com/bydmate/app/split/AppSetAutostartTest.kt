@@ -23,10 +23,12 @@ class AppSetAutostartTest {
     /** [splitOn]: the saved pair's mechanism (not «Пополам 1:1»); [switchedOn]: the split at all. */
     private fun autostart(
         legacy: Boolean = true, st: AppSetStore = store, splitOn: Boolean = false, switchedOn: Boolean = true,
+        boot: Int? = null,
     ) = AppSetAutostart(
         st.apply { setSetsMode(!splitOn); setSetsOn(!splitOn && switchedOn) }, launcher, fakeSplitSharedPrefs(backing),
         legacyHeadUnit = { legacy }, splitFeatureEnabled = { splitOn && switchedOn },
         startSplit = { splitStarts++; splitResult }, now = { clock }, pause = { pauses += it },
+        bootCount = { boot },
     )
 
     @Test fun `with the main method chosen its saved pair opens, not a set`() = runBlocking {
@@ -139,5 +141,33 @@ class AppSetAutostartTest {
         // No speed is read at all: the service gets here ~30 s after the head unit booted.
         assertEquals(Result.STARTED, autostart().runIfDue())
         coVerify(exactly = 1) { launcher.launch(set) }
+    }
+
+    // --- Once per head-unit boot (2026-11-21 21:35: a car start 90 s after an opening got REPEAT). ---
+
+    @Test fun `the recovery restart in the same boot does not open it again`() = runBlocking {
+        coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
+        autostart(boot = 228).runIfDue()
+        clock += 15_000L
+
+        assertEquals(Result.REPEAT, autostart(boot = 228).runIfDue())
+        coVerify(exactly = 1) { launcher.launch(set) }
+    }
+
+    @Test fun `a new car start opens it again a minute later`() = runBlocking {
+        coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
+        autostart(boot = 227).runIfDue()
+        clock += 90_000L
+
+        assertEquals(Result.STARTED, autostart(boot = 228).runIfDue())
+        coVerify(exactly = 2) { launcher.launch(set) }
+    }
+
+    @Test fun `an update installed after this boot's opening does not open it again`() = runBlocking {
+        coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
+        autostart(boot = 228).runIfDue()
+        clock += 60 * 60_000L
+
+        assertEquals(Result.REPEAT, autostart(boot = 228).runIfDue())
     }
 }
