@@ -10,6 +10,11 @@ import com.bydmate.app.data.automation.VoiceFireResult
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
+import com.bydmate.app.split.AppSet
+import com.bydmate.app.split.AppSetLauncher
+import com.bydmate.app.split.AppSetStore
+import com.bydmate.app.split.SplitSessionManager
+import com.bydmate.app.split.SplitStartResult
 import com.bydmate.app.util.appStringsOver
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -58,8 +63,25 @@ class VoiceControllerPrecedenceTest {
         fail("condition not met within ${timeoutMs}ms")
     }
 
+    /**
+     * «Разделение экрана» (Android 10): [mainMethod] = the saved pair's mechanism, else «Пополам
+     * 1:1» (the sets); [switchedOn] = the split switch.
+     */
+    private class SplitSetup(
+        val mainMethod: Boolean = false,
+        val manager: SplitSessionManager = mockk { coEvery { startLastPair() } returns SplitStartResult.OK },
+        val legacy: Boolean = true,
+        val switchedOn: Boolean = true,
+    )
+
     /** A real VoiceAutomationResolver over one enabled rule (id 9, name «Моё») with [automationPhrase]. */
-    private fun rig(automationPhrase: String?, userPhrases: VoiceUserPhrases): Rig {
+    private fun rig(
+        automationPhrase: String?,
+        userPhrases: VoiceUserPhrases,
+        appSets: Pair<AppSetStore, AppSetLauncher>? = null,
+        split: SplitSetup = SplitSetup(),
+        apps: suspend (String) -> String? = { null },
+    ): Rig {
         val gate = mockk<VoiceGate> {
             every { isEnabled() } returns true
             every { vehicleSnapshot() } returns null
@@ -90,6 +112,15 @@ class VoiceControllerPrecedenceTest {
             appStrings = appStringsOver(ctx),
             userPhrases = userPhrases,
         )
+        controller.legacyHeadUnit = { split.legacy }
+        controller.splitAppPackage = apps
+        appSets?.let { (store, launcher) ->
+            controller.injectAppSets(
+                store.apply { setSetsMode(!split.mainMethod); setSetsOn(!split.mainMethod && split.switchedOn) }, launcher,
+                mockk { every { isFeatureEnabled() } returns (split.mainMethod && split.switchedOn) },
+                dagger.Lazy { split.manager },
+            )
+        }
         return Rig(controller, asr, dispatcher, engine, journal).also { r ->
             coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } answers {
                 r.dispatched += firstArg<ActionDef>().command
@@ -167,6 +198,158 @@ class VoiceControllerPrecedenceTest {
 
         assertEquals("phrase:windows_close_all", r.say(text).command)
         assertEquals(listOf("车窗关闭"), r.dispatched.toList())
+    }
+
+    // --- the driver's app sets (Android 10 head units) ---
+
+    private val setStore = AppSetStore().apply {
+        upsert(AppSet("set1", "открой окна", "com.zhiliaoapp.musically", "ru.yandex.music"))
+    }
+
+    private fun setLauncher(outcome: AppSetLauncher.Outcome = AppSetLauncher.Outcome.OK) =
+        mockk<AppSetLauncher> { coEvery { launch(any()) } returns outcome }
+
+    @Test fun `split plus a set name beats the built-in parser and opens the set`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher)
+        val entry = r.say("сплит открой окна")
+
+        assertEquals(VoiceJournalEntry.Route.NLU, entry.route)
+        assertEquals(VoiceJournalEntry.Outcome.OK, entry.outcome)
+        assertEquals("appset:открой окна", entry.command)
+        coVerify(exactly = 1) { launcher.launch(match { it.id == "set1" }) }
+        assertEquals(emptyList<String>(), r.dispatched.toList())
+    }
+
+    @Test fun `the split screen phrase opens the first set`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher)
+
+        assertEquals("appset:открой окна", r.say("включи разделение экрана").command)
+        coVerify(exactly = 1) { launcher.launch(match { it.id == "set1" }) }
+    }
+
+    @Test fun `with the 1-3 split switched on no set opens, by name either`() {
+        // One utterance per rig: say() reads the first journal entry.
+        val launcher = setLauncher()
+        val bare = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, split = SplitSetup(mainMethod = true))
+        assertNotEquals("appset:открой окна", bare.say("включи разделение экрана").command)
+
+        val named = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, split = SplitSetup(mainMethod = true))
+        assertNotEquals("appset:открой окна", named.say("сплит открой окна").command)
+
+        coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `with the main method the split screen phrase opens its saved pair`() {
+        val manager = mockk<SplitSessionManager> { coEvery { startLastPair() } returns SplitStartResult.OK }
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, split = SplitSetup(mainMethod = true, manager = manager))
+
+        val entry = r.say("включи разделение экрана")
+
+        assertEquals("split:start", entry.command)
+        assertEquals(VoiceJournalEntry.Outcome.OK, entry.outcome)
+        coVerify(exactly = 1) { manager.startLastPair() }
+        coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `with the main method and no saved pair the phrase is reported as blocked`() {
+        val manager = mockk<SplitSessionManager> { coEvery { startLastPair() } returns null }
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to setLauncher(), split = SplitSetup(mainMethod = true, manager = manager))
+
+        assertEquals(VoiceJournalEntry.Outcome.BLOCKED, r.say("сплит").outcome)
+    }
+
+    @Test fun `other firmwares keep the split screen phrase for the agent`() {
+        val manager = mockk<SplitSessionManager> { coEvery { startLastPair() } returns SplitStartResult.OK }
+        val r = rig(
+            null, VoiceUserPhrases(), appSets = setStore to setLauncher(),
+            split = SplitSetup(mainMethod = true, manager = manager, legacy = false),
+        )
+
+        assertNotEquals("split:start", r.say("включи разделение экрана").command)
+        coVerify(exactly = 0) { manager.startLastPair() }
+    }
+
+    // --- the split with an app named on the spot (alternative method) ---
+
+    /** A head unit with Yandex Music installed: the name launch_app would find it by. */
+    private val withMusic: suspend (String) -> String? = { name ->
+        if (name.startsWith("яндекс музык")) "ru.yandex.music" else null
+    }
+
+    @Test fun `split and an app name splits the screen with that app`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, apps = withMusic)
+
+        val entry = r.say("сплит яндекс музыка")
+
+        assertEquals("split:app:яндекс музыка", entry.command)
+        assertEquals(VoiceJournalEntry.Outcome.OK, entry.outcome)
+        coVerify(exactly = 1) { launcher.launch(match { it.leftPkg == "ru.yandex.music" && it.rightPkg == null }) }
+    }
+
+    @Test fun `add an app to the split works too`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, apps = withMusic)
+
+        assertEquals("split:app:яндекс музыку", r.say("добавь яндекс музыку в сплит").command)
+    }
+
+    @Test fun `a set name still wins over an app`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, apps = withMusic)
+
+        assertEquals("appset:открой окна", r.say("сплит открой окна").command)
+    }
+
+    @Test fun `an app that is not installed leaves the one set to open as before`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher)
+
+        assertEquals("appset:открой окна", r.say("сплит яндекс музыка").command)
+    }
+
+    @Test fun `with the main method an app split is left to the agent`() {
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher, split = SplitSetup(mainMethod = true), apps = withMusic)
+
+        assertNotEquals("split:app:яндекс музыка", r.say("сплит яндекс музыка").command)
+        coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `with the split switched off neither a set nor the pair opens`() {
+        val manager = mockk<SplitSessionManager>(relaxed = true)
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher,
+            split = SplitSetup(manager = manager, switchedOn = false))
+
+        assertNotEquals("appset:открой окна", r.say("включи разделение экрана").command)
+        coVerify(exactly = 0) { launcher.launch(any()) }
+        coVerify(exactly = 0) { manager.startLastPair() }
+    }
+
+    @Test fun `an app set that does not open is reported as blocked`() {
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to setLauncher(AppSetLauncher.Outcome.LEFT_FAILED))
+
+        assertEquals(VoiceJournalEntry.Outcome.BLOCKED, r.say("сплит открой окна").outcome)
+    }
+
+    @Test fun `a set name without split is left to the parser`() {
+        val text = "открой окна"
+        val expected = parserLabel(text)
+        val launcher = setLauncher()
+        val r = rig(null, VoiceUserPhrases(), appSets = setStore to launcher)
+
+        assertEquals(expected, r.say(text).command)
+        coVerify(exactly = 0) { launcher.launch(any()) }
+    }
+
+    @Test fun `an automation phrase outranks an app set`() {
+        val r = rig("сплит открой окна", VoiceUserPhrases(), appSets = setStore to setLauncher())
+
+        assertEquals(VoiceJournalEntry.Route.AUTOMATION, r.say("сплит открой окна").route)
     }
 
     // --- a phrase inside a longer utterance never fires ---

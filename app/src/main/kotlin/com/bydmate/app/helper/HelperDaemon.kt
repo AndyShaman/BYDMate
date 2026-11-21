@@ -353,7 +353,7 @@ fun main(args: Array<String>) {
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
                 HelperBinderProtocol.TX_LAUNCH_APP -> runCatching {
-                    val ok = launchApp(data.readString() ?: "")
+                    val ok = launchAppFromParcel(data)
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }

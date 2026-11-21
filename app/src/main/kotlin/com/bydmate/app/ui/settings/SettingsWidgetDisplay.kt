@@ -59,6 +59,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.res.stringResource
 import com.bydmate.app.cluster.DEFAULT_TRIGGER_KEYCODE
 import com.bydmate.app.R
+import com.bydmate.app.platform.LegacyHeadUnit
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.MultiAppPickerDialog
 import com.bydmate.app.ui.theme.*
@@ -74,9 +75,11 @@ internal fun WidgetSection() {
     val prefs = remember { WidgetPreferences(context) }
     val enabled by prefs.enabledFlow().collectAsStateWithLifecycle(initialValue = prefs.isEnabled())
     // Read split feature state once at composition time to gate the left-tap mode chip.
+    // The Android 10 head units open the app set there, which needs no switch of the split feature.
     val splitFeatureEnabled = remember {
-        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
-            .splitPreferences().isFeatureEnabled()
+        LegacyHeadUnit.isAndroid10 ||
+            EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
+                .splitPreferences().isFeatureEnabled()
     }
     val alpha by prefs.alphaFlow().collectAsStateWithLifecycle(initialValue = prefs.getAlpha())
     val scale by prefs.scaleFlow().collectAsStateWithLifecycle(initialValue = prefs.getScale())
@@ -209,7 +212,10 @@ internal fun WidgetSection() {
             SettingToggleRow(
                 title = stringResource(R.string.settings_widget_left_tap_zoning_label),
                 traceId = "widget_left_tap_zoning",
-                description = stringResource(R.string.settings_widget_left_tap_zoning_description),
+                description = stringResource(
+                    if (LegacyHeadUnit.isAndroid10) R.string.settings_widget_left_tap_zoning_description_legacy
+                    else R.string.settings_widget_left_tap_zoning_description,
+                ),
                 checked = leftTapApp.enabled,
                 onCheckedChange = { prefs.setLeftTapZoningEnabled(it) },
                 enabled = enabled,
@@ -219,7 +225,10 @@ internal fun WidgetSection() {
                     title = stringResource(R.string.settings_widget_left_tap_mode_label),
                     options = listOf(
                         stringResource(R.string.settings_widget_left_tap_mode_app),
-                        stringResource(R.string.settings_widget_left_tap_mode_split),
+                        stringResource(
+                            if (LegacyHeadUnit.isAndroid10) R.string.settings_widget_left_tap_mode_split_legacy
+                            else R.string.settings_widget_left_tap_mode_split,
+                        ),
                     ),
                     selectedIndex = if (leftTapApp.mode == LeftTapMode.APP) 0 else 1,
                     onSelect = { idx ->

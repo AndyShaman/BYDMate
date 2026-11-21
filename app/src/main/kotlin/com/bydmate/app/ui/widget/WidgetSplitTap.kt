@@ -3,8 +3,14 @@ package com.bydmate.app.ui.widget
 import android.content.Context
 import android.util.Log
 import com.bydmate.app.data.vehicle.HelperBootstrap
+import com.bydmate.app.R
+import com.bydmate.app.platform.LegacyHeadUnit
+import com.bydmate.app.split.AppSetLauncher
+import com.bydmate.app.split.AppSetStore
 import com.bydmate.app.split.SplitOverlayController
+import com.bydmate.app.split.SplitPreferences
 import com.bydmate.app.split.SplitSessionManager
+import com.bydmate.app.split.appSetsActive
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -24,6 +30,9 @@ interface SplitWidgetEntryPoint {
     fun splitOverlayController(): SplitOverlayController
     fun helperBootstrap(): HelperBootstrap
     fun vehicleKindMonitor(): VehicleKindMonitor
+    fun appSetStore(): AppSetStore
+    fun appSetLauncher(): AppSetLauncher
+    fun splitPreferences(): SplitPreferences
 }
 
 /**
@@ -38,6 +47,11 @@ internal suspend fun toggleSplitByUser(context: Context, fromWidget: Boolean) {
             context.applicationContext,
             SplitWidgetEntryPoint::class.java,
         )
+        val store = ep.appSetStore()
+        if (appSetsActive(LegacyHeadUnit.isAndroid10, store.setsOn.value)) {
+            openDefaultAppSet(context, store, ep.appSetLauncher())
+            return
+        }
         val manager = ep.splitSessionManager()
         WidgetController.runSplitTap(
             manager = manager,
@@ -64,4 +78,18 @@ internal suspend fun toggleSplitByUser(context: Context, fromWidget: Boolean) {
     } catch (e: Exception) {
         Log.w("WidgetController", "split toggle failed (widget=$fromWidget): ${e.message}")
     }
+}
+
+/**
+ * On the Android 10 head units, with «Пополам 1:1» chosen, the widget tap and the split key open the
+ * default app set (the first in the list) with the firmware's own split ([appSetsActive]).
+ */
+internal suspend fun openDefaultAppSet(context: Context, store: AppSetStore, launcher: AppSetLauncher) {
+    val set = store.defaultSet()
+    val message = when {
+        set == null -> R.string.app_sets_none_hint
+        launcher.launch(set) != AppSetLauncher.Outcome.OK -> R.string.settings_app_sets_run_failed
+        else -> return
+    }
+    OverlayNotificationManager.show(context.applicationContext, context.getString(message), "")
 }

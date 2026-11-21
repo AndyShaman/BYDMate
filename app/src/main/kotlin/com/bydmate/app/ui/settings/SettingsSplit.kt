@@ -4,6 +4,8 @@ import android.content.Context
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
 import dagger.hilt.android.EntryPointAccessors
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.bydmate.app.platform.LegacyHeadUnit
 import com.bydmate.app.ui.widget.LeftTapMode
 import com.bydmate.app.ui.widget.WidgetPreferences
 import androidx.compose.material.icons.outlined.Build
@@ -70,6 +72,11 @@ import com.bydmate.app.split.applyPick
  *
  * The app rows edit the MENU pair; a launch with other apps changes only the session pair, which
  * the next process (car power cycle) forgets (SplitPreferences).
+ *
+ * «Открывать при запуске» under the mechanism row serves every mechanism
+ * ([com.bydmate.app.split.AppSetAutostart]). Android 10 head units (DiLink 3 / 4): the mechanism
+ * row has a third choice, «Пополам 1:1», the app sets through the firmware's own split
+ * ([AppSetsSection] instead of the pair rows); it exists only there (the firmware split it uses).
  */
 @Composable
 internal fun SplitSection(viewModel: SettingsViewModel) {
@@ -82,6 +89,10 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
         context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
     }
 
+    // Android 10 head units: «Пополам 1:1» (the app sets) next to the two mechanisms. Created
+    // before the switch states are read: it moves an earlier app-set setup to «1:1» first.
+    val legacy = remember { LegacyHeadUnit.isAndroid10 }
+    val setsViewModel: AppSetsViewModel = hiltViewModel()
     var splitEnabled by remember { mutableStateOf(splitPrefs.isFeatureEnabled()) }
     var nativeMode by remember { mutableStateOf(splitPrefs.isNativeModeEnabled()) }
     var hasLastPair by remember { mutableStateOf(splitPrefs.getMenuPair() != null) }
@@ -99,6 +110,37 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
     var clearStatus by remember { mutableStateOf<String?>(null) }
     // "?" badge on the section header; the text it toggles is the first block inside the card.
     var howToOpen by remember { mutableStateOf(false) }
+
+    val setsMode by setsViewModel.store.setsMode.collectAsStateWithLifecycle()
+    val setsOn by setsViewModel.store.setsOn.collectAsStateWithLifecycle()
+    var autostart by remember { mutableStateOf(setsViewModel.autostartEnabled()) }
+    // The pair rows, the mechanism hints and the clear row belong to the pair, not to the sets.
+    val pairMechanism = !(legacy && setsMode)
+    // The switch shows the split on: the pair's (splitEnabled, the author's flag) or the sets'.
+    // «Пополам 1:1» never sets the author's flag, so its machinery stays idle while the sets run.
+    val switchOn = splitEnabled || (legacy && setsOn)
+
+    /** The author's master switch, as it was: flag, reboot hint, freeform flag. */
+    fun setPairSplit(enabled: Boolean) {
+        splitPrefs.setFeatureEnabled(enabled)
+        splitEnabled = enabled
+        if (enabled) {
+            // Arm the reboot hint when enabling split while freeform is not yet live
+            // (direct projection is off → flag was 0). Mirrors the projection section's
+            // KEY_FREEFORM_REBOOT_PENDING mechanism for the split consumer.
+            ClusterProjectionManager.armSplitRebootHintIfNeeded(context, splitEnabled = true)
+            splitRebootPending = clusterPrefs.getBoolean(
+                ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false)
+        } else {
+            ClusterProjectionManager.clearSplitRebootHint(context)
+            splitRebootPending = false
+        }
+        // force=true on explicit disable: bypass the passive-user guard so the flag
+        // is written to 0 even when no projection transport has been chosen (Fix 2).
+        ClusterProjectionManager.realignFreeformFlag(
+            context, entryPoint.helperClient(), entryPoint.helperBootstrap(),
+            force = !enabled)
+    }
 
     // App pair picker state. Initialized from the stored pair; updated on every pick or clear.
     var displayWidePkg by remember { mutableStateOf(splitPrefs.getMenuPair()?.widePkg) }
@@ -126,53 +168,62 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
                 title = stringResource(R.string.settings_split_enable_title),
                 traceId = "split_enable",
                 description = stringResource(R.string.settings_split_enable_desc),
-                checked = splitEnabled,
+                checked = switchOn,
                 onCheckedChange = { enabled ->
-                    splitPrefs.setFeatureEnabled(enabled)
-                    splitEnabled = enabled
-                    if (enabled) {
-                        // Arm the reboot hint when enabling split while freeform is not yet live
-                        // (direct projection is off → flag was 0). Mirrors the projection section's
-                        // KEY_FREEFORM_REBOOT_PENDING mechanism for the split consumer.
-                        ClusterProjectionManager.armSplitRebootHintIfNeeded(context, splitEnabled = true)
-                        splitRebootPending = clusterPrefs.getBoolean(
-                            ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false)
-                    } else {
-                        ClusterProjectionManager.clearSplitRebootHint(context)
-                        splitRebootPending = false
-                    }
-                    // force=true on explicit disable: bypass the passive-user guard so the flag
-                    // is written to 0 even when no projection transport has been chosen (Fix 2).
-                    ClusterProjectionManager.realignFreeformFlag(
-                        context, entryPoint.helperClient(), entryPoint.helperBootstrap(),
-                        force = !enabled)
+                    if (legacy && setsMode) setsViewModel.store.setSetsOn(enabled) else setPairSplit(enabled)
                 },
             )
             if (splitEnabled && split37Firmware) {
                 SettingDivider()
                 SettingHint(text = stringResource(R.string.settings_split_mechanism_platformized_hint))
-            } else if (splitEnabled) {
+            } else if (switchOn) {
                 SettingDivider()
                 // Mechanism selector: our own freeform panes vs handing the pair to the
                 // firmware's split. Native is the fallback for firmwares that gate freeform.
                 SettingChipRow(
                     title = stringResource(R.string.settings_split_mechanism_title),
-                    options = listOf(
+                    options = listOfNotNull(
                         stringResource(R.string.settings_split_mechanism_freeform),
                         stringResource(R.string.settings_split_mechanism_native),
+                        if (legacy) stringResource(R.string.settings_split_mechanism_halves) else null,
                     ),
-                    selectedIndex = if (nativeMode) 1 else 0,
+                    selectedIndex = if (!pairMechanism) 2 else if (nativeMode) 1 else 0,
                     onSelect = { index ->
-                        val native = index == 1
-                        if (native != nativeMode) {
-                            splitPrefs.setNativeModeEnabled(native)
-                            nativeMode = native
+                        val halves = legacy && index == 2
+                        if (halves) {
+                            // To «1:1»: the author's split goes off (its flag, hint and freeform
+                            // flag as its own switch does), the sets go on. Native mode is left as is.
+                            if (splitEnabled) setPairSplit(false)
+                            setsViewModel.store.setSetsMode(true)
+                            setsViewModel.store.setSetsOn(true)
+                        } else {
+                            val native = index == 1
+                            if (native != nativeMode) {
+                                splitPrefs.setNativeModeEnabled(native)
+                                nativeMode = native
+                            }
+                            // From «1:1» back to a pair mechanism: the author's split comes on.
+                            if (legacy && setsMode) {
+                                setsViewModel.store.setSetsMode(false)
+                                setsViewModel.store.setSetsOn(false)
+                                setPairSplit(true)
+                            }
                         }
                     },
                 )
-                if (nativeMode) {
+                if (nativeMode && pairMechanism) {
                     SettingHint(text = stringResource(R.string.settings_split_mechanism_native_hint))
                 }
+            }
+            if (switchOn) {
+                SettingDivider()
+                SettingToggleRow(
+                    title = stringResource(R.string.settings_split_autostart_title),
+                    description = stringResource(R.string.settings_split_autostart_desc),
+                    checked = autostart,
+                    onCheckedChange = { autostart = it; setsViewModel.setAutostart(it) },
+                    traceId = "split_autostart",
+                )
             }
             // Reboot hint: shown when split was enabled while freeform was not yet active.
             // enable_freeform_support is read once at boot, so a restart is required. Once the
@@ -180,6 +231,7 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
             // and point at the native mechanism, which does not depend on that flag. Both hints
             // are about freeform only, so the native mechanism — and a firmware that only has
             // the native one — hides them.
+            // «Пополам 1:1» runs in native mode, so these freeform hints stay hidden for it too.
             if (splitEnabled && !nativeMode && !split37Firmware &&
                 (splitFreeformUnsupported || splitRebootPending)) {
                 val hint = if (splitFreeformUnsupported) {
@@ -190,7 +242,7 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
                 }
                 SettingHint(text = hint)
             }
-            if (splitEnabled) {
+            if (splitEnabled && pairMechanism) {
                 SettingDivider()
                 SettingValueRow(
                     title = stringResource(R.string.settings_split_wide_app_title),
@@ -220,8 +272,8 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
                     },
                 )
             }
-            SettingDivider()
-            SettingActionRow(
+            if (pairMechanism) SettingDivider()
+            if (pairMechanism) SettingActionRow(
                 title = stringResource(R.string.settings_split_clear_pair_title),
                 description = stringResource(R.string.settings_split_clear_pair_desc),
                 buttonLabel = stringResource(R.string.settings_split_clear_pair_title),
@@ -241,6 +293,8 @@ internal fun SplitSection(viewModel: SettingsViewModel) {
         }
     }
 
+    // «Пополам 1:1»: the sets in place of the pair. The launch block belongs to the author's split.
+    if (switchOn && !pairMechanism) AppSetsSection(setsViewModel)
     if (splitEnabled) SplitLaunchBlock(viewModel)
 
     // Picker for the wide (2/3) app.

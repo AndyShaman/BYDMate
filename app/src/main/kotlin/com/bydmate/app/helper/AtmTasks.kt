@@ -375,6 +375,19 @@ internal fun setTaskWindowingModeReflect(taskId: Int, windowingMode: Int) {
     if (result == false) throw IllegalStateException("setTaskWindowingMode(task=$taskId, mode=$windowingMode) returned false")
 }
 
+/**
+ * Moves the running [taskId] into the left half of the firmware's split, on top: on Android 10
+ * setTaskWindowingMode with SPLIT_SCREEN_PRIMARY is setTaskWindowingModeSplitScreenPrimary, and the
+ * app on screen goes to the other half. The app sets of the Android 10 head units use it for an app
+ * that is already running, which `am start --windowingMode 3` brings back fullscreen.
+ */
+internal fun dockTaskSplitPrimaryReflect(taskId: Int) {
+    val iAtm = activityTaskManager()
+    val result = iAtm.javaClass.getMethod("setTaskWindowingMode", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+        .invoke(iAtm, taskId, 3, true)
+    check(result != false) { "setTaskWindowingMode(task=$taskId, mode=3) returned false" }
+}
+
 internal fun setTaskBoundsReflect(taskId: Int, left: Int, top: Int, right: Int, bottom: Int) {
     val iAtm = activityTaskManager()
     val resizeTask = iAtm.javaClass.getMethod("resizeTask", Int::class.javaPrimitiveType, Rect::class.java, Int::class.javaPrimitiveType)

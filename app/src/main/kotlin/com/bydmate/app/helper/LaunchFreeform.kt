@@ -78,6 +78,62 @@ internal fun launchAppCore(
 }
 
 /**
+ * `am start --windowingMode <mode> -n <component>`, nothing else: the launch of the app sets on the
+ * Android 10 head units. Mode 3 (split-screen primary) puts the app in the left half and leaves the
+ * app that was on screen in the right one (on-car, DiLink 3.0, 2026-11-17). No MAIN/monkey fallback
+ * (it would open the app fullscreen and report a success) and no `--display`.
+ * Returns true when the command ran without an "Error".
+ */
+internal fun launchAppInWindowingModeCore(
+    packageName: String,
+    windowingMode: Int,
+    resolveComponent: (String) -> String?,
+    shell: (String, List<String>) -> String,
+    dockRunning: (String) -> Boolean = { false },
+): Boolean {
+    if (!packageName.matches(PACKAGE_NAME_REGEX) || windowingMode !in WINDOWING_MODE_RANGE) return false
+    // An app that is already running (left in the background by Home, say): `am start` brings its
+    // task back in the mode it had, fullscreen, and the screen is not split (on-car, DiLink 3.0,
+    // 2026-11-19). Its task is moved into the left half by id instead; `am start` stays for an app
+    // that is not running and for a task the firmware refuses to move.
+    if (windowingMode == WINDOWING_SPLIT_SCREEN_PRIMARY && runCatching { dockRunning(packageName) }.getOrDefault(false)) {
+        return true
+    }
+    val component = resolveComponent(packageName) ?: return false
+    // Component is passed as positional "$1" — never interpolated into the sh -c string.
+    return !shell("am start --windowingMode $windowingMode -n \"\$1\"", listOf(component)).contains("Error")
+}
+
+private val WINDOWING_MODE_RANGE = 1..6
+
+/** WindowConfiguration.WINDOWING_MODE_SPLIT_SCREEN_PRIMARY. */
+private const val WINDOWING_SPLIT_SCREEN_PRIMARY = 3
+
+internal fun launchAppInWindowingMode(packageName: String, windowingMode: Int): Boolean =
+    launchAppInWindowingModeCore(
+        packageName, windowingMode, ::resolveLaunchComponent, amShell,
+        dockRunning = ::dockRunningTaskSplitPrimary,
+    )
+
+/** Moves [packageName]'s running task into the left half; false when it has none or the firmware refuses. */
+private fun dockRunningTaskSplitPrimary(packageName: String): Boolean {
+    val taskId = findTaskId(packageName).takeIf { it > 0 } ?: return false
+    return runCatching { dockTaskSplitPrimaryReflect(taskId) }
+        .onFailure { android.util.Log.w("bydmate_helper", "dock task=$taskId failed: ${it.message}") }
+        .isSuccess
+}
+
+/**
+ * TX_LAUNCH_APP: the package, then an additive trailing int (app sets) with the windowing mode.
+ * Absent or 0 is the plain launch, so an older app's parcel works as before.
+ */
+internal fun launchAppFromParcel(data: android.os.Parcel): Boolean {
+    val pkg = data.readString() ?: ""
+    val mode = if (data.dataAvail() >= 4) data.readInt() else 0
+    return if (mode > 0) launchAppInWindowingMode(pkg, mode) else launchApp(pkg)
+}
+
+/**
  * Launches [packageName] via am/monkey strategies. Returns true if a launch command ran without an
  * obvious "Error". Mirrors CarControlImpl.launchApp (simplified to a boolean).
  */

@@ -13,6 +13,14 @@ import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.platform.LegacyHeadUnit
+import com.bydmate.app.split.AppSet
+import com.bydmate.app.split.AppSetLauncher
+import com.bydmate.app.split.AppSetStore
+import com.bydmate.app.split.SplitPreferences
+import com.bydmate.app.split.SplitSessionManager
+import com.bydmate.app.split.SplitStartResult
+import com.bydmate.app.split.appSetsActive
 import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
@@ -72,6 +80,33 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     @Inject
     internal fun injectAgentTools(tools: AgentTools) {
         agentTools = tools
+    }
+
+    // Method injection as well: the driver's own app sets («сплит <название>», Android 10 head units).
+    private var appSets: AppSetStore? = null
+    private var appSetLauncher: AppSetLauncher? = null
+    private var splitPreferences: SplitPreferences? = null
+    private var splitManager: dagger.Lazy<SplitSessionManager>? = null
+
+    /** The Android 10 head units, where «Разделение экрана» has a main and an alternative method. */
+    internal var legacyHeadUnit: () -> Boolean = { LegacyHeadUnit.isAndroid10 }
+
+    /** The package of an installed app by its spoken name, as launch_app finds it; null when none or several. */
+    internal var splitAppPackage: suspend (String) -> String? = { name ->
+        if (::agentTools.isInitialized) agentTools.launcherAppPackage(name) else null
+    }
+
+    @Inject
+    internal fun injectAppSets(
+        store: AppSetStore,
+        launcher: AppSetLauncher,
+        splitPrefs: SplitPreferences,
+        splitMgr: dagger.Lazy<SplitSessionManager>,
+    ) {
+        appSets = store
+        appSetLauncher = launcher
+        splitPreferences = splitPrefs
+        splitManager = splitMgr
     }
 
     // Process-lifetime scope (@Singleton): intentionally never cancelled.
@@ -648,6 +683,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     /** Side-effect-free resolution of a transcript to an actionable command. Precedence (the
      *  agent follow-up window, checked by the caller, outranks all of them):
      *  1. an automation phrase equal to the whole utterance, word for word after normalization;
+     *  1a. the split of the Android 10 head units ([appSetsActive]): with «Пополам 1:1» an app set
+     *      («сплит <название>», «сплит», «включи разделение экрана») or «сплит <приложение>»; with
+     *      the other mechanisms the bare split phrases open the saved pair;
      *  2. the user's own phrase for a built-in command, equal to the whole utterance;
      *  3. the built-in NluParser on the full utterance;
      *  4. the agent (Resolution.None, with the parser's reason).
@@ -656,6 +694,16 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  «открой окно наполовину», «не открывай окно» or «открой окно на палец». */
     private suspend fun resolve(text: String): Resolution {
         automationResolver.match(text)?.let { return Resolution.Auto(it) }
+        // Only one split works at a time ([appSetsActive]); the split switched off takes no phrase.
+        val splitOn = splitPreferences?.isFeatureEnabled() == true
+        if (appSetsActive(legacyHeadUnit(), appSets?.setsOn?.value == true)) {
+            // A set's name wins over an app; an app the table knows is split with the screen.
+            val adHoc = adHocSplitApp(text)
+            appSets?.resolve(text, oneSetTakesAny = adHoc == null)?.let { return Resolution.AppSetStart(it) }
+            adHoc?.let { return it }
+        } else if (splitOn && legacyHeadUnit() && AppSetStore.isBareSplitPhrase(text)) {
+            return Resolution.SplitStart
+        }
         userPhrases.match(text)?.let { return Resolution.Cmd(listOf(it.command), "phrase:${it.id}") }
         return parse(text)
     }
@@ -691,6 +739,9 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             Resolution.OpenNavigator -> dispatchOpenNavigator(transcript, decodeMs)
             is Resolution.Answer -> answer(res, transcript, decodeMs)
             is Resolution.Auto -> fireAutomation(res.match, transcript, decodeMs)
+            is Resolution.AppSetStart -> dispatchAppSet(res.set, transcript, decodeMs)
+            Resolution.SplitStart -> dispatchSplitStart(transcript, decodeMs)
+            is Resolution.SplitApp -> dispatchSplitApp(res, transcript, decodeMs)
             is Resolution.None -> agentFallback(transcript, decodeMs)
         }
     }
@@ -906,6 +957,59 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         }
         dispatchMedia(ActionDef(command = "", displayName = "Запуск навигатора", kind = "app_launch",
             payload = JSONObject().put("packageName", pkg).toString()), "app_launch=$pkg", transcript, decodeMs)
+    }
+
+    /** «открой комплект …»: the set's left app into the split, the right one beside it ([AppSetLauncher]). */
+    private suspend fun dispatchAppSet(set: AppSet, transcript: String, decodeMs: Long) {
+        val outcome = appSetLauncher?.launch(set) ?: AppSetLauncher.Outcome.LEFT_FAILED
+        report("appset:${set.name}", "cmd=appset name=${set.name} left=${set.leftPkg} right=${set.rightPkg ?: "-"}",
+            appSetFailure(outcome), transcript, decodeMs)
+    }
+
+    private fun appSetFailure(outcome: AppSetLauncher.Outcome): Failure? = when (outcome) {
+        AppSetLauncher.Outcome.OK -> null
+        AppSetLauncher.Outcome.RIGHT_FAILED -> Failure("right app did not start", "Не открылось второе приложение комплекта")
+        AppSetLauncher.Outcome.LEFT_FAILED -> Failure("left app did not start", "Не открылось первое приложение комплекта")
+        AppSetLauncher.Outcome.NOT_SPLIT -> Failure("screen did not split", "Экран не разделился")
+        AppSetLauncher.Outcome.CAMERA -> Failure("camera on screen", "Камера на экране, разделение не открыто")
+    }
+
+    /**
+     * «сплит <приложение>» ([SplitAppQuery]) on the Android 10 head units: the installed app of that
+     * name, found the way the agent's launch_app finds it, as a split of its own, or null (then the
+     * phrase goes on, to a set or the agent).
+     */
+    private suspend fun adHocSplitApp(text: String): Resolution.SplitApp? {
+        if (!legacyHeadUnit() || appSetLauncher == null) return null
+        val name = SplitAppQuery.name(text) ?: return null
+        val pkg = splitAppPackage(name) ?: return null
+        return Resolution.SplitApp(name, pkg)
+    }
+
+    /** The app the driver named, into the left half; the launch is the one of a set without a second app. */
+    private suspend fun dispatchSplitApp(res: Resolution.SplitApp, transcript: String, decodeMs: Long) {
+        val outcome = appSetLauncher?.launch(AppSet(SPLIT_APP_ID, res.name, res.pkg))
+            ?: AppSetLauncher.Outcome.LEFT_FAILED
+        val failure = when (outcome) {
+            AppSetLauncher.Outcome.LEFT_FAILED -> Failure("app did not start", "Не открылось приложение")
+            else -> appSetFailure(outcome)
+        }
+        report("split:app:${res.name}", "cmd=split app=${res.name} pkg=${res.pkg}", failure, transcript, decodeMs)
+    }
+
+    /** The main split method's saved pair, the way the widget tap opens it (SplitSessionManager.startLastPair). */
+    private suspend fun dispatchSplitStart(transcript: String, decodeMs: Long) {
+        // startLastPair() is null when no pair is saved, so a missing manager is told apart first.
+        val manager = splitManager?.get()
+        val result = if (manager == null) SplitStartResult.DISABLED else manager.startLastPair()
+        val failure = when (result) {
+            SplitStartResult.OK -> null
+            null -> Failure("no saved pair", "Нет сохранённой пары приложений: выберите её в настройках «Разделение экрана»")
+            SplitStartResult.FREEFORM_UNAVAILABLE -> Failure("freeform unavailable", "Разделение экрана пока недоступно на этой машине")
+            SplitStartResult.LAUNCH_FAILED -> Failure("launch failed", "Не удалось запустить приложение")
+            SplitStartResult.DISABLED -> Failure("split disabled", "Разделение экрана выключено в настройках")
+        }
+        report("split:start", "cmd=split action=start", failure, transcript, decodeMs)
     }
 
     /** The first package of the navigator chosen for routes that has a launcher entry here (the
@@ -1177,13 +1281,19 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             val label: String get() = "ask:${question.id}"
         }
         data class Auto(val match: VoiceAutomationMatch) : Resolution
+        /** The driver's app set, named by the whole utterance. */
+        data class AppSetStart(val set: AppSet) : Resolution
+        /** «Разделение экрана», main method of the Android 10 head units: its saved pair. */
+        data object SplitStart : Resolution
+        /** «сплит <приложение>»: [pkg] into the left half, the screen's app stays on the right. */
+        data class SplitApp(val name: String, val pkg: String) : Resolution
         /** Nothing local claimed the phrase: it goes to the agent; [reason] is a VoiceRefusal code. */
         data class None(val reason: String) : Resolution
 
         /** The route code of the trace. */
         val route: String get() = when (this) {
             is Cmd -> if (label.startsWith("phrase:")) "phrase" else "nlu"
-            is RelTemp, is Vol, Music, is Navigate, OpenNavigator, is Answer -> "nlu"
+            is RelTemp, is Vol, Music, is Navigate, OpenNavigator, is Answer, is AppSetStart, SplitStart, is SplitApp -> "nlu"
             is Auto -> "automation"
             is None -> "agent"
         }
@@ -1196,6 +1306,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
     companion object {
         private const val TAG = "VoiceController"
+        /** The id of the one-off set a named-app split launches through ([dispatchSplitApp]). */
+        private const val SPLIT_APP_ID = "split-app"
 
         // Longest value one logcat summary field may carry (an automation name, an utterance).
         private const val LOG_FIELD_CHARS = 200

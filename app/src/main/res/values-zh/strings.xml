@@ -1660,8 +1660,8 @@
     <string name="widget_button_icon_star">收藏</string>
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">分屏</string>
-    <string name="settings_split_enable_title">分屏 1/3 + 2/3</string>
-    <string name="settings_split_enable_desc">两个自由窗口：一个占三分之一，另一个占三分之二。默认关闭。车机自带的分屏按钮仍然是对半分屏。</string>
+    <string name="settings_split_enable_title">分屏</string>
+    <string name="settings_split_enable_desc">只有下方所选的一种机制生效。小组件、方向盘按键、语音和启动时打开都使用它。默认关闭。</string>
     <string name="settings_split_clear_pair_title">重置上次应用对</string>
     <string name="settings_split_clear_pair_desc">清除保存的应用对，下次启动时将打开选择器。</string>
     <string name="settings_split_pair_cleared">应用对已重置</string>
@@ -2305,6 +2305,36 @@
     <plurals name="tech_dtc_more_codes">
         <item quantity="other">还有 %1$d 个故障码放不下，全部见“诊断”窗口</item>
     </plurals>
+    <string name="settings_split_mechanism_halves">对半 1:1</string>
+    <string name="settings_split_autostart_title">启动时打开</string>
+    <string name="settings_split_autostart_desc">仅在车辆停止时：所选机制打开已保存的应用对，“对半 1:1”打开第一个组合。</string>
+    <string name="settings_section_app_sets_title">组合 1:1</string>
+    <string name="settings_app_sets_howto">语音：\n• “split”或“打开分屏”——列表中的第一个组合；\n• “split”加名称——对应的组合。名称随意，轻微的识别误差也能容忍。\n• “split”加应用名称（或“把&lt;应用&gt;加入分屏”）——该应用在左侧，当前屏幕上的内容在右侧。组合名称优先。\n小组件：点按左侧打开第一个组合。\n未选择第二个应用：保留当前已打开的内容。</string>
+    <string name="settings_app_sets_add_title">新建组合</string>
+    <string name="settings_app_sets_add">添加</string>
+    <string name="settings_app_sets_name_label">名称（语音指令）</string>
+    <string name="settings_app_sets_left_title">第一个应用</string>
+    <string name="settings_app_sets_right_title">第二个应用</string>
+    <string name="settings_app_sets_right_desc">先打开。未选择：保留当前已打开的内容</string>
+    <string name="settings_app_sets_right_keep">保留当前已打开的内容</string>
+    <string name="settings_app_sets_right_clear_title">不选择右侧应用</string>
+    <string name="settings_app_sets_right_clear">清除</string>
+    <string name="settings_app_sets_not_chosen">未选择</string>
+    <string name="settings_app_sets_save">保存</string>
+    <string name="settings_app_sets_run">运行</string>
+    <string name="settings_app_sets_delete">删除</string>
+    <string name="settings_app_sets_cancel">取消</string>
+    <string name="settings_app_sets_err_name">请输入名称</string>
+    <string name="settings_app_sets_err_name_long">名称太长</string>
+    <string name="settings_app_sets_err_left">请选择左侧应用</string>
+    <string name="settings_app_sets_err_same">请选择两个不同的应用</string>
+    <string name="settings_app_sets_err_many">最多 8 个组合</string>
+    <string name="settings_app_sets_err_in_use">该名称已存在：%1$s</string>
+    <string name="settings_app_sets_saved">已保存</string>
+    <string name="settings_app_sets_run_failed">组合未能打开</string>
+    <string name="app_sets_none_hint">还没有组合。请在设置 → 分屏 → 对半 1:1 中添加</string>
+    <string name="settings_widget_left_tap_zoning_description_legacy">左侧打开应用或分屏；其余为 BYDMate。</string>
+    <string name="settings_widget_left_tap_mode_split_legacy">分屏</string>
 
     <!-- Tyre-sensor ID window (CONTEXT.md «Номера датчиков колёс») -->
     <string name="tyre_title">胎压传感器</string>
