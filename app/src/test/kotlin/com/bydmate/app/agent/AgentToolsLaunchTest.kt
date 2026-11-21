@@ -411,6 +411,17 @@ class AgentToolsLaunchTest {
             // alias "медиацентр" resolves the stock media app.
             AliasCase("mediacenter resolves the stock player", "медиацентр",
                 listOf("多媒体" to "com.byd.mediacenter"), "com.byd.mediacenter"),
+            // Latin launcher labels the recognizer writes in Cyrillic.
+            AliasCase("tiktok resolves the Latin label", "тикток",
+                listOf("TikTok" to "com.zhiliaoapp.musically"), "com.zhiliaoapp.musically"),
+            AliasCase("tiktok's other build", "тик ток",
+                listOf("TikTok" to "com.ss.android.ugc.trill"), "com.ss.android.ugc.trill"),
+            AliasCase("waze resolves the Latin label", "вейз",
+                listOf("Waze" to "com.waze"), "com.waze"),
+            // The accusative of a voice phrase («добавь яндекс музыку в сплит»).
+            AliasCase("accusative alias", "яндекс музыку", null, "ru.yandex.music"),
+            AliasCase("accusative label", "карту парковок",
+                listOf("Карта Парковок" to "com.example.parking"), "com.example.parking"),
         )
         for (c in cases) {
             clearMocks(dispatcher)
