@@ -46,6 +46,25 @@ class AutostartTraceTest {
         assertEquals("boot_direct:USER_PRESENT", AutostartTrace.directFallbackTrigger("android.intent.action.USER_PRESENT"))
     }
 
+    @Test fun `only BOOT_COMPLETED and QUICKBOOT_POWERON are a car start`() {
+        assertEquals(true, AutostartTrace.isCarStart("android.intent.action.BOOT_COMPLETED"))
+        assertEquals(true, AutostartTrace.isCarStart("android.intent.action.QUICKBOOT_POWERON"))
+        assertEquals(false, AutostartTrace.isCarStart("android.intent.action.LOCKED_BOOT_COMPLETED"))
+        assertEquals(false, AutostartTrace.isCarStart("android.intent.action.MY_PACKAGE_REPLACED"))
+        assertEquals(false, AutostartTrace.isCarStart(BootReceiver.ACTION_RECOVER_START))
+        assertEquals(false, AutostartTrace.isCarStart(null))
+    }
+
+    @Test fun `a start trigger from a car start is told apart from the others`() {
+        assertEquals(true, AutostartTrace.isCarStartTrigger(AutostartTrace.workerTrigger("BOOT_COMPLETED")))
+        assertEquals(true, AutostartTrace.isCarStartTrigger(
+            AutostartTrace.directFallbackTrigger("android.intent.action.QUICKBOOT_POWERON")))
+        assertEquals(false, AutostartTrace.isCarStartTrigger(AutostartTrace.workerTrigger("RECOVER_START")))
+        assertEquals(false, AutostartTrace.isCarStartTrigger(AutostartTrace.workerTrigger("USER_PRESENT")))
+        assertEquals(false, AutostartTrace.isCarStartTrigger(AutostartTrace.TRIGGER_A11Y))
+        assertEquals(false, AutostartTrace.isCarStartTrigger("sticky_restart"))
+    }
+
     @Test fun `re-asserts print one digit per try, a dash when none was needed`() {
         assertEquals("-", AutostartTrace.reasserts(emptyList()))
         assertEquals("10", AutostartTrace.reasserts(listOf(true, false)))

@@ -1057,9 +1057,16 @@ class TrackingService : Service(), LocationListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // n=1 is the command that follows onCreate; later ones hit an already running service.
-        Trace.event(TraceArea.APP, "service-trigger",
-            "trigger" to AutostartTrace.startTrigger(intent != null, intent?.getStringExtra(AutostartTrace.EXTRA_TRIGGER)),
-            "n" to ++startCommands)
+        val trigger = AutostartTrace.startTrigger(intent != null, intent?.getStringExtra(AutostartTrace.EXTRA_TRIGGER))
+        Trace.event(TraceArea.APP, "service-trigger", "trigger" to trigger, "n" to ++startCommands)
+        // A car start that finds the service running (it came up before BOOT_COMPLETED, or the head
+        // unit woke with the process alive): onCreate's check ran for the previous start.
+        if (startCommands > 1 && AutostartTrace.isCarStartTrigger(trigger)) {
+            serviceScope.launch(Dispatchers.IO) {
+                runCatching { appSetAutostart.runIfDue() }
+                    .onFailure { Log.w(TAG, "app set autostart failed: ${it.message}") }
+            }
+        }
         maybeAttachWidget()
         return START_STICKY
     }

@@ -17,18 +17,20 @@ class AppSetAutostartTest {
     private val pauses = mutableListOf<Long>()
     private var clock = 1_000_000_000L
 
+    /** The car start BootReceiver recorded last; 0 = none since the install. */
+    private var carStart = 1_000_000_000L
+
     private var splitStarts = 0
     private var splitResult: SplitStartResult? = SplitStartResult.OK
 
     /** [splitOn]: the saved pair's mechanism (not «Пополам 1:1»); [switchedOn]: the split at all. */
     private fun autostart(
         legacy: Boolean = true, st: AppSetStore = store, splitOn: Boolean = false, switchedOn: Boolean = true,
-        boot: Int? = null,
     ) = AppSetAutostart(
         st.apply { setSetsMode(!splitOn); setSetsOn(!splitOn && switchedOn) }, launcher, fakeSplitSharedPrefs(backing),
         legacyHeadUnit = { legacy }, splitFeatureEnabled = { splitOn && switchedOn },
         startSplit = { splitStarts++; splitResult }, now = { clock }, pause = { pauses += it },
-        bootCount = { boot },
+        carStart = { carStart },
     )
 
     @Test fun `with the main method chosen its saved pair opens, not a set`() = runBlocking {
@@ -98,7 +100,8 @@ class AppSetAutostartTest {
     @Test fun `the next car start opens it again`() = runBlocking {
         coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
         autostart().runIfDue()
-        clock += AppSetAutostart.REPEAT_WINDOW_MS + 1
+        clock += 3 * 60_000L
+        carStart = clock
 
         assertEquals(Result.STARTED, autostart().runIfDue())
     }
@@ -143,31 +146,65 @@ class AppSetAutostartTest {
         coVerify(exactly = 1) { launcher.launch(set) }
     }
 
-    // --- Once per head-unit boot (2026-11-21 21:35: a car start 90 s after an opening got REPEAT). ---
+    // --- Once per car start (2026-11-22: the head unit wakes, not reboots: BOOT_COUNT stayed, three starts in 8 min). ---
 
-    @Test fun `the recovery restart in the same boot does not open it again`() = runBlocking {
+    @Test fun `the recovery restart after the same car start does not open it again`() = runBlocking {
         coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
-        autostart(boot = 228).runIfDue()
+        autostart().runIfDue()
         clock += 15_000L
 
-        assertEquals(Result.REPEAT, autostart(boot = 228).runIfDue())
+        assertEquals(Result.REPEAT, autostart().runIfDue())
         coVerify(exactly = 1) { launcher.launch(set) }
     }
 
-    @Test fun `a new car start opens it again a minute later`() = runBlocking {
+    @Test fun `a car start three minutes after an opening opens it again`() = runBlocking {
         coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
-        autostart(boot = 227).runIfDue()
-        clock += 90_000L
+        autostart().runIfDue()
+        clock += 3 * 60_000L
+        carStart = clock
 
-        assertEquals(Result.STARTED, autostart(boot = 228).runIfDue())
+        assertEquals(Result.STARTED, autostart().runIfDue())
         coVerify(exactly = 2) { launcher.launch(set) }
     }
 
-    @Test fun `an update installed after this boot's opening does not open it again`() = runBlocking {
+    @Test fun `an update installed after this start's opening does not open it again`() = runBlocking {
         coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
-        autostart(boot = 228).runIfDue()
+        autostart().runIfDue()
         clock += 60 * 60_000L
 
-        assertEquals(Result.REPEAT, autostart(boot = 228).runIfDue())
+        assertEquals(Result.REPEAT, autostart().runIfDue())
+    }
+
+    @Test fun `without a recorded car start nothing opens`() = runBlocking {
+        carStart = 0L
+
+        assertEquals(Result.NO_START, autostart().runIfDue())
+        coVerify(exactly = 0) { launcher.launch(any()) }
+        assertEquals(emptyList<Long>(), pauses)
+    }
+
+    @Test fun `a second check while the first waits opens nothing more`() = runBlocking {
+        coEvery { launcher.launch(set) } returns AppSetLauncher.Outcome.OK
+        var second: Result? = null
+        lateinit var a: AppSetAutostart
+        // BOOT_COMPLETED reaches the running service while onCreate's check waits out its delay.
+        a = AppSetAutostart(
+            store.apply { setSetsMode(true); setSetsOn(true) }, launcher, fakeSplitSharedPrefs(backing),
+            legacyHeadUnit = { true }, now = { clock }, carStart = { carStart },
+            pause = { second = a.runIfDue() },
+        )
+
+        assertEquals(Result.STARTED, a.runIfDue())
+        assertEquals(Result.BUSY, second)
+        coVerify(exactly = 1) { launcher.launch(set) }
+    }
+
+    @Test fun `BOOT_COMPLETED and QUICKBOOT_POWERON of one start are one start`() {
+        val prefs = fakeSplitSharedPrefs(backing)
+
+        assertEquals(true, AppSetAutostart.recordCarStart(prefs, 1_000_000L))
+        assertEquals(false, AppSetAutostart.recordCarStart(prefs, 1_002_000L))
+        assertEquals(1_000_000L, prefs.getLong(AppSetAutostart.KEY_CAR_START, 0L))
+        assertEquals(true, AppSetAutostart.recordCarStart(prefs, 1_000_000L + 3 * 60_000L))
     }
 }

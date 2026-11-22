@@ -28,6 +28,20 @@ internal object AutostartTrace {
 
     fun workerTrigger(source: String?): String = "worker:" + (source?.ifEmpty { null } ?: UNKNOWN)
 
+    /**
+     * BOOT_COMPLETED / QUICKBOOT_POWERON: a car start. The head unit sends them again on waking from
+     * sleep, not only after a reboot (AppSetAutostart). LOCKED_BOOT_COMPLETED comes before the user's
+     * storage is unlocked, so it does not count.
+     */
+    fun isCarStart(action: String?): Boolean =
+        action == "android.intent.action.BOOT_COMPLETED" || action == "android.intent.action.QUICKBOOT_POWERON"
+
+    /** A start trigger ([workerTrigger] or [directFallbackTrigger]) that a car start sent. */
+    fun isCarStartTrigger(trigger: String): Boolean = trigger in CAR_START_TRIGGERS
+
+    private val CAR_START_TRIGGERS = listOf("BOOT_COMPLETED", "QUICKBOOT_POWERON")
+        .flatMap { listOf("worker:$it", "boot_direct:$it") }.toSet()
+
     /** BootReceiver's last resort when WorkManager could not enqueue. */
     fun directFallbackTrigger(action: String?): String = "boot_direct:" + actionName(action)
 

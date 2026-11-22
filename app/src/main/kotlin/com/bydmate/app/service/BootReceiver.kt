@@ -56,7 +56,11 @@ class BootReceiver : BroadcastReceiver() {
         Log.i(TAG, "Boot/user event: ${intent.action}")
         ChainLog.append(context, "BootReceiver: ${intent.action}")
         val action = AutostartTrace.actionName(intent.action)
-        Trace.event(TraceArea.APP, "boot-receiver", "action" to action, "service_running" to TrackingService.isRunning.value)
+        // Before the service starts: its «Открывать при запуске» check reads it.
+        val carStart = AutostartTrace.isCarStart(intent.action) &&
+            runCatching { com.bydmate.app.split.AppSetAutostart.recordCarStart(context) }.getOrDefault(false)
+        Trace.event(TraceArea.APP, "boot-receiver", "action" to action,
+            "service_running" to TrackingService.isRunning.value, "car_start" to carStart)
 
         // Skip USER_PRESENT if service is already running
         if (intent.action == Intent.ACTION_USER_PRESENT && TrackingService.isRunning.value) {
