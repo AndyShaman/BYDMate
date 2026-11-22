@@ -69,35 +69,6 @@ class AppSetStore(private val prefs: SharedPreferences? = null) {
         prefs?.edit()?.putBoolean(KEY_SETS_ON, on)?.apply()
     }
 
-    /**
-     * Once, on the first start of this version:
-     * - the first app-set builds ran the sets with the split switched off: a head unit with sets
-     *   and the split off gets «Пополам 1:1» chosen and on;
-     * - the method switch («Основной / Альтернативный») kept the author's split on while the sets
-     *   ran, and with it on the firmware split stopped working (on-car, 2026-11-20): it is switched
-     *   back off, the sets keep running, and [onSplitOff] runs what the author's own switch-off runs
-     *   next (the freeform flag back to 0).
-     */
-    fun migrateSetsMode(split: SplitPreferences, onSplitOff: () -> Unit = {}) {
-        if (prefs == null || prefs.contains(KEY_SETS_ON)) return
-        when {
-            prefs.getBoolean(KEY_SETS_MODE, false) -> {
-                val wasOn = split.isFeatureEnabled()
-                setSetsOn(wasOn)
-                split.setFeatureEnabled(false)
-                if (wasOn) onSplitOff()
-            }
-            !split.isFeatureEnabled() && _sets.value.isNotEmpty() -> {
-                setSetsMode(true)
-                setSetsOn(true)
-            }
-            else -> {
-                setSetsMode(false)
-                setSetsOn(false)
-            }
-        }
-    }
-
     sealed interface Check {
         data object Ok : Check
         data object NoName : Check

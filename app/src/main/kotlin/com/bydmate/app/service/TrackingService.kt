@@ -119,7 +119,6 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager
     @Inject lateinit var voiceGate: com.bydmate.app.voice.VoiceGate
     @Inject lateinit var appSetAutostart: com.bydmate.app.split.AppSetAutostart
-    @Inject lateinit var appSetStore: com.bydmate.app.split.AppSetStore
     @Named("ttsLoadGuard") @Inject lateinit var ttsLoadGuard: com.bydmate.app.voice.AsrLoadGuard
     @Inject lateinit var ttsModelManager: com.bydmate.app.voice.TtsModelManager
     @Inject lateinit var ttsEngine: com.bydmate.app.voice.TtsEngine
@@ -749,17 +748,6 @@ class TrackingService : Service(), LocationListener {
 
         // «Открывать при запуске» of the split section: the saved pair, or the first set on «Пополам 1:1».
         serviceScope.launch(Dispatchers.IO) {
-            // Once: a head unit that ran the sets with the split switch off gets the switch on
-            // with «Пополам 1:1» (Android 10 only; the sets exist only there).
-            if (com.bydmate.app.platform.LegacyHeadUnit.isAndroid10) {
-                runCatching {
-                    appSetStore.migrateSetsMode(splitPreferences) {
-                        com.bydmate.app.cluster.ClusterProjectionManager.realignFreeformFlag(
-                            this@TrackingService, helperClient, helperBootstrap, force = true)
-                    }
-                }
-                    .onFailure { Log.w(TAG, "split mode migration failed: ${it.message}") }
-            }
             runCatching { appSetAutostart.runIfDue() }
                 .onFailure { Log.w(TAG, "app set autostart failed: ${it.message}") }
         }
