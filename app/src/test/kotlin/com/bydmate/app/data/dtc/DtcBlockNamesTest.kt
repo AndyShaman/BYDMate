@@ -1,8 +1,11 @@
 package com.bydmate.app.data.dtc
 
+import com.bydmate.app.helper.dtc.DtcDaemon
 import com.bydmate.app.helper.dtc.DtcFixtures
 import com.bydmate.app.helper.dtc.DtcFixtures.hex
+import com.bydmate.app.helper.dtc.DtcWire
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class DtcBlockNamesTest {
@@ -52,5 +55,46 @@ class DtcBlockNamesTest {
 
     @Test fun `a truncated identity answer names nothing`() {
         assertEquals(DtcBlockName(DtcBlock.UNKNOWN, 0x712), DtcBlockNames.identify(0x712, hex("62F1944B51")))
+    }
+
+    @Test fun `Yuan Plus K1 body block is identified as BODY`() {
+        assertEquals(
+            DtcBlockName(DtcBlock.BODY, 0x720),
+            DtcBlockNames.identify(0x720, hex("62F194 4B31 00 11 56 F0 001101")),
+        )
+    }
+
+    @Test fun `readDiagGuard prefers diagmgrsrv task_bk and falls back to DiLink 3 diagnosticsrv`() {
+        assertEquals(
+            "r@1_0&w@-1_0",
+            DtcDaemon.readDiagGuard { prop ->
+                when (prop) {
+                    "sys.diagmgrsrv.task_bk" -> "r@1_0&w@-1_0"
+                    "init.svc.diagnosticsrv" -> "running"
+                    else -> null
+                }
+            },
+        )
+        assertEquals(
+            DtcWire.GUARD_BASELINE,
+            DtcDaemon.readDiagGuard { prop ->
+                when (prop) {
+                    "init.svc.diagnosticsrv" -> "running"
+                    "persist.sys.ota.diagnostic" -> "false"
+                    else -> null
+                }
+            },
+        )
+        assertEquals(
+            "ota_diag",
+            DtcDaemon.readDiagGuard { prop ->
+                when (prop) {
+                    "init.svc.diagnosticsrv" -> "running"
+                    "persist.sys.ota.diagnostic" -> "true"
+                    else -> null
+                }
+            },
+        )
+        assertNull(DtcDaemon.readDiagGuard { null })
     }
 }

@@ -19,8 +19,8 @@ object DtcBlockNames {
         (0x4B30 to 0xFD) to DtcBlock.URE,
     )
 
-    /** The body family (L3 0x720 / 0x726 / 0x747): one supplier, three types. */
-    private const val BODY_SUPPLIER = 0x4845
+    /** The body family (0x720 / 0x726 / 0x747): L3 "HE" (0x4845) and Yuan Plus "K1" (0x4B31), three types. */
+    private val BODY_SUPPLIERS = setOf(0x4845, 0x4B31)
     private val BODY_TYPES = 0xF0..0xF2
 
     private const val ID_HEAD_LEN = 9
@@ -33,7 +33,7 @@ object DtcBlockNames {
         if (u(idUds, 0) != 0x62 || u(idUds, 1) != 0xF1 || u(idUds, 2) != 0x94) return unknown
         val supplier = (u(idUds, 3) shl 8) or u(idUds, 4)
         val type = u(idUds, TYPE_INDEX)
-        if (supplier == BODY_SUPPLIER && type in BODY_TYPES) return DtcBlockName(DtcBlock.BODY, addr)
+        if (supplier in BODY_SUPPLIERS && type in BODY_TYPES) return DtcBlockName(DtcBlock.BODY, addr)
         return DtcBlockName(KNOWN[supplier to type] ?: DtcBlock.UNKNOWN, addr)
     }
 
