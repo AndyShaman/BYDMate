@@ -359,7 +359,7 @@ private fun ViewCar(ctx: TyreCtx, onHold: (Int) -> Unit) {
             },
         ) {
             Text(
-                pressures[i]?.let { stringResource(R.string.tech_value_tyre_pressure, it / KPA_PER_BAR) } ?: DASH,
+                formatTyrePressure(pressures[i], s.pressureUnit),
                 color = TextPrimary, fontSize = 19.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold,
                 fontFamily = FontFamily.Monospace, maxLines = 1,
             )
@@ -1076,7 +1076,6 @@ private val PLACE_WIDTH = 56.dp
 private const val DIFF_NAME_WEIGHT = 0.42f
 private const val HOLD_MS = 600L
 private const val ID_INPUT_MAX = 12
-private const val KPA_PER_BAR = 100.0
 private const val LIFT_ALPHA = 0.85f
 private const val HINT_ALPHA = 0.12f
 private const val BATTERY_W = 20f

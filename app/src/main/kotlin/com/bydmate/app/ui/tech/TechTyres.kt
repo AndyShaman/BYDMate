@@ -78,10 +78,10 @@ internal fun TyreTopView(state: TechPanelUiState, onClick: () -> Unit) {
     Layout(
         content = {
             CarTopImage(deviates.map { if (it) WheelTint.WARN else WheelTint.NORMAL })
-            TyreTile(state.tirePressFL, state.tyreTempFL, deviates[0])
-            TyreTile(state.tirePressFR, state.tyreTempFR, deviates[1])
-            TyreTile(state.tirePressRL, state.tyreTempRL, deviates[2])
-            TyreTile(state.tirePressRR, state.tyreTempRR, deviates[3])
+            TyreTile(state.tirePressFL, state.tyreTempFL, deviates[0], state.pressureUnit)
+            TyreTile(state.tirePressFR, state.tyreTempFR, deviates[1], state.pressureUnit)
+            TyreTile(state.tirePressRL, state.tyreTempRL, deviates[2], state.pressureUnit)
+            TyreTile(state.tirePressRR, state.tyreTempRR, deviates[3], state.pressureUnit)
         },
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(top = 8.dp, bottom = 2.dp),
     ) { measurables, constraints ->
@@ -158,9 +158,23 @@ internal fun CarTopImage(tints: List<WheelTint>, height: Dp = CAR_HEIGHT, leadRe
 private val WHEEL_STROKE = Color(0xFF3A4D6B)
 private const val WHEEL_FILL_ALPHA = 0.45f
 
+private const val KPA_PER_BAR = 100.0
+
+/** Formats kPa tyre pressure in the chosen unit; bar keeps the original 2-decimal string, psi is whole. */
 @Composable
-private fun TyreTile(pressureKpa: Int?, tempC: Int?, deviates: Boolean) {
-    val bar = pressureKpa?.let { it / 100.0 }
+internal fun formatTyrePressure(pressureKpa: Int?, unit: TyrePressureUnit.Unit): String {
+    val bar = pressureKpa?.let { it / KPA_PER_BAR } ?: return DASH
+    return when (unit) {
+        TyrePressureUnit.Unit.BAR -> stringResource(R.string.tech_value_tyre_pressure, bar)
+        TyrePressureUnit.Unit.PSI -> stringResource(
+            R.string.tech_value_tyre_pressure_psi,
+            TyrePressureUnit.convert(bar, unit).roundToInt(),
+        )
+    }
+}
+
+@Composable
+private fun TyreTile(pressureKpa: Int?, tempC: Int?, deviates: Boolean, pressureUnit: TyrePressureUnit.Unit) {
     Row(
         modifier = Modifier
             .height(IntrinsicSize.Min)
@@ -175,7 +189,7 @@ private fun TyreTile(pressureKpa: Int?, tempC: Int?, deviates: Boolean) {
         )
         Column(modifier = Modifier.padding(start = 8.dp, end = 10.dp, top = 3.dp, bottom = 3.dp)) {
             Text(
-                bar?.let { stringResource(R.string.tech_value_tyre_pressure, it) } ?: DASH,
+                formatTyrePressure(pressureKpa, pressureUnit),
                 color = TextPrimary,
                 fontSize = 13.sp,
                 // Tight lines as in the mock: the theme's 22sp would push front and rear tiles

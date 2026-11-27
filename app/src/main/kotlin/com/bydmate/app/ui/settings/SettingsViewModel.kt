@@ -124,6 +124,7 @@ data class SettingsUiState(
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
     val units: String = SettingsRepository.DEFAULT_UNITS,
+    val pressureUnit: String = SettingsRepository.DEFAULT_PRESSURE_UNIT,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
     val chargeConnector: ChargeConnector = ChargeConnector.GBT,
@@ -476,6 +477,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 SettingsRepository.KEY_UNITS,
                 SettingsRepository.DEFAULT_UNITS
             )
+            val pressureUnit = settingsRepository.getString(
+                SettingsRepository.KEY_PRESSURE_UNIT,
+                SettingsRepository.DEFAULT_PRESSURE_UNIT
+            )
             val currency = settingsRepository.getCurrency()
             val chargeConnector = settingsRepository.getChargeConnector()
             val consumptionGood = settingsRepository.getString(
@@ -585,6 +590,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     homeTariff = homeTariff,
                     dcTariff = dcTariff,
                     units = units,
+                    pressureUnit = pressureUnit,
                     currency = currency.code,
                     currencySymbol = currency.symbol,
                     chargeConnector = chargeConnector,
@@ -798,6 +804,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(units = value) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_UNITS, value)
+        }
+    }
+
+    /** Save tyre pressure unit preference (bar or psi). */
+    fun savePressureUnit(value: String) {
+        _uiState.update { it.copy(pressureUnit = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_PRESSURE_UNIT, value)
         }
     }
 

@@ -163,6 +163,7 @@ object TelegramReportBuilder {
             found[ReportField.TEMPS]?.html,
             found[ReportField.BATTERY_TEMP]?.html,
             found[ReportField.TIRES]?.html,
+            found[ReportField.BATTERY_COUNTER]?.html,
             openings?.takeIf { !it.alert }?.html,
         )
 
@@ -215,14 +216,20 @@ object TelegramReportBuilder {
             ReportField.RANGE -> rangeHtml(inputs, strings)
             ReportField.ODOMETER -> odometerLine(d?.mileage, strings)
             ReportField.TRIP1, ReportField.TRIP2 -> counterBlock(field, inputs, strings)
-            ReportField.TEMPS -> d?.let { tempsLine(it, strings, locale) }?.let { "🌡 ${escape(it)}" }
+            ReportField.TEMPS -> tempsHtml(d, strings, locale)
             ReportField.BATTERY_TEMP -> batteryTempLine(d, strings)
-            ReportField.TIRES -> d?.let { tiresLine(it, strings, locale) }?.let { "🛞 ${escape(it)}" }
+            ReportField.TIRES -> tiresHtml(d, strings, locale)
+            ReportField.BATTERY_COUNTER -> batteryCounterLine(d?.totalElecConsumption, strings)
             ReportField.LOCATION -> locationLine(inputs, lang, strings)
-            ReportField.TRIP, ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST,
-            ReportField.OPENINGS -> null
+            else -> null
         }
     }
+
+    private fun tempsHtml(d: DiParsData?, strings: ReportStrings, locale: Locale): String? =
+        d?.let { tempsLine(it, strings, locale) }?.let { "🌡 ${escape(it)}" }
+
+    private fun tiresHtml(d: DiParsData?, strings: ReportStrings, locale: Locale): String? =
+        d?.let { tiresLine(it, strings, locale) }?.let { "🛞 ${escape(it)}" }
 
     /** «заряд <b>64%</b>», null outside 0..100. */
     private fun socPart(soc: Int?, strings: ReportStrings): String? = soc?.takeIf { it in 0..100 }?.let {
@@ -254,6 +261,11 @@ object TelegramReportBuilder {
     /** «🧭 Пробег 23 456 км»: whole kilometers cut like the car's own odometer, grouped by the language. */
     private fun odometerLine(km: Double?, strings: ReportStrings): String? = km?.takeIf { it >= MIN_ODOMETER_KM }?.let {
         "🧭 ${escape(text(strings, R.string.tg_report_odometer, it.toInt()))}"
+    }
+
+    /** Lifetime battery energy counter in kWh (one decimal); null when absent or not positive. */
+    private fun batteryCounterLine(kwh: Double?, strings: ReportStrings): String? = kwh?.takeIf { it > 0.0 }?.let {
+        "⚡ ${escape(text(strings, R.string.tg_report_battery_counter, it))}"
     }
 
     /** «🔋 Заряд <b>64%</b>, запас <b>312 км</b>», either half alone when only one is reported. */

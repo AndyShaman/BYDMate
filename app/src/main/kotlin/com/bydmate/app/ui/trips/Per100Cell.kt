@@ -26,6 +26,26 @@ internal fun per100Cell(
     }
 }
 
+/**
+ * The "/100" cell of a period header (day or month, #458). When both electric consumption and
+ * positive fuel consumption per 100 km are present, both show side by side uncoloured; otherwise
+ * falls back to [per100Cell].
+ */
+internal fun periodPer100Cell(
+    kwhPer100: Double?,
+    fuelLiters: Double?,
+    litersKm: Double?,
+    litersUnit: String,
+): Per100Cell {
+    val km = litersKm?.takeIf { it > 0.0 }
+    val litersPer100 = fuelLiters?.takeIf { it > 0.0 }?.let { liters -> km?.let { liters / it * 100.0 } }
+    return if (kwhPer100 != null && litersPer100 != null) {
+        Per100Cell("%.1f + %.1f %s".format(kwhPer100, litersPer100, litersUnit), colored = false)
+    } else {
+        per100Cell(kwhPer100, fuelLiters, litersKm, litersUnit)
+    }
+}
+
 /** The «л» cell: litres of the trip, «—» when either counter edge was missing. */
 internal fun litersCell(fuelLiters: Double?): String = fuelLiters?.let { "%.1f".format(it) } ?: "—"
 

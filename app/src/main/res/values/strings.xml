@@ -282,6 +282,7 @@
     <!-- Settings: Application section -->
     <string name="settings_app_units_header">Единицы и валюта</string>
     <string name="settings_app_distance_label">Расстояние</string>
+    <string name="settings_app_pressure_unit_label">Давление в шинах</string>
     <string name="settings_app_currency_label">Валюта</string>
     <string name="settings_charge_connector_label">Разъём для зарядки</string>
     <string name="settings_charge_connector_desc">Помощник ищет зарядки с этим разъёмом</string>
@@ -834,6 +835,8 @@
     <string name="settings_tariff_trip_custom_chip">Свой</string>
     <string name="settings_unit_km">км</string>
     <string name="settings_unit_miles">мили</string>
+    <string name="settings_unit_bar">бар</string>
+    <string name="settings_unit_psi">psi</string>
     <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
@@ -1807,6 +1810,8 @@
     <string name="tech_value_percent">%1$d%%</string>
     <!-- %1$.2f = bar -->
     <string name="tech_value_tyre_pressure">%1$.2f бар</string>
+    <!-- %1$d = psi -->
+    <string name="tech_value_tyre_pressure_psi">%1$d psi</string>
     <string name="tech_value_cell_scale">%1$.2f В</string>
     <string name="tech_hint_soh" formatted="false">Здоровье батареи по оценке самой машины: сколько ёмкости осталось от новой. 100 % у новой машины, медленно снижается с годами. Это отдельная цифра, с «Остатком» она формулой не связана, сравнивать их между собой не нужно.</string>
     <string name="tech_hint_remain_kwh" formatted="false">Сколько энергии осталось по оценке самой батареи. Она учитывает износ, поэтому цифра меньше, чем процент заряда, умноженный на заводскую ёмкость. Точнее всего сразу после зарядки до 100 %. Экран может держать 100 %, пока батарея уже отдала первые киловатт-часы, поэтому в самом верху шкалы остаток и процент расходятся сильнее.</string>
@@ -1998,6 +2003,7 @@
     <string name="tg_report_field_battery_temp">Температура батареи</string>
     <string name="tg_report_field_openings">Что открыто</string>
     <string name="tg_report_field_tires">Давление в шинах</string>
+    <string name="tg_report_field_battery_counter">Счётчик энергии батареи</string>
     <string name="tg_report_header_off">BYDMate: машина выключена %1$s в %2$s</string>
     <string name="tg_report_map_link">Открыть на карте</string>
     <string name="tg_report_soc">заряд %1$s</string>
@@ -2030,6 +2036,7 @@
     <string name="tg_report_open_front_trunk">передний багажник</string>
     <string name="tg_report_open_hood">капот</string>
     <string name="tg_report_tires">Шины: %1$s бар</string>
+    <string name="tg_report_battery_counter">Счётчик энергии батареи %1$.1f кВт·ч</string>
     <string name="tg_report_tire_fl">ПЛ %1$s</string>
     <string name="tg_report_tire_fr">ПП %1$s</string>
     <string name="tg_report_tire_rl">ЗЛ %1$s</string>
@@ -2055,6 +2062,7 @@
     <string name="tg_report_field_battery_temp_desc">Средняя по батарее</string>
     <string name="tg_report_field_openings_desc">Двери, окна, люк, багажник, капот</string>
     <string name="tg_report_field_tires_desc">Все четыре колеса</string>
+    <string name="tg_report_field_battery_counter_desc">Сколько кВт·ч прошло через батарею за всё время</string>
     <string name="settings_tg_report_off_title">Отчёт при выключении машины</string>
     <string name="settings_tg_report_off_hint">Отчёт уходит в первые секунды после выключения через мобильный интернет машины. Если связи нет, он придёт при следующем включении.</string>
     <string name="settings_tg_report_off_no_bot">Сначала подключите Telegram-бот выше.</string>

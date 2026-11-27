@@ -88,7 +88,7 @@ class TelegramReportBuilderTest {
     }
 
     @Test fun `every item present gives the approved layout with the map link last`() {
-        val report = build(inputs = inputs(live = LiveTrip(23.4, 3.79, now - 34 * 60_000L), trip1 = counter1, trip2 = counter2, tariff = 0.30, currency = "BYN"))
+        val report = build(inputs = inputs(data = fullData.copy(totalElecConsumption = 12_345.6), live = LiveTrip(23.4, 3.79, now - 34 * 60_000L), trip1 = counter1, trip2 = counter2, tariff = 0.30, currency = "BYN"))
         assertEquals(
             listOf(
                 "<b>BYDMate: Где машина</b>",
@@ -98,6 +98,7 @@ class TelegramReportBuilderTest {
                 "🌡 Снаружи +12°, в салоне +19°",
                 "🌡 Батарея +23° (от +21° до +25°)",
                 "🛞 Шины: ПЛ 2,4 · ПП 2,4 · ЗЛ 2,3 · ЗП 2,4 бар",
+                "⚡ Счётчик энергии батареи 12345,6 кВт·ч",
                 "",
                 "🚗 <b>Поездка</b>",
                 "${em}23 км за 34 мин",
@@ -166,7 +167,7 @@ class TelegramReportBuilderTest {
                 ReportField.LOCATION, ReportField.RANGE, ReportField.ODOMETER, ReportField.TRIP,
                 ReportField.TRIP_TIME, ReportField.TRIP_KWH, ReportField.TRIP_COST,
                 ReportField.TRIP1, ReportField.TRIP2, ReportField.TEMPS, ReportField.BATTERY_TEMP,
-                ReportField.OPENINGS, ReportField.TIRES,
+                ReportField.OPENINGS, ReportField.TIRES, ReportField.BATTERY_COUNTER,
             ),
             report.skipped,
         )

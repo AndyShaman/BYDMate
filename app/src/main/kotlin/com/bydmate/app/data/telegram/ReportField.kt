@@ -21,7 +21,8 @@ enum class ReportField(val id: String, val labelRes: Int, val descRes: Int) {
     TEMPS("temps", R.string.tg_report_field_temps, R.string.tg_report_field_temps_desc),
     BATTERY_TEMP("battery_temp", R.string.tg_report_field_battery_temp, R.string.tg_report_field_battery_temp_desc),
     OPENINGS("openings", R.string.tg_report_field_openings, R.string.tg_report_field_openings_desc),
-    TIRES("tires", R.string.tg_report_field_tires, R.string.tg_report_field_tires_desc);
+    TIRES("tires", R.string.tg_report_field_tires, R.string.tg_report_field_tires_desc),
+    BATTERY_COUNTER("battery_counter", R.string.tg_report_field_battery_counter, R.string.tg_report_field_battery_counter_desc);
 
     companion object {
         /** What a new action and the power-off report start with. */

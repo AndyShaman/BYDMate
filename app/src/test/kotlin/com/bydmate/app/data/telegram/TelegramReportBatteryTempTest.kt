@@ -42,7 +42,7 @@ class TelegramReportBatteryTempTest {
         assertEquals(
             listOf(
                 "location", "soc", "range", "odometer", "trip", "trip_time", "trip_kwh", "trip_cost",
-                "trip1", "trip2", "temps", "battery_temp", "openings", "tires",
+                "trip1", "trip2", "temps", "battery_temp", "openings", "tires", "battery_counter",
             ),
             entries.map { it.id },
         )

@@ -282,6 +282,7 @@
     <!-- Settings: Application section -->
     <string name="settings_app_units_header">Адзінкі і валюта</string>
     <string name="settings_app_distance_label">Адлегласць</string>
+    <string name="settings_app_pressure_unit_label">Ціск у шынах</string>
     <string name="settings_app_currency_label">Валюта</string>
     <string name="settings_charge_connector_label">Раз’ём для зарадкі</string>
     <string name="settings_charge_connector_desc">Памочнік шукае зарадкі з гэтым раз’ёмам</string>
@@ -830,6 +831,8 @@
     <string name="settings_tariff_trip_custom_chip">Свой</string>
     <string name="settings_unit_km">км</string>
     <string name="settings_unit_miles">мілі</string>
+    <string name="settings_unit_bar">бар</string>
+    <string name="settings_unit_psi">psi</string>
     <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
@@ -1793,6 +1796,7 @@
     <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f бар</string>
+    <string name="tech_value_tyre_pressure_psi">%1$d psi</string>
     <string name="tech_value_cell_scale">%1$.2f В</string>
     <string name="tech_hint_soh" formatted="false">Здароўе батарэі паводле ацэнкі самой машыны: колькі ёмістасці засталося ад новай. 100% у новай машыны, павольна зніжаецца з гадамі. Гэта асобная лічба, з «Астаткам» яна формулай не звязана, параўноўваць іх паміж сабой не трэба.</string>
     <string name="tech_hint_remain_kwh" formatted="false">Колькі энергіі засталося паводле ацэнкі самой батарэі. Яна ўлічвае знос, таму лічба меншая, чым працэнт зарада, памножаны на завадскую ёмістасць. Найдакладней адразу пасля зарадкі да 100%. На экране можа заставацца 100%, пакуль батарэя ўжо аддала першыя кілават-гадзіны, таму ў самым версе шкалы астатак і працэнт разыходзяцца мацней.</string>
@@ -1984,6 +1988,7 @@
     <string name="tg_report_field_battery_temp">Тэмпература батарэі</string>
     <string name="tg_report_field_openings">Што адчынена</string>
     <string name="tg_report_field_tires">Ціск у шынах</string>
+    <string name="tg_report_field_battery_counter">Лічыльнік энергіі батарэі</string>
     <string name="tg_report_header_off">BYDMate: машына выключана %1$s у %2$s</string>
     <string name="tg_report_map_link">Адкрыць на карце</string>
     <string name="tg_report_soc">зарад %1$s</string>
@@ -2016,6 +2021,7 @@
     <string name="tg_report_open_front_trunk">пярэдні багажнік</string>
     <string name="tg_report_open_hood">капот</string>
     <string name="tg_report_tires">Шыны: %1$s бар</string>
+    <string name="tg_report_battery_counter">Лічыльнік энергіі батарэі %1$.1f кВт·г</string>
     <string name="tg_report_tire_fl">ПЛ %1$s</string>
     <string name="tg_report_tire_fr">ПП %1$s</string>
     <string name="tg_report_tire_rl">ЗЛ %1$s</string>
@@ -2041,6 +2047,7 @@
     <string name="tg_report_field_battery_temp_desc">Сярэдняя па батарэі</string>
     <string name="tg_report_field_openings_desc">Дзверы, вокны, люк, багажнік, капот</string>
     <string name="tg_report_field_tires_desc">Усе чатыры колы</string>
+    <string name="tg_report_field_battery_counter_desc">Колькі кВт·г прайшло праз батарэю за ўвесь час</string>
     <string name="settings_tg_report_off_title">Справаздача пры выключэнні машыны</string>
     <string name="settings_tg_report_off_hint">Справаздача ідзе ў першыя секунды пасля выключэння праз мабільны інтэрнэт машыны. Калі сувязі няма, яна прыйдзе пры наступным уключэнні.</string>
     <string name="settings_tg_report_off_no_bot">Спачатку падключыце Telegram-бот вышэй.</string>

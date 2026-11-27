@@ -264,6 +264,7 @@
     <string name="settings_widget_buttons_description">Um toque exibe 4 botões, dois toques abrem o BYDMate. Um botão executa uma regra com o gatilho «Pressionamento de botão».</string>
     <string name="settings_app_units_header">Unidades e moeda</string>
     <string name="settings_app_distance_label">Distância</string>
+    <string name="settings_app_pressure_unit_label">Pressão dos pneus</string>
     <string name="settings_app_currency_label">Moeda</string>
     <string name="settings_charge_connector_label">Conector de carregamento</string>
     <string name="settings_charge_connector_desc">O assistente procura carregadores com este conector</string>
@@ -694,6 +695,8 @@
     <string name="settings_tariff_trip_custom_chip">Personalizado</string>
     <string name="settings_unit_km">km</string>
     <string name="settings_unit_miles">milhas</string>
+    <string name="settings_unit_bar">bar</string>
+    <string name="settings_unit_psi">psi</string>
     <string name="settings_saved">Salvo</string>
     <string name="settings_export_in_progress">Exportando...</string>
     <string name="settings_error_with_message">Erro: %1$s</string>
@@ -1644,6 +1647,7 @@
     <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_value_tyre_pressure_psi">%1$d psi</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Saúde da bateria segundo a estimativa do próprio carro: quanta capacidade resta em relação à bateria nova. 100% num carro novo, desce lentamente com os anos. É um valor à parte, não está ligado por fórmula a “Restante”, não é preciso compará-los entre si.</string>
     <string name="tech_hint_remain_kwh" formatted="false">Quanta energia resta, segundo a estimativa da própria bateria. Ela tem em conta o desgaste, por isso o valor é menor do que a percentagem de carga multiplicada pela capacidade de fábrica. É mais preciso logo após carregar até 100%. O ecrã pode manter 100% enquanto a bateria já forneceu os primeiros quilowatts-hora, por isso no topo da escala a energia restante e a percentagem afastam-se mais.</string>
@@ -1835,6 +1839,7 @@
     <string name="tg_report_field_battery_temp">Temperatura da bateria</string>
     <string name="tg_report_field_openings">O que está aberto</string>
     <string name="tg_report_field_tires">Pressão dos pneus</string>
+    <string name="tg_report_field_battery_counter">Contador de energia da bateria</string>
     <string name="tg_report_header_off">BYDMate: carro desligado em %1$s às %2$s</string>
     <string name="tg_report_map_link">Abrir no mapa</string>
     <string name="tg_report_soc">carga %1$s</string>
@@ -1867,6 +1872,7 @@
     <string name="tg_report_open_front_trunk">porta-malas dianteiro</string>
     <string name="tg_report_open_hood">capô</string>
     <string name="tg_report_tires">Pneus: %1$s bar</string>
+    <string name="tg_report_battery_counter">Contador de energia da bateria %1$.1f kWh</string>
     <string name="tg_report_tire_fl">DE %1$s</string>
     <string name="tg_report_tire_fr">DD %1$s</string>
     <string name="tg_report_tire_rl">TE %1$s</string>
@@ -1892,6 +1898,7 @@
     <string name="tg_report_field_battery_temp_desc">Média da bateria</string>
     <string name="tg_report_field_openings_desc">Portas, janelas, teto solar, porta-malas, capô</string>
     <string name="tg_report_field_tires_desc">As quatro rodas</string>
+    <string name="tg_report_field_battery_counter_desc">Total de kWh pela bateria desde novo</string>
     <string name="settings_tg_report_off_title">Relatório ao desligar o carro</string>
     <string name="settings_tg_report_off_hint">O relatório é enviado nos primeiros segundos após desligar, pela internet móvel do carro. Se não houver conexão, ele chega na próxima vez que o carro for ligado.</string>
     <string name="settings_tg_report_off_no_bot">Primeiro conecte o bot do Telegram acima.</string>

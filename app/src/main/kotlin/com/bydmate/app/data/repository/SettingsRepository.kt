@@ -34,6 +34,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_HOME_TARIFF = "home_tariff"
         const val KEY_DC_TARIFF = "dc_tariff"
         const val KEY_UNITS = "units" // "km" or "miles"
+        const val KEY_PRESSURE_UNIT = "pressure_unit" // "bar" or "psi"
         const val KEY_CURRENCY = "currency" // "BYN", "RUB", "USD", "EUR", "CNY"
         /** The car's charging connector the voice agent filters stations by (ChargeConnector.key). */
         const val KEY_CHARGE_CONNECTOR = "charge_connector"
@@ -189,6 +190,7 @@ open class SettingsRepository @Inject constructor(
         const val DEFAULT_HOME_TARIFF = "0.20"
         const val DEFAULT_DC_TARIFF = "0.73"
         const val DEFAULT_UNITS = "km"
+        const val DEFAULT_PRESSURE_UNIT = "bar"
         const val DEFAULT_CURRENCY = "BYN"
         const val DEFAULT_CONSUMPTION_GOOD = "20"
         const val DEFAULT_CONSUMPTION_BAD = "30"
@@ -226,6 +228,8 @@ open class SettingsRepository @Inject constructor(
             Currency("KGS", "сом"),
             Currency("MDL", "MDL"),
             Currency("RON", "lei"),
+            Currency("BRL", "R$"),
+            Currency("IDR", "Rp"),
         )
     }
 

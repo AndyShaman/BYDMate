@@ -235,7 +235,7 @@ class LiveTelemetrySender(
                     webhookTelemetryClient.send(
                         url = webhookUrl,
                         secret = webhookSecret,
-                        telemetry = withLocation(telemetry, location),
+                        telemetry = WebhookHybridFields.addTo(withLocation(telemetry, location), data),
                     ).onSuccess {
                         delivered = true
                         webhookCooldownUntilMs = 0L

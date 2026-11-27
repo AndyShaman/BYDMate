@@ -58,6 +58,7 @@ class TechPanelViewModel @Inject constructor(
         observeCalibrationMarks()
         observeCarStatus()
         observeDtcScan()
+        observePressureUnit()
         viewModelScope.launch {
             vehicleKindMonitor.kind.collect { kind ->
                 _uiState.update { it.copy(vehicleKind = kind, cardOrder = TechCardOrder.forKind(it.cardOrder, kind)) }
@@ -347,6 +348,15 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch {
             val result = dtcScanRepository.sendLastScan(labels)
             _uiState.update { it.copy(dtcSending = false, dtcSendResult = result) }
+        }
+    }
+
+    private fun observePressureUnit() {
+        viewModelScope.launch {
+            settingsRepository.observeString(SettingsRepository.KEY_PRESSURE_UNIT)
+                .map { TyrePressureUnit.fromSetting(it) }
+                .catch { Log.w(TAG, "pressure unit observe failed: ${it.message}") }
+                .collect { unit -> _uiState.update { it.copy(pressureUnit = unit) } }
         }
     }
 

@@ -265,6 +265,7 @@
     <string name="settings_widget_buttons_description">A single tap slides out 4 buttons, a double tap opens BYDMate. A button runs a rule with the "Button press" trigger.</string>
     <string name="settings_app_units_header">Units and currency</string>
     <string name="settings_app_distance_label">Distance</string>
+    <string name="settings_app_pressure_unit_label">Tire pressure</string>
     <string name="settings_app_currency_label">Currency</string>
     <string name="settings_charge_connector_label">Charging connector</string>
     <string name="settings_charge_connector_desc">The assistant looks for chargers with this connector</string>
@@ -700,6 +701,8 @@
     <string name="settings_tariff_trip_custom_chip">Custom</string>
     <string name="settings_unit_km">km</string>
     <string name="settings_unit_miles">miles</string>
+    <string name="settings_unit_bar">bar</string>
+    <string name="settings_unit_psi">psi</string>
     <string name="settings_saved">Saved</string>
     <string name="settings_export_in_progress">Exporting...</string>
     <string name="settings_error_with_message">Error: %1$s</string>
@@ -1648,6 +1651,7 @@
     <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_value_tyre_pressure_psi">%1$d psi</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Battery health, as the car itself estimates it: how much capacity is left compared to new. 100% on a new car, slowly decreasing over the years. This is a separate figure, it is not linked to \"Remaining\" by any formula, there is no need to compare them.</string>
     <string name="tech_hint_remain_kwh" formatted="false">How much energy is left, as estimated by the battery itself. It accounts for wear, so the figure is lower than the charge percentage multiplied by the factory capacity. It is most accurate right after charging to 100%. The display may still show 100% while the battery has already delivered the first kilowatt-hours, so at the very top of the scale the remaining energy and the percentage diverge more.</string>
@@ -1839,6 +1843,7 @@
     <string name="tg_report_field_battery_temp">Battery temperature</string>
     <string name="tg_report_field_openings">What is open</string>
     <string name="tg_report_field_tires">Tire pressure</string>
+    <string name="tg_report_field_battery_counter">Battery energy counter</string>
     <string name="tg_report_header_off">BYDMate: car turned off on %1$s at %2$s</string>
     <string name="tg_report_map_link">Open on the map</string>
     <string name="tg_report_soc">charge %1$s</string>
@@ -1871,6 +1876,7 @@
     <string name="tg_report_open_front_trunk">front trunk</string>
     <string name="tg_report_open_hood">hood</string>
     <string name="tg_report_tires">Tires: %1$s bar</string>
+    <string name="tg_report_battery_counter">Battery energy counter %1$.1f kWh</string>
     <string name="tg_report_tire_fl">FL %1$s</string>
     <string name="tg_report_tire_fr">FR %1$s</string>
     <string name="tg_report_tire_rl">RL %1$s</string>
@@ -1896,6 +1902,7 @@
     <string name="tg_report_field_battery_temp_desc">Battery average</string>
     <string name="tg_report_field_openings_desc">Doors, windows, sunroof, trunk, hood</string>
     <string name="tg_report_field_tires_desc">All four wheels</string>
+    <string name="tg_report_field_battery_counter_desc">Lifetime kWh through the battery</string>
     <string name="settings_tg_report_off_title">Report when the car is turned off</string>
     <string name="settings_tg_report_off_hint">The report goes out in the first seconds after the car is turned off, over the car\'s mobile internet. If there is no connection, it arrives the next time the car is turned on.</string>
     <string name="settings_tg_report_off_no_bot">Connect the Telegram bot above first.</string>

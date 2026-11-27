@@ -70,6 +70,7 @@ import com.bydmate.app.R
 import com.bydmate.app.agent.SHOW_CONTACTS_PERMISSION_REQUEST
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.tech.TyrePressureUnit
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.util.APP_LANGUAGES
 import android.Manifest
@@ -109,6 +110,17 @@ internal fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 options = listOf(stringResource(R.string.settings_unit_km), stringResource(R.string.settings_unit_miles)),
                 selectedIndex = if (state.units == "km") 0 else 1,
                 onSelect = { idx -> viewModel.saveUnits(if (idx == 0) "km" else "miles") },
+            )
+            SettingDivider()
+            SettingChipRow(
+                title = stringResource(R.string.settings_app_pressure_unit_label),
+                options = listOf(stringResource(R.string.settings_unit_bar), stringResource(R.string.settings_unit_psi)),
+                selectedIndex = if (TyrePressureUnit.fromSetting(state.pressureUnit) == TyrePressureUnit.Unit.PSI) 1 else 0,
+                onSelect = { idx ->
+                    viewModel.savePressureUnit(
+                        if (idx == 1) TyrePressureUnit.SETTING_PSI else TyrePressureUnit.SETTING_BAR
+                    )
+                },
             )
             SettingDivider()
             SettingChipRow(

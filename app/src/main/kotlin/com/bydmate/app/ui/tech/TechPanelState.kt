@@ -82,6 +82,7 @@ data class TechPanelUiState(
     val tyreTempFR: Int? = null,
     val tyreTempRL: Int? = null,
     val tyreTempRR: Int? = null,
+    val pressureUnit: TyrePressureUnit.Unit = TyrePressureUnit.Unit.BAR,
     // Батарея · история
     val lifetimeKm: Float? = null,
     val lifetimeKwh: Float? = null,

@@ -181,6 +181,7 @@
     <!-- Settings: Application section -->
     <string name="settings_app_units_header">单位与货币</string>
     <string name="settings_app_distance_label">距离</string>
+    <string name="settings_app_pressure_unit_label">胎压</string>
     <string name="settings_app_currency_label">货币</string>
     <string name="settings_charge_connector_label">充电接口</string>
     <string name="settings_charge_connector_desc">语音助手按此接口查找充电站</string>
@@ -667,6 +668,8 @@
     <string name="settings_tariff_trip_custom_chip">自定义</string>
     <string name="settings_unit_km">公里</string>
     <string name="settings_unit_miles">英里</string>
+    <string name="settings_unit_bar">bar</string>
+    <string name="settings_unit_psi">psi</string>
 
     <!-- Settings: ViewModel status strings -->
     <string name="settings_saved">已保存</string>
@@ -1758,6 +1761,7 @@
     <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_value_tyre_pressure_psi">%1$d psi</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">电池健康度，由车辆自己估算：相比新电池还剩多少容量。新车为 100%，随着年份缓慢下降。这是一个独立的数值，与“剩余电量”没有公式上的关系，不需要互相比较。</string>
     <string name="tech_hint_remain_kwh" formatted="false">剩余电量由电池自己估算。它考虑了电池损耗，所以这个数字小于电量百分比乘以出厂容量。刚充至 100% 时，估算最准确。屏幕可能一直显示 100%，而电池其实已经放出了最初的几千瓦时，所以在电量最高的一段，剩余电量和百分比相差更大。</string>
@@ -1949,6 +1953,7 @@
     <string name="tg_report_field_battery_temp">电池温度</string>
     <string name="tg_report_field_openings">未关闭项</string>
     <string name="tg_report_field_tires">胎压</string>
+    <string name="tg_report_field_battery_counter">电池电量计数</string>
     <string name="tg_report_header_off">BYDMate：车辆于 %1$s %2$s 熄火</string>
     <string name="tg_report_map_link">在地图上打开</string>
     <string name="tg_report_soc">电量 %1$s</string>
@@ -1981,6 +1986,7 @@
     <string name="tg_report_open_front_trunk">前备箱</string>
     <string name="tg_report_open_hood">引擎盖</string>
     <string name="tg_report_tires">胎压：%1$s bar</string>
+    <string name="tg_report_battery_counter">电池电量计数 %1$.1f kWh</string>
     <string name="tg_report_tire_fl">左前 %1$s</string>
     <string name="tg_report_tire_fr">右前 %1$s</string>
     <string name="tg_report_tire_rl">左后 %1$s</string>
@@ -2006,6 +2012,7 @@
     <string name="tg_report_field_battery_temp_desc">电池平均温度</string>
     <string name="tg_report_field_openings_desc">车门、车窗、天窗、后备箱、引擎盖</string>
     <string name="tg_report_field_tires_desc">全部四个车轮</string>
+    <string name="tg_report_field_battery_counter_desc">电池累计消耗的 kWh</string>
     <string name="settings_tg_report_off_title">熄火时发送报告</string>
     <string name="settings_tg_report_off_hint">熄火后的最初几秒内通过车辆的移动网络发送报告。如果没有网络，报告会在下次启动时送达。</string>
     <string name="settings_tg_report_off_no_bot">请先在上方连接 Telegram 机器人。</string>

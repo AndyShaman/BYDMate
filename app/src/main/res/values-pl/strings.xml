@@ -282,6 +282,7 @@
     <!-- Settings: Application section -->
     <string name="settings_app_units_header">Jednostki i waluta</string>
     <string name="settings_app_distance_label">Odległość</string>
+    <string name="settings_app_pressure_unit_label">Ciśnienie w oponach</string>
     <string name="settings_app_currency_label">Waluta</string>
     <string name="settings_charge_connector_label">Złącze ładowania</string>
     <string name="settings_charge_connector_desc">Asystent szuka ładowarek z tym złączem</string>
@@ -830,6 +831,8 @@
     <string name="settings_tariff_trip_custom_chip">Własna</string>
     <string name="settings_unit_km">km</string>
     <string name="settings_unit_miles">mile</string>
+    <string name="settings_unit_bar">bar</string>
+    <string name="settings_unit_psi">psi</string>
     <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
@@ -1793,6 +1796,7 @@
     <string name="tech_value_temp_range">%1$d°C (%2$d…%3$d)</string>
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_value_tyre_pressure_psi">%1$d psi</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Kondycja akumulatora według oceny samego samochodu: ile pojemności zostało w porównaniu z nowym. 100% w nowym samochodzie, powoli spada z latami. To osobna liczba, nie jest powiązana wzorem z „Pozostało”, nie trzeba ich ze sobą porównywać.</string>
     <string name="tech_hint_remain_kwh" formatted="false">Ile energii zostało według oceny samego akumulatora. Uwzględnia on zużycie, dlatego ta liczba jest mniejsza niż procent naładowania pomnożony przez pojemność fabryczną. Najdokładniejsza jest zaraz po naładowaniu do 100%. Ekran może pokazywać 100%, gdy akumulator oddał już pierwsze kilowatogodziny, dlatego na samej górze skali różnica między tymi dwiema ocenami jest większa.</string>
@@ -1984,6 +1988,7 @@
     <string name="tg_report_field_battery_temp">Temperatura baterii</string>
     <string name="tg_report_field_openings">Co jest otwarte</string>
     <string name="tg_report_field_tires">Ciśnienie w oponach</string>
+    <string name="tg_report_field_battery_counter">Licznik energii baterii</string>
     <string name="tg_report_header_off">BYDMate: samochód wyłączony %1$s o %2$s</string>
     <string name="tg_report_map_link">Otwórz na mapie</string>
     <string name="tg_report_soc">naładowanie %1$s</string>
@@ -2016,6 +2021,7 @@
     <string name="tg_report_open_front_trunk">przedni bagażnik</string>
     <string name="tg_report_open_hood">maska</string>
     <string name="tg_report_tires">Opony: %1$s bar</string>
+    <string name="tg_report_battery_counter">Licznik energii baterii %1$.1f kWh</string>
     <string name="tg_report_tire_fl">LP %1$s</string>
     <string name="tg_report_tire_fr">PP %1$s</string>
     <string name="tg_report_tire_rl">LT %1$s</string>
@@ -2041,6 +2047,7 @@
     <string name="tg_report_field_battery_temp_desc">Średnia baterii</string>
     <string name="tg_report_field_openings_desc">Drzwi, okna, szyberdach, bagażnik, maska</string>
     <string name="tg_report_field_tires_desc">Wszystkie cztery koła</string>
+    <string name="tg_report_field_battery_counter_desc">Łączne kWh przez baterię od nowości</string>
     <string name="settings_tg_report_off_title">Raport po wyłączeniu samochodu</string>
     <string name="settings_tg_report_off_hint">Raport jest wysyłany w pierwszych sekundach po wyłączeniu, przez mobilny internet samochodu. Jeśli nie ma połączenia, przyjdzie przy następnym włączeniu.</string>
     <string name="settings_tg_report_off_no_bot">Najpierw połącz bota Telegram powyżej.</string>

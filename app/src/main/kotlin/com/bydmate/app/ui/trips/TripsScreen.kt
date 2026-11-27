@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.bydmate.app.ui.components.AppAlertDialog
@@ -313,19 +314,19 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
 }
 
 /**
- * «/100» of a day or month header. On a hybrid the trip-row rule runs on the sums: with litres
- * it reads «1.8 л/100» uncoloured over [litersKm], the km of the trips that know their litres,
- * without them today's coloured kWh/100.
+ * "/100" of a day or month header. On a hybrid, a period with fuel uses [periodPer100Cell] so
+ * electric and fuel consumption show side by side uncoloured over [litersKm]; without fuel,
+ * today's coloured kWh/100 stays.
  */
 @Composable
 private fun AggregatePer100(avgConsumption: Double, totalLiters: Double?, litersKm: Double?, hybrid: Boolean) {
-    val cell = per100Cell(avgConsumption, totalLiters, litersKm, stringResource(R.string.dashboard_unit_liters))
+    val cell = periodPer100Cell(avgConsumption, totalLiters, litersKm, stringResource(R.string.dashboard_unit_liters))
     if (hybrid && !cell.colored) {
         Text("${cell.text}/100",
             color = TextPrimary, fontSize = 12.sp,
             fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
             fontWeight = FontWeight.Medium,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(72.dp))
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(min = 72.dp))
     } else {
         Text("%.1f/100".format(avgConsumption),
             color = consumptionColor(avgConsumption), fontSize = 12.sp,
