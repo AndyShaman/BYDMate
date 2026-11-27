@@ -3,6 +3,8 @@ package com.bydmate.app.data.vehicle
 import com.bydmate.app.data.nativestack.FidCatalog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import java.util.EnumMap
+import java.util.concurrent.atomic.AtomicLong
 
 /** A seat comfort target: which seat + heat/vent. */
 enum class SeatGroup { DRIVER_HEAT, DRIVER_VENT, PASSENGER_HEAT, PASSENGER_VENT }
@@ -72,6 +74,12 @@ class AdaptiveSeatChannel(
 
     /** Result of the readback probe: [contradicted] plus the rendered reads for the journal. */
     private data class Verdict(val contradicted: Boolean, val detail: String)
+
+    // Per-seat-group counter bumped on entry to fallbackDirect so a pending two-level clamp
+    // does not write 3 after a newer fallback command for the same seat has started (#441).
+    private val fallbackGeneration = EnumMap<SeatGroup, AtomicLong>(SeatGroup::class.java).apply {
+        SeatGroup.values().forEach { put(it, AtomicLong(0L)) }
+    }
 
     /** Actuate [group] at [level] (0=off, 1..5). Returns true iff a channel produced REAL. */
     suspend fun actuate(group: SeatGroup, level: Int): Boolean {
@@ -175,9 +183,10 @@ class AdaptiveSeatChannel(
     /** Cached fallback: channel already known, write the requested stage value directly
      *  (no re-probe, no flicker). 1=off, 2=lvl1 ... 6=lvl5, see [seatFallbackValue]. */
     private suspend fun fallbackDirect(group: SeatGroup, a: SeatActions, level: Int): WriteOutcome {
+        val gen = fallbackGeneration.getValue(group).incrementAndGet()
         val first = writer.write(a.fallback, if (level == 0) 1 else seatFallbackValue(group, level))
         val clamped = if (first == WriteOutcome.REAL || first == WriteOutcome.NOOP) {
-            clampTwoLevelHeat(group, a, level)
+            clampTwoLevelHeat(group, a, level, expectedGen = gen)
         } else {
             null
         }
@@ -211,10 +220,16 @@ class AdaptiveSeatChannel(
      * Two-level fallback seat heat clamp (#441): only for requested level 3 on front heat.
      * After the fallback write (6 for driver, 4 for passenger), reads the platform dev=1023
      * state fid with the primary readback cadence. If it stays at 1 (off) or 2 (low),
-     * writes 3 (high on a two-level seat) once and returns its outcome. Any other value,
+     * writes 3 (high on a two-level seat) once and returns its outcome, unless a newer
+     * fallback command for the same group started since [expectedGen]. Any other value,
      * read error or unknown platform writes nothing extra and returns null.
      */
-    private suspend fun clampTwoLevelHeat(group: SeatGroup, a: SeatActions, level: Int): WriteOutcome? {
+    private suspend fun clampTwoLevelHeat(
+        group: SeatGroup,
+        a: SeatActions,
+        level: Int,
+        expectedGen: Long? = null,
+    ): WriteOutcome? {
         if (level != DRIVER_HEAT_LEVEL3) return null
         if (group != SeatGroup.DRIVER_HEAT && group != SeatGroup.PASSENGER_HEAT) return null
         repeat(READBACK_ATTEMPTS) {
@@ -228,6 +243,7 @@ class AdaptiveSeatChannel(
             }
             if (state == null || state !in FALLBACK_CLAMP_STATES) return null
         }
+        if (expectedGen != null && fallbackGeneration.getValue(group).get() != expectedGen) return null
         return writer.write(a.fallback, FALLBACK_TWO_LEVEL_HIGH)
     }
 

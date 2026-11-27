@@ -67,7 +67,8 @@ class SteeringWheelKeyService : AccessibilityService() {
     private val splitKeyGuard = SplitKeyBusyGuard()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val doublePress = SteeringDoublePress()
-    private val doublePressDeadlines = mutableMapOf<Int, Runnable>()
+    private val doublePressDeadlines = mutableMapOf<Int, PendingDoublePress>()
+    private class PendingDoublePress(val runnable: Runnable, val keyId: Long)
     private val prefs: SharedPreferences by lazy {
         applicationContext.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -194,27 +195,32 @@ class SteeringWheelKeyService : AccessibilityService() {
         if (!firstDown) return true
         val keyCode = event.keyCode
         val atMs = event.eventTime.takeIf { it > 0L } ?: SystemClock.uptimeMillis()
+        if (doublePress.onDeadline(keyCode, atMs)) {
+            val prev = doublePressDeadlines.remove(keyCode)
+            prev?.let { mainHandler.removeCallbacks(it.runnable) }
+            fireSinglePressAtDeadline(keyCode, prev?.keyId ?: 0L)
+        }
         val keyId = traceId(event, "automation")
         when (doublePress.onDown(keyCode, atMs)) {
             DoublePressVerdict.PENDING -> {
                 Log.i(TAG, "steering key $keyCode: PENDING")
-                doublePressDeadlines.remove(keyCode)?.let { mainHandler.removeCallbacks(it) }
+                doublePressDeadlines.remove(keyCode)?.let { mainHandler.removeCallbacks(it.runnable) }
                 val deadline = Runnable {
                     doublePressDeadlines.remove(keyCode)
                     if (doublePress.onDeadline(keyCode, SystemClock.uptimeMillis())) {
-                        Log.i(TAG, "steering key $keyCode: single at deadline")
-                        keyCounters.onMatched()
-                        TrackingService.fireSteeringKey(keyCode, keyId, double = false) { matched ->
-                            Log.i(TAG, "steering key $keyCode (single): $matched rule(s)")
+                        if (learnMode) {
+                            Log.i(TAG, "steering key $keyCode: single at deadline suppressed (learn mode)")
+                        } else {
+                            fireSinglePressAtDeadline(keyCode, keyId)
                         }
                     }
                 }
-                doublePressDeadlines[keyCode] = deadline
+                doublePressDeadlines[keyCode] = PendingDoublePress(deadline, keyId)
                 mainHandler.postAtTime(deadline, atMs + SteeringDoublePress.WINDOW_MS)
             }
             DoublePressVerdict.DOUBLE -> {
                 Log.i(TAG, "steering key $keyCode: DOUBLE")
-                doublePressDeadlines.remove(keyCode)?.let { mainHandler.removeCallbacks(it) }
+                doublePressDeadlines.remove(keyCode)?.let { mainHandler.removeCallbacks(it.runnable) }
                 keyCounters.onMatched()
                 TrackingService.fireSteeringKey(keyCode, keyId, double = true) { matched ->
                     Log.i(TAG, "steering key $keyCode (double): $matched rule(s)")
@@ -224,8 +230,16 @@ class SteeringWheelKeyService : AccessibilityService() {
         return true
     }
 
+    private fun fireSinglePressAtDeadline(keyCode: Int, keyId: Long) {
+        Log.i(TAG, "steering key $keyCode: single at deadline")
+        keyCounters.onMatched()
+        TrackingService.fireSteeringKey(keyCode, keyId, double = false) { matched ->
+            Log.i(TAG, "steering key $keyCode (single): $matched rule(s)")
+        }
+    }
+
     private fun clearDoublePressState() {
-        doublePressDeadlines.values.forEach { mainHandler.removeCallbacks(it) }
+        doublePressDeadlines.values.forEach { mainHandler.removeCallbacks(it.runnable) }
         doublePressDeadlines.clear()
         doublePress.clear()
     }

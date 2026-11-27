@@ -63,7 +63,6 @@ class BluetoothConnectionTracker {
     fun start(context: Context) {
         if (registered) return
         connected.clear()
-        seedConnected()
         val filter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
@@ -74,6 +73,7 @@ class BluetoothConnectionTracker {
         }.onFailure { e ->
             Log.w(TAG, "bt receiver register failed: ${e.javaClass.simpleName}")
         }
+        seedConnected()
     }
 
     fun stop(context: Context) {
@@ -97,7 +97,6 @@ class BluetoothConnectionTracker {
                 }
             }
         }.onFailure { e ->
-            connected.clear()
             Log.w(TAG, "bt seed failed, starting empty: ${e.javaClass.simpleName}")
         }
     }

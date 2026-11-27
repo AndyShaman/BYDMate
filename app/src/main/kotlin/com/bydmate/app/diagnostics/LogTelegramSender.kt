@@ -64,6 +64,11 @@ class LogTelegramSender @Inject constructor(
         }
     }
 
+    /** Clears the remembered last-sent file path so it can be uploaded again after a binding change. */
+    fun forgetSent() {
+        _sentPath.value = null
+    }
+
     /** One upload of [file]; a call while another upload runs does nothing. */
     suspend fun send(file: File) {
         if (!_sending.compareAndSet(expect = false, update = true)) return

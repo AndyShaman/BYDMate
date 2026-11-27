@@ -75,7 +75,8 @@ sealed class RuleParseResult {
  */
 object RuleShare {
     const val FORMAT = "bydmate_rule"
-    const val VERSION = 1
+    const val VERSION = 2
+    private const val VERSION_BASE = 1
 
     internal val PLACE_KINDS = setOf("place_enter", "place_exit")
 
@@ -111,6 +112,8 @@ object RuleShare {
      * The share file body. What is stripped, per kind:
      * - triggers `place_enter` / `place_exit`: `placeId` (a local row id); `placeName` stays so the
      *   importer can find the place by name.
+     * - triggers `bt_connected` / `bt_disconnected`: `value` (the Bluetooth device MAC address);
+     *   `displayName` stays so the importer knows which device to pick.
      * - action `call`: `phone` and `name` (the contact), and the display name (the voice agent
      *   stores the contact name there); `autoDial` stays, plus a `contactRequired` marker.
      * - action `url`: what [RuleShareUrl.strip] removes, and the display name is rebuilt from the
@@ -125,10 +128,11 @@ object RuleShare {
     fun exportJson(rule: SharedRule, appVersion: String): String {
         val triggers = JSONArray()
         rule.triggers.forEach { t ->
-            triggers.put((if (t.kind in PLACE_KINDS) t.copy(placeId = null) else t).toJson())
+            triggers.put(stripTrigger(t).toJson())
         }
         val actions = JSONArray()
         rule.actions.forEach { actions.put(stripAction(it).toJson()) }
+        val exportVersion = if (rule.triggers.any { it.press != null }) VERSION else VERSION_BASE
         val body = JSONObject().apply {
             put("name", rule.name)
             put("trigger_logic", rule.triggerLogic)
@@ -142,7 +146,7 @@ object RuleShare {
         }
         return JSONObject().apply {
             put("format", FORMAT)
-            put("version", VERSION)
+            put("version", exportVersion)
             put("app_version", appVersion)
             put("rule", body)
         }.toString(2)
@@ -195,15 +199,15 @@ object RuleShare {
         val triggersJson = body.getJSONArray("triggers")
         val actionsJson = body.getJSONArray("actions")
         val triggers = (0 until triggersJson.length()).map {
-            // Only a name travels: the id always comes from the importing device.
-            TriggerDef.fromJson(triggersJson.getJSONObject(it)).let { t -> if (t.kind in PLACE_KINDS) t.copy(placeId = null) else t }
+            // Only names travel for places and Bluetooth devices: local ids and addresses come from the importer.
+            stripTrigger(TriggerDef.fromJson(triggersJson.getJSONObject(it)))
         }.let(TrunkRuleMigration::fix)  // a file from before 3.19 may still say Trunk "0" for closed
         val actions = (0 until actionsJson.length()).map {
             ActionDef.fromJson(actionsJson.getJSONObject(it)).let { a ->
                 if (a.kind == "call" && a.displayName.isBlank()) a.copy(displayName = callLabel) else a
             }
         }
-        if (triggers.any { it.kind !in KNOWN_TRIGGER_KINDS } || actions.any { !isKnownAction(it) }) {
+        if (triggers.any { !isKnownTrigger(it) } || actions.any { !isKnownAction(it) }) {
             return RuleParseResult.NewerVersion
         }
         val name = body.getString("name").trim()
@@ -615,6 +619,27 @@ private fun needsContact(action: ActionDef): Boolean = when (action.kind) {
     "call" -> payloadOf(action.payload).optString("phone").isBlank()
     "url" -> payloadOf(action.payload).optBoolean(RuleShare.CONTACT_REQUIRED, false)
     else -> false
+}
+
+private val BT_TRIGGER_KINDS = setOf(
+    AutomationEngine.TRIGGER_KIND_BT_CONNECTED,
+    AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED,
+)
+
+private fun stripTrigger(trigger: TriggerDef): TriggerDef = when (trigger.kind) {
+    in RuleShare.PLACE_KINDS -> trigger.copy(placeId = null)
+    in BT_TRIGGER_KINDS -> trigger.copy(value = "")
+    else -> trigger
+}
+
+// Unknown trigger kinds or unknown steering_key press modes came from a newer version.
+private fun isKnownTrigger(trigger: TriggerDef): Boolean {
+    if (trigger.kind !in RuleShare.KNOWN_TRIGGER_KINDS) return false
+    if (trigger.kind == AutomationEngine.TRIGGER_KIND_STEERING_KEY) {
+        val press = trigger.press
+        if (press != null && press != TriggerDef.PRESS_DOUBLE) return false
+    }
+    return true
 }
 
 private val WHITESPACE = Regex("\\s+")

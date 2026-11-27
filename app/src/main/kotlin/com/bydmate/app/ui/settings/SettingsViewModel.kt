@@ -2034,6 +2034,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         // The field now holds another token: store nothing, the caller drops this status.
         if (_uiState.value.tgBackupToken != token) return null
         settingsRepository.saveTgBackup(token, botName, chat.id, chat.name)
+        logTelegramSender.forgetSent()
         _uiState.update { it.copy(tgBackupCode = null, tgBackupBinding = TgBackupBinding(botName, chat.name)) }
         return null
     }
@@ -2058,6 +2059,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     fun disconnectTelegramBackup() {
         val check = tgCheckJob
         autoBackupScheduler.cancelScheduled(appContext)
+        logTelegramSender.forgetSent()
         _uiState.update {
             it.copy(
                 tgBackupToken = "",
