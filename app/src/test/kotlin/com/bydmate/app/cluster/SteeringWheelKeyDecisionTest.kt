@@ -196,4 +196,18 @@ class SteeringWheelKeyDecisionTest {
         val keys = listOf(304, 305, 327, 351, 360, 24, 25, 85, 87, 88, 19, 20, 21, 22, 23, 6, 78, 80, 82, 143, 164, 215, 218)
         keys.forEach { assertTrue("keycode $it", isTraceableKey(it)) }
     }
+
+    @Test fun firmware_media_track_keys_are_87_and_88_only() {
+        assertTrue(isFirmwareMediaTrackKey(87))
+        assertTrue(isFirmwareMediaTrackKey(88))
+        for (code in listOf(85, 126, 127, 351, 320, 0)) {
+            assertFalse("keycode $code", isFirmwareMediaTrackKey(code))
+        }
+    }
+
+    @Test fun learn_capture_swallows_only_the_captured_keycode() {
+        assertTrue(learnCaptureSwallows(305, 305))
+        assertFalse(learnCaptureSwallows(305, null))
+        assertFalse(learnCaptureSwallows(351, 305))
+    }
 }

@@ -408,4 +408,20 @@ class RuleTextTest {
         assertNotEquals("CarAudio", disconnectedText)
         assertNotEquals(connectedText, disconnectedText)
     }
+
+    @Test fun `steering key double press renders double wording while single stays unchanged`() {
+        val single = newSteeringKeyTrigger(305).copy(press = null)
+        val dbl = newSteeringKeyTrigger(305).copy(press = "double")
+
+        assertEquals("Клавиша руля «Левая звезда»", phrase(listOf(single)))
+
+        val ruDouble = phrase(listOf(dbl))
+        assertNotEquals("Клавиша руля «Левая звезда»", ruDouble)
+        assertTrue(ruDouble, ruDouble.lowercase().contains("двойн"))
+
+        LocalePreferences(ctx).setLanguage("en")
+        assertEquals("Steering key «Left star»", phrase(listOf(single)))
+        val enDouble = phrase(listOf(dbl))
+        assertTrue(enDouble, enDouble.lowercase().contains("double"))
+    }
 }

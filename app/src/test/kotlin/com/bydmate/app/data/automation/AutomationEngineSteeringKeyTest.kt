@@ -118,4 +118,33 @@ class AutomationEngineSteeringKeyTest {
         )
         assertEquals(setOf(305), awaitKeyCodes(engine, setOf(305)))
     }
+
+    private fun doubleKeyTrigger(keyCode: Int) =
+        steeringKeyTrigger(keyCode).copy(press = "double")
+
+    private suspend fun awaitDoubleCodes(engine: AutomationEngine, expected: Set<Int>): Set<Int> =
+        withTimeoutOrNull(10_000) { engine.steeringKeyDoubleCodes.first { it == expected } }
+            ?: throw AssertionError("double keycode cache never became $expected, last ${engine.steeringKeyDoubleCodes.value}")
+
+    @Test fun `single and double rules on the same key dispatch separately and populate steeringKeyDoubleCodes`() = runBlocking {
+        val ruleA = rule(1, steeringKeyTrigger(305).copy(press = null))
+        val ruleB = rule(2, doubleKeyTrigger(305))
+        val ruleC = rule(3, steeringKeyTrigger(351).copy(press = null))
+        val (engine, ruleDao, _) = setup(listOf(ruleA, ruleB, ruleC))
+
+        assertEquals(setOf(305), awaitDoubleCodes(engine, setOf(305)))
+        assertEquals(setOf(305, 351), awaitKeyCodes(engine, setOf(305, 351)))
+
+        assertEquals(1, engine.onSteeringKeyPress(305, double = false))
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+        coVerify(exactly = 0) { ruleDao.updateLastTriggered(2, any()) }
+
+        assertEquals(1, engine.onSteeringKeyPress(305, double = true))
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(2, any()) }
+
+        assertEquals(1, engine.onSteeringKey(305))
+        coVerify(exactly = 2) { ruleDao.updateLastTriggered(1, any()) }
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(2, any()) }
+    }
 }
