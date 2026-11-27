@@ -2293,4 +2293,18 @@
     <string name="tyre_why_only_p">Writing is possible only in P.</string>
     <string name="tyre_not_l3_title">Writing IDs is not available on this car.</string>
     <string name="tyre_not_l3_text">The tyre unit did not answer like on Leopard 3, so we do not risk writing to it. The IDs are shown and the sets can be kept.</string>
+
+    <!-- Overlay permission screen fallback (#454) -->
+    <string name="overlay_permission_screen_unavailable">This firmware has no “Draw over other apps” permission screen</string>
+
+    <!-- Media play/pause action (#185) and Bluetooth triggers (#486) -->
+    <string name="automation_action_media_play_pause">Media: play / pause</string>
+    <string name="automation_trigger_type_bt_connected">Bluetooth: device connected</string>
+    <string name="automation_trigger_type_bt_disconnected">Bluetooth: device disconnected</string>
+    <string name="automation_trigger_bt_pick">Choose device</string>
+    <string name="automation_trigger_bt_empty">No paired Bluetooth devices</string>
+    <string name="automation_trigger_bt_device_missing">Bluetooth device not selected</string>
+    <string name="auto_ui_phrase_bt_connected">Bluetooth: «%1$s» connected</string>
+    <string name="auto_ui_phrase_bt_disconnected">Bluetooth: «%1$s» disconnected</string>
+    <string name="auto_ui_miss_bt_device">Choose a Bluetooth device in condition %1$d</string>
 </resources>

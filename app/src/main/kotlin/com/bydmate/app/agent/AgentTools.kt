@@ -2412,6 +2412,7 @@ class AgentTools @Inject constructor(
     private fun triggerErrorText(err: TriggerValidationError): String = when (err) {
         is TriggerValidationError.ValueNotNumber -> "значение для «${err.param}» должно быть числом"
         TriggerValidationError.SteeringKeyUnassigned -> "не назначена клавиша руля"
+        TriggerValidationError.BluetoothDeviceMissing -> "не выбрано Bluetooth-устройство"
         TriggerValidationError.OneShotInvalid,
         TriggerValidationError.OneShotWithOr,
         TriggerValidationError.OneShotWithEvent,

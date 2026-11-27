@@ -114,6 +114,16 @@ internal fun conditionText(t: TriggerDef, lc: Context, now: Long, zone: ZoneId):
     "param" -> paramConditionText(t, lc)
     "place_enter" -> lc.getString(R.string.auto_trig_place_enter, t.placeName ?: "?")
     "place_exit" -> lc.getString(R.string.auto_ui_phrase_place_exit, t.placeName ?: "?")
+    AutomationEngine.TRIGGER_KIND_BT_CONNECTED -> {
+        val name = t.displayName.ifBlank { t.value }
+        if (name.isBlank()) lc.getString(R.string.automation_trigger_type_bt_connected)
+        else lc.getString(R.string.auto_ui_phrase_bt_connected, name)
+    }
+    AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED -> {
+        val name = t.displayName.ifBlank { t.value }
+        if (name.isBlank()) lc.getString(R.string.automation_trigger_type_bt_disconnected)
+        else lc.getString(R.string.auto_ui_phrase_bt_disconnected, name)
+    }
     "time_of_day" -> lc.getString(
         TIME_OF_DAY_NAMES.firstOrNull { it.first == t.value.uppercase() }?.second ?: R.string.automation_trigger_night
     )
@@ -450,6 +460,7 @@ internal sealed interface Missing {
     data class Operator(val condition: Int) : Missing
     data class Number(val condition: Int) : Missing
     data class Key(val condition: Int) : Missing
+    data class BluetoothDevice(val condition: Int) : Missing
     data object NoActions : Missing
     data class Action(val action: Int, val message: String) : Missing
 }
@@ -459,26 +470,29 @@ internal fun missingParts(e: EditingRule, context: Context): List<Missing> {
     val out = mutableListOf<Missing>()
     if (e.name.isBlank()) out += Missing.Name
     if (e.triggers.isEmpty()) out += Missing.NoConditions
-    e.triggers.forEachIndexed { i, t ->
-        val n = i + 1
-        when (t.kind) {
-            "param" -> {
-                val option = TRIGGER_PARAMS.firstOrNull { it.param == t.param }
-                when {
-                    option == null -> out += Missing.Param(n)
-                    option.enumValues != null -> {
-                        if (hasListOperatorMissing(t)) out += Missing.Operator(n)
-                        if (t.value.isBlank()) out += Missing.Value(n)
-                    }
-                    TriggerNumber.parse(t.value) == null -> out += Missing.Number(n)
-                }
-            }
-            AutomationEngine.TRIGGER_KIND_STEERING_KEY -> if ((t.value.toIntOrNull() ?: 0) <= 0) out += Missing.Key(n)
-        }
-    }
+    e.triggers.forEachIndexed { i, t -> missingInTrigger(i + 1, t, out) }
     if (e.actions.isEmpty()) out += Missing.NoActions
     RuleDraftValidator.validateActions(e.actions)?.let { out += it.toMissing(lc) }
     return out
+}
+
+private fun missingInTrigger(n: Int, t: TriggerDef, out: MutableList<Missing>) {
+    when (t.kind) {
+        "param" -> {
+            val option = TRIGGER_PARAMS.firstOrNull { it.param == t.param }
+            when {
+                option == null -> out += Missing.Param(n)
+                option.enumValues != null -> {
+                    if (hasListOperatorMissing(t)) out += Missing.Operator(n)
+                    if (t.value.isBlank()) out += Missing.Value(n)
+                }
+                TriggerNumber.parse(t.value) == null -> out += Missing.Number(n)
+            }
+        }
+        AutomationEngine.TRIGGER_KIND_STEERING_KEY -> if ((t.value.toIntOrNull() ?: 0) <= 0) out += Missing.Key(n)
+        AutomationEngine.TRIGGER_KIND_BT_CONNECTED,
+        AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED -> if (t.value.isBlank()) out += Missing.BluetoothDevice(n)
+    }
 }
 
 internal fun Missing.text(lc: Context): String = when (this) {
@@ -489,6 +503,7 @@ internal fun Missing.text(lc: Context): String = when (this) {
     is Missing.Operator -> lc.getString(R.string.auto_ui_miss_operator, condition)
     is Missing.Number -> lc.getString(R.string.auto_ui_miss_number, condition)
     is Missing.Key -> lc.getString(R.string.auto_ui_miss_key, condition)
+    is Missing.BluetoothDevice -> lc.getString(R.string.auto_ui_miss_bt_device, condition)
     Missing.NoActions -> lc.getString(R.string.auto_ui_miss_actions)
     is Missing.Action -> message
 }

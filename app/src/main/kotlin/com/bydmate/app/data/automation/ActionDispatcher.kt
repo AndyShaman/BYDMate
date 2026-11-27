@@ -322,8 +322,13 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         internal fun mediaKeyNameRes(payload: String?): Int? = when (payload) {
             "play" -> R.string.automation_action_media_play
             "pause" -> R.string.automation_action_media_pause
+            "play_pause" -> R.string.automation_action_media_play_pause
             else -> null
         }
+
+        /** Resolves "play_pause" against active session states: pause if any plays, else play (#185). */
+        internal fun resolvePlayPause(states: List<Int?>): String =
+            if (states.any { it == PlaybackState.STATE_PLAYING }) "pause" else "play"
 
         /**
          * Outcome of resolving a "toggle" against the live state: either the concrete
@@ -723,9 +728,18 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
      * playing stock player itself resets that. The memory lives as long as the process.
      */
     private fun dispatchMediaKey(action: ActionDef): DispatchResult {
-        val keyCode = mediaKeyCode(action.payload)
-            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_media_key_invalid))
+        val isToggle = action.payload == "play_pause"
+        if (!isToggle && mediaKeyCode(action.payload) == null) {
+            return DispatchResult(false, appStrings.get(R.string.dispatch_media_key_invalid))
+        }
         val all = runCatching { activeMediaControllers() }.getOrDefault(emptyList())
+        val effectivePayload = if (isToggle) {
+            resolvePlayPause(all.map { it.playbackState?.state })
+        } else {
+            action.payload
+        }
+        val keyCode = mediaKeyCode(effectivePayload)
+            ?: return DispatchResult(false, appStrings.get(R.string.dispatch_media_key_invalid))
         val sessions = all.joinToString(" ") { mediaSessionTag(it) }
         val kept = all.filterNot { isIdleStockSession(it) }
         val controllers = if (skipsPausedStock(keyCode)) kept.filterNot { isPausedStockSession(it) } else kept

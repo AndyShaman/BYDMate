@@ -2398,4 +2398,18 @@
     <string name="tyre_why_only_p">只能在 P 挡写入。</string>
     <string name="tyre_not_l3_title">此车辆不支持写入编号。</string>
     <string name="tyre_not_l3_text">车轮模块的应答与 Leopard 3 不一致，因此不冒险写入。编号可以查看，套装可以保存。</string>
+
+    <!-- Overlay permission screen fallback (#454) -->
+    <string name="overlay_permission_screen_unavailable">此固件没有「悬浮窗」权限设置页面</string>
+
+    <!-- Media play/pause action (#185) and Bluetooth triggers (#486) -->
+    <string name="automation_action_media_play_pause">媒体：播放 / 暂停</string>
+    <string name="automation_trigger_type_bt_connected">蓝牙：设备已连接</string>
+    <string name="automation_trigger_type_bt_disconnected">蓝牙：设备已断开</string>
+    <string name="automation_trigger_bt_pick">选择设备</string>
+    <string name="automation_trigger_bt_empty">没有已配对的蓝牙设备</string>
+    <string name="automation_trigger_bt_device_missing">未选择蓝牙设备</string>
+    <string name="auto_ui_phrase_bt_connected">蓝牙：已连接「%1$s」</string>
+    <string name="auto_ui_phrase_bt_disconnected">蓝牙：已断开「%1$s」</string>
+    <string name="auto_ui_miss_bt_device">请为条件 %1$d 选择蓝牙设备</string>
 </resources>

@@ -84,6 +84,7 @@ object RuleShare {
         "param", "place_enter", "place_exit", "time_of_day", "time_range", "service_start",
         "network_available", "button_press", AutomationEngine.TRIGGER_KIND_STEERING_KEY, "voice",
         OneShotTrigger.KIND,
+        AutomationEngine.TRIGGER_KIND_BT_CONNECTED, AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED,
     )
 
     /** Action kinds ActionDispatcher.dispatch routes in this build. */

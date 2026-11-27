@@ -2448,4 +2448,18 @@
     <string name="tyre_why_only_p">Прапісаць можна толькі на P.</string>
     <string name="tyre_not_l3_title">Запіс нумароў недаступны на гэтай машыне.</string>
     <string name="tyre_not_l3_text">Блок колаў адказаў не так, як на Leopard 3, таму пісаць у яго не рызыкуем. Нумары відаць, камплекты можна захоўваць.</string>
+
+    <!-- Overlay permission screen fallback (#454) -->
+    <string name="overlay_permission_screen_unavailable">На гэтай прашыўцы няма экрана дазволу «Паверх іншых вокнаў»</string>
+
+    <!-- Media play/pause action (#185) and Bluetooth triggers (#486) -->
+    <string name="automation_action_media_play_pause">Медыя: прайграць / паўза</string>
+    <string name="automation_trigger_type_bt_connected">Bluetooth: прылада падключылася</string>
+    <string name="automation_trigger_type_bt_disconnected">Bluetooth: прылада адключылася</string>
+    <string name="automation_trigger_bt_pick">Выберыце прыладу</string>
+    <string name="automation_trigger_bt_empty">Няма спалучаных прылад Bluetooth</string>
+    <string name="automation_trigger_bt_device_missing">Прылада Bluetooth не выбрана</string>
+    <string name="auto_ui_phrase_bt_connected">Bluetooth: падключылася «%1$s»</string>
+    <string name="auto_ui_phrase_bt_disconnected">Bluetooth: адключылася «%1$s»</string>
+    <string name="auto_ui_miss_bt_device">Выберыце прыладу Bluetooth ва ўмове %1$d</string>
 </resources>

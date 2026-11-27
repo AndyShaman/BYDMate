@@ -64,9 +64,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.DialogProperties
 import com.bydmate.app.R
+import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.ui.openOverlayPermissionOrToast
 import com.bydmate.app.ui.theme.*
 
 // --- Catalog Dropdown (with category headers) ---
@@ -206,6 +208,7 @@ private fun pickerSections(): List<PickerSection> {
                 PickerTile(lc.getString(R.string.automation_action_yandex_music)) { newYandexMusicAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_media_play)) { newMediaKeyAction(it, "play") },
                 PickerTile(lc.getString(R.string.automation_action_media_pause)) { newMediaKeyAction(it, "pause") },
+                PickerTile(lc.getString(R.string.automation_action_media_play_pause)) { newMediaKeyAction(it, "play_pause") },
                 PickerTile(lc.getString(R.string.automation_action_call)) { newCallAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_navigate)) { newNavigateAction(it) },
                 PickerTile(lc.getString(R.string.automation_action_url)) { newUrlAction(it) },
@@ -275,11 +278,7 @@ internal fun AddActionButton(
             confirmButton = {
                 TextButton(onClick = {
                     showOverlayPrompt = false
-                    val intent = android.content.Intent(
-                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        android.net.Uri.parse("package:${context.packageName}")
-                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    try { context.startActivity(intent) } catch (_: Exception) {}
+                    context.openOverlayPermissionOrToast()
                 }) {
                     Text(stringResource(R.string.automation_overlay_open_settings), color = AccentGreen, fontSize = EDITOR_TEXT)
                 }
@@ -470,6 +469,14 @@ internal fun AddTriggerButton(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.automation_trigger_type_voice), fontSize = EDITOR_TEXT) },
                     onClick = { add(newVoiceTrigger(context)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_bt_connected), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newBluetoothTrigger(AutomationEngine.TRIGGER_KIND_BT_CONNECTED)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_bt_disconnected), fontSize = EDITOR_TEXT) },
+                    onClick = { add(newBluetoothTrigger(AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED)) }
                 )
             }
         }

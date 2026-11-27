@@ -35,6 +35,10 @@ class LogTelegramSender @Inject constructor(
     private val _sending = MutableStateFlow(false)
     val sending: StateFlow<Boolean> = _sending.asStateFlow()
 
+    /** Path of the last log file uploaded with success (auto or manual, #417). */
+    private val _sentPath = MutableStateFlow<String?>(null)
+    val sentPath: StateFlow<String?> = _sentPath.asStateFlow()
+
     // Every status line of an upload, for an open Settings screen; nothing is replayed to a later one.
     private val _results = MutableSharedFlow<String>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val results: SharedFlow<String> = _results.asSharedFlow()
@@ -86,6 +90,7 @@ class LogTelegramSender @Inject constructor(
         }
         return sink.sendDocument(config.token, chatId, file, file.name).fold(
             onSuccess = {
+                _sentPath.value = file.absolutePath
                 Log.i(TAG, "log to telegram: sent ${size / 1024} KB")
                 strings.get(R.string.settings_log_tg_sent)
             },

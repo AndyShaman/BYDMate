@@ -1,12 +1,12 @@
 package com.bydmate.app.ui.settings
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.provider.Settings as AndroidSettings
+import com.bydmate.app.camera.BlindSpotOverlayAccess
 import com.bydmate.app.camera.BlindSpotPositionOverlay
 import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.camera.blindSpotClusterDisplay
+import com.bydmate.app.ui.openOverlayPermissionOrToast
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
@@ -44,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
@@ -120,11 +121,7 @@ internal fun WidgetSection() {
                             prefs.setEnabled(true)
                             WidgetController.attach(context, "settings_toggle_on")
                         } else {
-                            val intent = Intent(
-                                AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:${context.packageName}"),
-                            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-                            context.startActivity(intent)
+                            context.openOverlayPermissionOrToast()
                         }
                     } else {
                         prefs.setEnabled(false)
@@ -792,9 +789,33 @@ private fun BlindSpotCard() {
         }
     }
 
+    val scope = rememberCoroutineScope()
+    val entryPoint = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
+    }
+    val ensureOverlayAccess: () -> Unit = {
+        if (!AndroidSettings.canDrawOverlays(context)) {
+            scope.launch {
+                val helperAvailable = entryPoint.helperBootstrap().ensureRunning()
+                when (BlindSpotOverlayAccess.next(AndroidSettings.canDrawOverlays(context), helperAvailable)) {
+                    BlindSpotOverlayAccess.Step.NONE -> Unit
+                    BlindSpotOverlayAccess.Step.GRANT_VIA_HELPER -> {
+                        val granted = entryPoint.helperClient().grantOverlayPermission()
+                        if (!granted && !AndroidSettings.canDrawOverlays(context)) {
+                            context.openOverlayPermissionOrToast()
+                        }
+                    }
+                    BlindSpotOverlayAccess.Step.OPEN_SYSTEM_SCREEN -> context.openOverlayPermissionOrToast()
+                }
+            }
+        }
+    }
+
     val cameraPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* denial is answered by the pipeline itself: the camera simply never opens */ }
+    ) {
+        if (prefs.getBoolean(BlindSpotPreferences.KEY_ENABLED, false)) ensureOverlayAccess()
+    }
 
     SettingCollapsibleCard(
         title = stringResource(R.string.settings_blindspot_header),
@@ -809,10 +830,14 @@ private fun BlindSpotCard() {
         onCheckedChange = {
             enabled = it
             BlindSpotPreferences.setEnabled(prefs, it)
-            if (it && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                cameraPermLauncher.launch(Manifest.permission.CAMERA)
+            if (it) {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                    != PackageManager.PERMISSION_GRANTED
+                ) {
+                    cameraPermLauncher.launch(Manifest.permission.CAMERA)
+                } else {
+                    ensureOverlayAccess()
+                }
             }
             // Switching off disables the "Готово" row too, so the overlay has to be taken
             // down here or nothing on screen can dismiss it.

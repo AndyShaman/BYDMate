@@ -134,6 +134,8 @@ data class SettingsUiState(
     val isRecordingLogs: Boolean = false,
     /** File of the last finished log recording; null = none since the app started. */
     val lastLogPath: String? = null,
+    /** True when the current [lastLogPath] has already been uploaded to Telegram (#417). */
+    val lastLogSent: Boolean = false,
     /** «Отправить в Telegram» for the saved log is uploading (#324). */
     val logSending: Boolean = false,
     /** The fid recorder row is a diagnostic tool: shown on -test and local debug builds only. */
@@ -295,8 +297,8 @@ data class SettingsUiState(
         "custom" -> customConfigured
         else -> openRouterConfigured
     }
-    /** The saved log can go to the user's own bot: a finished recording, none running, a bot bound (#324). */
-    val canSendLogToTelegram: Boolean get() = lastLogPath != null && !isRecordingLogs && tgBackupBinding != null
+    /** The saved log can go to the user's own bot: a finished recording, none running, a bot bound, not already sent (#324, #417). */
+    val canSendLogToTelegram: Boolean get() = lastLogPath != null && !isRecordingLogs && tgBackupBinding != null && !lastLogSent
     /** No bot bound: the saved log goes through the system share sheet instead (#380). */
     val canShareLog: Boolean get() = lastLogPath != null && !isRecordingLogs &&
         com.bydmate.app.diagnostics.logSendRoute(botConfigured = tgBackupBinding != null) ==
@@ -1633,10 +1635,13 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                             appStrings.get(R.string.settings_log_saved, stopped.path, stopped.sizeKb)
                         } ?: it.logSaveStatus
                     }
+                    val path = state.lastStopped?.path
+                    val sent = logTelegramSender.sentPath.value
                     it.copy(
                         isRecordingLogs = state.isRecording,
                         logSaveStatus = status,
-                        lastLogPath = state.lastStopped?.path,
+                        lastLogPath = path,
+                        lastLogSent = path != null && sent == path,
                     )
                 }
                 first = false
@@ -1655,6 +1660,11 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         viewModelScope.launch {
             logTelegramSender.results.collect { status ->
                 _uiState.update { if (it.isRecordingLogs) it else it.copy(logSaveStatus = status) }
+            }
+        }
+        viewModelScope.launch {
+            logTelegramSender.sentPath.collect { sent ->
+                _uiState.update { it.copy(lastLogSent = it.lastLogPath != null && sent == it.lastLogPath) }
             }
         }
     }

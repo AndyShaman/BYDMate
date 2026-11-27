@@ -2463,4 +2463,18 @@
     <string name="tyre_why_only_p">Прописать можно только на P.</string>
     <string name="tyre_not_l3_title">Запись номеров недоступна на этой машине.</string>
     <string name="tyre_not_l3_text">Блок колёс ответил не так, как на Leopard 3, поэтому писать в него не рискуем. Номера видно, комплекты можно хранить.</string>
+
+    <!-- Overlay permission screen fallback (#454) -->
+    <string name="overlay_permission_screen_unavailable">На этой прошивке нет экрана разрешения «Поверх других окон»</string>
+
+    <!-- Media play/pause action (#185) and Bluetooth triggers (#486) -->
+    <string name="automation_action_media_play_pause">Медиа: играть / пауза</string>
+    <string name="automation_trigger_type_bt_connected">Bluetooth: устройство подключилось</string>
+    <string name="automation_trigger_type_bt_disconnected">Bluetooth: устройство отключилось</string>
+    <string name="automation_trigger_bt_pick">Выберите устройство</string>
+    <string name="automation_trigger_bt_empty">Нет сопряжённых устройств Bluetooth</string>
+    <string name="automation_trigger_bt_device_missing">Устройство Bluetooth не выбрано</string>
+    <string name="auto_ui_phrase_bt_connected">Bluetooth: подключилось «%1$s»</string>
+    <string name="auto_ui_phrase_bt_disconnected">Bluetooth: отключилось «%1$s»</string>
+    <string name="auto_ui_miss_bt_device">Выберите устройство Bluetooth в условии %1$d</string>
 </resources>

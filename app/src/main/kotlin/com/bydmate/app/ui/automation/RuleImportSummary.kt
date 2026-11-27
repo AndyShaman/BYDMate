@@ -3,6 +3,7 @@ package com.bydmate.app.ui.automation
 import android.content.Context
 import com.bydmate.app.R
 import com.bydmate.app.data.automation.ActionDispatcher
+import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.OneShotTrigger
 import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.automation.ScheduleSpec
@@ -77,6 +78,8 @@ internal object RuleImportSummary {
         "button_press" to R.string.automation_trigger_type_button_press,
         "steering_key" to R.string.automation_trigger_type_steering_key,
         "voice" to R.string.automation_trigger_type_voice,
+        AutomationEngine.TRIGGER_KIND_BT_CONNECTED to R.string.automation_trigger_type_bt_connected,
+        AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED to R.string.automation_trigger_type_bt_disconnected,
     )
 
     /**
@@ -154,6 +157,8 @@ internal object RuleImportSummary {
         "button_press" -> trigger.value
         "steering_key" -> steeringKeyValue(trigger, lc)
         "voice" -> "«${trigger.value}»"
+        AutomationEngine.TRIGGER_KIND_BT_CONNECTED,
+        AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED -> trigger.displayName.ifBlank { trigger.value }
         else -> null
     }
 

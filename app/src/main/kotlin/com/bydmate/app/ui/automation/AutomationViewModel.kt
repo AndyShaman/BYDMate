@@ -472,19 +472,25 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         val err = RuleDraftValidator.validateTriggers(triggers, editingId, _uiState.value.rules, userPhrases, triggerLogic)
             ?.takeUnless { keyPickedLater && it == TriggerValidationError.SteeringKeyUnassigned }
         if (err != null) Log.i("AutomationViewModel", "rule not saved: $err")
-        return when (err) {
-            TriggerValidationError.SteeringKeyUnassigned -> ctx.getString(R.string.automation_trigger_steering_key_unassigned)
-            is TriggerValidationError.ValueNotNumber ->
-                ctx.getString(R.string.auto_ui_miss_number, triggers.indexOfFirst { it.kind == "param" && it.param == err.param } + 1)
-            TriggerValidationError.OneShotInvalid -> ctx.getString(R.string.auto_ui_err_one_shot_invalid)
-            TriggerValidationError.OneShotWithOr -> ctx.getString(R.string.auto_ui_err_one_shot_or)
-            TriggerValidationError.OneShotWithEvent -> ctx.getString(R.string.auto_ui_err_one_shot_event)
-            TriggerValidationError.OneShotTwice -> ctx.getString(R.string.auto_ui_err_one_shot_twice)
-            TriggerValidationError.VoicePhraseEmpty -> ctx.getString(R.string.automation_voice_phrase_empty)
-            is TriggerValidationError.VoicePhraseBuiltin -> ctx.getString(R.string.automation_voice_phrase_taken, err.command)
-            is TriggerValidationError.VoicePhraseTaken -> ctx.getString(R.string.automation_voice_phrase_taken, err.rule)
-            null -> null
-        }
+        return err?.let { triggerErrorText(it, triggers, ctx) }
+    }
+
+    private fun triggerErrorText(
+        err: TriggerValidationError,
+        triggers: List<TriggerDef>,
+        ctx: Context,
+    ): String = when (err) {
+        TriggerValidationError.SteeringKeyUnassigned -> ctx.getString(R.string.automation_trigger_steering_key_unassigned)
+        TriggerValidationError.BluetoothDeviceMissing -> ctx.getString(R.string.automation_trigger_bt_device_missing)
+        is TriggerValidationError.ValueNotNumber ->
+            ctx.getString(R.string.auto_ui_miss_number, triggers.indexOfFirst { it.kind == "param" && it.param == err.param } + 1)
+        TriggerValidationError.OneShotInvalid -> ctx.getString(R.string.auto_ui_err_one_shot_invalid)
+        TriggerValidationError.OneShotWithOr -> ctx.getString(R.string.auto_ui_err_one_shot_or)
+        TriggerValidationError.OneShotWithEvent -> ctx.getString(R.string.auto_ui_err_one_shot_event)
+        TriggerValidationError.OneShotTwice -> ctx.getString(R.string.auto_ui_err_one_shot_twice)
+        TriggerValidationError.VoicePhraseEmpty -> ctx.getString(R.string.automation_voice_phrase_empty)
+        is TriggerValidationError.VoicePhraseBuiltin -> ctx.getString(R.string.automation_voice_phrase_taken, err.command)
+        is TriggerValidationError.VoicePhraseTaken -> ctx.getString(R.string.automation_voice_phrase_taken, err.rule)
     }
 
     fun saveRule() {

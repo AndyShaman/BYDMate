@@ -630,7 +630,8 @@ class BlindSpotController @Inject constructor(
         }
     }
 
-    private fun attachWindows() {
+    private suspend fun attachWindows() {
+        BlindSpotOverlayAccess.ensureViaHelper(context, helper)
         // Read BEFORE the addView below: an overlay added between this read and our attach shows
         // up as a mismatch on the next tick, which costs one redundant re-attach — the other
         // order would miss it and leave the camera buried under the overlay.

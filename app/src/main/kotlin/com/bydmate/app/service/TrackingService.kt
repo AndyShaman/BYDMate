@@ -147,6 +147,7 @@ class TrackingService : Service(), LocationListener {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeLockRenewer: WakeLockRenewer? = null
     private var locationManager: LocationManager? = null
+    private val bluetoothTracker = com.bydmate.app.data.automation.BluetoothConnectionTracker()
 
     // Widget session (ignition-on → ignition-off) — decoupled from TripTracker GPS state.
     // Primary signal: DiPars powerState ≥ 1. Fallback when powerState is unreliable:
@@ -826,6 +827,8 @@ class TrackingService : Service(), LocationListener {
         // Start the network monitor BEFORE polling so the first evaluate() tick
         // already has access to the latest VALIDATED edge state.
         networkAvailableMonitor.start()
+        bluetoothTracker.start(this)
+        automationEngine.connectedBtAddresses = { bluetoothTracker.addresses() }
         // Telegram reports that met no network go out now and whenever the internet comes back;
         // the edge at 0 is the start value, drained by the first line already.
         serviceScope.launch {
@@ -1305,6 +1308,8 @@ class TrackingService : Service(), LocationListener {
         _youtubeForeground.value = false
         _foregroundPackage.value = null
         networkAvailableMonitor.stop()
+        bluetoothTracker.stop(this)
+        automationEngine.connectedBtAddresses = { emptySet() }
         unregisterWifiRestoreCallback()
         unregisterWakeReceivers()
         // AutomationEngine is @Singleton — its scope must outlive the service

@@ -41,6 +41,8 @@ sealed class TriggerValidationError {
     data class ValueNotNumber(val param: String) : TriggerValidationError()
     /** A steering-wheel key trigger with no key picked yet (code 0). */
     object SteeringKeyUnassigned : TriggerValidationError()
+    /** A Bluetooth trigger with no device selected yet. */
+    object BluetoothDeviceMissing : TriggerValidationError()
     /** A one-shot moment that is not a date and time. */
     object OneShotInvalid : TriggerValidationError()
     /** A one-shot rule may add conditions only with AND, never OR. */
@@ -127,7 +129,7 @@ object RuleDraftValidator {
                     if (a.payload !in listOf("0", "1")) return ActionValidationError.ScreenInvalid(n)
                 }
                 "media_key" -> {
-                    if (ActionDispatcher.mediaKeyCode(a.payload) == null) return ActionValidationError.MediaKeyInvalid(n)
+                    if (ActionDispatcher.mediaKeyNameRes(a.payload) == null) return ActionValidationError.MediaKeyInvalid(n)
                 }
                 "speak" -> {
                     if (payloadJson(a.payload).optString("text").isBlank()) {
@@ -182,6 +184,11 @@ object RuleDraftValidator {
             ?.let { return TriggerValidationError.ValueNotNumber(it.param) }
         validateOneShot(triggers, triggerLogic)?.let { return it }
         validateVoice(triggers, editingId, existingRules, userCommandPhrases)?.let { return it }
+        val btMissing = triggers.any {
+            (it.kind == AutomationEngine.TRIGGER_KIND_BT_CONNECTED ||
+                it.kind == AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED) && it.value.isBlank()
+        }
+        if (btMissing) return TriggerValidationError.BluetoothDeviceMissing
         val unassignedKey = triggers.any {
             it.kind == AutomationEngine.TRIGGER_KIND_STEERING_KEY && (it.value.toIntOrNull() ?: 0) <= 0
         }

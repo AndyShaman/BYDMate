@@ -1,10 +1,6 @@
 package com.bydmate.app.ui.restore
 
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +31,7 @@ import com.bydmate.app.R
 import com.bydmate.app.data.backup.PostRestoreItem
 import com.bydmate.app.data.backup.PostRestoreNotice
 import com.bydmate.app.ui.components.AppAlertDialog
+import com.bydmate.app.ui.openOverlayPermissionOrToast
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.TextPrimary
@@ -82,14 +79,7 @@ fun PostRestoreDialog(viewModel: PostRestoreViewModel) {
                             PostRestoreItem.Overlay -> ActionRow(
                                 stringResource(R.string.post_restore_overlay),
                                 stringResource(R.string.post_restore_allow),
-                            ) {
-                                val intent = Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}"),
-                                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-                                runCatching { context.startActivity(intent) }
-                                    .onFailure { Log.w("PostRestoreDialog", "overlay screen: ${it.message}") }
-                            }
+                            ) { context.openOverlayPermissionOrToast() }
                             PostRestoreItem.Mic -> ActionRow(
                                 stringResource(R.string.post_restore_mic),
                                 stringResource(R.string.post_restore_allow),

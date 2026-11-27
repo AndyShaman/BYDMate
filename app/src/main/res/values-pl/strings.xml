@@ -2448,4 +2448,18 @@
     <string name="tyre_why_only_p">Wpisać można tylko na P.</string>
     <string name="tyre_not_l3_title">Zapis numerów niedostępny w tym aucie.</string>
     <string name="tyre_not_l3_text">Moduł kół odpowiedział inaczej niż w Leopard 3, więc nie ryzykujemy zapisu. Numery widać, komplety można przechowywać.</string>
+
+    <!-- Overlay permission screen fallback (#454) -->
+    <string name="overlay_permission_screen_unavailable">To oprogramowanie nie ma ekranu uprawnienia „Wyświetlanie nad innymi aplikacjami”</string>
+
+    <!-- Media play/pause action (#185) and Bluetooth triggers (#486) -->
+    <string name="automation_action_media_play_pause">Multimedia: odtwórz / pauza</string>
+    <string name="automation_trigger_type_bt_connected">Bluetooth: urządzenie połączone</string>
+    <string name="automation_trigger_type_bt_disconnected">Bluetooth: urządzenie rozłączone</string>
+    <string name="automation_trigger_bt_pick">Wybierz urządzenie</string>
+    <string name="automation_trigger_bt_empty">Brak sparowanych urządzeń Bluetooth</string>
+    <string name="automation_trigger_bt_device_missing">Nie wybrano urządzenia Bluetooth</string>
+    <string name="auto_ui_phrase_bt_connected">Bluetooth: połączono „%1$s”</string>
+    <string name="auto_ui_phrase_bt_disconnected">Bluetooth: rozłączono „%1$s”</string>
+    <string name="auto_ui_miss_bt_device">Wybierz urządzenie Bluetooth w warunku %1$d</string>
 </resources>

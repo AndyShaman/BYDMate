@@ -77,12 +77,12 @@ fun ActionDef.withAppClose(packageName: String, appLabel: String): ActionDef = c
     payload = org.json.JSONObject().put("packageName", packageName).put("appLabel", appLabel).toString()
 )
 
-// --- Media key helpers (#212, #275): payload "play" or "pause" ---
+// --- Media key helpers (#212, #275, #185): payload "play", "pause", or "play_pause" ---
 
 fun newMediaKeyAction(context: Context, key: String): ActionDef = ActionDef(
     command = "",
     displayName = context.getString(
-        if (key == "play") R.string.automation_action_media_play else R.string.automation_action_media_pause
+        ActionDispatcher.mediaKeyNameRes(key) ?: R.string.automation_action_media_pause
     ),
     kind = "media_key",
     payload = key
@@ -479,4 +479,14 @@ fun newSteeringKeyTrigger(keyCode: Int): TriggerDef = TriggerDef(
     value = keyCode.toString(),
     displayName = "Клавиша $keyCode",
     kind = AutomationEngine.TRIGGER_KIND_STEERING_KEY,
+)
+
+/** Builds a Bluetooth device connected/disconnected trigger (#486). */
+fun newBluetoothTrigger(kind: String): TriggerDef = TriggerDef(
+    param = AutomationEngine.TRIGGER_PARAM_BT_DEVICE,
+    chineseName = "",
+    operator = "==",
+    value = "",
+    displayName = "",
+    kind = kind,
 )

@@ -99,6 +99,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // the a11y key filter through onSteeringKey(), never from the poll.
         const val TRIGGER_KIND_STEERING_KEY = "steering_key"
         const val TRIGGER_PARAM_STEERING_KEY = "steering_key"
+        const val TRIGGER_KIND_BT_CONNECTED = "bt_connected"
+        const val TRIGGER_KIND_BT_DISCONNECTED = "bt_disconnected"
+        const val TRIGGER_PARAM_BT_DEVICE = "BtDevice"
 
         /** An enabled rule with a steering_key trigger needs the a11y key filter bound (#262). */
         fun hasEnabledSteeringKeyRule(rules: List<RuleEntity>): Boolean = rules.any { rule ->
@@ -181,6 +184,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     internal var liveData: () -> DiParsData? = { TrackingService.lastData.value }
     // Test seam: the range the Dashboard shows, for the RangeKm condition.
     internal var rangeKm: () -> Double? = { TrackingService.lastRangeKm.value }
+    // Connected Bluetooth device addresses (wired by TrackingService; overridden in tests, #486).
+    internal var connectedBtAddresses: () -> Set<String> = { emptySet() }
     // «Why was the rule skipped» lines: one per rule and reason per minute.
     private val skipLog = com.bydmate.app.data.autoservice.LogThrottle()
     private val journal = RuleJournal(ruleLogDao, appStrings, skipLog) { nowMs() }
@@ -578,8 +583,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         networkAvailableEdge: Boolean
     ): List<Boolean> = triggers.map { trigger ->
         when (trigger.kind) {
-            "place_enter" -> evaluatePlace(trigger, location, places, enterKind = true)
-            "place_exit" -> evaluatePlace(trigger, location, places, enterKind = false)
+            "place_enter", "place_exit" -> evaluatePlace(trigger, location, places, enterKind = trigger.kind == "place_enter")
+            TRIGGER_KIND_BT_CONNECTED, TRIGGER_KIND_BT_DISCONNECTED ->
+                evaluateBluetooth(trigger, connected = trigger.kind == TRIGGER_KIND_BT_CONNECTED)
             "time_of_day" -> evaluateTimeOfDay(trigger, location)
             "time_range" -> evaluateSchedule(trigger)
             "service_start" -> serviceStartActive
@@ -643,6 +649,13 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             place.lat, place.lon, place.radiusM
         )
         return if (enterKind) inside else !inside
+    }
+
+    private fun evaluateBluetooth(trigger: TriggerDef, connected: Boolean): Boolean {
+        val target = trigger.value.trim()
+        if (target.isEmpty()) return false
+        val present = connectedBtAddresses().any { it.equals(target, ignoreCase = true) }
+        return if (connected) present else !present
     }
 
     private fun evaluateTimeOfDay(trigger: TriggerDef, location: Location?): Boolean {
@@ -851,6 +864,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             when (t.kind) {
                 "place_enter" -> json.put("place_enter", t.placeName ?: "?")
                 "place_exit" -> json.put("place_exit", t.placeName ?: "?")
+                TRIGGER_KIND_BT_CONNECTED, TRIGGER_KIND_BT_DISCONNECTED ->
+                    json.put(t.kind, t.displayName.ifBlank { t.value })
                 "time_of_day", "time_range", "button_press", TRIGGER_KIND_STEERING_KEY, OneShotTrigger.KIND ->
                     json.put(t.kind, t.value)
                 "service_start" -> json.put("service_start", true)

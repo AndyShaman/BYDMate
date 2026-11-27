@@ -2294,4 +2294,18 @@
     <string name="tyre_why_only_p">Só é possível gravar em P.</string>
     <string name="tyre_not_l3_title">A gravação dos números não está disponível neste carro.</string>
     <string name="tyre_not_l3_text">O módulo das rodas não respondeu como no Leopard 3, por isso não arriscamos gravar. Os números são mostrados e os conjuntos podem ser guardados.</string>
+
+    <!-- Overlay permission screen fallback (#454) -->
+    <string name="overlay_permission_screen_unavailable">Este firmware não tem ecrã de permissão «Sobrepor a outras aplicações»</string>
+
+    <!-- Media play/pause action (#185) and Bluetooth triggers (#486) -->
+    <string name="automation_action_media_play_pause">Mídia: tocar / pausar</string>
+    <string name="automation_trigger_type_bt_connected">Bluetooth: dispositivo conectado</string>
+    <string name="automation_trigger_type_bt_disconnected">Bluetooth: dispositivo desconectado</string>
+    <string name="automation_trigger_bt_pick">Escolha o dispositivo</string>
+    <string name="automation_trigger_bt_empty">Nenhum dispositivo Bluetooth emparelhado</string>
+    <string name="automation_trigger_bt_device_missing">Dispositivo Bluetooth não selecionado</string>
+    <string name="auto_ui_phrase_bt_connected">Bluetooth: «%1$s» conectado</string>
+    <string name="auto_ui_phrase_bt_disconnected">Bluetooth: «%1$s» desconectado</string>
+    <string name="auto_ui_miss_bt_device">Escolha um dispositivo Bluetooth na condição %1$d</string>
 </resources>

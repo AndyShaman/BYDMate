@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.automirrored.outlined.Send
+import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.telegram.ReportField
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
@@ -561,7 +562,8 @@ internal fun AppCloseActionControls(
 
 @Composable
 internal fun MediaKeyActionControls(payload: String?, modifier: Modifier = Modifier) {
-    val play = payload == "play"
+    val icon = if (payload == "pause") Icons.Outlined.Pause else Icons.Outlined.PlayArrow
+    val labelRes = ActionDispatcher.mediaKeyNameRes(payload) ?: R.string.automation_action_media_pause
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier
@@ -573,16 +575,14 @@ internal fun MediaKeyActionControls(payload: String?, modifier: Modifier = Modif
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = if (play) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                imageVector = icon,
                 contentDescription = null,
                 tint = AccentTeal,
                 modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = stringResource(
-                    if (play) R.string.automation_action_media_play else R.string.automation_action_media_pause
-                ),
+                text = stringResource(labelRes),
                 fontSize = 16.sp,
                 color = TextPrimary,
                 maxLines = 1,
