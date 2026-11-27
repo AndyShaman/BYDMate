@@ -1,0 +1,19 @@
+08:55:31.468 app    start version=527 name=4.5.0 #27080
+08:55:31.928 app    boot-receiver action=BOOT_COMPLETED service_running=false #27081
+08:55:32.307 app    start-worker trigger=worker:BOOT_COMPLETED attempt=0 result=ok #27083
+08:55:32.675 app    service-start #27084
+08:55:32.900 app    service-trigger trigger=worker:BOOT_COMPLETED n=1 #27087
+12:24:41.458 app    start version=527 name=4.5.0 #27095
+12:24:42.807 app    boot-receiver action=BOOT_COMPLETED service_running=false #27097
+12:24:42.995 app    start-worker trigger=worker:BOOT_COMPLETED attempt=0 result=ok #27098
+12:24:43.257 app    service-start #27099
+12:24:43.449 app    service-trigger trigger=worker:BOOT_COMPLETED n=1 #27102
+15:53:52.142 app    start version=527 name=4.5.0 #27110
+15:53:52.292 app    boot-receiver action=BOOT_COMPLETED service_running=false #27111
+15:53:53.053 app    start-worker trigger=worker:BOOT_COMPLETED attempt=0 result=ok #27113
+15:53:53.363 app    service-start #27114
+15:53:53.436 app    service-trigger trigger=worker:BOOT_COMPLETED n=1 #27116
+18:03:42.967 app    boot-receiver action=BOOT_COMPLETED service_running=true #27126
+18:03:43.025 app    service-trigger trigger=worker:BOOT_COMPLETED n=2 #27127
+18:03:43.025 app    start-worker trigger=worker:BOOT_COMPLETED attempt=0 result=ok #27128
+18:04:09.991 app    a11y-grant reason=wake:android.intent.action.SCREEN_ON granted=false tries=6 reasserts=000000 #27134

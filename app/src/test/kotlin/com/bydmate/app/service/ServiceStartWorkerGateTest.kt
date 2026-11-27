@@ -33,4 +33,14 @@ class ServiceStartWorkerGateTest {
             assertTrue("$source on", ServiceStartWorker.shouldStart(source, interactive = true))
         }
     }
+
+    /** reboot,bydcloud on a parked car (#441, #491, case 197): the service held its wake lock till morning. */
+    @Test fun `a cold boot with the screen off is skipped`() {
+        assertFalse(ServiceStartWorker.shouldStart("BOOT_COMPLETED", interactive = false, coldBoot = true))
+    }
+
+    /** The user restarted the head unit in the car: the screen is on, the service must run. */
+    @Test fun `a cold boot with the screen on starts`() {
+        assertTrue(ServiceStartWorker.shouldStart("BOOT_COMPLETED", interactive = true, coldBoot = true))
+    }
 }

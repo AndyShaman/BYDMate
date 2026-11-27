@@ -51,4 +51,16 @@ class BootReceiverTest {
         assertEquals(ExistingWorkPolicy.KEEP, BootReceiver.workPolicyFor(Intent.ACTION_MY_PACKAGE_REPLACED))
         assertEquals(ExistingWorkPolicy.KEEP, BootReceiver.workPolicyFor(null))
     }
+
+    /** The firmware marks a car wake with from_quickboot=true; reboot,bydcloud sends a bare boot. */
+    @Test fun `the worker learns whether the boot was cold`() {
+        val bare = Intent(Intent.ACTION_BOOT_COMPLETED)
+        val wake = Intent(Intent.ACTION_BOOT_COMPLETED).putExtra("from_quickboot", true)
+
+        assertEquals(true, BootReceiver.workInput(bare).getBoolean(AutostartTrace.KEY_COLD_BOOT, false))
+        assertEquals(false, BootReceiver.workInput(wake).getBoolean(AutostartTrace.KEY_COLD_BOOT, true))
+        assertEquals("BOOT_COMPLETED", BootReceiver.workInput(bare).getString(AutostartTrace.KEY_WORKER_SOURCE))
+        assertEquals(false, BootReceiver.workInput(Intent(Intent.ACTION_MY_PACKAGE_REPLACED))
+            .getBoolean(AutostartTrace.KEY_COLD_BOOT, true))
+    }
 }

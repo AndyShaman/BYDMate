@@ -59,6 +59,22 @@ class AutostartTraceTest {
             AutostartTrace.TRIGGER_A11Y,
             AutostartTrace.TRIGGER_WELCOME,
             AutostartTrace.SOURCE_TASK_REMOVED,
+            AutostartTrace.workerTrigger(AutostartTrace.SOURCE_SCREEN_ON),
+            AutostartTrace.KEY_COLD_BOOT, "cold_boot_guard", "screen_off_at_start",
         ).forEach { assertEquals(it, TraceSanitizer.value(it)) }
+    }
+
+    /** DiLink 5.0 Utils.startAccOn puts from_quickboot=true on the BOOT_COMPLETED of every car wake. */
+    @Test fun `a boot without the quickboot flag is cold, a car wake is not`() {
+        val boot = "android.intent.action.BOOT_COMPLETED"
+        assertEquals(true, AutostartTrace.isColdBoot(boot, fromQuickboot = false))
+        assertEquals(false, AutostartTrace.isColdBoot(boot, fromQuickboot = true))
+        assertEquals("from_quickboot", AutostartTrace.EXTRA_FROM_QUICKBOOT)
+    }
+
+    @Test fun `other broadcasts are never a cold boot`() {
+        for (action in listOf("android.intent.action.MY_PACKAGE_REPLACED", BootReceiver.ACTION_RECOVER_START, null)) {
+            assertEquals("$action", false, AutostartTrace.isColdBoot(action, fromQuickboot = false))
+        }
     }
 }
