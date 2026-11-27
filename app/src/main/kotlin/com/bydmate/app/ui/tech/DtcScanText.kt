@@ -94,6 +94,7 @@ internal fun dtcErrorText(error: DtcScanError?): Int? = when (error) {
     DtcScanError.NOT_PARK -> R.string.tech_dtc_only_on_p
     DtcScanError.UNAVAILABLE -> R.string.tech_dtc_unavailable
     DtcScanError.NO_DIAG_SERVICE -> R.string.tech_dtc_no_diag_service
+    DtcScanError.READ_ONLY_FIRMWARE -> R.string.tech_dtc_read_only_firmware
     else -> R.string.tech_dtc_failed
 }
 

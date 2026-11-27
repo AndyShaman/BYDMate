@@ -252,6 +252,7 @@ class EcuFirmwareRepository(
 
         private fun errorOf(status: FirmwareStatus): DtcScanError = when {
             status.state == DtcWire.STATE_UNAVAILABLE && status.reason == "guard_absent" -> DtcScanError.NO_DIAG_SERVICE
+            status.state == DtcWire.STATE_UNAVAILABLE && status.reason == "guard_readonly" -> DtcScanError.READ_ONLY_FIRMWARE
             status.state == DtcWire.STATE_UNAVAILABLE -> DtcScanError.UNAVAILABLE
             status.reason.startsWith("not_park") -> DtcScanError.NOT_PARK
             else -> DtcScanError.ABORTED

@@ -21,6 +21,7 @@ internal fun dtcEraseErrorText(error: DtcScanError?): Int? = when (error) {
     DtcScanError.NOT_PARK -> R.string.tech_dtc_only_on_p_erase
     DtcScanError.ERASE_NEEDS_SCAN -> R.string.tech_dtc_erase_needs_scan
     DtcScanError.NO_DIAG_SERVICE -> R.string.tech_dtc_no_diag_service
+    DtcScanError.READ_ONLY_FIRMWARE -> R.string.tech_dtc_read_only_firmware
     DtcScanError.UNAVAILABLE -> R.string.tech_dtc_unavailable
     // The status was lost after the start: a clear may have gone out.
     DtcScanError.STATUS_LOST -> R.string.tech_dtc_erase_unknown

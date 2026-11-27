@@ -2131,6 +2131,7 @@
     <string name="tech_dtc_full_body">Módulo da carroçaria 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Módulo 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">Indisponível: o firmware deste carro não tem serviço de diagnóstico</string>
+    <string name="tech_dtc_read_only_firmware">Neste firmware, o BYDMate só pode ler códigos e sensores; apagar e gravar não é permitido</string>
     <string name="tech_fw_row_title">Firmware dos módulos</string>
     <string name="tech_fw_row_never">não verificado</string>
     <string name="tech_fw_row_unchanged">sem alterações</string>
@@ -2250,6 +2251,7 @@
     <string name="tyre_battery_ok">OK</string>
     <string name="tyre_battery_low">fraca</string>
     <string name="tyre_no_signal">sem sinal</string>
+    <string name="tyre_not_registered">sensor não registado</string>
     <string name="tyre_status_will_write">será gravado</string>
     <string name="tyre_status_in_block">já no módulo</string>
     <string name="tyre_status_unchanged">sem alteração</string>

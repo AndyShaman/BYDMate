@@ -48,6 +48,14 @@ object TpmsWire {
     private const val ID_ALL_SET = -1
     private const val SEED_BYTES = 4
 
+    /** Exact 12-byte F194 answer of the verified Song L EV 2025 K1 tyre block. */
+    private val SONG_L_EV_2025_F194: ByteArray = bytes(
+        0x62, 0xF1, 0x94, 0x4B, 0x31, 0x00, 0x13, 0x1B, 0xF0, 0x00, 0x51, 0xE0,
+    )
+
+    /** True for an unregistered sensor slot ID (0xFFFFFFFF or 0x00000000). */
+    fun isEmptyId(id: Int): Boolean = id == 0 || id == ID_ALL_SET
+
     /** `27 02` key for a 4-byte `67 01` seed: ((((s>>>1)^s)<<3)^(s>>>2)) ^ KEY_CONST, unsigned shifts. */
     fun securityKey(seed: Int): Int = ((((seed ushr 1) xor seed) shl 3) xor (seed ushr 2)) xor KEY_CONST
 
@@ -68,9 +76,16 @@ object TpmsWire {
             u(idUds, DID_HEAD) == SUPPLIER_HI && u(idUds, DID_HEAD + 1) == SUPPLIER_LO &&
             u(idUds, F194_TYPE_INDEX) == F194_TYPE_L3
 
-    /** True iff F194 and all four slots have the exact Leopard 3 shape (design section C). */
+    /**
+     * True iff [idUds] matches a block whose tyre-sensor write is verified: the Leopard 3 family
+     * ([l3Identity]) or the exact 12-byte Song L EV 2025 F194 answer.
+     */
+    fun writableIdentity(idUds: ByteArray?): Boolean =
+        l3Identity(idUds) || (idUds != null && idUds.contentEquals(SONG_L_EV_2025_F194))
+
+    /** True iff F194 is writable ([writableIdentity]) and all four slots have the 14-byte shape. */
     fun l3Shape(idUds: ByteArray?, slots: Map<Int, ByteArray?>): Boolean =
-        l3Identity(idUds) && DIDS.all { parseSlot(it, slots[it]) != null }
+        writableIdentity(idUds) && DIDS.all { parseSlot(it, slots[it]) != null }
 
     /** Null when [plan] may start; else the refusal reason (n 1..4, distinct DIDs of [DIDS], newId != old, not 0/FFFFFFFF). */
     fun validatePlan(plan: List<TpmsPlanEntry>): String? = when {

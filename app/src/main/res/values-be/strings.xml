@@ -2280,6 +2280,7 @@
     <string name="tech_dtc_full_body">Кузаўны блок 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Блок 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">Недаступна: у прашыўцы гэтай машыны няма дыягнастычнага сэрвісу</string>
+    <string name="tech_dtc_read_only_firmware">На гэтай прашыўцы BYDMate можа толькі чытаць коды і датчыкі, сціраць і прапісваць нельга</string>
     <string name="tech_fw_row_title">Прашыўкі блокаў</string>
     <string name="tech_fw_row_never">не правяралі</string>
     <string name="tech_fw_row_unchanged">без змен</string>
@@ -2404,6 +2405,7 @@
     <string name="tyre_battery_ok">OK</string>
     <string name="tyre_battery_low">разраджана</string>
     <string name="tyre_no_signal">няма сігналу</string>
+    <string name="tyre_not_registered">датчык не прапісаны</string>
     <string name="tyre_status_will_write">будзе запісаны</string>
     <string name="tyre_status_in_block">ужо ў блоку</string>
     <string name="tyre_status_unchanged">не мяняецца</string>

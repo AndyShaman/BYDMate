@@ -134,7 +134,7 @@ internal object TpmsJobs {
         val idMatch = ask(run, TpmsWire.readRequest(DtcWire.DID_IDENTITY), DtcWire.SERVICE_READ_DID, DtcWire.DID_IDENTITY)
         val id = udsOf(idMatch, DtcWire.SERVICE_READ_DID)
         run.edit { idUds = id }
-        if (positive(run, idMatch) == null || !TpmsWire.l3Identity(id)) {
+        if (positive(run, idMatch) == null || !TpmsWire.writableIdentity(id)) {
             log("tpms shape fail rule=f194 uds=${hexOrNull(id)}")
             throw stop(DtcWire.STATE_ABORTED, "not_l3 f194", at(TpmsWire.readRequest(DtcWire.DID_IDENTITY)))
         }

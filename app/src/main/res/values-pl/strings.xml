@@ -2280,6 +2280,7 @@
     <string name="tech_dtc_full_body">Moduł nadwozia 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Moduł 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">Niedostępne: oprogramowanie tego auta nie ma usługi diagnostycznej</string>
+    <string name="tech_dtc_read_only_firmware">Na tym oprogramowaniu BYDMate może tylko odczytywać kody i czujniki, kasowanie i zapis są niedostępne</string>
     <string name="tech_fw_row_title">Oprogramowanie modułów</string>
     <string name="tech_fw_row_never">nie sprawdzano</string>
     <string name="tech_fw_row_unchanged">bez zmian</string>
@@ -2404,6 +2405,7 @@
     <string name="tyre_battery_ok">OK</string>
     <string name="tyre_battery_low">słaba</string>
     <string name="tyre_no_signal">brak sygnału</string>
+    <string name="tyre_not_registered">czujnik nieprzypisany</string>
     <string name="tyre_status_will_write">zostanie zapisany</string>
     <string name="tyre_status_in_block">już w module</string>
     <string name="tyre_status_unchanged">bez zmian</string>

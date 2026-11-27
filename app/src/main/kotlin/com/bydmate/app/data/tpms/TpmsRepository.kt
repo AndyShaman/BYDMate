@@ -31,7 +31,10 @@ import java.util.Locale
 
 enum class TpmsPhase { IDLE, READING, WRITING }
 
-enum class TpmsError { NOT_PARK, DAEMON_UNREACHABLE, DAEMON_OUTDATED, BUSY, REFUSED, ABORTED, STATUS_LOST, NOT_L3, SECURITY_WAIT }
+enum class TpmsError {
+    NOT_PARK, DAEMON_UNREACHABLE, DAEMON_OUTDATED, BUSY, REFUSED, ABORTED, STATUS_LOST, NOT_L3,
+    SECURITY_WAIT, NO_DIAG_SERVICE, READ_ONLY_FIRMWARE,
+}
 
 /**
  * The tyre window's state. [lastRead] = the last finished read (kept in prefs, shown while
@@ -511,6 +514,8 @@ class TpmsRepository(
         }
 
         private fun errorOf(status: TpmsStatus): TpmsError = when {
+            status.state == DtcWire.STATE_UNAVAILABLE && status.reason == "guard_absent" -> TpmsError.NO_DIAG_SERVICE
+            status.state == DtcWire.STATE_UNAVAILABLE && status.reason == "guard_readonly" -> TpmsError.READ_ONLY_FIRMWARE
             status.reason.startsWith("not_park") || status.reason.startsWith("speed") -> TpmsError.NOT_PARK
             status.reason.startsWith("not_l3") -> TpmsError.NOT_L3
             else -> TpmsError.ABORTED

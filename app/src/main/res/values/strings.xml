@@ -2295,6 +2295,7 @@
     <string name="tech_dtc_full_body">Кузовной блок 0x%1$X</string>
     <string name="tech_dtc_full_unknown">Блок 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">Недоступно: в прошивке этой машины нет диагностического сервиса</string>
+    <string name="tech_dtc_read_only_firmware">На этой прошивке BYDMate может только читать коды и датчики, стирать и прописывать нельзя</string>
     <string name="tech_fw_row_title">Прошивки блоков</string>
     <string name="tech_fw_row_never">не проверяли</string>
     <string name="tech_fw_row_unchanged">без изменений</string>
@@ -2420,6 +2421,7 @@
     <string name="tyre_battery_ok">OK</string>
     <string name="tyre_battery_low">разряжена</string>
     <string name="tyre_no_signal">нет сигнала</string>
+    <string name="tyre_not_registered">датчик не прописан</string>
     <string name="tyre_status_will_write">будет записан</string>
     <string name="tyre_status_in_block">уже в блоке</string>
     <string name="tyre_status_unchanged">не меняется</string>

@@ -33,11 +33,12 @@ enum class DtcScanPhase { IDLE, SCANNING }
 
 /**
  * [NO_DIAG_SERVICE]: the firmware has no diagnostic manager (daemon reason `guard_absent`);
+ * [READ_ONLY_FIRMWARE]: the firmware only exposes the legacy guard (`guard_readonly`), so writes are refused;
  * [ERASE_NEEDS_SCAN]: an erase was asked without a scan of the last ten minutes.
  */
 enum class DtcScanError {
-    NOT_PARK, UNAVAILABLE, NO_DIAG_SERVICE, ABORTED, DAEMON_UNREACHABLE, DAEMON_OUTDATED, STATUS_LOST,
-    ERASE_NEEDS_SCAN,
+    NOT_PARK, UNAVAILABLE, NO_DIAG_SERVICE, READ_ONLY_FIRMWARE, ABORTED, DAEMON_UNREACHABLE, DAEMON_OUTDATED,
+    STATUS_LOST, ERASE_NEEDS_SCAN,
 }
 
 /**
@@ -453,6 +454,7 @@ class DtcScanRepository(
 
         private fun errorOf(status: DtcScanStatus): DtcScanError = when {
             status.state == DtcWire.STATE_UNAVAILABLE && status.reason == "guard_absent" -> DtcScanError.NO_DIAG_SERVICE
+            status.state == DtcWire.STATE_UNAVAILABLE && status.reason == "guard_readonly" -> DtcScanError.READ_ONLY_FIRMWARE
             status.state == DtcWire.STATE_UNAVAILABLE -> DtcScanError.UNAVAILABLE
             status.state == DtcWire.STATE_ABORTED && status.reason.startsWith("not_park") -> DtcScanError.NOT_PARK
             status.state == DtcWire.STATE_ABORTED -> DtcScanError.ABORTED

@@ -98,7 +98,11 @@ class DtcScanner(
      */
     fun startTpmsRead(gear: () -> Int?): Int {
         val guard = TpmsGuard(TpmsJobKind.READ, emptyList(), false)
-        val run = TpmsJobs.Run(link(gear, tpmsPolicy(guard, speedGate = false, strict = false)), guard, emptyList())
+        val run = TpmsJobs.Run(
+            link(gear, tpmsPolicy(guard, speedGate = false, strict = false, legacyGuardOk = true)),
+            guard,
+            emptyList(),
+        )
         return launch(DtcWire.MODE_TPMS_READ, IntArray(0), run) {
             execute(run.link, { TpmsJobs.read(run) }) { TpmsJobs.close(run, it, DtcWire.MODE_TPMS_READ) }
         }
@@ -176,14 +180,20 @@ class DtcScanner(
     private fun link(gear: () -> Int?, policy: LinkPolicy) = DiagLink(device, clock, readGuard, readSpeed, gear, policy)
 
     /** Tyre jobs: 0x720 only through [guard]; inside the extended session no busy resend, a short settle, pendings wait on. */
-    private fun tpmsPolicy(guard: TpmsGuard, speedGate: Boolean, strict: Boolean, inSession: Boolean = false) =
+    private fun tpmsPolicy(
+        guard: TpmsGuard,
+        speedGate: Boolean,
+        strict: Boolean,
+        inSession: Boolean = false,
+        legacyGuardOk: Boolean = false,
+    ) =
         if (inSession) {
             LinkPolicy(
                 TPMS_BUDGET_MS, speedGate, strict, settleMs = TPMS_SESSION_SETTLE_MS, busyRetries = 0,
-                pendingWindowMs = TPMS_PENDING_WINDOW_MS, allow = guard::allowed,
+                pendingWindowMs = TPMS_PENDING_WINDOW_MS, allow = guard::allowed, legacyGuardOk = legacyGuardOk,
             )
         } else {
-            LinkPolicy(TPMS_BUDGET_MS, speedGate, strict, allow = guard::allowed)
+            LinkPolicy(TPMS_BUDGET_MS, speedGate, strict, allow = guard::allowed, legacyGuardOk = legacyGuardOk)
         }
 
     @Suppress("LongParameterList") // the state one start sets, then the hook that must run before the thread
@@ -483,10 +493,11 @@ class DtcScanner(
         private const val MASK_ALL = 0xFF
         private const val COUNT_UDS_BYTES = 6
 
-        private val SCAN_POLICY = LinkPolicy(BUDGET_MS, speedGate = false, strictTraffic = false)
+        private val SCAN_POLICY = LinkPolicy(BUDGET_MS, speedGate = false, strictTraffic = false, legacyGuardOk = true)
         private val ERASE_POLICY = LinkPolicy(ERASE_BUDGET_MS, speedGate = true, strictTraffic = true)
-        private val FIRMWARE_POLICY =
-            LinkPolicy(BUDGET_MS, speedGate = false, strictTraffic = false, allow = EcuFirmwareWire::allowed)
+        private val FIRMWARE_POLICY = LinkPolicy(
+            BUDGET_MS, speedGate = false, strictTraffic = false, allow = EcuFirmwareWire::allowed, legacyGuardOk = true,
+        )
     }
 }
 

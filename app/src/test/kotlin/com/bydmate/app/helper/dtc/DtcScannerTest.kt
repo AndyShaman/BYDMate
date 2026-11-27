@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@Suppress("LargeClass") // one scanner, every job and its policy in one place
 class DtcScannerTest {
 
     private class FakeClock : DtcClock {

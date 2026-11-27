@@ -99,6 +99,9 @@ object DtcWire {
     /** Value of `sys.diagmgrsrv.task_bk` while the diagnostic manager is idle. */
     const val GUARD_BASELINE = "r@-1_0&w@-1_0"
 
+    /** Fallback guard on DiLink 3/4 when `diagnosticsrv` is running without `task_bk`; read-only jobs only. */
+    const val GUARD_LEGACY_IDLE = "legacy:diagnosticsrv"
+
     /**
      * The only addresses ever read (the Leopard 3 blocks): the first 18, then the 20 found on the car
      * 2026-11-19, after them so the first 18 keep their place in a scan.

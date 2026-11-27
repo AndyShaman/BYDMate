@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -182,13 +184,21 @@ internal fun TyreIdsDialog(state: TechPanelUiState, actions: TyreIdsActions, onD
     // While the window is open: after an incomplete write the repository reads the block once on a fresh P.
     LaunchedEffect(state.gear, state.serviceRunning, tpms.phase) { actions.onParkAgain() }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
         ScaledDialogContent {
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = CardSurface),
                 border = BorderStroke(1.dp, CardBorder),
-                modifier = Modifier.widthIn(max = 1200.dp).fillMaxWidth().padding(24.dp),
+                modifier = Modifier
+                    .systemBarsPadding()
+                    .imePadding()
+                    .widthIn(max = 1200.dp)
+                    .fillMaxWidth()
+                    .padding(24.dp),
             ) {
                 Column(modifier = Modifier.padding(start = 22.dp, end = 12.dp, top = 8.dp, bottom = 16.dp)) {
                     TitleRow(
@@ -202,7 +212,11 @@ internal fun TyreIdsDialog(state: TechPanelUiState, actions: TyreIdsActions, onD
                     )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(22.dp),
-                        modifier = Modifier.fillMaxWidth().height(BODY_HEIGHT).padding(end = 10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .heightIn(max = BODY_HEIGHT)
+                            .padding(end = 10.dp),
                     ) {
                         Column(modifier = Modifier.weight(LEFT_WEIGHT).fillMaxHeight().verticalScroll(rememberScrollState())) {
                             LeftSide(ctx, step, draft, result,
@@ -337,8 +351,13 @@ private fun ViewCar(ctx: TyreCtx, onHold: (Int) -> Unit) {
     TyreCar(deviates.map { if (it) WheelTint.WARN else WheelTint.NORMAL }) { i ->
         val w = wheels[i]
         val warn = deviates[i] || w.heard == false || w.battery == TyreBattery.LOW
+        val bar = when {
+            w.battery == TyreBattery.NOT_REGISTERED -> TextMuted
+            warn -> SocYellow
+            else -> AccentGreen
+        }
         WheelTile(
-            bar = if (warn) SocYellow else AccentGreen,
+            bar = bar,
             outline = if (pressed == i) AccentBlue else null,
             modifier = if (!canHold) Modifier else Modifier.pointerInput(i) {
                 // Hold 0,6 s: a plain tap does nothing, so the write screen never opens by accident.
@@ -549,6 +568,8 @@ private fun IdText(id: String) {
 private fun SensorState(w: TyreWheelStatus) {
     when {
         w.id == null -> Unit
+        w.battery == TyreBattery.NOT_REGISTERED ->
+            Text(stringResource(R.string.tyre_not_registered), color = TextMuted, fontSize = 12.sp, lineHeight = 15.sp)
         w.heard == false -> Text(stringResource(R.string.tyre_no_signal), color = SocYellow, fontSize = 12.sp, lineHeight = 15.sp)
         w.battery == TyreBattery.UNKNOWN -> Unit
         else -> {
@@ -1042,6 +1063,8 @@ private fun tpmsErrorText(error: TpmsError): Int = when (error) {
     TpmsError.BUSY -> R.string.tyre_why_busy
     TpmsError.STATUS_LOST -> R.string.tyre_err_lost
     TpmsError.NOT_L3 -> R.string.tyre_not_l3_title
+    TpmsError.NO_DIAG_SERVICE -> R.string.tech_dtc_no_diag_service
+    TpmsError.READ_ONLY_FIRMWARE -> R.string.tech_dtc_read_only_firmware
     else -> R.string.tyre_err_failed
 }
 

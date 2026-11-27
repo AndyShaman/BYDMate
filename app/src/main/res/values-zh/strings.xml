@@ -2245,6 +2245,7 @@
     <string name="tech_dtc_full_body">车身模块 0x%1$X</string>
     <string name="tech_dtc_full_unknown">模块 0x%1$X</string>
     <string name="tech_dtc_no_diag_service">不可用：此车固件没有诊断服务</string>
+    <string name="tech_dtc_read_only_firmware">在此固件上，BYDMate 只能读取故障码和传感器，无法清除和写入</string>
     <string name="tech_fw_row_title">模块固件</string>
     <string name="tech_fw_row_never">未检查</string>
     <string name="tech_fw_row_unchanged">无变化</string>
@@ -2354,6 +2355,7 @@
     <string name="tyre_battery_ok">正常</string>
     <string name="tyre_battery_low">电量低</string>
     <string name="tyre_no_signal">无信号</string>
+    <string name="tyre_not_registered">未写入传感器</string>
     <string name="tyre_status_will_write">将写入</string>
     <string name="tyre_status_in_block">已在模块中</string>
     <string name="tyre_status_unchanged">不变</string>

@@ -36,12 +36,13 @@ internal object DtcDaemon {
     /**
      * DiLink 5 exposes `sys.diagmgrsrv.task_bk` ([DtcWire.GUARD_BASELINE] while idle).
      * DiLink 3/4 runs `diagnosticsrv` (`init.svc.diagnosticsrv=running`) without `task_bk`
-     * and sets `persist.sys.ota.diagnostic=true` while an OTA diagnostic task is active.
+     * and sets `persist.sys.ota.diagnostic=true` while an OTA diagnostic task is active;
+     * when idle it returns [DtcWire.GUARD_LEGACY_IDLE], which opens read-only jobs only.
      */
     internal fun readDiagGuard(readProp: (String) -> String? = ::readSystemProperty): String? {
         readProp(GUARD_PROPERTY)?.let { return it }
         if (readProp(LEGACY_DIAG_SVC_PROPERTY) != LEGACY_DIAG_SVC_RUNNING) return null
-        return if (readProp(OTA_DIAG_PROPERTY) == "true") OTA_DIAG_BUSY else DtcWire.GUARD_BASELINE
+        return if (readProp(OTA_DIAG_PROPERTY) == "true") OTA_DIAG_BUSY else DtcWire.GUARD_LEGACY_IDLE
     }
 }
 

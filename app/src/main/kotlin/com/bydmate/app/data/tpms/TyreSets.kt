@@ -142,7 +142,7 @@ object TyreSetUpdate {
     }
 }
 
-enum class TyreBattery { OK, LOW, UNKNOWN }
+enum class TyreBattery { OK, LOW, UNKNOWN, NOT_REGISTERED }
 
 /** One wheel in the window: the ID in the block, whether the block hears the sensor, its battery. */
 data class TyreWheelStatus(val id: Int?, val heard: Boolean?, val battery: TyreBattery)
@@ -150,15 +150,17 @@ data class TyreWheelStatus(val id: Int?, val heard: Boolean?, val battery: TyreB
 object TyreWheelStatuses {
     /**
      * [slots] FL..RR as parsed from 0x720 (null = not read); [dtcUds] = the `59 02 …` answer of
-     * 0x720. Battery LOW only for an active record (status bit 0x01) of exactly C100D-00 / C100E-00 /
-     * C100F-00 / C1010-00 (bytes 50 0D 00 … 50 10 00) for that wheel; a stored-only record or any
-     * other FTB (C1010-08) is not LOW. Null [dtcUds] or not a `59 02` answer → UNKNOWN.
+     * 0x720. Empty slot IDs (0xFFFFFFFF or 0) map to [TyreBattery.NOT_REGISTERED]. Battery LOW
+     * only for an active record (status bit 0x01) of exactly C100D-00 / C100E-00 / C100F-00 /
+     * C1010-00 (bytes 50 0D 00 … 50 10 00) for that wheel; a stored-only record or any other FTB
+     * (C1010-08) is not LOW. Null [dtcUds] or not a `59 02` answer -> UNKNOWN.
      */
     fun of(slots: List<TpmsSlot?>, dtcUds: ByteArray?): List<TyreWheelStatus> {
         val low = lowBattery(dtcUds)
         return (0 until WHEELS).map { i ->
             val slot = slots.getOrNull(i)
             val battery = when {
+                slot != null && TpmsWire.isEmptyId(slot.id) -> TyreBattery.NOT_REGISTERED
                 low == null -> TyreBattery.UNKNOWN
                 i in low -> TyreBattery.LOW
                 else -> TyreBattery.OK

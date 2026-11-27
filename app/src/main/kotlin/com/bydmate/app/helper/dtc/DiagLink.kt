@@ -22,6 +22,7 @@ internal class LinkPolicy(
     val busyRetries: Int = DtcScanner.BUSY_RETRIES,
     val pendingWindowMs: Long = 0,
     val allow: (addr: Int, uds: ByteArray) -> Boolean = { _, _ -> true },
+    val legacyGuardOk: Boolean = false,
 ) {
     companion object {
         const val MAX_PENDINGS = 2
@@ -237,11 +238,17 @@ internal class DiagLink(
     private fun exitGate(guard: String?, at: String): DiagStop? =
         if (guard == DtcWire.GUARD_BASELINE) null else stop(DtcWire.STATE_ABORTED, "diag_busy prop=$guard", at)
 
+    /** True when [guard] indicates an idle diagnostic service permitted by this job's policy. */
+    private fun guardIdle(guard: String?): Boolean =
+        guard == DtcWire.GUARD_BASELINE || (policy.legacyGuardOk && guard == DtcWire.GUARD_LEGACY_IDLE)
+
     /** Why the next request (or, with [at] null, the run itself) must not go out; null when it may. */
     private fun gate(guard: String?, gear: Int?, speed: Int?, at: String?): DiagStop? = when {
         at == null && guard == null -> stop(DtcWire.STATE_UNAVAILABLE, "guard_absent", at)
+        at == null && guard == DtcWire.GUARD_LEGACY_IDLE && !policy.legacyGuardOk ->
+            stop(DtcWire.STATE_UNAVAILABLE, "guard_readonly", at)
         clock.nowMs() - startedMs >= policy.budgetMs -> stop(DtcWire.STATE_ABORTED, "budget", at)
-        guard != DtcWire.GUARD_BASELINE -> stop(DtcWire.STATE_ABORTED, "diag_busy prop=$guard", at)
+        !guardIdle(guard) -> stop(DtcWire.STATE_ABORTED, "diag_busy prop=$guard", at)
         gear != GEAR_PARK -> stop(DtcWire.STATE_ABORTED, "not_park gear=$gear", at)
         policy.speedGate && speed != 0 -> stop(DtcWire.STATE_ABORTED, "speed kmh=$speed", at)
         else -> null
