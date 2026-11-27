@@ -40,7 +40,7 @@ class ColdBootFixtureTest {
             // Screen still awake at the worker: the service starts and stops when the screen goes off.
             val guard = ColdBootGuard()
             assertFalse(guard.onStart(coldBoot = true, first = true, interactive = true))
-            assertTrue(boot, guard.onScreenOff())
+            assertTrue(boot, guard.onScreenOff(interactive = false))
         }
     }
 }
