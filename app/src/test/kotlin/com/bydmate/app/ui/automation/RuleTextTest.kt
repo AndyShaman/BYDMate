@@ -96,7 +96,7 @@ class RuleTextTest {
             PhraseCase("voice", listOf(TriggerDef("Voice", "", "==", "открой багажник", "", kind = "voice")), "Голосом «открой багажник»"),
             PhraseCase(
                 "one-shot with a param closes with a comma", listOf(oneShot("2026-09-30T07:30"), param("ExtTemp", "<", "5")),
-                "30 сентября в 07:30, один раз, и температура снаружи меньше 5 °C: авто AC, температура: 22 °C",
+                "30 сентября в 07:30, один раз, и температура снаружи меньше 5 °C: включить климат, температура: 22 °C",
                 actions = listOf(cmd("自动空调"), cmd("设置温度22")),
             ),
             PhraseCase("one-shot tomorrow", listOf(oneShot("2026-09-28T07:30")), "Завтра в 07:30, один раз"),

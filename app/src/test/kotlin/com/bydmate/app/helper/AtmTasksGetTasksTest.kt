@@ -1,3 +1,6 @@
+// The fakes mirror IActivityTaskManager.getTasks overloads, so their parameters are unused by design.
+@file:Suppress("UnusedParameter")
+
 package com.bydmate.app.helper
 
 import org.junit.Assert.assertArrayEquals
