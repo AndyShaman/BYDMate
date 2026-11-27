@@ -46,6 +46,8 @@ data class MonthGroup(
     val totalLiters: Double? = null,
     /** DM-i: km of the month's trips that know their litres. */
     val litersKm: Double? = null,
+    /** DM-i: period kWh/100, null when no trip in the month has a kWh reading (#458). */
+    val kwhPer100: Double? = null,
 )
 
 data class DayGroup(
@@ -57,6 +59,7 @@ data class DayGroup(
     val trips: List<TripEntity>,
     val totalLiters: Double? = null,
     val litersKm: Double? = null,
+    val kwhPer100: Double? = null,
 )
 
 data class TripsUiState(
@@ -336,6 +339,7 @@ class TripsViewModel @Inject constructor(
                     trips = dayTrips,
                     totalLiters = sumLiters(dayTrips),
                     litersKm = litersKm(dayTrips),
+                    kwhPer100 = periodKwhPer100(dayTrips),
                 )
             }
 
@@ -350,6 +354,7 @@ class TripsViewModel @Inject constructor(
                 days = days,
                 totalLiters = sumLiters(monthTrips),
                 litersKm = litersKm(monthTrips),
+                kwhPer100 = periodKwhPer100(monthTrips),
             )
         }
     }

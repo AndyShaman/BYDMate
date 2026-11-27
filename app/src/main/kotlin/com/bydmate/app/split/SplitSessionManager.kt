@@ -1379,7 +1379,8 @@ class SplitSessionManager(
     /**
      * Android 10 (SDK <= 29) fallback when the BYD toggle broadcast left the wide task fullscreen
      * (#385): dock the wide task in windowing mode 3, launch the narrow app once, and wait up to
-     * [NATIVE_CHECK_MS] for mode 3 plus a live narrow task. Returns OK when confirmed, null else.
+     * [NATIVE_CHECK_MS] for mode 3 plus narrow in split secondary (mode 4). Returns OK when
+     * confirmed, null else.
      */
     private suspend fun tryMode3FallbackLocked(
         pair: SplitPair,
@@ -1403,7 +1404,10 @@ class SplitSessionManager(
             }
             val narrow = helper.getTaskState(pair.narrowPkg)
             val seen = "wide ${wide.describe()} narrow ${narrow?.describe() ?: "null"} after ${waitedMs}ms"
-            if (wide.windowingMode == WINDOWING_SPLIT_PRIMARY && narrow != null && narrow.taskId != -1) {
+            val narrowInSecondary = narrow != null &&
+                narrow.taskId != -1 &&
+                narrow.windowingMode == WINDOWING_SPLIT_SECONDARY
+            if (wide.windowingMode == WINDOWING_SPLIT_PRIMARY && narrowInSecondary) {
                 oldAndroidNoSplit = false
                 prefs.saveLastPair(pair)
                 journal.append("$line OK (mode3 confirmed: $seen)")

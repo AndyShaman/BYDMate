@@ -22,6 +22,7 @@ object HvCurrent {
         private set
 
     fun fromCanInt(raw: Int): Float? {
+        if (raw == 0) return null
         val amps = (raw - CAN_OFFSET) / CAN_SCALE
         return amps.takeIf { abs(it) <= MAX_ABS_AMPS }
     }

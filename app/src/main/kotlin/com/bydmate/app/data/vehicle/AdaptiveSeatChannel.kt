@@ -175,8 +175,17 @@ class AdaptiveSeatChannel(
     /** Cached fallback: channel already known, write the requested stage value directly
      *  (no re-probe, no flicker). 1=off, 2=lvl1 ... 6=lvl5, see [seatFallbackValue]. */
     private suspend fun fallbackDirect(group: SeatGroup, a: SeatActions, level: Int): WriteOutcome {
-        val outcome = writer.write(a.fallback, if (level == 0) 1 else seatFallbackValue(group, level))
-        if (outcome == WriteOutcome.REAL) clampTwoLevelHeat(group, a, level)
+        val first = writer.write(a.fallback, if (level == 0) 1 else seatFallbackValue(group, level))
+        val clamped = if (first == WriteOutcome.REAL || first == WriteOutcome.NOOP) {
+            clampTwoLevelHeat(group, a, level)
+        } else {
+            null
+        }
+        val outcome = if (first == WriteOutcome.REAL || clamped == WriteOutcome.REAL) {
+            WriteOutcome.REAL
+        } else {
+            first
+        }
         journal?.appendActuation(group, level, SeatChannel.FALLBACK, outcome, "n/a")
         return outcome
     }
@@ -202,12 +211,12 @@ class AdaptiveSeatChannel(
      * Two-level fallback seat heat clamp (#441): only for requested level 3 on front heat.
      * After the fallback write (6 for driver, 4 for passenger), reads the platform dev=1023
      * state fid with the primary readback cadence. If it stays at 1 (off) or 2 (low),
-     * writes 3 (high on a two-level seat) once. Any other value, read error or unknown
-     * platform writes nothing extra.
+     * writes 3 (high on a two-level seat) once and returns its outcome. Any other value,
+     * read error or unknown platform writes nothing extra and returns null.
      */
-    private suspend fun clampTwoLevelHeat(group: SeatGroup, a: SeatActions, level: Int) {
-        if (level != DRIVER_HEAT_LEVEL3) return
-        if (group != SeatGroup.DRIVER_HEAT && group != SeatGroup.PASSENGER_HEAT) return
+    private suspend fun clampTwoLevelHeat(group: SeatGroup, a: SeatActions, level: Int): WriteOutcome? {
+        if (level != DRIVER_HEAT_LEVEL3) return null
+        if (group != SeatGroup.DRIVER_HEAT && group != SeatGroup.PASSENGER_HEAT) return null
         repeat(READBACK_ATTEMPTS) {
             delay(READBACK_DELAY_MS)
             val state = try {
@@ -217,9 +226,9 @@ class AdaptiveSeatChannel(
             } catch (_: Exception) {
                 null
             }
-            if (state == null || state !in FALLBACK_CLAMP_STATES) return
+            if (state == null || state !in FALLBACK_CLAMP_STATES) return null
         }
-        writer.write(a.fallback, FALLBACK_TWO_LEVEL_HIGH)
+        return writer.write(a.fallback, FALLBACK_TWO_LEVEL_HIGH)
     }
 
     private companion object {

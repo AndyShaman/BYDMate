@@ -28,6 +28,8 @@ internal object AutostartTrace {
 
     private const val UNKNOWN = "unknown"
     private const val ACTION_BOOT_COMPLETED = "android.intent.action.BOOT_COMPLETED"
+    private const val ANDROID_12_MIN_SDK = 31
+    private const val ANDROID_12_MAX_SDK = 32
 
     /**
      * A BOOT_COMPLETED without [EXTRA_FROM_QUICKBOOT] is a cold boot: the head unit rebooted itself
@@ -36,6 +38,9 @@ internal object AutostartTrace {
      */
     fun isColdBoot(action: String?, fromQuickboot: Boolean): Boolean =
         action == ACTION_BOOT_COMPLETED && !fromQuickboot
+
+    /** Cold-boot deferral is enabled only on Android 12 (DiLink 5.0), where quickboot extras were verified. */
+    fun coldBootGuardApplies(sdk: Int): Boolean = sdk in ANDROID_12_MIN_SDK..ANDROID_12_MAX_SDK
 
     /** "android.intent.action.BOOT_COMPLETED" -> "BOOT_COMPLETED": the package part adds nothing. */
     fun actionName(action: String?): String = action?.substringAfterLast('.')?.ifEmpty { null } ?: UNKNOWN

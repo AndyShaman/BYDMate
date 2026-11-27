@@ -75,3 +75,14 @@ internal fun sumLiters(trips: List<TripEntity>): Double? =
  */
 internal fun litersKm(trips: List<TripEntity>): Double? =
     trips.filter { it.fuelLiters != null }.takeIf { it.isNotEmpty() }?.sumOf { it.distanceKm ?: 0.0 }
+
+/**
+ * Electric consumption per 100 km of a period (#458): null when no trip has a kWh reading or the
+ * summed distance is not positive, so a hybrid header without kWh keeps the litres-only cell.
+ */
+internal fun periodKwhPer100(trips: List<TripEntity>): Double? {
+    if (trips.none { it.kwhConsumed != null }) return null
+    val km = trips.sumOf { it.distanceKm ?: 0.0 }
+    if (km <= 0.0) return null
+    return trips.sumOf { it.kwhConsumed ?: 0.0 } / km * 100.0
+}

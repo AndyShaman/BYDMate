@@ -172,6 +172,8 @@ class TrackingService : Service(), LocationListener {
     // Last range value logged (km, rounded) — avoids flooding logcat since
     // estimate() runs on every ~3s poll tick.
     private var lastLoggedRangeKm: Int? = null
+    // Last odometer logged by the hybrid range diagnostic line (once per km on hybrids).
+    private var lastHybridRangeLogOdoKm: Double? = null
     @Volatile private var lastGuidanceGrantRearmTs: Long = 0L
     // One listener rebind (#325) at a time: the guidance check may come while the startup one runs.
     private val notifRebindRunning = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -1571,6 +1573,17 @@ class TrackingService : Service(), LocationListener {
                         socPercent = data.soc,
                         sessionId = sessionId,
                     )
+                    if (vehicleKindMonitor.kind.value == com.bydmate.app.data.nativestack.VehicleKind.HYBRID &&
+                        HybridRangeTrace.due(lastHybridRangeLogOdoKm, data.mileage)
+                    ) {
+                        Log.i(
+                            TAG,
+                            "hybrid range sample odo=${data.mileage} elec=${data.totalElecConsumption} " +
+                                "soc=${data.soc} fuel=${data.fuelTotalL} ev=${data.mileageEvKm} " +
+                                "hev=${data.mileageHevKm} rpm=${data.engineRpm}",
+                        )
+                        lastHybridRangeLogOdoKm = data.mileage
+                    }
                     // Odometer at the finish of energydata trips (HistoryImporter matches them).
                     odometerMarks.onReading(data.mileage, nowMs)
                     liveTripBuffer.onSample(

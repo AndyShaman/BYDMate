@@ -3,6 +3,7 @@ package com.bydmate.app.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.work.Data
@@ -45,8 +46,12 @@ class BootReceiver : BroadcastReceiver() {
         /** The start worker's input: who enqueued it, and whether the boot was cold ([AutostartTrace.isColdBoot]). */
         fun workInput(intent: Intent): Data = workDataOf(
             AutostartTrace.KEY_WORKER_SOURCE to AutostartTrace.actionName(intent.action),
-            AutostartTrace.KEY_COLD_BOOT to AutostartTrace.isColdBoot(
-                intent.action, intent.getBooleanExtra(AutostartTrace.EXTRA_FROM_QUICKBOOT, false)),
+            AutostartTrace.KEY_COLD_BOOT to (
+                AutostartTrace.isColdBoot(
+                    intent.action,
+                    intent.getBooleanExtra(AutostartTrace.EXTRA_FROM_QUICKBOOT, false),
+                ) && AutostartTrace.coldBootGuardApplies(Build.VERSION.SDK_INT)
+            ),
         )
     }
 

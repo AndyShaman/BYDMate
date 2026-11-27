@@ -252,8 +252,10 @@ data class TechPanelUiState(
             fuelPercent, fuelRangeKm, evRangeKm, engineRpm, mileageHevKm, mileageEvKm, fuelTotalL,
         )
     val showTyres: Boolean
-        get() = listOf(tirePressFL, tirePressFR, tirePressRL, tirePressRR).any { it != null && it > 0 } ||
-            anyOf(tyreTempFL, tyreTempFR, tyreTempRL, tyreTempRR)
+        get() = anyOf(
+            tirePressFL, tirePressFR, tirePressRL, tirePressRR,
+            tyreTempFL, tyreTempFR, tyreTempRL, tyreTempRR,
+        )
     /** Provider rows, or a car that reports its gear (the scan needs it), or a saved scan. */
     val showDiagnostics: Boolean
         get() = faultCount != null || hasServiceRow || gear != null || dtcSummary != null
