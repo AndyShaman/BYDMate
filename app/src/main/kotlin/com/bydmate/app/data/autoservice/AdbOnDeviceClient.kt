@@ -2,6 +2,7 @@ package com.bydmate.app.data.autoservice
 
 import android.content.Context
 import android.util.Log
+import com.bydmate.app.helper.ShellUser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -152,7 +153,8 @@ class AdbOnDeviceClientImpl @Inject constructor(
         require(packageName.matches(PACKAGE_NAME_REGEX)) {
             "grantUsageStatsAppop: refused package $packageName"
         }
-        val cmd = "appops set $packageName GET_USAGE_STATS allow"
+        val userId = ShellUser.userIdOf(android.os.Process.myUid())
+        val cmd = ShellUser.appopsSet(packageName, "GET_USAGE_STATS", "allow", userId)
         val p = protocol ?: return@withContext false
         try {
             // appops prints nothing on success; null means transport error.
@@ -170,7 +172,8 @@ class AdbOnDeviceClientImpl @Inject constructor(
         require(packageName.matches(PACKAGE_NAME_REGEX)) {
             "grantWriteSecureSettings: refused package $packageName"
         }
-        val cmd = "pm grant $packageName android.permission.WRITE_SECURE_SETTINGS"
+        val userId = ShellUser.userIdOf(android.os.Process.myUid())
+        val cmd = ShellUser.pmGrant(packageName, "android.permission.WRITE_SECURE_SETTINGS", userId)
         val p = protocol ?: return@withContext false
         try {
             // pm prints nothing on success (and on a re-grant); any output is an error.

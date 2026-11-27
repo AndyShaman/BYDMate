@@ -32,6 +32,7 @@
     <string name="settings_cluster_full_display_desc">O mapa no painel inteiro, sem a faixa de baixo com a velocidade. Ative se o mapa ocupa só uma faixa estreita em cima. Vale na próxima projeção no painel.</string>
     <string name="settings_cluster_direct_reboot_hint">Para o agente de voz ver o navegador no painel, reinicie o DiLink uma vez: mantenha pressionado o botão de volume. Apenas desligar o carro não é suficiente. Até o reinício a projeção funciona, mas o agente não vê a rota.</string>
     <string name="cluster_direct_unsupported_hint">A saída direta não está disponível no firmware deste carro, um modo compatível é usado</string>
+    <string name="cluster_no_display_for_output">Neste carro, o painel de instrumentos não está disponível para exibição</string>
     <string name="settings_projection_mode_title">Modo de exibição no painel</string>
     <string name="settings_projection_mode_direct">Estendido</string>
     <string name="settings_projection_mode_vd">De fábrica</string>

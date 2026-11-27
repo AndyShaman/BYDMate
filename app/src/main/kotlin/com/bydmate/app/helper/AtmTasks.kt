@@ -51,34 +51,73 @@ internal fun fieldByName(target: Any, name: String): java.lang.reflect.Field? {
     return null
 }
 
-// --- IActivityTaskManager compatibility (Android 12 primary, Android 10 head units fallback) ---
+// --- IActivityTaskManager compatibility (Android 12 primary, Android 13 / Android 10 fallbacks) ---
 // Each verb resolves the CURRENT signature first and caches the Method for the daemon process:
 // the split/cluster watchdogs call these at 1 Hz, so after the first call there must be no
-// getMethod lookup, no methods[] scan and no thrown exception on either Android version.
+// getMethod lookup, no methods[] scan and no thrown exception on any Android version.
 
-/** Resolved IActivityTaskManager.getTasks; [atmGetTasksTakesFlags] false = Android 10 getTasks(int). */
-@Volatile private var atmGetTasksMethod: java.lang.reflect.Method? = null
-@Volatile private var atmGetTasksTakesFlags: Boolean = true
+/** Supported IActivityTaskManager.getTasks overload shapes in resolution order. */
+internal enum class GetTasksShape { FLAGS, FLAGS_DISPLAY, PLAIN }
+
+/**
+ * Resolves the best matching IActivityTaskManager.getTasks overload on [atmClass]:
+ * 3-arg (Android 12), then 4-arg with displayId (Android 13, #483), then 1-arg (Android 10).
+ * Returns null if none match.
+ */
+internal fun resolveGetTasks(atmClass: Class<*>): Pair<java.lang.reflect.Method, GetTasksShape>? {
+    val intT = Int::class.javaPrimitiveType
+    val boolT = Boolean::class.javaPrimitiveType
+    runCatching { atmClass.getMethod("getTasks", intT, boolT, boolT) }
+        .getOrNull()?.let { return it to GetTasksShape.FLAGS }
+    runCatching { atmClass.getMethod("getTasks", intT, boolT, boolT, intT) }
+        .getOrNull()?.let { return it to GetTasksShape.FLAGS_DISPLAY }
+    runCatching { atmClass.getMethod("getTasks", intT) }
+        .getOrNull()?.let { return it to GetTasksShape.PLAIN }
+    return null
+}
+
+/** Builds the reflective argument array for [shape]; FLAGS_DISPLAY passes Display.INVALID_DISPLAY (-1). */
+internal fun getTasksArgs(shape: GetTasksShape, maxNum: Int): Array<Any> = when (shape) {
+    GetTasksShape.FLAGS -> arrayOf(maxNum, false, false)
+    GetTasksShape.FLAGS_DISPLAY -> arrayOf(maxNum, false, false, -1)
+    GetTasksShape.PLAIN -> arrayOf(maxNum)
+}
+
+/** Diagnostic listing of every public getTasks overload on [atmClass]. */
+internal fun getTasksOverloads(atmClass: Class<*>): String =
+    atmClass.methods
+        .filter { it.name == "getTasks" }
+        .joinToString(", ") { m ->
+            "getTasks(${m.parameterTypes.joinToString(", ") { it.simpleName }})"
+        }
+        .ifEmpty { "(none)" }
+
+/** Cached IActivityTaskManager.getTasks method and its argument shape. */
+@Volatile private var atmGetTasksResolved: Pair<java.lang.reflect.Method, GetTasksShape>? = null
 
 /**
  * Running task list via getTasks(maxNum, false, false) (Android 12), falling back to
- * getTasks(maxNum) on Android 10 ROMs (DiLink 3.0 / 4.0) that have no flags overload.
+ * getTasks(maxNum, false, false, -1) on Android 13 (#483) and getTasks(maxNum) on Android 10.
  */
 internal fun atmGetTasks(iAtm: Any, maxNum: Int): List<*>? {
-    var m = atmGetTasksMethod
-    if (m == null) {
-        m = try {
-            iAtm.javaClass.getMethod(
-                "getTasks", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType,
-            )
-        } catch (e: NoSuchMethodException) {
-            atmGetTasksTakesFlags = false
-            android.util.Log.i("bydmate_helper", "atm compat: getTasks(int) (Android 10 signature)")
-            iAtm.javaClass.getMethod("getTasks", Int::class.javaPrimitiveType)
+    var resolved = atmGetTasksResolved
+    if (resolved == null) {
+        resolved = resolveGetTasks(iAtm.javaClass) ?: run {
+            val msg = "atm compat: no getTasks overload matched: ${getTasksOverloads(iAtm.javaClass)}"
+            android.util.Log.w("bydmate_helper", msg)
+            throw NoSuchMethodException(msg)
         }
-        atmGetTasksMethod = m
+        when (resolved.second) {
+            GetTasksShape.FLAGS -> Unit
+            GetTasksShape.FLAGS_DISPLAY ->
+                android.util.Log.i("bydmate_helper", "atm compat: getTasks(int, boolean, boolean, int) (Android 13 signature)")
+            GetTasksShape.PLAIN ->
+                android.util.Log.i("bydmate_helper", "atm compat: getTasks(int) (Android 10 signature)")
+        }
+        atmGetTasksResolved = resolved
     }
-    val raw = if (atmGetTasksTakesFlags) m.invoke(iAtm, maxNum, false, false) else m.invoke(iAtm, maxNum)
+    @Suppress("SpreadOperator")
+    val raw = resolved.first.invoke(iAtm, *getTasksArgs(resolved.second, maxNum))
     return raw as? List<*>
 }
 

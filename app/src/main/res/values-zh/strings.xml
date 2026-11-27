@@ -35,6 +35,7 @@
     <string name="settings_cluster_full_display_desc">地图占满整个仪表盘，不显示下方的车速信息条。如果地图只占顶部一条窄带，请开启。下次投射到仪表盘时生效。</string>
     <string name="settings_cluster_direct_reboot_hint">要让语音助手看到仪表盘上的导航，请将DiLink车机重启一次：长按音量旋钮即可重启。仅熄火并不能重启车机。重启之前投屏仍然可用，但语音助手看不到路线。</string>
     <string name="cluster_direct_unsupported_hint">此车机固件不支持直连输出，已使用兼容模式</string>
+    <string name="cluster_no_display_for_output">此车的仪表盘不支持投射显示</string>
     <string name="settings_projection_mode_title">仪表盘投射模式</string>
     <string name="settings_projection_mode_direct">扩展</string>
     <string name="settings_projection_mode_vd">出厂</string>

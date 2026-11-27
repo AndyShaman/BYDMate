@@ -35,6 +35,7 @@
     <string name="settings_cluster_full_display_desc">Mapa na całych wskaźnikach, bez dolnego paska z prędkością. Włącz, jeśli mapa zajmuje tylko wąski pasek u góry. Działa przy następnej projekcji na wskaźniki.</string>
     <string name="settings_cluster_direct_reboot_hint">Aby asystent głosowy widział nawigację na wskaźnikach, raz zrestartuj DiLink: naciśnij i przytrzymaj pokrętło głośności. Samo zgaszenie silnika nie wystarczy. Do restartu projekcja działa, ale agent nie widzi trasy.</string>
     <string name="cluster_direct_unsupported_hint">Bezpośredni tryb jest niedostępny w oprogramowaniu tego auta, używany jest tryb zgodności</string>
+    <string name="cluster_no_display_for_output">Zestaw wskaźników tego auta nie jest dostępny do wyświetlania</string>
     <string name="settings_projection_mode_title">Tryb wyświetlania na wskaźnikach</string>
     <string name="settings_projection_mode_direct">Rozszerzony</string>
     <string name="settings_projection_mode_vd">Fabryczny</string>

@@ -31,6 +31,7 @@
     <string name="settings_cluster_full_display_desc">The map across the whole cluster, without the bottom strip with the speed. Turn on if the map takes only a narrow strip at the top. Applies at the next output to the cluster.</string>
     <string name="settings_cluster_direct_reboot_hint">For the voice agent to see the navigator on the cluster, reboot the DiLink head unit once: press and hold the volume knob. Simply turning the car off is not enough. Until the reboot projection still works, but the agent cannot see the route.</string>
     <string name="cluster_direct_unsupported_hint">Direct output is not available on this car\'s firmware, a compatible mode is used</string>
+    <string name="cluster_no_display_for_output">This car\'s instrument cluster can\'t show apps</string>
     <string name="settings_projection_mode_title">Cluster output mode</string>
     <string name="settings_projection_mode_direct">Extended</string>
     <string name="settings_projection_mode_vd">Factory</string>

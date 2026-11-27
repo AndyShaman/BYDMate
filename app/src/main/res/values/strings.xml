@@ -35,6 +35,7 @@
     <string name="settings_cluster_full_display_desc">Карта на всю приборку, без нижней полосы со скоростью. Включите, если карта занимает только узкую полосу сверху. Применяется при следующем выводе на приборку.</string>
     <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
     <string name="cluster_direct_unsupported_hint">Прямой вывод недоступен на прошивке этой машины, используется совместимый режим</string>
+    <string name="cluster_no_display_for_output">На этой машине приборка недоступна для вывода</string>
     <string name="settings_projection_mode_title">Режим вывода на приборку</string>
     <string name="settings_projection_mode_direct">Расширенный</string>
     <string name="settings_projection_mode_vd">Заводской</string>

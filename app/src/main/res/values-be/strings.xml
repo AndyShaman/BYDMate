@@ -35,6 +35,7 @@
     <string name="settings_cluster_full_display_desc">Карта на ўсю прыборку, без ніжняй паласы з хуткасцю. Уключыце, калі карта займае толькі вузкую паласу зверху. Ужываецца пры наступным вывадзе на прыборку.</string>
     <string name="settings_cluster_direct_reboot_hint">Каб галасавы агент бачыў навігатар на прыборцы, адзін раз перазагрузіце DiLink: заціскайце і ўтрымлівайце колца гучнасці. Проста заглушыць машыну недастаткова. Да перазагрузкі праекцыя працуе, але агент не бачыць маршрут.</string>
     <string name="cluster_direct_unsupported_hint">Прамы вывад недаступны на прашыўцы гэтай машыны, выкарыстоўваецца сумяшчальны рэжым</string>
+    <string name="cluster_no_display_for_output">На гэтай машыне прыборка недаступная для вываду</string>
     <string name="settings_projection_mode_title">Рэжым вываду на прыборку</string>
     <string name="settings_projection_mode_direct">Пашыраны</string>
     <string name="settings_projection_mode_vd">Заводскі</string>

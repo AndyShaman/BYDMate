@@ -13,24 +13,24 @@ package com.bydmate.app.helper
  * Read-modify-write preserves other apps' services (our component is the only one we ever touch).
  * App-scoped, reversible Secure settings only; touches nothing on the vehicle (no autoservice/CAN).
  */
-internal fun enableAccessibilityService(): Boolean {
+internal fun enableAccessibilityService(userId: Int = 0): Boolean {
     val component = HelperBinderProtocol.ACCESSIBILITY_SERVICE_COMPONENT
     val target = canonicalComponent(component)
     // Abort on a failed READ — never write a guessed/garbled list back, that would clobber others.
-    val current = readSecure("enabled_accessibility_services") ?: return false
+    val current = readSecure("enabled_accessibility_services", userId) ?: return false
     // Strip EVERY spelling of our component. The short ("pkg/.Cls") and full ("pkg/pkg.Cls") forms
     // both canonicalise to the same ComponentName, so a literal-string filter would leave the other
     // form behind. The framework would then see no change to the enabled SET and never re-bind a
     // crashed service — the exact failure that kept star control dead after a reboot.
     val others = current.split(':').filter { it.isNotEmpty() && canonicalComponent(it) != target }
     // $1 = the list, passed as argv (not interpolated) — safe even if an existing entry is odd.
-    if (shExec("settings put secure enabled_accessibility_services \"\$1\"", others.joinToString(":")).code != 0) return false
+    if (shExec(ShellUser.settingsSecure("put", "enabled_accessibility_services \"\$1\"", userId), others.joinToString(":")).code != 0) return false
     Thread.sleep(200L)  // let the framework observe the removal before we re-add (OpenBYD uses 0.2s)
-    if (shExec("settings put secure enabled_accessibility_services \"\$1\"", (others + component).joinToString(":")).code != 0) return false
-    if (shExec("settings put secure accessibility_enabled 1").code != 0) return false
+    if (shExec(ShellUser.settingsSecure("put", "enabled_accessibility_services \"\$1\"", userId), (others + component).joinToString(":")).code != 0) return false
+    if (shExec(ShellUser.settingsSecure("put", "accessibility_enabled 1", userId)).code != 0) return false
     // Verify read-back: our component is now listed AND accessibility is enabled.
-    val after = (readSecure("enabled_accessibility_services") ?: return false).split(':').filter { it.isNotEmpty() }
-    return after.any { canonicalComponent(it) == target } && readSecure("accessibility_enabled") == "1"
+    val after = (readSecure("enabled_accessibility_services", userId) ?: return false).split(':').filter { it.isNotEmpty() }
+    return after.any { canonicalComponent(it) == target } && readSecure("accessibility_enabled", userId) == "1"
 }
 
 /**
@@ -44,12 +44,12 @@ internal fun enableAccessibilityService(): Boolean {
  * The app is killed by step 1, so it never sees the reply; the daemon survives (shell uid, own
  * process) and finishes the sequence. Kept dumb and logged — the SDK gate lives in the app.
  */
-internal fun recoverAccessibilityService(): Boolean {
+internal fun recoverAccessibilityService(userId: Int = 0): Boolean {
     val tag = "bydmate_helper"
     val pkg = HelperBinderProtocol.APP_PACKAGE
     android.util.Log.w(tag, "a11y recover: force-stopping $pkg (AOSP Q stuck binding)")
     try {
-        forceStopPackage(pkg)
+        forceStopPackage(pkg, userId)
     } catch (e: Throwable) {
         android.util.Log.w(tag, "a11y recover: force-stop failed: ${e.javaClass.simpleName}: ${e.message}")
         return false
@@ -65,10 +65,11 @@ internal fun recoverAccessibilityService(): Boolean {
     // force-stop to BootReceiver, with the widget and key service gone for that long.
     var am = ""
     var restarted = false
+    val recoverArgs = "--include-stopped-packages --receiver-foreground -a com.bydmate.app.action.RECOVER_START -n \"\$1\""
     for (attempt in 1..2) {
         am = runCatching {
             amShell(
-                "am broadcast --include-stopped-packages --receiver-foreground -a com.bydmate.app.action.RECOVER_START -n \"\$1\"",
+                ShellUser.amBroadcast(recoverArgs, userId),
                 listOf("$pkg/com.bydmate.app.service.BootReceiver"),
             )
         }.getOrElse { "broadcast failed: ${it.javaClass.simpleName}: ${it.message}" }
@@ -79,7 +80,7 @@ internal fun recoverAccessibilityService(): Boolean {
     }
     // Re-assert the a11y setting: onHandleForceStop removed us from the enabled set as well.
     val ok = try {
-        enableAccessibilityService()
+        enableAccessibilityService(userId)
     } catch (e: Throwable) {
         android.util.Log.w(tag, "a11y recover: re-assert failed: ${e.javaClass.simpleName}: ${e.message}")
         false
@@ -141,7 +142,7 @@ private fun logA11yFrameworkState(reassertOk: Boolean) {
  *
  * App-scoped, reversible Secure setting only; touches nothing on the vehicle (no autoservice/CAN).
  */
-internal fun enableNotificationListener(): Boolean {
+internal fun enableNotificationListener(userId: Int = 0): Boolean {
     val component = HelperBinderProtocol.NOTIFICATION_LISTENER_COMPONENT
     val target = canonicalComponent(component)
 
@@ -151,19 +152,19 @@ internal fun enableNotificationListener(): Boolean {
     // Readback is gated on exit code == 0: a stale raw entry in the setting could otherwise
     // false-positive the check when the canonical NMS grant is absent (the exact reconciliation
     // case), causing the function to return true before the fallback ever runs.
-    val cmdResult = shExec("cmd notification allow_listener \"\$1\"", component)
+    val cmdResult = shExec(ShellUser.notificationAllowListener("\"\$1\"", userId), component)
     if (cmdResult.code == 0) {
-        val afterCmd = (readSecure("enabled_notification_listeners") ?: "").split(':').filter { it.isNotEmpty() }
+        val afterCmd = (readSecure("enabled_notification_listeners", userId) ?: "").split(':').filter { it.isNotEmpty() }
         if (afterCmd.any { canonicalComponent(it) == target }) return true
     }
 
     // Fallback: remove-wait-readd settings-put for firmwares without `cmd notification`.
-    val current = readSecure("enabled_notification_listeners") ?: return false
+    val current = readSecure("enabled_notification_listeners", userId) ?: return false
     val others = current.split(':').filter { it.isNotEmpty() && canonicalComponent(it) != target }
-    if (shExec("settings put secure enabled_notification_listeners \"\$1\"", others.joinToString(":")).code != 0) return false
+    if (shExec(ShellUser.settingsSecure("put", "enabled_notification_listeners \"\$1\"", userId), others.joinToString(":")).code != 0) return false
     Thread.sleep(200L)
-    if (shExec("settings put secure enabled_notification_listeners \"\$1\"", (others + component).joinToString(":")).code != 0) return false
-    val after = (readSecure("enabled_notification_listeners") ?: return false).split(':').filter { it.isNotEmpty() }
+    if (shExec(ShellUser.settingsSecure("put", "enabled_notification_listeners \"\$1\"", userId), (others + component).joinToString(":")).code != 0) return false
+    val after = (readSecure("enabled_notification_listeners", userId) ?: return false).split(':').filter { it.isNotEmpty() }
     return after.any { canonicalComponent(it) == target }
 }
 
@@ -185,8 +186,8 @@ internal fun canonicalComponent(flattened: String): String {
  * Reads a secure setting via the `settings` binary: "" when unset (`settings get` prints "null"),
  * or null on a non-zero exit so callers can abort instead of acting on a bad read.
  */
-private fun readSecure(key: String): String? {
-    val r = shExec("settings get secure \"\$1\"", key)
+private fun readSecure(key: String, userId: Int = 0): String? {
+    val r = shExec(ShellUser.settingsSecure("get", "\"\$1\"", userId), key)
     if (r.code != 0) return null
     return if (r.stdout == "null") "" else r.stdout
 }

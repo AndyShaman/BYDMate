@@ -142,6 +142,7 @@ fun main(args: Array<String>) {
         // non-daemon threads alive, so a bare `return` from main() would hang the JVM.
         exitProcess(2)
     }
+    val daemonUserId = ShellUser.userIdOf(expectedUid)
     // Spawn token of THIS spawn — echoed back to the app in the broadcast fallback so it can
     // tell our Binder from anything else that reaches the exported receiver. Absent when an
     // older app version did the spawn (then only the addService path is available).
@@ -365,8 +366,8 @@ fun main(args: Array<String>) {
                     // DisplayManager.getDisplay(clusterId) returns null in our process). Mirrors
                     // OpenBYD AppConstants two-grant.
                     val pkg = HelperBinderProtocol.APP_PACKAGE
-                    val r1 = shExec("appops set \"\$1\" SYSTEM_ALERT_WINDOW allow", pkg)
-                    val r2 = shExec("appops set \"\$1\" PROJECT_MEDIA allow", pkg)
+                    val r1 = shExec(ShellUser.appopsSet("\"\$1\"", "SYSTEM_ALERT_WINDOW", "allow", daemonUserId), pkg)
+                    val r2 = shExec(ShellUser.appopsSet("\"\$1\"", "PROJECT_MEDIA", "allow", daemonUserId), pkg)
                     val ok = r1.code == 0 && r2.code == 0
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
@@ -376,7 +377,7 @@ fun main(args: Array<String>) {
                     // Narrow, hardcoded target — NOT a generic pm passthrough. READ_LOGS is a
                     // development permission (grantable via pm grant); it maps to the "log" gid,
                     // which the app process picks up on its NEXT start (gids are set at fork).
-                    val r = shExec("pm grant \"\$1\" android.permission.READ_LOGS", HelperBinderProtocol.APP_PACKAGE)
+                    val r = shExec(ShellUser.pmGrant("\"\$1\"", "android.permission.READ_LOGS", daemonUserId), HelperBinderProtocol.APP_PACKAGE)
                     reply?.writeInt(if (r.code == 0) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -415,7 +416,7 @@ fun main(args: Array<String>) {
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
                 HelperBinderProtocol.TX_ENABLE_ACCESSIBILITY -> runCatching {
-                    val ok = enableAccessibilityService()
+                    val ok = enableAccessibilityService(daemonUserId)
                     // Only reached when the app found the service NOT running: snapshot the
                     // framework's own view so a field log names the exact state (#a11y DiLink 4).
                     // Off the binder thread: a slow dumpsys must not delay the reply (the client
@@ -426,7 +427,7 @@ fun main(args: Array<String>) {
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
                 HelperBinderProtocol.TX_RECOVER_ACCESSIBILITY -> runCatching {
-                    val ok = recoverAccessibilityService()
+                    val ok = recoverAccessibilityService(daemonUserId)
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -539,7 +540,7 @@ fun main(args: Array<String>) {
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
                 HelperBinderProtocol.TX_ENABLE_NOTIFICATION_LISTENER -> runCatching {
-                    val ok = enableNotificationListener()
+                    val ok = enableNotificationListener(daemonUserId)
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -687,7 +688,7 @@ fun main(args: Array<String>) {
 
                 HelperBinderProtocol.TX_FORCE_STOP -> runCatching {
                     val pkg = data.readString() ?: ""
-                    forceStopPackage(pkg)
+                    forceStopPackage(pkg, if (pkg == HelperBinderProtocol.APP_PACKAGE) daemonUserId else 0)
                     reply?.writeInt(0); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -980,12 +981,12 @@ fun main(args: Array<String>) {
                 exitProcess(4)
             }
             RegistrationFallback.BROADCAST -> try {
-                publishBinderByBroadcast(systemContext!!, helperBinder, spawnToken!!)
+                publishBinderByBroadcast(systemContext!!, helperBinder, spawnToken!!, userId = daemonUserId)
                 transport = HelperBinderHolder.TRANSPORT_BROADCAST
                 // One delivery is not enough: the app process is recreated (service restart, task
                 // removed, memory pressure) far more often than the daemon, and a recreated process
                 // has no binder. Keep announcing until a client registers (#64/#148).
-                scheduleReannounce(systemContext!!, helperBinder, spawnToken!!)
+                scheduleReannounce(systemContext!!, helperBinder, spawnToken!!, userId = daemonUserId)
             } catch (be: Exception) {
                 System.err.println("ERR: broadcast ${describeBootstrapFailure(be)}")
                 exitProcess(5)
@@ -1042,11 +1043,13 @@ internal fun decideRegistrationFallback(hasSystemContext: Boolean, hasToken: Boo
  * FLAG_INCLUDE_STOPPED_PACKAGES so a force-stopped app (the state right after an update) is still
  * woken. The token lets the app authenticate the sender; version and pid are diagnostics for the dump.
  */
+@android.annotation.SuppressLint("MissingPermission") // Daemon runs under shell uid (INTERACT_ACROSS_USERS_FULL).
 private fun publishBinderByBroadcast(
     ctx: Context,
     binder: IBinder,
     token: String,
     includeStopped: Boolean = true,
+    userId: Int = 0,
 ) {
     val extras = Bundle().apply {
         putBinder(HelperBinderProtocol.KEY_BINDER, binder)
@@ -1059,7 +1062,18 @@ private fun publishBinderByBroadcast(
         .setPackage(HelperBinderProtocol.APP_PACKAGE)
         .addFlags(binderIntentFlags(includeStopped))
         .putExtra(HelperBinderProtocol.EXTRA_BUNDLE, extras)
-    ctx.sendBroadcast(intent)
+    if (userId > 0) {
+        // Secondary Android user (e.g. AAOS user 10 on Android 14, #472): systemContext belongs
+        // to user 0, so a plain sendBroadcast never reaches our receiver in the driver's user.
+        val userHandle = android.os.UserHandle::class.java
+            .getMethod("of", Int::class.javaPrimitiveType)
+            .invoke(null, userId) as android.os.UserHandle
+        println("BROADCAST user=$userId")
+        System.out.flush()
+        ctx.sendBroadcastAsUser(intent, userHandle)
+    } else {
+        ctx.sendBroadcast(intent)
+    }
 }
 
 /** App-side binder registered over TX_REGISTER_CLIENT; null while no app process holds ours. */
@@ -1083,7 +1097,7 @@ internal fun shouldReannounce(transport: String, clientRegistered: Boolean): Boo
  * registered. Uncapped on purpose: one explicit intent per 10 s costs nothing, and it is
  * self-limiting — a running app registers within seconds of receiving the binder.
  */
-private fun scheduleReannounce(ctx: Context, binder: IBinder, token: String) {
+private fun scheduleReannounce(ctx: Context, binder: IBinder, token: String, userId: Int = 0) {
     val handler = android.os.Handler(Looper.getMainLooper())
     val tick = object : Runnable {
         override fun run() {
@@ -1091,7 +1105,7 @@ private fun scheduleReannounce(ctx: Context, binder: IBinder, token: String) {
             // includeStopped = false: the user force-stopping the app kills our client binder and
             // resumes this timer — waking the app back up would override that stop. A process
             // restarted normally still receives it.
-            runCatching { publishBinderByBroadcast(ctx, binder, token, includeStopped = false) }
+            runCatching { publishBinderByBroadcast(ctx, binder, token, includeStopped = false, userId = userId) }
             reannounceCount++
             println("REANNOUNCE n=$reannounceCount")
             System.out.flush()
@@ -1158,12 +1172,12 @@ internal fun readTrailingToTop(data: Parcel): Boolean =
  *
  * Hidden-API note: daemon runs under app_process — reflection without HiddenApiBypass is fine.
  */
-internal fun forceStopPackage(packageName: String) {
+internal fun forceStopPackage(packageName: String, userId: Int = 0) {
     val amCls = Class.forName("android.app.ActivityManager")
     val iAm = amCls.getMethod("getService").invoke(null)
         ?: throw IllegalStateException("ActivityManager.getService() returned null")
     iAm.javaClass.getMethod("forceStopPackage", String::class.java, Int::class.javaPrimitiveType)
-        .invoke(iAm, packageName, 0)
+        .invoke(iAm, packageName, userId)
 }
 
 /**

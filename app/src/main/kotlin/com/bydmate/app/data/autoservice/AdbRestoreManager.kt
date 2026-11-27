@@ -322,6 +322,10 @@ class AdbRestoreManager @Inject constructor(
             } else {
                 transition(AdbRestoreState.NotNeeded, "classic port alive")
             }
+            // The classic port may have come alive outside restoreOverTls (e.g. manual dialog
+            // approval or another app); bring the helper up now instead of waiting for the
+            // periodic watchdog (#491).
+            ensureHelperRunning("on classic port")
             ensureAccessibilityForDialog(gen)
             return
         }
@@ -459,17 +463,22 @@ class AdbRestoreManager @Inject constructor(
     /** Publishes the success state and brings the helper daemon up behind it. */
     private suspend fun markRestored(gen: Int, reason: String) {
         transition(AdbRestoreState.Restored(system.nowMs()), reason)
+        ensureHelperRunning("after restore")
+        ensureAccessibilityForDialog(gen)
+    }
+
+    /** Brings the helper daemon up (or pings an existing current-version daemon), swallowing non-cancellation failures. */
+    private suspend fun ensureHelperRunning(phase: String) {
         runCatching { system.ensureHelperRunning() }
-            .onSuccess { Log.i(TAG, "helper after restore: $it") }
+            .onSuccess { Log.i(TAG, "helper $phase: $it") }
             .onFailure {
                 // A cancellation here (toggle off while the helper bootstrap is in flight) must
                 // keep unwinding into runAttempt's own catch, or a rerun requested right after
                 // gets coalesced into this already-cancelled coroutine and silently dropped: it
                 // sets rerunRequested, but nothing left to read it ever reaches that check again.
                 if (it is CancellationException) throw it
-                Log.w(TAG, "helper bootstrap after restore failed: ${it.message}")
+                Log.w(TAG, "helper bootstrap $phase failed: ${it.message}")
             }
-        ensureAccessibilityForDialog(gen)
     }
 
     /**

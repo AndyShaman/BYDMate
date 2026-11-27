@@ -16,6 +16,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.Toast
 import com.bydmate.app.R
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
@@ -1288,6 +1289,12 @@ object ClusterProjectionManager {
                 log("cluster diag: app displays=$appDisplays; asking daemon for snapshot")
                 Log.i(TAG, "cluster diag requested; app displays=$appDisplays")
                 runCatching { helper.logClusterDisplayDiag() }
+            }
+            // Tell the driver explicitly when this car has no cluster output display (#478).
+            withContext(Dispatchers.Main) {
+                runCatching {
+                    Toast.makeText(context, R.string.cluster_no_display_for_output, Toast.LENGTH_LONG).show()
+                }
             }
             return "projection"
         }
