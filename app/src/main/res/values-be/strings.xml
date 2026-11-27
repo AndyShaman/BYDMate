@@ -1201,7 +1201,7 @@
     <string name="auto_act_vent_front_windows">Праветрыць пярэднія</string>
     <string name="auto_act_half_rear_windows">Заднія на 50%</string>
     <string name="auto_act_vent_rear_windows">Праветрыць заднія</string>
-    <string name="auto_act_auto_ac">Аўта AC</string>
+    <string name="auto_act_auto_ac">Уключыць клімат</string>
     <string name="auto_act_ventilation_no_ac">Абдзьмуванне без AC</string>
     <string name="auto_act_wind_face">Абдзьмух: у твар</string>
     <string name="auto_act_wind_face_feet">Абдзьмух: твар і ногі</string>

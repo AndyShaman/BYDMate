@@ -1128,7 +1128,7 @@
     <string name="auto_act_vent_front_windows">前排车窗通风</string>
     <string name="auto_act_half_rear_windows">后排车窗半开</string>
     <string name="auto_act_vent_rear_windows">后排车窗通风</string>
-    <string name="auto_act_auto_ac">自动空调</string>
+    <string name="auto_act_auto_ac">开启空调</string>
     <string name="auto_act_ventilation_no_ac">通风（不开AC）</string>
     <string name="auto_act_wind_face">出风：吹面</string>
     <string name="auto_act_wind_face_feet">出风：吹面吹脚</string>

@@ -54,7 +54,7 @@ class AutomationI18nGoldenTest {
         "前排车窗通风" to Triple("Проветрить передние", "Vent Front Windows", "前排车窗通风"),
         "后排车窗半开" to Triple("Задние на 50%", "Rear Windows 50%", "后排车窗半开"),
         "后排车窗通风" to Triple("Проветрить задние", "Vent Rear Windows", "后排车窗通风"),
-        "自动空调" to Triple("Авто AC", "Auto AC", "自动空调"),
+        "自动空调" to Triple("Включить климат", "AC On", "开启空调"),
         "打开空调通风" to Triple("Обдув без AC", "Ventilation (no AC)", "通风（不开AC）"),
         "吹面" to Triple("Обдув: в лицо", "Airflow: face", "出风：吹面"),
         "吹面吹脚" to Triple("Обдув: лицо и ноги", "Airflow: face and feet", "出风：吹面吹脚"),

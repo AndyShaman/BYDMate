@@ -1056,7 +1056,7 @@
     <string name="auto_act_vent_front_windows">Vent Front Windows</string>
     <string name="auto_act_half_rear_windows">Rear Windows 50%</string>
     <string name="auto_act_vent_rear_windows">Vent Rear Windows</string>
-    <string name="auto_act_auto_ac">Auto AC</string>
+    <string name="auto_act_auto_ac">AC On</string>
     <string name="auto_act_ventilation_no_ac">Ventilation (no AC)</string>
     <string name="auto_act_wind_face">Airflow: face</string>
     <string name="auto_act_wind_face_feet">Airflow: face and feet</string>

@@ -1205,7 +1205,7 @@
     <string name="auto_act_vent_front_windows">Проветрить передние</string>
     <string name="auto_act_half_rear_windows">Задние на 50%</string>
     <string name="auto_act_vent_rear_windows">Проветрить задние</string>
-    <string name="auto_act_auto_ac">Авто AC</string>
+    <string name="auto_act_auto_ac">Включить климат</string>
     <string name="auto_act_ventilation_no_ac">Обдув без AC</string>
     <string name="auto_act_wind_face">Обдув: в лицо</string>
     <string name="auto_act_wind_face_feet">Обдув: лицо и ноги</string>

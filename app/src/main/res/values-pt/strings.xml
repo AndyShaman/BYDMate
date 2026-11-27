@@ -1050,7 +1050,7 @@
     <string name="auto_act_vent_front_windows">Ventilar dianteiros</string>
     <string name="auto_act_half_rear_windows">Traseiros a 50%</string>
     <string name="auto_act_vent_rear_windows">Ventilar traseiros</string>
-    <string name="auto_act_auto_ac">AC automático</string>
+    <string name="auto_act_auto_ac">Ligar AC</string>
     <string name="auto_act_ventilation_no_ac">Ventilação (sem AC)</string>
     <string name="auto_act_wind_face">Fluxo de ar: rosto</string>
     <string name="auto_act_wind_face_feet">Fluxo de ar: rosto e pés</string>

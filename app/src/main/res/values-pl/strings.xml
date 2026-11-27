@@ -1201,7 +1201,7 @@
     <string name="auto_act_vent_front_windows">Przewietrz przednie</string>
     <string name="auto_act_half_rear_windows">Tylne na 50%</string>
     <string name="auto_act_vent_rear_windows">Przewietrz tylne</string>
-    <string name="auto_act_auto_ac">Auto AC</string>
+    <string name="auto_act_auto_ac">Włącz klimatyzację</string>
     <string name="auto_act_ventilation_no_ac">Nawiew bez AC</string>
     <string name="auto_act_wind_face">Nawiew: na twarz</string>
     <string name="auto_act_wind_face_feet">Nawiew: twarz i nogi</string>
