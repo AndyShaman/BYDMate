@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [4.5.1] - 2026-11-27
+
 ### Новое
 - Автоматизация: условие «Круиз включён» в разделе «Движение». Срабатывает, когда работает адаптивный круиз или помощь в полосе (ACC, ICC, NOA). Сигнал проверен по записям Tang L и Leopard 3 (#383).
 - Автоматизация и голосовой помощник: действие «Подогрев руля: уровень». На машинах с выбором уровня (3 или 5 ступеней) оно включает подогрев руля и ставит нужный уровень; редактор показывает столько ступеней, сколько сообщает машина. На машине без выбора уровня приложение так и пишет (#408).
@@ -1642,7 +1644,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.5.0...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v4.5.1...HEAD
+[4.5.1]: https://github.com/AndyShaman/BYDMate/compare/v4.5.0...v4.5.1
 [4.5.0]: https://github.com/AndyShaman/BYDMate/compare/v4.4.2...v4.5.0
 [4.4.2]: https://github.com/AndyShaman/BYDMate/compare/v4.4.1...v4.4.2
 [4.4.1]: https://github.com/AndyShaman/BYDMate/compare/v4.4.0...v4.4.1
