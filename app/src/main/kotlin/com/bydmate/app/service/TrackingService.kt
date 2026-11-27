@@ -1369,8 +1369,14 @@ class TrackingService : Service(), LocationListener {
     override fun onLocationChanged(location: Location) {
         lastLocationFix = LocationFix(location, isLive = true)
         _lastLocation.value = location
+        val speedKmh = if (location.hasSpeed()) location.speed * 3.6 else null
         recentTrack.add(TrackPoint(android.os.SystemClock.elapsedRealtime(), location.latitude, location.longitude,
-            if (location.hasSpeed()) location.speed * 3.6 else null))
+            speedKmh))
+        val wasArmed = coldBootGuard.armed
+        coldBootGuard.onSpeed(speedKmh)
+        if (wasArmed && !coldBootGuard.armed) {
+            Trace.event(TraceArea.APP, "cold-boot guard", "armed" to false, "reason" to "moving")
+        }
         // AC-06: never log raw coordinates in release — logcat is readable on DiLink
         // and ends up in user-shared diagnostic dumps.
         if (BuildConfig.DEBUG) {
@@ -1903,7 +1909,8 @@ class TrackingService : Service(), LocationListener {
     // A no-op unless the cold-boot guard is armed: a normal drive with a dark screen is not touched.
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (coldBootGuard.onScreenOff()) stopForColdBoot("screen_off")
+            val interactive = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+            if (coldBootGuard.onScreenOff(interactive)) stopForColdBoot("screen_off")
         }
     }
 

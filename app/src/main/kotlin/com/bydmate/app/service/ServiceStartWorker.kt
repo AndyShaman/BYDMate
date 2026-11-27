@@ -58,7 +58,8 @@ class ServiceStartWorker(
             ContextCompat.startForegroundService(applicationContext, intent)
             ChainLog.append(applicationContext, "startForegroundService OK")
             Log.i(TAG, "startForegroundService OK")
-            Trace.event(TraceArea.APP, "start-worker", "trigger" to trigger, "attempt" to runAttemptCount, "result" to "ok")
+            Trace.event(TraceArea.APP, "start-worker", "trigger" to trigger, "attempt" to runAttemptCount,
+                "result" to "ok", "cold_boot" to coldBoot)
             Result.success()
         } catch (e: Exception) {
             ChainLog.append(applicationContext, "startForegroundService FAILED: ${e.message}")

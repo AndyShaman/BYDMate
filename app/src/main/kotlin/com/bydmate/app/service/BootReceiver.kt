@@ -35,11 +35,12 @@ class BootReceiver : BroadcastReceiver() {
         /** Explicit restart request from the helper daemon after the Android 10 a11y recovery. */
         const val ACTION_RECOVER_START = "com.bydmate.app.action.RECOVER_START"
 
-        // Unlock arrives only while the service is down (see onReceive), so whatever job is
-        // queued or running has not started it: replace it rather than be dropped behind a
-        // parked-restart job that skipped because the screen still read as off at car-on.
-        fun workPolicyFor(action: String?): ExistingWorkPolicy =
-            if (action == Intent.ACTION_USER_PRESENT) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
+        // DiLink's JobScheduler blocks third-party jobs while the car is off, so a start job can
+        // sit enqueued until morning and must not swallow the car-wake boot or a later unlock.
+        fun workPolicyFor(action: String?): ExistingWorkPolicy = when (action) {
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_USER_PRESENT -> ExistingWorkPolicy.REPLACE
+            else -> ExistingWorkPolicy.KEEP
+        }
 
         /** The start worker's input: who enqueued it, and whether the boot was cold ([AutostartTrace.isColdBoot]). */
         fun workInput(intent: Intent): Data = workDataOf(
