@@ -33,7 +33,8 @@ data class TriggerDef(
     val displayName: String,
     val kind: String = "param",            // "param" | "place_enter" | "place_exit"
     val placeId: Long? = null,             // only when kind is a place_* kind
-    val placeName: String? = null          // cached for display
+    val placeName: String? = null,         // cached for display
+    val press: String? = null,             // "double" for steering_key double press; null = single
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("param", param)
@@ -44,9 +45,12 @@ data class TriggerDef(
         put("kind", kind)
         if (placeId != null) put("placeId", placeId)
         if (placeName != null) put("placeName", placeName)
+        if (press != null) put("press", press)
     }
 
     companion object {
+        const val PRESS_DOUBLE = "double"
+
         fun fromJson(json: JSONObject) = TriggerDef(
             param = json.getString("param"),
             chineseName = json.getString("chineseName"),
@@ -55,7 +59,8 @@ data class TriggerDef(
             displayName = json.getString("displayName"),
             kind = json.optString("kind", "param"),
             placeId = if (json.has("placeId") && !json.isNull("placeId")) json.getLong("placeId") else null,
-            placeName = if (json.has("placeName") && !json.isNull("placeName")) json.getString("placeName") else null
+            placeName = if (json.has("placeName") && !json.isNull("placeName")) json.getString("placeName") else null,
+            press = if (json.has("press") && !json.isNull("press")) json.getString("press").ifBlank { null } else null,
         )
 
         fun listFromJson(jsonStr: String): List<TriggerDef> = try {

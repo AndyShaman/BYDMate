@@ -68,6 +68,7 @@
     <string name="learn_button_waiting">Press a steering-wheel button…</string>
     <string name="learn_button_rejected">This button can\'t be assigned. Press another.</string>
     <string name="learn_button_captured">Button recognized:</string>
+    <string name="learn_button_media_track_hint">The stock track skip on this button will still trigger</string>
     <string name="learn_button_timeout">Button not recognized. It may not reach the system. Try another.</string>
     <string name="learn_button_save">Save</string>
     <string name="learn_button_again">Again</string>
@@ -452,6 +453,8 @@
     <string name="automation_trigger_type_steering_key">Steering-wheel key</string>
     <string name="automation_trigger_steering_key_unassigned">Key not assigned</string>
     <string name="automation_trigger_steering_key_assign">assign</string>
+    <string name="automation_trigger_steering_key_single">single press</string>
+    <string name="automation_trigger_steering_key_double">double press</string>
     <string name="automation_steering_key_occupied_projection">This key turns navigation on the instrument cluster on. Free it up in Settings, Display section, or pick another one.</string>
     <string name="automation_steering_key_occupied_voice">This key calls the BYDMate voice assistant. Change the key in Settings, Voice agent section, or pick another one.</string>
     <string name="automation_steering_key_occupied_knob">The knob press is taken by play/pause. Turn it off in Settings, Display section, or pick another key.</string>
@@ -1949,6 +1952,7 @@
     <string name="auto_ui_days_weekends">On weekends</string>
     <string name="auto_ui_phrase_button">Widget button %1$d</string>
     <string name="auto_ui_phrase_steering">Steering key «%1$s»</string>
+    <string name="auto_ui_phrase_steering_double">Steering key «%1$s», double press</string>
     <string name="auto_ui_phrase_steering_none">Steering key not set</string>
     <string name="auto_ui_phrase_voice">By voice «%1$s»</string>
     <string name="auto_ui_phrase_once">%1$s, once</string>

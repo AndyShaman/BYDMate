@@ -133,8 +133,12 @@ internal fun conditionText(t: TriggerDef, lc: Context, now: Long, zone: ZoneId):
     "button_press" -> lc.getString(R.string.auto_ui_phrase_button, t.value.toIntOrNull() ?: 1)
     AutomationEngine.TRIGGER_KIND_STEERING_KEY -> {
         val code = t.value.toIntOrNull() ?: 0
-        if (code > 0) lc.getString(R.string.auto_ui_phrase_steering, steeringKeyLabel(lc, code))
-        else lc.getString(R.string.auto_ui_phrase_steering_none)
+        when {
+            code <= 0 -> lc.getString(R.string.auto_ui_phrase_steering_none)
+            t.press == TriggerDef.PRESS_DOUBLE ->
+                lc.getString(R.string.auto_ui_phrase_steering_double, steeringKeyLabel(lc, code))
+            else -> lc.getString(R.string.auto_ui_phrase_steering, steeringKeyLabel(lc, code))
+        }
     }
     "voice" -> if (t.value.isBlank()) lc.getString(R.string.automation_trigger_type_voice)
         else lc.getString(R.string.auto_ui_phrase_voice, t.value.trim())

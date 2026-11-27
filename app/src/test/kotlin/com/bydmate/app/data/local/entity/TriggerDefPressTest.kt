@@ -3,7 +3,11 @@ package com.bydmate.app.data.local.entity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+// Robolectric: the Android JSONObject keeps insertion order, as on the car.
+@RunWith(RobolectricTestRunner::class)
 class TriggerDefPressTest {
 
     @Test fun `press null omits press key and matches baseline json`() {

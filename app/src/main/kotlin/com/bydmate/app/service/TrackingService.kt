@@ -505,7 +505,12 @@ class TrackingService : Service(), LocationListener {
          * Same shape as [fireAutomationButton]; matched count is diagnostics only
          * (the key was already consumed by the time the rules run).
          */
-        fun fireSteeringKey(keyCode: Int, cause: Long, onResult: (matched: Int) -> Unit) {
+        fun fireSteeringKey(
+            keyCode: Int,
+            cause: Long,
+            double: Boolean = false,
+            onResult: (matched: Int) -> Unit,
+        ) {
             val svc = instance
             if (svc == null) {
                 onResult(0)
@@ -514,7 +519,7 @@ class TrackingService : Service(), LocationListener {
             // The key press is the cause of every rule line the engine traces for it.
             svc.serviceScope.launch(Trace.causedBy(cause)) {
                 val matched = try {
-                    svc.automationEngine.onSteeringKey(keyCode)
+                    svc.automationEngine.onSteeringKeyPress(keyCode, double = double)
                 } catch (e: Exception) {
                     Log.w(TAG, "fireSteeringKey failed: ${e.message}")
                     0
@@ -530,6 +535,13 @@ class TrackingService : Service(), LocationListener {
          */
         fun steeringKeyAssigned(keyCode: Int): Boolean =
             instance?.automationEngine?.steeringKeyCodes?.value?.contains(keyCode) == true
+
+        /**
+         * Synchronous "is this steering-wheel key bound to an enabled double-press rule?"
+         * Answered off the engine's cached double-press keycode set on the key-event path (#451).
+         */
+        fun steeringKeyHasDouble(keyCode: Int): Boolean =
+            instance?.automationEngine?.steeringKeyDoubleCodes?.value?.contains(keyCode) == true
 
         /** [trigger] names the entry point for the trace (see [AutostartTrace]). */
         fun start(context: Context, trigger: String) {

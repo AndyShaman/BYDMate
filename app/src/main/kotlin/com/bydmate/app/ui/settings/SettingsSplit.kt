@@ -39,6 +39,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.res.stringResource
 import com.bydmate.app.cluster.SteeringWheelKeyService
+import com.bydmate.app.cluster.isFirmwareMediaTrackKey
 import com.bydmate.app.cluster.readSteeringKeyOwners
 import com.bydmate.app.cluster.splitKeyChooserOwner
 import com.bydmate.app.cluster.steeringKeyOwner
@@ -584,6 +585,12 @@ internal fun LearnButtonDialog(
                             "(${(listOf(s.keyCode) + s.companions.sorted()).joinToString(" + ")})",
                         color = TextPrimary, fontWeight = FontWeight.Medium,
                     )
+                    if (isFirmwareMediaTrackKey(s.keyCode)) {
+                        Text(
+                            stringResource(R.string.learn_button_media_track_hint),
+                            color = TextSecondary, fontSize = 12.sp,
+                        )
+                    }
                 }
                 is LearnUiState.TimedOut -> Text(stringResource(R.string.learn_button_timeout))
             }

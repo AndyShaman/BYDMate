@@ -72,6 +72,7 @@
     <string name="learn_button_waiting">Націсніце кнопку на рулі…</string>
     <string name="learn_button_rejected">Гэту кнопку нельга прызначыць. Націсніце іншую.</string>
     <string name="learn_button_captured">Кнопка распазнана:</string>
+    <string name="learn_button_media_track_hint">Штатная перамотка трэка на гэтай кнопцы таксама спрацуе</string>
     <string name="learn_button_timeout">Кнопка не распазнана. Магчыма, яна не перадаецца сістэме. Паспрабуйце іншую.</string>
     <string name="learn_button_save">Захаваць</string>
     <string name="learn_button_again">Нанова</string>
@@ -503,6 +504,8 @@
     <string name="automation_trigger_type_steering_key">Клавіша руля</string>
     <string name="automation_trigger_steering_key_unassigned">Клавіша не прызначана</string>
     <string name="automation_trigger_steering_key_assign">прызначыць</string>
+    <string name="automation_trigger_steering_key_single">адно націсканне</string>
+    <string name="automation_trigger_steering_key_double">падвойнае націсканне</string>
     <string name="automation_steering_key_occupied_projection">Гэтая клавіша ўключае навігацыю на прыборнай панэлі. Вызваліце яе ў Наладах, раздзел Дысплей, або выберыце іншую.</string>
     <string name="automation_steering_key_occupied_voice">Гэтая клавіша выклікае галасавога памочніка BYDMate. Змяніце клавішу ў Наладах, раздзел Голас-агент, або выберыце іншую.</string>
     <string name="automation_steering_key_occupied_knob">Націсканне кола занята функцыяй play/pause. Выключыце яе ў Наладах, раздзел Дысплей, або выберыце іншую клавішу.</string>
@@ -2094,6 +2097,7 @@
     <string name="auto_ui_days_weekends">Па выхадных</string>
     <string name="auto_ui_phrase_button">Кнопка %1$d на віджэце</string>
     <string name="auto_ui_phrase_steering">Клавіша руля «%1$s»</string>
+    <string name="auto_ui_phrase_steering_double">Клавіша руля «%1$s», падвойнае націсканне</string>
     <string name="auto_ui_phrase_steering_none">Клавіша руля не прызначана</string>
     <string name="auto_ui_phrase_voice">Голасам «%1$s»</string>
     <string name="auto_ui_phrase_once">%1$s, адзін раз</string>

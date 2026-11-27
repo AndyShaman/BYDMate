@@ -1341,6 +1341,7 @@ private fun ButtonIconPicker(buttonNumber: Int) {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun SteeringKeyTriggerControls(
     trigger: TriggerDef,
@@ -1350,22 +1351,39 @@ private fun SteeringKeyTriggerControls(
     val context = LocalContext.current
     var learning by remember { mutableStateOf(false) }
     val code = trigger.value.toIntOrNull() ?: 0
-    Box(
-        modifier = Modifier
-            .minimumInteractiveComponentSize()
-            .heightIn(min = FIELD_HEIGHT)
-            .clip(FIELD_SHAPE)
-            .background(CardSurface)
-            .border(if (highlight) 1.5.dp else 1.dp, if (highlight) AccentOrange else CardBorder, FIELD_SHAPE)
-            .clickable { learning = true }
-            .padding(horizontal = 14.dp),
-        contentAlignment = Alignment.Center,
+    val isDouble = trigger.press == TriggerDef.PRESS_DOUBLE
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            if (code > 0) "${steeringKeyLabel(context, code)} ($code)"
-            else stringResource(R.string.automation_trigger_steering_key_assign),
-            fontSize = EDITOR_TEXT, color = AccentGreen, fontWeight = FontWeight.Bold,
-        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .minimumInteractiveComponentSize()
+                .heightIn(min = FIELD_HEIGHT)
+                .clip(FIELD_SHAPE)
+                .background(CardSurface)
+                .border(if (highlight) 1.5.dp else 1.dp, if (highlight) AccentOrange else CardBorder, FIELD_SHAPE)
+                .clickable { learning = true }
+                .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                if (code > 0) "${steeringKeyLabel(context, code)} ($code)"
+                else stringResource(R.string.automation_trigger_steering_key_assign),
+                fontSize = EDITOR_TEXT, color = AccentGreen, fontWeight = FontWeight.Bold,
+            )
+        }
+        Box(Modifier.align(Alignment.CenterVertically)) {
+            ChoiceChip(stringResource(R.string.automation_trigger_steering_key_single), !isDouble) {
+                if (isDouble) onUpdate(trigger.copy(press = null))
+            }
+        }
+        Box(Modifier.align(Alignment.CenterVertically)) {
+            ChoiceChip(stringResource(R.string.automation_trigger_steering_key_double), isDouble) {
+                if (!isDouble) onUpdate(trigger.copy(press = TriggerDef.PRESS_DOUBLE))
+            }
+        }
     }
 
     if (learning) {

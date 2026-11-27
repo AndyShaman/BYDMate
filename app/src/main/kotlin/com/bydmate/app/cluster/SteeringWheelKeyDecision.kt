@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // pure steering-wheel key gates
+
 package com.bydmate.app.cluster
 
 /**
@@ -168,3 +170,19 @@ fun steeringKeyDecision(keyCode: Int, isDown: Boolean, assigned: Boolean): Steer
     if (!assigned) return SteeringKeyDecision.PASS_THROUGH
     return if (isDown) SteeringKeyDecision.FIRE else SteeringKeyDecision.CONSUME
 }
+
+/** Standard Android media track keycodes handled by the firmware before the a11y filter (#455). */
+private const val MEDIA_NEXT_KEYCODE = 87
+private const val MEDIA_PREVIOUS_KEYCODE = 88
+
+/** True when the firmware switches the media track on [keyCode] before the a11y filter sees it. */
+fun isFirmwareMediaTrackKey(keyCode: Int): Boolean =
+    keyCode == MEDIA_NEXT_KEYCODE || keyCode == MEDIA_PREVIOUS_KEYCODE
+
+/**
+ * Pure gate for subsequent edges of a key already shown in the learn dialog (#451).
+ * Swallows every edge (UP, auto-repeats, a second press) of [capturedKeyCode] so it cannot fall
+ * through and trigger an existing rule while the dialog is open.
+ */
+fun learnCaptureSwallows(keyCode: Int, capturedKeyCode: Int?): Boolean =
+    capturedKeyCode != null && keyCode == capturedKeyCode

@@ -72,6 +72,7 @@
     <string name="learn_button_waiting">Нажмите кнопку на руле…</string>
     <string name="learn_button_rejected">Эту кнопку нельзя назначить. Нажмите другую.</string>
     <string name="learn_button_captured">Кнопка распознана:</string>
+    <string name="learn_button_media_track_hint">Штатная перемотка трека на этой кнопке тоже сработает</string>
     <string name="learn_button_timeout">Кнопка не распознана. Возможно, она не передаётся системе. Попробуйте другую.</string>
     <string name="learn_button_save">Сохранить</string>
     <string name="learn_button_again">Заново</string>
@@ -503,6 +504,8 @@
     <string name="automation_trigger_type_steering_key">Клавиша руля</string>
     <string name="automation_trigger_steering_key_unassigned">Клавиша не назначена</string>
     <string name="automation_trigger_steering_key_assign">назначить</string>
+    <string name="automation_trigger_steering_key_single">одно нажатие</string>
+    <string name="automation_trigger_steering_key_double">двойное нажатие</string>
     <string name="automation_steering_key_occupied_projection">Эта клавиша включает навигацию на приборке. Освободите её в Настройках, раздел Дисплей, или выберите другую.</string>
     <string name="automation_steering_key_occupied_voice">Эта клавиша вызывает голосового помощника BYDMate. Измените клавишу в Настройках, раздел Голос-агент, или выберите другую.</string>
     <string name="automation_steering_key_occupied_knob">Нажатие колёсика занято функцией play/pause. Выключите её в Настройках, раздел Дисплей, или выберите другую клавишу.</string>
@@ -2108,6 +2111,7 @@
     <string name="auto_ui_days_weekends">По выходным</string>
     <string name="auto_ui_phrase_button">Кнопка %1$d на виджете</string>
     <string name="auto_ui_phrase_steering">Клавиша руля «%1$s»</string>
+    <string name="auto_ui_phrase_steering_double">Клавиша руля «%1$s», двойное нажатие</string>
     <string name="auto_ui_phrase_steering_none">Клавиша руля не назначена</string>
     <string name="auto_ui_phrase_voice">Голосом «%1$s»</string>
     <string name="auto_ui_phrase_once">%1$s, один раз</string>

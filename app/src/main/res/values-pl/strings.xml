@@ -72,6 +72,7 @@
     <string name="learn_button_waiting">Naciśnij przycisk na kierownicy…</string>
     <string name="learn_button_rejected">Tego przycisku nie można przypisać. Naciśnij inny.</string>
     <string name="learn_button_captured">Rozpoznany przycisk:</string>
+    <string name="learn_button_media_track_hint">Fabryczna zmiana utworu na tym przycisku również zadziała</string>
     <string name="learn_button_timeout">Nie rozpoznano przycisku. Możliwe, że nie jest przekazywany do systemu. Spróbuj innego.</string>
     <string name="learn_button_save">Zapisz</string>
     <string name="learn_button_again">Od nowa</string>
@@ -503,6 +504,8 @@
     <string name="automation_trigger_type_steering_key">Klawisz kierownicy</string>
     <string name="automation_trigger_steering_key_unassigned">Klawisz nieprzypisany</string>
     <string name="automation_trigger_steering_key_assign">przypisz</string>
+    <string name="automation_trigger_steering_key_single">jedno naciśnięcie</string>
+    <string name="automation_trigger_steering_key_double">podwójne naciśnięcie</string>
     <string name="automation_steering_key_occupied_projection">Ten klawisz włącza nawigację na zestawie wskaźników. Zwolnij go w Ustawieniach, sekcja Ekran, albo wybierz inny.</string>
     <string name="automation_steering_key_occupied_voice">Ten klawisz wywołuje asystenta głosowego BYDMate. Zmień klawisz w Ustawieniach, sekcja Asystent głosowy, albo wybierz inny.</string>
     <string name="automation_steering_key_occupied_knob">Naciśnięcie pokrętła jest zajęte przez funkcję play/pause. Wyłącz ją w Ustawieniach, sekcja Ekran, albo wybierz inny klawisz.</string>
@@ -2094,6 +2097,7 @@
     <string name="auto_ui_days_weekends">W weekendy</string>
     <string name="auto_ui_phrase_button">Przycisk %1$d na widżecie</string>
     <string name="auto_ui_phrase_steering">Przycisk kierownicy „%1$s”</string>
+    <string name="auto_ui_phrase_steering_double">Przycisk kierownicy „%1$s”, podwójne naciśnięcie</string>
     <string name="auto_ui_phrase_steering_none">Przycisk kierownicy nieprzypisany</string>
     <string name="auto_ui_phrase_voice">Głosem „%1$s”</string>
     <string name="auto_ui_phrase_once">%1$s, jednorazowo</string>

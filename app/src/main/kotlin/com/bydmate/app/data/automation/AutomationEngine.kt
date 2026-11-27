@@ -47,6 +47,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+@Suppress("LargeClass") // rule evaluation loop, manual triggers and confirmation flow
 class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     private val ruleDao: RuleDao,
     private val ruleLogDao: RuleLogDao,
@@ -201,6 +202,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     // key event itself — a DB read there would run on the input path.
     private val _steeringKeyCodes = MutableStateFlow<Set<Int>>(emptySet())
     val steeringKeyCodes: StateFlow<Set<Int>> = _steeringKeyCodes
+    // Subset of steeringKeyCodes that have at least one enabled rule with press = "double" (#451).
+    private val _steeringKeyDoubleCodes = MutableStateFlow<Set<Int>>(emptySet())
+    val steeringKeyDoubleCodes: StateFlow<Set<Int>> = _steeringKeyDoubleCodes
 
     private data class PendingAction(
         val rule: RuleEntity,
@@ -221,13 +225,21 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     private fun observeSteeringKeyCodes() {
         scope.launch {
             ruleDao.getAll().collect { rules ->
-                _steeringKeyCodes.value = rules
+                val enabledTriggers = rules
                     .filter { it.enabled }
                     .flatMap { TriggerDef.listFromJson(it.triggers) }
                     .filter { it.kind == TRIGGER_KIND_STEERING_KEY }
-                    // 0 = "not assigned yet" (a trigger just added from the menu); it must never
-                    // claim a key, so the filter never sees it.
-                    .mapNotNullTo(HashSet()) { it.value.toIntOrNull()?.takeIf { code -> code > 0 } }
+                // 0 = "not assigned yet" (a trigger just added from the menu); it must never
+                // claim a key, so the filter never sees it.
+                val allCodes = HashSet<Int>()
+                val doubleCodes = HashSet<Int>()
+                for (trigger in enabledTriggers) {
+                    val code = trigger.value.toIntOrNull()?.takeIf { it > 0 } ?: continue
+                    allCodes.add(code)
+                    if (trigger.press == TriggerDef.PRESS_DOUBLE) doubleCodes.add(code)
+                }
+                _steeringKeyDoubleCodes.value = doubleCodes
+                _steeringKeyCodes.value = allCodes
             }
         }
     }
@@ -502,12 +514,23 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
     /**
      * Direct entry point for a steering-wheel key bound to a rule, called from the
-     * a11y key filter. Same manual semantics as [onButtonPress].
+     * a11y key filter. Same manual semantics as [onButtonPress]. Runs single-press rules only.
      *
      * Returns the number of rules matched by keycode (0 ⇒ nothing was bound to it).
      */
     suspend fun onSteeringKey(keyCode: Int): Int =
-        fireManualTrigger(TRIGGER_KIND_STEERING_KEY, keyCode.toString())
+        onSteeringKeyPress(keyCode, double = false)
+
+    /**
+     * Direct entry point for a steering-wheel key press distinguishing single ([double] = false,
+     * matching press null only) and double press ([double] = true, matching press "double" only).
+     */
+    suspend fun onSteeringKeyPress(keyCode: Int, double: Boolean): Int {
+        val expectedPress = if (double) TriggerDef.PRESS_DOUBLE else null
+        return fireManualTrigger(TRIGGER_KIND_STEERING_KEY, keyCode.toString()) { trigger ->
+            trigger.press == expectedPress
+        }
+    }
 
     /**
      * Shared body of the manual (event) trigger paths. Runs every ENABLED rule
@@ -524,10 +547,14 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
      * Returns the number of matched rules. A matched-but-park-gated rule still
      * counts, so the caller does not falsely report "no rules".
      */
-    private suspend fun fireManualTrigger(kind: String, value: String): Int {
+    private suspend fun fireManualTrigger(
+        kind: String,
+        value: String,
+        triggerPredicate: (TriggerDef) -> Boolean = { true },
+    ): Int {
         val matching = ruleDao.getEnabled().filter { rule ->
             TriggerDef.listFromJson(rule.triggers).any {
-                it.kind == kind && it.value == value
+                it.kind == kind && it.value == value && triggerPredicate(it)
             }
         }
         if (matching.isEmpty()) return 0

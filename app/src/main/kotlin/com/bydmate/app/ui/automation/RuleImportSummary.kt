@@ -171,9 +171,15 @@ internal object RuleImportSummary {
         return "${lc.getString(prefix)} «${trigger.placeName.orEmpty()}»"
     }
 
-    private fun steeringKeyValue(trigger: TriggerDef, lc: Context): String =
-        trigger.value.toIntOrNull()?.takeIf { it > 0 }?.let { steeringKeyLabel(lc, it) }
+    private fun steeringKeyValue(trigger: TriggerDef, lc: Context): String {
+        val label = trigger.value.toIntOrNull()?.takeIf { it > 0 }?.let { steeringKeyLabel(lc, it) }
             ?: lc.getString(R.string.automation_trigger_steering_key_unassigned)
+        return if (trigger.press == TriggerDef.PRESS_DOUBLE) {
+            "$label, ${lc.getString(R.string.automation_trigger_steering_key_double)}"
+        } else {
+            label
+        }
+    }
 
     private fun paramTrigger(trigger: TriggerDef, lc: Context): String {
         val option = TRIGGER_PARAMS.find { it.param == trigger.param }

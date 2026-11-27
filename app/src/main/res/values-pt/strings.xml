@@ -69,6 +69,7 @@
     <string name="learn_button_waiting">Pressione um botão do volante…</string>
     <string name="learn_button_rejected">Este botão não pode ser atribuído. Pressione outro.</string>
     <string name="learn_button_captured">Botão reconhecido:</string>
+    <string name="learn_button_media_track_hint">A troca padrão de faixa neste botão também será acionada</string>
     <string name="learn_button_timeout">Botão não reconhecido. Pode não chegar ao sistema. Tente outro.</string>
     <string name="learn_button_save">Salvar</string>
     <string name="learn_button_again">Novamente</string>
@@ -450,6 +451,8 @@
     <string name="automation_trigger_type_steering_key">Tecla do volante</string>
     <string name="automation_trigger_steering_key_unassigned">Tecla não atribuída</string>
     <string name="automation_trigger_steering_key_assign">atribuir</string>
+    <string name="automation_trigger_steering_key_single">toque simples</string>
+    <string name="automation_trigger_steering_key_double">toque duplo</string>
     <string name="automation_steering_key_occupied_projection">Esta tecla liga a navegação no painel de instrumentos. Libere-a em Configurações, seção Tela, ou escolha outra.</string>
     <string name="automation_steering_key_occupied_voice">Esta tecla chama o assistente de voz do BYDMate. Altere a tecla em Configurações, seção Agente de voz, ou escolha outra.</string>
     <string name="automation_steering_key_occupied_knob">O toque no botão giratório está ocupado pela função play/pause. Desative-a em Configurações, seção Tela, ou escolha outra tecla.</string>
@@ -1945,6 +1948,7 @@
     <string name="auto_ui_days_weekends">Nos fins de semana</string>
     <string name="auto_ui_phrase_button">Botão %1$d no widget</string>
     <string name="auto_ui_phrase_steering">Tecla do volante «%1$s»</string>
+    <string name="auto_ui_phrase_steering_double">Tecla do volante «%1$s», toque duplo</string>
     <string name="auto_ui_phrase_steering_none">Tecla do volante não definida</string>
     <string name="auto_ui_phrase_voice">Por voz «%1$s»</string>
     <string name="auto_ui_phrase_once">%1$s, uma vez</string>
