@@ -141,4 +141,25 @@ class SplitSessionManagerMode3FallbackTest {
         assertEquals(pair, h.prefs.getLastPair())
         coVerify(exactly = 0) { helper.setTaskSplitPrimary(any()) }
     }
+
+    @Test fun `sdk 29 unconfirmed toggle fails when narrow stays fullscreen after docking wide in mode 3`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        var docked = false
+        coEvery { helper.getTaskState("pkg.wide") } answers {
+            if (docked) task(7, 3) else task(7, 1)
+        }
+        coEvery { helper.getTaskState("pkg.narrow") } answers {
+            if (docked) task(8, 1) else task(-1, 0)
+        }
+        coEvery { helper.setTaskSplitPrimary(7) } answers {
+            docked = true
+            true
+        }
+        coEvery { helper.launchApp("pkg.narrow") } returns true
+        val h = nativeManager(helper, sdk = 29)
+
+        assertEquals(SplitStartResult.FREEFORM_UNAVAILABLE, h.mgr.start(pair))
+        assertTrue(h.mgr.freeformUnsupported())
+        assertNull(h.prefs.getLastPair())
+    }
 }

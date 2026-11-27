@@ -904,8 +904,8 @@ class TechPanelViewModelTest {
     }
 
     @Test
-    fun `460 - tyre card hides when all pressures are zero, stays shown for one flat tyre or real pressures`() {
-        assertFalse(TechPanelUiState(tirePressFL = 0, tirePressFR = 0, tirePressRL = 0, tirePressRR = 0).showTyres)
+    fun `460 - tyre card stays shown when pressures are zero so unregistered sensors can open the tyre window`() {
+        assertTrue(TechPanelUiState(tirePressFL = 0, tirePressFR = 0, tirePressRL = 0, tirePressRR = 0).showTyres)
         assertTrue(TechPanelUiState(tirePressFL = 0, tirePressFR = 230, tirePressRL = 230, tirePressRR = 230).showTyres)
         assertTrue(TechPanelUiState(tirePressFL = 230, tirePressFR = 230, tirePressRL = 230, tirePressRR = 230).showTyres)
         assertFalse(TechPanelUiState().showTyres)

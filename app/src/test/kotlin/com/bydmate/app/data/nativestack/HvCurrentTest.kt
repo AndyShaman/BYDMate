@@ -44,4 +44,9 @@ class HvCurrentTest {
             assertEquals("raw=$raw", expectedAmps, decoded!!, 0.01f)
         }
     }
+
+    @Test fun `fromCanInt rejects raw 0 sent on empty push`() {
+        assertNull(HvCurrent.fromCanInt(0))
+        assertEquals(1.8f, HvCurrent.fromCanInt(5018)!!, 0.01f)
+    }
 }

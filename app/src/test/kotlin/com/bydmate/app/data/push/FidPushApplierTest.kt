@@ -1,6 +1,7 @@
 package com.bydmate.app.data.push
 
 import com.bydmate.app.data.nativestack.FidMap
+import com.bydmate.app.data.nativestack.HvCurrent
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.remote.diParsData
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +105,17 @@ class FidPushApplierTest {
         val flow = MutableStateFlow<DiParsData?>(diParsData(windowFL = 10))
         assertFalse(FidPushApplier.patch(flow, "windowFL", 255, 0.0))
         assertEquals(10, flow.value?.windowFL)
+    }
+
+    @Test fun `in HvCurrent int mode a push with rawInt 0 leaves hvCurrent unchanged`() {
+        HvCurrent.setIntMode(true)
+        try {
+            val flow = MutableStateFlow<DiParsData?>(diParsData().copy(hvCurrent = 12.3))
+            assertFalse(FidPushApplier.patch(flow, "hvCurrent", intValue = 0, doubleValue = 0.0))
+            assertEquals(12.3, flow.value?.hvCurrent!!, 0.001)
+        } finally {
+            HvCurrent.reset()
+        }
     }
 
     /**

@@ -11,6 +11,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -267,6 +268,66 @@ class VehicleApiSeatFallbackTwoLevelTest {
         assertTrue(lines.none { it.contains("ch=fallback") })
         assertTrue(lines.any { it.contains("W driver_seat_heat_level ch=primary dev=1000 fid=1276252180 val=3 status=1 outcome=REAL") })
         assertTrue(lines.any { it.contains("A DRIVER_HEAT lvl=3 ch=primary outcome=REAL rb=expect=1 got=1") })
+    }
+
+    @Test fun `fallback driver level 3 clamps to 3 when 6 answers NOOP and state reads 1 or 2`() = runTest {
+        for (state in listOf(1L, 2L)) {
+            writes.clear()
+            coEvery { helper.writeStatus(any(), any(), any(), any()) } coAnswers {
+                val dev = firstArg<Int>()
+                val fid = secondArg<Int>()
+                val value = thirdArg<Int>()
+                writes += Triple(dev, fid, value)
+                if (value == 6) 0 else 1
+            }
+            coEvery { helper.read(DEV_SETTING, DRIVER_STATE_CANFD, any()) } returns state
+
+            assertTrue("state=$state", api().dispatch("主驾座椅加热3档").isSuccess)
+            assertEquals("state=$state", listOf(6, 3), fallbackValues(DRIVER_HEAT_FALLBACK_FID))
+        }
+    }
+
+    @Test fun `fallback passenger level 3 clamps to 3 when 4 answers NOOP and state reads 1 or 2`() = runTest {
+        for (state in listOf(1L, 2L)) {
+            writes.clear()
+            coEvery { helper.writeStatus(any(), any(), any(), any()) } coAnswers {
+                val dev = firstArg<Int>()
+                val fid = secondArg<Int>()
+                val value = thirdArg<Int>()
+                writes += Triple(dev, fid, value)
+                if (value == 4) 0 else 1
+            }
+            coEvery { helper.read(DEV_SETTING, PASSENGER_STATE_CANFD, any()) } returns state
+
+            assertTrue("state=$state", api().dispatch("副驾座椅加热3档").isSuccess)
+            assertEquals("state=$state", listOf(4, 3), fallbackValues(PASSENGER_HEAT_FALLBACK_FID))
+        }
+    }
+
+    @Test fun `fallback driver level 3 writes 6 only and is not success when 6 answers NOOP and state reads 6`() = runTest {
+        coEvery { helper.writeStatus(any(), any(), any(), any()) } coAnswers {
+            writes += Triple(firstArg(), secondArg(), thirdArg())
+            0
+        }
+        coEvery { helper.read(DEV_SETTING, DRIVER_STATE_CANFD, any()) } returns 6L
+
+        assertFalse(api().dispatch("主驾座椅加热3档").isSuccess)
+        assertEquals(listOf(6), fallbackValues(DRIVER_HEAT_FALLBACK_FID))
+    }
+
+    @Test fun `fallback driver level 3 skips state read when first write is TRANSIENT`() = runTest {
+        for (transientStatus in listOf(null, -1)) {
+            writes.clear()
+            io.mockk.clearMocks(helper, answers = false, recordedCalls = true)
+            coEvery { helper.writeStatus(any(), any(), any(), any()) } coAnswers {
+                writes += Triple(firstArg(), secondArg(), thirdArg())
+                transientStatus
+            }
+
+            assertFalse("status=$transientStatus", api().dispatch("主驾座椅加热3档").isSuccess)
+            assertEquals("status=$transientStatus", listOf(6), fallbackValues(DRIVER_HEAT_FALLBACK_FID))
+            coVerify(exactly = 0) { helper.read(DEV_SETTING, any(), any()) }
+        }
     }
 
     private companion object {

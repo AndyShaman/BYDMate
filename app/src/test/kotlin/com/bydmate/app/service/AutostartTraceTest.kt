@@ -77,4 +77,13 @@ class AutostartTraceTest {
             assertEquals("$action", false, AutostartTrace.isColdBoot(action, fromQuickboot = false))
         }
     }
+
+    @Test fun `coldBootGuardApplies is true only on Android 12`() {
+        assertEquals(false, AutostartTrace.coldBootGuardApplies(29))
+        assertEquals(false, AutostartTrace.coldBootGuardApplies(30))
+        assertEquals(true, AutostartTrace.coldBootGuardApplies(31))
+        assertEquals(true, AutostartTrace.coldBootGuardApplies(32))
+        assertEquals(false, AutostartTrace.coldBootGuardApplies(33))
+        assertEquals(false, AutostartTrace.coldBootGuardApplies(34))
+    }
 }
