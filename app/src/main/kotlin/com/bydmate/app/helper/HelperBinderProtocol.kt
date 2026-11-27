@@ -694,6 +694,16 @@ object HelperBinderProtocol {
      */
     val TX_DIAG_JOB_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 70  // 71
 
+    /**
+     * Docks a running task into Android 10 split-screen-primary (windowing mode 3) through
+     * IActivityTaskManager.setTaskWindowingMode(taskId, 3, true) (#385).
+     *
+     * Request: [int taskId]
+     * Reply:   [int status (0 = ok, -1 = failed), int 0]
+     * An old daemon without this handler makes transact return false -> the client returns false.
+     */
+    val TX_SET_TASK_SPLIT_PRIMARY: Int = IBinder.FIRST_CALL_TRANSACTION + 71  // 72
+
     /** TX_SET_AUTO_VOICE outcomes: called; no such method on this firmware; the audio service or
      *  the call threw. */
     const val AUTO_VOICE_APPLIED = 0

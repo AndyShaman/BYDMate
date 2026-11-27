@@ -1348,15 +1348,70 @@ class SplitSessionManager(
                 journal.append("$line OK (split confirmed: $seen)")
                 return SplitStartResult.OK
             }
-            if (waitedMs >= NATIVE_CHECK_MS) {
-                if (wide.taskId != -1 && wide.windowingMode == WINDOWING_FULLSCREEN) {
-                    oldAndroidNoSplit = true
-                    journal.append("$line not confirmed: $seen")
-                    return SplitStartResult.FREEFORM_UNAVAILABLE
-                }
+            if (waitedMs < NATIVE_CHECK_MS) {
+                delay(NATIVE_CHECK_STEP_MS)
+                waitedMs += NATIVE_CHECK_STEP_MS
+                continue
+            }
+            if (wide.taskId != -1 && wide.windowingMode == WINDOWING_FULLSCREEN) {
+                return resolveFullscreenNativeSplitLocked(pair, wide.taskId, line, seen)
+            }
+            prefs.saveLastPair(pair)
+            journal.append("$line OK (unverified: $seen)")
+            return SplitStartResult.OK
+        }
+    }
+
+    private suspend fun resolveFullscreenNativeSplitLocked(
+        pair: SplitPair,
+        wideTaskId: Int,
+        line: String,
+        seen: String,
+    ): SplitStartResult {
+        if (SplitMode3Fallback.applies(platformSdk, nativeConfirmed = false)) {
+            tryMode3FallbackLocked(pair, wideTaskId, line)?.let { return it }
+        }
+        oldAndroidNoSplit = true
+        journal.append("$line not confirmed: $seen")
+        return SplitStartResult.FREEFORM_UNAVAILABLE
+    }
+
+    /**
+     * Android 10 (SDK <= 29) fallback when the BYD toggle broadcast left the wide task fullscreen
+     * (#385): dock the wide task in windowing mode 3, launch the narrow app once, and wait up to
+     * [NATIVE_CHECK_MS] for mode 3 plus a live narrow task. Returns OK when confirmed, null else.
+     */
+    private suspend fun tryMode3FallbackLocked(
+        pair: SplitPair,
+        wideTaskId: Int,
+        line: String,
+    ): SplitStartResult? {
+        if (!helper.setTaskSplitPrimary(wideTaskId)) {
+            journal.append("$line mode3 fallback: setTaskSplitPrimary(task=$wideTaskId) false")
+            return null
+        }
+        if (!helper.launchApp(pair.narrowPkg)) {
+            journal.append("$line mode3 fallback: launchApp(${pair.narrowPkg}) false")
+            return null
+        }
+        var waitedMs = 0L
+        while (true) {
+            val wide = helper.getTaskState(pair.widePkg)
+            if (wide == null) {
+                journal.append("$line mode3 fallback not confirmed: wide=null after ${waitedMs}ms")
+                return null
+            }
+            val narrow = helper.getTaskState(pair.narrowPkg)
+            val seen = "wide ${wide.describe()} narrow ${narrow?.describe() ?: "null"} after ${waitedMs}ms"
+            if (wide.windowingMode == WINDOWING_SPLIT_PRIMARY && narrow != null && narrow.taskId != -1) {
+                oldAndroidNoSplit = false
                 prefs.saveLastPair(pair)
-                journal.append("$line OK (unverified: $seen)")
+                journal.append("$line OK (mode3 confirmed: $seen)")
                 return SplitStartResult.OK
+            }
+            if (waitedMs >= NATIVE_CHECK_MS) {
+                journal.append("$line mode3 fallback not confirmed: $seen")
+                return null
             }
             delay(NATIVE_CHECK_STEP_MS)
             waitedMs += NATIVE_CHECK_STEP_MS

@@ -302,21 +302,8 @@ fun main(args: Array<String>) {
                     }
                 }
 
-                HelperBinderProtocol.TX_SET_TASK_WINDOWING_MODE -> runCatching {
-                    val taskId = data.readInt(); val mode = data.readInt()
-                    handleSetWindowingModeTx(
-                        taskId, mode, readTrailingPaneType(data),
-                        reflectSet = ::setTaskWindowingModeReflect,
-                        resolveComponent = { packageForTask(taskId)?.let { resolveLaunchComponent(it) } },
-                        shell = amShell,
-                        getActivityType = { ti -> taskActivityType(ti) },
-                        sleep = { Thread.sleep(it) },
-                        // Enables the non-destructive freeform probe before a retype remove.
-                        stateOf = { ti -> taskModeState(ti) },
-                    )
-                    reply?.writeInt(0); reply?.writeInt(0)
-                    true
-                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+                HelperBinderProtocol.TX_SET_TASK_WINDOWING_MODE,
+                HelperBinderProtocol.TX_SET_TASK_SPLIT_PRIMARY -> handleWindowingModeTransact(code, data, reply)
 
                 HelperBinderProtocol.TX_CREATE_VIRTUAL_DISPLAY -> {
                     var logFlags = 0; var logWidth = 0; var logHeight = 0

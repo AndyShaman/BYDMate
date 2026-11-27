@@ -349,6 +349,12 @@ interface HelperClient {
     suspend fun setTaskWindowingMode(
         taskId: Int, windowingMode: Int, activityType: Int = HelperBinderProtocol.PANE_TYPE_RECENTS,
     ): Boolean
+
+    /**
+     * Docks [taskId] into Android 10 split-screen-primary (windowing mode 3) (#385).
+     * Always false on SDK > 29 (without calling the daemon), on any failure, or on an older daemon.
+     */
+    suspend fun setTaskSplitPrimary(taskId: Int): Boolean = false
     /**
      * Narrow appops grant to our own package: SYSTEM_ALERT_WINDOW (draw the cluster overlay)
      * and PROJECT_MEDIA (third-party access to the fission screen-projection display, else
@@ -842,6 +848,23 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             readAccepted(status)
         } ?: false
+
+    override suspend fun setTaskSplitPrimary(taskId: Int): Boolean {
+        val sdk = android.os.Build.VERSION.SDK_INT
+        if (sdk > SPLIT_PRIMARY_MAX_SDK) {
+            Log.i(TAG, "setTaskSplitPrimary task=$taskId ok=false (sdk=$sdk)")
+            return false
+        }
+        val ok = if (taskId <= 0) {
+            false
+        } else {
+            transactParsed(HelperBinderProtocol.TX_SET_TASK_SPLIT_PRIMARY, { it.writeInt(taskId) }) { reply ->
+                reply.dataAvail() >= 4 && reply.readInt() == 0
+            } ?: false
+        }
+        Log.i(TAG, "setTaskSplitPrimary task=$taskId ok=$ok")
+        return ok
+    }
 
     override suspend fun grantOverlayPermission(): Boolean =
         statusOk(HelperBinderProtocol.TX_GRANT_OVERLAY_PERMISSION) { }
@@ -1702,5 +1725,8 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         /** Safety cap on the number of TX_DUMP_FIDS loop iterations (chunks). 64 × 64 KiB = 4 MiB,
          *  far above any realistic SDK catalog size; guards against a misbehaving daemon. */
         private const val MAX_DUMP_CHUNKS = 64
+
+        /** Highest Android SDK level where TX_SET_TASK_SPLIT_PRIMARY is allowed (#385). */
+        private const val SPLIT_PRIMARY_MAX_SDK = 29
     }
 }

@@ -108,7 +108,7 @@ private const val LUMA_H = 18
  * Mean brightness of what [view] shows right now, from a tiny bitmap; a failed read is a failed
  * result, so nothing here can break the preview.
  */
-private fun frameLuma(view: TextureView?): Result<Int?> = runCatching {
+internal fun frameLuma(view: TextureView?): Result<Int?> = runCatching {
     val bitmap = view?.getBitmap(LUMA_W, LUMA_H) ?: return@runCatching null
     try {
         val pixels = IntArray(bitmap.width * bitmap.height)
@@ -120,7 +120,7 @@ private fun frameLuma(view: TextureView?): Result<Int?> = runCatching {
 }
 
 /** The luma for the log: the number, the error's class name, or `none` without a bitmap. */
-private fun Result<Int?>.lumaText(): String =
+internal fun Result<Int?>.lumaText(): String =
     getOrNull()?.toString() ?: exceptionOrNull()?.javaClass?.simpleName ?: "none"
 
 /**
@@ -239,6 +239,11 @@ class BlindSpotController @Inject constructor(
     /** Last late-frame luma per side (#409, #397), for the dump; null until one was measured. */
     @Volatile private var lateLumaLeft: Int? = null
     @Volatile private var lateLumaRight: Int? = null
+    @Volatile private var apaProbeDone = false
+    private val sideLumasForProbe: () -> Pair<String, String> = {
+        BlindSpotApaProbe.formatSideLuma(clusterWindow?.currentLuma, lateLumaLeft) to
+            BlindSpotApaProbe.formatSideLuma(pipWindow?.currentLuma, lateLumaRight)
+    }
     /** True while the loss watchdog is closing the pipeline, so only the transition is logged. */
     private var telemetryLost = false
     private var cameraOpen = false
@@ -1013,6 +1018,8 @@ class BlindSpotController @Inject constructor(
         private var glow: View? = null
         private var glowAnimator: ValueAnimator? = null
         private var frames = 0
+        /** First valid frame luma on this surface, for the one-time APA probe (#409). */
+        private var firstLuma: Int? = null
 
         /** The second luma look of this surface (#409, #397) was taken. */
         private var lateLumaDone = false
@@ -1033,6 +1040,8 @@ class BlindSpotController @Inject constructor(
             private set
 
         val hasValidFrame: Boolean get() = frames >= 2
+
+        val currentLuma: Result<Int?> get() = frameLuma(textureView)
 
         fun attach(
             windowContext: Context,
@@ -1166,6 +1175,7 @@ class BlindSpotController @Inject constructor(
             params = null
             wm = null
             frames = 0
+            firstLuma = null
             lateLumaDone = false
             lastFrameAt = 0L
             validFrameAt = 0L
@@ -1178,6 +1188,7 @@ class BlindSpotController @Inject constructor(
             surface?.release()
             surface = Surface(texture)
             frames = 0
+            firstLuma = null
             lateLumaDone = false
             lastFrameAt = 0L
             validFrameAt = 0L
@@ -1207,7 +1218,9 @@ class BlindSpotController @Inject constructor(
                 // The frame counter cannot tell a black frame from a picture, and the side views
                 // of the non-panoramic cameras stayed black on some cars (#409, #397).
                 if (blindSpotLumaChecked(probe.cameraTag)) {
-                    val luma = frameLuma(textureView).lumaText()
+                    val result = frameLuma(textureView)
+                    firstLuma = result.getOrNull()
+                    val luma = result.lumaText()
                     Log.i(TAG, "first frame luma $label side=$side tag=${probe.cameraTag}: $luma")
                     Trace.event(TraceArea.CAMERA, "first-frame-luma", "side" to side, "luma" to luma)
                 }
@@ -1215,13 +1228,18 @@ class BlindSpotController @Inject constructor(
             if (lateLumaDue(validFrameAt, now, lateLumaDone) && blindSpotLumaChecked(probe.cameraTag)) {
                 lateLumaDone = true
                 val result = frameLuma(textureView)
+                val lateLuma = result.getOrNull()
                 val luma = result.lumaText()
                 Log.i(TAG, "late frame luma $label side=$side tag=${probe.cameraTag}: $luma")
                 Trace.event(TraceArea.CAMERA, "late-frame-luma", "side" to side, "luma" to luma)
                 when (side) {
-                    BlindSpotSide.LEFT -> lateLumaLeft = result.getOrNull()
-                    BlindSpotSide.RIGHT -> lateLumaRight = result.getOrNull()
+                    BlindSpotSide.LEFT -> lateLumaLeft = lateLuma
+                    BlindSpotSide.RIGHT -> lateLumaRight = lateLuma
                     BlindSpotSide.NONE -> Unit
+                }
+                if (BlindSpotApaProbe.shouldProbe(probe.cameraTag, firstLuma, lateLuma, apaProbeDone)) {
+                    apaProbeDone = true
+                    ownScope.launch { BlindSpotApaProbe.run(context, probe, cameraDispatcher(), sideLumasForProbe) }
                 }
             }
             lastFrameAt = now

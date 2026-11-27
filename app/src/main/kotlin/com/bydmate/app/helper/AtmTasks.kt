@@ -414,6 +414,63 @@ internal fun setTaskWindowingModeReflect(taskId: Int, windowingMode: Int) {
     if (result == false) throw IllegalStateException("setTaskWindowingMode(task=$taskId, mode=$windowingMode) returned false")
 }
 
+/**
+ * Moves the running [taskId] into Android 10 split-screen-primary (windowing mode 3) on top (#385).
+ * False from setTaskWindowingMode means the firmware refused the dock without throwing.
+ */
+internal fun setTaskSplitPrimaryReflect(taskId: Int) {
+    require(taskId > 0) { "invalid taskId=$taskId" }
+    val iAtm = activityTaskManager()
+    val result = iAtm.javaClass.getMethod(
+        "setTaskWindowingMode",
+        Int::class.javaPrimitiveType,
+        Int::class.javaPrimitiveType,
+        Boolean::class.javaPrimitiveType,
+    ).invoke(iAtm, taskId, 3, true)
+    check(result != false) { "setTaskWindowingMode(task=$taskId, mode=3) returned false" }
+}
+
+/** Handles TX_SET_TASK_WINDOWING_MODE and TX_SET_TASK_SPLIT_PRIMARY (#385). */
+internal fun handleWindowingModeTransact(code: Int, data: android.os.Parcel, reply: android.os.Parcel?): Boolean =
+    if (code == HelperBinderProtocol.TX_SET_TASK_SPLIT_PRIMARY) {
+        handleSetTaskSplitPrimary(data, reply)
+    } else {
+        runCatching {
+            val taskId = data.readInt(); val mode = data.readInt()
+            handleSetWindowingModeTx(
+                taskId, mode, readTrailingPaneType(data),
+                reflectSet = ::setTaskWindowingModeReflect,
+                resolveComponent = { packageForTask(taskId)?.let { resolveLaunchComponent(it) } },
+                shell = amShell,
+                getActivityType = { ti -> taskActivityType(ti) },
+                sleep = { Thread.sleep(it) },
+                // Enables the non-destructive freeform probe before a retype remove.
+                stateOf = { ti -> taskModeState(ti) },
+            )
+            reply?.writeInt(0); reply?.writeInt(0)
+            true
+        }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+    }
+
+/** Handles TX_SET_TASK_SPLIT_PRIMARY inside HelperDaemon.onTransact (#385). */
+private fun handleSetTaskSplitPrimary(data: android.os.Parcel, reply: android.os.Parcel?): Boolean {
+    var logTaskId = -1
+    return runCatching {
+        val taskId = data.readInt()
+        logTaskId = taskId
+        setTaskSplitPrimaryReflect(taskId)
+        android.util.Log.i("bydmate_helper", "TX_SET_TASK_SPLIT_PRIMARY task=$logTaskId ok")
+        reply?.writeInt(0)
+        reply?.writeInt(0)
+        true
+    }.getOrElse { t ->
+        android.util.Log.w("bydmate_helper", "TX_SET_TASK_SPLIT_PRIMARY failed task=$logTaskId: ${t.message}")
+        reply?.writeInt(-1)
+        reply?.writeInt(0)
+        true
+    }
+}
+
 internal fun setTaskBoundsReflect(taskId: Int, left: Int, top: Int, right: Int, bottom: Int) {
     val iAtm = activityTaskManager()
     val resizeTask = iAtm.javaClass.getMethod("resizeTask", Int::class.javaPrimitiveType, Rect::class.java, Int::class.javaPrimitiveType)

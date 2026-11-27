@@ -57,5 +57,6 @@ private val WIRE_NUMBERS: Map<String, Int> by lazy {
         "TX_PRESS_BACK" to 66,
         "TX_PRESS_HOME" to 67,
         "TX_TPMS_READ_START" to 68, "TX_TPMS_WRITE_START" to 69, "TX_FW_READ_START" to 70, "TX_DIAG_JOB_STATUS" to 71,
+        "TX_SET_TASK_SPLIT_PRIMARY" to 72,
     )
 }

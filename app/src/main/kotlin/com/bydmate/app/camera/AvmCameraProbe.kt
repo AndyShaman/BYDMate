@@ -311,6 +311,54 @@ class AvmCameraProbe(
         _log.value = (_log.value + "${stamp.format(Date(clock()))} $line").takeLast(300)
     }
 
+    /**
+     * Reads the open camera's reported preview/picture size and format (#409). Best-effort: every
+     * reflective step is isolated so a missing vendor method only omits that field.
+     */
+    internal val cameraMeta: String
+        @Synchronized get() {
+            val info = runCatching { classLookup(BMM_CAMERA_INFO, cameraLoader) }.getOrNull()
+            return readAvmCameraMeta(camera, cameraId, info)
+        }
+
+    /**
+     * Attaches or detaches a temporary diagnostic surface on [index] while the camera is open
+     * (#409). Tracked in [bound] so [close] unbinds it too if teardown runs mid-probe.
+     */
+    @Synchronized
+    internal fun setProbeSurface(index: Int, surface: Surface, attach: Boolean): Boolean {
+        val cam = camera
+        if (!attach) {
+            if (bound[index] !== surface) return true
+            bound.remove(index)
+            if (cam != null) {
+                runCatching {
+                    cam.javaClass.getMethod("rmPreviewSurface", Surface::class.java, Int::class.java)
+                        .invoke(cam, surface, index)
+                }
+            }
+            return true
+        }
+        if (cam == null) return false
+        return runCatching {
+            val avm = cam.javaClass
+            val added = avm.getMethod("addPreviewSurface", Surface::class.java, Int::class.java)
+                .invoke(cam, surface, index)
+            val set = avm.getMethod("setPreviewSurface", Surface::class.java, Int::class.java)
+                .invoke(cam, surface, index)
+            if (added == false || set == false) {
+                runCatching {
+                    avm.getMethod("rmPreviewSurface", Surface::class.java, Int::class.java)
+                        .invoke(cam, surface, index)
+                }
+                false
+            } else {
+                bound[index] = surface
+                true
+            }
+        }.getOrDefault(false)
+    }
+
     private fun openWithConstructor(avm: Class<*>): Any? {
         val ctor = avm.getDeclaredConstructor(Int::class.java).apply { isAccessible = true }
         val cam = ctor.newInstance(cameraId)
@@ -416,3 +464,41 @@ private val AVM_EVENT_NAMES = mapOf(
     1009 to "device-free",
     1010 to "hal-died",
 )
+
+private fun readAvmCameraMeta(cam: Any?, cameraId: Int, info: Class<*>?): String {
+    val parts = mutableListOf<String>()
+    if (cam != null) {
+        val avm = cam.javaClass
+        val pw = runCatching { avm.getMethod("getPreviewWidth").invoke(cam) }.getOrNull()
+        val ph = runCatching { avm.getMethod("getPreviewHeight").invoke(cam) }.getOrNull()
+        if (pw != null || ph != null) parts += "preview=${pw}x$ph"
+        val params = runCatching { avm.getMethod("getParameters").invoke(cam) }.getOrNull()
+        if (params != null) {
+            parts += readAvmParametersMeta(params)
+        }
+    }
+    if (info != null && cameraId >= 0) {
+        val dw = runCatching { info.getMethod("getDefaultPreviewWidth", Int::class.java).invoke(null, cameraId) }.getOrNull()
+        val dh = runCatching { info.getMethod("getDefaultPreviewHeight", Int::class.java).invoke(null, cameraId) }.getOrNull()
+        if (dw != null || dh != null) parts += "default=${dw}x$dh"
+        val dataType = runCatching { info.getMethod("getDefaultDataType", Int::class.java).invoke(null, cameraId) }.getOrNull()
+        if (dataType != null) parts += "dataType=${dataType.toString().trim().ifEmpty { "(empty)" }}"
+    }
+    return parts.joinToString(" ").ifEmpty { "meta=none" }
+}
+
+private fun readAvmParametersMeta(params: Any): List<String> {
+    val cls = params.javaClass
+    val out = mutableListOf<String>()
+    fun sizeText(method: String): String? = runCatching {
+        val sz = cls.getMethod(method).invoke(params) ?: return@runCatching null
+        val w = sz.javaClass.getField("width").getInt(sz)
+        val h = sz.javaClass.getField("height").getInt(sz)
+        "${w}x$h"
+    }.getOrNull()
+    sizeText("getPreviewSize")?.let { out += "paramPreview=$it" }
+    runCatching { cls.getMethod("getPreviewFormat").invoke(params) }.getOrNull()?.let { out += "previewFmt=$it" }
+    sizeText("getPictureSize")?.let { out += "picture=$it" }
+    runCatching { cls.getMethod("getPictureFormat").invoke(params) }.getOrNull()?.let { out += "pictureFmt=$it" }
+    return out
+}
