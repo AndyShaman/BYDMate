@@ -72,6 +72,7 @@ class AdbRestoreManagerTest {
         var classicResults = mutableListOf(false, true)
         var classicCalls = 0
         var helperStarts = 0
+        var helperThrows: RuntimeException? = null
         /** Our accessibility service bound by the framework. */
         var a11yBound = false
         var a11yEnableCalls = 0
@@ -147,6 +148,7 @@ class AdbRestoreManagerTest {
                 withContext(NonCancellable) { it.await() }
                 currentCoroutineContext().ensureActive()
             }
+            helperThrows?.let { throw it }
             return true
         }
 
@@ -246,7 +248,7 @@ class AdbRestoreManagerTest {
     }
 
     @Test
-    fun `live classic port reports NotNeeded and writes nothing`() = runTest {
+    fun `live classic port reports NotNeeded, writes nothing and brings the helper up`() = runTest {
         val system = FakeSystem().apply { classicResults = mutableListOf(true) }
         val m = manager(FakePrefs(), system)
 
@@ -254,7 +256,37 @@ class AdbRestoreManagerTest {
 
         assertEquals(AdbRestoreState.NotNeeded, m.state.value)
         assertTrue(system.settingsWrites.isEmpty())
-        assertEquals(0, system.helperStarts)
+        assertEquals(1, system.helperStarts)
+    }
+
+    @Test
+    fun `live classic port keeps NotNeeded and returns normally when helper start throws`() = runTest {
+        val system = FakeSystem().apply {
+            classicResults = mutableListOf(true)
+            helperThrows = IllegalStateException("helper start failed")
+        }
+        val m = manager(FakePrefs(), system)
+
+        m.attemptIfNeeded("service_start")
+
+        assertEquals(AdbRestoreState.NotNeeded, m.state.value)
+        assertEquals(1, system.helperStarts)
+    }
+
+    @Test
+    fun `live classic port on a boot already marked Restored keeps Restored and starts the helper`() = runTest {
+        val system = FakeSystem().apply { classicResults = mutableListOf(false, true) }
+        val m = manager(FakePrefs(), system)
+
+        m.attemptIfNeeded("service_start")
+        val restored = m.state.value
+        assertTrue("expected Restored, got $restored", restored is AdbRestoreState.Restored)
+        assertEquals(1, system.helperStarts)
+
+        m.attemptIfNeeded("watchdog")
+
+        assertEquals(restored, m.state.value)
+        assertEquals(2, system.helperStarts)
     }
 
     @Test
@@ -440,9 +472,10 @@ class AdbRestoreManagerTest {
 
         assertEquals(1, reentrantCalls)
         // The interleaved attempt would have written the setting a second time; the deferred
-        // rerun happens only after the first one has finished restoring the port.
+        // rerun happens only after the first one has finished restoring the port, then finds the
+        // classic port already alive and brings the helper up once more while keeping Restored.
         assertEquals(listOf(1), system.settingsWrites)
-        assertEquals(1, system.helperStarts)
+        assertEquals(2, system.helperStarts)
         // Restore probe (2 calls) plus the rerun, which finds the port already alive and keeps
         // the Restored status of this boot instead of replacing it with NotNeeded.
         assertEquals(3, system.classicCalls)
