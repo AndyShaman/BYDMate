@@ -21,6 +21,7 @@ import io.mockk.verifyOrder
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -298,5 +299,30 @@ class ActionDispatcherMediaKeyTest {
         } finally {
             unmockkStatic(Log::class)
         }
+    }
+
+    @Test fun `resolvePlayPause picks pause when any session is playing and play otherwise`() {
+        assertEquals("pause", ActionDispatcher.resolvePlayPause(listOf(3)))
+        assertEquals("pause", ActionDispatcher.resolvePlayPause(listOf(2, 3)))
+        assertEquals("play", ActionDispatcher.resolvePlayPause(listOf(2)))
+        assertEquals("play", ActionDispatcher.resolvePlayPause(listOf(null)))
+        assertEquals("play", ActionDispatcher.resolvePlayPause(emptyList<Int?>()))
+    }
+
+    @Test fun `mediaKeyNameRes returns a resource for play_pause and keeps play and pause`() {
+        assertNotNull(ActionDispatcher.mediaKeyNameRes("play_pause"))
+        assertEquals(R.string.automation_action_media_play, ActionDispatcher.mediaKeyNameRes("play"))
+        assertEquals(R.string.automation_action_media_pause, ActionDispatcher.mediaKeyNameRes("pause"))
+    }
+
+    @Test fun `play_pause dispatches PAUSE 127 while playing and PLAY 126 while paused`() = runBlocking {
+        dispatcher.activeMediaControllers = { listOf(session("a.paused", 2), session("b.playing", 3)) }
+        assertTrue(dispatcher.dispatch(key("play_pause"), null).success)
+        assertEquals(listOf("b.playing" to 127), sent)
+
+        sent.clear()
+        dispatcher.activeMediaControllers = { listOf(session("a.paused", 2)) }
+        assertTrue(dispatcher.dispatch(key("play_pause"), null).success)
+        assertEquals(listOf("a.paused" to 126), sent)
     }
 }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -143,5 +144,21 @@ class LogTelegramSenderTest {
         coVerify(exactly = 1) { sink.sendDocument("123:abc", 777L, file, file.name) }
         assertEquals(AppStrings(ctx).get(com.bydmate.app.R.string.settings_log_tg_sent), results.last())
         assertEquals(false, sender.sending.value)
+    }
+
+    @Test fun `sentPath records successful auto upload path and stays null on failure`() = runTest {
+        assertNull(sender.sentPath.value)
+        val failingFile = log()
+        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.failure(RuntimeException("net"))
+        start()
+        stop(failingFile)
+        runCurrent()
+        assertNull(sender.sentPath.value)
+
+        val okFile = log()
+        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
+        stop(okFile)
+        runCurrent()
+        assertEquals(okFile.absolutePath, sender.sentPath.value)
     }
 }

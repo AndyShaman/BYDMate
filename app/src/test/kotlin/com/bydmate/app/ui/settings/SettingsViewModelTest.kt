@@ -2487,4 +2487,25 @@ class SettingsViewModelTest {
         assertEquals("true", settingsDao.map[SettingsRepository.KEY_TG_LOG_AUTO_SEND])
         assertTrue(vm.uiState.value.tgLogAutoSendEnabled)
     }
+
+    @Test
+    fun `canSendLogToTelegram is false when lastLogSent is true and true when false`() {
+        val bound = TgBackupBinding("my_car_bot", "Andy")
+        assertFalse(
+            SettingsUiState(
+                lastLogPath = "/tmp/log.txt",
+                isRecordingLogs = false,
+                tgBackupBinding = bound,
+                lastLogSent = true,
+            ).canSendLogToTelegram,
+        )
+        assertTrue(
+            SettingsUiState(
+                lastLogPath = "/tmp/log.txt",
+                isRecordingLogs = false,
+                tgBackupBinding = bound,
+                lastLogSent = false,
+            ).canSendLogToTelegram,
+        )
+    }
 }

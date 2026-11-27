@@ -16,6 +16,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -389,5 +390,22 @@ class RuleTextTest {
         assertEquals(listOf("==", "!="), operatorsFor(door))
         assertEquals(">" to "", withParam(t, speed, ctx).let { it.operator to it.value })
         assertEquals(OPERATORS, operatorsFor(speed))
+    }
+
+    @Test fun `bluetooth connected and disconnected render distinct phrases with device name`() {
+        val connected = TriggerDef(
+            param = "BtDevice", chineseName = "", operator = "==",
+            value = "AA:BB:CC:DD:EE:FF", displayName = "CarAudio", kind = "bt_connected",
+        )
+        val disconnected = connected.copy(kind = "bt_disconnected")
+
+        val connectedText = phrase(listOf(connected))
+        val disconnectedText = phrase(listOf(disconnected))
+
+        assertTrue(connectedText, connectedText.contains("CarAudio"))
+        assertTrue(disconnectedText, disconnectedText.contains("CarAudio"))
+        assertNotEquals("CarAudio", connectedText)
+        assertNotEquals("CarAudio", disconnectedText)
+        assertNotEquals(connectedText, disconnectedText)
     }
 }

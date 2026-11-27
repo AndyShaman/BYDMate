@@ -4,6 +4,7 @@ import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -44,6 +45,7 @@ class RuleDraftValidatorTest {
                 ActionValidationError.AppNotSelected(1)),
             StepCase("media_key play", step("media_key", "play"), null),
             StepCase("media_key pause", step("media_key", "pause"), null),
+            StepCase("media_key play_pause", step("media_key", "play_pause"), null),
             StepCase("media_key toggle", step("media_key", "toggle"), ActionValidationError.MediaKeyInvalid(1)),
             StepCase("call phone too short", step("call", """{"phone":"123"}"""), ActionValidationError.PhoneInvalid(1)),
             StepCase("call valid phone", step("call", """{"phone":"+79161234567"}"""), null),
@@ -151,5 +153,13 @@ class RuleDraftValidatorTest {
     @Test fun fresh_unique_voice_phrase_is_valid() {
         val triggers = listOf(TriggerDef(param = "Voice", chineseName = "语音", operator = "==", value = "поехали", displayName = "x", kind = "voice"))
         assertNull(RuleDraftValidator.validateTriggers(triggers, -1L, emptyList()))
+    }
+
+    @Test fun bt_connected_with_empty_value_is_invalid_and_with_address_is_valid() {
+        val empty = listOf(TriggerDef(param = "BtDevice", chineseName = "", operator = "==", value = "", displayName = "Car", kind = "bt_connected"))
+        assertNotNull(RuleDraftValidator.validateTriggers(empty, -1L, emptyList()))
+
+        val valid = listOf(TriggerDef(param = "BtDevice", chineseName = "", operator = "==", value = "AA:BB:CC:DD:EE:FF", displayName = "Car", kind = "bt_connected"))
+        assertNull(RuleDraftValidator.validateTriggers(valid, -1L, emptyList()))
     }
 }
