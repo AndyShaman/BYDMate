@@ -236,6 +236,7 @@ class TrackingService : Service(), LocationListener {
 
     // Main thread only: stops a service that a cold boot started on a parked car.
     private val coldBootGuard = ColdBootGuard()
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     // Self-heal engines for daemon-backed grants. Lazy so they capture the service context only
     // after onCreate, and are never instantiated for callers that short-circuit before use.
@@ -1366,17 +1367,22 @@ class TrackingService : Service(), LocationListener {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Main thread. A speed from GPS or from the car's own poll (works in a tunnel) disarms the guard. */
+    private fun disarmColdBootIfMoving(kmh: Double?, source: String) {
+        val wasArmed = coldBootGuard.armed
+        coldBootGuard.onSpeed(kmh)
+        if (wasArmed && !coldBootGuard.armed) {
+            Trace.event(TraceArea.APP, "cold-boot guard", "armed" to false, "reason" to "moving", "by" to source)
+        }
+    }
+
     override fun onLocationChanged(location: Location) {
         lastLocationFix = LocationFix(location, isLive = true)
         _lastLocation.value = location
         val speedKmh = if (location.hasSpeed()) location.speed * 3.6 else null
         recentTrack.add(TrackPoint(android.os.SystemClock.elapsedRealtime(), location.latitude, location.longitude,
             speedKmh))
-        val wasArmed = coldBootGuard.armed
-        coldBootGuard.onSpeed(speedKmh)
-        if (wasArmed && !coldBootGuard.armed) {
-            Trace.event(TraceArea.APP, "cold-boot guard", "armed" to false, "reason" to "moving")
-        }
+        disarmColdBootIfMoving(speedKmh, "gps")
         // AC-06: never log raw coordinates in release — logcat is readable on DiLink
         // and ends up in user-shared diagnostic dumps.
         if (BuildConfig.DEBUG) {
@@ -1425,6 +1431,10 @@ class TrackingService : Service(), LocationListener {
                     // Before the snapshot goes out: the Tech panel maps temperatures by the
                     // verdict when it receives this very snapshot.
                     motorPresence.onSnapshot(data, SystemClock.elapsedRealtime())
+                    val carKmh = data.speed?.toDouble()
+                    if (coldBootGuard.armed && carKmh != null && carKmh >= ColdBootGuard.DRIVING_KMH) {
+                        mainHandler.post { disarmColdBootIfMoving(carKmh, "car") }
+                    }
                     _lastData.value = data
                     lastDataAtMs = System.currentTimeMillis()
                     lastSample = sample

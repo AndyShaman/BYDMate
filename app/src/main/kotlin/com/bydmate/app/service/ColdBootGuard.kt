@@ -5,15 +5,15 @@ package com.bydmate.app.service
  * After reboot,bydcloud on a parked car the screen can still read as awake when BOOT_COMPLETED
  * arrives; the service then held its wake lock and GPS until the driver came back (#441, #491,
  * case 197). Any other start (a car wake or the user opening the app) or driving disarms the guard,
- * so a normal drive or a mid-drive head-unit restart is never cut short by a dark screen. Main
- * thread only.
+ * so a normal drive or a mid-drive head-unit restart is never cut short by a dark screen.
+ * Written on the main thread only; [armed] may be read from any thread.
  */
 internal class ColdBootGuard {
     companion object {
         const val DRIVING_KMH = 10.0
     }
 
-    var armed = false
+    @Volatile var armed = false
         private set
 
     /** [first] is the start that created the service. Returns true when the service should stop now. */

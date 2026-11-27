@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.PowerManager
 import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -28,12 +29,7 @@ internal object ColdBootDeferral {
         if (receiver != null) return
         val app = context.applicationContext
         val r = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, intent: Intent?) {
-                if (!release(app, this)) return
-                Log.i(TAG, "screen on after a skipped cold-boot start: ${intent?.action}")
-                Trace.event(TraceArea.APP, "start-deferred fired", "on" to AutostartTrace.actionName(intent?.action))
-                runCatching { start(app) }.onFailure { Log.w(TAG, "start failed: ${it.message}") }
-            }
+            override fun onReceive(c: Context?, intent: Intent?) = fire(app, this, AutostartTrace.actionName(intent?.action), start)
         }
         runCatching {
             app.registerReceiver(r, IntentFilter(Intent.ACTION_SCREEN_ON).apply { addAction(Intent.ACTION_USER_PRESENT) })
@@ -41,7 +37,17 @@ internal object ColdBootDeferral {
             receiver = r
             Log.i(TAG, "waiting for the screen: $reason")
             Trace.event(TraceArea.APP, "start-deferred", "reason" to reason)
+            // The screen may have come on between the caller's dark read and the registration:
+            // that SCREEN_ON was never delivered here, so start now rather than wait for the next one.
+            if ((app.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive) fire(app, r, "already_on", start)
         }.onFailure { Log.w(TAG, "register failed: ${it.message}") }
+    }
+
+    private fun fire(app: Context, r: BroadcastReceiver, on: String, start: (Context) -> Unit) {
+        if (!release(app, r)) return
+        Log.i(TAG, "screen on after a skipped cold-boot start: $on")
+        Trace.event(TraceArea.APP, "start-deferred fired", "on" to on)
+        runCatching { start(app) }.onFailure { Log.w(TAG, "start failed: ${it.message}") }
     }
 
     @Synchronized
