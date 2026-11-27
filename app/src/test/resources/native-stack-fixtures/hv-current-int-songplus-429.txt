@@ -1,0 +1,22 @@
+# Song Plus EV 2025 (#429): chgInt (dev=1009 fid=1145045016 tx=5) -> expected amps = (raw - 5000) / 10.
+# Extracted from battery current probe lines at parked, accelerating and regenerating moments.
+# Format: <raw_int> <expected_amps>
+
+# Parked (spd=0, cF=0.0)
+5018 1.8
+5020 2.0
+5012 1.2
+5028 2.8
+
+# Accelerating (cF > 0)
+5330 33.0
+5440 44.0
+5788 78.8
+5245 24.5
+
+# Regenerating (cF < 0)
+4414 -58.6
+4639 -36.1
+4785 -21.5
+4801 -19.9
+4502 -49.8

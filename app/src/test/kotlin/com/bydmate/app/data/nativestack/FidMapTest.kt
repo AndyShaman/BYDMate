@@ -173,4 +173,11 @@ class FidMapTest {
     @Test fun `field names are unique across the polled and extra tables`() {
         assertEquals(FidMap.all.size, FidMap.byField.size)
     }
+
+    @Test fun `cruiseMode fid is mapped on dev 1038 as int`() {
+        val entry = FidMap.entries.single { it.field == "cruiseMode" }
+        assertEquals(1038, entry.device)
+        assertEquals(852492340, entry.fid)
+        assertEquals(5, entry.transact)
+    }
 }

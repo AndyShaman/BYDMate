@@ -147,6 +147,11 @@ class TechPanelViewModelTest {
         coEvery { it.read() } returns answer
     }
 
+    private fun emptyPresenceStore() = object : com.bydmate.app.data.nativestack.MotorPresenceStore {
+        override fun load(): Set<String> = emptySet()
+        override fun save(absent: Set<String>) = Unit
+    }
+
     @Suppress("LongParameterList") // test factory: every override is optional
     private fun buildViewModel(
         battery: BatteryState? = null,
@@ -156,7 +161,7 @@ class TechPanelViewModelTest {
         kind: com.bydmate.app.data.nativestack.VehicleKind = com.bydmate.app.data.nativestack.VehicleKind.EV,
         carStatus: CarServiceStatus? = null,
         pm25: Pm25Reader = pm25Reader(null),
-        motorPresence: MotorPresence = MotorPresence(),
+        motorPresence: MotorPresence = MotorPresence(emptyPresenceStore()),
     ): TechPanelViewModel {
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } returns (
@@ -295,7 +300,7 @@ class TechPanelViewModelTest {
     }
 
     /** #426: a Qin L DM-i drive, the front motor spinning while the rear axle answers readable zeros. */
-    private fun rearAbsentPresence(): MotorPresence = MotorPresence().also { presence ->
+    private fun rearAbsentPresence(): MotorPresence = MotorPresence(emptyPresenceStore()).also { presence ->
         val driving = diParsData().copy(
             motorRpmFront = 5000, motorRpmRear = 0, motorCurrentFront = 30f, motorCurrentRear = 0f,
         )
@@ -375,7 +380,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null), dtcRepo(), pm25Reader(null), MotorPresence()))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true), com.bydmate.app.data.nativestack.kindMonitor(), carStatusReader(null), dtcRepo(), pm25Reader(null), MotorPresence(emptyPresenceStore())))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)

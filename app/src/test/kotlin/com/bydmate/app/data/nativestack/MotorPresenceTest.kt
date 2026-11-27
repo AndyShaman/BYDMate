@@ -3,6 +3,7 @@ package com.bydmate.app.data.nativestack
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.remote.diParsData
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,6 +13,18 @@ import org.junit.Test
  * comes from the axle's own behaviour, never from a temperature value.
  */
 class MotorPresenceTest {
+
+    private class FakeMotorPresenceStore(initial: Set<String> = emptySet()) : MotorPresenceStore {
+        private var stored: Set<String> = initial.toSet()
+        val saves = mutableListOf<Set<String>>()
+
+        override fun load(): Set<String> = stored
+
+        override fun save(absent: Set<String>) {
+            stored = absent.toSet()
+            saves += stored
+        }
+    }
 
     private val qin = "native-stack-fixtures/tech-qinl-rear-absent-20261116.txt"
     private val leopard3 = "native-stack-fixtures/tech-leopard3-awd-drive-20261113.txt"
@@ -43,14 +56,14 @@ class MotorPresenceTest {
     private suspend fun qinDrive() = HybridTechFixture.snapshots(qin).filter { (it.motorRpmFront ?: 0) >= 300 }
 
     @Test fun `Qin L drive marks the rear axle absent`() = runTest {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         replay(presence, qinDrive(), seconds = 24)
         assertTrue(presence.rearAbsent)
         assertFalse(presence.frontAbsent)
     }
 
     @Test fun `Leopard 3 drive keeps both axles`() = runTest {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         replay(presence, HybridTechFixture.snapshots(leopard3), seconds = 120)
         assertFalse(presence.rearAbsent)
         assertFalse(presence.frontAbsent)
@@ -59,7 +72,7 @@ class MotorPresenceTest {
     @Test fun `a parked car never decides`() = runTest {
         val parked = HybridTechFixture.snapshots(qin).filter { it.motorRpmFront == 0 } +
             HybridTechFixture.snapshots(HybridTechFixture.FIXTURE)
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         replay(presence, parked, seconds = 120)
         assertFalse(presence.rearAbsent)
         assertFalse(presence.frontAbsent)
@@ -67,14 +80,14 @@ class MotorPresenceTest {
 
     /** 441/448: the missing axle answers sentinels, which decode to null, so there is nothing to judge. */
     @Test fun `a missing axle that answers a sentinel never decides`() {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         replay(presence, listOf(axles(rpmF = 2969, rpmR = null, curR = null)), seconds = 120)
         assertFalse(presence.rearAbsent)
         assertFalse(presence.frontAbsent)
     }
 
     @Test fun `alive evidence clears the verdict for good`() = runTest {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         var now = replay(presence, qinDrive(), seconds = 24)
         assertTrue(presence.rearAbsent)
 
@@ -86,7 +99,7 @@ class MotorPresenceTest {
     }
 
     @Test fun `rear rpm outside the idle band counts as alive`() {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         val now = replay(presence, listOf(axles(rpmF = 5000, rpmR = 0)), seconds = 24)
         assertTrue(presence.rearAbsent)
         presence.onSnapshot(axles(rpmF = 5000, rpmR = 2), now)
@@ -94,7 +107,7 @@ class MotorPresenceTest {
     }
 
     @Test fun `a current of half an ampere counts as alive`() {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         val now = replay(presence, listOf(axles(rpmF = 5000, rpmR = 0)), seconds = 24)
         assertTrue(presence.rearAbsent)
         presence.onSnapshot(axles(rpmF = 5000, rpmR = 0, curR = 0.5f), now)
@@ -102,7 +115,7 @@ class MotorPresenceTest {
     }
 
     @Test fun `a short dead stretch is not enough`() {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         val spinning = axles(rpmF = 5000, rpmR = 0)
         presence.onSnapshot(spinning, 0L)
         presence.onSnapshot(spinning, 5_000L)
@@ -110,7 +123,7 @@ class MotorPresenceTest {
     }
 
     @Test fun `twenty seconds of continuous zeros are the threshold`() {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         val spinning = axles(rpmF = 5000, rpmR = 0)
         for (t in 0L..18_000L step stepMs) presence.onSnapshot(spinning, t)
         assertFalse(presence.rearAbsent)
@@ -119,7 +132,7 @@ class MotorPresenceTest {
     }
 
     @Test fun `a gap longer than 5 s restarts the count`() {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         val spinning = axles(rpmF = 5000, rpmR = 0)
         for (t in 0L..10_000L step stepMs) presence.onSnapshot(spinning, t)
         // Six seconds of silence: the stretch before it no longer counts.
@@ -130,7 +143,7 @@ class MotorPresenceTest {
     }
 
     @Test fun `a non-qualifying snapshot restarts the count`() {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         val spinning = axles(rpmF = 5000, rpmR = 0)
         for (t in 0L..16_000L step stepMs) presence.onSnapshot(spinning, t)
         // The front motor idles for one tick: no verdict can rest on the stretch before it.
@@ -142,9 +155,38 @@ class MotorPresenceTest {
     }
 
     @Test fun `a front motor that never spins is the mirror case`() {
-        val presence = MotorPresence()
+        val presence = MotorPresence(FakeMotorPresenceStore())
         replay(presence, listOf(axles(rpmF = 0, rpmR = 5000)), seconds = 24)
         assertTrue(presence.frontAbsent)
         assertFalse(presence.rearAbsent)
+    }
+
+    // #403: verdict persistence across starts
+
+    @Test fun `reaching rear absent persists rear to store`() = runTest {
+        val store = FakeMotorPresenceStore()
+        val presence = MotorPresence(store)
+        replay(presence, qinDrive(), seconds = 24)
+        assertEquals(listOf(setOf("rear")), store.saves)
+    }
+
+    @Test fun `restores rear absent from store before any snapshot`() {
+        val presence = MotorPresence(FakeMotorPresenceStore(setOf("rear")))
+        assertTrue(presence.rearAbsent)
+        assertFalse(presence.frontAbsent)
+    }
+
+    @Test fun `alive evidence on restored rear axle clears verdict and saves empty set`() {
+        val store = FakeMotorPresenceStore(setOf("rear"))
+        val presence = MotorPresence(store)
+        presence.onSnapshot(axles(rpmF = 5000, rpmR = 500), 0L)
+        assertFalse(presence.rearAbsent)
+        assertEquals(emptySet<String>(), store.saves.last())
+    }
+
+    @Test fun `empty store starts with no absent axles`() {
+        val presence = MotorPresence(FakeMotorPresenceStore(emptySet()))
+        assertFalse(presence.rearAbsent)
+        assertFalse(presence.frontAbsent)
     }
 }

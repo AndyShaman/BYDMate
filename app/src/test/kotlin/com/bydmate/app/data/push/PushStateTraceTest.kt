@@ -359,6 +359,19 @@ class PushStateTraceTest {
         assertEquals(emptyList<String>(), changes())
     }
 
+    @Test fun `lane signal 828375084 is no longer traced while other ADAS signals still emit`() = runTest {
+        channel.resubscribe("binder accepted") { CATALOG }
+
+        push(828375084 to 1)
+        push(828375084 to 5)
+        push(LANE_GRAY to 1, 700448800 to 4)
+
+        val emitted = changes()
+        assertTrue("lane-cruise must not be traced, got $emitted", emitted.none { "lane-cruise" in it })
+        assertTrue("other ADAS signals must still emit, got $emitted", "car adas name=lane-change-gray to=1" in emitted)
+        assertTrue("other ADAS signals must still emit, got $emitted", "car adas name=nav-pilot to=4" in emitted)
+    }
+
     private companion object {
         val ID = Regex(" #\\d+")
         val MS = Regex(" ms=\\d+")
