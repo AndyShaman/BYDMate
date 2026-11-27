@@ -902,4 +902,12 @@ class TechPanelViewModelTest {
         assertFalse(state.canScan)
         assertEquals(DtcScanLabel.SCANNING, state.scanLabel)
     }
+
+    @Test
+    fun `460 - tyre card hides when all pressures are zero, stays shown for one flat tyre or real pressures`() {
+        assertFalse(TechPanelUiState(tirePressFL = 0, tirePressFR = 0, tirePressRL = 0, tirePressRR = 0).showTyres)
+        assertTrue(TechPanelUiState(tirePressFL = 0, tirePressFR = 230, tirePressRL = 230, tirePressRR = 230).showTyres)
+        assertTrue(TechPanelUiState(tirePressFL = 230, tirePressFR = 230, tirePressRL = 230, tirePressRR = 230).showTyres)
+        assertFalse(TechPanelUiState().showTyres)
+    }
 }

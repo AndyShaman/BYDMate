@@ -904,4 +904,77 @@ class DtcScannerTpmsTest {
         val wait = w.scanner.securityWaitMs()
         assertTrue(wait.toString(), wait in 9 * 60_000L..10 * 60_000L)
     }
+
+    @Test fun `legacy diagnosticsrv guard refuses tpms write before any frame with guard_readonly`() {
+        val (w, _) = world()
+        w.guard = { DtcWire.GUARD_LEGACY_IDLE }
+        assertEquals(0, write(w))
+        val s = w.scanner.tpmsStatus()
+        assertEquals(0, w.device.sent.size)
+        assertEquals(DtcWire.STATE_UNAVAILABLE, s.state)
+        assertEquals("guard_readonly", s.reason)
+    }
+
+    @Test fun `absent and busy guards stop tpms read and write before any frame as before`() {
+        val (absentReadW, _) = world()
+        absentReadW.guard = { null }
+        absentReadW.scanner.startTpmsRead { 1 }
+        assertEquals(0, absentReadW.device.sent.size)
+        assertEquals(DtcWire.STATE_UNAVAILABLE, absentReadW.scanner.tpmsStatus().state)
+        assertEquals("guard_absent", absentReadW.scanner.tpmsStatus().reason)
+
+        val (busyReadW, _) = world()
+        busyReadW.guard = { "r@1_0&w@-1_0" }
+        busyReadW.scanner.startTpmsRead { 1 }
+        assertEquals(0, busyReadW.device.sent.size)
+        assertEquals(DtcWire.STATE_ABORTED, busyReadW.scanner.tpmsStatus().state)
+        assertTrue(busyReadW.scanner.tpmsStatus().reason, busyReadW.scanner.tpmsStatus().reason.startsWith("diag_busy"))
+
+        val (absentWriteW, _) = world()
+        absentWriteW.guard = { null }
+        write(absentWriteW)
+        assertEquals(0, absentWriteW.device.sent.size)
+        assertEquals(DtcWire.STATE_UNAVAILABLE, absentWriteW.scanner.tpmsStatus().state)
+        assertEquals("guard_absent", absentWriteW.scanner.tpmsStatus().reason)
+
+        val (busyWriteW, _) = world()
+        busyWriteW.guard = { "r@1_0&w@-1_0" }
+        write(busyWriteW)
+        assertEquals(0, busyWriteW.device.sent.size)
+        assertEquals(DtcWire.STATE_ABORTED, busyWriteW.scanner.tpmsStatus().state)
+        assertTrue(busyWriteW.scanner.tpmsStatus().reason, busyWriteW.scanner.tpmsStatus().reason.startsWith("diag_busy"))
+    }
+
+    @Test fun `tpms-k1 Song L EV 2025 F194 passes the identity gate and reaches 10 03`() {
+        val (w, car) = world()
+        val songLF194 = hex("62F1944B3100131BF00051E0")
+        car.override = { h -> if (h == "22F194") twice(songLF194) else null }
+        assertEquals(0, write(w))
+        assertEquals(1, w.count("1003"))
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_DONE, s.state)
+        assertEquals(List(4) { TpmsVerdict.WRITTEN }, dids.map { slot(s, it).verdict })
+    }
+
+    @Test fun `tpms-k1 Yuan Plus 2024 F194 stops with not_l3 before 10 03`() {
+        val (w, car) = world()
+        val yuanPlusF194 = hex("62F1944B31001156F0001101")
+        car.override = { h -> if (h == "22F194") twice(yuanPlusF194) else null }
+        assertEquals(0, write(w))
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("not_l3"))
+        assertEquals(0, w.count("1003"))
+    }
+
+    @Test fun `tpms-k1 2-byte seed on 67 01 stops before 27 02 with security_rejected seed_len=2`() {
+        val (w, car) = world()
+        car.override = { h -> if (h == "2701") twice(hex("6701AABB")) else null }
+        write(w)
+        val s = w.scanner.tpmsStatus()
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertEquals("security_rejected seed_len=2", s.reason)
+        assertEquals(0, w.count("2702") + w.count("2E"))
+        assertEquals(1, w.count("1001"))
+    }
 }

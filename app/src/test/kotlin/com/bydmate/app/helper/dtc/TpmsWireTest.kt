@@ -190,4 +190,25 @@ class TpmsWireTest {
         assertEquals("4500001D", keyHex("80000000"))
         assertEquals("1FF69346", keyHex("0A0B0C0D"))
     }
+
+    @Test fun `isEmptyId treats FFFFFFFF and 0 as empty and real IDs as present`() {
+        assertTrue(TpmsWire.isEmptyId(-1))
+        assertTrue(TpmsWire.isEmptyId(0))
+        assertFalse(TpmsWire.isEmptyId(0x1A2B3C4D))
+    }
+
+    @Test fun `tpms-k1 writableIdentity opens only for Leopard 3 and exact Song L EV 2025 F194`() {
+        val songL = hex("62F1944B3100131BF00051E0")
+        val songLChanged = hex("62F1944B3100131BF00051E1")
+        val yuanPlus = hex("62F1944B31001156F0001101")
+        assertTrue(TpmsWire.writableIdentity(DtcFixtures.idUds(0x720)))
+        assertTrue(TpmsWire.writableIdentity(songL))
+        assertFalse(TpmsWire.writableIdentity(songLChanged))
+        assertFalse(TpmsWire.writableIdentity(yuanPlus))
+        assertFalse(TpmsWire.writableIdentity(null))
+        assertFalse(TpmsWire.writableIdentity(hex("62F1944B3100131BF00051")))
+
+        assertTrue(TpmsWire.l3Shape(songL, slotsWinter))
+        assertFalse(TpmsWire.l3Shape(yuanPlus, slotsWinter))
+    }
 }

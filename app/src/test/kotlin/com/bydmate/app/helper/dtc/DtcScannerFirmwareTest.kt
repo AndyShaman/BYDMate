@@ -160,4 +160,24 @@ class DtcScannerFirmwareTest {
         assertEquals(1, w.scanner.startFirmware { w.gear() })
         assertEquals(0, w.device.sent.size)
     }
+
+    @Test fun `absent or busy guard stops firmware check before any send`() {
+        val absentClock = FakeClock()
+        val absentDevice = FakeDevice(absentClock)
+        val absentScanner = DtcScanner(absentDevice, absentClock, { null }, runner = { it.run() }, readSpeed = { 0 })
+        absentScanner.startFirmware { 1 }
+        val absent = absentScanner.firmwareStatus()
+        assertEquals(0, absentDevice.sent.size)
+        assertEquals(DtcWire.STATE_UNAVAILABLE, absent.state)
+        assertEquals("guard_absent", absent.reason)
+
+        val busyClock = FakeClock()
+        val busyDevice = FakeDevice(busyClock)
+        val busyScanner = DtcScanner(busyDevice, busyClock, { "r@1_0&w@-1_0" }, runner = { it.run() }, readSpeed = { 0 })
+        busyScanner.startFirmware { 1 }
+        val busy = busyScanner.firmwareStatus()
+        assertEquals(0, busyDevice.sent.size)
+        assertEquals(DtcWire.STATE_ABORTED, busy.state)
+        assertTrue(busy.reason, busy.reason.startsWith("diag_busy"))
+    }
 }

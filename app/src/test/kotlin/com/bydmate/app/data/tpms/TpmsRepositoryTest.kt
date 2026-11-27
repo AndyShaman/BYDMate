@@ -526,4 +526,44 @@ class TpmsRepositoryTest {
             ))
         }
     }
+
+    @Test fun `guard_readonly on write maps to READ_ONLY_FIRMWARE`() = runTest {
+        val r = repo(this)
+        openAndRead(r)
+        statuses.addLast(
+            TpmsStatus(DtcWire.STATE_UNAVAILABLE, DtcWire.MODE_TPMS_WRITE, "guard_readonly", null, null, null, emptyList(), ""),
+        )
+        r.write(listOf(hx(e), null, null, null), null, 0, carIds)
+        runCurrent()
+        settle()
+        assertEquals(TpmsPhase.IDLE, r.state.value.phase)
+        assertEquals(TpmsError.READ_ONLY_FIRMWARE, r.state.value.error)
+    }
+
+    @Test fun `tpms-msg guard_absent on read maps to NO_DIAG_SERVICE while other reasons keep their errors`() = runTest {
+        val r = repo(this)
+
+        openAndRead(r, TpmsStatus(DtcWire.STATE_UNAVAILABLE, DtcWire.MODE_TPMS_READ, "guard_absent", null, null, null, emptyList(), ""))
+        assertEquals(TpmsError.NO_DIAG_SERVICE, r.state.value.error)
+
+        openAndRead(r, TpmsStatus(DtcWire.STATE_ABORTED, DtcWire.MODE_TPMS_READ, "not_park gear=4", null, null, null, emptyList(), ""))
+        assertEquals(TpmsError.NOT_PARK, r.state.value.error)
+
+        openAndRead(r, TpmsStatus(DtcWire.STATE_ABORTED, DtcWire.MODE_TPMS_READ, "not_l3 f194", null, null, null, emptyList(), ""))
+        assertEquals(TpmsError.NOT_L3, r.state.value.error)
+
+        openAndRead(r, TpmsStatus(DtcWire.STATE_UNAVAILABLE, DtcWire.MODE_TPMS_READ, "no_frames", null, null, null, emptyList(), ""))
+        assertEquals(TpmsError.ABORTED, r.state.value.error)
+    }
+
+    @Test fun `tpms-k1 canWrite opens for Song L EV 2025 F194 and stays closed for Yuan Plus 2024 F194`() = runTest {
+        val songL = repo(this)
+        openAndRead(songL, readDone(identity = hex("62F1944B3100131BF00051E0")))
+        assertTrue(songL.state.value.canWrite)
+
+        prefs.edit().clear().commit()
+        val yuanPlus = repo(this)
+        openAndRead(yuanPlus, readDone(identity = hex("62F1944B31001156F0001101")))
+        assertFalse(yuanPlus.state.value.canWrite)
+    }
 }

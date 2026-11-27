@@ -1,10 +1,14 @@
 package com.bydmate.app.ui.tech
 
+import com.bydmate.app.R
 import com.bydmate.app.data.dtc.DtcErasePhase
 import com.bydmate.app.data.dtc.DtcEraseState
+import com.bydmate.app.data.dtc.DtcScanError
 import com.bydmate.app.helper.dtc.DtcEraseResult
 import com.bydmate.app.helper.dtc.DtcWire
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -37,5 +41,19 @@ class DtcEraseTextTest {
             "Блок силовой установки URE (0x7E0, 0x7E2)",
             dtcEraseTitleName("Блок силовой установки URE", listOf(0x7E0, 0x7E2)),
         )
+    }
+
+    @Test fun `READ_ONLY_FIRMWARE maps to its own erase and scan error text`() {
+        val eraseRes = dtcEraseErrorText(DtcScanError.READ_ONLY_FIRMWARE)
+        assertNotNull(eraseRes)
+        assertNotEquals(R.string.tech_dtc_erase_failed, eraseRes)
+        assertNotEquals(R.string.tech_dtc_unavailable, eraseRes)
+        assertNotEquals(R.string.tech_dtc_no_diag_service, eraseRes)
+
+        val scanRes = dtcErrorText(DtcScanError.READ_ONLY_FIRMWARE)
+        assertNotNull(scanRes)
+        assertNotEquals(R.string.tech_dtc_failed, scanRes)
+        assertNotEquals(R.string.tech_dtc_unavailable, scanRes)
+        assertNotEquals(R.string.tech_dtc_no_diag_service, scanRes)
     }
 }

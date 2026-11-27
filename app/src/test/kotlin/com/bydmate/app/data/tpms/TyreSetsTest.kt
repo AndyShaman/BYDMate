@@ -232,4 +232,16 @@ class TyreSetsTest {
         assertNull(r[1].id)
         assertNull(r[1].heard)
     }
+
+    @Test fun `460 - an empty sensor slot with heard status 00 is NOT_REGISTERED, never OK`() {
+        val emptyFf = TpmsWire.parseSlot(0x3305, hex("623305FFFFFFFF00000000900100"))
+        val emptyZero = TpmsWire.parseSlot(0x3306, hex("6233060000000000000000900100"))
+        val realHeard = slot(0x3307, c, heard = true)
+        val r = TyreWheelStatuses.of(listOf(emptyFf, emptyZero, realHeard, slots[3]), hex("5902FF"))
+        assertEquals(TyreBattery.NOT_REGISTERED, r[0].battery)
+        assertEquals(TyreBattery.NOT_REGISTERED, r[1].battery)
+        assertEquals(TyreBattery.OK, r[2].battery)
+        assertEquals(c, r[2].id)
+        assertEquals(true, r[2].heard)
+    }
 }

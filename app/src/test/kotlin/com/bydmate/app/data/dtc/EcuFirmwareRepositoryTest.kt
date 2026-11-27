@@ -388,4 +388,20 @@ class EcuFirmwareRepositoryTest {
         assertFalse(dump, dump.contains("4.00.08"))
         assertFalse(dump, dump.contains("2026-01-01"))
     }
+
+    @Test fun `guard_readonly maps to READ_ONLY_FIRMWARE and guard_absent stays NO_DIAG_SERVICE`() = runTest {
+        val r = repo(this)
+        statuses.addLast(FirmwareStatus(DtcWire.STATE_UNAVAILABLE, 0, 0, "guard_readonly", emptyList()))
+        r.check()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(FirmwarePhase.IDLE, r.state.value.phase)
+        assertEquals(DtcScanError.READ_ONLY_FIRMWARE, r.state.value.error)
+
+        statuses.addLast(FirmwareStatus(DtcWire.STATE_UNAVAILABLE, 0, 0, "guard_absent", emptyList()))
+        r.check()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(DtcScanError.NO_DIAG_SERVICE, r.state.value.error)
+    }
 }

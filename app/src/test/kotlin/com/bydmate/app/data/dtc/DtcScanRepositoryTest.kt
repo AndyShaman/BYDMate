@@ -293,6 +293,18 @@ class DtcScanRepositoryTest {
         assertEquals(DtcScanError.UNAVAILABLE, r.state.value.error)
     }
 
+    @Test fun `guard_readonly on erase maps to READ_ONLY_FIRMWARE`() = runTest {
+        coEvery { helper.dtcEraseStart(any(), any(), any(), any(), any()) } returns 0
+        val r = repo(this)
+        finishScan(r)
+        statuses.addLast(DtcScanStatus(DtcWire.STATE_UNAVAILABLE, 0, 1, "guard_readonly", emptyList(), emptyList(), DtcWire.MODE_ERASE))
+        r.startErase(intArrayOf(0x7E0))
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(DtcErasePhase.ENDED, r.erase.value?.phase)
+        assertEquals(DtcScanError.READ_ONLY_FIRMWARE, r.erase.value?.error)
+    }
+
     @Test fun `erase with a scan older than ten minutes does not call the daemon`() = runTest {
         val r = repo(this)
         finishScan(r)

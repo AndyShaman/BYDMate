@@ -496,6 +496,25 @@ class DtcScannerTest {
         assertTrue(b.reason, b.reason.startsWith("diag_busy"))
     }
 
+    @Test fun `E4b legacy diagnosticsrv guard refuses erase before any frame with guard_readonly`() {
+        val w = eraseWorld()
+        w.guard = { DtcWire.GUARD_LEGACY_IDLE }
+        val s = w.erase(0x712, 0x7E7)
+        assertEquals(0, w.device.sent.size)
+        assertEquals(DtcWire.STATE_UNAVAILABLE, s.state)
+        assertEquals("guard_readonly", s.reason)
+        assertTrue(s.erase.all { it.confirm == DtcWire.CONFIRM_NOT_RUN })
+    }
+
+    @Test fun `a busy task_bk guard aborts a scan before any frame`() {
+        val w = world()
+        w.guard = { "r@1_0&w@-1_0" }
+        val s = w.run()
+        assertEquals(0, w.device.sent.size)
+        assertEquals(DtcWire.STATE_ABORTED, s.state)
+        assertTrue(s.reason, s.reason.startsWith("diag_busy"))
+    }
+
     @Test fun `E5 traffic in the passive window stops the erase without sending`() {
         val w = eraseWorld()
         w.device.queue += DtcFixtures.raw("count-712.txt")

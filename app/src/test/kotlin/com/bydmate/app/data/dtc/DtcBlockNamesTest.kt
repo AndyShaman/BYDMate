@@ -76,7 +76,7 @@ class DtcBlockNamesTest {
             },
         )
         assertEquals(
-            DtcWire.GUARD_BASELINE,
+            DtcWire.GUARD_LEGACY_IDLE,
             DtcDaemon.readDiagGuard { prop ->
                 when (prop) {
                     "init.svc.diagnosticsrv" -> "running"
