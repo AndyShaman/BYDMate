@@ -17,7 +17,25 @@ internal object AutostartTrace {
     const val SOURCE_SERVICE_DESTROYED = "service_destroyed"
     const val SOURCE_TASK_REMOVED = "task_removed"
 
+    /** Firmware extra on BOOT_COMPLETED: true on every car wake (DiLink 5.0 Utils.startAccOn). */
+    const val EXTRA_FROM_QUICKBOOT = "from_quickboot"
+
+    /** Worker input and service extra: the start came from a cold boot, see [isColdBoot]. */
+    const val KEY_COLD_BOOT = "cold_boot"
+
+    /** Worker source of a start that waited for the screen, see [ColdBootDeferral]. */
+    const val SOURCE_SCREEN_ON = "screen_on"
+
     private const val UNKNOWN = "unknown"
+    private const val ACTION_BOOT_COMPLETED = "android.intent.action.BOOT_COMPLETED"
+
+    /**
+     * A BOOT_COMPLETED without [EXTRA_FROM_QUICKBOOT] is a cold boot: the head unit rebooted itself
+     * on a parked car (reboot,bydcloud, every ~3.5 h on some firmwares) or the user restarted it.
+     * A car wake, remote start included, comes out of quickboot and carries the flag.
+     */
+    fun isColdBoot(action: String?, fromQuickboot: Boolean): Boolean =
+        action == ACTION_BOOT_COMPLETED && !fromQuickboot
 
     /** "android.intent.action.BOOT_COMPLETED" -> "BOOT_COMPLETED": the package part adds nothing. */
     fun actionName(action: String?): String = action?.substringAfterLast('.')?.ifEmpty { null } ?: UNKNOWN

@@ -27,13 +27,14 @@ class ServiceStartWorker(
         const val WORK_NAME = "ServiceStart"
 
         /**
-         * A restart enqueued by onTaskRemoved / onDestroy is dropped when the screen is off:
-         * the car is parked, and the service would hold its wake lock all night.
-         * Every other source starts as before.
+         * A restart enqueued by onTaskRemoved / onDestroy, and a cold boot, are dropped when the
+         * screen is off: the car is parked, and the service would hold its wake lock all night.
+         * A skipped cold boot waits for the screen in [ColdBootDeferral]. Every other source
+         * starts as before.
          */
-        fun shouldStart(source: String?, interactive: Boolean): Boolean =
-            interactive || (source != AutostartTrace.SOURCE_TASK_REMOVED &&
-                source != AutostartTrace.SOURCE_SERVICE_DESTROYED)
+        fun shouldStart(source: String?, interactive: Boolean, coldBoot: Boolean = false): Boolean =
+            interactive || !(coldBoot || source == AutostartTrace.SOURCE_TASK_REMOVED ||
+                source == AutostartTrace.SOURCE_SERVICE_DESTROYED)
     }
 
     override suspend fun doWork(): Result {
@@ -41,15 +42,18 @@ class ServiceStartWorker(
         ChainLog.append(applicationContext, "Worker doWork started")
         val source = inputData.getString(AutostartTrace.KEY_WORKER_SOURCE)
         val trigger = AutostartTrace.workerTrigger(source)
+        val coldBoot = inputData.getBoolean(AutostartTrace.KEY_COLD_BOOT, false)
         val interactive = (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
-        if (!shouldStart(source, interactive)) {
-            Log.i(TAG, "Skipped: screen off, source=$source")
-            Trace.event(TraceArea.APP, "start-worker skipped: screen off", "trigger" to trigger)
+        if (!shouldStart(source, interactive, coldBoot)) {
+            Log.i(TAG, "Skipped: screen off, source=$source cold_boot=$coldBoot")
+            Trace.event(TraceArea.APP, "start-worker skipped: screen off", "trigger" to trigger, "cold_boot" to coldBoot)
+            if (coldBoot) ColdBootDeferral.arm(applicationContext, "cold_boot")
             return Result.success()
         }
         return try {
             val intent = Intent(applicationContext, TrackingService::class.java).apply {
                 putExtra(AutostartTrace.EXTRA_TRIGGER, trigger)
+                putExtra(AutostartTrace.KEY_COLD_BOOT, coldBoot)
             }
             ContextCompat.startForegroundService(applicationContext, intent)
             ChainLog.append(applicationContext, "startForegroundService OK")

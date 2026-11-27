@@ -234,6 +234,9 @@ class TrackingService : Service(), LocationListener {
     // service apart from repeats on a running one in the trace.
     private var startCommands = 0
 
+    // Main thread only: stops a service that a cold boot started on a parked car.
+    private val coldBootGuard = ColdBootGuard()
+
     // Self-heal engines for daemon-backed grants. Lazy so they capture the service context only
     // after onCreate, and are never instantiated for callers that short-circuit before use.
     private val starGrant by lazy {
@@ -1038,11 +1041,29 @@ class TrackingService : Service(), LocationListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // n=1 is the command that follows onCreate; later ones hit an already running service.
+        val n = ++startCommands
+        val coldBoot = intent?.getBooleanExtra(AutostartTrace.KEY_COLD_BOOT, false) == true
         Trace.event(TraceArea.APP, "service-trigger",
             "trigger" to AutostartTrace.startTrigger(intent != null, intent?.getStringExtra(AutostartTrace.EXTRA_TRIGGER)),
-            "n" to ++startCommands)
+            "n" to n, "cold_boot" to coldBoot)
+        val wasArmed = coldBootGuard.armed
+        val interactive = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+        if (coldBootGuard.onStart(coldBoot, first = n == 1, interactive = interactive)) {
+            stopForColdBoot("screen_off_at_start")
+            return START_NOT_STICKY
+        }
+        if (coldBootGuard.armed != wasArmed) Trace.event(TraceArea.APP, "cold-boot guard", "armed" to coldBootGuard.armed)
         maybeAttachWidget()
         return START_STICKY
+    }
+
+    /** The head unit rebooted itself on a parked car: give back the wake lock and GPS, wait for the screen. */
+    private fun stopForColdBoot(reason: String) {
+        Log.i(TAG, "cold-boot guard: $reason, stopping")
+        ChainLog.append(this, "cold-boot guard stop: $reason")
+        Trace.event(TraceArea.APP, "service-stop", "reason" to "cold_boot", "at" to reason)
+        ColdBootDeferral.arm(this, "cold_boot_guard")
+        stopSelf()
     }
 
     private fun maybeAttachWidget() {
@@ -1879,12 +1900,20 @@ class TrackingService : Service(), LocationListener {
         }
     }
 
+    // A no-op unless the cold-boot guard is armed: a normal drive with a dark screen is not touched.
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (coldBootGuard.onScreenOff()) stopForColdBoot("screen_off")
+        }
+    }
+
     private fun registerScreenWakeReceiver() {
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON).apply {
             addAction(Intent.ACTION_USER_PRESENT)
         }
         try {
             registerReceiver(screenWakeReceiver, filter)
+            registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
         } catch (e: Exception) {
             Log.w(TAG, "screen-wake receiver register failed: ${e.message}")
         }
@@ -1893,6 +1922,7 @@ class TrackingService : Service(), LocationListener {
     private fun unregisterWakeReceivers() {
         try {
             unregisterReceiver(screenWakeReceiver)
+            unregisterReceiver(screenOffReceiver)
         } catch (e: Exception) {
             Log.w(TAG, "screen-wake receiver unregister failed: ${e.message}")
         }
