@@ -1149,6 +1149,7 @@
     <string name="auto_act_steering_heat_on">方向盘加热开</string>
     <string name="auto_act_steering_heat_off">方向盘加热关</string>
     <string name="steering_heat_not_equipped">这辆车没有方向盘加热</string>
+    <string name="steering_heat_level_not_equipped">这辆车不支持方向盘加热档位选择</string>
     <string name="auto_act_hud_on">打开抬头显示</string>
     <string name="auto_act_hud_off">关闭抬头显示</string>
     <string name="hud_not_equipped">这辆车没有抬头显示</string>
@@ -1197,6 +1198,7 @@
     <string name="auto_level_off">关</string>
     <string name="auto_level_temp">温度</string>
     <string name="auto_level_fan">风量</string>
+    <string name="auto_level_steering_heat">方向盘加热</string>
     <string name="auto_level_seat_heat_driver">主驾座椅加热</string>
     <string name="auto_level_seat_heat_passenger">副驾座椅加热</string>
     <string name="auto_level_seat_vent_driver">主驾座椅通风</string>
@@ -1211,6 +1213,7 @@
     <string name="auto_level_fridge_heat">冰箱制热</string>
     <string name="auto_level_tile_temp">温度 16–33 °C</string>
     <string name="auto_level_tile_fan">风量 1–7</string>
+    <string name="auto_level_tile_steering_heat">方向盘加热：档位</string>
     <string name="auto_level_tile_seat_heat_driver">主驾座椅加热：1–5 档或关</string>
     <string name="auto_level_tile_seat_heat_passenger">副驾座椅加热：1–5 档或关</string>
     <string name="auto_level_tile_seat_vent_driver">主驾座椅通风：1–5 档或关</string>

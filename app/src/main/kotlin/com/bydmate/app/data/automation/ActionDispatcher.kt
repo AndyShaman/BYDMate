@@ -22,6 +22,7 @@ import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.nativestack.FidAddresses
+import com.bydmate.app.data.nativestack.FidCatalogManager
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
 import com.bydmate.app.data.telegram.TelegramReporter
@@ -29,11 +30,15 @@ import com.bydmate.app.data.telegram.runReportAction
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.CommandTranslator
 import com.bydmate.app.data.vehicle.DriveMode
+import com.bydmate.app.data.vehicle.FrontSeatHeatState
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.RearSeatHeat
 import com.bydmate.app.data.vehicle.SPOILER_ANTI_PINCH
 import com.bydmate.app.data.vehicle.SPOILER_STANDING
 import com.bydmate.app.data.vehicle.ScreenBacklightReply
+import com.bydmate.app.data.vehicle.SeatChannel
+import com.bydmate.app.data.vehicle.SeatChannelStorePrefs
+import com.bydmate.app.data.vehicle.SeatGroup
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.vehicle.VehicleWriteError
 import com.bydmate.app.data.vehicle.WindowPane
@@ -455,6 +460,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             action.startsWith("hud_") -> R.string.hud_not_equipped
             action.startsWith("spoiler_") -> R.string.spoiler_not_equipped
             action in RearSeatHeat.ACTIONS -> R.string.rear_seat_heat_not_equipped
+            action.startsWith("steering_heat_level_") -> R.string.steering_heat_level_not_equipped
             else -> R.string.steering_heat_not_equipped
         }
 
@@ -910,12 +916,38 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         TOGGLE_LOCKS -> live?.lockFL
         TOGGLE_HAZARD -> live?.turnSignal
         TOGGLE_CLIMATE -> live?.acStatus
-        TOGGLE_SEAT_HEAT_DRIVER -> live?.seatHeatDriver
-        TOGGLE_SEAT_HEAT_PASSENGER -> live?.seatHeatPassenger
+        TOGGLE_SEAT_HEAT_DRIVER -> seatHeatToggleState(SeatGroup.DRIVER_HEAT, live?.seatHeatDriver)
+        TOGGLE_SEAT_HEAT_PASSENGER -> seatHeatToggleState(SeatGroup.PASSENGER_HEAT, live?.seatHeatPassenger)
         TOGGLE_SEAT_VENT_DRIVER -> live?.seatVentDriver
         TOGGLE_SEAT_VENT_PASSENGER -> live?.seatVentPassenger
         TOGGLE_STEERING_HEAT -> helper.read(WriteAllowlist.STEERING_HEAT_STATE_DEV, WriteAllowlist.STEERING_HEAT_STATE_FID)?.toInt()
         else -> null
+    }
+
+    /**
+     * Front seat heat state for toggle (#441): on FALLBACK cars dev=1000 snapshot fields stay 0,
+     * so read the platform dev=1023 state fid (1=off, 2..6=on -> 0 / 1..5). If the read fails or
+     * the platform is unknown, fall back to [snapshotValue]. PRIMARY cars read [snapshotValue] only.
+     */
+    private suspend fun seatHeatToggleState(group: SeatGroup, snapshotValue: Int?): Int? {
+        val winner = runCatching {
+            SeatChannelStorePrefs(context.getSharedPreferences("seat_channel", Context.MODE_PRIVATE)).winner()
+        }.getOrDefault(SeatChannel.UNKNOWN)
+        if (winner != SeatChannel.FALLBACK) return snapshotValue
+        val fid = FrontSeatHeatState.stateFid(FidCatalogManager.readCachedCatalog(context), group)
+            ?: return snapshotValue
+        val state = try {
+            helper.read(FrontSeatHeatState.READ_DEV, fid)?.toInt()?.let(SentinelDecoder::decodeInt)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        return when {
+            state == 1 -> 0
+            state != null && state in 2..6 -> state - 1
+            else -> snapshotValue
+        }
     }
 
     /**

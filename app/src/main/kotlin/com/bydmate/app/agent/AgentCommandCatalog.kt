@@ -99,6 +99,11 @@ object AgentCommandCatalog {
         // Steering wheel
         Cmd("steering_heat_on", "включить подогрев руля", { "方向盘加热" }),
         Cmd("steering_heat_off", "выключить подогрев руля", { "关闭方向盘加热" }),
+        Cmd("steering_heat_level_1", "подогрев руля 1 уровень", { "方向盘加热1档" }),
+        Cmd("steering_heat_level_2", "подогрев руля 2 уровень", { "方向盘加热2档" }),
+        Cmd("steering_heat_level_3", "подогрев руля 3 уровень", { "方向盘加热3档" }),
+        Cmd("steering_heat_level_4", "подогрев руля 4 уровень", { "方向盘加热4档" }),
+        Cmd("steering_heat_level_5", "подогрев руля 5 уровень (максимум)", { "方向盘加热5档" }),
         // Lights
         Cmd("light_ambient_on", "включить атмосферную подсветку салона (амбиент)", { "氛围灯打开" }),
         Cmd("light_ambient_off", "выключить атмосферную подсветку салона (амбиент)", { "氛围灯关闭" }),

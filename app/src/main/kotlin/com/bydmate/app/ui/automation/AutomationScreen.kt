@@ -219,7 +219,10 @@ fun AutomationScreen(
     }
 
     // Editor dialog
-    if (state.showEditor) CompositionLocalProvider(LocalRearSeats provides state.rearSeats) {
+    if (state.showEditor) CompositionLocalProvider(
+        LocalRearSeats provides state.rearSeats,
+        LocalSteeringHeatLevels provides state.steeringHeatLevels,
+    ) {
         EditorDialog(
             editing = state.editing,
             places = state.places,

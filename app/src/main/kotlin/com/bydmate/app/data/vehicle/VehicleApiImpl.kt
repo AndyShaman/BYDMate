@@ -50,6 +50,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         seatStore,
         SeatReadback { group -> readSeatStatus(group) },
         seatJournal,
+        SeatReadback { group -> readFallbackSeatHeatState(group) },
     )
 
     private val windowChannel = WindowChannelRouter(helper, windowStore)
@@ -57,6 +58,7 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
     private val steeringHeatChannel = SteeringHeatChannel(
         SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
         SteeringHeatReadback { readSteeringHeatState() },
+        readFid = { fid -> helper.read(WriteAllowlist.STEERING_HEAT_STATE_DEV, fid)?.toInt() },
     )
 
     private val hudSwitchChannel = HudSwitchChannel(
@@ -426,6 +428,8 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
      */
     private suspend fun channelWrite(action: String): Result<Unit>? = when {
         action in STEERING_HEAT_ACTIONS -> withContext(NonCancellable) { steeringHeat(action) }
+        SteeringHeatChannel.levelOfAction(action) != null ->
+            withContext(NonCancellable) { steeringHeatLevel(action, SteeringHeatChannel.levelOfAction(action)!!) }
         action in HUD_ACTIONS -> withContext(NonCancellable) { hudSwitch(action) }
         action in SPOILER_ACTIONS -> withContext(NonCancellable) { spoiler(action) }
         action in BatteryPreheatChannel.ACTIONS ->
@@ -441,9 +445,23 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
      */
     private suspend fun steeringHeat(action: String): Result<Unit> {
         val outcome = steeringHeatChannel.actuate(on = action == "steering_heat_on")
+        return finishSteeringHeat(action, outcome, fallbackValue = -1)
+    }
+
+    /** Steering wheel heat level through [SteeringHeatChannel.setLevel] (#408). */
+    private suspend fun steeringHeatLevel(action: String, level: Int): Result<Unit> {
+        val outcome = steeringHeatChannel.setLevel(level)
+        return finishSteeringHeat(action, outcome, fallbackValue = level)
+    }
+
+    private suspend fun finishSteeringHeat(
+        action: String,
+        outcome: SteeringHeatChannel.Outcome,
+        fallbackValue: Int,
+    ): Result<Unit> {
         val entry = allowlist.find(action)
         logWrite(
-            action, outcome.dev, entry?.writeFid ?: -1, entry?.valueMin ?: -1, outcome.state,
+            action, outcome.dev, entry?.writeFid ?: -1, entry?.valueMin ?: fallbackValue, outcome.state,
             outcome.result == SteeringHeatChannel.Result.OK, "verdict=${outcome.verdict}", validated = false,
         )
         return when (outcome.result) {
@@ -531,6 +549,8 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
 
     override suspend fun rearSeatHeatSides(): Set<RearSeat> =
         RearSeat.entries.filter { rearSeatHeatChannel.equipped(it) }.toSet()
+
+    override suspend fun steeringHeatLevelCount(): Int = steeringHeatChannel.levelCount()
 
     /**
      * Drive mode through its verification channel, as the Result dispatch returns. Like the
@@ -1021,6 +1041,15 @@ class VehicleApiImpl @Inject @Suppress("LongParameterList") constructor( // Hilt
         WriteAllowlist.SEAT_STATUS_FIDS[group]
             ?.let { helper.read(WriteAllowlist.SEAT_STATUS_DEV, it) }
             ?.let { SentinelDecoder.decodeInt(it.toInt()) }
+
+    /**
+     * Platform dev=1023 front seat heating state (1=off, 2=low, 3=high) for the fallback
+     * two-level clamp (#441). Returns null without reading on an unknown platform.
+     */
+    private suspend fun readFallbackSeatHeatState(group: SeatGroup): Int? {
+        val fid = FrontSeatHeatState.stateFid(rearCatalog(), group) ?: return null
+        return helper.read(FrontSeatHeatState.READ_DEV, fid)?.toInt()?.let(SentinelDecoder::decodeInt)
+    }
 
     // ─── Observability hook ────────────────────────────────────────────────────
 

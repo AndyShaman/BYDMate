@@ -74,7 +74,10 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             1004 to 1324621876,  // LIGHT_REAR_GLOW_LOGO_STATE_SET (rear logo light, #383) — live-validated on Leopard 3 2026-11-06
             1023 to 850427920,  // fridge WORKING_STATUS_SET (cool/heat/off) — com.byd.car.icebox
             1023 to 850427928,  // fridge TEMP_REGULATION_SET — com.byd.car.icebox
-            1023 to 944767029,  // SET_STEERING_WHEEL_HEAT_STATE_SET — BYDAutoSettingDevice, unvalidated
+            1023 to 944767029,  // SET_STEERING_WHEEL_HEAT_STATE_SET - BYDAutoSettingDevice, unvalidated
+            // SET_AUTO_STEER_WHEEL_HEATING_GEAR_SET (#408) - steering heat level 1..5.
+            // Only values 1..5 pass, see [RESTRICTED_VALUES]; config and gear read fids stay banned.
+            STEERING_HEAT_STATE_DEV to STEERING_HEAT_LEVEL_FID,
             // SETTING_PRESELECTED_DRIVING_MODE_SET — the BYD voice assistant's drive mode write.
             // Only the values of [RESTRICTED_VALUES] pass, see there.
             DRIVE_MODE_DEV to DRIVE_MODE_WRITE_FID,
@@ -168,6 +171,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             (BATTERY_PREHEAT_DEV to BATTERY_PREHEAT_SET_FID) to setOf(1, 2),
             (SPOILER_DEV to SPOILER_CMD_FID) to setOf(1, 2),
             (SPOILER_DEV to SPOILER_AUTO_SET_FID) to setOf(1),
+            (STEERING_HEAT_STATE_DEV to STEERING_HEAT_LEVEL_FID) to setOf(1, 2, 3, 4, 5),
         )
 
         /** False when [entry] sits on a [RESTRICTED_VALUES] fid with a value outside its set. */
@@ -363,6 +367,12 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
          */
         const val STEERING_HEAT_STATE_DEV = 1023
         const val STEERING_HEAT_STATE_FID = 1116733454
+        /** SET_AUTO_STEER_WHEEL_HEATING_CONFIG (tx=5): 1/4 = on/off only, 2/5 = 3 levels, 3/6 = 5 levels. */
+        const val STEERING_HEAT_CONFIG_FID = 1116733496
+        /** SET_AUTO_STEER_WHEEL_HEATING_GEAR (tx=5): current level readback 1..3 or 1..5. */
+        const val STEERING_HEAT_GEAR_FID = 1116733465
+        /** SET_AUTO_STEER_WHEEL_HEATING_GEAR_SET (tx=6): level write 1..5, dev=1023 carve-out (#408). */
+        const val STEERING_HEAT_LEVEL_FID = 1276256274
 
         /**
          * Candidate (unvalidated) native channels staged for an in-vehicle snap.
@@ -415,6 +425,14 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // the channel reads it back itself after a delay.
             WriteEntry("steering_heat_on",  1023, 944767029, null, 2, 2, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice"),
             WriteEntry("steering_heat_off", 1023, 944767029, null, 1, 1, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice"),
+            // Steering wheel heat level (#408) - dev=1023 carve-out, exact values 1..5, unvalidated.
+            // No readbackFid: [SteeringHeatChannel.setLevel] checks config, ensures heat is on, waits
+            // >= 300 ms, writes the clamped level and confirms via STEERING_HEAT_GEAR_FID.
+            WriteEntry("steering_heat_level_1", 1023, STEERING_HEAT_LEVEL_FID, null, 1, 1, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice (#408)"),
+            WriteEntry("steering_heat_level_2", 1023, STEERING_HEAT_LEVEL_FID, null, 2, 2, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice (#408)"),
+            WriteEntry("steering_heat_level_3", 1023, STEERING_HEAT_LEVEL_FID, null, 3, 3, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice (#408)"),
+            WriteEntry("steering_heat_level_4", 1023, STEERING_HEAT_LEVEL_FID, null, 4, 4, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice (#408)"),
+            WriteEntry("steering_heat_level_5", 1023, STEERING_HEAT_LEVEL_FID, null, 5, 5, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice (#408)"),
             // Drive mode rock (8) — BYD voice assistant value, not tried: the Leopard 3 support
             // flag reports it absent. Same dev=1023 carve-out as the validated modes.
             WriteEntry("drive_mode_rock", 1023, 1276260400, null, 8, 8, "drive_mode", false, "byd-sdk autovoice DrivingPatternApiImpl"),

@@ -273,8 +273,27 @@ class FidCatalogManager @Inject constructor(
         fun wantedSymbols(): Set<String> = (
             (FidMap.all + FidMap.hybrid).mapNotNull { it.symbol } + WriteFidSymbols.byFid.values +
                 PushStateTrace.ADAS_STATES.map { it.symbol } + com.bydmate.app.media.ClusterMusicFids.SYMBOLS +
-                com.bydmate.app.data.vehicle.RearSeatHeat.SYMBOLS + BatteryCurrentProbe.SYMBOLS
+                com.bydmate.app.data.vehicle.RearSeatHeat.SYMBOLS +
+                com.bydmate.app.data.vehicle.FrontSeatHeatState.SYMBOLS +
+                BatteryCurrentProbe.SYMBOLS
         ).toSortedSet()
+
+        /** Read-only load of the cached catalog for the current firmware and app build, or null. */
+        internal fun readCachedCatalog(context: Context): FidCatalog? {
+            val file = File(context.filesDir, CACHE_FILE)
+            if (!file.exists()) return null
+            val fingerprint = Build.FINGERPRINT ?: ""
+            return try {
+                val text = file.readText()
+                val header = text.lineSequence().firstOrNull().orEmpty()
+                if (!FidCatalogCache.isCurrent(header, fingerprint, BuildConfig.VERSION_CODE)) return null
+                val parsed = FidCatalog.parse(text)
+                val total = FidCatalogCache.totalSymbols(header) ?: parsed.symbols.size
+                if (parsed.symbols.isEmpty()) null else parsed.copy(totalSymbols = total)
+            } catch (_: Exception) {
+                null
+            }
+        }
         const val CACHE_FILE = "fid-catalog.txt"
         const val PROBE_ATTEMPTS = 3
         const val PROBE_RETRY_DELAY_MS = 10_000L

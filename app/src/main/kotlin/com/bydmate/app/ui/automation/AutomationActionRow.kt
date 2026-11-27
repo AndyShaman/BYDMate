@@ -238,10 +238,17 @@ private fun LevelActionControls(
 ) {
     val lc = LocalContext.current.appLocalizedContext()
     val family = level.family
+    val steeringLevels = LocalSteeringHeatLevels.current
+    val effectiveRange = if (family == LevelFamily.STEERING_HEAT) {
+        val upper = if (steeringLevels >= 5) 5 else 3
+        1..maxOf(upper, level.value)
+    } else {
+        family.range
+    }
     LevelRow(
         icon = family.icon,
         value = level.value,
-        range = family.range,
+        range = effectiveRange,
         step = family.step,
         valueText = family.valueText(level.value, lc),
         onValue = { v -> onUpdate(action.copy(command = family.command(v), displayName = family.displayName(v, lc))) },

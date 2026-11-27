@@ -21,6 +21,7 @@ class SteeringHeatLevelTest {
 
     private val allowlist = WriteAllowlist.loadProduction { "{}" }
 
+    @Suppress("LongParameterList") // one knob per scripted car input
     private class FakeCar(
         private val scope: TestScope,
         var config: Int? = 2,

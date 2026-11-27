@@ -164,6 +164,12 @@ object CommandTranslator {
         // dev=1000 fallback) instead of a bare write.
         "方向盘加热"   to Resolved("steering_heat_on",  2),
         "关闭方向盘加热" to Resolved("steering_heat_off", 1),
+        // Steering wheel heat levels (#408) - routed through SteeringHeatChannel.setLevel.
+        "方向盘加热1档" to Resolved("steering_heat_level_1", 1),
+        "方向盘加热2档" to Resolved("steering_heat_level_2", 2),
+        "方向盘加热3档" to Resolved("steering_heat_level_3", 3),
+        "方向盘加热4档" to Resolved("steering_heat_level_4", 4),
+        "方向盘加热5档" to Resolved("steering_heat_level_5", 5),
 
         // ── HUD master switch (#292) ── CANDIDATE (dev=1023 carve-out, 1=on / 2=off) ──
         // VehicleApiImpl routes both through HudSwitchChannel (HUD presence check + status readback).

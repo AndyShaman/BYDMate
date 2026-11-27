@@ -175,6 +175,9 @@ private class PickerSection(val name: String, val tiles: List<PickerTile>)
 /** Rear seats whose heat this car reports (#327), for the editor's catalog; none outside the editor. */
 internal val LocalRearSeats = compositionLocalOf { emptySet<RearSeat>() }
 
+/** Steering wheel heat level count reported by the car (0, 3 or 5) (#408); 0 defaults the editor to 1..3. */
+internal val LocalSteeringHeatLevels = compositionLocalOf { 0 }
+
 /** The section the picker opened on last time: it opens there again. */
 private object ActionPickerMemory {
     var section = 0

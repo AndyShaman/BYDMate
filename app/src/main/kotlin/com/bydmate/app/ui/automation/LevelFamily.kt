@@ -47,6 +47,7 @@ enum class LevelFamily @Suppress("LongParameterList") constructor( // one catalo
 ) {
     TEMPERATURE("设置温度", "", 16..33, 1, 22, CELSIUS, R.string.auto_level_temp, R.string.auto_level_tile_temp, R.string.auto_cat_climate, pickerBefore = "吹面"),
     FAN("风量", "", 1..7, 1, 3, "", R.string.auto_level_fan, R.string.auto_level_tile_fan, R.string.auto_cat_climate, pickerBefore = "吹面"),
+    STEERING_HEAT("方向盘加热", "档", 1..5, 1, 2, "", R.string.auto_level_steering_heat, R.string.auto_level_tile_steering_heat, R.string.auto_cat_climate, pickerBefore = ActionDispatcher.TOGGLE_STEERING_HEAT),
     SEAT_HEAT_DRIVER("主驾座椅加热", "档", 0..5, 1, 3, "", R.string.auto_level_seat_heat_driver, R.string.auto_level_tile_seat_heat_driver, R.string.auto_cat_seats, true, ActionDispatcher.TOGGLE_SEAT_HEAT_DRIVER),
     SEAT_HEAT_PASSENGER("副驾座椅加热", "档", 0..5, 1, 3, "", R.string.auto_level_seat_heat_passenger, R.string.auto_level_tile_seat_heat_passenger, R.string.auto_cat_seats, true, ActionDispatcher.TOGGLE_SEAT_HEAT_PASSENGER),
     SEAT_VENT_DRIVER("主驾座椅通风", "档", 0..5, 1, 3, "", R.string.auto_level_seat_vent_driver, R.string.auto_level_tile_seat_vent_driver, R.string.auto_cat_seats, true, ActionDispatcher.TOGGLE_SEAT_VENT_DRIVER),
@@ -78,7 +79,7 @@ enum class LevelFamily @Suppress("LongParameterList") constructor( // one catalo
 
     val icon: ImageVector
         get() = when (this) {
-            TEMPERATURE -> Icons.Outlined.Thermostat
+            TEMPERATURE, STEERING_HEAT -> Icons.Outlined.Thermostat
             FAN -> Icons.Outlined.Air
             SEAT_HEAT_DRIVER, SEAT_HEAT_PASSENGER, SEAT_VENT_DRIVER, SEAT_VENT_PASSENGER,
             SEAT_HEAT_REAR_LEFT, SEAT_HEAT_REAR_RIGHT -> Icons.Outlined.AirlineSeatReclineNormal

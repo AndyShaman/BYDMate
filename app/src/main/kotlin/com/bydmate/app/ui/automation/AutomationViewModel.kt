@@ -187,6 +187,8 @@ data class AutomationUiState(
     val message: String? = null,
     /** Rear seats whose heat this car reports (#327): the editor offers only their tiles. */
     val rearSeats: Set<RearSeat> = emptySet(),
+    /** Steering wheel heat level count reported by the car (0, 3 or 5) (#408). */
+    val steeringHeatLevels: Int = 0,
 )
 
 @HiltViewModel
@@ -382,11 +384,12 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         loadRearSeats()
     }
 
-    /** Asks the car which rear seats have heat (#327), once per editor open. */
+    /** Asks the car which rear seats have heat (#327) and steering heat level count (#408), once per editor open. */
     private fun loadRearSeats() {
         viewModelScope.launch {
             val sides = withContext(ioDispatcher) { vehicleApi.rearSeatHeatSides() }
-            _uiState.update { it.copy(rearSeats = sides) }
+            val steeringLevels = withContext(ioDispatcher) { vehicleApi.steeringHeatLevelCount() }
+            _uiState.update { it.copy(rearSeats = sides, steeringHeatLevels = steeringLevels) }
         }
     }
 

@@ -1,10 +1,35 @@
 package com.bydmate.app.data.vehicle
 
+import com.bydmate.app.data.nativestack.FidCatalog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 /** A seat comfort target: which seat + heat/vent. */
 enum class SeatGroup { DRIVER_HEAT, DRIVER_VENT, PASSENGER_HEAT, PASSENGER_VENT }
+
+/**
+ * dev=1023 read-side state fids for front seat heating on the fallback channel (#441).
+ * Values: 1 = off, 2 = low, 3 = high (2..6 = on). Only known CanFD and non-CanFD fids
+ * resolve; Toyota variants or a missing catalog resolve to null (unknown platform).
+ */
+internal object FrontSeatHeatState {
+    const val READ_DEV = 1023
+    const val DRIVER_SYMBOL = "Setting.SET_DRIVER_SEAT_HEATING_STATE"
+    const val PASSENGER_SYMBOL = "Setting.SET_PASSENGER_SEAT_HEATING_STATE"
+    val SYMBOLS: List<String> = listOf(DRIVER_SYMBOL, PASSENGER_SYMBOL)
+
+    private val KNOWN_DRIVER_FIDS = setOf(1335885835, 1335885851)
+    private val KNOWN_PASSENGER_FIDS = setOf(1335885843, 1335885859)
+
+    fun stateFid(catalog: FidCatalog?, group: SeatGroup): Int? {
+        catalog ?: return null
+        return when (group) {
+            SeatGroup.DRIVER_HEAT -> catalog.fidOf(DRIVER_SYMBOL)?.takeIf { it in KNOWN_DRIVER_FIDS }
+            SeatGroup.PASSENGER_HEAT -> catalog.fidOf(PASSENGER_SYMBOL)?.takeIf { it in KNOWN_PASSENGER_FIDS }
+            SeatGroup.DRIVER_VENT, SeatGroup.PASSENGER_VENT -> null
+        }
+    }
+}
 
 /** Status-classified single write, supplied by VehicleApiImpl.doWriteOutcome. */
 fun interface SeatWriter {
@@ -40,25 +65,17 @@ class AdaptiveSeatChannel(
     private val store: SeatChannelStore,
     private val readback: SeatReadback = SeatReadback { null },
     private val journal: SeatCommandJournal? = null,
+    private val fallbackStateReadback: SeatReadback = SeatReadback { null },
 ) {
-    private data class Actions(val switch: String, val level: String, val fallback: String)
-
     /** Outcome of a primary attempt; [contradicted] = write accepted BUT the status fid disagreed twice. */
     private data class PrimaryResult(val outcome: WriteOutcome, val contradicted: Boolean)
 
     /** Result of the readback probe: [contradicted] plus the rendered reads for the journal. */
     private data class Verdict(val contradicted: Boolean, val detail: String)
 
-    private fun actionsFor(g: SeatGroup): Actions = when (g) {
-        SeatGroup.DRIVER_HEAT -> Actions("driver_seat_heat_switch", "driver_seat_heat_level", "driver_seat_heat_fallback")
-        SeatGroup.DRIVER_VENT -> Actions("driver_seat_vent_switch", "driver_seat_vent_level", "driver_seat_vent_fallback")
-        SeatGroup.PASSENGER_HEAT -> Actions("passenger_seat_heat_switch", "passenger_seat_heat_level", "passenger_seat_heat_fallback")
-        SeatGroup.PASSENGER_VENT -> Actions("passenger_seat_vent_switch", "passenger_seat_vent_level", "passenger_seat_vent_fallback")
-    }
-
     /** Actuate [group] at [level] (0=off, 1..5). Returns true iff a channel produced REAL. */
     suspend fun actuate(group: SeatGroup, level: Int): Boolean {
-        val a = actionsFor(group)
+        val a = seatActionsFor(group)
         return when (store.winner()) {
             SeatChannel.PRIMARY -> cachedPrimary(group, a, level)
             SeatChannel.FALLBACK -> fallbackDirect(group, a, level) == WriteOutcome.REAL
@@ -74,7 +91,7 @@ class AdaptiveSeatChannel(
      * so a car probed while switched off does not lose its fallback forever. One probe per
      * process, re-armed by the manual channel reset (setWinner(UNKNOWN) from the settings screen).
      */
-    private suspend fun probe(group: SeatGroup, a: Actions, level: Int): Boolean {
+    private suspend fun probe(group: SeatGroup, a: SeatActions, level: Int): Boolean {
         val p = primary(group, a, level)
         if (p.outcome == WriteOutcome.REAL) { store.setWinner(SeatChannel.PRIMARY); return true }
         if (p.outcome == WriteOutcome.TRANSIENT) return false   // car off / daemon down — don't switch
@@ -97,7 +114,7 @@ class AdaptiveSeatChannel(
      * unconfirmed probe must not un-learn the channel this car already actuated on, and
      * leaving the store UNKNOWN would send every later command back through [probe].
      */
-    private suspend fun cachedPrimary(group: SeatGroup, a: Actions, level: Int): Boolean {
+    private suspend fun cachedPrimary(group: SeatGroup, a: SeatActions, level: Int): Boolean {
         val p = primary(group, a, level)
         if (p.outcome == WriteOutcome.REAL) return true
         if (!p.contradicted || !store.claimReprobe()) return false
@@ -112,7 +129,7 @@ class AdaptiveSeatChannel(
      *  NOT 0. Live-confirmed on Leopard 3 2026-07-01: the autoservice returns status=1 ("ok")
      *  for switch=0 but does NOT actuate — the seat stays on. 2 is the real off code (matches
      *  the read status enum: 1=on, 2=off). */
-    private suspend fun primary(group: SeatGroup, a: Actions, level: Int): PrimaryResult {
+    private suspend fun primary(group: SeatGroup, a: SeatActions, level: Int): PrimaryResult {
         val sw = writer.write(a.switch, if (level == 0) 2 else 1)
         if (level > 0 && sw == WriteOutcome.REAL) writer.write(a.level, level)
         if (sw != WriteOutcome.REAL) {
@@ -147,55 +164,93 @@ class AdaptiveSeatChannel(
             }
             if (value == null) {
                 seen += "err"
-                return Verdict(contradicted = false, detail = detail(expected, seen))
+                return Verdict(contradicted = false, detail = readbackDetail(expected, seen))
             }
             seen += value.toString()
-            if (value == expected) return Verdict(contradicted = false, detail = detail(expected, seen))
+            if (value == expected) return Verdict(contradicted = false, detail = readbackDetail(expected, seen))
         }
-        return Verdict(contradicted = true, detail = detail(expected, seen))
+        return Verdict(contradicted = true, detail = readbackDetail(expected, seen))
     }
 
-    private fun detail(expected: Int, seen: List<String>) = "expect=$expected got=${seen.joinToString(",")}"
-
     /** Cached fallback: channel already known, write the requested stage value directly
-     *  (no re-probe, no flicker). 1=off, 2=lvl1 … 6=lvl5, see [fallbackValue]. */
-    private suspend fun fallbackDirect(group: SeatGroup, a: Actions, level: Int): WriteOutcome {
-        val outcome = writer.write(a.fallback, if (level == 0) 1 else fallbackValue(group, level))
+     *  (no re-probe, no flicker). 1=off, 2=lvl1 ... 6=lvl5, see [seatFallbackValue]. */
+    private suspend fun fallbackDirect(group: SeatGroup, a: SeatActions, level: Int): WriteOutcome {
+        val outcome = writer.write(a.fallback, if (level == 0) 1 else seatFallbackValue(group, level))
+        if (outcome == WriteOutcome.REAL) clampTwoLevelHeat(group, a, level)
         journal?.appendActuation(group, level, SeatChannel.FALLBACK, outcome, "n/a")
         return outcome
     }
 
     /**
-     * Probe fallback with a MODEL-UNIVERSAL value (off=1, or stage-1 on=2 — both valid on
+     * Probe fallback with a MODEL-UNIVERSAL value (off=1, or stage-1 on=2 - both valid on
      * 3- and 5-stage cars), take the channel verdict from it, then best-effort apply the
      * requested stage. The apply write's outcome does NOT change the verdict: a no-op of a
      * high stage on a 3-stage car means "stage unsupported on this trim", not "channel
      * dead", so it never un-learns the winner (still audit-logged as outcome_NOOP).
      */
-    private suspend fun fallbackProbe(group: SeatGroup, a: Actions, level: Int): WriteOutcome {
+    private suspend fun fallbackProbe(group: SeatGroup, a: SeatActions, level: Int): WriteOutcome {
         val outcome = writer.write(a.fallback, if (level == 0) 1 else 2)
-        if (level > 1 && outcome == WriteOutcome.REAL) writer.write(a.fallback, fallbackValue(group, level))
+        if (level > 1 && outcome == WriteOutcome.REAL) {
+            writer.write(a.fallback, seatFallbackValue(group, level))
+            clampTwoLevelHeat(group, a, level)
+        }
         journal?.appendActuation(group, level, SeatChannel.FALLBACK, outcome, "n/a")
         return outcome
     }
 
     /**
-     * Fallback stage value for an on [level]: level + 1, except driver heat level 3, which the
-     * stock climate app writes as 6 (SEAT_HEATING_LEVEL3_ON) — 4 does not heat the driver seat
-     * (#341). Passenger heat and both vents have no such code and keep level + 1.
+     * Two-level fallback seat heat clamp (#441): only for requested level 3 on front heat.
+     * After the fallback write (6 for driver, 4 for passenger), reads the platform dev=1023
+     * state fid with the primary readback cadence. If it stays at 1 (off) or 2 (low),
+     * writes 3 (high on a two-level seat) once. Any other value, read error or unknown
+     * platform writes nothing extra.
      */
-    private fun fallbackValue(group: SeatGroup, level: Int): Int =
-        if (group == SeatGroup.DRIVER_HEAT && level == DRIVER_HEAT_LEVEL3) DRIVER_HEAT_LEVEL3_ON else level + 1
+    private suspend fun clampTwoLevelHeat(group: SeatGroup, a: SeatActions, level: Int) {
+        if (level != DRIVER_HEAT_LEVEL3) return
+        if (group != SeatGroup.DRIVER_HEAT && group != SeatGroup.PASSENGER_HEAT) return
+        repeat(READBACK_ATTEMPTS) {
+            delay(READBACK_DELAY_MS)
+            val state = try {
+                fallbackStateReadback.read(group)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (state == null || state !in FALLBACK_CLAMP_STATES) return
+        }
+        writer.write(a.fallback, FALLBACK_TWO_LEVEL_HIGH)
+    }
 
     private companion object {
         const val STATUS_ON = 1
         const val STATUS_OFF = 2
         const val DRIVER_HEAT_LEVEL3 = 3
-        const val DRIVER_HEAT_LEVEL3_ON = 6
+        const val FALLBACK_TWO_LEVEL_HIGH = 3
+        val FALLBACK_CLAMP_STATES = setOf(1, 2)
         const val READBACK_ATTEMPTS = 2
         /** Per readback attempt. The whole verify runs inside the NonCancellable seat write, so
-         *  this is added latency on every seat command — 2 × 400 ms is the budget that still
+         *  this is added latency on every seat command - 2 x 400 ms is the budget that still
          *  leaves the climate module time to publish the new status. */
         const val READBACK_DELAY_MS = 400L
     }
 }
+
+private data class SeatActions(val switch: String, val level: String, val fallback: String)
+
+private fun seatActionsFor(g: SeatGroup): SeatActions = when (g) {
+    SeatGroup.DRIVER_HEAT -> SeatActions("driver_seat_heat_switch", "driver_seat_heat_level", "driver_seat_heat_fallback")
+    SeatGroup.DRIVER_VENT -> SeatActions("driver_seat_vent_switch", "driver_seat_vent_level", "driver_seat_vent_fallback")
+    SeatGroup.PASSENGER_HEAT -> SeatActions("passenger_seat_heat_switch", "passenger_seat_heat_level", "passenger_seat_heat_fallback")
+    SeatGroup.PASSENGER_VENT -> SeatActions("passenger_seat_vent_switch", "passenger_seat_vent_level", "passenger_seat_vent_fallback")
+}
+
+private fun readbackDetail(expected: Int, seen: List<String>) = "expect=$expected got=${seen.joinToString(",")}"
+
+/**
+ * Fallback stage value for an on [level]: level + 1, except driver heat level 3, which the
+ * stock climate app writes as 6 (SEAT_HEATING_LEVEL3_ON) - 4 does not heat the driver seat
+ * (#341). Passenger heat and both vents have no such code and keep level + 1.
+ */
+private fun seatFallbackValue(group: SeatGroup, level: Int): Int =
+    if (group == SeatGroup.DRIVER_HEAT && level == 3) 6 else level + 1

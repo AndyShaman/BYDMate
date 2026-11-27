@@ -24,4 +24,7 @@ interface VehicleApi {
 
     /** Rear seats whose heat this car has (#327). */
     suspend fun rearSeatHeatSides(): Set<RearSeat> = emptySet()
+
+    /** Number of steering wheel heat levels this car supports (0, 3 or 5), or 0 when unknown (#408). */
+    suspend fun steeringHeatLevelCount(): Int = 0
 }

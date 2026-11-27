@@ -1071,6 +1071,7 @@
     <string name="auto_act_steering_heat_on">Aquec. volante lig.</string>
     <string name="auto_act_steering_heat_off">Aquec. volante desl.</string>
     <string name="steering_heat_not_equipped">Este carro não tem aquecimento do volante</string>
+    <string name="steering_heat_level_not_equipped">Este carro não tem seleção de nível de aquecimento do volante</string>
     <string name="auto_act_hud_on">HUD: ligar</string>
     <string name="auto_act_hud_off">HUD: desligar</string>
     <string name="hud_not_equipped">Este carro não tem HUD</string>
@@ -1119,6 +1120,7 @@
     <string name="auto_level_off">desl.</string>
     <string name="auto_level_temp">Temperatura</string>
     <string name="auto_level_fan">Ventilação</string>
+    <string name="auto_level_steering_heat">Aquecimento do volante</string>
     <string name="auto_level_seat_heat_driver">Aquecimento do banco do motorista</string>
     <string name="auto_level_seat_heat_passenger">Aquecimento do banco do passageiro</string>
     <string name="auto_level_seat_vent_driver">Ventilação do banco do motorista</string>
@@ -1133,6 +1135,7 @@
     <string name="auto_level_fridge_heat">Aquecimento da geladeira</string>
     <string name="auto_level_tile_temp">Temperatura 16–33 °C</string>
     <string name="auto_level_tile_fan">Ventilação 1–7</string>
+    <string name="auto_level_tile_steering_heat">Aquecimento do volante: nível</string>
     <string name="auto_level_tile_seat_heat_driver">Aquecimento do banco do motorista: nível 1–5 ou desl.</string>
     <string name="auto_level_tile_seat_heat_passenger">Aquecimento do banco do passageiro: nível 1–5 ou desl.</string>
     <string name="auto_level_tile_seat_vent_driver">Ventilação do banco do motorista: nível 1–5 ou desl.</string>
