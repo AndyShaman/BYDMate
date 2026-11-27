@@ -23,9 +23,12 @@ class AdasStatesCatalogTest {
     @Test fun `the states around cruise and lane keeping are traced (383)`() {
         val traced = PushStateTrace.ADAS_STATES.map { it.symbol }
         listOf(
-            "Adas.ADAS_ASSIST_DRIVE_MODE_STATUS", "Adas.ADAS_ACC_MODE_ARHUD", "Adas.ADAS_ACC_MODE",
-            "Adas.ADAS_TJA_ICA_STATE", "Adas.ADAS_BROADCAST_AFTER_GET_ICCSIGNAL", "Adas.ADAS_DNP_STATE",
+            "Adas.ADAS_ASSIST_DRIVE_MODE_STATUS", "Adas.ADAS_ACC_MODE_ARHUD",
+            "Adas.ADAS_BROADCAST_AFTER_GET_ICCSIGNAL", "Adas.ADAS_DNP_STATE",
         ).forEach { assertTrue(it, it in traced) }
+        // ADAS_ACC_MODE became the cruiseMode field (a FidMap entry), and the lane signal
+        // ADAS_TJA_ICA_STATE flipped hundreds of times a trip, so neither is traced any more.
+        listOf("Adas.ADAS_ACC_MODE", "Adas.ADAS_TJA_ICA_STATE").forEach { assertTrue(it, it !in traced) }
     }
 
     /** The daemon keys its tables by fid, and a trace line is read by its name. */

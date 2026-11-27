@@ -95,7 +95,7 @@ class PushStateTraceTest {
         assertEquals(ADAS.keys.map { FidPushSub(it, 1038) }, subs.captured.drop(wave.size))
         assertEquals(wave.size + ADAS.size, subs.captured.size)
         assertTrue(subs.captured.size <= MAX_PUSH_FIDS)
-        assertEquals(listOf("car adas-subscribe confirmed=13 skipped=0"), events())
+        assertEquals(listOf("car adas-subscribe confirmed=11 skipped=0"), events())
     }
 
     @Test fun `a symbol this firmware numbers differently is skipped, and never traced by name`() = runTest {
@@ -109,7 +109,7 @@ class PushStateTraceTest {
         push(LKS_FAULT to 1, 309 to 1, LANE_GRAY to 1)
 
         assertEquals(
-            listOf("car adas-subscribe confirmed=12 skipped=1", "car adas name=lane-change-gray to=1"),
+            listOf("car adas-subscribe confirmed=10 skipped=1", "car adas name=lane-change-gray to=1"),
             events(),
         )
     }
@@ -119,7 +119,7 @@ class PushStateTraceTest {
         channel.resubscribe("fid catalog resolved") { FidCatalog(mapOf(LKS_SYMBOL to LKS_FAULT), emptyMap()) }
 
         assertEquals(listOf(FidPushSub(LKS_FAULT, 1038)), subs.captured.drop(FidPushApplier.PUSH_FIELDS.size))
-        assertEquals(listOf("car adas-subscribe confirmed=1 skipped=12"), events())
+        assertEquals(listOf("car adas-subscribe confirmed=1 skipped=10"), events())
     }
 
     @Test fun `without a catalog no ADAS state is subscribed or traced`() = runTest {
@@ -143,7 +143,7 @@ class PushStateTraceTest {
         assertEquals(
             listOf(
                 "car adas-subscribe reason=no-catalog",
-                "car adas-subscribe confirmed=13 skipped=0",
+                "car adas-subscribe confirmed=11 skipped=0",
                 "car adas name=lane-change-gray to=1",
             ),
             events(),
@@ -216,7 +216,7 @@ class PushStateTraceTest {
         assertEquals(
             listOf(
                 "car adas-subscribe reason=no-catalog",
-                "car adas-subscribe confirmed=13 skipped=0 result=unconfirmed",
+                "car adas-subscribe confirmed=11 skipped=0 result=unconfirmed",
                 "car adas-subscribe reason=no-catalog result=unconfirmed",
             ),
             events(),
@@ -239,7 +239,7 @@ class PushStateTraceTest {
 
         assertEquals(1, subs.captured.count { it.fid == lane })
         assertEquals("bsdLeft", channel.fieldFor(lane))
-        assertEquals(listOf("car adas-subscribe confirmed=12 skipped=1"), events())
+        assertEquals(listOf("car adas-subscribe confirmed=10 skipped=1"), events())
     }
 
     @Test fun `ADAS fids are not FidMap fields, so nothing patches the snapshot with them`() = runTest {
@@ -393,8 +393,6 @@ class PushStateTraceTest {
             LKS_FAULT to "lks-fault",
             535830576 to "assist-mode",
             700448780 to "cruise-arhud",
-            852492340 to "cruise-mode",
-            828375084 to "lane-cruise",
             700448784 to "icc-signal",
             700448800 to "nav-pilot",
         )
