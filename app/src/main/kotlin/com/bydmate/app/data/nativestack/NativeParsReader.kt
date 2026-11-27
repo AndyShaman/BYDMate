@@ -78,12 +78,14 @@ class NativeParsReader @Inject constructor(
                 if (batchRaw == null) {
                     gate.recordBatchUnavailable()
                 } else {
+                    val batchDecoded = decodeBatch(batchRaw, table, hybrid != null)
+                    resolveHvCurrentFromBatch(helperClient, batchRaw, batchDecoded, table, hvCurrentIndex, rememberMode = false)
                     gate.recordComparison(
                         adb,
                         // Shadow snapshot: compared, never returned — so it must not update
                         // any state a returned snapshot depends on (see stickyDriveMode).
                         assembleSnapshot(
-                            decodeBatch(batchRaw, table, hybrid != null),
+                            batchDecoded,
                             windowRrRawFromBatch(batchRaw),
                             rememberSticky = false,
                         ),
@@ -96,7 +98,9 @@ class NativeParsReader @Inject constructor(
 
     private suspend fun fetchViaBatch(table: ResolvedFidTable, hybrid: ResolvedFidTable?): DiParsData? {
         val pairs = helperClient.readBatch(batchItems(table, hybrid)) ?: return null
-        return assembleSnapshot(decodeBatch(pairs, table, hybrid != null), windowRrRawFromBatch(pairs))
+        val decoded = decodeBatch(pairs, table, hybrid != null)
+        resolveHvCurrentFromBatch(helperClient, pairs, decoded, table, hvCurrentIndex, rememberMode = true)
+        return assembleSnapshot(decoded, windowRrRawFromBatch(pairs))
     }
 
     /** Raw pre-decode windowRR value when the read itself succeeded, else null. */
@@ -116,7 +120,7 @@ class NativeParsReader @Inject constructor(
         pairs: List<Pair<Int, Int>>,
         table: ResolvedFidTable,
         hybrid: Boolean,
-    ): Map<String, Any?> {
+    ): MutableMap<String, Any?> {
         val decoded = mutableMapOf<String, Any?>()
         FidMap.entries.forEachIndexed { i, entry ->
             val (status, word) = pairs[i]
@@ -199,14 +203,7 @@ class NativeParsReader @Inject constructor(
                     decodeTx5(entry, windowRrRaw?.let { SentinelDecoder.decodeInt(it) }, table)
                 }
                 entry.transact == 5 -> decodeTx5(entry, autoservice.getInt(address.device, address.fid), table)
-                entry.transact == 7 -> {
-                    // AutoserviceClient.getFloat already rejects float sentinels (-1.0f, NaN, Inf).
-                    // Convert Float back to its raw IEEE-754 bits so ParamDecoder.decodeFloat
-                    // can apply its SentinelDecoder path (which also rejects -1.0f etc.).
-                    val f = autoservice.getFloat(address.device, address.fid)
-                    if (f == null) null
-                    else ParamDecoder.decodeFloat(java.lang.Float.floatToRawIntBits(f), entry.decoder)
-                }
+                entry.transact == 7 -> readFloatViaAdb(autoservice, entry, address, entry === hvCurrentEntry)
                 else -> null
             }
             decoded[entry.field] = value
@@ -447,6 +444,7 @@ class NativeParsReader @Inject constructor(
             mileageEvKm         = field<Int>("mileageEvKm"),
             engineRpm           = field<Int>("engineRpm"),
             evRangeKm           = field<Int>("evRangeKm"),
+            cruiseMode          = field<Int>("cruiseMode"),
         )
     }
 
@@ -474,7 +472,71 @@ class NativeParsReader @Inject constructor(
 
         val windowRrEntry: FidEntry = FidMap.entries.first { it.field == "windowRR" }
         val windowRrIndex: Int = FidMap.entries.indexOf(windowRrEntry)
+        val hvCurrentEntry: FidEntry = FidMap.entries.first { it.field == "hvCurrent" }
+        val hvCurrentIndex: Int = FidMap.entries.indexOf(hvCurrentEntry)
     }
+}
+
+private const val HV_CURRENT_FLOAT_SENTINEL = -1.0f
+
+/**
+ * #429: on firmwares where hvCurrent tx 7 answers the -1.0f float sentinel while tx 5 carries
+ * a live CAN-offset int, issue a single conditional tx 5 read and switch this process into
+ * int mode. A working float read issues no extra read and clears int mode.
+ */
+@Suppress("LongParameterList") // keeps the helper out of NativeParsReader's class method count
+private suspend fun resolveHvCurrentFromBatch(
+    helperClient: HelperClient,
+    pairs: List<Pair<Int, Int>>,
+    decoded: MutableMap<String, Any?>,
+    table: ResolvedFidTable,
+    hvCurrentIndex: Int,
+    rememberMode: Boolean,
+) {
+    if (decoded["hvCurrent"] != null) {
+        if (rememberMode) HvCurrent.setIntMode(false)
+        return
+    }
+    val (status, word) = pairs.getOrNull(hvCurrentIndex) ?: return
+    if (status != 0 || java.lang.Float.intBitsToFloat(word) != HV_CURRENT_FLOAT_SENTINEL) return
+    val address = table.address("hvCurrent")
+    val reply = helperClient.readBatch(listOf(BatchReadItem(5, address.device, address.fid)))
+        ?.firstOrNull() ?: return
+    if (reply.first != 0) return
+    val amps = HvCurrent.fromCanInt(reply.second) ?: return
+    decoded["hvCurrent"] = amps.toDouble()
+    if (rememberMode && HvCurrent.setIntMode(true)) {
+        logHvCurrentIntMode(address, reply.second, amps)
+    }
+}
+
+/**
+ * Reads one tx 7 float entry over ADB, falling back to a tx 5 CAN-offset int for hvCurrent when
+ * the float read returns sentinel (#429).
+ */
+private suspend fun readFloatViaAdb(
+    autoservice: AutoserviceClient,
+    entry: FidEntry,
+    address: FidAddress,
+    isHvCurrent: Boolean,
+): Double? {
+    val f = autoservice.getFloat(address.device, address.fid)
+    if (f != null) {
+        if (isHvCurrent) HvCurrent.setIntMode(false)
+        return ParamDecoder.decodeFloat(java.lang.Float.floatToRawIntBits(f), entry.decoder)
+    }
+    if (!isHvCurrent) return null
+    val raw = autoservice.getInt(address.device, address.fid) ?: return null
+    val amps = HvCurrent.fromCanInt(raw) ?: return null
+    if (HvCurrent.setIntMode(true)) logHvCurrentIntMode(address, raw, amps)
+    return amps.toDouble()
+}
+
+private fun logHvCurrentIntMode(address: FidAddress, raw: Int, amps: Float) {
+    android.util.Log.i(
+        "NativeParsReader",
+        "hvCurrent switched to CAN int mode (dev=${address.device} fid=${address.fid} raw=$raw amps=$amps)",
+    )
 }
 
 /**

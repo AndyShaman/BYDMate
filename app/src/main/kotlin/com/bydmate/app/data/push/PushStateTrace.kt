@@ -96,14 +96,12 @@ internal class PushStateTrace(
             AdasState(535826458, "noa-gray", "Adas.ADAS_NOA_GRAY_STATE"),
             AdasState(535830556, "noa-quit", "Adas.ADAS_NOA_QUIT_PROMPT"),
             AdasState(828375060, "lks-fault", "Adas.ADAS_LKS_FAULT"),
-            // #383, a rule condition "ICC is on": which of these follows the cruise and the lane
-            // keeping is not known from a car yet, the trace of a drive is what tells. BYD's own
-            // code reads the mode as 1 ACC, 2 ICC, 3 NOA and the cruise as active at 3..7; the
-            // navigation pilot drives at 4, 6, 8. Not read on a car before 4.4.2.
+            // #383: ADAS_ACC_MODE (852492340) moved to FidMap as cruiseMode for the cruise_active
+            // condition, and ADAS_TJA_ICA_STATE (828375084, lane signal) was dropped because it
+            // flipped between 1 and 5 hundreds of times per trip. The remaining four stay traced
+            // to tell ACC, ICC and NOA apart in field logs.
             AdasState(535830576, "assist-mode", "Adas.ADAS_ASSIST_DRIVE_MODE_STATUS"),
             AdasState(700448780, "cruise-arhud", "Adas.ADAS_ACC_MODE_ARHUD"),
-            AdasState(852492340, "cruise-mode", "Adas.ADAS_ACC_MODE"),
-            AdasState(828375084, "lane-cruise", "Adas.ADAS_TJA_ICA_STATE"),
             AdasState(700448784, "icc-signal", "Adas.ADAS_BROADCAST_AFTER_GET_ICCSIGNAL"),
             AdasState(700448800, "nav-pilot", "Adas.ADAS_DNP_STATE"),
         )

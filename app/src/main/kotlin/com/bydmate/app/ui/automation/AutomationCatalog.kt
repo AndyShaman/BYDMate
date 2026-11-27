@@ -78,6 +78,8 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "3" to R.string.auto_enum_code_normal, "4" to R.string.auto_enum_code_snow, "5" to R.string.auto_enum_code_sand, "6" to R.string.auto_enum_code_mud, "7" to R.string.auto_enum_code_mountain, "21" to R.string.auto_enum_code_smart)),
         // Live codes (Leopard 3 2026-07-31): mask of the blinker lines, holds steady while blinking
         TriggerParamOption("TurnSignal", "转向灯", R.string.auto_param_turnsignal, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_turn_off, "2" to R.string.auto_enum_turn_left, "4" to R.string.auto_enum_turn_right, "6" to R.string.auto_enum_turn_hazard)),
+        // ADAS cruise (ACC/ICC/NOA) active when cruiseMode in 3..7 (#383)
+        TriggerParamOption("cruise_active", "巡航开启", R.string.auto_param_cruise_active, R.string.auto_cat_driving, enumValues = listOf("0" to R.string.auto_enum_off, "1" to R.string.auto_enum_on)),
         TriggerParamOption("SOC", "电量百分比", R.string.auto_param_soc, R.string.auto_cat_energy, R.string.auto_unit_percent),
         TriggerParamOption("ChargingStatus", "充电状态", R.string.auto_param_chargingstatus, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_none, "1" to R.string.auto_enum_connected, "2" to R.string.auto_enum_charging)),
         TriggerParamOption("Voltage12V", "蓄电池电压", R.string.auto_param_voltage12v, R.string.auto_cat_energy, R.string.auto_unit_volt),

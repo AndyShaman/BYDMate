@@ -120,4 +120,6 @@ data class DiParsData(
     val mileageEvKm: Int? = null,         // odometer driven on the battery, km
     val engineRpm: Int? = null,           // engine speed, rpm (0 = engine off)
     val evRangeKm: Int? = null,           // range on battery as the car reports it, km (meaning unconfirmed)
+    // ADAS ACC/ICC/NOA mode (#383): 3..7 = active cruise (5 = throttle override), 2 = off.
+    val cruiseMode: Int? = null,
 )

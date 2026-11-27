@@ -698,6 +698,16 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideMotorPresenceStore(@ApplicationContext ctx: Context): com.bydmate.app.data.nativestack.MotorPresenceStore =
+        com.bydmate.app.data.nativestack.SharedPrefsMotorPresenceStore(
+            ctx.getSharedPreferences(
+                com.bydmate.app.data.nativestack.SharedPrefsMotorPresenceStore.PREFS_NAME,
+                Context.MODE_PRIVATE,
+            )
+        )
+
+    @Provides
+    @Singleton
     @Suppress("LongParameterList") // Hilt-injected dependencies
     fun provideVehicleApi(
         autoservice: com.bydmate.app.data.autoservice.AutoserviceClient,

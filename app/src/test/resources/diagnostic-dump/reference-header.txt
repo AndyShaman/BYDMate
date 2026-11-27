@@ -223,7 +223,7 @@ left: -> hidden not in catalog
 right: -> hidden not in catalog
 --- fid resolve ---
 catalog: source=constants symbols=0 devices=0
-resolved: 122 const, 0 catalog, 0 rejected, 0 no-symbol
+resolved: 123 const, 0 catalog, 0 rejected, 0 no-symbol
 (every entry on its constant)
 --- auto backup ---
 period: daily

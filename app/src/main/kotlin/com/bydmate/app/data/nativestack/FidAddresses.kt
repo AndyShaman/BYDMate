@@ -35,6 +35,7 @@ object FidAddresses {
     fun resetToConstants() {
         table = FidResolver.constants(FidMap.all)
         hybrid = FidResolver.constants(FidMap.hybrid)
+        HvCurrent.reset()
     }
 
     fun of(field: String): FidAddress = table.address(field)

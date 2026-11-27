@@ -25,6 +25,7 @@ import com.bydmate.app.data.automation.RuleParseResult
 import com.bydmate.app.data.automation.RuleShare
 import com.bydmate.app.data.automation.RuleShareFiles
 import com.bydmate.app.data.automation.RuleShareUrl
+import com.bydmate.app.data.automation.RuleStepPacing
 import com.bydmate.app.data.automation.SharedRule
 import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.voice.VoiceUserPhrases
@@ -51,6 +52,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -668,15 +670,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             val lc = context.appLocalizedContext()
             try {
                 if (e.playSound) OverlayNotificationManager.playNotificationSound(context)
-                var failed = 0
-                var firstReason: String? = null
-                for (action in e.actions) {
-                    val reason = runTestAction(action)
-                    if (reason != null) {
-                        failed++
-                        if (firstReason == null) firstReason = reason
-                    }
-                }
+                val (failed, firstReason) = runTestActions(e.actions)
                 val msg = if (failed == 0) {
                     lc.getString(R.string.automation_test_run_done)
                 } else {
@@ -702,6 +696,23 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         if (freshGear == 1 && gear == 1) return true
         Log.i("AutomationViewModel", "test run refused: park only, gear=$gear fresh=$freshGear")
         return false
+    }
+
+    private suspend fun runTestActions(actions: List<ActionDef>): Pair<Int, String?> {
+        var failed = 0
+        var firstReason: String? = null
+        var prevAction: ActionDef? = null
+        for (action in actions) {
+            val gapMs = RuleStepPacing.gapBefore(prevAction, action)
+            if (gapMs > 0L) delay(gapMs)
+            prevAction = action
+            val reason = runTestAction(action)
+            if (reason != null) {
+                failed++
+                if (firstReason == null) firstReason = reason
+            }
+        }
+        return failed to firstReason
     }
 
     /**

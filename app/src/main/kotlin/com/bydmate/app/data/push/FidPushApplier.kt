@@ -5,6 +5,7 @@ import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.nativestack.FidEntry
 import com.bydmate.app.data.nativestack.FidMap
 import com.bydmate.app.data.nativestack.FieldGuards
+import com.bydmate.app.data.nativestack.HvCurrent
 import com.bydmate.app.data.nativestack.ParamDecoder
 import com.bydmate.app.data.remote.DiParsData
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,6 +83,8 @@ object FidPushApplier {
      */
     private fun decodeDouble(entry: FidEntry, rawInt: Int, doubleValue: Double): Double? {
         val decoded = when {
+            entry.field == "hvCurrent" && HvCurrent.intMode ->
+                HvCurrent.fromCanInt(rawInt)?.toDouble()
             entry.transact == 7 ->
                 ParamDecoder.decodeFloat(
                     java.lang.Float.floatToRawIntBits(doubleValue.toFloat()),
@@ -182,6 +185,8 @@ object FidPushApplier {
         // Charging plug diagnostics (no logic depends on them yet)
         "chargerConnectState" to { d, v -> d.copy(chargerConnectState = v) },
         "chargeConnectIndicator" to { d, v -> d.copy(chargeConnectIndicator = v) },
+        // ADAS
+        "cruiseMode" to { d, v -> d.copy(cruiseMode = v) },
     )
 
     /** Fields the poll assigns from a decoded double (tx 7, or tx 5 with a scale). */

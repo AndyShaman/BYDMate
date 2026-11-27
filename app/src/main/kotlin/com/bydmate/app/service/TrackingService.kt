@@ -361,7 +361,7 @@ class TrackingService : Service(), LocationListener {
          * that no rule can act on.
          */
         internal val PUSH_EVALUATE_FIELDS: Set<String> = setOf(
-            "gear", "turnSignal", "powerState", "workMode", "driveModeTarget",
+            "gear", "turnSignal", "powerState", "workMode", "driveModeTarget", "cruiseMode",
             "doorFL", "doorFR", "doorRL", "doorRR",
             "windowFL", "windowFR", "windowRL", "windowRR",
             "sunroof", "trunk", "hood", "lockFL",

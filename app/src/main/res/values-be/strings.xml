@@ -1173,6 +1173,7 @@
     <string name="auto_param_lightlow">Блізкае святло</string>
     <string name="auto_param_drl">Дзённыя ходавыя</string>
     <string name="auto_param_turnsignal">Паваротнік</string>
+    <string name="auto_param_cruise_active">Круіз уключаны</string>
     <!-- action names -->
     <string name="auto_act_vent_windows">Праветрыванне</string>
     <string name="auto_act_close_all_windows">Зачыніць усе вокны</string>

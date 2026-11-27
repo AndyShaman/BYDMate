@@ -1177,6 +1177,7 @@
     <string name="auto_param_lightlow">Ближний свет</string>
     <string name="auto_param_drl">Дневные ходовые</string>
     <string name="auto_param_turnsignal">Поворотник</string>
+    <string name="auto_param_cruise_active">Круиз включён</string>
     <!-- action names -->
     <string name="auto_act_vent_windows">Проветривание</string>
     <string name="auto_act_close_all_windows">Закрыть все окна</string>

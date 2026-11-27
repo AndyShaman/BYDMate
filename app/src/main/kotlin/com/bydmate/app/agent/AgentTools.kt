@@ -558,6 +558,7 @@ class AgentTools @Inject constructor(
         putIf("ambient_light_level_1dark_5bright", d.lightLevel)
         putIf("key_fob_battery_ok", d.keyBatteryStatus?.let { it == 0 })
         putIf("rain_detected", d.rain?.let { it == 1 })
+        putIf("cruise_active", d.cruiseMode?.let { it in 3..7 })
         // Blind-spot cameras are a BYDMate feature, not a car parameter: the driver asks why
         // the picture does not appear, and the answer is usually "off" or "below the threshold".
         runCatchingCancellable { BlindSpotPreferences(context) }.getOrNull()?.let { bs ->

@@ -1173,6 +1173,7 @@
     <string name="auto_param_lightlow">Światła mijania</string>
     <string name="auto_param_drl">Światła do jazdy dziennej</string>
     <string name="auto_param_turnsignal">Kierunkowskaz</string>
+    <string name="auto_param_cruise_active">Tempomat włączony</string>
     <!-- action names -->
     <string name="auto_act_vent_windows">Wietrzenie</string>
     <string name="auto_act_close_all_windows">Zamknij wszystkie szyby</string>

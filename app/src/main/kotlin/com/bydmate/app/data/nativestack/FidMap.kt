@@ -191,6 +191,8 @@ object FidMap {
         // the plug in says what these two report there.
         FidEntry("chargerConnectState",    1009, 89128973,  5, Decoder.INT_RAW, symbol = "Charging.CHARGING_CHARGER_CONNECT_STATE"),
         FidEntry("chargeConnectIndicator", 1007, 710934572, 5, Decoder.INT_RAW, symbol = "Instrument.INSTRUMENT_2IN1_FAULT_POWER_BATTERY_CHARGE_CONNECT_INDICATOR"),
+        // ADAS ACC/ICC/NOA mode (#383): 3..7 = active cruise (5 = throttle override), 2 = off.
+        FidEntry("cruiseMode",             1038, 852492340, 5, Decoder.INT_ENUM, symbol = "Adas.ADAS_ACC_MODE"),
     )
 
     /**

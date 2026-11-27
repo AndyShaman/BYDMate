@@ -1100,6 +1100,7 @@
     <string name="auto_param_lightlow">近光灯</string>
     <string name="auto_param_drl">日行灯</string>
     <string name="auto_param_turnsignal">转向灯</string>
+    <string name="auto_param_cruise_active">巡航已开启</string>
     <!-- action names -->
     <string name="auto_act_vent_windows">车窗通风</string>
     <string name="auto_act_close_all_windows">关闭所有车窗</string>

@@ -34,6 +34,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -58,6 +59,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     companion object {
         private const val TAG = "AutomationEngine"
         private const val CONFIRM_CHANNEL_ID = "bydmate_automation_confirm"
+        // ADAS ACC/ICC/NOA active mode codes (#383): 3..7 (5 = throttle override).
+        private const val CRUISE_ACTIVE_MIN = 3
+        private const val CRUISE_ACTIVE_MAX = 7
         private const val CONFIRM_TIMEOUT_MS = 30_000L
         private const val NOTIF_BASE_ID = 5000
         // Trace `src=` of the edges that do not come from a manual trigger kind.
@@ -714,6 +718,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         "LightLow" -> data.lightLow?.toDouble()
         "DRL" -> data.drl?.toDouble()
         "TurnSignal" -> data.turnSignal?.toDouble()
+        "cruise_active" -> data.cruiseMode?.let { if (it in CRUISE_ACTIVE_MIN..CRUISE_ACTIVE_MAX) 1.0 else 0.0 }
         "MaxBatTemp" -> data.maxBatTemp?.toDouble()
         "AvgBatTemp" -> data.avgBatTemp?.toDouble()
         "MinBatTemp" -> data.minBatTemp?.toDouble()
@@ -746,8 +751,12 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
             val results = JSONArray()
             var allSuccess = true
+            var prevAction: ActionDef? = null
 
             for ((i, action) in actions.withIndex()) {
+                val gapMs = RuleStepPacing.gapBefore(prevAction, action)
+                if (gapMs > 0L) delay(gapMs)
+                prevAction = action
                 // Fresh data per step: a pause may lie between the fire and this step. A speed-gated
                 // step does not trust it either: the dispatcher reads the speed itself right before.
                 val stepData = liveData() ?: data

@@ -1028,6 +1028,7 @@
     <string name="auto_param_lightlow">Low Beam</string>
     <string name="auto_param_drl">DRL</string>
     <string name="auto_param_turnsignal">Turn signal</string>
+    <string name="auto_param_cruise_active">Cruise control on</string>
     <!-- action names -->
     <string name="auto_act_vent_windows">Vent Windows</string>
     <string name="auto_act_close_all_windows">Close All Windows</string>

@@ -48,8 +48,8 @@ class HybridFidResolveTest {
 
         val allFields = FidMap.all.map { it.field }.toSet()
         FidMap.hybrid.forEach { assertFalse("${it.field} leaked into FidMap.all", it.field in allFields) }
-        assertEquals(122, FidMap.all.size)
-        assertEquals(94, FidMap.entries.size)
+        assertEquals(123, FidMap.all.size)
+        assertEquals(95, FidMap.entries.size)
     }
 
     @Test fun `dead compiled addresses make the six hybrid fields follow the Tang catalog`() = runTest {

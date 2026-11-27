@@ -217,6 +217,7 @@ class AutomationI18nGoldenTest {
         "Gear" to Triple("Передача", "Gear", "档位"),
         "DriveMode" to Triple("Режим вождения", "Drive Mode", "整车运行模式"),
         "TurnSignal" to Triple("Поворотник", "Turn signal", "转向灯"),
+        "cruise_active" to Triple("Круиз включён", "Cruise control on", "巡航已开启"),
         "SOC" to Triple("SOC", "SOC", "电量百分比"),
         "ChargingStatus" to Triple("Статус зарядки", "Charging Status", "充电状态"),
         "Voltage12V" to Triple("12V аккумулятор", "12V Battery", "蓄电池电压"),
@@ -267,6 +268,7 @@ class AutomationI18nGoldenTest {
         "Gear" to Triple("Движение", "Driving", "行驶"),
         "DriveMode" to Triple("Движение", "Driving", "行驶"),
         "TurnSignal" to Triple("Движение", "Driving", "行驶"),
+        "cruise_active" to Triple("Движение", "Driving", "行驶"),
         "SOC" to Triple("Энергия", "Energy", "能源"),
         "ChargingStatus" to Triple("Энергия", "Energy", "能源"),
         "Voltage12V" to Triple("Энергия", "Energy", "能源"),
@@ -317,6 +319,7 @@ class AutomationI18nGoldenTest {
         "Gear" to "",
         "DriveMode" to "",
         "TurnSignal" to "",
+        "cruise_active" to "",
         "SOC" to "%",
         "ChargingStatus" to "",
         "Voltage12V" to "В",
@@ -394,6 +397,7 @@ class AutomationI18nGoldenTest {
         "OccupancyRM" to listOf("1" to "Свободно", "2" to "Занято"),
         "OccupancyRR" to listOf("1" to "Свободно", "2" to "Занято"),
         "LightLow" to listOf("0" to "Выкл", "1" to "Вкл"),
+        "cruise_active" to listOf("0" to "Выкл", "1" to "Вкл"),
         "DRL" to listOf("0" to "Нет", "1" to "Вкл", "2" to "Выкл"),
     )
 
