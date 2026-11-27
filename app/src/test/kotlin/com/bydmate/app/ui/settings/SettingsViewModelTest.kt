@@ -2508,4 +2508,37 @@ class SettingsViewModelTest {
             ).canSendLogToTelegram,
         )
     }
+
+    @Test
+    fun `re-binding or disconnecting Telegram resets lastLogSent so the saved log can be sent again`() = runTest {
+        val log = savedLog()
+        val sink = tgSinkFake()
+        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
+        val vm = vmWithStoppedLog(log)
+
+        vm.sendLogToTelegram()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.uiState.value.lastLogSent)
+
+        // Binding another bot or chat clears the sent mark.
+        coEvery { sink.getMe("456:new") } returns Result.success("new_bot")
+        checkToken(vm, "456:new")
+        val code = vm.uiState.value.tgBackupCode!!
+        coEvery { sink.findLinkChat("456:new", code) } returns
+            Result.success(com.bydmate.app.data.backup.TelegramChat(888L, "Other"))
+        coEvery { sink.sendMessage("456:new", 888L, any()) } returns Result.success(Unit)
+        checkToken(vm, "456:new")
+
+        assertFalse(vm.uiState.value.lastLogSent)
+        assertTrue(vm.uiState.value.canSendLogToTelegram)
+
+        // Disconnecting also clears the sent mark after a subsequent upload.
+        vm.sendLogToTelegram()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.uiState.value.lastLogSent)
+
+        vm.disconnectTelegramBackup()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(vm.uiState.value.lastLogSent)
+    }
 }

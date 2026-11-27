@@ -161,4 +161,14 @@ class LogTelegramSenderTest {
         runCurrent()
         assertEquals(okFile.absolutePath, sender.sentPath.value)
     }
+
+    @Test fun `forgetSent clears sentPath after a successful upload`() = runTest {
+        val file = log()
+        sender.send(file)
+        runCurrent()
+        assertEquals(file.absolutePath, sender.sentPath.value)
+
+        sender.forgetSent()
+        assertNull(sender.sentPath.value)
+    }
 }

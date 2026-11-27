@@ -9,6 +9,11 @@ import com.bydmate.app.data.nativestack.FidCatalog
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,6 +28,7 @@ import org.robolectric.annotation.Config
  * #441: two-level seat heat on the fallback channel (Song Plus EV 2025 and similar),
  * tested through the existing [VehicleApiImpl.dispatch] entry point with [FidCatalog].
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class VehicleApiSeatFallbackTwoLevelTest {
@@ -328,6 +334,56 @@ class VehicleApiSeatFallbackTwoLevelTest {
             assertEquals("status=$transientStatus", listOf(6), fallbackValues(DRIVER_HEAT_FALLBACK_FID))
             coVerify(exactly = 0) { helper.read(DEV_SETTING, any(), any()) }
         }
+    }
+
+    // Q1 (#441): a newer command for the same seat cancels a pending two-level clamp.
+    @Test fun `newer command for the same driver seat cancels pending two-level clamp`() = runTest {
+        val subject = api()
+        coEvery { helper.read(DEV_SETTING, DRIVER_STATE_CANFD, any()) } returns 1L
+
+        val first = async { subject.dispatch("主驾座椅加热3档") }
+        advanceTimeBy(500L)
+        runCurrent()
+        assertEquals(listOf(6), fallbackValues(DRIVER_HEAT_FALLBACK_FID))
+
+        assertTrue(subject.dispatch("主驾座椅加热关闭").isSuccess)
+        advanceUntilIdle()
+
+        assertTrue(first.await().isSuccess)
+        assertEquals(listOf(6, 1), fallbackValues(DRIVER_HEAT_FALLBACK_FID))
+    }
+
+    @Test fun `newer command for the same passenger seat cancels pending two-level clamp`() = runTest {
+        val subject = api()
+        coEvery { helper.read(DEV_SETTING, PASSENGER_STATE_CANFD, any()) } returns 1L
+
+        val first = async { subject.dispatch("副驾座椅加热3档") }
+        advanceTimeBy(500L)
+        runCurrent()
+        assertEquals(listOf(4), fallbackValues(PASSENGER_HEAT_FALLBACK_FID))
+
+        assertTrue(subject.dispatch("副驾座椅加热关闭").isSuccess)
+        advanceUntilIdle()
+
+        assertTrue(first.await().isSuccess)
+        assertEquals(listOf(4, 1), fallbackValues(PASSENGER_HEAT_FALLBACK_FID))
+    }
+
+    @Test fun `command for the other seat does not cancel pending two-level clamp`() = runTest {
+        val subject = api()
+        coEvery { helper.read(DEV_SETTING, DRIVER_STATE_CANFD, any()) } returns 1L
+
+        val first = async { subject.dispatch("主驾座椅加热3档") }
+        advanceTimeBy(500L)
+        runCurrent()
+        assertEquals(listOf(6), fallbackValues(DRIVER_HEAT_FALLBACK_FID))
+
+        assertTrue(subject.dispatch("副驾座椅加热关闭").isSuccess)
+        advanceUntilIdle()
+
+        assertTrue(first.await().isSuccess)
+        assertEquals(listOf(6, 3), fallbackValues(DRIVER_HEAT_FALLBACK_FID))
+        assertEquals(listOf(1), fallbackValues(PASSENGER_HEAT_FALLBACK_FID))
     }
 
     private companion object {

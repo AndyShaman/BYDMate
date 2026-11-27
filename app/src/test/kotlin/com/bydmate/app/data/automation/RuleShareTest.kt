@@ -436,7 +436,7 @@ class RuleShareTest {
         val newerTrigger = fixture("bydmate_rule_speed.json")
             .replace(""""displayName":"Скорость","kind":"param"""", """"displayName":"Скорость","kind":"gravity"""")
         assertEquals(RuleParseResult.NewerVersion, RuleShare.parse(newerTrigger, "Звонок"))
-        val newerVersion = fixture("bydmate_rule_speed.json").replace("\"version\": 1", "\"version\": 2")
+        val newerVersion = fixture("bydmate_rule_speed.json").replace("\"version\": 1", "\"version\": 3")
         assertEquals(RuleParseResult.NewerVersion, RuleShare.parse(newerVersion, "Звонок"))
     }
 
@@ -565,5 +565,126 @@ class RuleShareTest {
         )
         assertTrue(RuleShare.KNOWN_TRIGGER_KINDS.containsAll(created))
         assertTrue(ActionDef("c", "x").kind in RuleShare.KNOWN_ACTION_KINDS)
+    }
+
+    private fun ruleWithTriggers(vararg triggers: TriggerDef) = SharedRule.fromEntity(
+        RuleEntity(
+            name = "ShareTest",
+            triggers = TriggerDef.listToJson(triggers.toList()),
+            actions = ActionDef.listToJson(listOf(ActionDef("c", "x"))),
+        )
+    )
+
+    // --- Q2: Bluetooth device address is stripped on export and parse ---
+
+    @Test fun `export drops bluetooth device address and keeps displayName`() {
+        for (kind in listOf(AutomationEngine.TRIGGER_KIND_BT_CONNECTED, AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED)) {
+            val btTrigger = TriggerDef(
+                param = "BtDevice",
+                chineseName = "",
+                operator = "==",
+                value = "AA:BB:CC:DD:EE:FF",
+                displayName = "Phone",
+                kind = kind,
+            )
+            val text = RuleShare.exportJson(ruleWithTriggers(btTrigger), "4.5.1")
+            assertFalse(kind, text.contains("AA:BB:CC:DD:EE:FF"))
+            val jsonTrigger = JSONObject(text).getJSONObject("rule").getJSONArray("triggers").getJSONObject(0)
+            assertEquals(kind, "", jsonTrigger.getString("value"))
+            assertEquals(kind, "Phone", jsonTrigger.getString("displayName"))
+        }
+    }
+
+    @Test fun `parse drops bluetooth device address from share file and keeps displayName`() {
+        val btTrigger = TriggerDef(
+            param = "BtDevice",
+            chineseName = "",
+            operator = "==",
+            value = "AA:BB:CC:DD:EE:FF",
+            displayName = "Phone",
+            kind = AutomationEngine.TRIGGER_KIND_BT_DISCONNECTED,
+        )
+        val raw = JSONObject(fixture("bydmate_rule_speed.json")).apply {
+            getJSONObject("rule").put("triggers", org.json.JSONArray().put(btTrigger.toJson()))
+        }.toString()
+
+        val parsed = (RuleShare.parse(raw, "Звонок") as RuleParseResult.Ok).rule
+        val trigger = parsed.triggers.single()
+        assertEquals("", trigger.value)
+        assertEquals("Phone", trigger.displayName)
+        assertEquals(TriggerValidationError.BluetoothDeviceMissing, importCheck(parsed))
+    }
+
+    @Test fun `other trigger kinds keep their value on export and parse`() {
+        val paramTrigger = TriggerDef("Speed", "车速", ">", "7", "Скорость", kind = "param")
+        val keyTrigger = TriggerDef("steering_key", "", "==", "305", "Key 305", kind = AutomationEngine.TRIGGER_KIND_STEERING_KEY)
+        val text = RuleShare.exportJson(ruleWithTriggers(paramTrigger, keyTrigger), "4.5.1")
+        val parsed = (RuleShare.parse(text, "Звонок") as RuleParseResult.Ok).rule
+
+        assertEquals("7", parsed.triggers[0].value)
+        assertEquals("305", parsed.triggers[1].value)
+    }
+
+    // --- Q3: Double-press steering_key uses share version 2 and rejects unknown press ---
+
+    @Test fun `export writes version 2 only when a trigger has press`() {
+        val doubleKey = TriggerDef(
+            param = "steering_key",
+            chineseName = "",
+            operator = "==",
+            value = "305",
+            displayName = "Key 305",
+            kind = AutomationEngine.TRIGGER_KIND_STEERING_KEY,
+            press = TriggerDef.PRESS_DOUBLE,
+        )
+        val singleKey = doubleKey.copy(press = null)
+        val plainParam = TriggerDef("Speed", "车速", ">", "7", "Скорость", kind = "param")
+
+        assertEquals(2, JSONObject(RuleShare.exportJson(ruleWithTriggers(doubleKey), "4.5.1")).getInt("version"))
+        assertEquals(1, JSONObject(RuleShare.exportJson(ruleWithTriggers(singleKey), "4.5.1")).getInt("version"))
+        assertEquals(1, JSONObject(RuleShare.exportJson(ruleWithTriggers(plainParam), "4.5.1")).getInt("version"))
+    }
+
+    @Test fun `parse accepts version 1 and version 2 with double press and refuses version 3`() {
+        val doubleKey = TriggerDef(
+            param = "steering_key",
+            chineseName = "",
+            operator = "==",
+            value = "305",
+            displayName = "Key 305",
+            kind = AutomationEngine.TRIGGER_KIND_STEERING_KEY,
+            press = TriggerDef.PRESS_DOUBLE,
+        )
+        val v2 = JSONObject(fixture("bydmate_rule_speed.json")).apply {
+            put("version", 2)
+            getJSONObject("rule").put("triggers", org.json.JSONArray().put(doubleKey.toJson()))
+        }.toString()
+        val parsedV2 = RuleShare.parse(v2, "Звонок")
+        assertTrue(parsedV2 is RuleParseResult.Ok)
+        assertEquals(TriggerDef.PRESS_DOUBLE, (parsedV2 as RuleParseResult.Ok).rule.triggers.single().press)
+
+        val v3 = fixture("bydmate_rule_speed.json").replace("\"version\": 1", "\"version\": 3")
+        assertEquals(RuleParseResult.NewerVersion, RuleShare.parse(v3, "Звонок"))
+
+        assertTrue(RuleShare.parse(fixture("bydmate_rule_speed.json"), "Звонок") is RuleParseResult.Ok)
+    }
+
+    @Test fun `parse refuses steering_key trigger with unknown press value as newer version`() {
+        for (unknownPress in listOf("long", "single")) {
+            val trigger = TriggerDef(
+                param = "steering_key",
+                chineseName = "",
+                operator = "==",
+                value = "305",
+                displayName = "Key 305",
+                kind = AutomationEngine.TRIGGER_KIND_STEERING_KEY,
+                press = unknownPress,
+            )
+            val json = JSONObject(fixture("bydmate_rule_speed.json")).apply {
+                getJSONObject("rule").put("triggers", org.json.JSONArray().put(trigger.toJson()))
+            }.toString()
+
+            assertEquals(unknownPress, RuleParseResult.NewerVersion, RuleShare.parse(json, "Звонок"))
+        }
     }
 }
