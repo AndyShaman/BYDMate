@@ -41,4 +41,27 @@ class CurrencyListTest {
         dao.map[SettingsRepository.KEY_CURRENCY] = "XXX"
         assertEquals("BYN", repo.getCurrency().code)
     }
+
+    @Test fun `BRL and IDR are present once and existing currencies keep their order`() {
+        val expectedPrefix = listOf(
+            SettingsRepository.Currency("BYN", "BYN"),
+            SettingsRepository.Currency("RUB", "₽"),
+            SettingsRepository.Currency("UAH", "₴"),
+            SettingsRepository.Currency("KZT", "₸"),
+            SettingsRepository.Currency("AMD", "֏"),
+            SettingsRepository.Currency("AZN", "₼"),
+            SettingsRepository.Currency("GEL", "₾"),
+            SettingsRepository.Currency("USD", "$"),
+            SettingsRepository.Currency("EUR", "€"),
+            SettingsRepository.Currency("PLN", "zł"),
+            SettingsRepository.Currency("CNY", "¥"),
+            SettingsRepository.Currency("UZS", "UZS"),
+            SettingsRepository.Currency("KGS", "сом"),
+            SettingsRepository.Currency("MDL", "MDL"),
+            SettingsRepository.Currency("RON", "lei"),
+        )
+        assertEquals(expectedPrefix, CURRENCIES.take(expectedPrefix.size))
+        assertEquals(1, CURRENCIES.count { it == SettingsRepository.Currency("BRL", "R$") })
+        assertEquals(1, CURRENCIES.count { it == SettingsRepository.Currency("IDR", "Rp") })
+    }
 }
